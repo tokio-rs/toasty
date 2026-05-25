@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
+            window.path_to_searchindex_js = "searchindex-4161a174.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -183,8 +183,8 @@ the value requires either a follow-up <code>.exec()</code> call or a preload wit
 read: a <code>Document</code> body, a binary blob, an audit-event JSON payload.
 Without the deferred annotation, every list query reads every column
 whether the caller needs it or not.</p>
-<p>The API mirrors deferred relation fields: a synchronous <code>.get()</code> reads an
-already-loaded value, an async per-field accessor loads on demand, and
+<p>The API mirrors relation fields wrapped in <code>Deferred&lt;_&gt;</code>: a synchronous <code>.get()</code>
+reads an already-loaded value, an async per-field accessor loads on demand, and
 <code>.include()</code> preloads as part of the parent query.</p>
 <h2 id="marking-a-field-as-deferred"><a class="header" href="#marking-a-field-as-deferred">Marking a field as deferred</a></h2>
 <p>Annotate the field with <code>#[deferred]</code> and wrap its type in <code>Deferred&lt;T&gt;</code>:</p>
@@ -264,8 +264,8 @@ let body: &amp;String = doc.body.get();   // synchronous, no query
 </span><span class="boring">}</span></code></pre>
 <p><code>#[deferred]</code> is supported on primitive fields and on embedded types
 (<code>#[derive(Embed)]</code> structs and enums). It does not compose with
-<code>#[belongs_to]</code>, <code>#[has_many]</code>, or <code>#[has_one]</code> — relations are already
-lazy.</p>
+<code>#[belongs_to]</code>, <code>#[has_many]</code>, or <code>#[has_one]</code>. Relation fields use
+<code>Deferred&lt;_&gt;</code> in the field type itself when they should be lazy.</p>
 <p>A deferred embed value omits all of the embed’s columns from the default
 projection. Loading is the same as for a primitive: call the per-field
 accessor, or chain <code>.include()</code> to preload alongside the parent query.</p>

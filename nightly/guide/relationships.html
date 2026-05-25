@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
+            window.path_to_searchindex_js = "searchindex-4161a174.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -266,6 +266,39 @@ when you need to navigate from child to parent but not the reverse. The opposite
 is not allowed — a <code>#[has_many]</code> or <code>#[has_one]</code> field always requires a
 matching <code>#[belongs_to]</code> on the target model, because Toasty needs the foreign
 key definition to know how the models connect.</p>
+<h3 id="lazy-and-eager-relation-fields"><a class="header" href="#lazy-and-eager-relation-fields">Lazy and eager relation fields</a></h3>
+<p>The relation field type controls when Toasty loads the related records.</p>
+<p>Use <code>Deferred&lt;_&gt;</code> for a lazy relation. A normal query leaves the field unloaded.
+Load it by calling the generated relation accessor, or preload it with
+<code>.include(...)</code>:</p>
+<pre><code class="language-rust ignore">#[has_many]
+posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
+
+let posts = user.posts().exec(&amp;mut db).await?;</code></pre>
+<p>Use the relation value directly for an eager relation. Toasty loads the relation
+with every query that returns the model, as if the query had an implicit
+<code>.include(...)</code>:</p>
+<pre><code class="language-rust ignore">#[has_many]
+posts: Vec&lt;Post&gt;,
+
+let user = User::filter_by_id(user_id).get(&amp;mut db).await?;
+let post_count = user.posts.len();</code></pre>
+<p>The accepted eager field types are:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Attribute</th><th>Lazy field type</th><th>Eager field type</th></tr>
+</thead>
+<tbody>
+<tr><td><code>#[has_many]</code></td><td><code>Deferred&lt;Vec&lt;T&gt;&gt;</code></td><td><code>Vec&lt;T&gt;</code></td></tr>
+<tr><td><code>#[has_one]</code></td><td><code>Deferred&lt;T&gt;</code> or <code>Deferred&lt;Option&lt;T&gt;&gt;</code></td><td><code>T</code> or <code>Option&lt;T&gt;</code></td></tr>
+<tr><td><code>#[belongs_to]</code></td><td><code>Deferred&lt;T&gt;</code> or <code>Deferred&lt;Option&lt;T&gt;&gt;</code></td><td><code>T</code> or <code>Option&lt;T&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Eager relations can load other eager relations. Toasty rejects schemas with an
+eager-load cycle, such as <code>User.posts: Vec&lt;Post&gt;</code> and <code>Post.user: User</code>. Wrap at
+least one relation in <code>Deferred&lt;_&gt;</code> to break the cycle.</p>
 <h2 id="required-vs-optional-relationships"><a class="header" href="#required-vs-optional-relationships">Required vs optional relationships</a></h2>
 <p>The nullability of the foreign key field controls whether the relationship is
 required or optional.</p>
@@ -357,9 +390,9 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 <tr><th>You want to express…</th><th>Use</th><th>FK goes on</th></tr>
 </thead>
 <tbody>
-<tr><td>A post has one author</td><td><code>Post</code> → <code>Deferred&lt;User&gt;</code> + <code>User</code> → <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code></td><td><code>posts.user_id</code></td></tr>
-<tr><td>A user has one profile</td><td><code>User</code> → <code>Deferred&lt;Profile&gt;</code> + <code>Profile</code> → <code>Deferred&lt;User&gt;</code></td><td><code>profiles.user_id</code></td></tr>
-<tr><td>A comment belongs to a post</td><td><code>Comment</code> → <code>Deferred&lt;Post&gt;</code> + <code>Post</code> → <code>Deferred&lt;Vec&lt;Comment&gt;&gt;</code></td><td><code>comments.post_id</code></td></tr>
+<tr><td>A post has one author</td><td><code>Post</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code> + <code>User</code> → <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code> or <code>Vec&lt;Post&gt;</code></td><td><code>posts.user_id</code></td></tr>
+<tr><td>A user has one profile</td><td><code>User</code> → <code>Deferred&lt;Profile&gt;</code> or <code>Profile</code> + <code>Profile</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code></td><td><code>profiles.user_id</code></td></tr>
+<tr><td>A comment belongs to a post</td><td><code>Comment</code> → <code>Deferred&lt;Post&gt;</code> or <code>Post</code> + <code>Post</code> → <code>Deferred&lt;Vec&lt;Comment&gt;&gt;</code> or <code>Vec&lt;Comment&gt;</code></td><td><code>comments.post_id</code></td></tr>
 </tbody>
 </table>
 </div>

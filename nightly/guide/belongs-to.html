@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
+            window.path_to_searchindex_js = "searchindex-4161a174.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -179,9 +179,9 @@
 foreign key. The child stores the parent’s ID in one of its own fields.</p>
 <h2 id="defining-a-belongsto-relationship"><a class="header" href="#defining-a-belongsto-relationship">Defining a BelongsTo relationship</a></h2>
 <p>A BelongsTo relationship requires two things on the child model: a foreign key
-field and a <code>Deferred&lt;T&gt;</code> relation field. The <code>#[belongs_to]</code> attribute tells
-Toasty which field holds the foreign key and which field on the parent it
-references.</p>
+field and a relation field. Wrap the relation in <code>Deferred&lt;T&gt;</code> for lazy loading,
+or use <code>T</code> directly for eager loading. The <code>#[belongs_to]</code> attribute tells Toasty
+which field holds the foreign key and which field on the parent it references.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -226,6 +226,11 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 </code></pre>
 <p>The parent model (<code>User</code>) typically declares a <code>#[has_many]</code> field pointing back
 at the child. See <a href="./has-many.html">HasMany</a> for details.</p>
+<p>Use a plain relation field when every loaded child should also load its parent:</p>
+<pre><code class="language-rust ignore">#[belongs_to(key = user_id, references = id)]
+user: User,</code></pre>
+<p>This behaves like an implicit <code>.include(Post::fields().user())</code> on every query
+that returns <code>Post</code>.</p>
 <h2 id="optional-belongsto"><a class="header" href="#optional-belongsto">Optional BelongsTo</a></h2>
 <p>If a child does not always have a parent, make the foreign key <code>Option&lt;T&gt;</code> and
 wrap the relation type in <code>Option</code>:</p>
@@ -255,6 +260,9 @@ struct Post {
 }
 <span class="boring">}</span></code></pre>
 <p>The <code>user_id</code> column is now nullable. A post can exist without a user.</p>
+<p>For eager loading, omit <code>Deferred</code> and keep the <code>Option</code>:</p>
+<pre><code class="language-rust ignore">#[belongs_to(key = user_id, references = id)]
+user: Option&lt;User&gt;,</code></pre>
 <h2 id="accessing-the-related-record"><a class="header" href="#accessing-the-related-record">Accessing the related record</a></h2>
 <p>Call the relation method on the child instance to get the parent. The method
 name matches the relation field name.</p>

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
+            window.path_to_searchindex_js = "searchindex-4161a174.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -179,9 +179,10 @@
 <a href="./has-many.html">HasMany</a>, the foreign key lives on the child model, but
 <code>HasOne</code> enforces that at most one child exists per parent.</p>
 <h2 id="defining-a-hasone-relationship"><a class="header" href="#defining-a-hasone-relationship">Defining a HasOne relationship</a></h2>
-<p>Add a <code>#[has_one]</code> field of type <code>Deferred&lt;T&gt;</code> on the parent model. The child
-model must have a corresponding <code>#[belongs_to]</code> field with a <code>#[unique]</code> foreign
-key (since each parent maps to at most one child):</p>
+<p>Add a <code>#[has_one]</code> field on the parent model. Use <code>Deferred&lt;T&gt;</code> or
+<code>Deferred&lt;Option&lt;T&gt;&gt;</code> for lazy loading, or <code>T</code> / <code>Option&lt;T&gt;</code> for eager loading.
+The child model must have a corresponding <code>#[belongs_to]</code> field with a
+<code>#[unique]</code> foreign key (since each parent maps to at most one child):</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -221,9 +222,14 @@ that only one profile can reference a given user. In the database:</p>
 );
 CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id);
 </code></pre>
+<p>With an eager field, Toasty loads the child whenever it loads the parent:</p>
+<pre><code class="language-rust ignore">#[has_one]
+profile: Option&lt;Profile&gt;,</code></pre>
+<p>This behaves like an implicit <code>.include(User::fields().profile())</code> on every
+query that returns <code>User</code>.</p>
 <h2 id="optional-vs-required-hasone"><a class="header" href="#optional-vs-required-hasone">Optional vs required HasOne</a></h2>
 <p>The type parameter on <code>HasOne</code> controls whether the parent must have a child.</p>
-<h3 id="optional-deferredoptionprofile"><a class="header" href="#optional-deferredoptionprofile">Optional: <code>Deferred&lt;Option&lt;Profile&gt;&gt;</code></a></h3>
+<h3 id="optional-deferredoptionprofile-or-optionprofile"><a class="header" href="#optional-deferredoptionprofile-or-optionprofile">Optional: <code>Deferred&lt;Option&lt;Profile&gt;&gt;</code> or <code>Option&lt;Profile&gt;</code></a></h3>
 <p>The parent may or may not have a child. Creating a parent without a child is
 allowed:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -257,7 +263,7 @@ assert!(user.profile().exec(&amp;mut db).await?.is_none());
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<h3 id="required-deferredprofile"><a class="header" href="#required-deferredprofile">Required: <code>Deferred&lt;Profile&gt;</code></a></h3>
+<h3 id="required-deferredprofile-or-profile"><a class="header" href="#required-deferredprofile-or-profile">Required: <code>Deferred&lt;Profile&gt;</code> or <code>Profile</code></a></h3>
 <p>The parent must have a child. Creating a parent requires providing a child:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {

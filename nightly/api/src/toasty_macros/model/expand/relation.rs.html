@@ -493,7 +493,7 @@
 <a href=#493 id=493 data-nosnippet>493</a>        <span class="kw">let </span>verify_t = util::ident(<span class="string">"T"</span>);
 <a href=#494 id=494 data-nosnippet>494</a>
 <a href=#495 id=495 data-nosnippet>495</a>        <span class="kw">let </span>msg = <span class="macro">format!</span>(
-<a href=#496 id=496 data-nosnippet>496</a>            <span class="string">"{relation_kind} requires the {{{verify_a}}}::{pair_ident} field to be of type `Deferred&lt;Self&gt;`, but it was `{{Self}}` instead"
+<a href=#496 id=496 data-nosnippet>496</a>            <span class="string">"{relation_kind} requires the {{{verify_a}}}::{pair_ident} field to be a relation to `Self`, but it was `{{Self}}` instead"
 <a href=#497 id=497 data-nosnippet>497</a>        </span>);
 <a href=#498 id=498 data-nosnippet>498</a>
 <a href=#499 id=499 data-nosnippet>499</a>        <span class="macro">quote::quote_spanned!</span> {rel_span=&gt;
@@ -521,13 +521,21 @@
 <a href=#521 id=521 data-nosnippet>521</a>                </span><span class="kw">impl</span>&lt;#verify_a&gt; Verify&lt;#verify_a&gt; <span class="kw">for </span>#toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;#model_ident&gt;&gt; {
 <a href=#522 id=522 data-nosnippet>522</a>                }
 <a href=#523 id=523 data-nosnippet>523</a>
-<a href=#524 id=524 data-nosnippet>524</a>                <span class="kw">fn </span>verify&lt;#verify_t: Verify&lt;#verify_a&gt;, #verify_a&gt;(<span class="kw">_</span>: <span class="kw-2">&amp;</span>#verify_t) {
-<a href=#525 id=525 data-nosnippet>525</a>                }
-<a href=#526 id=526 data-nosnippet>526</a>
-<a href=#527 id=527 data-nosnippet>527</a>                <span class="kw">let </span>instance = load::&lt;&lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;();
-<a href=#528 id=528 data-nosnippet>528</a>                verify::&lt;<span class="kw">_</span>, &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;(instance.#verify_pair_belongs_to_exists_for_field());
-<a href=#529 id=529 data-nosnippet>529</a>            }
-<a href=#530 id=530 data-nosnippet>530</a>        }
-<a href=#531 id=531 data-nosnippet>531</a>    }
-<a href=#532 id=532 data-nosnippet>532</a>}
+<a href=#524 id=524 data-nosnippet>524</a>                <span class="attr">#[diagnostic::do_not_recommend]
+<a href=#525 id=525 data-nosnippet>525</a>                </span><span class="kw">impl</span>&lt;#verify_a&gt; Verify&lt;#verify_a&gt; <span class="kw">for </span>#model_ident {
+<a href=#526 id=526 data-nosnippet>526</a>                }
+<a href=#527 id=527 data-nosnippet>527</a>
+<a href=#528 id=528 data-nosnippet>528</a>                <span class="attr">#[diagnostic::do_not_recommend]
+<a href=#529 id=529 data-nosnippet>529</a>                </span><span class="kw">impl</span>&lt;#verify_a&gt; Verify&lt;#verify_a&gt; <span class="kw">for </span><span class="prelude-ty">Option</span>&lt;#model_ident&gt; {
+<a href=#530 id=530 data-nosnippet>530</a>                }
+<a href=#531 id=531 data-nosnippet>531</a>
+<a href=#532 id=532 data-nosnippet>532</a>                <span class="kw">fn </span>verify&lt;#verify_t: Verify&lt;#verify_a&gt;, #verify_a&gt;(<span class="kw">_</span>: <span class="kw-2">&amp;</span>#verify_t) {
+<a href=#533 id=533 data-nosnippet>533</a>                }
+<a href=#534 id=534 data-nosnippet>534</a>
+<a href=#535 id=535 data-nosnippet>535</a>                <span class="kw">let </span>instance = load::&lt;&lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;();
+<a href=#536 id=536 data-nosnippet>536</a>                verify::&lt;<span class="kw">_</span>, &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Relation&gt;::Model&gt;(instance.#verify_pair_belongs_to_exists_for_field());
+<a href=#537 id=537 data-nosnippet>537</a>            }
+<a href=#538 id=538 data-nosnippet>538</a>        }
+<a href=#539 id=539 data-nosnippet>539</a>    }
+<a href=#540 id=540 data-nosnippet>540</a>}
 </code></pre></div></section></main></body></html>

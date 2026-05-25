@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
+            window.path_to_searchindex_js = "searchindex-4161a174.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -179,16 +179,16 @@
 query, avoiding extra database round-trips when you access associations.</p>
 <h2 id="async-means-a-query"><a class="header" href="#async-means-a-query">Async means a query</a></h2>
 <p>Toasty’s API follows one rule for associations: <strong>if you <code>.await</code> it, it hits
-the database.</strong> The two ways to access
-an association make this visible in the code:</p>
+the database.</strong> Lazy relation fields make this visible in the code:</p>
 <ul>
 <li><code>user.posts().exec(&amp;mut db).await?</code> — async, executes a query.</li>
 <li><code>user.posts.get()</code> — not async, reads already-loaded data in memory.</li>
 </ul>
 <p>Because <code>.get()</code> is a plain (non-async) method, the compiler won’t let you
-confuse the two. You can scan any code path for <code>.await</code> to know exactly where
-database round-trips happen. This makes N+1 problems easy to spot and impossible
-to introduce by accident.</p>
+confuse the two. Plain eager relation fields are already-loaded values, so
+accessing <code>user.posts</code> also does not issue a query. You can scan any code path
+for <code>.await</code> to know exactly where database round-trips happen. This makes N+1
+problems easy to spot and impossible to introduce by accident.</p>
 <h2 id="the-n1-problem"><a class="header" href="#the-n1-problem">The N+1 problem</a></h2>
 <p>Without preloading, accessing a relation on each record in a list causes one
 query per record:</p>
@@ -205,8 +205,8 @@ for user in &amp;users {
 iteration. Preloading reduces this to a fixed number of queries regardless of
 how many records you load.</p>
 <h2 id="using-include"><a class="header" href="#using-include">Using <code>.include()</code></a></h2>
-<p>Add <code>.include()</code> to a query to preload a relation. Pass the field path from the
-model’s <code>fields()</code> accessor:</p>
+<p>Add <code>.include()</code> to a query to preload a <code>Deferred&lt;_&gt;</code> relation. Pass the field
+path from the model’s <code>fields()</code> accessor:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -251,16 +251,41 @@ query. After preloading, access the data through the field directly with
 with <code>user.posts().exec(&amp;mut db).await?</code>, which is async and always runs a
 query. The presence or absence of <code>.await</code> tells you whether code touches the
 database.</p>
+<h2 id="eager-relation-fields"><a class="header" href="#eager-relation-fields">Eager relation fields</a></h2>
+<p>A relation field that is not wrapped in <code>Deferred&lt;_&gt;</code> is loaded by every query
+that returns the model. This is equivalent to an implicit <code>.include(...)</code>.</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[has_many]
+    posts: Vec&lt;Post&gt;,
+}
+
+let user = User::filter_by_id(user_id).get(&amp;mut db).await?;
+
+// Already loaded — no .include() and no .get() wrapper.
+let post_count = user.posts.len();</code></pre>
+<p>Use eager relation fields when most queries for the model need the relation. Use
+<code>Deferred&lt;_&gt;</code> when callers should choose between lazy access and explicit
+<code>.include(...)</code>.</p>
+<p>Eager relations cannot form cycles. Toasty rejects a schema where eager loading
+would recurse forever, such as <code>User.posts: Vec&lt;Post&gt;</code> paired with
+<code>Post.user: User</code>. Make one side <code>Deferred&lt;_&gt;</code> when two models point at each
+other.</p>
 <h2 id="preloaded-vs-unloaded-access"><a class="header" href="#preloaded-vs-unloaded-access">Preloaded vs unloaded access</a></h2>
-<p>There are two ways to access a relation, depending on whether it was preloaded:</p>
+<p>There are three access patterns for relations:</p>
 <div class="table-wrapper">
 <table>
 <thead>
 <tr><th>Access pattern</th><th>Async</th><th>When to use</th><th>Queries</th></tr>
 </thead>
 <tbody>
-<tr><td><code>user.posts().exec(&amp;mut db).await?</code></td><td>Yes</td><td>Relation was not preloaded</td><td>Executes a query</td></tr>
-<tr><td><code>user.posts.get()</code></td><td>No</td><td>Relation was preloaded with <code>.include()</code></td><td>No query</td></tr>
+<tr><td><code>user.posts().exec(&amp;mut db).await?</code></td><td>Yes</td><td>Lazy relation was not preloaded</td><td>Executes a query</td></tr>
+<tr><td><code>user.posts.get()</code></td><td>No</td><td><code>Deferred&lt;_&gt;</code> relation was preloaded with <code>.include()</code></td><td>No query</td></tr>
+<tr><td><code>user.posts</code></td><td>No</td><td>Relation field is not wrapped in <code>Deferred&lt;_&gt;</code></td><td>No query</td></tr>
 </tbody>
 </table>
 </div>
@@ -472,12 +497,11 @@ for user in &amp;users {
 <tr><th>Syntax</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code>.include(Model::fields().relation())</code></td><td>Preload a relation in the query</td></tr>
-<tr><td><code>model.relation.get()</code></td><td>Access preloaded HasMany data (returns <code>&amp;[T]</code>)</td></tr>
-<tr><td><code>model.relation.get()</code></td><td>Access preloaded BelongsTo data (returns <code>&amp;T</code>)</td></tr>
-<tr><td><code>model.relation.get()</code></td><td>Access preloaded HasOne data (returns <code>&amp;T</code> or <code>&amp;Option&lt;T&gt;</code>)</td></tr>
+<tr><td><code>.include(Model::fields().relation())</code></td><td>Preload a <code>Deferred&lt;_&gt;</code> relation in the query</td></tr>
+<tr><td><code>model.relation.get()</code></td><td>Access preloaded <code>Deferred&lt;Vec&lt;T&gt;&gt;</code>, <code>Deferred&lt;T&gt;</code>, or <code>Deferred&lt;Option&lt;T&gt;&gt;</code> data</td></tr>
+<tr><td><code>model.relation</code></td><td>Access an eager <code>Vec&lt;T&gt;</code>, <code>T</code>, or <code>Option&lt;T&gt;</code> relation field</td></tr>
 <tr><td><code>model.relation.try_get()</code></td><td>Non-panicking access; returns <code>None</code> if not preloaded</td></tr>
-<tr><td><code>model.relation.is_unloaded()</code></td><td>Check if a relation was preloaded</td></tr>
+<tr><td><code>model.relation.is_unloaded()</code></td><td>Check whether a <code>Deferred&lt;_&gt;</code> relation was preloaded</td></tr>
 </tbody>
 </table>
 </div>

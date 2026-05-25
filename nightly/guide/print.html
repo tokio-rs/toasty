@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
+            window.path_to_searchindex_js = "searchindex-4161a174.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -3258,6 +3258,39 @@ when you need to navigate from child to parent but not the reverse. The opposite
 is not allowed — a <code>#[has_many]</code> or <code>#[has_one]</code> field always requires a
 matching <code>#[belongs_to]</code> on the target model, because Toasty needs the foreign
 key definition to know how the models connect.</p>
+<h3 id="lazy-and-eager-relation-fields"><a class="header" href="#lazy-and-eager-relation-fields">Lazy and eager relation fields</a></h3>
+<p>The relation field type controls when Toasty loads the related records.</p>
+<p>Use <code>Deferred&lt;_&gt;</code> for a lazy relation. A normal query leaves the field unloaded.
+Load it by calling the generated relation accessor, or preload it with
+<code>.include(...)</code>:</p>
+<pre><code class="language-rust ignore">#[has_many]
+posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,
+
+let posts = user.posts().exec(&amp;mut db).await?;</code></pre>
+<p>Use the relation value directly for an eager relation. Toasty loads the relation
+with every query that returns the model, as if the query had an implicit
+<code>.include(...)</code>:</p>
+<pre><code class="language-rust ignore">#[has_many]
+posts: Vec&lt;Post&gt;,
+
+let user = User::filter_by_id(user_id).get(&amp;mut db).await?;
+let post_count = user.posts.len();</code></pre>
+<p>The accepted eager field types are:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Attribute</th><th>Lazy field type</th><th>Eager field type</th></tr>
+</thead>
+<tbody>
+<tr><td><code>#[has_many]</code></td><td><code>Deferred&lt;Vec&lt;T&gt;&gt;</code></td><td><code>Vec&lt;T&gt;</code></td></tr>
+<tr><td><code>#[has_one]</code></td><td><code>Deferred&lt;T&gt;</code> or <code>Deferred&lt;Option&lt;T&gt;&gt;</code></td><td><code>T</code> or <code>Option&lt;T&gt;</code></td></tr>
+<tr><td><code>#[belongs_to]</code></td><td><code>Deferred&lt;T&gt;</code> or <code>Deferred&lt;Option&lt;T&gt;&gt;</code></td><td><code>T</code> or <code>Option&lt;T&gt;</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Eager relations can load other eager relations. Toasty rejects schemas with an
+eager-load cycle, such as <code>User.posts: Vec&lt;Post&gt;</code> and <code>Post.user: User</code>. Wrap at
+least one relation in <code>Deferred&lt;_&gt;</code> to break the cycle.</p>
 <h2 id="required-vs-optional-relationships"><a class="header" href="#required-vs-optional-relationships">Required vs optional relationships</a></h2>
 <p>The nullability of the foreign key field controls whether the relationship is
 required or optional.</p>
@@ -3349,9 +3382,9 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 <tr><th>You want to express…</th><th>Use</th><th>FK goes on</th></tr>
 </thead>
 <tbody>
-<tr><td>A post has one author</td><td><code>Post</code> → <code>Deferred&lt;User&gt;</code> + <code>User</code> → <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code></td><td><code>posts.user_id</code></td></tr>
-<tr><td>A user has one profile</td><td><code>User</code> → <code>Deferred&lt;Profile&gt;</code> + <code>Profile</code> → <code>Deferred&lt;User&gt;</code></td><td><code>profiles.user_id</code></td></tr>
-<tr><td>A comment belongs to a post</td><td><code>Comment</code> → <code>Deferred&lt;Post&gt;</code> + <code>Post</code> → <code>Deferred&lt;Vec&lt;Comment&gt;&gt;</code></td><td><code>comments.post_id</code></td></tr>
+<tr><td>A post has one author</td><td><code>Post</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code> + <code>User</code> → <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code> or <code>Vec&lt;Post&gt;</code></td><td><code>posts.user_id</code></td></tr>
+<tr><td>A user has one profile</td><td><code>User</code> → <code>Deferred&lt;Profile&gt;</code> or <code>Profile</code> + <code>Profile</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code></td><td><code>profiles.user_id</code></td></tr>
+<tr><td>A comment belongs to a post</td><td><code>Comment</code> → <code>Deferred&lt;Post&gt;</code> or <code>Post</code> + <code>Post</code> → <code>Deferred&lt;Vec&lt;Comment&gt;&gt;</code> or <code>Vec&lt;Comment&gt;</code></td><td><code>comments.post_id</code></td></tr>
 </tbody>
 </table>
 </div>
@@ -3420,9 +3453,9 @@ queries by loading relations upfront with <code>.include()</code></li>
 foreign key. The child stores the parent’s ID in one of its own fields.</p>
 <h2 id="defining-a-belongsto-relationship"><a class="header" href="#defining-a-belongsto-relationship">Defining a BelongsTo relationship</a></h2>
 <p>A BelongsTo relationship requires two things on the child model: a foreign key
-field and a <code>Deferred&lt;T&gt;</code> relation field. The <code>#[belongs_to]</code> attribute tells
-Toasty which field holds the foreign key and which field on the parent it
-references.</p>
+field and a relation field. Wrap the relation in <code>Deferred&lt;T&gt;</code> for lazy loading,
+or use <code>T</code> directly for eager loading. The <code>#[belongs_to]</code> attribute tells Toasty
+which field holds the foreign key and which field on the parent it references.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -3467,6 +3500,11 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 </code></pre>
 <p>The parent model (<code>User</code>) typically declares a <code>#[has_many]</code> field pointing back
 at the child. See <a href="#hasmany">HasMany</a> for details.</p>
+<p>Use a plain relation field when every loaded child should also load its parent:</p>
+<pre><code class="language-rust ignore">#[belongs_to(key = user_id, references = id)]
+user: User,</code></pre>
+<p>This behaves like an implicit <code>.include(Post::fields().user())</code> on every query
+that returns <code>Post</code>.</p>
 <h2 id="optional-belongsto"><a class="header" href="#optional-belongsto">Optional BelongsTo</a></h2>
 <p>If a child does not always have a parent, make the foreign key <code>Option&lt;T&gt;</code> and
 wrap the relation type in <code>Option</code>:</p>
@@ -3496,6 +3534,9 @@ struct Post {
 }
 <span class="boring">}</span></code></pre>
 <p>The <code>user_id</code> column is now nullable. A post can exist without a user.</p>
+<p>For eager loading, omit <code>Deferred</code> and keep the <code>Option</code>:</p>
+<pre><code class="language-rust ignore">#[belongs_to(key = user_id, references = id)]
+user: Option&lt;User&gt;,</code></pre>
 <h2 id="accessing-the-related-record"><a class="header" href="#accessing-the-related-record">Accessing the related record</a></h2>
 <p>Call the relation method on the child instance to get the parent. The method
 name matches the relation field name.</p>
@@ -3698,11 +3739,13 @@ parent specifies <code>pair = owner</code> to establish the connection.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="hasmany"><a class="header" href="#hasmany">HasMany</a></h1>
 <p>A <code>HasMany</code> relationship connects a parent model to multiple child records. The
-parent declares a <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> field, and the child stores a foreign key
-pointing back to the parent via <a href="#belongsto">BelongsTo</a>.</p>
+parent declares a <code>Vec&lt;T&gt;</code> relation field, usually wrapped in <code>Deferred&lt;_&gt;</code> for
+lazy loading. The child stores a foreign key pointing back to the parent via
+<a href="#belongsto">BelongsTo</a>.</p>
 <h2 id="defining-a-hasmany-relationship"><a class="header" href="#defining-a-hasmany-relationship">Defining a HasMany relationship</a></h2>
-<p>Add a <code>#[has_many]</code> field of type <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> on the parent model. The child
-model must have a corresponding <code>#[belongs_to]</code> field.</p>
+<p>Add a <code>#[has_many]</code> field on the parent model. Use <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> for lazy
+loading, or <code>Vec&lt;T&gt;</code> for eager loading. The child model must have a
+corresponding <code>#[belongs_to]</code> field.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -3735,6 +3778,11 @@ struct Post {
 <span class="boring">}</span></code></pre>
 <p>The <code>#[has_many]</code> attribute does not add any columns to the parent’s table. The
 relationship is stored entirely in the child’s foreign key column (<code>user_id</code>).</p>
+<p>With an eager field, Toasty loads the children whenever it loads the parent:</p>
+<pre><code class="language-rust ignore">#[has_many]
+posts: Vec&lt;Post&gt;,</code></pre>
+<p>This behaves like an implicit <code>.include(User::fields().posts())</code> on every query
+that returns <code>User</code>.</p>
 <h2 id="querying-children"><a class="header" href="#querying-children">Querying children</a></h2>
 <p>Call the relation method on a parent instance to get an accessor for its
 children:</p>
@@ -4053,9 +4101,10 @@ available on DynamoDB.</p>
 <a href="#hasmany">HasMany</a>, the foreign key lives on the child model, but
 <code>HasOne</code> enforces that at most one child exists per parent.</p>
 <h2 id="defining-a-hasone-relationship"><a class="header" href="#defining-a-hasone-relationship">Defining a HasOne relationship</a></h2>
-<p>Add a <code>#[has_one]</code> field of type <code>Deferred&lt;T&gt;</code> on the parent model. The child
-model must have a corresponding <code>#[belongs_to]</code> field with a <code>#[unique]</code> foreign
-key (since each parent maps to at most one child):</p>
+<p>Add a <code>#[has_one]</code> field on the parent model. Use <code>Deferred&lt;T&gt;</code> or
+<code>Deferred&lt;Option&lt;T&gt;&gt;</code> for lazy loading, or <code>T</code> / <code>Option&lt;T&gt;</code> for eager loading.
+The child model must have a corresponding <code>#[belongs_to]</code> field with a
+<code>#[unique]</code> foreign key (since each parent maps to at most one child):</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -4095,9 +4144,14 @@ that only one profile can reference a given user. In the database:</p>
 );
 CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id);
 </code></pre>
+<p>With an eager field, Toasty loads the child whenever it loads the parent:</p>
+<pre><code class="language-rust ignore">#[has_one]
+profile: Option&lt;Profile&gt;,</code></pre>
+<p>This behaves like an implicit <code>.include(User::fields().profile())</code> on every
+query that returns <code>User</code>.</p>
 <h2 id="optional-vs-required-hasone"><a class="header" href="#optional-vs-required-hasone">Optional vs required HasOne</a></h2>
 <p>The type parameter on <code>HasOne</code> controls whether the parent must have a child.</p>
-<h3 id="optional-deferredoptionprofile"><a class="header" href="#optional-deferredoptionprofile">Optional: <code>Deferred&lt;Option&lt;Profile&gt;&gt;</code></a></h3>
+<h3 id="optional-deferredoptionprofile-or-optionprofile"><a class="header" href="#optional-deferredoptionprofile-or-optionprofile">Optional: <code>Deferred&lt;Option&lt;Profile&gt;&gt;</code> or <code>Option&lt;Profile&gt;</code></a></h3>
 <p>The parent may or may not have a child. Creating a parent without a child is
 allowed:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -4131,7 +4185,7 @@ assert!(user.profile().exec(&amp;mut db).await?.is_none());
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<h3 id="required-deferredprofile"><a class="header" href="#required-deferredprofile">Required: <code>Deferred&lt;Profile&gt;</code></a></h3>
+<h3 id="required-deferredprofile-or-profile"><a class="header" href="#required-deferredprofile-or-profile">Required: <code>Deferred&lt;Profile&gt;</code> or <code>Profile</code></a></h3>
 <p>The parent must have a child. Creating a parent requires providing a child:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -4418,16 +4472,16 @@ generates:</p>
 query, avoiding extra database round-trips when you access associations.</p>
 <h2 id="async-means-a-query"><a class="header" href="#async-means-a-query">Async means a query</a></h2>
 <p>Toasty’s API follows one rule for associations: <strong>if you <code>.await</code> it, it hits
-the database.</strong> The two ways to access
-an association make this visible in the code:</p>
+the database.</strong> Lazy relation fields make this visible in the code:</p>
 <ul>
 <li><code>user.posts().exec(&amp;mut db).await?</code> — async, executes a query.</li>
 <li><code>user.posts.get()</code> — not async, reads already-loaded data in memory.</li>
 </ul>
 <p>Because <code>.get()</code> is a plain (non-async) method, the compiler won’t let you
-confuse the two. You can scan any code path for <code>.await</code> to know exactly where
-database round-trips happen. This makes N+1 problems easy to spot and impossible
-to introduce by accident.</p>
+confuse the two. Plain eager relation fields are already-loaded values, so
+accessing <code>user.posts</code> also does not issue a query. You can scan any code path
+for <code>.await</code> to know exactly where database round-trips happen. This makes N+1
+problems easy to spot and impossible to introduce by accident.</p>
 <h2 id="the-n1-problem"><a class="header" href="#the-n1-problem">The N+1 problem</a></h2>
 <p>Without preloading, accessing a relation on each record in a list causes one
 query per record:</p>
@@ -4444,8 +4498,8 @@ for user in &amp;users {
 iteration. Preloading reduces this to a fixed number of queries regardless of
 how many records you load.</p>
 <h2 id="using-include"><a class="header" href="#using-include">Using <code>.include()</code></a></h2>
-<p>Add <code>.include()</code> to a query to preload a relation. Pass the field path from the
-model’s <code>fields()</code> accessor:</p>
+<p>Add <code>.include()</code> to a query to preload a <code>Deferred&lt;_&gt;</code> relation. Pass the field
+path from the model’s <code>fields()</code> accessor:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -4490,16 +4544,41 @@ query. After preloading, access the data through the field directly with
 with <code>user.posts().exec(&amp;mut db).await?</code>, which is async and always runs a
 query. The presence or absence of <code>.await</code> tells you whether code touches the
 database.</p>
+<h2 id="eager-relation-fields"><a class="header" href="#eager-relation-fields">Eager relation fields</a></h2>
+<p>A relation field that is not wrapped in <code>Deferred&lt;_&gt;</code> is loaded by every query
+that returns the model. This is equivalent to an implicit <code>.include(...)</code>.</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[has_many]
+    posts: Vec&lt;Post&gt;,
+}
+
+let user = User::filter_by_id(user_id).get(&amp;mut db).await?;
+
+// Already loaded — no .include() and no .get() wrapper.
+let post_count = user.posts.len();</code></pre>
+<p>Use eager relation fields when most queries for the model need the relation. Use
+<code>Deferred&lt;_&gt;</code> when callers should choose between lazy access and explicit
+<code>.include(...)</code>.</p>
+<p>Eager relations cannot form cycles. Toasty rejects a schema where eager loading
+would recurse forever, such as <code>User.posts: Vec&lt;Post&gt;</code> paired with
+<code>Post.user: User</code>. Make one side <code>Deferred&lt;_&gt;</code> when two models point at each
+other.</p>
 <h2 id="preloaded-vs-unloaded-access"><a class="header" href="#preloaded-vs-unloaded-access">Preloaded vs unloaded access</a></h2>
-<p>There are two ways to access a relation, depending on whether it was preloaded:</p>
+<p>There are three access patterns for relations:</p>
 <div class="table-wrapper">
 <table>
 <thead>
 <tr><th>Access pattern</th><th>Async</th><th>When to use</th><th>Queries</th></tr>
 </thead>
 <tbody>
-<tr><td><code>user.posts().exec(&amp;mut db).await?</code></td><td>Yes</td><td>Relation was not preloaded</td><td>Executes a query</td></tr>
-<tr><td><code>user.posts.get()</code></td><td>No</td><td>Relation was preloaded with <code>.include()</code></td><td>No query</td></tr>
+<tr><td><code>user.posts().exec(&amp;mut db).await?</code></td><td>Yes</td><td>Lazy relation was not preloaded</td><td>Executes a query</td></tr>
+<tr><td><code>user.posts.get()</code></td><td>No</td><td><code>Deferred&lt;_&gt;</code> relation was preloaded with <code>.include()</code></td><td>No query</td></tr>
+<tr><td><code>user.posts</code></td><td>No</td><td>Relation field is not wrapped in <code>Deferred&lt;_&gt;</code></td><td>No query</td></tr>
 </tbody>
 </table>
 </div>
@@ -4711,12 +4790,11 @@ for user in &amp;users {
 <tr><th>Syntax</th><th>Description</th></tr>
 </thead>
 <tbody>
-<tr><td><code>.include(Model::fields().relation())</code></td><td>Preload a relation in the query</td></tr>
-<tr><td><code>model.relation.get()</code></td><td>Access preloaded HasMany data (returns <code>&amp;[T]</code>)</td></tr>
-<tr><td><code>model.relation.get()</code></td><td>Access preloaded BelongsTo data (returns <code>&amp;T</code>)</td></tr>
-<tr><td><code>model.relation.get()</code></td><td>Access preloaded HasOne data (returns <code>&amp;T</code> or <code>&amp;Option&lt;T&gt;</code>)</td></tr>
+<tr><td><code>.include(Model::fields().relation())</code></td><td>Preload a <code>Deferred&lt;_&gt;</code> relation in the query</td></tr>
+<tr><td><code>model.relation.get()</code></td><td>Access preloaded <code>Deferred&lt;Vec&lt;T&gt;&gt;</code>, <code>Deferred&lt;T&gt;</code>, or <code>Deferred&lt;Option&lt;T&gt;&gt;</code> data</td></tr>
+<tr><td><code>model.relation</code></td><td>Access an eager <code>Vec&lt;T&gt;</code>, <code>T</code>, or <code>Option&lt;T&gt;</code> relation field</td></tr>
 <tr><td><code>model.relation.try_get()</code></td><td>Non-panicking access; returns <code>None</code> if not preloaded</td></tr>
-<tr><td><code>model.relation.is_unloaded()</code></td><td>Check if a relation was preloaded</td></tr>
+<tr><td><code>model.relation.is_unloaded()</code></td><td>Check whether a <code>Deferred&lt;_&gt;</code> relation was preloaded</td></tr>
 </tbody>
 </table>
 </div>
@@ -6042,8 +6120,8 @@ the value requires either a follow-up <code>.exec()</code> call or a preload wit
 read: a <code>Document</code> body, a binary blob, an audit-event JSON payload.
 Without the deferred annotation, every list query reads every column
 whether the caller needs it or not.</p>
-<p>The API mirrors deferred relation fields: a synchronous <code>.get()</code> reads an
-already-loaded value, an async per-field accessor loads on demand, and
+<p>The API mirrors relation fields wrapped in <code>Deferred&lt;_&gt;</code>: a synchronous <code>.get()</code>
+reads an already-loaded value, an async per-field accessor loads on demand, and
 <code>.include()</code> preloads as part of the parent query.</p>
 <h2 id="marking-a-field-as-deferred"><a class="header" href="#marking-a-field-as-deferred">Marking a field as deferred</a></h2>
 <p>Annotate the field with <code>#[deferred]</code> and wrap its type in <code>Deferred&lt;T&gt;</code>:</p>
@@ -6123,8 +6201,8 @@ let body: &amp;String = doc.body.get();   // synchronous, no query
 </span><span class="boring">}</span></code></pre>
 <p><code>#[deferred]</code> is supported on primitive fields and on embedded types
 (<code>#[derive(Embed)]</code> structs and enums). It does not compose with
-<code>#[belongs_to]</code>, <code>#[has_many]</code>, or <code>#[has_one]</code> — relations are already
-lazy.</p>
+<code>#[belongs_to]</code>, <code>#[has_many]</code>, or <code>#[has_one]</code>. Relation fields use
+<code>Deferred&lt;_&gt;</code> in the field type itself when they should be lazy.</p>
 <p>A deferred embed value omits all of the embed’s columns from the default
 projection. Loading is the same as for a primitive: call the per-field
 accessor, or chain <code>.include()</code> to preload alongside the parent query.</p>
@@ -6927,8 +7005,9 @@ one crate.</p>
 <p>You don’t need to list every model. Registering a model also registers any
 models reachable through its fields — <code>BelongsTo</code>, <code>HasMany</code>, <code>HasOne</code>, and
 embedded types are all discovered by traversing the model’s fields. For
-example, if <code>User</code> has a <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code> field and <code>Post</code> has a <code>Deferred&lt;User&gt;</code>
-field, <code>toasty::models!(User)</code> registers both <code>User</code> and <code>Post</code>.</p>
+example, if <code>User</code> has a <code>Vec&lt;Post&gt;</code> or <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code> field and <code>Post</code>
+has a <code>User</code> or <code>Deferred&lt;User&gt;</code> field, <code>toasty::models!(User)</code> registers both
+<code>User</code> and <code>Post</code>.</p>
 <h2 id="connection-urls"><a class="header" href="#connection-urls">Connection URLs</a></h2>
 <p>The connection URL determines which database driver Toasty uses. Each driver
 requires its corresponding feature flag in <code>Cargo.toml</code>.</p>

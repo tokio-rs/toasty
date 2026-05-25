@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-66ef6eda.js";
+            window.path_to_searchindex_js = "searchindex-4161a174.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-17951f78.js"></script>
@@ -176,11 +176,13 @@
                     <main>
                         <h1 id="hasmany"><a class="header" href="#hasmany">HasMany</a></h1>
 <p>A <code>HasMany</code> relationship connects a parent model to multiple child records. The
-parent declares a <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> field, and the child stores a foreign key
-pointing back to the parent via <a href="./belongs-to.html">BelongsTo</a>.</p>
+parent declares a <code>Vec&lt;T&gt;</code> relation field, usually wrapped in <code>Deferred&lt;_&gt;</code> for
+lazy loading. The child stores a foreign key pointing back to the parent via
+<a href="./belongs-to.html">BelongsTo</a>.</p>
 <h2 id="defining-a-hasmany-relationship"><a class="header" href="#defining-a-hasmany-relationship">Defining a HasMany relationship</a></h2>
-<p>Add a <code>#[has_many]</code> field of type <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> on the parent model. The child
-model must have a corresponding <code>#[belongs_to]</code> field.</p>
+<p>Add a <code>#[has_many]</code> field on the parent model. Use <code>Deferred&lt;Vec&lt;T&gt;&gt;</code> for lazy
+loading, or <code>Vec&lt;T&gt;</code> for eager loading. The child model must have a
+corresponding <code>#[belongs_to]</code> field.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -213,6 +215,11 @@ struct Post {
 <span class="boring">}</span></code></pre>
 <p>The <code>#[has_many]</code> attribute does not add any columns to the parent’s table. The
 relationship is stored entirely in the child’s foreign key column (<code>user_id</code>).</p>
+<p>With an eager field, Toasty loads the children whenever it loads the parent:</p>
+<pre><code class="language-rust ignore">#[has_many]
+posts: Vec&lt;Post&gt;,</code></pre>
+<p>This behaves like an implicit <code>.include(User::fields().posts())</code> on every query
+that returns <code>User</code>.</p>
 <h2 id="querying-children"><a class="header" href="#querying-children">Querying children</a></h2>
 <p>Call the relation method on a parent instance to get an accessor for its
 children:</p>

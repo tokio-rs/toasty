@@ -268,192 +268,196 @@
 <a href=#268 id=268 data-nosnippet>268</a>        field_index: usize,
 <a href=#269 id=269 data-nosnippet>269</a>        nested: <span class="kw-2">&amp;</span>[stmt::Projection],
 <a href=#270 id=270 data-nosnippet>270</a>    ) {
-<a href=#271 id=271 data-nosnippet>271</a>        returning[field_index] =
-<a href=#272 id=272 data-nosnippet>272</a>            lazy_slot::loaded_expr(<span class="self">self</span>.build_relation_subquery(field_index, nested));
-<a href=#273 id=273 data-nosnippet>273</a>    }
-<a href=#274 id=274 data-nosnippet>274</a>
-<a href=#275 id=275 data-nosnippet>275</a>    <span class="doccomment">/// Build a subquery that loads the related model(s) for a
-<a href=#276 id=276 data-nosnippet>276</a>    /// `BelongsTo`/`HasOne`/`HasMany` field, run the canonical lowering
-<a href=#277 id=277 data-nosnippet>277</a>    /// pipeline on it, and return it stitched onto the parent statement
-<a href=#278 id=278 data-nosnippet>278</a>    /// as an `Expr::Arg`. Used both by `.include(...)` (which wraps the
-<a href=#279 id=279 data-nosnippet>279</a>    /// result as a loaded lazy slot before splicing it into a record slot)
-<a href=#280 id=280 data-nosnippet>280</a>    /// and by `.select(rel_field)` (which uses the raw result as the entire
-<a href=#281 id=281 data-nosnippet>281</a>    /// projection expression).
-<a href=#282 id=282 data-nosnippet>282</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>build_relation_subquery(
-<a href=#283 id=283 data-nosnippet>283</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#284 id=284 data-nosnippet>284</a>        field_index: usize,
-<a href=#285 id=285 data-nosnippet>285</a>        nested: <span class="kw-2">&amp;</span>[stmt::Projection],
-<a href=#286 id=286 data-nosnippet>286</a>    ) -&gt; stmt::Expr {
-<a href=#287 id=287 data-nosnippet>287</a>        <span class="kw">let </span>field = <span class="kw-2">&amp;</span><span class="self">self</span>.model_unwrap().fields[field_index];
-<a href=#288 id=288 data-nosnippet>288</a>
-<a href=#289 id=289 data-nosnippet>289</a>        <span class="comment">// A multi-step (`via`) relation reaches its target through a path of
-<a href=#290 id=290 data-nosnippet>290</a>        // existing relations. Build the child query as a single JOIN through
-<a href=#291 id=291 data-nosnippet>291</a>        // the via chain so the engine can issue one query (per include) and
-<a href=#292 id=292 data-nosnippet>292</a>        // group the children with the parent in `NestedMerge`. This relies on
-<a href=#293 id=293 data-nosnippet>293</a>        // the database executing the join, so it is SQL-only — a key-value
-<a href=#294 id=294 data-nosnippet>294</a>        // backend would need a cascade of per-step queries instead.
-<a href=#295 id=295 data-nosnippet>295</a>        </span><span class="kw">let </span>via = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
-<a href=#296 id=296 data-nosnippet>296</a>            app::FieldTy::HasMany(rel) =&gt; rel.kind.via(),
-<a href=#297 id=297 data-nosnippet>297</a>            app::FieldTy::HasOne(rel) =&gt; rel.kind.via(),
-<a href=#298 id=298 data-nosnippet>298</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#299 id=299 data-nosnippet>299</a>        };
-<a href=#300 id=300 data-nosnippet>300</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(via) = via {
-<a href=#301 id=301 data-nosnippet>301</a>            <span class="kw">if </span>!<span class="self">self</span>.capability().sql {
-<a href=#302 id=302 data-nosnippet>302</a>                <span class="macro">todo!</span>(
-<a href=#303 id=303 data-nosnippet>303</a>                    <span class="string">"`.include()` / `.select()` of a multi-step `via` relation is only \
-<a href=#304 id=304 data-nosnippet>304</a>                     supported on SQL backends; query the relation directly instead"
-<a href=#305 id=305 data-nosnippet>305</a>                </span>);
-<a href=#306 id=306 data-nosnippet>306</a>            }
-<a href=#307 id=307 data-nosnippet>307</a>            <span class="kw">return </span><span class="self">self</span>.build_via_include_subquery(field_index, via, nested);
-<a href=#308 id=308 data-nosnippet>308</a>        }
-<a href=#309 id=309 data-nosnippet>309</a>
-<a href=#310 id=310 data-nosnippet>310</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>stmt, target_model_id) = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
-<a href=#311 id=311 data-nosnippet>311</a>            app::FieldTy::HasMany(rel) =&gt; (
-<a href=#312 id=312 data-nosnippet>312</a>                stmt::Query::new_select(
-<a href=#313 id=313 data-nosnippet>313</a>                    rel.target,
-<a href=#314 id=314 data-nosnippet>314</a>                    stmt::Expr::eq(
-<a href=#315 id=315 data-nosnippet>315</a>                        stmt::Expr::ref_parent_model(),
-<a href=#316 id=316 data-nosnippet>316</a>                        stmt::Expr::ref_self_field(direct_pair(<span class="kw-2">&amp;</span>rel.kind)),
-<a href=#317 id=317 data-nosnippet>317</a>                    ),
-<a href=#318 id=318 data-nosnippet>318</a>                ),
-<a href=#319 id=319 data-nosnippet>319</a>                rel.target,
-<a href=#320 id=320 data-nosnippet>320</a>            ),
-<a href=#321 id=321 data-nosnippet>321</a>            <span class="comment">// To handle single relations, we need a new query modifier that
-<a href=#322 id=322 data-nosnippet>322</a>            // returns a single record and not a list. This matters for the
-<a href=#323 id=323 data-nosnippet>323</a>            // type system.
-<a href=#324 id=324 data-nosnippet>324</a>            </span>app::FieldTy::BelongsTo(rel) =&gt; {
-<a href=#325 id=325 data-nosnippet>325</a>                <span class="kw">let </span>source_fk;
-<a href=#326 id=326 data-nosnippet>326</a>                <span class="kw">let </span>target_pk;
-<a href=#327 id=327 data-nosnippet>327</a>
-<a href=#328 id=328 data-nosnippet>328</a>                <span class="kw">if let </span>[fk_field] = <span class="kw-2">&amp;</span>rel.foreign_key.fields[..] {
-<a href=#329 id=329 data-nosnippet>329</a>                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
-<a href=#330 id=330 data-nosnippet>330</a>                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
-<a href=#331 id=331 data-nosnippet>331</a>                } <span class="kw">else </span>{
-<a href=#332 id=332 data-nosnippet>332</a>                    <span class="kw">let </span><span class="kw-2">mut </span>source_fk_fields = <span class="macro">vec!</span>[];
-<a href=#333 id=333 data-nosnippet>333</a>                    <span class="kw">let </span><span class="kw-2">mut </span>target_pk_fields = <span class="macro">vec!</span>[];
-<a href=#334 id=334 data-nosnippet>334</a>
-<a href=#335 id=335 data-nosnippet>335</a>                    <span class="kw">for </span>fk_field <span class="kw">in </span><span class="kw-2">&amp;</span>rel.foreign_key.fields {
-<a href=#336 id=336 data-nosnippet>336</a>                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-<a href=#337 id=337 data-nosnippet>337</a>                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-<a href=#338 id=338 data-nosnippet>338</a>                    }
-<a href=#339 id=339 data-nosnippet>339</a>
-<a href=#340 id=340 data-nosnippet>340</a>                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
-<a href=#341 id=341 data-nosnippet>341</a>                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
-<a href=#342 id=342 data-nosnippet>342</a>                }
+<a href=#271 id=271 data-nosnippet>271</a>        <span class="kw">let </span>value = <span class="self">self</span>.build_relation_subquery(field_index, nested);
+<a href=#272 id=272 data-nosnippet>272</a>        returning[field_index] = <span class="kw">if </span><span class="self">self</span>.model_unwrap().fields[field_index].deferred {
+<a href=#273 id=273 data-nosnippet>273</a>            lazy_slot::loaded_expr(value)
+<a href=#274 id=274 data-nosnippet>274</a>        } <span class="kw">else </span>{
+<a href=#275 id=275 data-nosnippet>275</a>            value
+<a href=#276 id=276 data-nosnippet>276</a>        };
+<a href=#277 id=277 data-nosnippet>277</a>    }
+<a href=#278 id=278 data-nosnippet>278</a>
+<a href=#279 id=279 data-nosnippet>279</a>    <span class="doccomment">/// Build a subquery that loads the related model(s) for a
+<a href=#280 id=280 data-nosnippet>280</a>    /// `BelongsTo`/`HasOne`/`HasMany` field, run the canonical lowering
+<a href=#281 id=281 data-nosnippet>281</a>    /// pipeline on it, and return it stitched onto the parent statement
+<a href=#282 id=282 data-nosnippet>282</a>    /// as an `Expr::Arg`. Used both by `.include(...)` (which wraps the
+<a href=#283 id=283 data-nosnippet>283</a>    /// result as a loaded lazy slot before splicing it into a record slot)
+<a href=#284 id=284 data-nosnippet>284</a>    /// and by `.select(rel_field)` (which uses the raw result as the entire
+<a href=#285 id=285 data-nosnippet>285</a>    /// projection expression).
+<a href=#286 id=286 data-nosnippet>286</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>build_relation_subquery(
+<a href=#287 id=287 data-nosnippet>287</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#288 id=288 data-nosnippet>288</a>        field_index: usize,
+<a href=#289 id=289 data-nosnippet>289</a>        nested: <span class="kw-2">&amp;</span>[stmt::Projection],
+<a href=#290 id=290 data-nosnippet>290</a>    ) -&gt; stmt::Expr {
+<a href=#291 id=291 data-nosnippet>291</a>        <span class="kw">let </span>field = <span class="kw-2">&amp;</span><span class="self">self</span>.model_unwrap().fields[field_index];
+<a href=#292 id=292 data-nosnippet>292</a>
+<a href=#293 id=293 data-nosnippet>293</a>        <span class="comment">// A multi-step (`via`) relation reaches its target through a path of
+<a href=#294 id=294 data-nosnippet>294</a>        // existing relations. Build the child query as a single JOIN through
+<a href=#295 id=295 data-nosnippet>295</a>        // the via chain so the engine can issue one query (per include) and
+<a href=#296 id=296 data-nosnippet>296</a>        // group the children with the parent in `NestedMerge`. This relies on
+<a href=#297 id=297 data-nosnippet>297</a>        // the database executing the join, so it is SQL-only — a key-value
+<a href=#298 id=298 data-nosnippet>298</a>        // backend would need a cascade of per-step queries instead.
+<a href=#299 id=299 data-nosnippet>299</a>        </span><span class="kw">let </span>via = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
+<a href=#300 id=300 data-nosnippet>300</a>            app::FieldTy::HasMany(rel) =&gt; rel.kind.via(),
+<a href=#301 id=301 data-nosnippet>301</a>            app::FieldTy::HasOne(rel) =&gt; rel.kind.via(),
+<a href=#302 id=302 data-nosnippet>302</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
+<a href=#303 id=303 data-nosnippet>303</a>        };
+<a href=#304 id=304 data-nosnippet>304</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(via) = via {
+<a href=#305 id=305 data-nosnippet>305</a>            <span class="kw">if </span>!<span class="self">self</span>.capability().sql {
+<a href=#306 id=306 data-nosnippet>306</a>                <span class="macro">todo!</span>(
+<a href=#307 id=307 data-nosnippet>307</a>                    <span class="string">"`.include()` / `.select()` of a multi-step `via` relation is only \
+<a href=#308 id=308 data-nosnippet>308</a>                     supported on SQL backends; query the relation directly instead"
+<a href=#309 id=309 data-nosnippet>309</a>                </span>);
+<a href=#310 id=310 data-nosnippet>310</a>            }
+<a href=#311 id=311 data-nosnippet>311</a>            <span class="kw">return </span><span class="self">self</span>.build_via_include_subquery(field_index, via, nested);
+<a href=#312 id=312 data-nosnippet>312</a>        }
+<a href=#313 id=313 data-nosnippet>313</a>
+<a href=#314 id=314 data-nosnippet>314</a>        <span class="kw">let </span>(<span class="kw-2">mut </span>stmt, target_model_id) = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
+<a href=#315 id=315 data-nosnippet>315</a>            app::FieldTy::HasMany(rel) =&gt; (
+<a href=#316 id=316 data-nosnippet>316</a>                stmt::Query::new_select(
+<a href=#317 id=317 data-nosnippet>317</a>                    rel.target,
+<a href=#318 id=318 data-nosnippet>318</a>                    stmt::Expr::eq(
+<a href=#319 id=319 data-nosnippet>319</a>                        stmt::Expr::ref_parent_model(),
+<a href=#320 id=320 data-nosnippet>320</a>                        stmt::Expr::ref_self_field(direct_pair(<span class="kw-2">&amp;</span>rel.kind)),
+<a href=#321 id=321 data-nosnippet>321</a>                    ),
+<a href=#322 id=322 data-nosnippet>322</a>                ),
+<a href=#323 id=323 data-nosnippet>323</a>                rel.target,
+<a href=#324 id=324 data-nosnippet>324</a>            ),
+<a href=#325 id=325 data-nosnippet>325</a>            <span class="comment">// To handle single relations, we need a new query modifier that
+<a href=#326 id=326 data-nosnippet>326</a>            // returns a single record and not a list. This matters for the
+<a href=#327 id=327 data-nosnippet>327</a>            // type system.
+<a href=#328 id=328 data-nosnippet>328</a>            </span>app::FieldTy::BelongsTo(rel) =&gt; {
+<a href=#329 id=329 data-nosnippet>329</a>                <span class="kw">let </span>source_fk;
+<a href=#330 id=330 data-nosnippet>330</a>                <span class="kw">let </span>target_pk;
+<a href=#331 id=331 data-nosnippet>331</a>
+<a href=#332 id=332 data-nosnippet>332</a>                <span class="kw">if let </span>[fk_field] = <span class="kw-2">&amp;</span>rel.foreign_key.fields[..] {
+<a href=#333 id=333 data-nosnippet>333</a>                    source_fk = stmt::Expr::ref_parent_field(fk_field.source);
+<a href=#334 id=334 data-nosnippet>334</a>                    target_pk = stmt::Expr::ref_self_field(fk_field.target);
+<a href=#335 id=335 data-nosnippet>335</a>                } <span class="kw">else </span>{
+<a href=#336 id=336 data-nosnippet>336</a>                    <span class="kw">let </span><span class="kw-2">mut </span>source_fk_fields = <span class="macro">vec!</span>[];
+<a href=#337 id=337 data-nosnippet>337</a>                    <span class="kw">let </span><span class="kw-2">mut </span>target_pk_fields = <span class="macro">vec!</span>[];
+<a href=#338 id=338 data-nosnippet>338</a>
+<a href=#339 id=339 data-nosnippet>339</a>                    <span class="kw">for </span>fk_field <span class="kw">in </span><span class="kw-2">&amp;</span>rel.foreign_key.fields {
+<a href=#340 id=340 data-nosnippet>340</a>                        source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+<a href=#341 id=341 data-nosnippet>341</a>                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+<a href=#342 id=342 data-nosnippet>342</a>                    }
 <a href=#343 id=343 data-nosnippet>343</a>
-<a href=#344 id=344 data-nosnippet>344</a>                <span class="kw">let </span><span class="kw-2">mut </span>query =
-<a href=#345 id=345 data-nosnippet>345</a>                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
-<a href=#346 id=346 data-nosnippet>346</a>                query.single = <span class="bool-val">true</span>;
-<a href=#347 id=347 data-nosnippet>347</a>                (query, rel.target)
-<a href=#348 id=348 data-nosnippet>348</a>            }
-<a href=#349 id=349 data-nosnippet>349</a>            app::FieldTy::HasOne(rel) =&gt; {
-<a href=#350 id=350 data-nosnippet>350</a>                <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::new_select(
-<a href=#351 id=351 data-nosnippet>351</a>                    rel.target,
-<a href=#352 id=352 data-nosnippet>352</a>                    stmt::Expr::eq(
-<a href=#353 id=353 data-nosnippet>353</a>                        stmt::Expr::ref_parent_model(),
-<a href=#354 id=354 data-nosnippet>354</a>                        stmt::Expr::ref_self_field(direct_pair(<span class="kw-2">&amp;</span>rel.kind)),
-<a href=#355 id=355 data-nosnippet>355</a>                    ),
-<a href=#356 id=356 data-nosnippet>356</a>                );
-<a href=#357 id=357 data-nosnippet>357</a>                query.single = <span class="bool-val">true</span>;
-<a href=#358 id=358 data-nosnippet>358</a>                (query, rel.target)
-<a href=#359 id=359 data-nosnippet>359</a>            }
-<a href=#360 id=360 data-nosnippet>360</a>            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"build_include_subquery called on non-relation field"</span>),
-<a href=#361 id=361 data-nosnippet>361</a>        };
-<a href=#362 id=362 data-nosnippet>362</a>
-<a href=#363 id=363 data-nosnippet>363</a>        <span class="comment">// Attach each non-empty remainder as a nested include on the
-<a href=#364 id=364 data-nosnippet>364</a>        // subquery. Empty remainders (from a bare `.include(posts())`) need
-<a href=#365 id=365 data-nosnippet>365</a>        // no nested include — the subquery itself satisfies them. The
-<a href=#366 id=366 data-nosnippet>366</a>        // lowering pipeline will recursively group and process the nested
-<a href=#367 id=367 data-nosnippet>367</a>        // includes when it encounters `Returning::Model` on this subquery.
-<a href=#368 id=368 data-nosnippet>368</a>        </span><span class="kw">for </span>rest <span class="kw">in </span>nested {
-<a href=#369 id=369 data-nosnippet>369</a>            <span class="kw">if </span>!rest.is_empty() {
-<a href=#370 id=370 data-nosnippet>370</a>                stmt.include(stmt::Path {
-<a href=#371 id=371 data-nosnippet>371</a>                    root: stmt::PathRoot::Model(target_model_id),
-<a href=#372 id=372 data-nosnippet>372</a>                    projection: rest.clone(),
-<a href=#373 id=373 data-nosnippet>373</a>                });
-<a href=#374 id=374 data-nosnippet>374</a>            }
-<a href=#375 id=375 data-nosnippet>375</a>        }
-<a href=#376 id=376 data-nosnippet>376</a>
-<a href=#377 id=377 data-nosnippet>377</a>        <span class="comment">// Run the canonical pipeline (pre-lower simplify, lowering walk,
-<a href=#378 id=378 data-nosnippet>378</a>        // post-lower simplify) on the synthesized subquery, stitching it onto
-<a href=#379 id=379 data-nosnippet>379</a>        // the parent as an `Expr::Arg`.
-<a href=#380 id=380 data-nosnippet>380</a>        </span><span class="self">self</span>.lower_sub_stmt(stmt::Statement::Query(stmt))
-<a href=#381 id=381 data-nosnippet>381</a>    }
-<a href=#382 id=382 data-nosnippet>382</a>}
-<a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a><span class="kw">impl </span>FieldIncludes {
-<a href=#385 id=385 data-nosnippet>385</a>    <span class="doccomment">/// True when at least one include path activates this field.
-<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="kw">fn </span>self_included(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#387 id=387 data-nosnippet>387</a>        <span class="self">self</span>.include_self || !<span class="self">self</span>.sub_paths.is_empty()
-<a href=#388 id=388 data-nosnippet>388</a>    }
-<a href=#389 id=389 data-nosnippet>389</a>}
-<a href=#390 id=390 data-nosnippet>390</a>
-<a href=#391 id=391 data-nosnippet>391</a><span class="doccomment">/// The paired `BelongsTo` field of a direct has-relation. `.include()` of a
-<a href=#392 id=392 data-nosnippet>392</a>/// `via` relation is rejected earlier in `build_relation_subquery`, so any
-<a href=#393 id=393 data-nosnippet>393</a>/// relation reaching the direct-relation path has a pair.
-<a href=#394 id=394 data-nosnippet>394</a></span><span class="kw">fn </span>direct_pair(kind: <span class="kw-2">&amp;</span>app::HasKind) -&gt; app::FieldId {
-<a href=#395 id=395 data-nosnippet>395</a>    kind.pair_id()
-<a href=#396 id=396 data-nosnippet>396</a>        .expect(<span class="string">"`via` relation reached the direct-relation include path"</span>)
-<a href=#397 id=397 data-nosnippet>397</a>}
-<a href=#398 id=398 data-nosnippet>398</a>
-<a href=#399 id=399 data-nosnippet>399</a><span class="doccomment">/// Find the include paths that target field index `i` and split them by
-<a href=#400 id=400 data-nosnippet>400</a>/// whether they name the field itself or a sub-path within it.
-<a href=#401 id=401 data-nosnippet>401</a></span><span class="kw">fn </span>partition_paths(paths: <span class="kw-2">&amp;</span>[stmt::Projection], i: usize) -&gt; FieldIncludes {
-<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">let </span><span class="kw-2">mut </span>include_self = <span class="bool-val">false</span>;
-<a href=#403 id=403 data-nosnippet>403</a>    <span class="kw">let </span><span class="kw-2">mut </span>sub_paths = Vec::new();
-<a href=#404 id=404 data-nosnippet>404</a>    <span class="kw">for </span>path <span class="kw">in </span>paths {
-<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((first, rest)) = path.as_slice().split_first()
-<a href=#406 id=406 data-nosnippet>406</a>            &amp;&amp; <span class="kw-2">*</span>first == i
-<a href=#407 id=407 data-nosnippet>407</a>        {
-<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw">if </span>rest.is_empty() {
-<a href=#409 id=409 data-nosnippet>409</a>                include_self = <span class="bool-val">true</span>;
-<a href=#410 id=410 data-nosnippet>410</a>            } <span class="kw">else </span>{
-<a href=#411 id=411 data-nosnippet>411</a>                sub_paths.push(stmt::Projection::from(rest));
-<a href=#412 id=412 data-nosnippet>412</a>            }
-<a href=#413 id=413 data-nosnippet>413</a>        }
-<a href=#414 id=414 data-nosnippet>414</a>    }
-<a href=#415 id=415 data-nosnippet>415</a>    FieldIncludes {
-<a href=#416 id=416 data-nosnippet>416</a>        include_self,
-<a href=#417 id=417 data-nosnippet>417</a>        sub_paths,
+<a href=#344 id=344 data-nosnippet>344</a>                    source_fk = stmt::Expr::record_from_vec(source_fk_fields);
+<a href=#345 id=345 data-nosnippet>345</a>                    target_pk = stmt::Expr::record_from_vec(target_pk_fields);
+<a href=#346 id=346 data-nosnippet>346</a>                }
+<a href=#347 id=347 data-nosnippet>347</a>
+<a href=#348 id=348 data-nosnippet>348</a>                <span class="kw">let </span><span class="kw-2">mut </span>query =
+<a href=#349 id=349 data-nosnippet>349</a>                    stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
+<a href=#350 id=350 data-nosnippet>350</a>                query.single = <span class="bool-val">true</span>;
+<a href=#351 id=351 data-nosnippet>351</a>                (query, rel.target)
+<a href=#352 id=352 data-nosnippet>352</a>            }
+<a href=#353 id=353 data-nosnippet>353</a>            app::FieldTy::HasOne(rel) =&gt; {
+<a href=#354 id=354 data-nosnippet>354</a>                <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::new_select(
+<a href=#355 id=355 data-nosnippet>355</a>                    rel.target,
+<a href=#356 id=356 data-nosnippet>356</a>                    stmt::Expr::eq(
+<a href=#357 id=357 data-nosnippet>357</a>                        stmt::Expr::ref_parent_model(),
+<a href=#358 id=358 data-nosnippet>358</a>                        stmt::Expr::ref_self_field(direct_pair(<span class="kw-2">&amp;</span>rel.kind)),
+<a href=#359 id=359 data-nosnippet>359</a>                    ),
+<a href=#360 id=360 data-nosnippet>360</a>                );
+<a href=#361 id=361 data-nosnippet>361</a>                query.single = <span class="bool-val">true</span>;
+<a href=#362 id=362 data-nosnippet>362</a>                (query, rel.target)
+<a href=#363 id=363 data-nosnippet>363</a>            }
+<a href=#364 id=364 data-nosnippet>364</a>            <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"build_include_subquery called on non-relation field"</span>),
+<a href=#365 id=365 data-nosnippet>365</a>        };
+<a href=#366 id=366 data-nosnippet>366</a>
+<a href=#367 id=367 data-nosnippet>367</a>        <span class="comment">// Attach each non-empty remainder as a nested include on the
+<a href=#368 id=368 data-nosnippet>368</a>        // subquery. Empty remainders (from a bare `.include(posts())`) need
+<a href=#369 id=369 data-nosnippet>369</a>        // no nested include — the subquery itself satisfies them. The
+<a href=#370 id=370 data-nosnippet>370</a>        // lowering pipeline will recursively group and process the nested
+<a href=#371 id=371 data-nosnippet>371</a>        // includes when it encounters `Returning::Model` on this subquery.
+<a href=#372 id=372 data-nosnippet>372</a>        </span><span class="kw">for </span>rest <span class="kw">in </span>nested {
+<a href=#373 id=373 data-nosnippet>373</a>            <span class="kw">if </span>!rest.is_empty() {
+<a href=#374 id=374 data-nosnippet>374</a>                stmt.include(stmt::Path {
+<a href=#375 id=375 data-nosnippet>375</a>                    root: stmt::PathRoot::Model(target_model_id),
+<a href=#376 id=376 data-nosnippet>376</a>                    projection: rest.clone(),
+<a href=#377 id=377 data-nosnippet>377</a>                });
+<a href=#378 id=378 data-nosnippet>378</a>            }
+<a href=#379 id=379 data-nosnippet>379</a>        }
+<a href=#380 id=380 data-nosnippet>380</a>
+<a href=#381 id=381 data-nosnippet>381</a>        <span class="comment">// Run the canonical pipeline (pre-lower simplify, lowering walk,
+<a href=#382 id=382 data-nosnippet>382</a>        // post-lower simplify) on the synthesized subquery, stitching it onto
+<a href=#383 id=383 data-nosnippet>383</a>        // the parent as an `Expr::Arg`.
+<a href=#384 id=384 data-nosnippet>384</a>        </span><span class="self">self</span>.lower_sub_stmt(stmt::Statement::Query(stmt))
+<a href=#385 id=385 data-nosnippet>385</a>    }
+<a href=#386 id=386 data-nosnippet>386</a>}
+<a href=#387 id=387 data-nosnippet>387</a>
+<a href=#388 id=388 data-nosnippet>388</a><span class="kw">impl </span>FieldIncludes {
+<a href=#389 id=389 data-nosnippet>389</a>    <span class="doccomment">/// True when at least one include path activates this field.
+<a href=#390 id=390 data-nosnippet>390</a>    </span><span class="kw">fn </span>self_included(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#391 id=391 data-nosnippet>391</a>        <span class="self">self</span>.include_self || !<span class="self">self</span>.sub_paths.is_empty()
+<a href=#392 id=392 data-nosnippet>392</a>    }
+<a href=#393 id=393 data-nosnippet>393</a>}
+<a href=#394 id=394 data-nosnippet>394</a>
+<a href=#395 id=395 data-nosnippet>395</a><span class="doccomment">/// The paired `BelongsTo` field of a direct has-relation. `.include()` of a
+<a href=#396 id=396 data-nosnippet>396</a>/// `via` relation is rejected earlier in `build_relation_subquery`, so any
+<a href=#397 id=397 data-nosnippet>397</a>/// relation reaching the direct-relation path has a pair.
+<a href=#398 id=398 data-nosnippet>398</a></span><span class="kw">fn </span>direct_pair(kind: <span class="kw-2">&amp;</span>app::HasKind) -&gt; app::FieldId {
+<a href=#399 id=399 data-nosnippet>399</a>    kind.pair_id()
+<a href=#400 id=400 data-nosnippet>400</a>        .expect(<span class="string">"`via` relation reached the direct-relation include path"</span>)
+<a href=#401 id=401 data-nosnippet>401</a>}
+<a href=#402 id=402 data-nosnippet>402</a>
+<a href=#403 id=403 data-nosnippet>403</a><span class="doccomment">/// Find the include paths that target field index `i` and split them by
+<a href=#404 id=404 data-nosnippet>404</a>/// whether they name the field itself or a sub-path within it.
+<a href=#405 id=405 data-nosnippet>405</a></span><span class="kw">fn </span>partition_paths(paths: <span class="kw-2">&amp;</span>[stmt::Projection], i: usize) -&gt; FieldIncludes {
+<a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">let </span><span class="kw-2">mut </span>include_self = <span class="bool-val">false</span>;
+<a href=#407 id=407 data-nosnippet>407</a>    <span class="kw">let </span><span class="kw-2">mut </span>sub_paths = Vec::new();
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="kw">for </span>path <span class="kw">in </span>paths {
+<a href=#409 id=409 data-nosnippet>409</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((first, rest)) = path.as_slice().split_first()
+<a href=#410 id=410 data-nosnippet>410</a>            &amp;&amp; <span class="kw-2">*</span>first == i
+<a href=#411 id=411 data-nosnippet>411</a>        {
+<a href=#412 id=412 data-nosnippet>412</a>            <span class="kw">if </span>rest.is_empty() {
+<a href=#413 id=413 data-nosnippet>413</a>                include_self = <span class="bool-val">true</span>;
+<a href=#414 id=414 data-nosnippet>414</a>            } <span class="kw">else </span>{
+<a href=#415 id=415 data-nosnippet>415</a>                sub_paths.push(stmt::Projection::from(rest));
+<a href=#416 id=416 data-nosnippet>416</a>            }
+<a href=#417 id=417 data-nosnippet>417</a>        }
 <a href=#418 id=418 data-nosnippet>418</a>    }
-<a href=#419 id=419 data-nosnippet>419</a>}
-<a href=#420 id=420 data-nosnippet>420</a>
-<a href=#421 id=421 data-nosnippet>421</a><span class="doccomment">/// Flatten an include [`stmt::Path`] into a single projection, folding any
-<a href=#422 id=422 data-nosnippet>422</a>/// `PathRoot::Variant` chain into a discriminant-index step.
-<a href=#423 id=423 data-nosnippet>423</a>///
-<a href=#424 id=424 data-nosnippet>424</a>/// The result uses LOCAL field indices for variant fields (matching the IR's
-<a href=#425 id=425 data-nosnippet>425</a>/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
-<a href=#426 id=426 data-nosnippet>426</a>/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
-<a href=#427 id=427 data-nosnippet>427</a>/// not the schema, so LOCAL is what `process_enum_arms` needs.
-<a href=#428 id=428 data-nosnippet>428</a></span><span class="kw">fn </span>flatten_path(path: <span class="kw-2">&amp;</span>stmt::Path) -&gt; stmt::Projection {
-<a href=#429 id=429 data-nosnippet>429</a>    <span class="kw">let </span><span class="kw-2">mut </span>acc = stmt::Projection::identity();
-<a href=#430 id=430 data-nosnippet>430</a>    push_root_steps(<span class="kw-2">&amp;</span>path.root, <span class="kw-2">&amp;mut </span>acc);
-<a href=#431 id=431 data-nosnippet>431</a>    <span class="kw">for </span>step <span class="kw">in </span>path.projection.as_slice() {
-<a href=#432 id=432 data-nosnippet>432</a>        acc.push(<span class="kw-2">*</span>step);
-<a href=#433 id=433 data-nosnippet>433</a>    }
-<a href=#434 id=434 data-nosnippet>434</a>    acc
-<a href=#435 id=435 data-nosnippet>435</a>}
-<a href=#436 id=436 data-nosnippet>436</a>
-<a href=#437 id=437 data-nosnippet>437</a><span class="kw">fn </span>push_root_steps(root: <span class="kw-2">&amp;</span>stmt::PathRoot, acc: <span class="kw-2">&amp;mut </span>stmt::Projection) {
-<a href=#438 id=438 data-nosnippet>438</a>    <span class="kw">if let </span>stmt::PathRoot::Variant { parent, variant_id } = root {
-<a href=#439 id=439 data-nosnippet>439</a>        push_root_steps(<span class="kw-2">&amp;</span>parent.root, acc);
-<a href=#440 id=440 data-nosnippet>440</a>        <span class="kw">for </span>step <span class="kw">in </span>parent.projection.as_slice() {
-<a href=#441 id=441 data-nosnippet>441</a>            acc.push(<span class="kw-2">*</span>step);
-<a href=#442 id=442 data-nosnippet>442</a>        }
-<a href=#443 id=443 data-nosnippet>443</a>        acc.push(variant_id.index);
-<a href=#444 id=444 data-nosnippet>444</a>    }
-<a href=#445 id=445 data-nosnippet>445</a>}
-<a href=#446 id=446 data-nosnippet>446</a>
-<a href=#447 id=447 data-nosnippet>447</a><span class="doccomment">/// Build the loaded-form inner expression for a deferred field.
-<a href=#448 id=448 data-nosnippet>448</a>///
-<a href=#449 id=449 data-nosnippet>449</a>/// - Primitive — the cached column reference (with any storage-type cast).
-<a href=#450 id=450 data-nosnippet>450</a>/// - Embed (struct or enum) — the embed's pre-computed `default_returning`.
-<a href=#451 id=451 data-nosnippet>451</a></span><span class="kw">fn </span>loaded_form(field: <span class="kw-2">&amp;</span>app::Field, mapping: <span class="kw-2">&amp;</span>mapping::Field) -&gt; stmt::Expr {
-<a href=#452 id=452 data-nosnippet>452</a>    <span class="kw">match </span>(<span class="kw-2">&amp;</span>field.ty, mapping) {
-<a href=#453 id=453 data-nosnippet>453</a>        (app::FieldTy::Primitive(<span class="kw">_</span>), mapping::Field::Primitive(p)) =&gt; p.column_expr.clone(),
-<a href=#454 id=454 data-nosnippet>454</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Struct(s)) =&gt; s.default_returning.clone(),
-<a href=#455 id=455 data-nosnippet>455</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Enum(e)) =&gt; e.default_returning.clone(),
-<a href=#456 id=456 data-nosnippet>456</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"deferred field has unexpected mapping shape"</span>),
-<a href=#457 id=457 data-nosnippet>457</a>    }
-<a href=#458 id=458 data-nosnippet>458</a>}
+<a href=#419 id=419 data-nosnippet>419</a>    FieldIncludes {
+<a href=#420 id=420 data-nosnippet>420</a>        include_self,
+<a href=#421 id=421 data-nosnippet>421</a>        sub_paths,
+<a href=#422 id=422 data-nosnippet>422</a>    }
+<a href=#423 id=423 data-nosnippet>423</a>}
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a><span class="doccomment">/// Flatten an include [`stmt::Path`] into a single projection, folding any
+<a href=#426 id=426 data-nosnippet>426</a>/// `PathRoot::Variant` chain into a discriminant-index step.
+<a href=#427 id=427 data-nosnippet>427</a>///
+<a href=#428 id=428 data-nosnippet>428</a>/// The result uses LOCAL field indices for variant fields (matching the IR's
+<a href=#429 id=429 data-nosnippet>429</a>/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
+<a href=#430 id=430 data-nosnippet>430</a>/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
+<a href=#431 id=431 data-nosnippet>431</a>/// not the schema, so LOCAL is what `process_enum_arms` needs.
+<a href=#432 id=432 data-nosnippet>432</a></span><span class="kw">fn </span>flatten_path(path: <span class="kw-2">&amp;</span>stmt::Path) -&gt; stmt::Projection {
+<a href=#433 id=433 data-nosnippet>433</a>    <span class="kw">let </span><span class="kw-2">mut </span>acc = stmt::Projection::identity();
+<a href=#434 id=434 data-nosnippet>434</a>    push_root_steps(<span class="kw-2">&amp;</span>path.root, <span class="kw-2">&amp;mut </span>acc);
+<a href=#435 id=435 data-nosnippet>435</a>    <span class="kw">for </span>step <span class="kw">in </span>path.projection.as_slice() {
+<a href=#436 id=436 data-nosnippet>436</a>        acc.push(<span class="kw-2">*</span>step);
+<a href=#437 id=437 data-nosnippet>437</a>    }
+<a href=#438 id=438 data-nosnippet>438</a>    acc
+<a href=#439 id=439 data-nosnippet>439</a>}
+<a href=#440 id=440 data-nosnippet>440</a>
+<a href=#441 id=441 data-nosnippet>441</a><span class="kw">fn </span>push_root_steps(root: <span class="kw-2">&amp;</span>stmt::PathRoot, acc: <span class="kw-2">&amp;mut </span>stmt::Projection) {
+<a href=#442 id=442 data-nosnippet>442</a>    <span class="kw">if let </span>stmt::PathRoot::Variant { parent, variant_id } = root {
+<a href=#443 id=443 data-nosnippet>443</a>        push_root_steps(<span class="kw-2">&amp;</span>parent.root, acc);
+<a href=#444 id=444 data-nosnippet>444</a>        <span class="kw">for </span>step <span class="kw">in </span>parent.projection.as_slice() {
+<a href=#445 id=445 data-nosnippet>445</a>            acc.push(<span class="kw-2">*</span>step);
+<a href=#446 id=446 data-nosnippet>446</a>        }
+<a href=#447 id=447 data-nosnippet>447</a>        acc.push(variant_id.index);
+<a href=#448 id=448 data-nosnippet>448</a>    }
+<a href=#449 id=449 data-nosnippet>449</a>}
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a><span class="doccomment">/// Build the loaded-form inner expression for a deferred field.
+<a href=#452 id=452 data-nosnippet>452</a>///
+<a href=#453 id=453 data-nosnippet>453</a>/// - Primitive — the cached column reference (with any storage-type cast).
+<a href=#454 id=454 data-nosnippet>454</a>/// - Embed (struct or enum) — the embed's pre-computed `default_returning`.
+<a href=#455 id=455 data-nosnippet>455</a></span><span class="kw">fn </span>loaded_form(field: <span class="kw-2">&amp;</span>app::Field, mapping: <span class="kw-2">&amp;</span>mapping::Field) -&gt; stmt::Expr {
+<a href=#456 id=456 data-nosnippet>456</a>    <span class="kw">match </span>(<span class="kw-2">&amp;</span>field.ty, mapping) {
+<a href=#457 id=457 data-nosnippet>457</a>        (app::FieldTy::Primitive(<span class="kw">_</span>), mapping::Field::Primitive(p)) =&gt; p.column_expr.clone(),
+<a href=#458 id=458 data-nosnippet>458</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Struct(s)) =&gt; s.default_returning.clone(),
+<a href=#459 id=459 data-nosnippet>459</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Enum(e)) =&gt; e.default_returning.clone(),
+<a href=#460 id=460 data-nosnippet>460</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"deferred field has unexpected mapping shape"</span>),
+<a href=#461 id=461 data-nosnippet>461</a>    }
+<a href=#462 id=462 data-nosnippet>462</a>}
 </code></pre></div></section></main></body></html>
