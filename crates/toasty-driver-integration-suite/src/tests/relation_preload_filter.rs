@@ -6,20 +6,20 @@ use crate::prelude::*;
 pub async fn preload_has_many_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let alice = User::create()
-        .name("alice")
-        .todo(Todo::create().title("a"))
-        .todo(Todo::create().title("b"))
-        .todo(Todo::create().title("c"))
-        .exec(&mut db)
-        .await?;
+    let alice = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }, { title: "b" }, { title: "c" }]
+    })
+    .exec(&mut db)
+    .await?;
 
     // Bob has no matching todos.
-    let bob = User::create()
-        .name("bob")
-        .todo(Todo::create().title("x"))
-        .exec(&mut db)
-        .await?;
+    let bob = toasty::create!(User {
+        name: "bob",
+        todos: [{ title: "x" }]
+    })
+    .exec(&mut db)
+    .await?;
 
     let alice_loaded = User::filter_by_id(alice.id)
         .include(
@@ -58,19 +58,20 @@ pub async fn preload_has_many_with_filter(test: &mut Test) -> Result<()> {
 pub async fn preload_has_many_filter_independent_of_parent_any(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let _alice = User::create()
-        .name("alice")
-        .todo(Todo::create().title("keep"))
-        .todo(Todo::create().title("drop"))
-        .exec(&mut db)
-        .await?;
+    let _alice = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "keep" }, { title: "drop" }]
+    })
+    .exec(&mut db)
+    .await?;
 
     // Bob has no `keep` todo, so the parent-side `any` excludes him.
-    let _bob = User::create()
-        .name("bob")
-        .todo(Todo::create().title("drop"))
-        .exec(&mut db)
-        .await?;
+    let _bob = toasty::create!(User {
+        name: "bob",
+        todos: [{ title: "drop" }]
+    })
+    .exec(&mut db)
+    .await?;
 
     let users: Vec<User> = User::all()
         .filter(
@@ -101,13 +102,12 @@ pub async fn preload_has_many_filter_independent_of_parent_any(test: &mut Test) 
 pub async fn preload_has_many_repeated_filters_anded(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let alice = User::create()
-        .name("alice")
-        .todo(Todo::create().title("aaa"))
-        .todo(Todo::create().title("aab"))
-        .todo(Todo::create().title("bbb"))
-        .exec(&mut db)
-        .await?;
+    let alice = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "aaa" }, { title: "aab" }, { title: "bbb" }]
+    })
+    .exec(&mut db)
+    .await?;
 
     let alice_loaded = User::filter_by_id(alice.id)
         .include(
@@ -140,11 +140,12 @@ pub async fn preload_has_many_repeated_filters_anded(test: &mut Test) -> Result<
 pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let user = User::create()
-        .name("alice")
-        .profile(Profile::create().bio("public bio"))
-        .exec(&mut db)
-        .await?;
+    let user = toasty::create!(User {
+        name: "alice",
+        profile: { bio: "public bio" }
+    })
+    .exec(&mut db)
+    .await?;
 
     // Filter excludes the row → loaded None.
     let loaded = User::filter_by_id(user.id)
