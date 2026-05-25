@@ -56,6 +56,21 @@ impl Value {
 
         Value(core_value)
     }
+
+    /// Converts a SQLite value within a row using SQLite's runtime storage class.
+    pub fn from_sql_infer(row: &Row, index: usize) -> Self {
+        let value: Option<SqlValue> = row.get(index).unwrap();
+
+        let core_value = match value {
+            Some(SqlValue::Null) | None => stmt::Value::Null,
+            Some(SqlValue::Integer(value)) => stmt::Value::I64(value),
+            Some(SqlValue::Real(value)) => stmt::Value::F64(value),
+            Some(SqlValue::Text(value)) => stmt::Value::String(value),
+            Some(SqlValue::Blob(value)) => stmt::Value::Bytes(value),
+        };
+
+        Value(core_value)
+    }
 }
 
 impl ToSql for Value {

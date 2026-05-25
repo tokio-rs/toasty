@@ -1,6 +1,6 @@
 use super::Serializer;
 
-use toasty_core::schema::db;
+use toasty_core::{driver::SqlPlaceholder, schema::db};
 
 #[derive(Debug)]
 pub(super) enum Flavor {
@@ -56,5 +56,15 @@ impl<'a> Serializer<'a> {
 
     pub(super) fn is_mysql(&self) -> bool {
         matches!(self.flavor, Flavor::Mysql)
+    }
+}
+
+impl Flavor {
+    pub(super) fn sql_placeholder(&self) -> SqlPlaceholder {
+        match self {
+            Flavor::Postgresql => SqlPlaceholder::DollarNumber,
+            Flavor::Sqlite => SqlPlaceholder::NumberedQuestionMark,
+            Flavor::Mysql => SqlPlaceholder::QuestionMark,
+        }
     }
 }

@@ -10,6 +10,7 @@
 
 use std::sync::Arc;
 
+use toasty_core::driver::operation::RawSql;
 use toasty_core::driver::{Connection, Rows};
 use toasty_core::stmt::Value;
 use tokio::{
@@ -30,6 +31,11 @@ pub(crate) enum ConnectionOperation {
     },
     ExecOperation {
         operation: Box<toasty_core::driver::operation::Operation>,
+        tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
+    },
+    /// Execute user-authored SQL through the engine's SQL capability guard.
+    ExecRawSql {
+        raw: Box<RawSql>,
         tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     /// Push schema to the database.
@@ -125,6 +131,10 @@ impl ConnectionTask {
             }
             ConnectionOperation::ExecOperation { operation, tx } => {
                 let result = self.connection.exec(&self.engine.schema, *operation).await;
+                self.respond(tx, result)
+            }
+            ConnectionOperation::ExecRawSql { raw, tx } => {
+                let result = self.engine.exec_raw_sql(&mut *self.connection, *raw).await;
                 self.respond(tx, result)
             }
             ConnectionOperation::PushSchema { tx } => {

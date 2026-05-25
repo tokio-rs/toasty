@@ -6,13 +6,15 @@
 //! operations against a live database session).
 //!
 //! The query planner inspects [`Capability`] to decide which [`Operation`]
-//! variants to emit. SQL-based drivers receive [`Operation::QuerySql`] and
-//! [`Operation::Insert`], while key-value drivers (e.g., DynamoDB) receive
-//! [`Operation::GetByKey`], [`Operation::QueryPk`], etc. The
+//! variants to emit. SQL-based drivers receive [`Operation::QuerySql`],
+//! [`Operation::RawSql`], and [`Operation::Insert`], while key-value drivers
+//! (e.g., DynamoDB) receive [`Operation::GetByKey`], [`Operation::QueryPk`], etc. The
 //! [`SchemaMutations`] sub-struct (`Capability::schema_mutations`) describes
 //! what the database can do to its own schema — for example, whether
 //! `ALTER COLUMN` can change a column's type — and the migration generator
 //! consults it to decide between an in-place alter and a table rebuild.
+//! [`SqlPlaceholder`] describes the bind placeholder syntax used by SQL
+//! operations and raw SQL.
 //!
 //! # Architecture
 //!
@@ -51,7 +53,7 @@
 //! [`crate::Error::driver_operation_failed`].
 
 mod capability;
-pub use capability::{Capability, SchemaMutations, StorageTypes};
+pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
 
 mod response;
 pub use response::{ExecResponse, Rows};

@@ -7,7 +7,10 @@ use crate::{Result, db::ConnectionOperation, db::Executor};
 use async_trait::async_trait;
 use toasty_core::{
     Schema,
-    driver::operation::{self, IsolationLevel, TransactionMode},
+    driver::{
+        Capability,
+        operation::{self, IsolationLevel, RawSql, TransactionMode},
+    },
 };
 use tokio::sync::oneshot;
 
@@ -269,6 +272,14 @@ impl<'a> Executor for Transaction<'a> {
         stmt: toasty_core::stmt::Statement,
     ) -> Result<toasty_core::driver::ExecResponse> {
         self.conn.exec_stmt(stmt, true).await
+    }
+
+    async fn exec_raw_sql(&mut self, raw: RawSql) -> Result<toasty_core::driver::ExecResponse> {
+        self.conn.exec_raw_sql(raw).await
+    }
+
+    fn capability(&mut self) -> &Capability {
+        self.conn.shared.engine.capability()
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

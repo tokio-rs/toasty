@@ -184,6 +184,65 @@ impl Value {
 
         Value(core_value)
     }
+
+    /// Converts a MySQL value within a row using the value metadata available
+    /// from the driver.
+    pub fn from_sql_infer(i: usize, row: &mut Row, _column: &Column) -> Self {
+        let value = match row.take_opt(i).expect("value missing") {
+            Ok(value) => value,
+            Err(err) => err.0,
+        };
+
+        let core_value = match value {
+            mysql_async::Value::NULL => stmt::Value::Null,
+            mysql_async::Value::Bytes(bytes) => String::from_utf8(bytes)
+                .map(stmt::Value::String)
+                .unwrap_or_else(|err| stmt::Value::Bytes(err.into_bytes())),
+            mysql_async::Value::Int(value) => stmt::Value::I64(value),
+            mysql_async::Value::UInt(value) => stmt::Value::U64(value),
+            mysql_async::Value::Float(value) => stmt::Value::F32(value),
+            mysql_async::Value::Double(value) => stmt::Value::F64(value),
+            #[cfg(feature = "jiff")]
+            mysql_async::Value::Date(year, month, day, 0, 0, 0, 0) => stmt::Value::Date(
+                jiff::civil::Date::constant(year as i16, month as i8, day as i8),
+            ),
+            #[cfg(feature = "jiff")]
+            mysql_async::Value::Date(year, month, day, hour, minute, second, microsecond) => {
+                stmt::Value::DateTime(jiff::civil::DateTime::constant(
+                    year as i16,
+                    month as i8,
+                    day as i8,
+                    hour as i8,
+                    minute as i8,
+                    second as i8,
+                    (microsecond * 1000) as i32,
+                ))
+            }
+            #[cfg(not(feature = "jiff"))]
+            mysql_async::Value::Date(year, month, day, hour, minute, second, microsecond) => {
+                stmt::Value::String(format!(
+                    "{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}.{microsecond:06}"
+                ))
+            }
+            #[cfg(feature = "jiff")]
+            mysql_async::Value::Time(_, _, hour, minute, second, microsecond) => {
+                stmt::Value::Time(jiff::civil::Time::constant(
+                    hour as i8,
+                    minute as i8,
+                    second as i8,
+                    (microsecond * 1000) as i32,
+                ))
+            }
+            #[cfg(not(feature = "jiff"))]
+            mysql_async::Value::Time(_, days, hour, minute, second, microsecond) => {
+                stmt::Value::String(format!(
+                    "{days} {hour:02}:{minute:02}:{second:02}.{microsecond:06}"
+                ))
+            }
+        };
+
+        Value(core_value)
+    }
 }
 
 impl ToValue for Value {

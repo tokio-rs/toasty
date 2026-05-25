@@ -120,7 +120,6 @@ the entry lands here.
 ## Drivers
 
 - DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
-- Raw SQL escape hatch ([#93])
 - Connection pooling improvements ([#384])
 - New driver backends
   - MongoDB — `toasty-mongodb` ([#48])

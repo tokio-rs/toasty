@@ -27,6 +27,11 @@ pub struct Capability {
     /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
 
+    /// Placeholder syntax accepted by the driver's SQL bind layer.
+    ///
+    /// SQL drivers set this to `Some`. Non-SQL drivers set this to `None`.
+    pub sql_placeholder: Option<SqlPlaceholder>,
+
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
@@ -361,6 +366,24 @@ pub struct SchemaMutations {
     pub alter_column_properties_atomic: bool,
 }
 
+/// SQL bind-parameter placeholder syntax accepted by a driver.
+///
+/// This describes the SQL text users must write when sending raw SQL through
+/// [`RawSql`](super::operation::RawSql). The SQL serializer uses the same
+/// value when rendering Toasty-generated SQL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqlPlaceholder {
+    /// Positional `?` placeholders, where parameter order is the occurrence
+    /// order in the SQL string.
+    QuestionMark,
+
+    /// Numbered `?1`, `?2`, ... placeholders.
+    NumberedQuestionMark,
+
+    /// Numbered `$1`, `$2`, ... placeholders.
+    DollarNumber,
+}
+
 impl Capability {
     /// Validates the consistency of the capability configuration.
     ///
@@ -388,6 +411,18 @@ impl Capability {
         if self.native_ilike && !self.native_like {
             return Err(crate::Error::invalid_driver_configuration(
                 "native_ilike is true but native_like is false",
+            ));
+        }
+
+        if self.sql && self.sql_placeholder.is_none() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is true but sql_placeholder is None",
+            ));
+        }
+
+        if !self.sql && self.sql_placeholder.is_some() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is false but sql_placeholder is Some",
             ));
         }
 
@@ -433,6 +468,7 @@ impl Capability {
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
         sql: true,
+        sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
@@ -510,6 +546,7 @@ impl Capability {
     /// PostgreSQL capabilities
     pub const POSTGRESQL: Self = Self {
         cte_with_update: true,
+        sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
         schema_mutations: SchemaMutations::POSTGRESQL,
         select_for_update: true,
@@ -563,6 +600,7 @@ impl Capability {
     /// MySQL capabilities
     pub const MYSQL: Self = Self {
         cte_with_update: false,
+        sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
@@ -624,6 +662,7 @@ impl Capability {
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
         sql: false,
+        sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
@@ -876,6 +915,40 @@ mod tests {
     fn test_validate_dynamodb_capability() {
         // DynamoDB has native_varchar=false and varchar=None, should pass
         assert!(Capability::DYNAMODB.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_fails_when_sql_has_no_placeholder() {
+        let invalid = Capability {
+            sql_placeholder: None,
+            ..Capability::SQLITE
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("sql is true but sql_placeholder is None")
+        );
+    }
+
+    #[test]
+    fn test_validate_fails_when_non_sql_has_placeholder() {
+        let invalid = Capability {
+            sql_placeholder: Some(SqlPlaceholder::QuestionMark),
+            ..Capability::DYNAMODB
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("sql is false but sql_placeholder is Some")
+        );
     }
 
     #[test]

@@ -186,6 +186,96 @@ impl Value {
 
         Value(core_value)
     }
+
+    /// Converts a PostgreSQL value within a row using PostgreSQL column
+    /// metadata as the Toasty value type.
+    pub fn from_sql_infer(index: usize, row: &Row, column: &Column) -> Self {
+        macro_rules! get_or_return_null {
+            ($ty:ty) => {{
+                match row.get::<usize, Option<$ty>>(index) {
+                    Some(inner) => inner,
+                    None => return Self(stmt::Value::Null),
+                }
+            }};
+        }
+
+        let core_value = if column.type_() == &Type::TEXT || column.type_() == &Type::VARCHAR {
+            stmt::Value::String(get_or_return_null!(String))
+        } else if column.type_() == &Type::BOOL {
+            stmt::Value::Bool(get_or_return_null!(bool))
+        } else if column.type_() == &Type::INT2 {
+            stmt::Value::I16(get_or_return_null!(i16))
+        } else if column.type_() == &Type::INT4 {
+            stmt::Value::I32(get_or_return_null!(i32))
+        } else if column.type_() == &Type::INT8 {
+            stmt::Value::I64(get_or_return_null!(i64))
+        } else if column.type_() == &Type::UUID {
+            stmt::Value::Uuid(get_or_return_null!(uuid::Uuid))
+        } else if column.type_() == &Type::BYTEA {
+            stmt::Value::Bytes(get_or_return_null!(Vec<u8>))
+        } else if column.type_() == &Type::TIMESTAMPTZ {
+            #[cfg(feature = "jiff")]
+            {
+                stmt::Value::Timestamp(get_or_return_null!(jiff::Timestamp))
+            }
+            #[cfg(not(feature = "jiff"))]
+            {
+                panic!("TIMESTAMPTZ requires jiff feature to be enabled")
+            }
+        } else if column.type_() == &Type::TIMESTAMP {
+            #[cfg(feature = "jiff")]
+            {
+                stmt::Value::DateTime(get_or_return_null!(jiff::civil::DateTime))
+            }
+            #[cfg(not(feature = "jiff"))]
+            {
+                panic!("TIMESTAMP requires jiff feature to be enabled")
+            }
+        } else if column.type_() == &Type::DATE {
+            #[cfg(feature = "jiff")]
+            {
+                stmt::Value::Date(get_or_return_null!(jiff::civil::Date))
+            }
+            #[cfg(not(feature = "jiff"))]
+            {
+                panic!("DATE requires jiff feature to be enabled")
+            }
+        } else if column.type_() == &Type::TIME {
+            #[cfg(feature = "jiff")]
+            {
+                stmt::Value::Time(get_or_return_null!(jiff::civil::Time))
+            }
+            #[cfg(not(feature = "jiff"))]
+            {
+                panic!("TIME requires jiff feature to be enabled")
+            }
+        } else if column.type_() == &Type::FLOAT4 {
+            stmt::Value::F32(get_or_return_null!(f32))
+        } else if column.type_() == &Type::FLOAT8 {
+            stmt::Value::F64(get_or_return_null!(f64))
+        } else if column.type_() == &Type::NUMERIC {
+            #[cfg(feature = "rust_decimal")]
+            {
+                stmt::Value::Decimal(get_or_return_null!(rust_decimal::Decimal))
+            }
+            #[cfg(not(feature = "rust_decimal"))]
+            {
+                panic!("NUMERIC requires rust_decimal feature to be enabled")
+            }
+        } else if matches!(column.type_().kind(), Kind::Enum(_)) {
+            match row.get::<usize, Option<EnumString>>(index) {
+                Some(EnumString(v)) => stmt::Value::String(v),
+                None => return Self(stmt::Value::Null),
+            }
+        } else {
+            todo!(
+                "implement PostgreSQL raw SQL inference for `{:#?}`",
+                column.type_()
+            );
+        };
+
+        Value(core_value)
+    }
 }
 
 // ============================================================================

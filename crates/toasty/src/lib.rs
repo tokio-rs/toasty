@@ -41,6 +41,11 @@
 //! Generated query builders (e.g. `find_by_*`, `filter_by_*`) produce these
 //! types.
 //!
+//! ## [`sql`] — raw SQL execution helpers
+//!
+//! Contains [`sql::statement`] and [`sql::query`] for running backend SQL
+//! through [`Db`], [`Connection`], or [`Transaction`] handles.
+//!
 //! # Key traits
 //!
 //! - [`Model`](schema::Model) — a root model backed by a database table.
@@ -61,6 +66,8 @@
 //! - [`Page`](stmt::Page) — a page of results from a paginated query, with cursor-based
 //!   navigation.
 //! - [`Batch`](stmt::Batch) — groups multiple queries into a single round-trip.
+//! - [`Capability`] / [`SqlPlaceholder`] — driver metadata, including SQL
+//!   placeholder syntax for raw SQL.
 //! - [`Error`] / [`Result`] — re-exported from `toasty-core`.
 //!
 //! # Derive macros
@@ -109,7 +116,9 @@ pub use stmt::{Batch, batch};
 
 /// Database handle, connection pool, executor trait, and transaction support.
 pub mod db;
-pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
+pub use db::{
+    Capability, Connection, Db, Executor, SqlPlaceholder, Transaction, TransactionBuilder,
+};
 
 mod engine;
 
@@ -128,6 +137,9 @@ pub mod stmt;
 #[cfg(feature = "serde")]
 pub use stmt::Json;
 pub use stmt::Statement;
+
+/// Raw SQL execution helpers.
+pub mod sql;
 
 pub use toasty_macros::{Embed, Model, create, query};
 

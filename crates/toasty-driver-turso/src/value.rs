@@ -69,6 +69,18 @@ pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type) -> CoreValue {
     }
 }
 
+/// Converts a [`turso::Value`] back to a [`toasty_core::stmt::Value`] using
+/// SQLite's runtime storage class.
+pub(crate) fn from_turso_infer(value: TursoValue) -> CoreValue {
+    match value {
+        TursoValue::Null => CoreValue::Null,
+        TursoValue::Integer(v) => CoreValue::I64(v),
+        TursoValue::Real(v) => CoreValue::F64(v),
+        TursoValue::Text(v) => CoreValue::String(v),
+        TursoValue::Blob(v) => CoreValue::Bytes(v),
+    }
+}
+
 fn value_list_to_json_text(value: &CoreValue) -> String {
     let json = toasty_sql::value_json::value_list_to_json(value);
     serde_json::to_string(&json).expect("serialize Vec<scalar> to JSON")

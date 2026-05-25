@@ -31,7 +31,7 @@ use toasty_core::{
     Result, Schema,
     driver::{
         Capability, Driver, ExecResponse,
-        operation::{IsolationLevel, Operation, Transaction},
+        operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
     schema::{
         db::{self, Migration, Table},
@@ -41,6 +41,12 @@ use toasty_core::{
 };
 use toasty_sql::{self as sql};
 use url::Url;
+
+enum SqlReturn {
+    Count,
+    Infer,
+    Types(Vec<stmt::Type>),
+}
 
 /// A SQLite [`Driver`] that opens connections to a file or in-memory database.
 ///
@@ -165,6 +171,65 @@ impl Connection {
         let sqlite = Self { connection };
         Ok(sqlite)
     }
+
+    fn exec_sql(
+        &mut self,
+        sql_str: &str,
+        typed_params: Vec<TypedValue>,
+        ret: SqlReturn,
+    ) -> Result<ExecResponse> {
+        tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
+
+        let mut stmt = self.connection.prepare_cached(sql_str).unwrap();
+
+        let params = typed_params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect::<Vec<_>>();
+
+        if matches!(ret, SqlReturn::Count) {
+            let count = stmt
+                .execute(rusqlite::params_from_iter(params.iter()))
+                .map_err(toasty_core::Error::driver_operation_failed)?;
+
+            return Ok(ExecResponse::count(count as _));
+        }
+
+        let mut rows = stmt
+            .query(rusqlite::params_from_iter(params.iter()))
+            .unwrap();
+
+        let mut values = vec![];
+        let column_count = rows.as_ref().map(|stmt| stmt.column_count()).unwrap_or(0);
+
+        loop {
+            match rows.next() {
+                Ok(Some(row)) => {
+                    let items = match &ret {
+                        SqlReturn::Count => unreachable!(),
+                        SqlReturn::Infer => (0..column_count)
+                            .map(|index| Value::from_sql_infer(row, index).into_inner())
+                            .collect(),
+                        SqlReturn::Types(ret_tys) => ret_tys
+                            .iter()
+                            .enumerate()
+                            .map(|(index, ret_ty)| Value::from_sql(row, index, ret_ty).into_inner())
+                            .collect(),
+                    };
+
+                    values.push(stmt::ValueRecord::from_vec(items).into());
+                }
+                Ok(None) => break,
+                Err(err) => {
+                    return Err(toasty_core::Error::driver_operation_failed(err));
+                }
+            }
+        }
+
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(
+            values,
+        )))
+    }
 }
 
 #[async_trait]
@@ -179,6 +244,14 @@ impl toasty_core::driver::Connection for Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
                 );
                 (sql::Statement::from(op.stmt), op.params, op.ret)
+            }
+            Operation::RawSql(op) => {
+                let ret = match op.ret {
+                    RawSqlRet::None => SqlReturn::Count,
+                    RawSqlRet::Infer => SqlReturn::Infer,
+                    RawSqlRet::Types(types) => SqlReturn::Types(types),
+                };
+                return self.exec_sql(&op.sql, op.params, ret);
             }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(mut op) => {
@@ -199,78 +272,33 @@ impl toasty_core::driver::Connection for Connection {
             _ => todo!("op={:#?}", op),
         };
 
-        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
-
-        tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
-
-        let mut stmt = self.connection.prepare_cached(&sql_str).unwrap();
-
-        let width = match &sql {
+        let ret = match &sql {
             sql::Statement::Query(stmt) => match &stmt.body {
-                stmt::ExprSet::Select(stmt) => {
-                    Some(stmt.returning.as_project_unwrap().as_record_unwrap().len())
-                }
+                stmt::ExprSet::Select(_) => SqlReturn::Types(ret_tys.unwrap()),
                 _ => todo!(),
             },
             sql::Statement::Insert(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_project_unwrap().as_record_unwrap().len()),
+                .map(|_| SqlReturn::Types(ret_tys.unwrap()))
+                .unwrap_or(SqlReturn::Count),
             sql::Statement::Delete(stmt) => stmt
                 .returning
                 .as_ref()
-                .map(|returning| returning.as_project_unwrap().as_record_unwrap().len()),
+                .map(|_| SqlReturn::Types(ret_tys.unwrap()))
+                .unwrap_or(SqlReturn::Count),
             sql::Statement::Update(stmt) => {
                 assert!(stmt.condition.is_none(), "stmt={stmt:#?}");
                 stmt.returning
                     .as_ref()
-                    .map(|returning| returning.as_project_unwrap().as_record_unwrap().len())
+                    .map(|_| SqlReturn::Types(ret_tys.unwrap()))
+                    .unwrap_or(SqlReturn::Count)
             }
-            _ => None,
+            _ => SqlReturn::Count,
         };
 
-        let params = typed_params
-            .into_iter()
-            .map(|tv| Value::from(tv.value))
-            .collect::<Vec<_>>();
-
-        if width.is_none() {
-            let count = stmt
-                .execute(rusqlite::params_from_iter(params.iter()))
-                .map_err(toasty_core::Error::driver_operation_failed)?;
-
-            return Ok(ExecResponse::count(count as _));
-        }
-
-        let mut rows = stmt
-            .query(rusqlite::params_from_iter(params.iter()))
-            .unwrap();
-
-        let mut ret = vec![];
-
-        let ret_tys = &ret_tys.as_ref().unwrap();
-
-        loop {
-            match rows.next() {
-                Ok(Some(row)) => {
-                    let mut items = vec![];
-
-                    let width = width.unwrap();
-
-                    for index in 0..width {
-                        items.push(Value::from_sql(row, index, &ret_tys[index]).into_inner());
-                    }
-
-                    ret.push(stmt::ValueRecord::from_vec(items).into());
-                }
-                Ok(None) => break,
-                Err(err) => {
-                    return Err(toasty_core::Error::driver_operation_failed(err));
-                }
-            }
-        }
-
-        Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(ret)))
+        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
+        self.exec_sql(&sql_str, typed_params, ret)
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

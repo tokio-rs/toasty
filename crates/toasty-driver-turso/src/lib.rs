@@ -47,7 +47,7 @@ use toasty_core::{
     Result, Schema,
     driver::{
         Capability, Driver, ExecResponse,
-        operation::{IsolationLevel, Operation, Transaction},
+        operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
     schema::{
         db::{self, Migration, Table},
@@ -59,6 +59,12 @@ use toasty_sql::{self as sql};
 use tokio::sync::Mutex;
 use turso::{Builder, Connection as TursoConn, Database, Statement, Value as TursoValue};
 use url::Url;
+
+enum SqlReturn {
+    Count,
+    Infer,
+    Types(Vec<stmt::Type>),
+}
 
 const CREATE_MIGRATIONS_TABLE: &str = "\
 CREATE TABLE IF NOT EXISTS __toasty_migrations (
@@ -425,6 +431,74 @@ impl fmt::Debug for Connection {
     }
 }
 
+impl Connection {
+    async fn exec_sql(
+        &mut self,
+        sql_str: &str,
+        typed_params: Vec<TypedValue>,
+        ret: SqlReturn,
+    ) -> Result<ExecResponse> {
+        tracing::debug!(db.system = "turso", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
+
+        let params: Vec<TursoValue> = typed_params
+            .iter()
+            .map(|tv| value::to_turso(&tv.value))
+            .collect();
+
+        let mut stmt: Statement = self
+            .conn
+            .prepare_cached(sql_str)
+            .await
+            .map_err(classify_turso_error)?;
+
+        if matches!(ret, SqlReturn::Count) {
+            let count = stmt.execute(params).await.map_err(classify_turso_error)?;
+
+            return Ok(ExecResponse::count(count as _));
+        }
+
+        let mut rows = stmt.query(params).await.map_err(classify_turso_error)?;
+
+        let mut values = vec![];
+
+        loop {
+            match rows.next().await {
+                Ok(Some(row)) => {
+                    let items = match &ret {
+                        SqlReturn::Count => unreachable!(),
+                        SqlReturn::Infer => {
+                            let mut items = vec![];
+                            for index in 0..row.column_count() {
+                                let turso_val =
+                                    row.get_value(index).map_err(classify_turso_error)?;
+                                items.push(value::from_turso_infer(turso_val));
+                            }
+                            items
+                        }
+                        SqlReturn::Types(ret_tys) => {
+                            let mut items = Vec::with_capacity(ret_tys.len());
+                            for (index, ret_ty) in ret_tys.iter().enumerate() {
+                                let turso_val =
+                                    row.get_value(index).map_err(classify_turso_error)?;
+                                items.push(value::from_turso(turso_val, ret_ty));
+                            }
+                            items
+                        }
+                    };
+
+                    values.push(stmt::ValueRecord::from_vec(items).into());
+                }
+                Ok(None) => break,
+                Err(err) => return Err(classify_turso_error(err)),
+            }
+        }
+
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(
+            values,
+        )))
+    }
+}
+
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
@@ -437,6 +511,14 @@ impl toasty_core::driver::Connection for Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for Turso"
                 );
                 (sql::Statement::from(op.stmt), op.params, op.ret)
+            }
+            Operation::RawSql(op) => {
+                let ret = match op.ret {
+                    RawSqlRet::None => SqlReturn::Count,
+                    RawSqlRet::Infer => SqlReturn::Infer,
+                    RawSqlRet::Types(types) => SqlReturn::Types(types),
+                };
+                return self.exec_sql(&op.sql, op.params, ret).await;
             }
             Operation::Transaction(op) => {
                 if let Transaction::Start { isolation, .. } = &op
@@ -462,50 +544,14 @@ impl toasty_core::driver::Connection for Connection {
             _ => todo!("op={:#?}", op),
         };
 
+        let ret = if sql.returning_len().is_some() {
+            SqlReturn::Types(ret_tys.unwrap())
+        } else {
+            SqlReturn::Count
+        };
+
         let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
-
-        tracing::debug!(db.system = "turso", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
-
-        let width = sql.returning_len();
-
-        let params: Vec<TursoValue> = typed_params
-            .iter()
-            .map(|tv| value::to_turso(&tv.value))
-            .collect();
-
-        let mut stmt: Statement = self
-            .conn
-            .prepare_cached(&sql_str)
-            .await
-            .map_err(classify_turso_error)?;
-
-        if width.is_none() {
-            let count = stmt.execute(params).await.map_err(classify_turso_error)?;
-
-            return Ok(ExecResponse::count(count as _));
-        }
-
-        let mut rows = stmt.query(params).await.map_err(classify_turso_error)?;
-
-        let mut ret = vec![];
-        let ret_tys = ret_tys.as_ref().unwrap();
-
-        loop {
-            match rows.next().await {
-                Ok(Some(row)) => {
-                    let mut items = Vec::with_capacity(ret_tys.len());
-                    for (index, ret_ty) in ret_tys.iter().enumerate() {
-                        let turso_val = row.get_value(index).map_err(classify_turso_error)?;
-                        items.push(value::from_turso(turso_val, ret_ty));
-                    }
-                    ret.push(stmt::ValueRecord::from_vec(items).into());
-                }
-                Ok(None) => break,
-                Err(err) => return Err(classify_turso_error(err)),
-            }
-        }
-
-        Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(ret)))
+        self.exec_sql(&sql_str, typed_params, ret).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
