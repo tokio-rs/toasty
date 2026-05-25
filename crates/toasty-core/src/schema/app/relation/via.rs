@@ -1,6 +1,6 @@
 use crate::{schema::app::FieldId, stmt};
 
-/// How a `HasMany` or `HasOne` relation reaches its target.
+/// How a `Has` relation reaches its target.
 ///
 /// Both relation kinds share this: the question — "is the target reached
 /// through a paired `BelongsTo`, or by following a path?" — is the same for
@@ -41,7 +41,8 @@ impl HasKind {
 
 /// A multi-step relation path.
 ///
-/// A `HasMany` or `HasOne` declared with `#[has_many(via = a.b)]` reaches its
+/// A `Has` relation declared with `#[has_many(via = a.b)]` or
+/// `#[has_one(via = a.b)]` reaches its
 /// target by following a path of existing relations rather than pairing with a
 /// single `BelongsTo`. The path is resolved at macro-expansion time — the
 /// derive emits a chained call on the model's `Fields` struct

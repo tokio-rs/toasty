@@ -59,8 +59,8 @@ impl LowerStatement<'_, '_> {
 
             if is_insert && is_insert_local_eager_relation(&field.ty) {
                 record[field.id.index] = match field.ty {
-                    FieldTy::HasMany(_) => stmt::Expr::list_from_vec(vec![]),
-                    FieldTy::HasOne(_) => stmt::Expr::null(),
+                    FieldTy::Has(ref rel) if rel.is_many() => stmt::Expr::list_from_vec(vec![]),
+                    FieldTy::Has(_) => stmt::Expr::null(),
                     _ => unreachable!(),
                 };
                 continue;
@@ -370,7 +370,7 @@ impl LowerStatement<'_, '_> {
 }
 
 fn is_insert_local_eager_relation(field_ty: &FieldTy) -> bool {
-    matches!(field_ty, FieldTy::HasMany(_) | FieldTy::HasOne(_))
+    matches!(field_ty, FieldTy::Has(_))
 }
 
 fn first_model_field(path: &stmt::Path, model_id: ModelId) -> Option<usize> {

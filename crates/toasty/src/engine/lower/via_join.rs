@@ -204,7 +204,7 @@ impl Edge {
         // on the target-side model and owns the FK; a `BelongsTo` step is the
         // edge itself, on the root-side model.
         let (belongs_to, owner_is_target_side) = match &field.ty {
-            app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+            app::FieldTy::Has(_) => {
                 let pair = field
                     .pair()
                     .expect("via paths are unfolded into direct steps before edge resolution");
@@ -255,8 +255,7 @@ fn flatten_via_steps(
         // If this step itself names a `via` relation, splice the nested
         // path in place of it and continue (handles via-of-via naturally).
         let nested_via = match &field.ty {
-            app::FieldTy::HasMany(rel) => rel.kind.via(),
-            app::FieldTy::HasOne(rel) => rel.kind.via(),
+            app::FieldTy::Has(rel) => rel.kind.via(),
             _ => None,
         };
         if let Some(via) = nested_via {

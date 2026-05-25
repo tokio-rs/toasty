@@ -3,17 +3,13 @@
 //! Toasty supports three kinds of relations:
 //!
 //! - [`BelongsTo`] -- the owning side; stores the foreign key fields.
-//! - [`HasMany`] -- the inverse side for a one-to-many relationship.
-//! - [`HasOne`] -- the inverse side for a one-to-one relationship.
+//! - [`Has`] -- the inverse side for one-to-many and one-to-one relationships.
 
 mod belongs_to;
 pub use belongs_to::BelongsTo;
 
-mod has_many;
-pub use has_many::HasMany;
-
-mod has_one;
-pub use has_one::HasOne;
+mod has;
+pub use has::{Has, HasCardinality};
 
 mod via;
 pub use via::{HasKind, Via};

@@ -1066,7 +1066,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
                     match &field.ty {
                         app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
-                        app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => todo!(),
+                        app::FieldTy::Has(_) => todo!(),
                         app::FieldTy::BelongsTo(rel) => {
                             *operand = key_field_refs(
                                 nesting,

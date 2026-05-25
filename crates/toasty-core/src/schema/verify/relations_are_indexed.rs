@@ -18,8 +18,7 @@ impl Verify<'_> {
 
         match &field.ty {
             FieldTy::BelongsTo(rel) => self.verify_belongs_to_is_indexed(rel),
-            FieldTy::HasMany(rel) => self.verify_has_many_relation_is_indexed(owner, field, rel),
-            FieldTy::HasOne(rel) => self.verify_has_one_relation_is_indexed(owner, field, rel),
+            FieldTy::Has(rel) => self.verify_has_relation_is_indexed_field(owner, field, rel),
             _ => Ok(()),
         }
     }
@@ -29,26 +28,14 @@ impl Verify<'_> {
         Ok(())
     }
 
-    fn verify_has_many_relation_is_indexed(
+    fn verify_has_relation_is_indexed_field(
         &self,
         owner: &Model,
         field: &Field,
-        rel: &app::HasMany,
+        rel: &app::Has,
     ) -> Result<()> {
         // A `via` relation has no pair of its own; each step it traverses is
         // a relation that is verified on its own model.
-        let Some(pair) = rel.kind.pair_id() else {
-            return Ok(());
-        };
-        self.verify_has_relation_is_indexed(owner, field, rel.target(&self.schema.app), pair)
-    }
-
-    fn verify_has_one_relation_is_indexed(
-        &self,
-        owner: &Model,
-        field: &Field,
-        rel: &app::HasOne,
-    ) -> Result<()> {
         let Some(pair) = rel.kind.pair_id() else {
             return Ok(());
         };

@@ -182,11 +182,8 @@ pub(super) fn lift_in_subquery(
     // something this pass can handle.
     match &field.ty {
         FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
-        FieldTy::HasOne(has_one) if has_one.kind.pair_id().is_some() => {
-            lift_has_n_in_subquery(has_one.target, has_one.pair(&cx.schema().app), query)
-        }
-        FieldTy::HasMany(has_many) if has_many.kind.pair_id().is_some() => {
-            lift_has_n_in_subquery(has_many.target, has_many.pair(&cx.schema().app), query)
+        FieldTy::Has(has) if has.kind.pair_id().is_some() => {
+            lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query)
         }
         _ => None,
     }
@@ -215,9 +212,8 @@ pub(super) fn try_lift_relation_path_comparison(
     };
 
     let target_model_id = match &field.ty {
-        FieldTy::HasOne(rel) => rel.target,
+        FieldTy::Has(rel) => rel.target,
         FieldTy::BelongsTo(rel) => rel.target,
-        FieldTy::HasMany(rel) => rel.target,
         _ => return None,
     };
 
