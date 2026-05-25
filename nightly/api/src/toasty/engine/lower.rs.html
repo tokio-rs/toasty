@@ -1066,7 +1066,7 @@
 <a href=#1066 id=1066 data-nosnippet>1066</a>
 <a href=#1067 id=1067 data-nosnippet>1067</a>                    <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
 <a href=#1068 id=1068 data-nosnippet>1068</a>                        app::FieldTy::Primitive(<span class="kw">_</span>) | app::FieldTy::Embedded(<span class="kw">_</span>) =&gt; {}
-<a href=#1069 id=1069 data-nosnippet>1069</a>                        app::FieldTy::Has(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
+<a href=#1069 id=1069 data-nosnippet>1069</a>                        app::FieldTy::Has(<span class="kw">_</span>) | app::FieldTy::Via(<span class="kw">_</span>) =&gt; <span class="macro">todo!</span>(),
 <a href=#1070 id=1070 data-nosnippet>1070</a>                        app::FieldTy::BelongsTo(rel) =&gt; {
 <a href=#1071 id=1071 data-nosnippet>1071</a>                            <span class="kw-2">*</span>operand = key_field_refs(
 <a href=#1072 id=1072 data-nosnippet>1072</a>                                nesting,

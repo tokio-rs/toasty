@@ -297,7 +297,7 @@
 <a href=#297 id=297 data-nosnippet>297</a>        // the database executing the join, so it is SQL-only — a key-value
 <a href=#298 id=298 data-nosnippet>298</a>        // backend would need a cascade of per-step queries instead.
 <a href=#299 id=299 data-nosnippet>299</a>        </span><span class="kw">let </span>via = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
-<a href=#300 id=300 data-nosnippet>300</a>            app::FieldTy::Has(rel) =&gt; rel.kind.via(),
+<a href=#300 id=300 data-nosnippet>300</a>            app::FieldTy::Via(via) =&gt; <span class="prelude-val">Some</span>(via),
 <a href=#301 id=301 data-nosnippet>301</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
 <a href=#302 id=302 data-nosnippet>302</a>        };
 <a href=#303 id=303 data-nosnippet>303</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(via) = via {
@@ -316,7 +316,7 @@
 <a href=#316 id=316 data-nosnippet>316</a>                    rel.target,
 <a href=#317 id=317 data-nosnippet>317</a>                    stmt::Expr::eq(
 <a href=#318 id=318 data-nosnippet>318</a>                        stmt::Expr::ref_parent_model(),
-<a href=#319 id=319 data-nosnippet>319</a>                        stmt::Expr::ref_self_field(direct_pair(<span class="kw-2">&amp;</span>rel.kind)),
+<a href=#319 id=319 data-nosnippet>319</a>                        stmt::Expr::ref_self_field(rel.pair_id),
 <a href=#320 id=320 data-nosnippet>320</a>                    ),
 <a href=#321 id=321 data-nosnippet>321</a>                );
 <a href=#322 id=322 data-nosnippet>322</a>                <span class="kw">if </span>rel.is_one() {
@@ -386,72 +386,64 @@
 <a href=#386 id=386 data-nosnippet>386</a>    }
 <a href=#387 id=387 data-nosnippet>387</a>}
 <a href=#388 id=388 data-nosnippet>388</a>
-<a href=#389 id=389 data-nosnippet>389</a><span class="doccomment">/// The paired `BelongsTo` field of a direct has-relation. `.include()` of a
-<a href=#390 id=390 data-nosnippet>390</a>/// `via` relation is rejected earlier in `build_relation_subquery`, so any
-<a href=#391 id=391 data-nosnippet>391</a>/// relation reaching the direct-relation path has a pair.
-<a href=#392 id=392 data-nosnippet>392</a></span><span class="kw">fn </span>direct_pair(kind: <span class="kw-2">&amp;</span>app::HasKind) -&gt; app::FieldId {
-<a href=#393 id=393 data-nosnippet>393</a>    kind.pair_id()
-<a href=#394 id=394 data-nosnippet>394</a>        .expect(<span class="string">"`via` relation reached the direct-relation include path"</span>)
-<a href=#395 id=395 data-nosnippet>395</a>}
-<a href=#396 id=396 data-nosnippet>396</a>
-<a href=#397 id=397 data-nosnippet>397</a><span class="doccomment">/// Find the include paths that target field index `i` and split them by
-<a href=#398 id=398 data-nosnippet>398</a>/// whether they name the field itself or a sub-path within it.
-<a href=#399 id=399 data-nosnippet>399</a></span><span class="kw">fn </span>partition_paths(paths: <span class="kw-2">&amp;</span>[stmt::Projection], i: usize) -&gt; FieldIncludes {
-<a href=#400 id=400 data-nosnippet>400</a>    <span class="kw">let </span><span class="kw-2">mut </span>include_self = <span class="bool-val">false</span>;
-<a href=#401 id=401 data-nosnippet>401</a>    <span class="kw">let </span><span class="kw-2">mut </span>sub_paths = Vec::new();
-<a href=#402 id=402 data-nosnippet>402</a>    <span class="kw">for </span>path <span class="kw">in </span>paths {
-<a href=#403 id=403 data-nosnippet>403</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((first, rest)) = path.as_slice().split_first()
-<a href=#404 id=404 data-nosnippet>404</a>            &amp;&amp; <span class="kw-2">*</span>first == i
-<a href=#405 id=405 data-nosnippet>405</a>        {
-<a href=#406 id=406 data-nosnippet>406</a>            <span class="kw">if </span>rest.is_empty() {
-<a href=#407 id=407 data-nosnippet>407</a>                include_self = <span class="bool-val">true</span>;
-<a href=#408 id=408 data-nosnippet>408</a>            } <span class="kw">else </span>{
-<a href=#409 id=409 data-nosnippet>409</a>                sub_paths.push(stmt::Projection::from(rest));
-<a href=#410 id=410 data-nosnippet>410</a>            }
-<a href=#411 id=411 data-nosnippet>411</a>        }
-<a href=#412 id=412 data-nosnippet>412</a>    }
-<a href=#413 id=413 data-nosnippet>413</a>    FieldIncludes {
-<a href=#414 id=414 data-nosnippet>414</a>        include_self,
-<a href=#415 id=415 data-nosnippet>415</a>        sub_paths,
-<a href=#416 id=416 data-nosnippet>416</a>    }
-<a href=#417 id=417 data-nosnippet>417</a>}
-<a href=#418 id=418 data-nosnippet>418</a>
-<a href=#419 id=419 data-nosnippet>419</a><span class="doccomment">/// Flatten an include [`stmt::Path`] into a single projection, folding any
-<a href=#420 id=420 data-nosnippet>420</a>/// `PathRoot::Variant` chain into a discriminant-index step.
-<a href=#421 id=421 data-nosnippet>421</a>///
-<a href=#422 id=422 data-nosnippet>422</a>/// The result uses LOCAL field indices for variant fields (matching the IR's
-<a href=#423 id=423 data-nosnippet>423</a>/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
-<a href=#424 id=424 data-nosnippet>424</a>/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
-<a href=#425 id=425 data-nosnippet>425</a>/// not the schema, so LOCAL is what `process_enum_arms` needs.
-<a href=#426 id=426 data-nosnippet>426</a></span><span class="kw">fn </span>flatten_path(path: <span class="kw-2">&amp;</span>stmt::Path) -&gt; stmt::Projection {
-<a href=#427 id=427 data-nosnippet>427</a>    <span class="kw">let </span><span class="kw-2">mut </span>acc = stmt::Projection::identity();
-<a href=#428 id=428 data-nosnippet>428</a>    push_root_steps(<span class="kw-2">&amp;</span>path.root, <span class="kw-2">&amp;mut </span>acc);
-<a href=#429 id=429 data-nosnippet>429</a>    <span class="kw">for </span>step <span class="kw">in </span>path.projection.as_slice() {
-<a href=#430 id=430 data-nosnippet>430</a>        acc.push(<span class="kw-2">*</span>step);
-<a href=#431 id=431 data-nosnippet>431</a>    }
-<a href=#432 id=432 data-nosnippet>432</a>    acc
-<a href=#433 id=433 data-nosnippet>433</a>}
-<a href=#434 id=434 data-nosnippet>434</a>
-<a href=#435 id=435 data-nosnippet>435</a><span class="kw">fn </span>push_root_steps(root: <span class="kw-2">&amp;</span>stmt::PathRoot, acc: <span class="kw-2">&amp;mut </span>stmt::Projection) {
-<a href=#436 id=436 data-nosnippet>436</a>    <span class="kw">if let </span>stmt::PathRoot::Variant { parent, variant_id } = root {
-<a href=#437 id=437 data-nosnippet>437</a>        push_root_steps(<span class="kw-2">&amp;</span>parent.root, acc);
-<a href=#438 id=438 data-nosnippet>438</a>        <span class="kw">for </span>step <span class="kw">in </span>parent.projection.as_slice() {
-<a href=#439 id=439 data-nosnippet>439</a>            acc.push(<span class="kw-2">*</span>step);
-<a href=#440 id=440 data-nosnippet>440</a>        }
-<a href=#441 id=441 data-nosnippet>441</a>        acc.push(variant_id.index);
-<a href=#442 id=442 data-nosnippet>442</a>    }
-<a href=#443 id=443 data-nosnippet>443</a>}
-<a href=#444 id=444 data-nosnippet>444</a>
-<a href=#445 id=445 data-nosnippet>445</a><span class="doccomment">/// Build the loaded-form inner expression for a deferred field.
-<a href=#446 id=446 data-nosnippet>446</a>///
-<a href=#447 id=447 data-nosnippet>447</a>/// - Primitive — the cached column reference (with any storage-type cast).
-<a href=#448 id=448 data-nosnippet>448</a>/// - Embed (struct or enum) — the embed's pre-computed `default_returning`.
-<a href=#449 id=449 data-nosnippet>449</a></span><span class="kw">fn </span>loaded_form(field: <span class="kw-2">&amp;</span>app::Field, mapping: <span class="kw-2">&amp;</span>mapping::Field) -&gt; stmt::Expr {
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">match </span>(<span class="kw-2">&amp;</span>field.ty, mapping) {
-<a href=#451 id=451 data-nosnippet>451</a>        (app::FieldTy::Primitive(<span class="kw">_</span>), mapping::Field::Primitive(p)) =&gt; p.column_expr.clone(),
-<a href=#452 id=452 data-nosnippet>452</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Struct(s)) =&gt; s.default_returning.clone(),
-<a href=#453 id=453 data-nosnippet>453</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Enum(e)) =&gt; e.default_returning.clone(),
-<a href=#454 id=454 data-nosnippet>454</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"deferred field has unexpected mapping shape"</span>),
-<a href=#455 id=455 data-nosnippet>455</a>    }
-<a href=#456 id=456 data-nosnippet>456</a>}
+<a href=#389 id=389 data-nosnippet>389</a><span class="doccomment">/// Find the include paths that target field index `i` and split them by
+<a href=#390 id=390 data-nosnippet>390</a>/// whether they name the field itself or a sub-path within it.
+<a href=#391 id=391 data-nosnippet>391</a></span><span class="kw">fn </span>partition_paths(paths: <span class="kw-2">&amp;</span>[stmt::Projection], i: usize) -&gt; FieldIncludes {
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="kw">let </span><span class="kw-2">mut </span>include_self = <span class="bool-val">false</span>;
+<a href=#393 id=393 data-nosnippet>393</a>    <span class="kw">let </span><span class="kw-2">mut </span>sub_paths = Vec::new();
+<a href=#394 id=394 data-nosnippet>394</a>    <span class="kw">for </span>path <span class="kw">in </span>paths {
+<a href=#395 id=395 data-nosnippet>395</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>((first, rest)) = path.as_slice().split_first()
+<a href=#396 id=396 data-nosnippet>396</a>            &amp;&amp; <span class="kw-2">*</span>first == i
+<a href=#397 id=397 data-nosnippet>397</a>        {
+<a href=#398 id=398 data-nosnippet>398</a>            <span class="kw">if </span>rest.is_empty() {
+<a href=#399 id=399 data-nosnippet>399</a>                include_self = <span class="bool-val">true</span>;
+<a href=#400 id=400 data-nosnippet>400</a>            } <span class="kw">else </span>{
+<a href=#401 id=401 data-nosnippet>401</a>                sub_paths.push(stmt::Projection::from(rest));
+<a href=#402 id=402 data-nosnippet>402</a>            }
+<a href=#403 id=403 data-nosnippet>403</a>        }
+<a href=#404 id=404 data-nosnippet>404</a>    }
+<a href=#405 id=405 data-nosnippet>405</a>    FieldIncludes {
+<a href=#406 id=406 data-nosnippet>406</a>        include_self,
+<a href=#407 id=407 data-nosnippet>407</a>        sub_paths,
+<a href=#408 id=408 data-nosnippet>408</a>    }
+<a href=#409 id=409 data-nosnippet>409</a>}
+<a href=#410 id=410 data-nosnippet>410</a>
+<a href=#411 id=411 data-nosnippet>411</a><span class="doccomment">/// Flatten an include [`stmt::Path`] into a single projection, folding any
+<a href=#412 id=412 data-nosnippet>412</a>/// `PathRoot::Variant` chain into a discriminant-index step.
+<a href=#413 id=413 data-nosnippet>413</a>///
+<a href=#414 id=414 data-nosnippet>414</a>/// The result uses LOCAL field indices for variant fields (matching the IR's
+<a href=#415 id=415 data-nosnippet>415</a>/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
+<a href=#416 id=416 data-nosnippet>416</a>/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
+<a href=#417 id=417 data-nosnippet>417</a>/// not the schema, so LOCAL is what `process_enum_arms` needs.
+<a href=#418 id=418 data-nosnippet>418</a></span><span class="kw">fn </span>flatten_path(path: <span class="kw-2">&amp;</span>stmt::Path) -&gt; stmt::Projection {
+<a href=#419 id=419 data-nosnippet>419</a>    <span class="kw">let </span><span class="kw-2">mut </span>acc = stmt::Projection::identity();
+<a href=#420 id=420 data-nosnippet>420</a>    push_root_steps(<span class="kw-2">&amp;</span>path.root, <span class="kw-2">&amp;mut </span>acc);
+<a href=#421 id=421 data-nosnippet>421</a>    <span class="kw">for </span>step <span class="kw">in </span>path.projection.as_slice() {
+<a href=#422 id=422 data-nosnippet>422</a>        acc.push(<span class="kw-2">*</span>step);
+<a href=#423 id=423 data-nosnippet>423</a>    }
+<a href=#424 id=424 data-nosnippet>424</a>    acc
+<a href=#425 id=425 data-nosnippet>425</a>}
+<a href=#426 id=426 data-nosnippet>426</a>
+<a href=#427 id=427 data-nosnippet>427</a><span class="kw">fn </span>push_root_steps(root: <span class="kw-2">&amp;</span>stmt::PathRoot, acc: <span class="kw-2">&amp;mut </span>stmt::Projection) {
+<a href=#428 id=428 data-nosnippet>428</a>    <span class="kw">if let </span>stmt::PathRoot::Variant { parent, variant_id } = root {
+<a href=#429 id=429 data-nosnippet>429</a>        push_root_steps(<span class="kw-2">&amp;</span>parent.root, acc);
+<a href=#430 id=430 data-nosnippet>430</a>        <span class="kw">for </span>step <span class="kw">in </span>parent.projection.as_slice() {
+<a href=#431 id=431 data-nosnippet>431</a>            acc.push(<span class="kw-2">*</span>step);
+<a href=#432 id=432 data-nosnippet>432</a>        }
+<a href=#433 id=433 data-nosnippet>433</a>        acc.push(variant_id.index);
+<a href=#434 id=434 data-nosnippet>434</a>    }
+<a href=#435 id=435 data-nosnippet>435</a>}
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a><span class="doccomment">/// Build the loaded-form inner expression for a deferred field.
+<a href=#438 id=438 data-nosnippet>438</a>///
+<a href=#439 id=439 data-nosnippet>439</a>/// - Primitive — the cached column reference (with any storage-type cast).
+<a href=#440 id=440 data-nosnippet>440</a>/// - Embed (struct or enum) — the embed's pre-computed `default_returning`.
+<a href=#441 id=441 data-nosnippet>441</a></span><span class="kw">fn </span>loaded_form(field: <span class="kw-2">&amp;</span>app::Field, mapping: <span class="kw-2">&amp;</span>mapping::Field) -&gt; stmt::Expr {
+<a href=#442 id=442 data-nosnippet>442</a>    <span class="kw">match </span>(<span class="kw-2">&amp;</span>field.ty, mapping) {
+<a href=#443 id=443 data-nosnippet>443</a>        (app::FieldTy::Primitive(<span class="kw">_</span>), mapping::Field::Primitive(p)) =&gt; p.column_expr.clone(),
+<a href=#444 id=444 data-nosnippet>444</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Struct(s)) =&gt; s.default_returning.clone(),
+<a href=#445 id=445 data-nosnippet>445</a>        (app::FieldTy::Embedded(<span class="kw">_</span>), mapping::Field::Enum(e)) =&gt; e.default_returning.clone(),
+<a href=#446 id=446 data-nosnippet>446</a>        <span class="kw">_ </span>=&gt; <span class="macro">unreachable!</span>(<span class="string">"deferred field has unexpected mapping shape"</span>),
+<a href=#447 id=447 data-nosnippet>447</a>    }
+<a href=#448 id=448 data-nosnippet>448</a>}
 </code></pre></div></section></main></body></html>
