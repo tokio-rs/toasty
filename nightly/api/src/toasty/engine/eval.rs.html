@@ -76,26 +76,27 @@
 <a href=#76 id=76 data-nosnippet>76</a>    <span class="kw">match </span>expr {
 <a href=#77 id=77 data-nosnippet>77</a>        Arg(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
 <a href=#78 id=78 data-nosnippet>78</a>        And(expr_and) =&gt; expr_and.operands.iter().all(verify_expr),
-<a href=#79 id=79 data-nosnippet>79</a>        BinaryOp(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.lhs) &amp;&amp; verify_expr(<span class="kw-2">&amp;</span>expr.rhs),
-<a href=#80 id=80 data-nosnippet>80</a>        Cast(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.expr),
-<a href=#81 id=81 data-nosnippet>81</a>        IsNull(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.expr),
-<a href=#82 id=82 data-nosnippet>82</a>        Let(expr) =&gt; expr.bindings.iter().all(verify_expr) &amp;&amp; verify_expr(<span class="kw-2">&amp;</span>expr.body),
-<a href=#83 id=83 data-nosnippet>83</a>        List(expr) =&gt; expr.items.iter().all(verify_expr),
-<a href=#84 id=84 data-nosnippet>84</a>        Map(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.base) &amp;&amp; verify_expr(<span class="kw-2">&amp;</span>expr.map),
-<a href=#85 id=85 data-nosnippet>85</a>        Match(expr_match) =&gt; {
-<a href=#86 id=86 data-nosnippet>86</a>            verify_expr(<span class="kw-2">&amp;</span>expr_match.subject)
-<a href=#87 id=87 data-nosnippet>87</a>                &amp;&amp; expr_match.arms.iter().all(|arm| verify_expr(<span class="kw-2">&amp;</span>arm.expr))
-<a href=#88 id=88 data-nosnippet>88</a>        }
-<a href=#89 id=89 data-nosnippet>89</a>        Project(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.base),
-<a href=#90 id=90 data-nosnippet>90</a>        Record(expr) =&gt; expr.fields.iter().all(verify_expr),
-<a href=#91 id=91 data-nosnippet>91</a>        Exists(expr_exists) =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span>expr_exists.subquery.body {
-<a href=#92 id=92 data-nosnippet>92</a>            stmt::ExprSet::Values(values) =&gt; values.rows.iter().all(verify_expr),
-<a href=#93 id=93 data-nosnippet>93</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
-<a href=#94 id=94 data-nosnippet>94</a>        },
-<a href=#95 id=95 data-nosnippet>95</a>        Reference(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-<a href=#96 id=96 data-nosnippet>96</a>        Func(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
-<a href=#97 id=97 data-nosnippet>97</a>        Value(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
-<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"expr={expr:#?}"</span>),
-<a href=#99 id=99 data-nosnippet>99</a>    }
-<a href=#100 id=100 data-nosnippet>100</a>}
+<a href=#79 id=79 data-nosnippet>79</a>        Or(expr_or) =&gt; expr_or.operands.iter().all(verify_expr),
+<a href=#80 id=80 data-nosnippet>80</a>        BinaryOp(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.lhs) &amp;&amp; verify_expr(<span class="kw-2">&amp;</span>expr.rhs),
+<a href=#81 id=81 data-nosnippet>81</a>        Cast(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.expr),
+<a href=#82 id=82 data-nosnippet>82</a>        IsNull(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.expr),
+<a href=#83 id=83 data-nosnippet>83</a>        Let(expr) =&gt; expr.bindings.iter().all(verify_expr) &amp;&amp; verify_expr(<span class="kw-2">&amp;</span>expr.body),
+<a href=#84 id=84 data-nosnippet>84</a>        List(expr) =&gt; expr.items.iter().all(verify_expr),
+<a href=#85 id=85 data-nosnippet>85</a>        Map(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.base) &amp;&amp; verify_expr(<span class="kw-2">&amp;</span>expr.map),
+<a href=#86 id=86 data-nosnippet>86</a>        Match(expr_match) =&gt; {
+<a href=#87 id=87 data-nosnippet>87</a>            verify_expr(<span class="kw-2">&amp;</span>expr_match.subject)
+<a href=#88 id=88 data-nosnippet>88</a>                &amp;&amp; expr_match.arms.iter().all(|arm| verify_expr(<span class="kw-2">&amp;</span>arm.expr))
+<a href=#89 id=89 data-nosnippet>89</a>        }
+<a href=#90 id=90 data-nosnippet>90</a>        Project(expr) =&gt; verify_expr(<span class="kw-2">&amp;</span>expr.base),
+<a href=#91 id=91 data-nosnippet>91</a>        Record(expr) =&gt; expr.fields.iter().all(verify_expr),
+<a href=#92 id=92 data-nosnippet>92</a>        Exists(expr_exists) =&gt; <span class="kw">match </span><span class="kw-2">&amp;</span>expr_exists.subquery.body {
+<a href=#93 id=93 data-nosnippet>93</a>            stmt::ExprSet::Values(values) =&gt; values.rows.iter().all(verify_expr),
+<a href=#94 id=94 data-nosnippet>94</a>            <span class="kw">_ </span>=&gt; <span class="bool-val">false</span>,
+<a href=#95 id=95 data-nosnippet>95</a>        },
+<a href=#96 id=96 data-nosnippet>96</a>        Reference(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+<a href=#97 id=97 data-nosnippet>97</a>        Func(<span class="kw">_</span>) =&gt; <span class="bool-val">false</span>,
+<a href=#98 id=98 data-nosnippet>98</a>        Value(<span class="kw">_</span>) =&gt; <span class="bool-val">true</span>,
+<a href=#99 id=99 data-nosnippet>99</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"expr={expr:#?}"</span>),
+<a href=#100 id=100 data-nosnippet>100</a>    }
+<a href=#101 id=101 data-nosnippet>101</a>}
 </code></pre></div></section></main></body></html>
