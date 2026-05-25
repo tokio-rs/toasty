@@ -1,4 +1,4 @@
-use super::{Deferred, HasManyField, Register, Relation};
+use super::{Deferred, HasManyField, Load, Register, Relation};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
@@ -9,6 +9,35 @@ impl<T: Relation> HasManyField for Deferred<Vec<T>> {
 
     fn nullable() -> bool {
         <T as Relation>::nullable()
+    }
+
+    const DEFERRED: bool = true;
+
+    fn reload(target: &mut Self, _value: stmt::Value) -> crate::Result<()> {
+        target.unload();
+        Ok(())
+    }
+
+    fn has_many_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<stmt::Path>,
+    ) -> FieldTy {
+        has_many_field_ty::<T>(singular, pair, via)
+    }
+}
+
+impl<T: Relation> HasManyField for Vec<T> {
+    type Target = T;
+
+    fn nullable() -> bool {
+        <T as Relation>::nullable()
+    }
+
+    const DEFERRED: bool = false;
+
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
+        <Self as Load>::reload(target, value)
     }
 
     fn has_many_field_ty(

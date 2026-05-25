@@ -561,8 +561,17 @@ impl Expand<'_> {
                     FieldTy::Primitive(ty) => {
                         quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
                     }
-                    _ => {
-                        quote!(#i => #field_access.unload(),)
+                    FieldTy::BelongsTo(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::BelongsToField>::reload(&mut #field_access, value)?,)
+                    }
+                    FieldTy::HasMany(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::HasManyField>::reload(&mut #field_access, value)?,)
+                    }
+                    FieldTy::HasOne(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::HasOneField>::reload(&mut #field_access, value)?,)
                     }
                 }
             })

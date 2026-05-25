@@ -1,13 +1,15 @@
 # HasMany
 
 A `HasMany` relationship connects a parent model to multiple child records. The
-parent declares a `Deferred<Vec<T>>` field, and the child stores a foreign key
-pointing back to the parent via [BelongsTo](./belongs-to.md).
+parent declares a `Vec<T>` relation field, usually wrapped in `Deferred<_>` for
+lazy loading. The child stores a foreign key pointing back to the parent via
+[BelongsTo](./belongs-to.md).
 
 ## Defining a HasMany relationship
 
-Add a `#[has_many]` field of type `Deferred<Vec<T>>` on the parent model. The child
-model must have a corresponding `#[belongs_to]` field.
+Add a `#[has_many]` field on the parent model. Use `Deferred<Vec<T>>` for lazy
+loading, or `Vec<T>` for eager loading. The child model must have a
+corresponding `#[belongs_to]` field.
 
 ```rust
 # use toasty::Model;
@@ -41,6 +43,16 @@ struct Post {
 
 The `#[has_many]` attribute does not add any columns to the parent's table. The
 relationship is stored entirely in the child's foreign key column (`user_id`).
+
+With an eager field, Toasty loads the children whenever it loads the parent:
+
+```rust,ignore
+#[has_many]
+posts: Vec<Post>,
+```
+
+This behaves like an implicit `.include(User::fields().posts())` on every query
+that returns `User`.
 
 ## Querying children
 

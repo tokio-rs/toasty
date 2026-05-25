@@ -77,6 +77,7 @@ impl Expand<'_> {
             let index_tokenized = util::int(index);
             let field_ty;
             let nullable;
+            let deferred;
 
             let field_named = match &self.model.kind {
                 ModelKind::Root(_) => true,
@@ -119,6 +120,8 @@ impl Expand<'_> {
                     };
 
                     nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
+                    let deferred_attr = field.attrs.deferred;
+                    deferred = quote!(#deferred_attr);
                     field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
                 }
                 FieldTy::BelongsTo(rel) => {
@@ -143,6 +146,7 @@ impl Expand<'_> {
                     });
 
                     nullable = quote!(<#ty as #toasty::BelongsToField>::nullable());
+                    deferred = quote!(<#ty as #toasty::BelongsToField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::BelongsToField>::belongs_to_field_ty(
                         #toasty::core::schema::app::ForeignKey {
                             fields: vec![ #( #fk_fields ),* ],
@@ -156,6 +160,7 @@ impl Expand<'_> {
                     let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
                     nullable = quote!(<#ty as #toasty::HasManyField>::nullable());
+                    deferred = quote!(<#ty as #toasty::HasManyField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::HasManyField>::has_many_field_ty(#singular_name, #pair, #via));
                 }
                 FieldTy::HasOne(rel) => {
@@ -164,6 +169,7 @@ impl Expand<'_> {
                     let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
                     nullable = quote!(<#ty as #toasty::HasOneField>::nullable());
+                    deferred = quote!(<#ty as #toasty::HasOneField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::HasOneField>::has_one_field_ty(#pair, #via));
                 }
             }
@@ -190,7 +196,6 @@ impl Expand<'_> {
             };
 
             let versionable = field.attrs.versionable;
-            let deferred = field.attrs.deferred;
 
             quote! {
                 #toasty::core::schema::app::Field {

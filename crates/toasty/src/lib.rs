@@ -25,8 +25,10 @@
 //! [`Auto`](schema::Auto), a wrapper for auto-generated values such as
 //! database-assigned IDs.
 //!
-//! Relation fields use [`Deferred`](schema::Deferred) and are populated through
-//! `.include(...)` or generated relation accessors.
+//! Relation fields can use [`Deferred`](schema::Deferred) for lazy loading or
+//! direct relation values for eager loading. Lazy relations are populated
+//! through `.include(...)` or generated relation accessors. Eager relations are
+//! loaded whenever the model is loaded.
 //!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.

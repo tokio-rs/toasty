@@ -493,7 +493,7 @@ impl Expand<'_> {
         let verify_t = util::ident("T");
 
         let msg = format!(
-            "{relation_kind} requires the {{{verify_a}}}::{pair_ident} field to be of type `Deferred<Self>`, but it was `{{Self}}` instead"
+            "{relation_kind} requires the {{{verify_a}}}::{pair_ident} field to be a relation to `Self`, but it was `{{Self}}` instead"
         );
 
         quote::quote_spanned! {rel_span=>
@@ -519,6 +519,14 @@ impl Expand<'_> {
 
                 #[diagnostic::do_not_recommend]
                 impl<#verify_a> Verify<#verify_a> for #toasty::Deferred<Option<#model_ident>> {
+                }
+
+                #[diagnostic::do_not_recommend]
+                impl<#verify_a> Verify<#verify_a> for #model_ident {
+                }
+
+                #[diagnostic::do_not_recommend]
+                impl<#verify_a> Verify<#verify_a> for Option<#model_ident> {
                 }
 
                 fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: &#verify_t) {

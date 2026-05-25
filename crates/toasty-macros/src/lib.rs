@@ -335,6 +335,21 @@ use proc_macro::TokenStream;
 ///
 /// # Relation attributes
 ///
+/// Relation fields can be lazy or eager. Wrap the relation value in
+/// `toasty::Deferred<_>` for lazy loading; ordinary queries leave the field
+/// unloaded until the generated relation accessor or `.include(...)` loads it.
+/// Use the relation value directly for eager loading; every query that returns
+/// the model loads the relation as if the query included that field.
+///
+/// | Attribute | Lazy field type | Eager field type |
+/// |-----------|-----------------|------------------|
+/// | `#[belongs_to]` | `toasty::Deferred<T>` or `toasty::Deferred<Option<T>>` | `T` or `Option<T>` |
+/// | `#[has_many]` | `toasty::Deferred<Vec<T>>` | `Vec<T>` |
+/// | `#[has_one]` | `toasty::Deferred<T>` or `toasty::Deferred<Option<T>>` | `T` or `Option<T>` |
+///
+/// Toasty rejects schemas with eager-load cycles. If two relation paths point
+/// back to each other, wrap at least one field in `toasty::Deferred<_>`.
+///
 /// ## `#[belongs_to(...)]` — foreign-key reference
 ///
 /// Declares a many-to-one (or one-to-one) association through a foreign
@@ -357,6 +372,13 @@ use proc_macro::TokenStream;
 /// #[belongs_to(key = user_id, references = id)]
 /// user: toasty::Deferred<User>,
 /// # }
+/// ```
+///
+/// To load the relation with every `Example` query, omit `Deferred`:
+///
+/// ```ignore
+/// #[belongs_to(key = user_id, references = id)]
+/// user: User,
 /// ```
 ///
 /// | Parameter | Meaning |
@@ -437,6 +459,13 @@ use proc_macro::TokenStream;
 /// #[has_many]
 /// posts: toasty::Deferred<Vec<Post>>,
 /// # }
+/// ```
+///
+/// To load the collection with every `Example` query, use `Vec<Post>`:
+///
+/// ```ignore
+/// #[has_many]
+/// posts: Vec<Post>,
 /// ```
 ///
 /// Toasty generates an accessor method (e.g. `.posts()`) and an insert
@@ -544,6 +573,13 @@ use proc_macro::TokenStream;
 /// # }
 /// ```
 ///
+/// To load the relation with every `Example` query, omit `Deferred`:
+///
+/// ```ignore
+/// #[has_one]
+/// profile: Profile,
+/// ```
+///
 /// Wrap in `Option` for an optional association:
 ///
 /// ```
@@ -567,6 +603,8 @@ use proc_macro::TokenStream;
 /// profile: toasty::Deferred<Option<Profile>>,
 /// # }
 /// ```
+///
+/// The eager optional form is `Option<Profile>`.
 ///
 /// ### `via` — multi-step relations
 ///
@@ -624,6 +662,8 @@ use proc_macro::TokenStream;
 /// - `#[column]`, `#[default]`, and `#[update]` cannot be used on relation
 ///   fields (`BelongsTo`, `HasMany`, `HasOne`).
 /// - A field can have at most one relation attribute.
+/// - Eager relation fields cannot form a cycle. Use `toasty::Deferred<_>` on at
+///   least one edge of a bidirectional relation.
 /// - `Self` can be used as a type in relation fields for self-referential
 ///   models.
 ///
@@ -1765,9 +1805,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// | `Option<T>` | Defaults to `None` (`NULL`) |
 /// | `#[default(expr)]` | Uses the default expression |
 /// | `#[update(expr)]` | Uses the expression as the initial value |
-/// | `#[has_many] Deferred<Vec<T>>` | No related records created |
-/// | `#[has_one] Deferred<Option<T>>` | No related record created |
-/// | `#[belongs_to] Deferred<Option<T>>` | Foreign key set to `NULL` |
+/// | `#[has_many] Deferred<Vec<T>>` or `#[has_many] Vec<T>` | No related records created |
+/// | `#[has_one] Deferred<Option<T>>` or `#[has_one] Option<T>` | No related record created |
+/// | `#[belongs_to] Deferred<Option<T>>` or `#[belongs_to] Option<T>` | Foreign key set to `NULL` |
 ///
 /// Required fields (`String`, `i64`, non-optional `BelongsTo`, etc.) that are
 /// missing do not cause a compile-time error. The insert fails at runtime with

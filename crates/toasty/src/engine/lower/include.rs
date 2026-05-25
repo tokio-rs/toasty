@@ -268,8 +268,12 @@ impl LowerStatement<'_, '_> {
         field_index: usize,
         nested: &[stmt::Projection],
     ) {
-        returning[field_index] =
-            lazy_slot::loaded_expr(self.build_relation_subquery(field_index, nested));
+        let value = self.build_relation_subquery(field_index, nested);
+        returning[field_index] = if self.model_unwrap().fields[field_index].deferred {
+            lazy_slot::loaded_expr(value)
+        } else {
+            value
+        };
     }
 
     /// Build a subquery that loads the related model(s) for a

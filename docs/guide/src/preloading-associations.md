@@ -6,16 +6,16 @@ query, avoiding extra database round-trips when you access associations.
 ## Async means a query
 
 Toasty's API follows one rule for associations: **if you `.await` it, it hits
-the database.** The two ways to access
-an association make this visible in the code:
+the database.** Lazy relation fields make this visible in the code:
 
 - `user.posts().exec(&mut db).await?` — async, executes a query.
 - `user.posts.get()` — not async, reads already-loaded data in memory.
 
 Because `.get()` is a plain (non-async) method, the compiler won't let you
-confuse the two. You can scan any code path for `.await` to know exactly where
-database round-trips happen. This makes N+1 problems easy to spot and impossible
-to introduce by accident.
+confuse the two. Plain eager relation fields are already-loaded values, so
+accessing `user.posts` also does not issue a query. You can scan any code path
+for `.await` to know exactly where database round-trips happen. This makes N+1
+problems easy to spot and impossible to introduce by accident.
 
 ## The N+1 problem
 
@@ -40,8 +40,8 @@ how many records you load.
 
 ## Using `.include()`
 
-Add `.include()` to a query to preload a relation. Pass the field path from the
-model's `fields()` accessor:
+Add `.include()` to a query to preload a `Deferred<_>` relation. Pass the field
+path from the model's `fields()` accessor:
 
 ```rust
 # use toasty::Model;
@@ -88,14 +88,46 @@ with `user.posts().exec(&mut db).await?`, which is async and always runs a
 query. The presence or absence of `.await` tells you whether code touches the
 database.
 
+## Eager relation fields
+
+A relation field that is not wrapped in `Deferred<_>` is loaded by every query
+that returns the model. This is equivalent to an implicit `.include(...)`.
+
+```rust,ignore
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[has_many]
+    posts: Vec<Post>,
+}
+
+let user = User::filter_by_id(user_id).get(&mut db).await?;
+
+// Already loaded — no .include() and no .get() wrapper.
+let post_count = user.posts.len();
+```
+
+Use eager relation fields when most queries for the model need the relation. Use
+`Deferred<_>` when callers should choose between lazy access and explicit
+`.include(...)`.
+
+Eager relations cannot form cycles. Toasty rejects a schema where eager loading
+would recurse forever, such as `User.posts: Vec<Post>` paired with
+`Post.user: User`. Make one side `Deferred<_>` when two models point at each
+other.
+
 ## Preloaded vs unloaded access
 
-There are two ways to access a relation, depending on whether it was preloaded:
+There are three access patterns for relations:
 
 | Access pattern | Async | When to use | Queries |
 |---|---|---|---|
-| `user.posts().exec(&mut db).await?` | Yes | Relation was not preloaded | Executes a query |
-| `user.posts.get()` | No | Relation was preloaded with `.include()` | No query |
+| `user.posts().exec(&mut db).await?` | Yes | Lazy relation was not preloaded | Executes a query |
+| `user.posts.get()` | No | `Deferred<_>` relation was preloaded with `.include()` | No query |
+| `user.posts` | No | Relation field is not wrapped in `Deferred<_>` | No query |
 
 Calling `.get()` on an unloaded relation panics. Only use `.get()` when you know
 the relation was preloaded.
@@ -331,9 +363,8 @@ for user in &users {
 
 | Syntax | Description |
 |---|---|
-| `.include(Model::fields().relation())` | Preload a relation in the query |
-| `model.relation.get()` | Access preloaded HasMany data (returns `&[T]`) |
-| `model.relation.get()` | Access preloaded BelongsTo data (returns `&T`) |
-| `model.relation.get()` | Access preloaded HasOne data (returns `&T` or `&Option<T>`) |
+| `.include(Model::fields().relation())` | Preload a `Deferred<_>` relation in the query |
+| `model.relation.get()` | Access preloaded `Deferred<Vec<T>>`, `Deferred<T>`, or `Deferred<Option<T>>` data |
+| `model.relation` | Access an eager `Vec<T>`, `T`, or `Option<T>` relation field |
 | `model.relation.try_get()` | Non-panicking access; returns `None` if not preloaded |
-| `model.relation.is_unloaded()` | Check if a relation was preloaded |
+| `model.relation.is_unloaded()` | Check whether a `Deferred<_>` relation was preloaded |
