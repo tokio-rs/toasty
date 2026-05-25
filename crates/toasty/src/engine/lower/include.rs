@@ -1,7 +1,7 @@
 //! Lowering for `Returning::Model` includes and deferred-field masking.
 //!
 //! `mapping::Model::default_returning` is computed at schema-build time with
-//! every `#[deferred]` field — top-level or nested inside an embedded type —
+//! every deferred field — top-level or nested inside an embedded type —
 //! pre-masked to `Null`. Lowering starts from a clone of the default
 //! expression and splices loaded forms in for fields named by `.include()`
 //! paths or, for an `INSERT … RETURNING`, for every deferred field.
@@ -9,7 +9,7 @@
 //! The recursion is mapping-driven: each `mapping::Field` variant decides how
 //! to descend into its corresponding expression. Driving off the mapping
 //! tree (rather than the expression's shape) is what lets us reach a
-//! `#[deferred]` sub-field of an embed struct nested inside an enum variant —
+//! deferred sub-field of an embed struct nested inside an enum variant —
 //! the masked `Null` lives inside a `Match` expression, not a `Record`.
 //!
 //! Include paths arrive as [`stmt::Path`] values. The first thing we do is

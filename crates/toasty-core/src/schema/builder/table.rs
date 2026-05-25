@@ -414,7 +414,7 @@ impl BuildMapping<'_> {
     }
 
     /// Builds the model's default `RETURNING` expression — the same shape as
-    /// `table_to_model` but with every `#[deferred]` field, at this level or
+    /// `table_to_model` but with every deferred field, at this level or
     /// inside a nested embedded type, pre-masked to `Null`. Also writes each
     /// embed's own default expression into the corresponding mapping node so
     /// lowering can splice it in when an `.include()` activates a deferred
@@ -507,9 +507,8 @@ impl BuildMapping<'_> {
     /// field through [`Self::build_default_returning_field`] instead of
     /// the raw column emitter.
     ///
-    /// `#[deferred]` directly on a variant field is rejected by the macro,
-    /// so the only deferred fields reachable through this recursion live
-    /// inside an embed struct used as a variant field.
+    /// Deferred variant fields route through the same default-returning
+    /// masking as fields inside embedded structs.
     fn build_default_returning_enum(
         &self,
         model: &app::EmbeddedEnum,

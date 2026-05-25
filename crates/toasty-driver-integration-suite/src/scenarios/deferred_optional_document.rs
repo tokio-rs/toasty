@@ -10,8 +10,6 @@ scenario! {
         id: ID,
 
         title: String,
-
-        #[deferred]
         summary: toasty::Deferred<Option<String>>,
     }
 

@@ -185,7 +185,7 @@ pub struct FieldPrimitive {
     /// from the primitive's expression type.
     ///
     /// Cached so that lowering can splice the loaded form `Record([..])` for
-    /// a `#[deferred]` primitive without re-deriving the column expression
+    /// a deferred primitive without re-deriving the column expression
     /// from the column id and schema.
     pub column_expr: stmt::Expr,
 }
@@ -273,9 +273,7 @@ pub struct FieldEnum {
     /// For unit-only enums this is the discriminant column reference. For
     /// data-carrying enums it is the full `Match { disc, arms[], else }`
     /// expression with per-arm records (currently identical to the raw
-    /// `table_to_model` shape — `#[deferred]` on a variant field is
-    /// rejected at the macro layer; if it is ever lifted, the per-arm
-    /// records would mask their deferred fields here).
+    /// `table_to_model` shape with deferred fields masked in each arm.
     pub default_returning: stmt::Expr,
 }
 

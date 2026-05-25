@@ -7,7 +7,7 @@ to a chosen subset of fields.  `.select(field)` returns `Vec<T>` for that
 field's type; `.select((f1, f2, ...))` returns `Vec` of a tuple.  The
 method composes with `.filter`, `.order_by`, `.limit`, `.first`, `.get`,
 and `.count`.  It is the per-call companion to schema-level
-`#[deferred]`: deferred sets a default for a column the model rarely
+`Deferred<T>`: deferral sets a default for a column the model rarely
 needs; `.select` shapes one call site.  Compilation rides the engine's
 existing `Returning::Project` path; no new driver capability is required.
 
@@ -25,19 +25,17 @@ patterns:
 - A migration script that wants every record minus a deprecated
   column, before dropping it.
 
-`#[deferred]` ([design](deferred-fields.md), PR #793) addresses the
-case where a column is *always* heavy.  It is a schema-level decision.
-The cases above are call-site decisions on otherwise-eager columns, and
-moving every such column to `Deferred<T>` flips the schema's polarity in
-the wrong direction (unloaded by default, loaded on opt-in) for the
-many call sites that do not need to skip it.
+`Deferred<T>` addresses the case where a column is *always* heavy. It is
+a schema-level decision. The cases above are call-site decisions on
+otherwise-eager columns, and moving every such column to `Deferred<T>`
+flips the schema's polarity in the wrong direction (unloaded by
+default, loaded on opt-in) for the many call sites that do not need to
+skip it.
 
-The deferred-fields design carved this gap out as a future feature in
-its "Alternatives considered" and "Out of scope" sections.  This
-document is that follow-on.  The pattern is well-established elsewhere:
-Diesel's `select(...)`, ActiveRecord's `select`, Sequel's `select`,
-JPQL constructor expressions, Prisma's `select`, SQLAlchemy's
-`load_only`.  Toasty already has the engine plumbing
+The pattern is well-established elsewhere: Diesel's `select(...)`,
+ActiveRecord's `select`, Sequel's `select`, JPQL constructor
+expressions, Prisma's `select`, SQLAlchemy's `load_only`. Toasty
+already has the engine plumbing
 (`Returning::Project` accepts arbitrary column expressions, renamed in
 PR #790); the missing piece is the user-facing surface and the
 type-level shape of the result.
@@ -143,7 +141,7 @@ let active_emails: Vec<String> = User::all()
 
 ### Selecting deferred and embedded fields
 
-A `#[deferred]` field selected through `.select(...)` is loaded
+A `Deferred<T>` field selected through `.select(...)` is loaded
 eagerly, exactly as if it had been included.  An embedded type field
 selected through `.select(...)` returns the embed value:
 
@@ -155,7 +153,7 @@ selected through `.select(...)` returns the embed value:
 # struct Document {
 #     #[key] #[auto] id: u64,
 #     title: String,
-#     #[deferred] body: toasty::Deferred<String>,
+#     body: toasty::Deferred<String>,
 #     metadata: Metadata,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -279,7 +277,7 @@ parameter of the `IntoExpr<T>` impl chosen at the call site.  The
 user can let inference do the work or annotate at the binding site as
 the examples above do.
 
-**Deferred fields.**  Selecting a `#[deferred]` field eagerly loads
+**Deferred fields.**  Selecting a `Deferred<T>` field eagerly loads
 it.  The result element type is `T`, not `Deferred<T>`; the unloaded
 state has no place in a projection result.
 
@@ -435,7 +433,7 @@ planner.  No change to the operation graph.  No new MIR variant.
 ### SQL drivers
 
 No change.  The shorter column list flows through `SELECT col1, col2,
-... FROM ...` identically to how `#[deferred]` already produces a
+... FROM ...` identically to how `Deferred<T>` already produces a
 shorter list.  No new dialect coverage; no new capability flag; no SQL
 serializer changes beyond accepting the existing `Returning::Project`
 shape.
@@ -454,7 +452,7 @@ A driver that ignored projection lists in the past keeps working: the
 engine continues to decode the columns it requested, and the
 user-visible behavior degrades to "the projection returned more
 columns than asked for, which the engine then discards."  Identical
-compat outcome to the `#[deferred]` rollout.
+compat outcome to the `Deferred<T>` rollout.
 
 ## Alternatives considered
 
@@ -476,10 +474,9 @@ specialized form for "give me a `Vec<T>` of one field".  Rejected as
 redundant: the size-1 tuple impl produces the same shape with one
 method instead of two.
 
-**`.exclude(F)` as the inverse of `.select(F)`.**  The deferred-fields
-design names `.exclude(...)` alongside `.select(...)` as a future
-feature.  After analysis, `.exclude(...)` does not fit Toasty's typed
-model without a representational change:
+**`.exclude(F)` as the inverse of `.select(F)`.**  After analysis,
+`.exclude(...)` does not fit Toasty's typed model without a
+representational change:
 
 - A non-deferred field of declared type `T` has no runtime "unloaded"
   state.  Returning a model record with such a field marked unloaded
@@ -488,13 +485,13 @@ model without a representational change:
   type per call site (`UserExcludeName`, `UserExcludeEmail`,
   combinatorially many), or a runtime "stale" bit accessed through a
   non-default API path.
-- A `#[deferred] Deferred<T>` field is already unloaded by default;
+- A `Deferred<T>` field is already unloaded by default;
   `.exclude(...)` of it is a no-op against the existing schema-level
   semantics.
 - A relation field is already lazy; `.exclude(...)` of it is also a
   no-op against the existing `.include(...)` semantics.
 
-The conclusion is that the per-call complement to `#[deferred]` is
+The conclusion is that the per-call complement to `Deferred<T>` is
 `.select(...)` alone in Toasty's typed-model setting.  Where Rails
 or Sequel use `.exclude(...)` for an everything-but-X projection,
 toasty's analog is `.select((all, fields, except, the, one))`, which
@@ -503,17 +500,15 @@ macro shorthand if call-site verbosity becomes a real complaint.
 
 **`Select<M>` carries a phantom `Loaded` set in the type system.**
 Encode the projection as a type-level set (`Select<M, {Name, Id}>`).
-Rejected because the deferred-fields design already chose runtime
-loaded-ness over phantom-set encoding for the same kind of state, and
-introducing it here for projections would duplicate that decision in
-incompatible ways.
+Rejected because `Deferred<T>` uses runtime loaded-ness. Introducing a
+phantom-set encoding for projections would represent the same kind of
+state in an incompatible way.
 
 **Reusing `.include(...)` for primitive fields.**  Make
 `.include(field)` mean "ensure this field is loaded" for both
-relations and deferred primitives.  Already designed: the
-deferred-fields document specifies `.include(...)` for deferred
-primitives.  No conflict with `.select(...)`, which constructs a
-different result shape.
+relations and deferred primitives. This already works for deferred
+fields. No conflict with `.select(...)`, which constructs a different
+result shape.
 
 ## Open questions
 
@@ -565,7 +560,7 @@ different result shape.
 
 - **`.exclude(...)` as a primary surface.**  Discussed in
   "Alternatives considered" above.  The conclusion is that the
-  per-call complement to `#[deferred]` is `.select(...)` alone in
+  per-call complement to `Deferred<T>` is `.select(...)` alone in
   Toasty's typed-model setting.  Reopen as a separate design if
   users argue it back in.
 

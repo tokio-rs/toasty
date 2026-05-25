@@ -2,21 +2,20 @@
 
 A deferred field is a column Toasty omits from the default `SELECT`
 list. Records returned from a query have the field unloaded; loading
-the value requires either a follow-up `.exec()` call or a preload with
-`.include()`.
+the value requires a preload with `.include()`.
 
 The pattern fits columns that are large, expensive to fetch, or rarely
 read: a `Document` body, a binary blob, an audit-event JSON payload.
-Without the deferred annotation, every list query reads every column
-whether the caller needs it or not.
+Without `Deferred<T>`, every list query reads every column whether the
+caller needs it or not.
 
-The API mirrors relation fields wrapped in `Deferred<_>`: a synchronous `.get()`
-reads an already-loaded value, an async per-field accessor loads on demand, and
-`.include()` preloads as part of the parent query.
+The API mirrors deferred relation fields: a synchronous `.get()` reads an
+already-loaded value, and `.include()` preloads the value as part of
+the parent query.
 
 ## Marking a field as deferred
 
-Annotate the field with `#[deferred]` and wrap its type in `Deferred<T>`:
+Wrap the field type in `Deferred<T>`:
 
 ```rust
 # use toasty::Model;
@@ -27,19 +26,14 @@ struct Document {
     id: u64,
 
     title: String,
-
-    #[deferred]
     body: toasty::Deferred<String>,
 }
 ```
 
-Both are required; using one without the other is a compile error. The
-attribute directs the macro to omit the field from the default
-projection and to generate the per-field load method. The wrapper type
-provides the unloaded-state runtime API.
+The wrapper tells Toasty to omit the field from the default projection
+and provides the unloaded-state runtime API.
 
-A record from an ordinary query has `body` unloaded. Load it explicitly
-with a follow-up read keyed on the primary key:
+A record from an ordinary query has `body` unloaded:
 
 ```rust
 # use toasty::Model;
@@ -49,7 +43,6 @@ with a follow-up read keyed on the primary key:
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[deferred]
 #     body: toasty::Deferred<String>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -59,15 +52,11 @@ with a follow-up read keyed on the primary key:
 # }).exec(&mut db).await?;
 let doc = Document::filter_by_id(created.id).get(&mut db).await?;
 assert!(doc.body.is_unloaded());
-
-// Issue a follow-up read for just the deferred column.
-let body: String = doc.body().exec(&mut db).await?;
 # Ok(())
 # }
 ```
 
-Or preload it with `.include()` so the value arrives on the record the
-query returns — no second round-trip:
+Use `.include()` so the value arrives on the record the query returns:
 
 ```rust
 # use toasty::Model;
@@ -77,7 +66,6 @@ query returns — no second round-trip:
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[deferred]
 #     body: toasty::Deferred<String>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -95,14 +83,14 @@ let body: &String = doc.body.get();   // synchronous, no query
 # }
 ```
 
-`#[deferred]` is supported on primitive fields and on embedded types
+`Deferred<T>` is supported on primitive fields and on embedded types
 (`#[derive(Embed)]` structs and enums). It does not compose with
 `#[belongs_to]`, `#[has_many]`, or `#[has_one]`. Relation fields use
 `Deferred<_>` in the field type itself when they should be lazy.
 
 A deferred embed value omits all of the embed's columns from the default
-projection. Loading is the same as for a primitive: call the per-field
-accessor, or chain `.include()` to preload alongside the parent query.
+projection. Loading is the same as for a primitive: chain `.include()`
+to preload alongside the parent query.
 
 ```rust
 # use toasty::Model;
@@ -119,23 +107,19 @@ struct Document {
     id: u64,
 
     title: String,
-
-    #[deferred]
     metadata: toasty::Deferred<Metadata>,
 }
 ```
 
-`#[deferred]` is also valid on a primitive field *inside* an embedded
-struct. The annotation defers just that column wherever the embed is
-used; the embed's other (eager) fields still load with the parent query.
+`Deferred<T>` is also valid on a primitive field *inside* an embedded
+struct. It defers just that column wherever the embed is used; the
+embed's other fields still load with the parent query.
 
 ```rust
 # use toasty::Model;
 #[derive(Debug, toasty::Embed)]
 struct Metadata {
     author: String,
-
-    #[deferred]
     notes: toasty::Deferred<String>,
 }
 ```
@@ -174,7 +158,6 @@ the deferred field unloaded:
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[deferred]
 #     body: toasty::Deferred<String>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -200,42 +183,6 @@ Calling `doc.body.get()` in the unloaded state panics. `.get()` is the
 synchronous accessor for a value already loaded into the record; on an
 unloaded field there is nothing to return.
 
-## Loading on demand
-
-The macro generates a per-field method that issues a single-row read
-keyed on the model's primary key. Call `.exec()` to fetch the value:
-
-```rust
-# use toasty::Model;
-# #[derive(Debug, toasty::Model)]
-# struct Document {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     title: String,
-#     #[deferred]
-#     body: toasty::Deferred<String>,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-# let created = toasty::create!(Document {
-#     title: "Hello",
-#     body: "the long body",
-# }).exec(&mut db).await?;
-# let doc = Document::filter_by_id(created.id).get(&mut db).await?;
-let body: String = doc.body().exec(&mut db).await?;
-# Ok(())
-# }
-```
-
-The return type of `.exec()` is the type within `Deferred<T>`. The
-call does not mutate the in-memory record — `doc.body.is_unloaded()`
-is still `true` afterward, and re-issuing the same load returns the
-value again.
-
-The `.await` makes the round-trip explicit. Code that needs the value
-many times should preload with `.include()` instead — calling `.exec()`
-in a loop over a `Vec<Document>` is N+1 by definition.
-
 ## Preloading with `.include()`
 
 `.include()` extends the parent query's projection so deferred fields
@@ -249,7 +196,6 @@ are loaded onto the same record returned by the query:
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[deferred]
 #     body: toasty::Deferred<String>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -297,7 +243,6 @@ adds the field to the `SELECT` list:
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[deferred]
 #     body: toasty::Deferred<String>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -320,8 +265,8 @@ assert!(docs[0].body.is_unloaded());
 
 Updating a deferred field does not require it to be loaded. The
 caller already supplies the value, so the field is loaded with the new
-value after the update — no follow-up `.exec()` or `.include()` is
-needed to read what was just written:
+value after the update. No `.include()` is needed to read what was just
+written:
 
 ```rust
 # use toasty::Model;
@@ -331,7 +276,6 @@ needed to read what was just written:
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[deferred]
 #     body: toasty::Deferred<String>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -365,8 +309,6 @@ struct Document {
     id: u64,
 
     title: String,
-
-    #[deferred]
     summary: toasty::Deferred<Option<String>>,
 }
 ```
@@ -379,7 +321,6 @@ struct Document {
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[deferred]
 #     summary: toasty::Deferred<Option<String>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -393,11 +334,17 @@ let without = toasty::create!(Document {
     title: "No summary",
 }).exec(&mut db).await?;
 
-let summary: Option<String> = with.summary().exec(&mut db).await?;
-assert_eq!(Some("a brief summary".to_string()), summary);
+let with = Document::filter_by_id(with.id)
+    .include(Document::fields().summary())
+    .get(&mut db)
+    .await?;
+assert_eq!(&Some("a brief summary".to_string()), with.summary.get());
 
-let summary: Option<String> = without.summary().exec(&mut db).await?;
-assert_eq!(None, summary);
+let without = Document::filter_by_id(without.id)
+    .include(Document::fields().summary())
+    .get(&mut db)
+    .await?;
+assert_eq!(&None, without.summary.get());
 # Ok(())
 # }
 ```
@@ -408,6 +355,6 @@ argument to `create!`, just like any other non-nullable field —
 
 ## Driver support
 
-`#[deferred]` is supported on every driver. SQL backends shorten the
+Deferred fields are supported on every driver. SQL backends shorten the
 `SELECT` column list; DynamoDB shortens the `ProjectionExpression`.
 Drivers do not need a capability flag for this feature.

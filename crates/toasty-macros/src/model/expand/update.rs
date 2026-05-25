@@ -100,21 +100,6 @@ impl Expand<'_> {
                     }
                 }
             }
-            FieldTy::Primitive(ty) if field.attrs.deferred => {
-                let inner = quote!(<#ty as #toasty::Defer>::Inner);
-                quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#inner>) -> Self {
-                        self.#set_field_ident(#field_ident);
-                        self
-                    }
-
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#inner>) -> &mut Self {
-                        let projection = #projection;
-                        #field_ident.assign(&mut self.assignments, projection);
-                        self
-                    }
-                }
-            }
             FieldTy::Primitive(ty) => {
                 // Bind through `Field::ExprTarget` so each field's setter
                 // accepts whatever its expression-level type permits —

@@ -24,64 +24,6 @@ pub async fn default_load_leaves_deferred_unloaded(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
-pub async fn deferred_exec_loads_value(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    let created = toasty::create!(Document {
-        title: "Hello".to_string(),
-        body: "the long body".to_string(),
-    })
-    .exec(&mut db)
-    .await?;
-
-    let read = Document::filter_by_id(created.id).get(&mut db).await?;
-    assert!(read.body.is_unloaded());
-
-    // The per-field accessor loads on demand and returns the value.
-    let body: String = read.body().exec(&mut db).await?;
-    assert_eq!("the long body", body);
-
-    // The in-memory record is not mutated by `.exec()`.
-    assert!(read.body.is_unloaded());
-
-    Ok(())
-}
-
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
-pub async fn deferred_optional_exec_loads_value(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    // Create with summary set.
-    let with_summary = toasty::create!(Document {
-        title: "With summary".to_string(),
-        summary: "a brief summary".to_string(),
-    })
-    .exec(&mut db)
-    .await?;
-
-    // Create with summary omitted (nullable, so optional).
-    let without_summary = toasty::create!(Document {
-        title: "No summary".to_string(),
-    })
-    .exec(&mut db)
-    .await?;
-
-    let with = Document::filter_by_id(with_summary.id).get(&mut db).await?;
-    assert!(with.summary.is_unloaded());
-    let summary: Option<String> = with.summary().exec(&mut db).await?;
-    assert_eq!(Some("a brief summary".to_string()), summary);
-
-    let without = Document::filter_by_id(without_summary.id)
-        .get(&mut db)
-        .await?;
-    assert!(without.summary.is_unloaded());
-    let summary: Option<String> = without.summary().exec(&mut db).await?;
-    assert_eq!(None, summary);
-
-    Ok(())
-}
-
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_include_loads_value(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -266,8 +208,6 @@ pub async fn deferred_works_through_type_alias(t: &mut Test) -> Result<()> {
         id: ID,
 
         title: String,
-
-        #[deferred]
         body: Lazy<String>,
     }
 
@@ -280,11 +220,11 @@ pub async fn deferred_works_through_type_alias(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    let read = Document::filter_by_id(created.id).get(&mut db).await?;
-    assert!(read.body.is_unloaded());
-
-    let body: String = read.body().exec(&mut db).await?;
-    assert_eq!("the long body", body);
+    let read = Document::filter_by_id(created.id)
+        .include(Document::fields().body())
+        .get(&mut db)
+        .await?;
+    assert_eq!("the long body", read.body.get());
 
     Ok(())
 }
@@ -400,38 +340,6 @@ pub async fn deferred_json_default_load_leaves_unloaded(t: &mut Test) -> Result<
     .await?;
 
     let read = Repository::filter_by_id(created.id).get(&mut db).await?;
-    assert!(read.payload.is_unloaded());
-
-    Ok(())
-}
-
-#[driver_test(
-    id(ID),
-    requires(sql),
-    scenario(crate::scenarios::deferred_json_document)
-)]
-pub async fn deferred_json_exec_lazy_loads_value(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    let initial = Payload {
-        name: "users".to_string(),
-        version: 1,
-    };
-
-    let created = toasty::create!(Repository {
-        name: "main".to_string(),
-        payload: initial.clone(),
-    })
-    .exec(&mut db)
-    .await?;
-
-    let read = Repository::filter_by_id(created.id).get(&mut db).await?;
-    // The per-field accessor returns a Statement<Json<Payload>>; .exec()
-    // hands back the JSON-deserialized value through Json<T>'s Load impl.
-    let payload: toasty::Json<Payload> = read.payload().exec(&mut db).await?;
-    assert_eq!(initial, payload.0);
-
-    // The in-memory record is not mutated by `.exec()`.
     assert!(read.payload.is_unloaded());
 
     Ok(())

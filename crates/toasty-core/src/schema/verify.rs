@@ -30,6 +30,7 @@ impl Verify<'_> {
             for field in &root.fields {
                 self.verify_relations_are_indexed(model, field)?;
                 self.verify_auto_field_type(field);
+                self.verify_deferred_field(field)?;
             }
         }
 
@@ -64,6 +65,28 @@ impl Verify<'_> {
     }
 
     // TODO: move these methods to separate modules?
+
+    fn verify_deferred_field(&self, field: &super::app::Field) -> Result<()> {
+        if !field.deferred {
+            return Ok(());
+        }
+
+        if field.primary_key {
+            return Err(crate::Error::invalid_schema(format!(
+                "field `{}` cannot be both deferred and part of the primary key",
+                field.name
+            )));
+        }
+
+        if field.versionable {
+            return Err(crate::Error::invalid_schema(format!(
+                "field `{}` cannot be both deferred and versionable",
+                field.name
+            )));
+        }
+
+        Ok(())
+    }
 
     fn verify_ids_populated(&self) -> bool {
         for model in self.schema.app.models() {

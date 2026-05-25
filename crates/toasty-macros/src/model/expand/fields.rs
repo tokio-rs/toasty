@@ -64,11 +64,6 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(ty) if field.attrs.deferred => {
-                        let inner: syn::Type =
-                            syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
-                        self.expand_primitive_field_method(field_ident, &inner, &field_offset)
-                    }
                     Primitive(ty) => {
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
@@ -175,10 +170,6 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(ty) if field.attrs.deferred => {
-                        let inner: syn::Type = syn::parse_quote!(<#ty as #toasty::Defer>::Inner);
-                        self.expand_list_primitive_field_method(field_ident, &inner, &field_offset)
-                    }
                     Primitive(ty) => {
                         self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
                     }

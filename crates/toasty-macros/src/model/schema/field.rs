@@ -51,9 +51,6 @@ pub(crate) struct FieldAttr {
 
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
-
-    /// True if the field is annotated with `#[deferred]`
-    pub(crate) deferred: bool,
 }
 
 #[derive(Debug)]
@@ -84,7 +81,6 @@ impl FieldAttr {
             default_expr: None,
             update_expr: None,
             versionable: false,
-            deferred: false,
         };
 
         for attr in attrs {
@@ -172,15 +168,6 @@ impl FieldAttr {
                     ));
                 } else {
                     field_attr.versionable = true;
-                }
-            } else if attr.path().is_ident("deferred") {
-                if field_attr.deferred {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[deferred] attribute",
-                    ));
-                } else {
-                    field_attr.deferred = true;
                 }
             } else if attr.path().is_ident("serialize") {
                 // The `#[serialize(json)]` attribute has been replaced by the
@@ -337,29 +324,6 @@ impl Field {
                 field,
                 "#[version] cannot be combined with #[auto]",
             ));
-        }
-
-        if attrs.deferred {
-            if ty.is_some() {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[deferred] cannot be combined with relation attributes",
-                ));
-            }
-
-            if attrs.versionable {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[deferred] cannot be combined with #[version]",
-                ));
-            }
-
-            if attrs.key.is_some() {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[deferred] cannot be combined with #[key]",
-                ));
-            }
         }
 
         if let Some(err) = errs.collect() {

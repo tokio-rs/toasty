@@ -161,7 +161,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 #field_struct_ident { path }
             }
 
-            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self::ExprTarget>>) -> Self::ListPath<__Origin> {
                 #field_list_struct_ident { path }
             }
 
@@ -310,7 +310,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 #field_struct_ident { path }
             }
 
-            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self::ExprTarget>>) -> Self::ListPath<__Origin> {
                 #field_list_struct_ident { path }
             }
 
@@ -445,8 +445,8 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         // Construct the chained path with the field's `ExprTarget` as the
-        // tag, so `new_path` receives exactly the type it expects — no
-        // PhantomData retag at the boundary. For `Vec<scalar>` this is
+        // tag, so `new_path` receives exactly the type it expects. For
+        // `Vec<scalar>` this is
         // `List<T>`; for everything else it is the field's Rust type.
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {

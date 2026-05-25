@@ -120,8 +120,7 @@ impl Expand<'_> {
                     };
 
                     nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
-                    let deferred_attr = field.attrs.deferred;
-                    deferred = quote!(#deferred_attr);
+                    deferred = quote!(<#ty as #toasty::Field>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
                 }
                 FieldTy::BelongsTo(rel) => {

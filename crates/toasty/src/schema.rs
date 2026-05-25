@@ -8,7 +8,7 @@ pub mod create_meta;
 pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
 
 mod deferred;
-pub use deferred::{Defer, Deferred, build_deferred_load};
+pub use deferred::Deferred;
 
 mod embed;
 pub use embed::Embed;

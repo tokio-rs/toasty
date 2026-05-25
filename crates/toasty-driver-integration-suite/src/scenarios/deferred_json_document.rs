@@ -17,8 +17,6 @@ scenario! {
         id: ID,
 
         name: String,
-
-        #[deferred]
         payload: toasty::Deferred<toasty::Json<Payload>>,
     }
 
