@@ -160,6 +160,13 @@ impl<T, U> Path<T, U> {
         }
     }
 
+    pub(crate) fn retag<V>(self) -> Path<T, V> {
+        Path {
+            untyped: self.untyped,
+            _p: PhantomData,
+        }
+    }
+
     /// Build a filter `Expr<bool>` from this path, automatically wrapping
     /// the body with an `is_variant(parent, variant_id)` AND-gate when the
     /// path is variant-rooted.

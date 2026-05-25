@@ -17,8 +17,6 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
         id: ID,
 
         title: String,
-
-        #[deferred]
         metadata: toasty::Deferred<Metadata>,
     }
 
@@ -45,13 +43,6 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
     assert_eq!("Hello", read.title);
     assert!(read.metadata.is_unloaded());
 
-    // The per-field accessor loads the embed by value.
-    let metadata: Metadata = read.metadata().exec(&mut db).await?;
-    assert_eq!("Alice", metadata.author);
-    assert_eq!("Important", metadata.notes);
-    // `.exec()` does not mutate the in-memory record.
-    assert!(read.metadata.is_unloaded());
-
     // `.include()` preloads the embed onto the parent query.
     let read_with = Document::filter_by_id(created.id)
         .include(Document::fields().metadata())
@@ -70,20 +61,17 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
 // errors out with "type Model(...) is not supported by this database".
 // Tracking that gap is orthogonal to deferred fields.
 
-// ---------- #[deferred] inside an embed struct that's nested in an enum variant ----------
+// ---------- Deferred<T> inside an embed struct that's nested in an enum variant ----------
 //
-// `#[deferred]` on a variant field directly is rejected at the macro layer,
-// but a struct embedded as a variant field is allowed to carry its own
-// deferred sub-fields. The lowering has to descend through the enum's
-// `Match` expression to mask / wrap those sub-fields.
+// A struct embedded as a variant field is allowed to carry deferred
+// sub-fields. The lowering has to descend through the enum's `Match`
+// expression to mask / wrap those sub-fields.
 
 #[driver_test(id(ID))]
 pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
         author: String,
-
-        #[deferred]
         notes: toasty::Deferred<String>,
     }
 
@@ -154,8 +142,6 @@ pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Resu
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
         author: String,
-
-        #[deferred]
         notes: toasty::Deferred<String>,
     }
 
@@ -246,8 +232,6 @@ pub async fn deferred_embed_unit_enum(t: &mut Test) -> Result<()> {
         id: ID,
 
         title: String,
-
-        #[deferred]
         status: toasty::Deferred<Status>,
     }
 
@@ -264,9 +248,6 @@ pub async fn deferred_embed_unit_enum(t: &mut Test) -> Result<()> {
 
     let read = Document::filter_by_id(created.id).get(&mut db).await?;
     assert!(read.status.is_unloaded());
-
-    let status: Status = read.status().exec(&mut db).await?;
-    assert_eq!(Status::Published, status);
 
     let inc = Document::filter_by_id(created.id)
         .include(Document::fields().status())
@@ -296,8 +277,6 @@ pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
         id: ID,
 
         name: String,
-
-        #[deferred]
         contact: toasty::Deferred<ContactInfo>,
     }
 
@@ -329,18 +308,6 @@ pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
     let read = Person::filter_by_id(alice.id).get(&mut db).await?;
     assert!(read.contact.is_unloaded());
 
-    let contact: ContactInfo = read.contact().exec(&mut db).await?;
-    assert_eq!(
-        ContactInfo::Email {
-            address: "alice@example.com".to_string()
-        },
-        contact
-    );
-
-    let read_bob = Person::filter_by_id(bob.id).get(&mut db).await?;
-    let contact: ContactInfo = read_bob.contact().exec(&mut db).await?;
-    assert_eq!(ContactInfo::Mail, contact);
-
     let inc = Person::filter_by_id(alice.id)
         .include(Person::fields().contact())
         .get(&mut db)
@@ -352,6 +319,12 @@ pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
         },
         inc.contact.get()
     );
+
+    let inc_bob = Person::filter_by_id(bob.id)
+        .include(Person::fields().contact())
+        .get(&mut db)
+        .await?;
+    assert_eq!(&ContactInfo::Mail, inc_bob.contact.get());
 
     Ok(())
 }
@@ -373,8 +346,6 @@ pub async fn deferred_embed_update_reloads(t: &mut Test) -> Result<()> {
         id: ID,
 
         title: String,
-
-        #[deferred]
         metadata: toasty::Deferred<Metadata>,
     }
 
@@ -409,7 +380,7 @@ pub async fn deferred_embed_update_reloads(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// ---------- Deferred<Embed> with #[deferred] inside the embed ----------
+// ---------- Deferred<Embed> with Deferred<T> inside the embed ----------
 //
 // The combined shape: the embed itself is deferred at the parent, AND the
 // embed has its own deferred sub-field. `.include(metadata())` loads the
@@ -421,8 +392,6 @@ pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> 
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
         author: String,
-
-        #[deferred]
         notes: toasty::Deferred<String>,
     }
 
@@ -433,8 +402,6 @@ pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> 
         id: ID,
 
         title: String,
-
-        #[deferred]
         metadata: toasty::Deferred<Metadata>,
     }
 
@@ -482,15 +449,13 @@ pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> 
     Ok(())
 }
 
-// ---------- #[deferred] inside an Embed (per-column) ----------
+// ---------- Deferred<T> inside an Embed (per-column) ----------
 
 #[driver_test(id(ID))]
 pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
         author: String,
-
-        #[deferred]
         notes: toasty::Deferred<String>,
     }
 
@@ -538,7 +503,7 @@ pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
 }
 
 // Updating an eager embed by whole-value when that embed contains a
-// `#[deferred]` sub-field. The struct literal supplies the deferred sub-field
+// deferred sub-field. The struct literal supplies the deferred sub-field
 // via `From<T>` (`.into()`), the encoder unwraps it through
 // `Deferred<T>: IntoExpr<T>`, and the column is written.
 
@@ -547,8 +512,6 @@ pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Resu
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
         author: String,
-
-        #[deferred]
         notes: toasty::Deferred<String>,
     }
 

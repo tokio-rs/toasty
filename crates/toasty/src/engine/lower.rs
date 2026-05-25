@@ -830,7 +830,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
             // Start from the schema's pre-computed default returning — every
-            // `#[deferred]` field, top-level or nested, is already `Null`.
+            // Deferred fields, top-level or nested, are already `Null`.
             // `process_top_level_includes` then splices loaded forms in for
             // the fields named by include paths (and for every deferred field
             // when this is an `INSERT ... RETURNING`).

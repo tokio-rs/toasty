@@ -225,7 +225,7 @@ impl Expand<'_> {
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
 
         // Always emit `include()` on root models. The macro can't see through a
-        // field's type to know whether an embedded type holds a `#[deferred]`
+        // field's type to know whether an embedded type holds a deferred
         // sub-field, so a stricter gate would deny `.include(metadata().notes())`
         // on a model whose only includable thing lives inside an embed.
         Some(quote! {

@@ -73,6 +73,9 @@ pub trait HasManyField: Load<Output = Self> {
     /// The relation target type carried by this field.
     type Target: Relation;
 
+    /// Whether this relation field is omitted from default loads.
+    const DEFERRED: bool = false;
+
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
         <Self::Target as Relation>::nullable()
@@ -107,6 +110,9 @@ pub trait HasOneField: Load<Output = Self> {
     /// The relation target type carried by this field.
     type Target: Relation;
 
+    /// Whether this relation field is omitted from default loads.
+    const DEFERRED: bool = false;
+
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {
         <Self::Target as Relation>::nullable()
@@ -138,6 +144,9 @@ pub trait HasOneField: Load<Output = Self> {
 pub trait BelongsToField: Load<Output = Self> {
     /// The relation target type carried by this field.
     type Target: Relation;
+
+    /// Whether this relation field is omitted from default loads.
+    const DEFERRED: bool = false;
 
     /// Returns `true` if this relation field is nullable.
     fn nullable() -> bool {

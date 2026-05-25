@@ -46,7 +46,7 @@ use std::fmt;
 /// # Composition with `Deferred`
 ///
 /// `Json<T>` is the only wrapper allowed inside [`Deferred`](crate::Deferred)
-/// for a serde-typed field, since a `#[deferred]` column needs both lazy
+/// for a serde-typed field, since a deferred column needs both lazy
 /// loading and a serializer the macro can drive through trait dispatch:
 ///
 /// ```ignore
@@ -54,7 +54,6 @@ use std::fmt;
 /// struct Repository {
 ///     #[key] #[auto]
 ///     id: uuid::Uuid,
-///     #[deferred]
 ///     schema: toasty::Deferred<toasty::Json<MySchema>>,
 /// }
 /// ```

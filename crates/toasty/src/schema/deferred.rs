@@ -17,26 +17,6 @@ pub struct Deferred<T> {
     value: Option<Box<T>>,
 }
 
-/// Marker trait identifying a deferred-load field wrapper, exposing the wrapped
-/// value type via [`Inner`](Defer::Inner).
-///
-/// Generated code references `<F as Defer>::Inner` to recover the user-facing
-/// value type for fields annotated with `#[deferred]`. The trait is implemented
-/// only for [`Deferred<T>`], so applying `#[deferred]` to a field whose type is
-/// not `Deferred<T>` (after type aliases are resolved) fails to compile.
-#[diagnostic::on_unimplemented(
-    message = "`#[deferred]` requires the field to be wrapped in `Deferred<T>`",
-    label = "expected `Deferred<T>`, found `{Self}`"
-)]
-pub trait Defer {
-    /// The wrapped value type.
-    type Inner;
-}
-
-impl<T> Defer for Deferred<T> {
-    type Inner = T;
-}
-
 impl<T> Deferred<T> {
     /// Returns `true` if the field has not been loaded.
     pub fn is_unloaded(&self) -> bool {
@@ -73,10 +53,10 @@ impl<T> Deferred<T> {
 /// model-field index of the deferred field. Rewrites the statement's
 /// `RETURNING` clause to project just that column.
 ///
-/// Used by generated code for the per-field accessor on `#[deferred]`
-/// primitives. The model record itself is never decoded, which keeps the
-/// loaded state of nullable fields (`Deferred<Option<T>>`) unambiguous
-/// regardless of whether the column value is `NULL`.
+/// Used to project only one deferred field. The model record itself is never
+/// decoded, which keeps the loaded state of nullable fields
+/// (`Deferred<Option<T>>`) unambiguous regardless of whether the column value
+/// is `NULL`.
 #[doc(hidden)]
 pub fn build_deferred_load<T, S: IntoStatement>(stmt: S, field_index: usize) -> Statement<T> {
     let mut untyped = stmt.into_statement().into_untyped();
@@ -99,7 +79,7 @@ impl<T> From<T> for Deferred<T> {
     /// Constructs a loaded `Deferred<T>` from a value.
     ///
     /// Used in struct literals for `#[derive(Embed)]` types that contain
-    /// `#[deferred]` sub-fields, where the user supplies the inner value
+    /// deferred sub-fields, where the user supplies the inner value
     /// directly: `Metadata { author, notes: "...".into() }`.
     fn from(value: T) -> Self {
         Self {
@@ -175,18 +155,14 @@ impl<T: Field<Output = T>> Field for Deferred<T> {
     type Update<'a> = T::Update<'a>;
     type Inner = T::Inner;
     const NULLABLE: bool = T::NULLABLE;
+    const DEFERRED: bool = true;
 
-    fn new_path<Origin>(_path: stmt::Path<Origin, T::ExprTarget>) -> Self::Path<Origin> {
-        // Deferred fields use a generated accessor that emits a path on the
-        // inner type T directly (see `expand_primitive_field_method`'s
-        // deferred arm). This impl is unreachable through normal codegen.
-        unreachable!("Deferred::new_path should not be called directly")
+    fn new_path<Origin>(path: stmt::Path<Origin, T::ExprTarget>) -> Self::Path<Origin> {
+        T::new_path(path)
     }
 
-    fn new_list_path<Origin>(
-        _path: stmt::Path<Origin, stmt::List<Self>>,
-    ) -> Self::ListPath<Origin> {
-        unreachable!("Deferred::new_list_path should not be called directly")
+    fn new_list_path<Origin>(path: stmt::Path<Origin, stmt::List<Self>>) -> Self::ListPath<Origin> {
+        T::new_list_path(path.retag())
     }
 
     fn new_update<'a>(

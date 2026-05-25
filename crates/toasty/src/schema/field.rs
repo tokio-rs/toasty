@@ -55,6 +55,9 @@ pub trait Field: Load {
     /// Whether or not the type is nullable
     const NULLABLE: bool = false;
 
+    /// Whether this field is omitted from default loads.
+    const DEFERRED: bool = false;
+
     /// Build a field path from a raw path of the field's
     /// [`Self::ExprTarget`].
     ///

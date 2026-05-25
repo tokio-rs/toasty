@@ -442,14 +442,9 @@ impl Expand<'_> {
                 }
             };
 
-            // For `#[deferred]` fields, encode at the inner type. `Deferred<T>`
-            // is a load-state wrapper, not a value type, so the splice site
-            // must talk in `T` — there is no meaningful `Expr<Deferred<T>>`.
-            let target_ty = if field.attrs.deferred {
-                quote!(<#ty as #toasty::Defer>::Inner)
-            } else {
-                quote!(#ty)
-            };
+            // Bind through `Field::ExprTarget` so wrappers such as
+            // `Deferred<T>` encode the underlying expression type.
+            let target_ty = quote!(FieldExprTarget<#ty>);
             quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
         });
 
@@ -531,7 +526,7 @@ impl Expand<'_> {
     /// - `SparseRecord` — partial update, reload only the named sub-fields.
     /// - `Record` — whole-embed update, reload every sub-field positionally.
     ///
-    /// The positional path matters for embeds with `#[deferred]` sub-fields:
+    /// The positional path matters for embeds with deferred sub-fields:
     /// the assigned record carries the inner T directly (because `IntoExpr<T>`
     /// for `Deferred<T>` unwraps), so each sub-field must go through `reload`
     /// — which knows to re-wrap a bare value as loaded — rather than through
