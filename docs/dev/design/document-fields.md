@@ -1127,13 +1127,12 @@ Legend:
   (same as `native`); the cost scales with the document size, not
   the modified path.
 
-## Composition with `#[deferred]`
+## Composition with `Deferred<T>`
 
-`#[deferred]` (planned, see [Partial model loading](../roadmap.md#schema--types)
-on the roadmap) marks a field as not loaded by default; callers opt
-in to retrieve it. The semantic is "load everything except deferred
-fields." It composes cleanly with the storage choices in this
-design, but the lowering depends on where the deferred field lives.
+`Deferred<T>` marks a field as not loaded by default; callers opt in
+with `.include()`. The semantic is "load everything except deferred
+fields." It composes cleanly with the storage choices in this design,
+but the lowering depends on where the deferred field lives.
 
 **Column-expanded fields.** The driver omits the deferred column
 from the `SELECT` list. The existing column-projection path covers
@@ -1176,7 +1175,7 @@ being deferred-loadable.
 
 - **Raw document path expressions.** A `path_match("$.a[*] ? (@.b > 1)")`
   escape hatch for queries the typed accessors cannot express.
-  Defer until the typed surface proves insufficient.
+  Postpone until the typed surface proves insufficient.
 - **DynamoDB nested-path indexing.** Indexing a value buried in a
   Map requires denormalizing it to a top-level attribute. A
   `#[index(extract(path))]` form could automate this; out of scope

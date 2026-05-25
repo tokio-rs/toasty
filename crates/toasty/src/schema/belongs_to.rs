@@ -5,7 +5,6 @@ use toasty_core::stmt;
 
 impl<T: Relation> BelongsToField for Deferred<T> {
     type Target = T;
-    const DEFERRED: bool = true;
 
     fn nullable() -> bool {
         <T as Relation>::nullable()

@@ -1,6 +1,5 @@
 use super::{Field, Load, lazy_slot};
-use crate::Statement;
-use crate::stmt::{self, Expr, IntoExpr, IntoStatement};
+use crate::stmt::{self, Expr, IntoExpr};
 use toasty_core::schema::app::ModelSet;
 
 use std::fmt;
@@ -9,8 +8,8 @@ use std::fmt;
 ///
 /// `Deferred<T>` wraps a `T` whose underlying column is excluded from default
 /// queries. After a normal load the value is unloaded and accessing it via
-/// [`get`](Deferred::get) panics. Fetch the value with the per-field
-/// `.exec()` accessor on the record.
+/// [`get`](Deferred::get) panics. Use `.include()` on the query to load the
+/// value.
 ///
 /// `Deferred<Option<T>>` is supported when the column is nullable.
 pub struct Deferred<T> {
@@ -47,26 +46,6 @@ impl<T> Deferred<T> {
     pub fn into_inner(self) -> T {
         *self.value.expect("deferred field not loaded")
     }
-}
-
-/// Build a `Statement<T>` from a PK-filtered single-row query and the
-/// model-field index of the deferred field. Rewrites the statement's
-/// `RETURNING` clause to project just that column.
-///
-/// Used to project only one deferred field. The model record itself is never
-/// decoded, which keeps the loaded state of nullable fields
-/// (`Deferred<Option<T>>`) unambiguous regardless of whether the column value
-/// is `NULL`.
-#[doc(hidden)]
-pub fn build_deferred_load<T, S: IntoStatement>(stmt: S, field_index: usize) -> Statement<T> {
-    let mut untyped = stmt.into_statement().into_untyped();
-    *untyped.returning_mut_unwrap() = toasty_core::stmt::Returning::Project(
-        toasty_core::stmt::Expr::Reference(toasty_core::stmt::ExprReference::Field {
-            nesting: 0,
-            index: field_index,
-        }),
-    );
-    Statement::from_untyped_stmt(untyped)
 }
 
 impl<T> Default for Deferred<T> {
@@ -161,8 +140,10 @@ impl<T: Field<Output = T>> Field for Deferred<T> {
         T::new_path(path)
     }
 
-    fn new_list_path<Origin>(path: stmt::Path<Origin, stmt::List<Self>>) -> Self::ListPath<Origin> {
-        T::new_list_path(path.retag())
+    fn new_list_path<Origin>(
+        path: stmt::Path<Origin, stmt::List<Self::ExprTarget>>,
+    ) -> Self::ListPath<Origin> {
+        T::new_list_path(path)
     }
 
     fn new_update<'a>(

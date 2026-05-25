@@ -85,13 +85,6 @@ impl Verify<'_> {
             )));
         }
 
-        if field.ty.is_relation() {
-            return Err(crate::Error::invalid_schema(format!(
-                "relation field `{}` cannot use deferred column loading",
-                field.name
-            )));
-        }
-
         Ok(())
     }
 
