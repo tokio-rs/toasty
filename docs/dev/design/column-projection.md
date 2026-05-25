@@ -25,19 +25,17 @@ patterns:
 - A migration script that wants every record minus a deprecated
   column, before dropping it.
 
-`Deferred<T>` ([design](deferred-fields.md), PR #793) addresses the
-case where a column is *always* heavy.  It is a schema-level decision.
-The cases above are call-site decisions on otherwise-eager columns, and
-moving every such column to `Deferred<T>` flips the schema's polarity in
-the wrong direction (unloaded by default, loaded on opt-in) for the
-many call sites that do not need to skip it.
+`Deferred<T>` addresses the case where a column is *always* heavy. It is
+a schema-level decision. The cases above are call-site decisions on
+otherwise-eager columns, and moving every such column to `Deferred<T>`
+flips the schema's polarity in the wrong direction (unloaded by
+default, loaded on opt-in) for the many call sites that do not need to
+skip it.
 
-The deferred-fields design carved this gap out as a future feature in
-its "Alternatives considered" and "Out of scope" sections.  This
-document is that follow-on.  The pattern is well-established elsewhere:
-Diesel's `select(...)`, ActiveRecord's `select`, Sequel's `select`,
-JPQL constructor expressions, Prisma's `select`, SQLAlchemy's
-`load_only`.  Toasty already has the engine plumbing
+The pattern is well-established elsewhere: Diesel's `select(...)`,
+ActiveRecord's `select`, Sequel's `select`, JPQL constructor
+expressions, Prisma's `select`, SQLAlchemy's `load_only`. Toasty
+already has the engine plumbing
 (`Returning::Project` accepts arbitrary column expressions, renamed in
 PR #790); the missing piece is the user-facing surface and the
 type-level shape of the result.
@@ -476,10 +474,9 @@ specialized form for "give me a `Vec<T>` of one field".  Rejected as
 redundant: the size-1 tuple impl produces the same shape with one
 method instead of two.
 
-**`.exclude(F)` as the inverse of `.select(F)`.**  The deferred-fields
-design names `.exclude(...)` alongside `.select(...)` as a future
-feature.  After analysis, `.exclude(...)` does not fit Toasty's typed
-model without a representational change:
+**`.exclude(F)` as the inverse of `.select(F)`.**  After analysis,
+`.exclude(...)` does not fit Toasty's typed model without a
+representational change:
 
 - A non-deferred field of declared type `T` has no runtime "unloaded"
   state.  Returning a model record with such a field marked unloaded
@@ -503,17 +500,15 @@ macro shorthand if call-site verbosity becomes a real complaint.
 
 **`Select<M>` carries a phantom `Loaded` set in the type system.**
 Encode the projection as a type-level set (`Select<M, {Name, Id}>`).
-Rejected because the deferred-fields design already chose runtime
-loaded-ness over phantom-set encoding for the same kind of state, and
-introducing it here for projections would duplicate that decision in
-incompatible ways.
+Rejected because `Deferred<T>` uses runtime loaded-ness. Introducing a
+phantom-set encoding for projections would represent the same kind of
+state in an incompatible way.
 
 **Reusing `.include(...)` for primitive fields.**  Make
 `.include(field)` mean "ensure this field is loaded" for both
-relations and deferred primitives.  Already designed: the
-deferred-fields document specifies `.include(...)` for deferred
-primitives.  No conflict with `.select(...)`, which constructs a
-different result shape.
+relations and deferred primitives. This already works for deferred
+fields. No conflict with `.select(...)`, which constructs a different
+result shape.
 
 ## Open questions
 
