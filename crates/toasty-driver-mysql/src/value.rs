@@ -2,7 +2,7 @@ use mysql_async::{Column, Row, prelude::ToValue};
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
-pub struct Value(CoreValue);
+pub(crate) struct Value(CoreValue);
 
 impl From<CoreValue> for Value {
     fn from(value: CoreValue) -> Self {
@@ -12,236 +12,256 @@ impl From<CoreValue> for Value {
 
 impl Value {
     /// Converts this MySQL driver value into the core Toasty value.
-    pub fn into_inner(self) -> CoreValue {
+    pub(crate) fn into_inner(self) -> CoreValue {
         self.0
     }
 
     /// Converts a MySQL value within a row to a Toasty value.
-    pub fn from_sql(i: usize, row: &mut Row, column: &Column, ty: &stmt::Type) -> Self {
-        use mysql_async::consts::ColumnType as CT;
+    pub(crate) fn from_sql(i: usize, row: &mut Row, column: &Column, ty: &stmt::Type) -> Self {
+        let value = take_mysql_value(row, i);
 
-        /// Helper function to extract a value from a MySQL row or return Null if the value is NULL
-        fn extract_or_null<T>(
-            row: &mut Row,
-            i: usize,
-            constructor: fn(T) -> stmt::Value,
-        ) -> stmt::Value
-        where
-            T: mysql_async::prelude::FromValue,
-        {
-            match row.take_opt(i).expect("value missing") {
-                Ok(v) => constructor(v),
-                Err(e) => {
-                    assert!(matches!(e.0, mysql_async::Value::NULL));
-                    stmt::Value::Null
-                }
-            }
-        }
-
-        let core_value = match column.column_type() {
-            CT::MYSQL_TYPE_NULL => stmt::Value::Null,
-
-            CT::MYSQL_TYPE_VARCHAR
-            | CT::MYSQL_TYPE_VAR_STRING
-            | CT::MYSQL_TYPE_STRING
-            | CT::MYSQL_TYPE_BLOB => match ty {
-                stmt::Type::String => extract_or_null(row, i, stmt::Value::String),
-                stmt::Type::Uuid => extract_or_null(row, i, stmt::Value::Uuid),
-                stmt::Type::Bytes => extract_or_null(row, i, stmt::Value::Bytes),
-                _ => todo!("ty={ty:#?}"),
-            },
-
-            CT::MYSQL_TYPE_TINY
-            | CT::MYSQL_TYPE_SHORT
-            | CT::MYSQL_TYPE_INT24
-            | CT::MYSQL_TYPE_LONG
-            | CT::MYSQL_TYPE_LONGLONG => match ty {
-                stmt::Type::Bool => extract_or_null(row, i, stmt::Value::Bool),
-                stmt::Type::I8 => extract_or_null(row, i, stmt::Value::I8),
-                stmt::Type::I16 => extract_or_null(row, i, stmt::Value::I16),
-                stmt::Type::I32 => extract_or_null(row, i, stmt::Value::I32),
-                stmt::Type::I64 => extract_or_null(row, i, stmt::Value::I64),
-                stmt::Type::U8 => extract_or_null(row, i, stmt::Value::U8),
-                stmt::Type::U16 => extract_or_null(row, i, stmt::Value::U16),
-                stmt::Type::U32 => extract_or_null(row, i, stmt::Value::U32),
-                stmt::Type::U64 => extract_or_null(row, i, stmt::Value::U64),
-                _ => todo!("ty={ty:#?}"),
-            },
-
-            #[cfg(feature = "jiff")]
-            CT::MYSQL_TYPE_TIMESTAMP | CT::MYSQL_TYPE_DATETIME => {
-                match row.take_opt(i).expect("value missing") {
-                    Ok(mysql_async::Value::Date(
-                        year,
-                        month,
-                        day,
-                        hour,
-                        minute,
-                        second,
-                        microsecond,
-                    )) => {
-                        let dt = jiff::civil::DateTime::constant(
-                            year as i16,
-                            month as i8,
-                            day as i8,
-                            hour as i8,
-                            minute as i8,
-                            second as i8,
-                            (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
-                        );
-                        match ty {
-                            stmt::Type::DateTime => stmt::Value::DateTime(dt),
-                            stmt::Type::Timestamp => stmt::Value::Timestamp(
-                                dt.to_zoned(jiff::tz::TimeZone::UTC).unwrap().into(),
-                            ),
-                            _ => todo!("unexpected type for DATETIME: {ty:#?}"),
-                        }
-                    }
-                    Ok(mysql_async::Value::NULL) | Err(_) => stmt::Value::Null,
-                    Ok(v) => panic!("unexpected MySQL value for TIMESTAMP/DATETIME: {v:#?}"),
-                }
-            }
-
-            #[cfg(feature = "jiff")]
-            CT::MYSQL_TYPE_DATE => match row.take_opt(i).expect("value missing") {
-                Ok(mysql_async::Value::Date(year, month, day, _, _, _, _)) => stmt::Value::Date(
-                    jiff::civil::Date::constant(year as i16, month as i8, day as i8),
-                ),
-                Ok(mysql_async::Value::NULL) | Err(_) => stmt::Value::Null,
-                Ok(v) => panic!("unexpected MySQL value for DATE: {v:#?}"),
-            },
-
-            #[cfg(feature = "jiff")]
-            CT::MYSQL_TYPE_TIME => {
-                match row.take_opt(i).expect("value missing") {
-                    Ok(mysql_async::Value::Time(
-                        _is_negative,
-                        _days,
-                        hour,
-                        minute,
-                        second,
-                        microsecond,
-                    )) => {
-                        stmt::Value::Time(jiff::civil::Time::constant(
-                            hour as i8,
-                            minute as i8,
-                            second as i8,
-                            (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
-                        ))
-                    }
-                    Ok(mysql_async::Value::NULL) | Err(_) => stmt::Value::Null,
-                    Ok(v) => panic!("unexpected MySQL value for TIME: {v:#?}"),
-                }
-            }
-
-            CT::MYSQL_TYPE_FLOAT => match ty {
-                stmt::Type::F32 => extract_or_null(row, i, stmt::Value::F32),
-                stmt::Type::F64 => extract_or_null(row, i, |v: f32| stmt::Value::F64(v as f64)),
-                _ => todo!("ty={ty:#?}"),
-            },
-
-            CT::MYSQL_TYPE_DOUBLE => match ty {
-                stmt::Type::F64 => extract_or_null(row, i, stmt::Value::F64),
-                stmt::Type::F32 => extract_or_null(row, i, |v: f64| stmt::Value::F32(v as f32)),
-                _ => todo!("ty={ty:#?}"),
-            },
-
-            CT::MYSQL_TYPE_JSON => match ty {
-                stmt::Type::List(elem) => {
-                    let bytes: Vec<u8> = match row.take_opt(i).expect("value missing") {
-                        Ok(v) => v,
-                        Err(e) => {
-                            assert!(matches!(e.0, mysql_async::Value::NULL));
-                            return Value(stmt::Value::Null);
-                        }
-                    };
-                    json_bytes_to_value_list(&bytes, elem)
-                }
-                _ => todo!("MySQL JSON column with stmt::Type {ty:#?}"),
-            },
-
-            CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL => match ty {
-                #[cfg(feature = "rust_decimal")]
-                stmt::Type::Decimal => extract_or_null(row, i, |s: String| {
-                    stmt::Value::Decimal(s.parse().expect("failed to parse Decimal from MySQL"))
-                }),
-                #[cfg(feature = "bigdecimal")]
-                stmt::Type::BigDecimal => extract_or_null(row, i, |s: String| {
-                    stmt::Value::BigDecimal(
-                        s.parse().expect("failed to parse BigDecimal from MySQL"),
-                    )
-                }),
-                _ => todo!("unexpected type for DECIMAL: {ty:#?}"),
-            },
-
-            _ => todo!(
-                "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
-                column.column_type(),
-                row.get::<mysql_async::Value, _>(i),
-                ty
-            ),
-        };
-
-        Value(core_value)
+        Value(typed_mysql_value_to_core(value, column, ty))
     }
 
     /// Converts a MySQL value within a row using the value metadata available
     /// from the driver.
-    pub fn from_sql_infer(i: usize, row: &mut Row, _column: &Column) -> Self {
-        let value = match row.take_opt(i).expect("value missing") {
-            Ok(value) => value,
-            Err(err) => err.0,
-        };
+    pub(crate) fn from_sql_infer(i: usize, row: &mut Row, column: &Column) -> Self {
+        let value = take_mysql_value(row, i);
+        let ty = infer_mysql_type(column, &value);
 
-        let core_value = match value {
-            mysql_async::Value::NULL => stmt::Value::Null,
-            mysql_async::Value::Bytes(bytes) => String::from_utf8(bytes)
-                .map(stmt::Value::String)
-                .unwrap_or_else(|err| stmt::Value::Bytes(err.into_bytes())),
-            mysql_async::Value::Int(value) => stmt::Value::I64(value),
-            mysql_async::Value::UInt(value) => stmt::Value::U64(value),
-            mysql_async::Value::Float(value) => stmt::Value::F32(value),
-            mysql_async::Value::Double(value) => stmt::Value::F64(value),
+        Value(typed_mysql_value_to_core(value, column, &ty))
+    }
+}
+
+fn take_mysql_value(row: &mut Row, i: usize) -> mysql_async::Value {
+    match row.take_opt(i).expect("value missing") {
+        Ok(value) => value,
+        Err(err) => err.0,
+    }
+}
+
+fn infer_mysql_type(column: &Column, value: &mysql_async::Value) -> stmt::Type {
+    use mysql_async::consts::ColumnFlags as CF;
+
+    match value {
+        mysql_async::Value::NULL => stmt::Type::Null,
+        mysql_async::Value::Bytes(bytes) => {
+            if std::str::from_utf8(bytes).is_ok() {
+                stmt::Type::String
+            } else {
+                stmt::Type::Bytes
+            }
+        }
+        mysql_async::Value::Int(_) if column.flags().contains(CF::UNSIGNED_FLAG) => stmt::Type::U64,
+        mysql_async::Value::Int(_) => stmt::Type::I64,
+        mysql_async::Value::UInt(_) => stmt::Type::U64,
+        mysql_async::Value::Float(_) => stmt::Type::F32,
+        mysql_async::Value::Double(_) => stmt::Type::F64,
+        mysql_async::Value::Date(_, _, _, 0, 0, 0, 0) => {
             #[cfg(feature = "jiff")]
-            mysql_async::Value::Date(year, month, day, 0, 0, 0, 0) => stmt::Value::Date(
-                jiff::civil::Date::constant(year as i16, month as i8, day as i8),
-            ),
+            {
+                stmt::Type::Date
+            }
+            #[cfg(not(feature = "jiff"))]
+            {
+                stmt::Type::String
+            }
+        }
+        mysql_async::Value::Date(..) => {
             #[cfg(feature = "jiff")]
+            {
+                stmt::Type::DateTime
+            }
+            #[cfg(not(feature = "jiff"))]
+            {
+                stmt::Type::String
+            }
+        }
+        mysql_async::Value::Time(..) => {
+            #[cfg(feature = "jiff")]
+            {
+                stmt::Type::Time
+            }
+            #[cfg(not(feature = "jiff"))]
+            {
+                stmt::Type::String
+            }
+        }
+    }
+}
+
+fn typed_mysql_value_to_core(
+    value: mysql_async::Value,
+    column: &Column,
+    ty: &stmt::Type,
+) -> CoreValue {
+    use mysql_async::consts::ColumnType as CT;
+
+    if matches!(value, mysql_async::Value::NULL) {
+        return stmt::Value::Null;
+    }
+
+    match column.column_type() {
+        CT::MYSQL_TYPE_NULL => stmt::Value::Null,
+
+        CT::MYSQL_TYPE_VARCHAR
+        | CT::MYSQL_TYPE_VAR_STRING
+        | CT::MYSQL_TYPE_STRING
+        | CT::MYSQL_TYPE_TINY_BLOB
+        | CT::MYSQL_TYPE_MEDIUM_BLOB
+        | CT::MYSQL_TYPE_LONG_BLOB
+        | CT::MYSQL_TYPE_BLOB
+        | CT::MYSQL_TYPE_ENUM
+        | CT::MYSQL_TYPE_SET => match ty {
+            stmt::Type::String => convert_or_null(value, stmt::Value::String),
+            stmt::Type::Uuid => convert_or_null(value, stmt::Value::Uuid),
+            stmt::Type::Bytes => convert_or_null(value, stmt::Value::Bytes),
+            _ => todo!("ty={ty:#?}"),
+        },
+
+        CT::MYSQL_TYPE_TINY
+        | CT::MYSQL_TYPE_SHORT
+        | CT::MYSQL_TYPE_INT24
+        | CT::MYSQL_TYPE_LONG
+        | CT::MYSQL_TYPE_LONGLONG => match ty {
+            stmt::Type::Bool => convert_or_null(value, stmt::Value::Bool),
+            stmt::Type::I8 => convert_or_null(value, stmt::Value::I8),
+            stmt::Type::I16 => convert_or_null(value, stmt::Value::I16),
+            stmt::Type::I32 => convert_or_null(value, stmt::Value::I32),
+            stmt::Type::I64 => convert_or_null(value, stmt::Value::I64),
+            stmt::Type::U8 => convert_or_null(value, stmt::Value::U8),
+            stmt::Type::U16 => convert_or_null(value, stmt::Value::U16),
+            stmt::Type::U32 => convert_or_null(value, stmt::Value::U32),
+            stmt::Type::U64 => convert_or_null(value, stmt::Value::U64),
+            _ => todo!("ty={ty:#?}"),
+        },
+
+        #[cfg(feature = "jiff")]
+        CT::MYSQL_TYPE_TIMESTAMP | CT::MYSQL_TYPE_DATETIME => match value {
             mysql_async::Value::Date(year, month, day, hour, minute, second, microsecond) => {
-                stmt::Value::DateTime(jiff::civil::DateTime::constant(
+                let dt = jiff::civil::DateTime::constant(
                     year as i16,
                     month as i8,
                     day as i8,
                     hour as i8,
                     minute as i8,
                     second as i8,
-                    (microsecond * 1000) as i32,
-                ))
+                    (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
+                );
+                match ty {
+                    stmt::Type::DateTime => stmt::Value::DateTime(dt),
+                    stmt::Type::Timestamp => {
+                        stmt::Value::Timestamp(dt.to_zoned(jiff::tz::TimeZone::UTC).unwrap().into())
+                    }
+                    _ => todo!("unexpected type for DATETIME: {ty:#?}"),
+                }
             }
-            #[cfg(not(feature = "jiff"))]
-            mysql_async::Value::Date(year, month, day, hour, minute, second, microsecond) => {
-                stmt::Value::String(format!(
-                    "{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}.{microsecond:06}"
-                ))
-            }
-            #[cfg(feature = "jiff")]
-            mysql_async::Value::Time(_, _, hour, minute, second, microsecond) => {
+            mysql_async::Value::NULL => stmt::Value::Null,
+            v => panic!("unexpected MySQL value for TIMESTAMP/DATETIME: {v:#?}"),
+        },
+
+        #[cfg(feature = "jiff")]
+        CT::MYSQL_TYPE_DATE => match value {
+            mysql_async::Value::Date(year, month, day, _, _, _, _) => stmt::Value::Date(
+                jiff::civil::Date::constant(year as i16, month as i8, day as i8),
+            ),
+            mysql_async::Value::NULL => stmt::Value::Null,
+            v => panic!("unexpected MySQL value for DATE: {v:#?}"),
+        },
+
+        #[cfg(feature = "jiff")]
+        CT::MYSQL_TYPE_TIME => match value {
+            mysql_async::Value::Time(_is_negative, _days, hour, minute, second, microsecond) => {
                 stmt::Value::Time(jiff::civil::Time::constant(
                     hour as i8,
                     minute as i8,
                     second as i8,
-                    (microsecond * 1000) as i32,
+                    (microsecond * 1000) as i32, // Convert microseconds to nanoseconds
                 ))
             }
-            #[cfg(not(feature = "jiff"))]
-            mysql_async::Value::Time(_, days, hour, minute, second, microsecond) => {
-                stmt::Value::String(format!(
-                    "{days} {hour:02}:{minute:02}:{second:02}.{microsecond:06}"
-                ))
-            }
-        };
+            mysql_async::Value::NULL => stmt::Value::Null,
+            v => panic!("unexpected MySQL value for TIME: {v:#?}"),
+        },
 
-        Value(core_value)
+        #[cfg(not(feature = "jiff"))]
+        CT::MYSQL_TYPE_TIMESTAMP | CT::MYSQL_TYPE_DATETIME | CT::MYSQL_TYPE_DATE => match ty {
+            stmt::Type::String => match value {
+                mysql_async::Value::Date(year, month, day, hour, minute, second, microsecond) => {
+                    stmt::Value::String(format!(
+                        "{year:04}-{month:02}-{day:02} {hour:02}:{minute:02}:{second:02}.{microsecond:06}"
+                    ))
+                }
+                v => panic!("unexpected MySQL value for TIMESTAMP/DATETIME/DATE: {v:#?}"),
+            },
+            _ => todo!("unexpected type for DATETIME: {ty:#?}"),
+        },
+
+        #[cfg(not(feature = "jiff"))]
+        CT::MYSQL_TYPE_TIME => match ty {
+            stmt::Type::String => match value {
+                mysql_async::Value::Time(_, days, hour, minute, second, microsecond) => {
+                    stmt::Value::String(format!(
+                        "{days} {hour:02}:{minute:02}:{second:02}.{microsecond:06}"
+                    ))
+                }
+                v => panic!("unexpected MySQL value for TIME: {v:#?}"),
+            },
+            _ => todo!("unexpected type for TIME: {ty:#?}"),
+        },
+
+        CT::MYSQL_TYPE_FLOAT => match ty {
+            stmt::Type::F32 => convert_or_null(value, stmt::Value::F32),
+            stmt::Type::F64 => convert_or_null(value, |v: f32| stmt::Value::F64(v as f64)),
+            _ => todo!("ty={ty:#?}"),
+        },
+
+        CT::MYSQL_TYPE_DOUBLE => match ty {
+            stmt::Type::F64 => convert_or_null(value, stmt::Value::F64),
+            stmt::Type::F32 => convert_or_null(value, |v: f64| stmt::Value::F32(v as f32)),
+            _ => todo!("ty={ty:#?}"),
+        },
+
+        CT::MYSQL_TYPE_JSON => match ty {
+            stmt::Type::String => convert_or_null(value, stmt::Value::String),
+            stmt::Type::List(elem) => convert_or_null(value, |bytes: Vec<u8>| {
+                json_bytes_to_value_list(&bytes, elem)
+            }),
+            _ => todo!("MySQL JSON column with stmt::Type {ty:#?}"),
+        },
+
+        CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL => match ty {
+            stmt::Type::String => convert_or_null(value, stmt::Value::String),
+            #[cfg(feature = "rust_decimal")]
+            stmt::Type::Decimal => convert_or_null(value, |s: String| {
+                stmt::Value::Decimal(s.parse().expect("failed to parse Decimal from MySQL"))
+            }),
+            #[cfg(feature = "bigdecimal")]
+            stmt::Type::BigDecimal => convert_or_null(value, |s: String| {
+                stmt::Value::BigDecimal(s.parse().expect("failed to parse BigDecimal from MySQL"))
+            }),
+            _ => todo!("unexpected type for DECIMAL: {ty:#?}"),
+        },
+
+        _ => todo!(
+            "implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}",
+            column.column_type(),
+            value,
+            ty
+        ),
+    }
+}
+
+fn convert_or_null<T, F>(value: mysql_async::Value, constructor: F) -> stmt::Value
+where
+    T: mysql_async::prelude::FromValue,
+    F: FnOnce(T) -> stmt::Value,
+{
+    match mysql_async::from_value_opt::<T>(value) {
+        Ok(v) => constructor(v),
+        Err(e) => {
+            assert!(matches!(e.0, mysql_async::Value::NULL));
+            stmt::Value::Null
+        }
     }
 }
 

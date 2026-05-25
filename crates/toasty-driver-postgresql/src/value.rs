@@ -49,7 +49,7 @@ impl<'a> postgres_types::FromSql<'a> for RawBytes<'a> {
 }
 
 #[derive(Debug)]
-pub struct Value(pub(crate) CoreValue);
+pub(crate) struct Value(CoreValue);
 
 impl From<CoreValue> for Value {
     fn from(value: CoreValue) -> Self {
@@ -59,12 +59,17 @@ impl From<CoreValue> for Value {
 
 impl Value {
     /// Converts this PostgreSQL driver value into the core Toasty value.
-    pub fn into_inner(self) -> CoreValue {
+    pub(crate) fn into_inner(self) -> CoreValue {
         self.0
     }
 
     /// Converts a PostgreSQL value within a row to a Toasty value.
-    pub fn from_sql(index: usize, row: &Row, column: &Column, expected_ty: &stmt::Type) -> Self {
+    pub(crate) fn from_sql(
+        index: usize,
+        row: &Row,
+        column: &Column,
+        expected_ty: &stmt::Type,
+    ) -> Self {
         // Gets the value from the row as Option<T> and return stmt::Value::Null if the Option is
         // None.
         macro_rules! get_or_return_null {
@@ -189,7 +194,7 @@ impl Value {
 
     /// Converts a PostgreSQL value within a row using PostgreSQL column
     /// metadata as the Toasty value type.
-    pub fn from_sql_infer(index: usize, row: &Row, column: &Column) -> Self {
+    pub(crate) fn from_sql_infer(index: usize, row: &Row, column: &Column) -> Self {
         macro_rules! get_or_return_null {
             ($ty:ty) => {{
                 match row.get::<usize, Option<$ty>>(index) {

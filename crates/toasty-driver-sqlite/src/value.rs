@@ -5,7 +5,7 @@ use rusqlite::{
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
-pub struct Value(CoreValue);
+pub(crate) struct Value(CoreValue);
 
 impl From<CoreValue> for Value {
     fn from(value: CoreValue) -> Self {
@@ -15,16 +15,16 @@ impl From<CoreValue> for Value {
 
 impl Value {
     /// Converts this SQLite driver value into the core Toasty value.
-    pub fn into_inner(self) -> CoreValue {
+    pub(crate) fn into_inner(self) -> CoreValue {
         self.0
     }
 
     /// Converts a SQLite value within a row to a Toasty value.
-    pub fn from_sql(row: &Row, index: usize, ty: &stmt::Type) -> Self {
+    pub(crate) fn from_sql(row: &Row, index: usize, ty: &stmt::Type) -> Self {
         let value: Option<SqlValue> = row.get(index).unwrap();
 
         let core_value = match value {
-            Some(SqlValue::Null) => stmt::Value::Null,
+            Some(SqlValue::Null) | None => stmt::Value::Null,
             Some(SqlValue::Integer(value)) => match ty {
                 stmt::Type::Bool => stmt::Value::Bool(value != 0),
                 stmt::Type::I8 => stmt::Value::I8(value as i8),
@@ -51,14 +51,13 @@ impl Value {
                 stmt::Type::Bytes => stmt::Value::Bytes(value),
                 _ => todo!("value={value:#?}"),
             },
-            None => stmt::Value::Null,
         };
 
         Value(core_value)
     }
 
     /// Converts a SQLite value within a row using SQLite's runtime storage class.
-    pub fn from_sql_infer(row: &Row, index: usize) -> Self {
+    pub(crate) fn from_sql_infer(row: &Row, index: usize) -> Self {
         let value: Option<SqlValue> = row.get(index).unwrap();
 
         let core_value = match value {
