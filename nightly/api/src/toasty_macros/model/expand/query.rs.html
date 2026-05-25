@@ -225,7 +225,7 @@
 <a href=#225 id=225 data-nosnippet>225</a>        <span class="kw">let </span>query_struct_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.kind.as_root_unwrap().query_struct_ident;
 <a href=#226 id=226 data-nosnippet>226</a>
 <a href=#227 id=227 data-nosnippet>227</a>        <span class="comment">// Always emit `include()` on root models. The macro can't see through a
-<a href=#228 id=228 data-nosnippet>228</a>        // field's type to know whether an embedded type holds a `#[deferred]`
+<a href=#228 id=228 data-nosnippet>228</a>        // field's type to know whether an embedded type holds a deferred
 <a href=#229 id=229 data-nosnippet>229</a>        // sub-field, so a stricter gate would deny `.include(metadata().notes())`
 <a href=#230 id=230 data-nosnippet>230</a>        // on a model whose only includable thing lives inside an embed.
 <a href=#231 id=231 data-nosnippet>231</a>        </span><span class="prelude-val">Some</span>(<span class="macro">quote!</span> {

@@ -187,30 +187,21 @@
 <a href=#187 id=187 data-nosnippet>187</a>                            </span>}
 <a href=#188 id=188 data-nosnippet>188</a>                        }
 <a href=#189 id=189 data-nosnippet>189</a>                    }
-<a href=#190 id=190 data-nosnippet>190</a>                    FieldTy::Primitive(ty) <span class="kw">if </span>field.attrs.deferred =&gt; {
-<a href=#191 id=191 data-nosnippet>191</a>                        <span class="kw">let </span>inner = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::Defer&gt;::Inner);
-<a href=#192 id=192 data-nosnippet>192</a>                        <span class="macro">quote!</span> {
-<a href=#193 id=193 data-nosnippet>193</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;#inner&gt;) -&gt; <span class="self">Self </span>{
-<a href=#194 id=194 data-nosnippet>194</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
-<a href=#195 id=195 data-nosnippet>195</a>                                <span class="self">self
-<a href=#196 id=196 data-nosnippet>196</a>                            </span>}
-<a href=#197 id=197 data-nosnippet>197</a>                        }
-<a href=#198 id=198 data-nosnippet>198</a>                    }
-<a href=#199 id=199 data-nosnippet>199</a>                    FieldTy::Primitive(ty) =&gt; {
-<a href=#200 id=200 data-nosnippet>200</a>                        <span class="comment">// The setter binds through the field's
-<a href=#201 id=201 data-nosnippet>201</a>                        // `Field::ExprTarget` — `Self` for scalars/`Vec&lt;u8&gt;`,
-<a href=#202 id=202 data-nosnippet>202</a>                        // `List&lt;T&gt;` for `Vec&lt;T: Scalar&gt;`. Trait dispatch
-<a href=#203 id=203 data-nosnippet>203</a>                        // routes each case correctly; no type parsing here.
-<a href=#204 id=204 data-nosnippet>204</a>                        </span><span class="macro">quote!</span> {
-<a href=#205 id=205 data-nosnippet>205</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>IntoExpr&lt;FieldExprTarget&lt;#ty&gt;&gt;) -&gt; <span class="self">Self </span>{
-<a href=#206 id=206 data-nosnippet>206</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
-<a href=#207 id=207 data-nosnippet>207</a>                                <span class="self">self
-<a href=#208 id=208 data-nosnippet>208</a>                            </span>}
-<a href=#209 id=209 data-nosnippet>209</a>                        }
-<a href=#210 id=210 data-nosnippet>210</a>                    }
-<a href=#211 id=211 data-nosnippet>211</a>                }
-<a href=#212 id=212 data-nosnippet>212</a>            })
-<a href=#213 id=213 data-nosnippet>213</a>            .collect()
-<a href=#214 id=214 data-nosnippet>214</a>    }
-<a href=#215 id=215 data-nosnippet>215</a>}
+<a href=#190 id=190 data-nosnippet>190</a>                    FieldTy::Primitive(ty) =&gt; {
+<a href=#191 id=191 data-nosnippet>191</a>                        <span class="comment">// The setter binds through the field's
+<a href=#192 id=192 data-nosnippet>192</a>                        // `Field::ExprTarget` — `Self` for scalars/`Vec&lt;u8&gt;`,
+<a href=#193 id=193 data-nosnippet>193</a>                        // `List&lt;T&gt;` for `Vec&lt;T: Scalar&gt;`. Trait dispatch
+<a href=#194 id=194 data-nosnippet>194</a>                        // routes each case correctly; no type parsing here.
+<a href=#195 id=195 data-nosnippet>195</a>                        </span><span class="macro">quote!</span> {
+<a href=#196 id=196 data-nosnippet>196</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>IntoExpr&lt;FieldExprTarget&lt;#ty&gt;&gt;) -&gt; <span class="self">Self </span>{
+<a href=#197 id=197 data-nosnippet>197</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
+<a href=#198 id=198 data-nosnippet>198</a>                                <span class="self">self
+<a href=#199 id=199 data-nosnippet>199</a>                            </span>}
+<a href=#200 id=200 data-nosnippet>200</a>                        }
+<a href=#201 id=201 data-nosnippet>201</a>                    }
+<a href=#202 id=202 data-nosnippet>202</a>                }
+<a href=#203 id=203 data-nosnippet>203</a>            })
+<a href=#204 id=204 data-nosnippet>204</a>            .collect()
+<a href=#205 id=205 data-nosnippet>205</a>    }
+<a href=#206 id=206 data-nosnippet>206</a>}
 </code></pre></div></section></main></body></html>

@@ -429,174 +429,168 @@
 <a href=#429 id=429 data-nosnippet>429</a>            <span class="kw">for </span>(index, ast_field) <span class="kw">in </span>ast_fields.iter().enumerate() {
 <a href=#430 id=430 data-nosnippet>430</a>                <span class="kw">let </span><span class="kw-2">mut </span>field =
 <a href=#431 id=431 data-nosnippet>431</a>                    Field::from_ast(ast_field, <span class="kw-2">&amp;</span>model_ident, global_field_index, index, <span class="kw-2">&amp;</span>names)<span class="question-mark">?</span>;
-<a href=#432 id=432 data-nosnippet>432</a>                <span class="kw">if </span>field.attrs.deferred {
-<a href=#433 id=433 data-nosnippet>433</a>                    errs.push(syn::Error::new_spanned(
-<a href=#434 id=434 data-nosnippet>434</a>                        ast_field,
-<a href=#435 id=435 data-nosnippet>435</a>                        <span class="string">"#[deferred] is not yet supported on embedded enum variant fields"</span>,
-<a href=#436 id=436 data-nosnippet>436</a>                    ));
-<a href=#437 id=437 data-nosnippet>437</a>                }
-<a href=#438 id=438 data-nosnippet>438</a>                field.variant = <span class="prelude-val">Some</span>(variant_index);
-<a href=#439 id=439 data-nosnippet>439</a>                all_fields.push(field);
-<a href=#440 id=440 data-nosnippet>440</a>                global_field_index += <span class="number">1</span>;
-<a href=#441 id=441 data-nosnippet>441</a>            }
+<a href=#432 id=432 data-nosnippet>432</a>                field.variant = <span class="prelude-val">Some</span>(variant_index);
+<a href=#433 id=433 data-nosnippet>433</a>                all_fields.push(field);
+<a href=#434 id=434 data-nosnippet>434</a>                global_field_index += <span class="number">1</span>;
+<a href=#435 id=435 data-nosnippet>435</a>            }
+<a href=#436 id=436 data-nosnippet>436</a>
+<a href=#437 id=437 data-nosnippet>437</a>            <span class="kw">match </span>Variant::from_ast(variant, <span class="kw-2">&amp;</span>ast.ident, has_fields, attr) {
+<a href=#438 id=438 data-nosnippet>438</a>                <span class="prelude-val">Ok</span>(v) =&gt; variants.push(v),
+<a href=#439 id=439 data-nosnippet>439</a>                <span class="prelude-val">Err</span>(e) =&gt; errs.push(e),
+<a href=#440 id=440 data-nosnippet>440</a>            }
+<a href=#441 id=441 data-nosnippet>441</a>        }
 <a href=#442 id=442 data-nosnippet>442</a>
-<a href=#443 id=443 data-nosnippet>443</a>            <span class="kw">match </span>Variant::from_ast(variant, <span class="kw-2">&amp;</span>ast.ident, has_fields, attr) {
-<a href=#444 id=444 data-nosnippet>444</a>                <span class="prelude-val">Ok</span>(v) =&gt; variants.push(v),
-<a href=#445 id=445 data-nosnippet>445</a>                <span class="prelude-val">Err</span>(e) =&gt; errs.push(e),
-<a href=#446 id=446 data-nosnippet>446</a>            }
-<a href=#447 id=447 data-nosnippet>447</a>        }
-<a href=#448 id=448 data-nosnippet>448</a>
-<a href=#449 id=449 data-nosnippet>449</a>        <span class="comment">// Validate: all discriminants must be the same kind (all integer or all string)
-<a href=#450 id=450 data-nosnippet>450</a>        </span><span class="kw">if </span>variants.iter().any(|v| v.attrs.discriminant.is_integer())
-<a href=#451 id=451 data-nosnippet>451</a>            &amp;&amp; variants.iter().any(|v| v.attrs.discriminant.is_string())
-<a href=#452 id=452 data-nosnippet>452</a>        {
-<a href=#453 id=453 data-nosnippet>453</a>            errs.push(syn::Error::new_spanned(
-<a href=#454 id=454 data-nosnippet>454</a>                ast,
-<a href=#455 id=455 data-nosnippet>455</a>                <span class="string">"cannot mix integer and string variant discriminants; \
-<a href=#456 id=456 data-nosnippet>456</a>                 all variants must use the same discriminant kind"</span>,
-<a href=#457 id=457 data-nosnippet>457</a>            ));
-<a href=#458 id=458 data-nosnippet>458</a>        }
-<a href=#459 id=459 data-nosnippet>459</a>
-<a href=#460 id=460 data-nosnippet>460</a>        <span class="comment">// Validate: no duplicate discriminant values
-<a href=#461 id=461 data-nosnippet>461</a>        </span><span class="kw">for </span>(i, v) <span class="kw">in </span>variants.iter().enumerate() {
-<a href=#462 id=462 data-nosnippet>462</a>            <span class="kw">for </span>prev <span class="kw">in </span><span class="kw-2">&amp;</span>variants[..i] {
-<a href=#463 id=463 data-nosnippet>463</a>                <span class="kw">if </span>v.attrs.discriminant == prev.attrs.discriminant {
-<a href=#464 id=464 data-nosnippet>464</a>                    errs.push(syn::Error::new_spanned(
-<a href=#465 id=465 data-nosnippet>465</a>                        <span class="kw-2">&amp;</span>v.ident,
-<a href=#466 id=466 data-nosnippet>466</a>                        <span class="macro">format!</span>(
-<a href=#467 id=467 data-nosnippet>467</a>                            <span class="string">"duplicate variant discriminant {}; already used by `{}`"</span>,
-<a href=#468 id=468 data-nosnippet>468</a>                            v.attrs.discriminant, prev.ident
-<a href=#469 id=469 data-nosnippet>469</a>                        ),
-<a href=#470 id=470 data-nosnippet>470</a>                    ));
-<a href=#471 id=471 data-nosnippet>471</a>                    <span class="kw">break</span>;
-<a href=#472 id=472 data-nosnippet>472</a>                }
-<a href=#473 id=473 data-nosnippet>473</a>            }
-<a href=#474 id=474 data-nosnippet>474</a>        }
-<a href=#475 id=475 data-nosnippet>475</a>
-<a href=#476 id=476 data-nosnippet>476</a>        <span class="comment">// Validate string label lengths (max 63 bytes).
-<a href=#477 id=477 data-nosnippet>477</a>        </span><span class="kw">for </span>v <span class="kw">in </span><span class="kw-2">&amp;</span>variants {
-<a href=#478 id=478 data-nosnippet>478</a>            <span class="kw">if let </span>VariantValue::String(s) = <span class="kw-2">&amp;</span>v.attrs.discriminant
-<a href=#479 id=479 data-nosnippet>479</a>                &amp;&amp; s.len() &gt; <span class="number">63
-<a href=#480 id=480 data-nosnippet>480</a>            </span>{
-<a href=#481 id=481 data-nosnippet>481</a>                errs.push(syn::Error::new_spanned(
-<a href=#482 id=482 data-nosnippet>482</a>                    <span class="kw-2">&amp;</span>v.ident,
-<a href=#483 id=483 data-nosnippet>483</a>                    <span class="macro">format!</span>(
-<a href=#484 id=484 data-nosnippet>484</a>                        <span class="string">"variant label \"{}\" is {} bytes; maximum is 63"</span>,
-<a href=#485 id=485 data-nosnippet>485</a>                        s,
-<a href=#486 id=486 data-nosnippet>486</a>                        s.len()
-<a href=#487 id=487 data-nosnippet>487</a>                    ),
-<a href=#488 id=488 data-nosnippet>488</a>                ));
-<a href=#489 id=489 data-nosnippet>489</a>            }
-<a href=#490 id=490 data-nosnippet>490</a>        }
-<a href=#491 id=491 data-nosnippet>491</a>
-<a href=#492 id=492 data-nosnippet>492</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = errs.collect() {
-<a href=#493 id=493 data-nosnippet>493</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(err);
-<a href=#494 id=494 data-nosnippet>494</a>        }
+<a href=#443 id=443 data-nosnippet>443</a>        <span class="comment">// Validate: all discriminants must be the same kind (all integer or all string)
+<a href=#444 id=444 data-nosnippet>444</a>        </span><span class="kw">if </span>variants.iter().any(|v| v.attrs.discriminant.is_integer())
+<a href=#445 id=445 data-nosnippet>445</a>            &amp;&amp; variants.iter().any(|v| v.attrs.discriminant.is_string())
+<a href=#446 id=446 data-nosnippet>446</a>        {
+<a href=#447 id=447 data-nosnippet>447</a>            errs.push(syn::Error::new_spanned(
+<a href=#448 id=448 data-nosnippet>448</a>                ast,
+<a href=#449 id=449 data-nosnippet>449</a>                <span class="string">"cannot mix integer and string variant discriminants; \
+<a href=#450 id=450 data-nosnippet>450</a>                 all variants must use the same discriminant kind"</span>,
+<a href=#451 id=451 data-nosnippet>451</a>            ));
+<a href=#452 id=452 data-nosnippet>452</a>        }
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>        <span class="comment">// Validate: no duplicate discriminant values
+<a href=#455 id=455 data-nosnippet>455</a>        </span><span class="kw">for </span>(i, v) <span class="kw">in </span>variants.iter().enumerate() {
+<a href=#456 id=456 data-nosnippet>456</a>            <span class="kw">for </span>prev <span class="kw">in </span><span class="kw-2">&amp;</span>variants[..i] {
+<a href=#457 id=457 data-nosnippet>457</a>                <span class="kw">if </span>v.attrs.discriminant == prev.attrs.discriminant {
+<a href=#458 id=458 data-nosnippet>458</a>                    errs.push(syn::Error::new_spanned(
+<a href=#459 id=459 data-nosnippet>459</a>                        <span class="kw-2">&amp;</span>v.ident,
+<a href=#460 id=460 data-nosnippet>460</a>                        <span class="macro">format!</span>(
+<a href=#461 id=461 data-nosnippet>461</a>                            <span class="string">"duplicate variant discriminant {}; already used by `{}`"</span>,
+<a href=#462 id=462 data-nosnippet>462</a>                            v.attrs.discriminant, prev.ident
+<a href=#463 id=463 data-nosnippet>463</a>                        ),
+<a href=#464 id=464 data-nosnippet>464</a>                    ));
+<a href=#465 id=465 data-nosnippet>465</a>                    <span class="kw">break</span>;
+<a href=#466 id=466 data-nosnippet>466</a>                }
+<a href=#467 id=467 data-nosnippet>467</a>            }
+<a href=#468 id=468 data-nosnippet>468</a>        }
+<a href=#469 id=469 data-nosnippet>469</a>
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="comment">// Validate string label lengths (max 63 bytes).
+<a href=#471 id=471 data-nosnippet>471</a>        </span><span class="kw">for </span>v <span class="kw">in </span><span class="kw-2">&amp;</span>variants {
+<a href=#472 id=472 data-nosnippet>472</a>            <span class="kw">if let </span>VariantValue::String(s) = <span class="kw-2">&amp;</span>v.attrs.discriminant
+<a href=#473 id=473 data-nosnippet>473</a>                &amp;&amp; s.len() &gt; <span class="number">63
+<a href=#474 id=474 data-nosnippet>474</a>            </span>{
+<a href=#475 id=475 data-nosnippet>475</a>                errs.push(syn::Error::new_spanned(
+<a href=#476 id=476 data-nosnippet>476</a>                    <span class="kw-2">&amp;</span>v.ident,
+<a href=#477 id=477 data-nosnippet>477</a>                    <span class="macro">format!</span>(
+<a href=#478 id=478 data-nosnippet>478</a>                        <span class="string">"variant label \"{}\" is {} bytes; maximum is 63"</span>,
+<a href=#479 id=479 data-nosnippet>479</a>                        s,
+<a href=#480 id=480 data-nosnippet>480</a>                        s.len()
+<a href=#481 id=481 data-nosnippet>481</a>                    ),
+<a href=#482 id=482 data-nosnippet>482</a>                ));
+<a href=#483 id=483 data-nosnippet>483</a>            }
+<a href=#484 id=484 data-nosnippet>484</a>        }
+<a href=#485 id=485 data-nosnippet>485</a>
+<a href=#486 id=486 data-nosnippet>486</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(err) = errs.collect() {
+<a href=#487 id=487 data-nosnippet>487</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(err);
+<a href=#488 id=488 data-nosnippet>488</a>        }
+<a href=#489 id=489 data-nosnippet>489</a>
+<a href=#490 id=490 data-nosnippet>490</a>        <span class="comment">// Determine storage strategy for string-discriminant enums.
+<a href=#491 id=491 data-nosnippet>491</a>        </span><span class="kw">let </span>uses_strings = variants
+<a href=#492 id=492 data-nosnippet>492</a>            .first()
+<a href=#493 id=493 data-nosnippet>493</a>            .map(|v| v.attrs.discriminant.is_string())
+<a href=#494 id=494 data-nosnippet>494</a>            .unwrap_or(<span class="bool-val">false</span>);
 <a href=#495 id=495 data-nosnippet>495</a>
-<a href=#496 id=496 data-nosnippet>496</a>        <span class="comment">// Determine storage strategy for string-discriminant enums.
-<a href=#497 id=497 data-nosnippet>497</a>        </span><span class="kw">let </span>uses_strings = variants
-<a href=#498 id=498 data-nosnippet>498</a>            .first()
-<a href=#499 id=499 data-nosnippet>499</a>            .map(|v| v.attrs.discriminant.is_string())
-<a href=#500 id=500 data-nosnippet>500</a>            .unwrap_or(<span class="bool-val">false</span>);
-<a href=#501 id=501 data-nosnippet>501</a>
-<a href=#502 id=502 data-nosnippet>502</a>        <span class="kw">let </span>storage_strategy = <span class="kw">if </span>uses_strings {
-<a href=#503 id=503 data-nosnippet>503</a>            <span class="kw">match </span>enum_column_type {
-<a href=#504 id=504 data-nosnippet>504</a>                <span class="comment">// Explicit `#[column(type = text)]` or `#[column(type = varchar(N))]`
-<a href=#505 id=505 data-nosnippet>505</a>                // opts out of native enum storage.
-<a href=#506 id=506 data-nosnippet>506</a>                </span><span class="prelude-val">Some</span>(ty) <span class="kw">if </span>ty.is_string_like() =&gt; <span class="prelude-val">Some</span>(EnumStorageStrategy::PlainString(ty)),
-<a href=#507 id=507 data-nosnippet>507</a>                <span class="comment">// Explicit `#[column(type = enum)]` or `#[column(type = enum("name"))]`
-<a href=#508 id=508 data-nosnippet>508</a>                </span><span class="prelude-val">Some</span>(ColumnType::Enum(custom_name)) =&gt; {
-<a href=#509 id=509 data-nosnippet>509</a>                    <span class="prelude-val">Some</span>(EnumStorageStrategy::NativeEnum(custom_name))
-<a href=#510 id=510 data-nosnippet>510</a>                }
-<a href=#511 id=511 data-nosnippet>511</a>                <span class="comment">// No explicit type attribute: default to native enum.
-<a href=#512 id=512 data-nosnippet>512</a>                </span><span class="prelude-val">None </span>=&gt; <span class="prelude-val">Some</span>(EnumStorageStrategy::NativeEnum(<span class="prelude-val">None</span>)),
-<a href=#513 id=513 data-nosnippet>513</a>                <span class="comment">// Any other type override on an enum is an error.
-<a href=#514 id=514 data-nosnippet>514</a>                </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {
-<a href=#515 id=515 data-nosnippet>515</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
-<a href=#516 id=516 data-nosnippet>516</a>                        ast,
-<a href=#517 id=517 data-nosnippet>517</a>                        <span class="string">"unsupported #[column(type = ...)] for enum; \
-<a href=#518 id=518 data-nosnippet>518</a>                         use `text`, `varchar(N)`, or `enum` / `enum(\"name\")`"</span>,
-<a href=#519 id=519 data-nosnippet>519</a>                    ));
-<a href=#520 id=520 data-nosnippet>520</a>                }
-<a href=#521 id=521 data-nosnippet>521</a>            }
-<a href=#522 id=522 data-nosnippet>522</a>        } <span class="kw">else </span>{
-<a href=#523 id=523 data-nosnippet>523</a>            <span class="comment">// Integer discriminants: enum-level type override is not applicable.
-<a href=#524 id=524 data-nosnippet>524</a>            </span><span class="kw">if </span>enum_column_type.is_some() {
-<a href=#525 id=525 data-nosnippet>525</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
-<a href=#526 id=526 data-nosnippet>526</a>                    ast,
-<a href=#527 id=527 data-nosnippet>527</a>                    <span class="string">"#[column(type = ...)] is not supported for integer-discriminant enums"</span>,
-<a href=#528 id=528 data-nosnippet>528</a>                ));
-<a href=#529 id=529 data-nosnippet>529</a>            }
-<a href=#530 id=530 data-nosnippet>530</a>            <span class="prelude-val">None
-<a href=#531 id=531 data-nosnippet>531</a>        </span>};
-<a href=#532 id=532 data-nosnippet>532</a>
-<a href=#533 id=533 data-nosnippet>533</a>        <span class="kw">let </span><span class="kw-2">mut </span>indices = <span class="macro">vec!</span>[];
-<a href=#534 id=534 data-nosnippet>534</a>        collect_field_indices(<span class="kw-2">&amp;</span>all_fields, <span class="kw-2">&amp;mut </span>indices);
-<a href=#535 id=535 data-nosnippet>535</a>
-<a href=#536 id=536 data-nosnippet>536</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#537 id=537 data-nosnippet>537</a>            vis: ast.vis.clone(),
-<a href=#538 id=538 data-nosnippet>538</a>            name: Name::from_ident(<span class="kw-2">&amp;</span>ast.ident),
-<a href=#539 id=539 data-nosnippet>539</a>            ident: model_ident,
-<a href=#540 id=540 data-nosnippet>540</a>            fields: all_fields,
-<a href=#541 id=541 data-nosnippet>541</a>            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
-<a href=#542 id=542 data-nosnippet>542</a>                field_struct_ident: enum_ident(<span class="string">"Fields"</span>, ast),
-<a href=#543 id=543 data-nosnippet>543</a>                field_list_struct_ident: enum_list_ident(<span class="string">"ListFields"</span>, ast),
-<a href=#544 id=544 data-nosnippet>544</a>                variants,
-<a href=#545 id=545 data-nosnippet>545</a>                storage_strategy,
-<a href=#546 id=546 data-nosnippet>546</a>            }),
-<a href=#547 id=547 data-nosnippet>547</a>            indices,
-<a href=#548 id=548 data-nosnippet>548</a>            table: <span class="prelude-val">None</span>,
-<a href=#549 id=549 data-nosnippet>549</a>        })
-<a href=#550 id=550 data-nosnippet>550</a>    }
-<a href=#551 id=551 data-nosnippet>551</a>}
-<a href=#552 id=552 data-nosnippet>552</a>
-<a href=#553 id=553 data-nosnippet>553</a><span class="kw">fn </span>collect_ast_fields(ast: <span class="kw-2">&amp;</span>syn::Fields) -&gt; syn::Result&lt;Vec&lt;<span class="kw-2">&amp;</span>syn::Field&gt;&gt; {
-<a href=#554 id=554 data-nosnippet>554</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>ast {
-<a href=#555 id=555 data-nosnippet>555</a>        syn::Fields::Named(f) =&gt; f.named.iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-<a href=#556 id=556 data-nosnippet>556</a>        syn::Fields::Unnamed(f) =&gt; {
-<a href=#557 id=557 data-nosnippet>557</a>            <span class="kw">if </span>f.unnamed.len() &gt; <span class="number">1 </span>{
-<a href=#558 id=558 data-nosnippet>558</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
-<a href=#559 id=559 data-nosnippet>559</a>                    ast,
-<a href=#560 id=560 data-nosnippet>560</a>                    <span class="string">"tuple structs (besides new-type) are not supported"</span>,
-<a href=#561 id=561 data-nosnippet>561</a>                ));
-<a href=#562 id=562 data-nosnippet>562</a>            }
+<a href=#496 id=496 data-nosnippet>496</a>        <span class="kw">let </span>storage_strategy = <span class="kw">if </span>uses_strings {
+<a href=#497 id=497 data-nosnippet>497</a>            <span class="kw">match </span>enum_column_type {
+<a href=#498 id=498 data-nosnippet>498</a>                <span class="comment">// Explicit `#[column(type = text)]` or `#[column(type = varchar(N))]`
+<a href=#499 id=499 data-nosnippet>499</a>                // opts out of native enum storage.
+<a href=#500 id=500 data-nosnippet>500</a>                </span><span class="prelude-val">Some</span>(ty) <span class="kw">if </span>ty.is_string_like() =&gt; <span class="prelude-val">Some</span>(EnumStorageStrategy::PlainString(ty)),
+<a href=#501 id=501 data-nosnippet>501</a>                <span class="comment">// Explicit `#[column(type = enum)]` or `#[column(type = enum("name"))]`
+<a href=#502 id=502 data-nosnippet>502</a>                </span><span class="prelude-val">Some</span>(ColumnType::Enum(custom_name)) =&gt; {
+<a href=#503 id=503 data-nosnippet>503</a>                    <span class="prelude-val">Some</span>(EnumStorageStrategy::NativeEnum(custom_name))
+<a href=#504 id=504 data-nosnippet>504</a>                }
+<a href=#505 id=505 data-nosnippet>505</a>                <span class="comment">// No explicit type attribute: default to native enum.
+<a href=#506 id=506 data-nosnippet>506</a>                </span><span class="prelude-val">None </span>=&gt; <span class="prelude-val">Some</span>(EnumStorageStrategy::NativeEnum(<span class="prelude-val">None</span>)),
+<a href=#507 id=507 data-nosnippet>507</a>                <span class="comment">// Any other type override on an enum is an error.
+<a href=#508 id=508 data-nosnippet>508</a>                </span><span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; {
+<a href=#509 id=509 data-nosnippet>509</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
+<a href=#510 id=510 data-nosnippet>510</a>                        ast,
+<a href=#511 id=511 data-nosnippet>511</a>                        <span class="string">"unsupported #[column(type = ...)] for enum; \
+<a href=#512 id=512 data-nosnippet>512</a>                         use `text`, `varchar(N)`, or `enum` / `enum(\"name\")`"</span>,
+<a href=#513 id=513 data-nosnippet>513</a>                    ));
+<a href=#514 id=514 data-nosnippet>514</a>                }
+<a href=#515 id=515 data-nosnippet>515</a>            }
+<a href=#516 id=516 data-nosnippet>516</a>        } <span class="kw">else </span>{
+<a href=#517 id=517 data-nosnippet>517</a>            <span class="comment">// Integer discriminants: enum-level type override is not applicable.
+<a href=#518 id=518 data-nosnippet>518</a>            </span><span class="kw">if </span>enum_column_type.is_some() {
+<a href=#519 id=519 data-nosnippet>519</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
+<a href=#520 id=520 data-nosnippet>520</a>                    ast,
+<a href=#521 id=521 data-nosnippet>521</a>                    <span class="string">"#[column(type = ...)] is not supported for integer-discriminant enums"</span>,
+<a href=#522 id=522 data-nosnippet>522</a>                ));
+<a href=#523 id=523 data-nosnippet>523</a>            }
+<a href=#524 id=524 data-nosnippet>524</a>            <span class="prelude-val">None
+<a href=#525 id=525 data-nosnippet>525</a>        </span>};
+<a href=#526 id=526 data-nosnippet>526</a>
+<a href=#527 id=527 data-nosnippet>527</a>        <span class="kw">let </span><span class="kw-2">mut </span>indices = <span class="macro">vec!</span>[];
+<a href=#528 id=528 data-nosnippet>528</a>        collect_field_indices(<span class="kw-2">&amp;</span>all_fields, <span class="kw-2">&amp;mut </span>indices);
+<a href=#529 id=529 data-nosnippet>529</a>
+<a href=#530 id=530 data-nosnippet>530</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#531 id=531 data-nosnippet>531</a>            vis: ast.vis.clone(),
+<a href=#532 id=532 data-nosnippet>532</a>            name: Name::from_ident(<span class="kw-2">&amp;</span>ast.ident),
+<a href=#533 id=533 data-nosnippet>533</a>            ident: model_ident,
+<a href=#534 id=534 data-nosnippet>534</a>            fields: all_fields,
+<a href=#535 id=535 data-nosnippet>535</a>            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
+<a href=#536 id=536 data-nosnippet>536</a>                field_struct_ident: enum_ident(<span class="string">"Fields"</span>, ast),
+<a href=#537 id=537 data-nosnippet>537</a>                field_list_struct_ident: enum_list_ident(<span class="string">"ListFields"</span>, ast),
+<a href=#538 id=538 data-nosnippet>538</a>                variants,
+<a href=#539 id=539 data-nosnippet>539</a>                storage_strategy,
+<a href=#540 id=540 data-nosnippet>540</a>            }),
+<a href=#541 id=541 data-nosnippet>541</a>            indices,
+<a href=#542 id=542 data-nosnippet>542</a>            table: <span class="prelude-val">None</span>,
+<a href=#543 id=543 data-nosnippet>543</a>        })
+<a href=#544 id=544 data-nosnippet>544</a>    }
+<a href=#545 id=545 data-nosnippet>545</a>}
+<a href=#546 id=546 data-nosnippet>546</a>
+<a href=#547 id=547 data-nosnippet>547</a><span class="kw">fn </span>collect_ast_fields(ast: <span class="kw-2">&amp;</span>syn::Fields) -&gt; syn::Result&lt;Vec&lt;<span class="kw-2">&amp;</span>syn::Field&gt;&gt; {
+<a href=#548 id=548 data-nosnippet>548</a>    <span class="prelude-val">Ok</span>(<span class="kw">match </span>ast {
+<a href=#549 id=549 data-nosnippet>549</a>        syn::Fields::Named(f) =&gt; f.named.iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#550 id=550 data-nosnippet>550</a>        syn::Fields::Unnamed(f) =&gt; {
+<a href=#551 id=551 data-nosnippet>551</a>            <span class="kw">if </span>f.unnamed.len() &gt; <span class="number">1 </span>{
+<a href=#552 id=552 data-nosnippet>552</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
+<a href=#553 id=553 data-nosnippet>553</a>                    ast,
+<a href=#554 id=554 data-nosnippet>554</a>                    <span class="string">"tuple structs (besides new-type) are not supported"</span>,
+<a href=#555 id=555 data-nosnippet>555</a>                ));
+<a href=#556 id=556 data-nosnippet>556</a>            }
+<a href=#557 id=557 data-nosnippet>557</a>
+<a href=#558 id=558 data-nosnippet>558</a>            f.unnamed.iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
+<a href=#559 id=559 data-nosnippet>559</a>        }
+<a href=#560 id=560 data-nosnippet>560</a>        <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
+<a href=#561 id=561 data-nosnippet>561</a>    })
+<a href=#562 id=562 data-nosnippet>562</a>}
 <a href=#563 id=563 data-nosnippet>563</a>
-<a href=#564 id=564 data-nosnippet>564</a>            f.unnamed.iter().collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;()
-<a href=#565 id=565 data-nosnippet>565</a>        }
-<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">_ </span>=&gt; <span class="macro">vec!</span>[],
-<a href=#567 id=567 data-nosnippet>567</a>    })
-<a href=#568 id=568 data-nosnippet>568</a>}
-<a href=#569 id=569 data-nosnippet>569</a>
-<a href=#570 id=570 data-nosnippet>570</a><span class="kw">fn </span>collect_field_indices(fields: <span class="kw-2">&amp;</span>[Field], indices: <span class="kw-2">&amp;mut </span>Vec&lt;Index&gt;) {
-<a href=#571 id=571 data-nosnippet>571</a>    <span class="kw">for </span>(index, field) <span class="kw">in </span>fields.iter().enumerate() {
-<a href=#572 id=572 data-nosnippet>572</a>        <span class="kw">if </span>field.attrs.is_indexed() {
-<a href=#573 id=573 data-nosnippet>573</a>            indices.push(Index {
-<a href=#574 id=574 data-nosnippet>574</a>                fields: <span class="macro">vec!</span>[IndexField {
-<a href=#575 id=575 data-nosnippet>575</a>                    field: index,
-<a href=#576 id=576 data-nosnippet>576</a>                    scope: IndexScope::Partition,
-<a href=#577 id=577 data-nosnippet>577</a>                }],
-<a href=#578 id=578 data-nosnippet>578</a>                unique: field.attrs.unique,
-<a href=#579 id=579 data-nosnippet>579</a>                primary_key: <span class="bool-val">false</span>,
-<a href=#580 id=580 data-nosnippet>580</a>                name: <span class="prelude-val">None</span>,
-<a href=#581 id=581 data-nosnippet>581</a>            });
-<a href=#582 id=582 data-nosnippet>582</a>        }
-<a href=#583 id=583 data-nosnippet>583</a>    }
-<a href=#584 id=584 data-nosnippet>584</a>}
-<a href=#585 id=585 data-nosnippet>585</a>
-<a href=#586 id=586 data-nosnippet>586</a><span class="kw">fn </span>struct_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemStruct) -&gt; syn::Ident {
-<a href=#587 id=587 data-nosnippet>587</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#588 id=588 data-nosnippet>588</a>}
-<a href=#589 id=589 data-nosnippet>589</a>
-<a href=#590 id=590 data-nosnippet>590</a><span class="doccomment">/// Generates an ident like `UserListFields` — injects the suffix after the model name.
-<a href=#591 id=591 data-nosnippet>591</a></span><span class="kw">fn </span>struct_list_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemStruct) -&gt; syn::Ident {
-<a href=#592 id=592 data-nosnippet>592</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#593 id=593 data-nosnippet>593</a>}
-<a href=#594 id=594 data-nosnippet>594</a>
-<a href=#595 id=595 data-nosnippet>595</a><span class="kw">fn </span>enum_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemEnum) -&gt; syn::Ident {
-<a href=#596 id=596 data-nosnippet>596</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#597 id=597 data-nosnippet>597</a>}
-<a href=#598 id=598 data-nosnippet>598</a>
-<a href=#599 id=599 data-nosnippet>599</a><span class="kw">fn </span>enum_list_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemEnum) -&gt; syn::Ident {
-<a href=#600 id=600 data-nosnippet>600</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#601 id=601 data-nosnippet>601</a>}
+<a href=#564 id=564 data-nosnippet>564</a><span class="kw">fn </span>collect_field_indices(fields: <span class="kw-2">&amp;</span>[Field], indices: <span class="kw-2">&amp;mut </span>Vec&lt;Index&gt;) {
+<a href=#565 id=565 data-nosnippet>565</a>    <span class="kw">for </span>(index, field) <span class="kw">in </span>fields.iter().enumerate() {
+<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw">if </span>field.attrs.is_indexed() {
+<a href=#567 id=567 data-nosnippet>567</a>            indices.push(Index {
+<a href=#568 id=568 data-nosnippet>568</a>                fields: <span class="macro">vec!</span>[IndexField {
+<a href=#569 id=569 data-nosnippet>569</a>                    field: index,
+<a href=#570 id=570 data-nosnippet>570</a>                    scope: IndexScope::Partition,
+<a href=#571 id=571 data-nosnippet>571</a>                }],
+<a href=#572 id=572 data-nosnippet>572</a>                unique: field.attrs.unique,
+<a href=#573 id=573 data-nosnippet>573</a>                primary_key: <span class="bool-val">false</span>,
+<a href=#574 id=574 data-nosnippet>574</a>                name: <span class="prelude-val">None</span>,
+<a href=#575 id=575 data-nosnippet>575</a>            });
+<a href=#576 id=576 data-nosnippet>576</a>        }
+<a href=#577 id=577 data-nosnippet>577</a>    }
+<a href=#578 id=578 data-nosnippet>578</a>}
+<a href=#579 id=579 data-nosnippet>579</a>
+<a href=#580 id=580 data-nosnippet>580</a><span class="kw">fn </span>struct_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemStruct) -&gt; syn::Ident {
+<a href=#581 id=581 data-nosnippet>581</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
+<a href=#582 id=582 data-nosnippet>582</a>}
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a><span class="doccomment">/// Generates an ident like `UserListFields` — injects the suffix after the model name.
+<a href=#585 id=585 data-nosnippet>585</a></span><span class="kw">fn </span>struct_list_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemStruct) -&gt; syn::Ident {
+<a href=#586 id=586 data-nosnippet>586</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
+<a href=#587 id=587 data-nosnippet>587</a>}
+<a href=#588 id=588 data-nosnippet>588</a>
+<a href=#589 id=589 data-nosnippet>589</a><span class="kw">fn </span>enum_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemEnum) -&gt; syn::Ident {
+<a href=#590 id=590 data-nosnippet>590</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
+<a href=#591 id=591 data-nosnippet>591</a>}
+<a href=#592 id=592 data-nosnippet>592</a>
+<a href=#593 id=593 data-nosnippet>593</a><span class="kw">fn </span>enum_list_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemEnum) -&gt; syn::Ident {
+<a href=#594 id=594 data-nosnippet>594</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
+<a href=#595 id=595 data-nosnippet>595</a>}
 </code></pre></div></section></main></body></html>

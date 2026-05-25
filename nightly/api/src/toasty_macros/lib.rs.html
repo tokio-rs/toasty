@@ -712,7 +712,7 @@
 <a href=#712 id=712 data-nosnippet>712</a>    Model,
 <a href=#713 id=713 data-nosnippet>713</a>    attributes(
 <a href=#714 id=714 data-nosnippet>714</a>        key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-<a href=#715 id=715 data-nosnippet>715</a>        version, deferred
+<a href=#715 id=715 data-nosnippet>715</a>        version
 <a href=#716 id=716 data-nosnippet>716</a>    )
 <a href=#717 id=717 data-nosnippet>717</a>)]
 <a href=#718 id=718 data-nosnippet>718</a></span><span class="kw">pub fn </span>derive_model(input: TokenStream) -&gt; TokenStream {
@@ -1062,7 +1062,7 @@
 <a href=#1062 id=1062 data-nosnippet>1062</a>///
 <a href=#1063 id=1063 data-nosnippet>1063</a>/// [`Embed`]: toasty::Embed
 <a href=#1064 id=1064 data-nosnippet>1064</a>/// [`Register`]: toasty::Register
-<a href=#1065 id=1065 data-nosnippet>1065</a></span><span class="attr">#[proc_macro_derive(Embed, attributes(column, deferred, index, unique))]
+<a href=#1065 id=1065 data-nosnippet>1065</a></span><span class="attr">#[proc_macro_derive(Embed, attributes(column, index, unique))]
 <a href=#1066 id=1066 data-nosnippet>1066</a></span><span class="kw">pub fn </span>derive_embed(input: TokenStream) -&gt; TokenStream {
 <a href=#1067 id=1067 data-nosnippet>1067</a>    <span class="kw">match </span>model::generate_embed(input.into()) {
 <a href=#1068 id=1068 data-nosnippet>1068</a>        <span class="prelude-val">Ok</span>(output) =&gt; output.into(),

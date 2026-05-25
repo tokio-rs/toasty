@@ -42,7 +42,7 @@ expression references table columns (via <code>Expr::Reference</code>) and produ
 a model field value. Relation fields are initialized to <code>Null</code> and
 replaced with subqueries when <code>include()</code> is used.</p>
 </div><span id="structfield.default_returning" class="structfield section-header"><a href="#structfield.default_returning" class="anchor field">§</a><code>default_returning: <a class="enum" href="../../stmt/enum.Expr.html" title="enum toasty_core::stmt::Expr">Expr</a></code></span><div class="docblock"><p>Pre-computed default <code>RETURNING</code> expression for this model.</p>
-<p>Same shape as <code>table_to_model</code>’s record, but with every <code>#[deferred]</code>
+<p>Same shape as <code>table_to_model</code>’s record, but with every deferred
 field — at this level or nested inside an embedded type — pre-masked
 to <code>Null</code>. Lowering starts from this expression and splices loaded
 forms in for fields named by <code>.include()</code> (or for every deferred

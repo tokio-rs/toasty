@@ -830,7 +830,7 @@
 <a href=#830 id=830 data-nosnippet>830</a>    <span class="kw">fn </span>visit_returning_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Returning) {
 <a href=#831 id=831 data-nosnippet>831</a>        <span class="kw">if let </span>stmt::Returning::Model { include } = i {
 <a href=#832 id=832 data-nosnippet>832</a>            <span class="comment">// Start from the schema's pre-computed default returning — every
-<a href=#833 id=833 data-nosnippet>833</a>            // `#[deferred]` field, top-level or nested, is already `Null`.
+<a href=#833 id=833 data-nosnippet>833</a>            // Deferred fields, top-level or nested, are already `Null`.
 <a href=#834 id=834 data-nosnippet>834</a>            // `process_top_level_includes` then splices loaded forms in for
 <a href=#835 id=835 data-nosnippet>835</a>            // the fields named by include paths (and for every deferred field
 <a href=#836 id=836 data-nosnippet>836</a>            // when this is an `INSERT ... RETURNING`).

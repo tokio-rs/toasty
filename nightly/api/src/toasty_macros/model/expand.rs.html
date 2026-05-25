@@ -161,7 +161,7 @@
 <a href=#161 id=161 data-nosnippet>161</a>                #field_struct_ident { path }
 <a href=#162 id=162 data-nosnippet>162</a>            }
 <a href=#163 id=163 data-nosnippet>163</a>
-<a href=#164 id=164 data-nosnippet>164</a>            <span class="kw">fn </span>new_list_path&lt;__Origin&gt;(path: #toasty::Path&lt;__Origin, #toasty::List&lt;<span class="self">Self</span>&gt;&gt;) -&gt; <span class="self">Self</span>::ListPath&lt;__Origin&gt; {
+<a href=#164 id=164 data-nosnippet>164</a>            <span class="kw">fn </span>new_list_path&lt;__Origin&gt;(path: #toasty::Path&lt;__Origin, #toasty::List&lt;<span class="self">Self</span>::ExprTarget&gt;&gt;) -&gt; <span class="self">Self</span>::ListPath&lt;__Origin&gt; {
 <a href=#165 id=165 data-nosnippet>165</a>                #field_list_struct_ident { path }
 <a href=#166 id=166 data-nosnippet>166</a>            }
 <a href=#167 id=167 data-nosnippet>167</a>
@@ -310,7 +310,7 @@
 <a href=#310 id=310 data-nosnippet>310</a>                #field_struct_ident { path }
 <a href=#311 id=311 data-nosnippet>311</a>            }
 <a href=#312 id=312 data-nosnippet>312</a>
-<a href=#313 id=313 data-nosnippet>313</a>            <span class="kw">fn </span>new_list_path&lt;__Origin&gt;(path: #toasty::Path&lt;__Origin, #toasty::List&lt;<span class="self">Self</span>&gt;&gt;) -&gt; <span class="self">Self</span>::ListPath&lt;__Origin&gt; {
+<a href=#313 id=313 data-nosnippet>313</a>            <span class="kw">fn </span>new_list_path&lt;__Origin&gt;(path: #toasty::Path&lt;__Origin, #toasty::List&lt;<span class="self">Self</span>::ExprTarget&gt;&gt;) -&gt; <span class="self">Self</span>::ListPath&lt;__Origin&gt; {
 <a href=#314 id=314 data-nosnippet>314</a>                #field_list_struct_ident { path }
 <a href=#315 id=315 data-nosnippet>315</a>            }
 <a href=#316 id=316 data-nosnippet>316</a>
@@ -445,8 +445,8 @@
 <a href=#445 id=445 data-nosnippet>445</a>        <span class="kw">let </span>span = field_ident.span();
 <a href=#446 id=446 data-nosnippet>446</a>
 <a href=#447 id=447 data-nosnippet>447</a>        <span class="comment">// Construct the chained path with the field's `ExprTarget` as the
-<a href=#448 id=448 data-nosnippet>448</a>        // tag, so `new_path` receives exactly the type it expects — no
-<a href=#449 id=449 data-nosnippet>449</a>        // PhantomData retag at the boundary. For `Vec&lt;scalar&gt;` this is
+<a href=#448 id=448 data-nosnippet>448</a>        // tag, so `new_path` receives exactly the type it expects. For
+<a href=#449 id=449 data-nosnippet>449</a>        // `Vec&lt;scalar&gt;` this is
 <a href=#450 id=450 data-nosnippet>450</a>        // `List&lt;T&gt;`; for everything else it is the field's Rust type.
 <a href=#451 id=451 data-nosnippet>451</a>        </span><span class="macro">quote_spanned!</span> { span=&gt;
 <a href=#452 id=452 data-nosnippet>452</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::Field&gt;::Path&lt;__Origin&gt; {

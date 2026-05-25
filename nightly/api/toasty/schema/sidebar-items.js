@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["from_macro","generate_unique_id"],"mod":["app","create_meta","db","diff","mapping"],"struct":["Deferred","ModelSet"],"trait":["Auto","BelongsToField","Defer","Embed","Field","HasManyField","HasOneField","Load","Model","Register","Relation","Scalar","Scope"]};
+window.SIDEBAR_ITEMS = {"fn":["from_macro","generate_unique_id"],"mod":["app","create_meta","db","diff","mapping"],"struct":["Deferred","ModelSet"],"trait":["Auto","BelongsToField","Embed","Field","HasManyField","HasOneField","Load","Model","Register","Relation","Scalar","Scope"]};
