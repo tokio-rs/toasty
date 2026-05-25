@@ -207,10 +207,10 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         match &field.ty {
-            FieldTy::HasOne(..) => {
+            FieldTy::Has(rel) if rel.is_one() => {
                 self.relation_step(field, |lower| lower.plan_mut_has_one(field, op, source));
             }
-            FieldTy::HasMany(..) => {
+            FieldTy::Has(rel) if rel.is_many() => {
                 self.relation_step(field, |lower| lower.plan_mut_has_many(field, op, source));
             }
             FieldTy::BelongsTo(_) => {

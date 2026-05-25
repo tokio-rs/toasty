@@ -90,10 +90,12 @@ fn has_many_target_not_registered() {
             model_a,
             1,
             "talks",
-            FieldTy::HasMany(HasMany {
+            FieldTy::Has(Has {
                 target: MISSING,
                 expr_ty: stmt::Type::list(stmt::Type::Unknown),
-                singular: Name::new("talk"),
+                cardinality: HasCardinality::Many {
+                    singular: Name::new("talk"),
+                },
                 kind: HasKind::Direct(FieldId {
                     model: MISSING,
                     index: 0,
@@ -116,9 +118,10 @@ fn has_one_target_not_registered() {
             model_a,
             1,
             "profile",
-            FieldTy::HasOne(HasOne {
+            FieldTy::Has(Has {
                 target: MISSING,
                 expr_ty: stmt::Type::Unknown,
+                cardinality: HasCardinality::One,
                 kind: HasKind::Direct(FieldId {
                     model: MISSING,
                     index: 0,

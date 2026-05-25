@@ -227,11 +227,8 @@ impl ModelRoot {
             // Only SQL drivers can evaluate them today; key-value drivers
             // would need a separate per-step batched fetch strategy that
             // is not yet implemented.
-            let is_via = match &field.ty {
-                FieldTy::HasMany(rel) => matches!(rel.kind, HasKind::Via(_)),
-                FieldTy::HasOne(rel) => matches!(rel.kind, HasKind::Via(_)),
-                _ => false,
-            };
+            let is_via =
+                matches!(&field.ty, FieldTy::Has(rel) if matches!(rel.kind, HasKind::Via(_)));
             if is_via && !db.sql {
                 return Err(crate::Error::invalid_schema(format!(
                     "field `{}::{}` declares a multi-step `via` relation, which \

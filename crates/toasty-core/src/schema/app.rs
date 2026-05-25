@@ -13,7 +13,7 @@
 //! - [`Model`] -- a single model, which can be a [`ModelRoot`] (backed by a
 //!   database table), an [`EmbeddedStruct`], or an [`EmbeddedEnum`].
 //! - [`Field`] -- one field on a model, identified by a [`FieldId`].
-//! - [`BelongsTo`], [`HasMany`], [`HasOne`] -- relation types.
+//! - [`BelongsTo`], [`Has`] -- relation types.
 //! - [`Index`] -- a secondary index on a model's fields.
 //! - [`PrimaryKey`] -- a model's primary key definition.
 //!
@@ -57,7 +57,7 @@ mod pk;
 pub use pk::PrimaryKey;
 
 mod relation;
-pub use relation::{BelongsTo, HasKind, HasMany, HasOne, Via};
+pub use relation::{BelongsTo, Has, HasCardinality, HasKind, Via};
 
 mod schema;
 pub use schema::{Resolved, Schema};

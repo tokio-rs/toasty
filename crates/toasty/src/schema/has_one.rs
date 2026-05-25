@@ -42,9 +42,10 @@ impl<T: Relation> HasOneField for T {
 }
 
 fn has_one_field_ty<T: Relation>(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-    FieldTy::HasOne(app::HasOne {
+    FieldTy::Has(app::Has {
         target: <T::Model as Register>::id(),
         expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
+        cardinality: app::HasCardinality::One,
         kind: has_kind(pair, via),
     })
 }

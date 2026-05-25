@@ -10,7 +10,7 @@ use indexmap::IndexMap;
 /// - Primitive fields map to a single column
 /// - Struct fields flatten an embedded struct to multiple columns
 /// - Enum fields map to a discriminant column plus per-variant data columns
-/// - Relation fields (`BelongsTo`, `HasMany`, `HasOne`) don't have direct column storage
+/// - Relation fields (`BelongsTo`, `Has`) don't have direct column storage
 ///
 /// # Examples
 ///
@@ -298,7 +298,7 @@ pub struct EnumVariant {
     pub fields: Vec<Field>,
 }
 
-/// Maps a relation field (`BelongsTo`, `HasMany`, `HasOne`).
+/// Maps a relation field (`BelongsTo`, `Has`).
 ///
 /// Relations don't map to columns in this table -- they are resolved through
 /// joins or foreign keys in other tables. A unique bit is assigned in the

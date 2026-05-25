@@ -54,10 +54,10 @@ fn has_many_field_ty<T: Relation>(
     pair: Option<FieldId>,
     via: Option<stmt::Path>,
 ) -> FieldTy {
-    FieldTy::HasMany(app::HasMany {
+    FieldTy::Has(app::Has {
         target: <T::Model as Register>::id(),
         expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
-        singular,
+        cardinality: app::HasCardinality::Many { singular },
         kind: has_kind(pair, via),
     })
 }

@@ -168,11 +168,8 @@ impl Schema {
                 FieldTy::BelongsTo(belongs_to) => {
                     current_field = belongs_to.target(self).as_root_unwrap().fields.get(*step)?;
                 }
-                FieldTy::HasMany(has_many) => {
-                    current_field = has_many.target(self).as_root_unwrap().fields.get(*step)?;
-                }
-                FieldTy::HasOne(has_one) => {
-                    current_field = has_one.target(self).as_root_unwrap().fields.get(*step)?;
+                FieldTy::Has(has) => {
+                    current_field = has.target(self).as_root_unwrap().fields.get(*step)?;
                 }
             };
         }
@@ -312,8 +309,8 @@ impl Builder {
         // process, models cannot be iterated as that would hold a reference to
         // `self`. Instead, we use index based iteration.
 
-        // First, link all HasMany relations. HasManys are linked first because
-        // linking them may result in converting HasOne relations to BelongTo.
+        // First, link all has-many relations. Has-manys are linked first because
+        // linking them may result in converting has-one relations to BelongTo.
         // We need this conversion to happen before any of the other processing.
         for curr in 0..self.models.len() {
             if self.models[curr].is_embedded() {
@@ -324,12 +321,14 @@ impl Builder {
                 let src = model.id();
                 let field = &model.as_root_unwrap().fields[index];
 
-                if let FieldTy::HasMany(has_many) = &field.ty {
+                if let FieldTy::Has(has) = &field.ty
+                    && has.is_many()
+                {
                     // `via` relations have no pair to link.
-                    let HasKind::Direct(pair) = has_many.kind else {
+                    let HasKind::Direct(pair) = has.kind else {
                         continue;
                     };
-                    let target = has_many.target;
+                    let target = has.target;
                     let field_name = field.name.app_unwrap().to_string();
                     let pair = if pair.is_placeholder() {
                         self.find_has_many_pair(src, target, &field_name)?
@@ -339,13 +338,13 @@ impl Builder {
                     };
                     self.models[curr].as_root_mut_unwrap().fields[index]
                         .ty
-                        .as_has_many_mut_unwrap()
+                        .as_has_mut_unwrap()
                         .kind = HasKind::Direct(pair);
                 }
             }
         }
 
-        // Link HasOne relations and compute BelongsTo foreign keys
+        // Link has-one relations and compute BelongsTo foreign keys
         for curr in 0..self.models.len() {
             if self.models[curr].is_embedded() {
                 continue;
@@ -356,12 +355,12 @@ impl Builder {
                 let field = &model.as_root_unwrap().fields[index];
 
                 match &field.ty {
-                    FieldTy::HasOne(has_one) => {
+                    FieldTy::Has(has) if has.is_one() => {
                         // `via` relations have no pair to link.
-                        let HasKind::Direct(pair) = has_one.kind else {
+                        let HasKind::Direct(pair) = has.kind else {
                             continue;
                         };
-                        let target = has_one.target;
+                        let target = has.target;
                         let field_name = field.name.app_unwrap().to_string();
                         let pair = if pair.is_placeholder() {
                             match self.find_belongs_to_pair(src, target, &field_name)? {
@@ -381,7 +380,7 @@ impl Builder {
 
                         self.models[curr].as_root_mut_unwrap().fields[index]
                             .ty
-                            .as_has_one_mut_unwrap()
+                            .as_has_mut_unwrap()
                             .kind = HasKind::Direct(pair);
                     }
                     FieldTy::BelongsTo(belongs_to) => {
@@ -422,18 +421,7 @@ impl Builder {
                             pair = match &self.models[target].as_root_unwrap().fields[target_index]
                                 .ty
                             {
-                                FieldTy::HasMany(has_many)
-                                    if has_many.kind.pair_id() == Some(field_id) =>
-                                {
-                                    assert!(pair.is_none());
-                                    Some(
-                                        self.models[target].as_root_unwrap().fields[target_index]
-                                            .id,
-                                    )
-                                }
-                                FieldTy::HasOne(has_one)
-                                    if has_one.kind.pair_id() == Some(field_id) =>
-                                {
+                                FieldTy::Has(has) if has.kind.pair_id() == Some(field_id) => {
                                     assert!(pair.is_none());
                                     Some(
                                         self.models[target].as_root_unwrap().fields[target_index]

@@ -297,8 +297,7 @@ impl LowerStatement<'_, '_> {
         // the database executing the join, so it is SQL-only — a key-value
         // backend would need a cascade of per-step queries instead.
         let via = match &field.ty {
-            app::FieldTy::HasMany(rel) => rel.kind.via(),
-            app::FieldTy::HasOne(rel) => rel.kind.via(),
+            app::FieldTy::Has(rel) => rel.kind.via(),
             _ => None,
         };
         if let Some(via) = via {
@@ -312,16 +311,22 @@ impl LowerStatement<'_, '_> {
         }
 
         let (mut stmt, target_model_id) = match &field.ty {
-            app::FieldTy::HasMany(rel) => (
-                stmt::Query::new_select(
+            app::FieldTy::Has(rel) => {
+                let mut query = stmt::Query::new_select(
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
                         stmt::Expr::ref_self_field(direct_pair(&rel.kind)),
                     ),
-                ),
-                rel.target,
-            ),
+                );
+                if rel.is_one() {
+                    // To handle single relations, we need a new query modifier that
+                    // returns a single record and not a list. This matters for the
+                    // type system.
+                    query.single = true;
+                }
+                (query, rel.target)
+            }
             // To handle single relations, we need a new query modifier that
             // returns a single record and not a list. This matters for the
             // type system.
@@ -347,17 +352,6 @@ impl LowerStatement<'_, '_> {
 
                 let mut query =
                     stmt::Query::new_select(rel.target, stmt::Expr::eq(source_fk, target_pk));
-                query.single = true;
-                (query, rel.target)
-            }
-            app::FieldTy::HasOne(rel) => {
-                let mut query = stmt::Query::new_select(
-                    rel.target,
-                    stmt::Expr::eq(
-                        stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(direct_pair(&rel.kind)),
-                    ),
-                );
                 query.single = true;
                 (query, rel.target)
             }
