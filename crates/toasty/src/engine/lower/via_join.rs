@@ -38,7 +38,10 @@ impl LowerStatement<'_, '_> {
 
         let schema = self.schema();
         let model = self.model_unwrap();
-        let single = !model.fields[field_index].ty.is_has_many();
+        let single = match &model.fields[field_index].ty {
+            app::FieldTy::Via(via) => via.is_one(),
+            _ => unreachable!("build_via_include_subquery called on non-via field"),
+        };
         let nullable = model.fields[field_index].nullable();
         let join = ViaJoin::resolve(schema, model.id, via);
 
@@ -255,7 +258,7 @@ fn flatten_via_steps(
         // If this step itself names a `via` relation, splice the nested
         // path in place of it and continue (handles via-of-via naturally).
         let nested_via = match &field.ty {
-            app::FieldTy::Has(rel) => rel.kind.via(),
+            app::FieldTy::Via(via) => Some(via),
             _ => None,
         };
         if let Some(via) = nested_via {

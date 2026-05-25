@@ -458,7 +458,9 @@ impl BuildMapping<'_> {
                 Ok(self.map_table_column_to_model(column_id, primitive))
             }
             app::FieldTy::Embedded(_) => self.populate_embed_default_returning(field, mapping),
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) => Ok(stmt::Value::Null.into()),
+            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
+                Ok(stmt::Value::Null.into())
+            }
         }
     }
 
@@ -756,7 +758,9 @@ impl BuildMapping<'_> {
                     _ => unreachable!("invalid schema"),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) => Ok(stmt::Value::Null.into()),
+            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
+                Ok(stmt::Value::Null.into())
+            }
         }
     }
 }
@@ -799,7 +803,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                     _ => unreachable!(),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) => {
+            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
                 assert!(!self.in_enum_variant);
                 let bit = self.build.next_bit();
                 Ok(mapping::Field::Relation(mapping::FieldRelation {

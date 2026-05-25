@@ -2,7 +2,7 @@ mod primitive;
 pub use primitive::{FieldPrimitive, SerializeFormat};
 
 use super::{
-    AutoStrategy, BelongsTo, Constraint, Embedded, Has, Model, ModelId, Schema, VariantId,
+    AutoStrategy, BelongsTo, Constraint, Embedded, Has, Model, ModelId, Schema, VariantId, Via,
 };
 use crate::{Result, driver, stmt};
 use std::fmt;
@@ -200,6 +200,8 @@ pub enum FieldTy {
     BelongsTo(BelongsTo),
     /// The inverse side of a relationship.
     Has(Has),
+    /// A relation reached by following a path of existing relations.
+    Via(Via),
 }
 
 impl Field {
@@ -243,7 +245,8 @@ impl Field {
         self.versionable
     }
 
-    /// Returns `true` if this field is a relation (`BelongsTo` or `Has`).
+    /// Returns `true` if this field is a relation (`BelongsTo`, `Has`, or
+    /// `Via`).
     pub fn is_relation(&self) -> bool {
         self.ty.is_relation()
     }
@@ -261,6 +264,7 @@ impl Field {
         match &self.ty {
             FieldTy::BelongsTo(belongs_to) => Some(belongs_to.target),
             FieldTy::Has(has) => Some(has.target),
+            FieldTy::Via(via) => Some(via.target),
             _ => None,
         }
     }
@@ -280,6 +284,7 @@ impl Field {
             FieldTy::Embedded(embedded) => &embedded.expr_ty,
             FieldTy::BelongsTo(belongs_to) => &belongs_to.expr_ty,
             FieldTy::Has(has) => &has.expr_ty,
+            FieldTy::Via(via) => &via.expr_ty,
         }
     }
 
@@ -294,7 +299,8 @@ impl Field {
             FieldTy::Primitive(_) => None,
             FieldTy::Embedded(_) => None,
             FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
-            FieldTy::Has(has) => has.kind.pair_id(),
+            FieldTy::Has(has) => Some(has.pair_id),
+            FieldTy::Via(_) => None,
         }
     }
 
@@ -392,9 +398,10 @@ impl FieldTy {
         }
     }
 
-    /// Returns `true` if this is a relation type (`BelongsTo` or `Has`).
+    /// Returns `true` if this is a relation type (`BelongsTo`, `Has`, or
+    /// `Via`).
     pub fn is_relation(&self) -> bool {
-        matches!(self, Self::BelongsTo(..) | Self::Has(..))
+        matches!(self, Self::BelongsTo(..) | Self::Has(..) | Self::Via(..))
     }
 
     /// Returns `true` if this is a [`FieldTy::Has`] relation.
@@ -570,6 +577,7 @@ impl fmt::Debug for FieldTy {
             Self::Embedded(ty) => ty.fmt(fmt),
             Self::BelongsTo(ty) => ty.fmt(fmt),
             Self::Has(ty) => ty.fmt(fmt),
+            Self::Via(ty) => ty.fmt(fmt),
         }
     }
 }

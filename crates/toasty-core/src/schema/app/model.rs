@@ -1,4 +1,4 @@
-use super::{Field, FieldId, FieldPrimitive, FieldTy, HasKind, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
 use crate::{Result, driver, stmt};
 use indexmap::IndexMap;
 use std::fmt;
@@ -227,9 +227,7 @@ impl ModelRoot {
             // Only SQL drivers can evaluate them today; key-value drivers
             // would need a separate per-step batched fetch strategy that
             // is not yet implemented.
-            let is_via =
-                matches!(&field.ty, FieldTy::Has(rel) if matches!(rel.kind, HasKind::Via(_)));
-            if is_via && !db.sql {
+            if matches!(&field.ty, FieldTy::Via(_)) && !db.sql {
                 return Err(crate::Error::invalid_schema(format!(
                     "field `{}::{}` declares a multi-step `via` relation, which \
                      requires a SQL-capable driver; the configured driver does not \

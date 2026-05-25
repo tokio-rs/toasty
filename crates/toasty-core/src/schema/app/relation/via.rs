@@ -1,43 +1,7 @@
-use crate::{schema::app::FieldId, stmt};
-
-/// How a `Has` relation reaches its target.
-///
-/// Both relation kinds share this: the question — "is the target reached
-/// through a paired `BelongsTo`, or by following a path?" — is the same for
-/// has-many and has-one.
-#[derive(Debug, Clone)]
-pub enum HasKind {
-    /// The target is reached through a `BelongsTo` field on the target model.
-    /// Carries that paired `BelongsTo` field's id.
-    ///
-    /// If a `#[has_many(pair = <field>)]` / `#[has_one(pair = <field>)]` was
-    /// supplied, the macro resolves the id at schema-construction time.
-    /// Otherwise the linker fills it in by searching the target model for a
-    /// unique `BelongsTo` back to the source.
-    Direct(FieldId),
-
-    /// The target is reached by following a [`Via`] path of existing
-    /// relations rather than pairing with a single `BelongsTo`.
-    Via(Via),
-}
-
-impl HasKind {
-    /// The paired `BelongsTo` field id, or `None` for a `via` relation.
-    pub fn pair_id(&self) -> Option<FieldId> {
-        match self {
-            HasKind::Direct(pair) => Some(*pair),
-            HasKind::Via(_) => None,
-        }
-    }
-
-    /// The [`Via`] path, or `None` for a direct relation.
-    pub fn via(&self) -> Option<&Via> {
-        match self {
-            HasKind::Via(via) => Some(via),
-            HasKind::Direct(_) => None,
-        }
-    }
-}
+use crate::{
+    schema::app::{Cardinality, Model, ModelId, Name, Schema},
+    stmt,
+};
 
 /// A multi-step relation path.
 ///
@@ -51,6 +15,16 @@ impl HasKind {
 /// Rust compile error rather than a runtime schema validation failure.
 #[derive(Debug, Clone)]
 pub struct Via {
+    /// The [`ModelId`] of the associated (target) model.
+    pub target: ModelId,
+
+    /// The expression type this field evaluates to from the application's
+    /// perspective.
+    pub expr_ty: stmt::Type,
+
+    /// Whether this relation is one-to-many or one-to-one.
+    pub cardinality: Cardinality,
+
     /// The resolved field path, rooted at the model that declares the via
     /// relation.
     pub path: stmt::Path,
@@ -58,7 +32,37 @@ pub struct Via {
 
 impl Via {
     /// Create a `Via` from its fully resolved field path.
-    pub fn new(path: stmt::Path) -> Self {
-        Self { path }
+    pub fn new(
+        target: ModelId,
+        expr_ty: stmt::Type,
+        cardinality: Cardinality,
+        path: stmt::Path,
+    ) -> Self {
+        Self {
+            target,
+            expr_ty,
+            cardinality,
+            path,
+        }
+    }
+
+    /// Returns `true` when this is a one-to-many relation.
+    pub fn is_many(&self) -> bool {
+        self.cardinality.is_many()
+    }
+
+    /// Returns `true` when this is a one-to-one relation.
+    pub fn is_one(&self) -> bool {
+        self.cardinality.is_one()
+    }
+
+    /// Returns the singular item name for a one-to-many relation.
+    pub fn singular(&self) -> Option<&Name> {
+        self.cardinality.singular()
+    }
+
+    /// Resolves the target [`Model`] from the given schema.
+    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
+        schema.model(self.target)
     }
 }
