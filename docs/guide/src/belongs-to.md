@@ -6,9 +6,9 @@ foreign key. The child stores the parent's ID in one of its own fields.
 ## Defining a BelongsTo relationship
 
 A BelongsTo relationship requires two things on the child model: a foreign key
-field and a `Deferred<T>` relation field. The `#[belongs_to]` attribute tells
-Toasty which field holds the foreign key and which field on the parent it
-references.
+field and a relation field. Wrap the relation in `Deferred<T>` for lazy loading,
+or use `T` directly for eager loading. The `#[belongs_to]` attribute tells Toasty
+which field holds the foreign key and which field on the parent it references.
 
 ```rust
 # use toasty::Model;
@@ -59,6 +59,16 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 The parent model (`User`) typically declares a `#[has_many]` field pointing back
 at the child. See [HasMany](./has-many.md) for details.
 
+Use a plain relation field when every loaded child should also load its parent:
+
+```rust,ignore
+#[belongs_to(key = user_id, references = id)]
+user: User,
+```
+
+This behaves like an implicit `.include(Post::fields().user())` on every query
+that returns `Post`.
+
 ## Optional BelongsTo
 
 If a child does not always have a parent, make the foreign key `Option<T>` and
@@ -90,6 +100,13 @@ struct Post {
 ```
 
 The `user_id` column is now nullable. A post can exist without a user.
+
+For eager loading, omit `Deferred` and keep the `Option`:
+
+```rust,ignore
+#[belongs_to(key = user_id, references = id)]
+user: Option<User>,
+```
 
 ## Accessing the related record
 

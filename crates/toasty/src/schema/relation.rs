@@ -65,9 +65,10 @@ pub trait Relation: Load<Output = Self> {
 
 /// A Rust field type that represents a `#[has_many]` relation.
 ///
-/// This is implemented by [`Deferred<Vec<T>>`](super::Deferred). The target
-/// model/query-builder metadata stays on [`Relation`]; this trait only
-/// describes how the field itself contributes relation schema metadata.
+/// This is implemented by [`Deferred<Vec<T>>`](super::Deferred) for lazy
+/// relations and by `Vec<T>` for eager relations. The target model/query-builder
+/// metadata stays on [`Relation`]; this trait only describes how the field
+/// itself contributes relation schema metadata.
 pub trait HasManyField: Load<Output = Self> {
     /// The relation target type carried by this field.
     type Target: Relation;
@@ -98,6 +99,10 @@ pub trait HasManyField: Load<Output = Self> {
 }
 
 /// A Rust field type that represents a `#[has_one]` relation.
+///
+/// This is implemented by [`Deferred<T>`](super::Deferred) for lazy relations
+/// and by `T` for eager relations. `T` may be `Option<Model>` for nullable
+/// `has_one` fields.
 pub trait HasOneField: Load<Output = Self> {
     /// The relation target type carried by this field.
     type Target: Relation;
@@ -126,6 +131,10 @@ pub trait HasOneField: Load<Output = Self> {
 }
 
 /// A Rust field type that represents a `#[belongs_to]` relation.
+///
+/// This is implemented by [`Deferred<T>`](super::Deferred) for lazy relations
+/// and by `T` for eager relations. `T` may be `Option<Model>` for nullable
+/// `belongs_to` fields.
 pub trait BelongsToField: Load<Output = Self> {
     /// The relation target type carried by this field.
     type Target: Relation;

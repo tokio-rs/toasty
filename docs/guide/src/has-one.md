@@ -6,9 +6,10 @@ A `HasOne` relationship connects a parent model to a single child record. Like
 
 ## Defining a HasOne relationship
 
-Add a `#[has_one]` field of type `Deferred<T>` on the parent model. The child
-model must have a corresponding `#[belongs_to]` field with a `#[unique]` foreign
-key (since each parent maps to at most one child):
+Add a `#[has_one]` field on the parent model. Use `Deferred<T>` or
+`Deferred<Option<T>>` for lazy loading, or `T` / `Option<T>` for eager loading.
+The child model must have a corresponding `#[belongs_to]` field with a
+`#[unique]` foreign key (since each parent maps to at most one child):
 
 ```rust
 # use toasty::Model;
@@ -52,11 +53,21 @@ CREATE TABLE profiles (
 CREATE UNIQUE INDEX idx_profiles_user_id ON profiles (user_id);
 ```
 
+With an eager field, Toasty loads the child whenever it loads the parent:
+
+```rust,ignore
+#[has_one]
+profile: Option<Profile>,
+```
+
+This behaves like an implicit `.include(User::fields().profile())` on every
+query that returns `User`.
+
 ## Optional vs required HasOne
 
 The type parameter on `HasOne` controls whether the parent must have a child.
 
-### Optional: `Deferred<Option<Profile>>`
+### Optional: `Deferred<Option<Profile>>` or `Option<Profile>`
 
 The parent may or may not have a child. Creating a parent without a child is
 allowed:
@@ -92,7 +103,7 @@ assert!(user.profile().exec(&mut db).await?.is_none());
 # }
 ```
 
-### Required: `Deferred<Profile>`
+### Required: `Deferred<Profile>` or `Profile`
 
 The parent must have a child. Creating a parent requires providing a child:
 

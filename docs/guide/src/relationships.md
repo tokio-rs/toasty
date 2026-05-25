@@ -103,6 +103,45 @@ is not allowed — a `#[has_many]` or `#[has_one]` field always requires a
 matching `#[belongs_to]` on the target model, because Toasty needs the foreign
 key definition to know how the models connect.
 
+### Lazy and eager relation fields
+
+The relation field type controls when Toasty loads the related records.
+
+Use `Deferred<_>` for a lazy relation. A normal query leaves the field unloaded.
+Load it by calling the generated relation accessor, or preload it with
+`.include(...)`:
+
+```rust,ignore
+#[has_many]
+posts: toasty::Deferred<Vec<Post>>,
+
+let posts = user.posts().exec(&mut db).await?;
+```
+
+Use the relation value directly for an eager relation. Toasty loads the relation
+with every query that returns the model, as if the query had an implicit
+`.include(...)`:
+
+```rust,ignore
+#[has_many]
+posts: Vec<Post>,
+
+let user = User::filter_by_id(user_id).get(&mut db).await?;
+let post_count = user.posts.len();
+```
+
+The accepted eager field types are:
+
+| Attribute | Lazy field type | Eager field type |
+|---|---|---|
+| `#[has_many]` | `Deferred<Vec<T>>` | `Vec<T>` |
+| `#[has_one]` | `Deferred<T>` or `Deferred<Option<T>>` | `T` or `Option<T>` |
+| `#[belongs_to]` | `Deferred<T>` or `Deferred<Option<T>>` | `T` or `Option<T>` |
+
+Eager relations can load other eager relations. Toasty rejects schemas with an
+eager-load cycle, such as `User.posts: Vec<Post>` and `Post.user: User`. Wrap at
+least one relation in `Deferred<_>` to break the cycle.
+
 ## Required vs optional relationships
 
 The nullability of the foreign key field controls whether the relationship is
@@ -203,9 +242,9 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 
 | You want to express… | Use | FK goes on |
 |---|---|---|
-| A post has one author | `Post` → `Deferred<User>` + `User` → `Deferred<Vec<Post>>` | `posts.user_id` |
-| A user has one profile | `User` → `Deferred<Profile>` + `Profile` → `Deferred<User>` | `profiles.user_id` |
-| A comment belongs to a post | `Comment` → `Deferred<Post>` + `Post` → `Deferred<Vec<Comment>>` | `comments.post_id` |
+| A post has one author | `Post` → `Deferred<User>` or `User` + `User` → `Deferred<Vec<Post>>` or `Vec<Post>` | `posts.user_id` |
+| A user has one profile | `User` → `Deferred<Profile>` or `Profile` + `Profile` → `Deferred<User>` or `User` | `profiles.user_id` |
+| A comment belongs to a post | `Comment` → `Deferred<Post>` or `Post` + `Post` → `Deferred<Vec<Comment>>` or `Vec<Comment>` | `comments.post_id` |
 
 When deciding between `HasOne` and `HasMany`, ask: "Can the parent have more
 than one?" If yes, use `HasMany`. If exactly one (or zero), use `HasOne`. The
