@@ -2,10 +2,11 @@
 
 ## Summary
 
-Relations should use the same loaded/unloaded value model as deferred fields.
-Instead of declaring relation fields with dedicated wrapper types such as
-`HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>`, users will declare relations
-with `Deferred<T>`:
+Relations use ordinary Rust field types to control loading behavior. A relation
+wrapped in `Deferred<T>` is lazy, and a direct relation value is eager. Instead
+of declaring relation fields with dedicated wrapper types such as `HasMany<T>`,
+`HasOne<T>`, and `BelongsTo<T>`, users declare lazy relations with
+`Deferred<T>`:
 
 ```rust
 #[has_many]
@@ -18,8 +19,22 @@ profile: toasty::Deferred<Option<Profile>>,
 user: toasty::Deferred<User>,
 ```
 
-This removes the public relation wrapper types and makes relation loading
-consistent with `#[deferred]` scalar and embedded fields.
+They declare eager relations with the relation value directly:
+
+```rust
+#[has_many]
+foos: Vec<Foo>,
+
+#[has_one]
+profile: Option<Profile>,
+
+#[belongs_to(key = user_id, references = id)]
+user: User,
+```
+
+This removes the public relation wrapper types and makes the field type describe
+whether Toasty loads the relation on demand or with every query that returns the
+model.
 
 ## Motivation
 
@@ -31,9 +46,10 @@ are separate:
 - `HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>` are used for relations.
 
 The split leaks into the API. Users must learn separate wrapper names, separate
-loaded-state types, and separate rules for when `.include()` matters. Once
+loaded-state types, and separate rules for when `.include()` matters. Once lazy
 relations are modeled as `Deferred<RelationValue>`, relation fields use the
-same loaded-state API as other deferred fields.
+same loaded-state API as other deferred fields. Direct relation fields cover the
+other common case: a relation that every query for the model needs.
 
 ## User-facing API
 
@@ -82,6 +98,27 @@ for post in user.posts.get() {
 }
 ```
 
+Eager relations are declared by using the relation value directly. Toasty loads
+an eager relation with every query that returns the model, as if the query had
+included the relation path.
+
+```rust
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    id: toasty::Id<Self>,
+
+    #[has_many]
+    posts: Vec<Post>,
+}
+
+let user = User::filter_by_id(id).get(&mut db).await?;
+
+for post in &user.posts {
+    println!("{}", post.title);
+}
+```
+
 Before:
 
 ```rust
@@ -102,6 +139,16 @@ posts: toasty::Deferred<Vec<Post>>,
 user: toasty::Deferred<User>,
 ```
 
+Or, when the relation should load with every model query:
+
+```rust
+#[has_many]
+posts: Vec<Post>,
+
+#[belongs_to(key = user_id, references = id)]
+user: User,
+```
+
 ## Behavior
 
 Lazy relation fields behave like other `Deferred<T>` fields. The field is
@@ -113,15 +160,22 @@ exist. `#[has_one] Deferred<Option<T>>` and
 `#[belongs_to] Deferred<Option<T>>` load as `None` when the relation was loaded
 and no related row exists.
 
-Direct relation fields are not supported until the engine has eager relation
-loading. Every relation field must use `Deferred<_>`.
+Direct relation fields are eager. `#[has_many] Vec<T>` loads as an empty
+`Vec<T>` when no related rows exist. `#[has_one] Option<T>` and
+`#[belongs_to] Option<T>` load as `None` when the relation is optional and no
+related row exists. Required direct single relations use `T`.
+
+Toasty rejects schemas with eager-load cycles. A schema such as
+`User { posts: Vec<Post> }` and `Post { user: User }` would recurse forever, so
+one side must use `Deferred<_>`.
 
 Relation accessors remain available. A `user.posts()` method still returns a
 relation query builder for querying, filtering, inserting into, or removing
 from the association. The field value and relation query accessor continue to
 serve different purposes:
 
-- `user.posts` is the loaded model field.
+- `user.posts` is the loaded model field for eager relations, or the
+  loaded/unloaded slot for lazy relations.
 - `user.posts()` builds a statement for the association.
 
 ## Edge cases
@@ -135,14 +189,13 @@ use one lazy-slot convention for deferred fields and relations:
 This lets `Deferred<Option<T>>` and `Deferred<Option<Model>>` represent loaded
 `None` as `Record([Null])` without a relation-specific special value.
 
-Eager relation fields remain out of scope for this phase. When eager relations
-are added, cycles such as `User { posts: Vec<Post> }` and `Post { user: User }`
-must be rejected or bounded.
+Eager relation cycles are schema errors. Cycles are checked across eager
+relation fields only. A cycle that contains a `Deferred<_>` edge is allowed
+because the lazy edge does not load by default.
 
-Multi-step `via` relations should remain lazy-only until include/select support
-for `via` relations exists. The current relation include path already rejects
-multi-step relation projection, so eager `via` would expose an unsupported
-default-load path.
+Multi-step `via` relations may be eager once include/select support for `via`
+relations exists. The eager-cycle check must treat an eager `via` relation like
+the relation path it follows.
 
 ## Driver integration
 
@@ -176,17 +229,16 @@ the public relation syntax changes.
    `Deferred<Option<T>>` where applicable.
 
 6. Done: change macro parsing and expansion to use field-level relation traits.
-   Relation attributes accept `Deferred<_>`. Old wrapper types and direct value
-   types are rejected as relation fields.
+   Relation attributes accept `Deferred<_>` for lazy relations and direct value
+   types for eager relations. Old wrapper types are rejected as relation fields.
 
-7. Future: teach default returning lowering to include non-deferred relation
+7. Done: teach default returning lowering to include non-deferred relation
    fields. `Deferred<_>` relation fields stay unloaded by default; direct
-   relation fields are included automatically once eager loading exists.
+   relation fields are included automatically.
 
-8. Add schema verification for eager relation cycles and unsupported eager
-   `via` relations.
+8. Done: add schema verification for eager relation cycles.
 
-9. Update tests and docs for the new syntax.
+9. Done: update tests and docs for the new syntax.
 
 10. Done: remove `HasMany<T>`, `HasOne<T>`, and `BelongsTo<T>` from the public
     API.
@@ -221,21 +273,17 @@ without overloading `Option`.
 
 ## Open questions
 
-- Blocking implementation: should eager `belongs_to` be allowed for required
-  relations only, or also for nullable `Option<T>`?
-- Blocking implementation: should eager relation cycle detection reject every
-  cycle, or allow explicitly bounded cycles in the future?
 - Deferrable: should there be a batch loader for already-loaded
   `Vec<Model>` values with lazy relation fields?
 - Deferrable: when old relation wrappers are deprecated, should they become
   type aliases, compatibility structs, or disappear in one major release step?
+- Deferrable: should eager relation cycle detection ever allow explicitly
+  bounded cycles?
 
 ## Out of scope
 
 - Per-query relation projection beyond existing `.include(...)` and
   `.select(...)`; this design only changes relation field representation and
   default loading.
-- Eager loading through multi-step `via` relations; this should wait for
-  include/select support for `via`.
 - Driver-specific join optimization; relation loading can continue to use the
   existing nested-query and nested-merge path.
