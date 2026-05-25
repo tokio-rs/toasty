@@ -136,11 +136,7 @@ pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// Gated on `requires(sql)` until [#857] is fixed — `OR` of comparison ops
-// nested inside an `AND` panics in eval on the DynamoDB scan path.
-//
-// [#857]: https://github.com/tokio-rs/toasty/issues/857
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
