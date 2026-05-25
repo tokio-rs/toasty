@@ -9,7 +9,7 @@ mod belongs_to;
 pub use belongs_to::BelongsTo;
 
 mod has;
-pub use has::{Has, HasCardinality};
+pub use has::{Cardinality, Has};
 
 mod via;
-pub use via::{HasKind, Via};
+pub use via::Via;

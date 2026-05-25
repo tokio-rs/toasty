@@ -54,25 +54,20 @@ fn has_many_field_ty<T: Relation>(
     pair: Option<FieldId>,
     via: Option<stmt::Path>,
 ) -> FieldTy {
-    FieldTy::Has(app::Has {
-        target: <T::Model as Register>::id(),
-        expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
-        cardinality: app::HasCardinality::Many { singular },
-        kind: has_kind(pair, via),
-    })
-}
+    let target = <T::Model as Register>::id();
+    let expr_ty = stmt::Type::List(Box::new(stmt::Type::Model(target)));
+    let cardinality = app::Cardinality::Many { singular };
 
-/// Build a [`HasKind`](app::HasKind) from the macro-supplied `pair` / `via`
-/// attributes. `via` declares a multi-step relation and carries the fully
-/// resolved [`stmt::Path`] emitted by the derive; otherwise the relation is
-/// direct, and a direct relation with no explicit `pair` gets a placeholder
-/// that the schema linker resolves.
-pub(super) fn has_kind(pair: Option<FieldId>, via: Option<stmt::Path>) -> app::HasKind {
     match via {
-        Some(path) => app::HasKind::Via(app::Via::new(path)),
-        None => app::HasKind::Direct(pair.unwrap_or(FieldId {
-            model: ModelId(usize::MAX),
-            index: usize::MAX,
-        })),
+        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+        None => FieldTy::Has(app::Has {
+            target,
+            expr_ty,
+            cardinality,
+            pair_id: pair.unwrap_or(FieldId {
+                model: ModelId(usize::MAX),
+                index: usize::MAX,
+            }),
+        }),
     }
 }

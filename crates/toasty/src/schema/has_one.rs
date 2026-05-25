@@ -1,6 +1,6 @@
-use super::has_many::has_kind;
 use super::{Deferred, HasOneField, Load, Register, Relation};
 
+use toasty_core::schema::app::ModelId;
 use toasty_core::schema::app::{self, FieldId, FieldTy};
 use toasty_core::stmt;
 
@@ -42,10 +42,20 @@ impl<T: Relation> HasOneField for T {
 }
 
 fn has_one_field_ty<T: Relation>(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-    FieldTy::Has(app::Has {
-        target: <T::Model as Register>::id(),
-        expr_ty: stmt::Type::Model(<T::Model as Register>::id()),
-        cardinality: app::HasCardinality::One,
-        kind: has_kind(pair, via),
-    })
+    let target = <T::Model as Register>::id();
+    let expr_ty = stmt::Type::Model(target);
+    let cardinality = app::Cardinality::One;
+
+    match via {
+        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+        None => FieldTy::Has(app::Has {
+            target,
+            expr_ty,
+            cardinality,
+            pair_id: pair.unwrap_or(FieldId {
+                model: ModelId(usize::MAX),
+                index: usize::MAX,
+            }),
+        }),
+    }
 }

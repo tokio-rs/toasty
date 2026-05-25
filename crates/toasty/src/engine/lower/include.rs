@@ -297,7 +297,7 @@ impl LowerStatement<'_, '_> {
         // the database executing the join, so it is SQL-only — a key-value
         // backend would need a cascade of per-step queries instead.
         let via = match &field.ty {
-            app::FieldTy::Has(rel) => rel.kind.via(),
+            app::FieldTy::Via(via) => Some(via),
             _ => None,
         };
         if let Some(via) = via {
@@ -316,7 +316,7 @@ impl LowerStatement<'_, '_> {
                     rel.target,
                     stmt::Expr::eq(
                         stmt::Expr::ref_parent_model(),
-                        stmt::Expr::ref_self_field(direct_pair(&rel.kind)),
+                        stmt::Expr::ref_self_field(rel.pair_id),
                     ),
                 );
                 if rel.is_one() {
@@ -384,14 +384,6 @@ impl FieldIncludes {
     fn self_included(&self) -> bool {
         self.include_self || !self.sub_paths.is_empty()
     }
-}
-
-/// The paired `BelongsTo` field of a direct has-relation. `.include()` of a
-/// `via` relation is rejected earlier in `build_relation_subquery`, so any
-/// relation reaching the direct-relation path has a pair.
-fn direct_pair(kind: &app::HasKind) -> app::FieldId {
-    kind.pair_id()
-        .expect("`via` relation reached the direct-relation include path")
 }
 
 /// Find the include paths that target field index `i` and split them by
