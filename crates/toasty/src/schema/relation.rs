@@ -77,6 +77,12 @@ pub trait HasManyField: Load<Output = Self> {
         <Self::Target as Relation>::nullable()
     }
 
+    /// Whether the field stores its value in a deferred load slot.
+    const DEFERRED: bool;
+
+    /// Reloads this relation field from a returned value.
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
+
     /// Build the [`FieldTy`] for a `HasMany` relation field, given the
     /// singular name derived from the field identifier and an optional
     /// paired `BelongsTo` field on the target model resolved from
@@ -101,6 +107,12 @@ pub trait HasOneField: Load<Output = Self> {
         <Self::Target as Relation>::nullable()
     }
 
+    /// Whether the field stores its value in a deferred load slot.
+    const DEFERRED: bool;
+
+    /// Reloads this relation field from a returned value.
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
+
     /// Build the [`FieldTy`] for a `HasOne` relation field, given an
     /// optional paired `BelongsTo` field on the target model resolved
     /// from `#[has_one(pair = <field>)]`. When `None`, the linker selects
@@ -122,6 +134,12 @@ pub trait BelongsToField: Load<Output = Self> {
     fn nullable() -> bool {
         <Self::Target as Relation>::nullable()
     }
+
+    /// Whether the field stores its value in a deferred load slot.
+    const DEFERRED: bool;
+
+    /// Reloads this relation field from a returned value.
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
 
     /// Build the [`FieldTy`] for a `BelongsTo` relation field, given the
     /// foreign key resolved from the field's `#[belongs_to(...)]` attribute.

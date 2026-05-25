@@ -339,10 +339,17 @@ impl Expand<'_> {
                 FieldTy::Primitive(ty) => {
                     quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
                 }
-                _ => {
-                    // Relation fields (BelongsTo, HasMany, HasOne) are unloaded on update.
-                    // Embedded fields are handled above via the Primitive arm.
-                    quote!(#i => target.#field_ident.unload(),)
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#i => <#ty as #toasty::BelongsToField>::reload(&mut target.#field_ident, value)?,)
+                }
+                FieldTy::HasMany(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#i => <#ty as #toasty::HasManyField>::reload(&mut target.#field_ident, value)?,)
+                }
+                FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#i => <#ty as #toasty::HasOneField>::reload(&mut target.#field_ident, value)?,)
                 }
             }
 

@@ -40,7 +40,7 @@ trait RelationSource: std::fmt::Debug {
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr);
 
     /// Update a returning field expression
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr);
 
     /// Whether the source might produce zero rows. When true, relation
     /// mutations must be wrapped in a conditional to avoid FK updates when
@@ -422,7 +422,7 @@ impl LowerStatement<'_, '_> {
         // Run the canonical pipeline on the synthesized child insert and
         // stitch it onto the parent as an `Expr::Arg`.
         let arg = self.lower_sub_stmt(stmt::Statement::Insert(stmt));
-        source.set_returning_field(_field.id, arg);
+        source.set_returning_field(_field, arg);
     }
 
     fn plan_mut_belongs_to(
@@ -809,7 +809,7 @@ impl RelationSource for &stmt::Delete {
         unimplemented!("delete statements do not need to update field values");
     }
 
-    fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
+    fn set_returning_field(&mut self, _field: &Field, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
     }
 
@@ -829,7 +829,7 @@ impl RelationSource for UpdateRelationSource<'_> {
         self.assignments.set(field, expr);
     }
 
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr) {
         debug_assert!(self.returning_changed, "TODO");
 
         let Some(stmt::Returning::Project(stmt::Expr::Cast(expr_cast))) = self.returning else {
@@ -842,14 +842,14 @@ impl RelationSource for UpdateRelationSource<'_> {
 
         let position = path_field_set
             .iter()
-            .position(|field_id| field_id == field.index)
+            .position(|field_id| field_id == field.id.index)
             .unwrap();
 
         let stmt::Expr::Record(record) = &mut *expr_cast.expr else {
             todo!()
         };
 
-        set_returning_slot(record, position, expr);
+        set_returning_slot(record, position, expr, field.deferred);
     }
 
     fn needs_existence_check(&self) -> bool {
@@ -881,7 +881,7 @@ impl RelationSource for InsertRelationSource<'_> {
         self.row.as_record_mut_unwrap()[field.index] = expr;
     }
 
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr) {
         let record = match self.returning {
             Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
             Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
@@ -891,7 +891,7 @@ impl RelationSource for InsertRelationSource<'_> {
             _ => todo!("InsertRelationSource={self:#?}"),
         };
 
-        set_returning_slot(record, field.index, expr);
+        set_returning_slot(record, field.id.index, expr, field.deferred);
     }
 
     fn needs_existence_check(&self) -> bool {
@@ -986,11 +986,15 @@ fn flatten_relation_batch(entries: &mut Vec<stmt::Assignment>) {
     }
 }
 
-fn set_returning_slot(record: &mut stmt::ExprRecord, index: usize, expr: stmt::Expr) {
-    assert!(
-        record.fields[index].is_value_null(),
-        "TODO: probably need to merge instead of overwrite; actual={:#?}",
-        record.fields[index]
-    );
-    record.fields[index] = lazy_slot::loaded_expr(expr);
+fn set_returning_slot(
+    record: &mut stmt::ExprRecord,
+    index: usize,
+    expr: stmt::Expr,
+    deferred: bool,
+) {
+    record.fields[index] = if deferred {
+        lazy_slot::loaded_expr(expr)
+    } else {
+        expr
+    };
 }

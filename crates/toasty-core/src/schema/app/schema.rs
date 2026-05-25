@@ -2,6 +2,7 @@ use super::{EnumVariant, Field, FieldId, FieldTy, HasKind, Model, ModelId, Varia
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
+use std::collections::HashSet;
 
 /// The result of resolving a [`stmt::Projection`] through the application
 /// schema.
@@ -224,8 +225,85 @@ impl Builder {
         // All models have been discovered and initialized at some level, now do
         // the relation linking.
         self.link_relations()?;
+        self.verify_no_eager_load_cycles()?;
 
         Ok(())
+    }
+
+    fn verify_no_eager_load_cycles(&self) -> crate::Result<()> {
+        let mut visited = HashSet::new();
+        let mut model_stack = Vec::new();
+        let mut field_stack = Vec::new();
+
+        for model in self.models.values() {
+            if model.is_embedded() {
+                continue;
+            }
+            self.visit_eager_load_graph(
+                model.id(),
+                &mut visited,
+                &mut model_stack,
+                &mut field_stack,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_eager_load_graph(
+        &self,
+        model_id: ModelId,
+        visited: &mut HashSet<ModelId>,
+        model_stack: &mut Vec<ModelId>,
+        field_stack: &mut Vec<FieldId>,
+    ) -> crate::Result<()> {
+        if model_stack.contains(&model_id) {
+            return Ok(());
+        }
+
+        if !visited.insert(model_id) {
+            return Ok(());
+        }
+
+        model_stack.push(model_id);
+
+        let model = self.models[&model_id].as_root_unwrap();
+        for field in &model.fields {
+            let Some(target) = eager_relation_target(field) else {
+                continue;
+            };
+
+            if let Some(pos) = model_stack.iter().position(|id| *id == target) {
+                let mut cycle = field_stack[pos..].to_vec();
+                cycle.push(field.id);
+                return Err(crate::Error::invalid_schema(format!(
+                    "eager relation cycle detected: {}",
+                    self.format_eager_load_cycle(&cycle, target)
+                )));
+            }
+
+            field_stack.push(field.id);
+            self.visit_eager_load_graph(target, visited, model_stack, field_stack)?;
+            field_stack.pop();
+        }
+
+        model_stack.pop();
+        Ok(())
+    }
+
+    fn format_eager_load_cycle(&self, fields: &[FieldId], target: ModelId) -> String {
+        let mut parts = Vec::new();
+        for field_id in fields {
+            let model = &self.models[&field_id.model];
+            let field = &model.as_root_unwrap().fields[field_id.index];
+            parts.push(format!(
+                "{}::{}",
+                model.name().upper_camel_case(),
+                field.name.app_unwrap()
+            ));
+        }
+        parts.push(self.models[&target].name().upper_camel_case());
+        parts.join(" -> ")
     }
 
     /// Go through all relations and link them to their pairs
@@ -494,4 +572,12 @@ impl Builder {
             ))),
         }
     }
+}
+
+fn eager_relation_target(field: &Field) -> Option<ModelId> {
+    if field.deferred {
+        return None;
+    }
+
+    field.relation_target_id()
 }
