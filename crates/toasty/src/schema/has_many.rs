@@ -1,15 +1,29 @@
-use super::{Deferred, HasManyField, Load, Register, Relation};
+use super::{Deferred, HasManyField, Load, Model, Register};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
 use toasty_core::stmt;
 
-impl<T: Relation> HasManyField for Deferred<Vec<T>> {
-    type Target = T;
+impl<M: Model> HasManyField for Vec<M> {
+    type Model = M;
 
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
+    const DEFERRED: bool = false;
+
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
+        <Self as Load>::reload(target, value)
     }
+
+    fn has_many_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<stmt::Path>,
+    ) -> FieldTy {
+        has_many_field_ty::<M>(singular, pair, via)
+    }
+}
+
+impl<M: Model> HasManyField for Deferred<Vec<M>> {
+    type Model = M;
 
     const DEFERRED: bool = true;
 
@@ -23,38 +37,16 @@ impl<T: Relation> HasManyField for Deferred<Vec<T>> {
         pair: Option<FieldId>,
         via: Option<stmt::Path>,
     ) -> FieldTy {
-        has_many_field_ty::<T>(singular, pair, via)
+        has_many_field_ty::<M>(singular, pair, via)
     }
 }
 
-impl<T: Relation> HasManyField for Vec<T> {
-    type Target = T;
-
-    fn nullable() -> bool {
-        <T as Relation>::nullable()
-    }
-
-    const DEFERRED: bool = false;
-
-    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
-        <Self as Load>::reload(target, value)
-    }
-
-    fn has_many_field_ty(
-        singular: Name,
-        pair: Option<FieldId>,
-        via: Option<stmt::Path>,
-    ) -> FieldTy {
-        has_many_field_ty::<T>(singular, pair, via)
-    }
-}
-
-fn has_many_field_ty<T: Relation>(
+fn has_many_field_ty<M: Model>(
     singular: Name,
     pair: Option<FieldId>,
     via: Option<stmt::Path>,
 ) -> FieldTy {
-    let target = <T::Model as Register>::id();
+    let target = <M as Register>::id();
     let expr_ty = stmt::Type::List(Box::new(stmt::Type::Model(target)));
     let cardinality = app::Cardinality::Many { singular };
 

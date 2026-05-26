@@ -134,6 +134,11 @@ impl Expand<'_> {
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
+                type Many = Many;
+                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
+                type One = One;
+                type OneField<__Origin> = #field_struct_ident<__Origin>;
+                type OptionOne = OptionOne;
 
                 const CREATE_META: #toasty::CreateMeta = #toasty::CreateMeta {
                     fields: &[ #create_meta_fields ],
@@ -144,26 +149,14 @@ impl Expand<'_> {
                     #field_struct_ident::from_path(path)
                 }
 
-                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
-                    #find_by_primary_key_body
-                }
-            }
-
-            impl #toasty::Relation for #model_ident {
-                type Model = #model_ident;
-                type Expr = #model_ident;
-                type Query = #query_struct_ident;
-                type Create = #create_struct_ident;
-                type Many = Many;
-                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type One = One;
-                type OneField<__Origin> = #field_struct_ident<__Origin>;
-                type OptionOne = OptionOne;
-
                 fn new_many_field<__Origin>(
-                    path: #toasty::Path<__Origin, #toasty::List<Self::Model>>,
+                    path: #toasty::Path<__Origin, #toasty::List<Self>>,
                 ) -> #field_list_struct_ident<__Origin> {
                     #field_list_struct_ident::from_path(path)
+                }
+
+                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
+                    #find_by_primary_key_body
                 }
 
                 #field_name_to_id

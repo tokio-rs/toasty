@@ -1,5 +1,4 @@
-use super::{Load, Relation};
-use toasty_core::schema::app::FieldId;
+use super::Load;
 use toasty_core::stmt::{self, Value};
 
 impl<T: Load> Load for Option<T> {
@@ -34,31 +33,5 @@ impl<T: Load> Load for Option<T> {
     fn reload(target: &mut Self::Output, value: Value) -> Result<(), crate::Error> {
         *target = Self::load(value)?;
         Ok(())
-    }
-}
-
-impl<T: Relation> Relation for Option<T> {
-    type Model = T::Model;
-    type Expr = Option<T::Model>;
-    type Query = T::Query;
-    type Create = T::Create;
-    type Many = T::Many;
-    type ManyField<__Origin> = T::ManyField<__Origin>;
-    type One = T::OptionOne;
-    type OneField<__Origin> = T::OneField<__Origin>;
-    type OptionOne = T::OptionOne;
-
-    fn new_many_field<__Origin>(
-        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
-    ) -> Self::ManyField<__Origin> {
-        T::new_many_field(path)
-    }
-
-    fn field_name_to_id(name: &str) -> FieldId {
-        T::field_name_to_id(name)
-    }
-
-    fn nullable() -> bool {
-        true
     }
 }

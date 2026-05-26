@@ -15,7 +15,7 @@ pub use crate::{
     schema::create_meta::{assert_create_fields, const_contains},
     schema::{
         Auto, BelongsToField, CreateField, CreateMeta, Deferred, DiscoverItem, Embed, Field,
-        HasManyField, HasOneField, Load, Model, Register, Relation, Scope, ValidateCreate,
+        HasManyField, HasOneField, Load, Model, Register, Scope, ValidateCreate,
         generate_unique_id,
     },
     stmt::CreateMany,

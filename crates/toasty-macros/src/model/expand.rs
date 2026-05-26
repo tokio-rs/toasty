@@ -407,7 +407,7 @@ impl Expand<'_> {
     }
 
     /// Generates a field accessor method for a `BelongsTo` or `HasOne`
-    /// relation using the target's `Relation::OneField`.
+    /// relation using the target model's `Model::OneField`.
     fn expand_one_relation_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -421,8 +421,8 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Relation>::OneField<__Origin> {
-                <<#ty as #field_trait>::Target as #toasty::Relation>::OneField::from_path(
+            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin> {
+                <<<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin>>::from_path(
                     self.path().chain(
                         #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )

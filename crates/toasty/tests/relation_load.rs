@@ -1,7 +1,6 @@
 use toasty::Deferred;
 use toasty::schema::{
     self, BelongsToField, CreateMeta, HasManyField, HasOneField, Load, Model, ModelSet, Register,
-    Relation,
 };
 use toasty::stmt::{Expr, Insert, IntoExpr, IntoInsert, Path};
 use toasty_core::stmt::{self, Value};
@@ -54,6 +53,11 @@ impl Model for Dummy {
     type UpdateQuery = ();
     type Path<Origin> = Path<Origin, Self>;
     type PrimaryKey = i64;
+    type Many = ();
+    type ManyField<Origin> = ();
+    type One = ();
+    type OneField<Origin> = ();
+    type OptionOne = ();
 
     const CREATE_META: CreateMeta = CreateMeta {
         fields: &[],
@@ -62,6 +66,12 @@ impl Model for Dummy {
 
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
+    }
+
+    fn new_many_field<Origin>(_path: Path<Origin, toasty::stmt::List<Self>>) {}
+
+    fn field_name_to_id(_name: &str) -> schema::app::FieldId {
+        panic!("not needed for relation lazy-slot decode tests")
     }
 
     fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query {}
@@ -85,37 +95,22 @@ impl IntoExpr<Dummy> for DummyCreate {
     }
 }
 
-impl Relation for Dummy {
-    type Model = Dummy;
-    type Expr = Dummy;
-    type Query = ();
-    type Create = DummyCreate;
-    type Many = ();
-    type ManyField<Origin> = ();
-    type One = ();
-    type OneField<Origin> = ();
-    type OptionOne = ();
-
-    fn new_many_field<Origin>(_path: Path<Origin, toasty::stmt::List<Self::Model>>) {}
-
-    fn field_name_to_id(_name: &str) -> schema::app::FieldId {
-        panic!("not needed for relation lazy-slot decode tests")
-    }
-}
-
-fn assert_has_many_field<F: HasManyField<Target = Dummy>>() {}
-
-fn assert_has_one_field<F: HasOneField<Target = Target>, Target: Relation>() {}
-
-fn assert_belongs_to_field<F: BelongsToField<Target = Target>, Target: Relation>() {}
+fn assert_has_many_field<F: HasManyField<Model = Dummy>>() {}
+fn assert_has_one_field<F: HasOneField<Model = Dummy>>() {}
+fn assert_belongs_to_field<F: BelongsToField<Model = Dummy>>() {}
 
 #[test]
 fn deferred_relation_field_shapes_are_supported() {
+    assert_has_many_field::<Vec<Dummy>>();
     assert_has_many_field::<Deferred<Vec<Dummy>>>();
 
-    assert_has_one_field::<Deferred<Dummy>, Dummy>();
-    assert_has_one_field::<Deferred<Option<Dummy>>, Option<Dummy>>();
+    assert_has_one_field::<Dummy>();
+    assert_has_one_field::<Option<Dummy>>();
+    assert_has_one_field::<Deferred<Dummy>>();
+    assert_has_one_field::<Deferred<Option<Dummy>>>();
 
-    assert_belongs_to_field::<Deferred<Dummy>, Dummy>();
-    assert_belongs_to_field::<Deferred<Option<Dummy>>, Option<Dummy>>();
+    assert_belongs_to_field::<Dummy>();
+    assert_belongs_to_field::<Option<Dummy>>();
+    assert_belongs_to_field::<Deferred<Dummy>>();
+    assert_belongs_to_field::<Deferred<Option<Dummy>>>();
 }

@@ -234,8 +234,8 @@ impl Expand<'_> {
                 let field_offset = util::int(field.id);
 
                 Some(quote! {
-                    #vis fn #field_ident(self) -> <<#ty as #field_trait>::Target as #toasty::Relation>::Many {
-                        <<#ty as #field_trait>::Target as #toasty::Relation>::Many::from_stmt(
+                    #vis fn #field_ident(self) -> <<#ty as #field_trait>::Model as #toasty::Model>::Many {
+                        <<<#ty as #field_trait>::Model as #toasty::Model>::Many>::from_stmt(
                             self.stmt.chain_field(#field_offset)
                         )
                     }
@@ -270,7 +270,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target_ty = quote!(<#ty as #toasty::BelongsToField>::Target);
+        let target_ty = quote!(<#ty as #toasty::BelongsToField>::Model);
 
         let operands = rel.foreign_key.iter().map(|fk_field| {
             let source = &self.model.fields[fk_field.source];
@@ -285,7 +285,7 @@ impl Expand<'_> {
             quote! {
                 #toasty::Field::key_constraint(
                     &self.#source_field_ident,
-                    <#target_ty as #toasty::Relation>::Model::fields().#target_field().into(),
+                    #target_ty::fields().#target_field().into(),
                 )
             }
         });
@@ -311,7 +311,7 @@ impl Expand<'_> {
         );
 
         quote! {
-            #vis fn #field_ident(&self) -> <#target_ty as #toasty::Relation>::One {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::BelongsToField>::One {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -319,8 +319,8 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#target_ty as #toasty::Relation>::One::from_stmt(
-                        <#target_ty as #toasty::Relation>::Model::filter(#filter).into_statement().into_query().unwrap()
+                    <<#ty as #toasty::BelongsToField>::One>::from_stmt(
+                        #target_ty::filter(#filter).into_statement().into_query().unwrap()
                     )
                 }
             }
@@ -340,7 +340,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::HasManyField>::Target);
+        let target = quote!(<#ty as #toasty::HasManyField>::Model);
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -364,7 +364,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#target as #toasty::Relation>::Many {
+            #vis fn #field_ident(&self) -> <#target as #toasty::Model>::Many {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -374,7 +374,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#target as #toasty::Relation>::Many::from_stmt(
+                    <<#target as #toasty::Model>::Many>::from_stmt(
                         #toasty::stmt::Association::many(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()
@@ -390,7 +390,6 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::HasOneField>::Target);
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -414,7 +413,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#target as #toasty::Relation>::One {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::HasOneField>::One {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -424,7 +423,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <#target as #toasty::Relation>::One::from_stmt(
+                    <<#ty as #toasty::HasOneField>::One>::from_stmt(
                         #toasty::stmt::Association::one(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()
@@ -501,8 +500,8 @@ impl Expand<'_> {
                 fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: &#verify_t) {
                 }
 
-                let instance = load::<<<#ty as #field_trait>::Target as #toasty::Relation>::Model>();
-                verify::<_, <<#ty as #field_trait>::Target as #toasty::Relation>::Model>(instance.#verify_pair_belongs_to_exists_for_field());
+                let instance = load::<<#ty as #field_trait>::Model>();
+                verify::<_, <#ty as #field_trait>::Model>(instance.#verify_pair_belongs_to_exists_for_field());
             }
         }
     }
