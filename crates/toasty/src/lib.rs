@@ -143,7 +143,7 @@ pub use stmt::Statement;
 /// Raw SQL execution helpers.
 pub mod sql;
 
-pub use toasty_macros::{Embed, Model, create, query};
+pub use toasty_macros::{Embed, Model, create, query, update};
 
 pub use toasty_core::{Error, Result, schema::app::ModelSet};
 

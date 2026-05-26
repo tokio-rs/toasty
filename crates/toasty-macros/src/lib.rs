@@ -11,6 +11,7 @@ extern crate proc_macro;
 mod create;
 mod model;
 mod query;
+mod update;
 
 use proc_macro::TokenStream;
 
@@ -1905,6 +1906,224 @@ pub fn query(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn create(input: TokenStream) -> TokenStream {
     match create::generate(input.into()) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// Expands struct-literal syntax into update-builder method chains. Returns
+/// the same builder `target.update()` would return — call
+/// `.exec(&mut db).await?` to execute the update.
+///
+/// # Syntax
+///
+/// ```ignore
+/// toasty::update!(target { field: value, ... })
+/// ```
+///
+/// `target` is any expression that has an `.update()` method — a model
+/// instance, a query builder, or a scoped relation accessor.
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User, id: i64) -> toasty::Result<()> {
+/// // Instance target
+/// toasty::update!(user { name: "Alice Smith" })
+///     .exec(&mut db).await?;
+///
+/// // Query target
+/// toasty::update!(User::filter_by_id(id) { name: "Bob" })
+///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Instance targets do not consume the binding — the macro expands to
+/// `user.update()`, which auto-borrows `&mut user` the same way the
+/// chain form does. `user` stays owned after the macro returns.
+///
+/// # Field shapes
+///
+/// ## Explicit
+///
+/// `field: expr` sets the field to `expr`:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     email: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     name: "Alice Smith",
+///     email: "alice.smith@example.com",
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// `expr` is any Rust expression. For collection fields, pass a
+/// `toasty::stmt::*` combinator (e.g. `stmt::push("x")`,
+/// `stmt::apply([...])`) for non-set semantics.
+///
+/// ## Shorthand
+///
+/// `field` alone is equivalent to `field: field`, matching Rust struct
+/// literal shorthand:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// let name = "Alice Smith";
+/// toasty::update!(user { name }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Method shorthand
+///
+/// `field.combinator(args)` is shorthand for
+/// `field: toasty::stmt::combinator(args)`. Any function in `toasty::stmt`
+/// works; missing functions surface as ordinary "no function" errors:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct Article {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     tags: Vec<String>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut article: Article) -> toasty::Result<()> {
+/// // tags.push("rust") expands to tags: stmt::push("rust")
+/// toasty::update!(article { tags.push("rust") })
+///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// The shorthand is one method call deep. For chained expressions, use
+/// the explicit `field: expr` form.
+///
+/// ## Embedded patch
+///
+/// `field: { sub: val, ... }` partially updates an embedded struct
+/// field, leaving sub-fields not listed unchanged. Expands to
+/// `stmt::apply([stmt::patch(...), ...])`:
+///
+/// ```no_run
+/// # #[derive(toasty::Embed)]
+/// # struct Metadata { version: i64, status: String }
+/// # #[derive(toasty::Model)]
+/// # struct Document {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     meta: Metadata,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut doc: Document) -> toasty::Result<()> {
+/// toasty::update!(doc {
+///     meta: { version: 2, status: "published" },
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Sub-fields nest to arbitrary depth. To replace an embedded value
+/// wholesale, pass the typed value directly: `meta: Metadata { ... }`.
+///
+/// ## Has-many insert
+///
+/// `field: [{ ... }, ...]` inserts new children of a has-many relation.
+/// Each `{ ... }` becomes a create builder wrapped in
+/// `stmt::insert(...)`; the whole list is wrapped in
+/// `stmt::apply([...])`:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     #[has_many]
+/// #     todos: toasty::Deferred<Vec<Todo>>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     todos: [{ title: "buy milk" }, { title: "walk dog" }],
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Items can also be plain expressions, mixed in with builder
+/// shorthands — useful for combining inserts and removals:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     todos: toasty::Deferred<Vec<Todo>>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User, old: Todo) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     todos: [{ title: "new" }, toasty::stmt::remove(&old)],
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Field validation
+///
+/// The macro emits a method call per named field on the update builder.
+/// A field name the model does not expose for update fails with the
+/// compiler's standard "no method named …" error at the macro call
+/// site.
+#[proc_macro]
+pub fn update(input: TokenStream) -> TokenStream {
+    match update::generate(input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }
