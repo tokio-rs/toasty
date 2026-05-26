@@ -56,6 +56,48 @@ jobs:
         - name: cargo clippy
           run: cargo clippy --workspace --all-features
 
+    feature-combinations:
+        needs: check
+        name: Check feature combinations (${{ matrix.package }})
+        runs-on: ubuntu-latest
+        strategy:
+          fail-fast: false
+          matrix:
+            include:
+              # Top-level crates have enough independent features that a full
+              # powerset would be noisy in CI. Pairwise coverage catches missing
+              # feature wiring without running hundreds of checks per package.
+              - package: toasty
+                extra_args: --depth 2
+              - package: toasty-core
+                extra_args: ""
+              - package: toasty-sql
+                extra_args: ""
+              - package: toasty-driver-mysql
+                extra_args: ""
+              - package: toasty-driver-postgresql
+                extra_args: ""
+              - package: example-composite-key
+                extra_args: ""
+              - package: example-hello-toasty
+                extra_args: ""
+              - package: example-todo-with-cli
+                extra_args: ""
+              - package: example-user-has-one-profile
+                extra_args: ""
+        steps:
+        - uses: actions/checkout@v6
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+        - name: Install cargo-hack
+          run: cargo install cargo-hack --locked
+        - name: cargo hack check --feature-powerset
+          run: cargo hack check --package "${{ matrix.package }}" --feature-powerset ${{ matrix.extra_args }}
+
     msrv:
         needs: check
         name: Check MSRV
@@ -219,18 +261,3 @@ jobs:
           run: cargo test --workspace
         - name: Run examples
           run: scripts/gen-examples run
-
-    examples:
-        needs: check
-        name: Build the `hello-toasty` example with each feature
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - run: cargo install cargo-hack
-        - run: cd examples/hello-toasty && cargo hack build --each-feature
