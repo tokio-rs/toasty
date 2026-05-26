@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.6.1...toasty-macros-v0.7.0) - 2026-05-26
+
+### Added
+
+- reject create() on multi-step relation scopes at compile time ([#978])
+- [**breaking**] remove singular has-many create-builder methods ([#977])
+- [**breaking**] remove the `#[deferred]` field attribute in favor of `Deferred<T>` ([#961])
+- support eager relation fields ([#958])
+- support `.include()` of multi-step `via` relations ([#946])
+- add Turso driver with TransactionMode-aware concurrent writes ([#938])
+- allow #[version] on tuple-newtype embeds of u64 ([#930])
+- [**breaking**] replace `#[serialize(json)]` with `toasty::Json<T>` wrapper ([#926])
+- expose primary-key type via Model::PrimaryKey ([#921])
+- add multi-step (via) has_many and has_one relations ([#890])
+
+### Fixed
+
+- respect `pair` attribute in `#[has_one]` macro ([#927])
+
+### Changed
+
+- [**breaking**] merge one relation field traits ([#971])
+- [**breaking**] delete Relation trait, tighten relation field shapes ([#967])
+- [**breaking**] require Deferred relation fields ([#954])
+
+[#890]: https://github.com/tokio-rs/toasty/pull/890
+[#921]: https://github.com/tokio-rs/toasty/pull/921
+[#926]: https://github.com/tokio-rs/toasty/pull/926
+[#927]: https://github.com/tokio-rs/toasty/pull/927
+[#930]: https://github.com/tokio-rs/toasty/pull/930
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#946]: https://github.com/tokio-rs/toasty/pull/946
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#958]: https://github.com/tokio-rs/toasty/pull/958
+[#961]: https://github.com/tokio-rs/toasty/pull/961
+[#967]: https://github.com/tokio-rs/toasty/pull/967
+[#971]: https://github.com/tokio-rs/toasty/pull/971
+[#977]: https://github.com/tokio-rs/toasty/pull/977
+[#978]: https://github.com/tokio-rs/toasty/pull/978
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.6.0...toasty-macros-v0.6.1) - 2026-05-16
 
 ### Added

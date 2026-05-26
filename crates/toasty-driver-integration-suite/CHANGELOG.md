@@ -7,6 +7,51 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.6.1...toasty-driver-integration-suite-v0.7.0) - 2026-05-26
+
+### Added
+
+- [**breaking**] Remove singular has-many create-builder methods ([#977])
+- Add raw SQL execution API ([#965])
+- [**breaking**] Remove `#[deferred]` field attribute in favor of `Deferred<T>` ([#961])
+- Support eager relation fields ([#958])
+- Support `.include()` of multi-step `via` relations ([#946])
+- Add Turso driver with TransactionMode-aware concurrent writes ([#938])
+- Add TransactionMode for SQLite lock-acquisition control ([#931])
+- Allow `#[version]` on tuple-newtype embeds of u64 ([#930])
+- [**breaking**] Replace `#[serialize(json)]` with `toasty::Json<T>` wrapper ([#926])
+- Expose primary-key type via Model::PrimaryKey ([#921])
+- Add multi-step (via) has_many and has_one relations ([#890])
+- [**breaking**] Require Deferred relation fields ([#954])
+- [**breaking**] Move schema diff types to `schema::diff` module ([#929])
+
+### Fixed
+
+- Cap SQLite auto-increment integer storage at 4 bytes ([#969])
+- Fix ExprOr handling in expression evaluation ([#959])
+- DynamoDB: omit empty ExpressionAttributeValues on IS NULL / IS NOT NULL scans ([#940])
+- [**breaking**] Scope `.ilike()` operator to PostgreSQL and document operator pass-through ([#937])
+- Respect `pair` attribute in `#[has_one]` macro ([#927])
+
+[#890]: https://github.com/tokio-rs/toasty/pull/890
+[#921]: https://github.com/tokio-rs/toasty/pull/921
+[#926]: https://github.com/tokio-rs/toasty/pull/926
+[#927]: https://github.com/tokio-rs/toasty/pull/927
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#930]: https://github.com/tokio-rs/toasty/pull/930
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#937]: https://github.com/tokio-rs/toasty/pull/937
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#940]: https://github.com/tokio-rs/toasty/pull/940
+[#946]: https://github.com/tokio-rs/toasty/pull/946
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#958]: https://github.com/tokio-rs/toasty/pull/958
+[#959]: https://github.com/tokio-rs/toasty/pull/959
+[#961]: https://github.com/tokio-rs/toasty/pull/961
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#969]: https://github.com/tokio-rs/toasty/pull/969
+[#977]: https://github.com/tokio-rs/toasty/pull/977
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.6.0...toasty-driver-integration-suite-v0.6.1) - 2026-05-16
 
 ### Added

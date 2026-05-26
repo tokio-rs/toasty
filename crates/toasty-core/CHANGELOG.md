@@ -7,6 +7,46 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.1...toasty-core-v0.7.0) - 2026-05-26
+
+### Added
+
+- Raw SQL execution ([#965])
+- [**breaking**] Relation fields use `Deferred<T>` type instead of `#[deferred]` attribute ([#961])
+- Eager relation fields ([#958])
+- Multi-step `via` relations with `.include()` support ([#946])
+- Migration core API ([#944])
+- Turso driver ([#938])
+- SQLite TransactionMode ([#931])
+- SELECT DISTINCT queries ([#934])
+- INNER joins ([#922])
+- Multi-step has_many and has_one relations ([#890])
+
+### Fixed
+
+- SQLite auto-increment storage capped at 4 bytes ([#969])
+- [**breaking**] `.ilike()` operator restricted to PostgreSQL ([#937])
+
+### Changed
+
+- [**breaking**] Merged has relation field variants ([#964])
+- [**breaking**] Schema diff types moved to `schema::diff` ([#929])
+
+[#890]: https://github.com/tokio-rs/toasty/pull/890
+[#922]: https://github.com/tokio-rs/toasty/pull/922
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#934]: https://github.com/tokio-rs/toasty/pull/934
+[#937]: https://github.com/tokio-rs/toasty/pull/937
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#944]: https://github.com/tokio-rs/toasty/pull/944
+[#946]: https://github.com/tokio-rs/toasty/pull/946
+[#958]: https://github.com/tokio-rs/toasty/pull/958
+[#961]: https://github.com/tokio-rs/toasty/pull/961
+[#964]: https://github.com/tokio-rs/toasty/pull/964
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#969]: https://github.com/tokio-rs/toasty/pull/969
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.0...toasty-core-v0.6.1) - 2026-05-16
 
 ### Added

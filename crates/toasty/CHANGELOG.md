@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.6.1...toasty-v0.7.0) - 2026-05-26
+
+### Added
+
+- Raw SQL execution API ([#965])
+- Eager relation fields ([#958])
+- Support for `.include()` of multi-step `via` relations ([#946])
+- Migration core exposed from toasty ([#944])
+- Turso driver with TransactionMode-aware concurrent writes ([#938])
+- TransactionMode for SQLite lock-acquisition control ([#931])
+- `#[version]` support on tuple-newtype embeds of u64 ([#930])
+- `SELECT DISTINCT` serialization in SQL queries ([#934])
+- Primary-key type exposed via `Model::PrimaryKey` ([#921])
+- Multi-step (via) has-many and has-one relations ([#890])
+- Non-panicking `try_get` method on relation types ([#918])
+
+### Changed
+
+- [**breaking**] `toasty::Json<T>` wrapper replaces `#[serialize(json)]` attribute ([#926])
+- [**breaking**] Migration types consolidated in toasty crate; `db::diff` API reorganized ([#928])
+- [**breaking**] Schema diff types moved to `schema::diff` module ([#929])
+- [**breaking**] `.ilike()` scoped to PostgreSQL; operator pass-through documented ([#937])
+- [**breaking**] Relation fields now require `Deferred<T>` wrapper (replacing optional `#[deferred]` attribute) ([#961], [#954])
+- [**breaking**] Merged has relation field variants ([#964])
+- [**breaking**] Deleted `Relation` trait and tightened relation field shapes ([#967])
+- [**breaking**] Merged relation field traits ([#971])
+- [**breaking**] `create()` rejected at compile time on multi-step relation scopes ([#978])
+
+### Fixed
+
+- Handle `ExprOr` expressions in eval verify logic ([#959])
+
+[#890]: https://github.com/tokio-rs/toasty/pull/890
+[#918]: https://github.com/tokio-rs/toasty/pull/918
+[#921]: https://github.com/tokio-rs/toasty/pull/921
+[#926]: https://github.com/tokio-rs/toasty/pull/926
+[#928]: https://github.com/tokio-rs/toasty/pull/928
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#930]: https://github.com/tokio-rs/toasty/pull/930
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#934]: https://github.com/tokio-rs/toasty/pull/934
+[#937]: https://github.com/tokio-rs/toasty/pull/937
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#944]: https://github.com/tokio-rs/toasty/pull/944
+[#946]: https://github.com/tokio-rs/toasty/pull/946
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#958]: https://github.com/tokio-rs/toasty/pull/958
+[#959]: https://github.com/tokio-rs/toasty/pull/959
+[#961]: https://github.com/tokio-rs/toasty/pull/961
+[#964]: https://github.com/tokio-rs/toasty/pull/964
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#967]: https://github.com/tokio-rs/toasty/pull/967
+[#971]: https://github.com/tokio-rs/toasty/pull/971
+[#978]: https://github.com/tokio-rs/toasty/pull/978
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-v0.6.0...toasty-v0.6.1) - 2026-05-16
 
 ### Added

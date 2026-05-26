@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.6.1...toasty-cli-v0.7.0) - 2026-05-26
+
+### Added
+
+- Expose migration core from toasty ([#944])
+- Turso driver with TransactionMode-aware concurrent writes ([#938])
+
+### Changed
+
+- [**breaking**] Require Deferred relation fields ([#954])
+- [**breaking**] Move schema diff types to `schema::diff` ([#929])
+
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#944]: https://github.com/tokio-rs/toasty/pull/944
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.6.0...toasty-cli-v0.6.1) - 2026-05-16
 
 - Internal improvements only.

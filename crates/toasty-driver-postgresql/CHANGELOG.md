@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.6.1...toasty-driver-postgresql-v0.7.0) - 2026-05-26
+
+### Added
+
+- Raw SQL execution API ([#965])
+- Turso driver with TransactionMode-aware concurrent writes ([#938])
+- TransactionMode for SQLite lock-acquisition control ([#931])
+
+### Changed
+
+- [**breaking**] Deferred relation fields are now required ([#954])
+- [**breaking**] Schema diff types moved to `schema::diff` module ([#929])
+
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.6.0...toasty-driver-postgresql-v0.6.1) - 2026-05-16
 
 - Internal improvements only.

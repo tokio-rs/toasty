@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.6.1...toasty-sql-v0.7.0) - 2026-05-26
+
+### Added
+
+- Raw SQL execution API ([#965])
+- Turso driver with TransactionMode-aware concurrent writes ([#938])
+- TransactionMode for SQLite lock-acquisition control ([#931])
+- `SELECT DISTINCT` query support ([#934])
+- INNER join variant ([#922])
+
+### Fixed
+
+- Cap SQLite auto-increment integer storage at 4 bytes ([#969])
+- [**breaking**] Scope `.ilike()` to PostgreSQL ([#937])
+
+### Changed
+
+- [**breaking**] Require Deferred relation fields ([#954])
+- [**breaking**] Move schema diff types to `schema::diff` ([#929])
+
+[#922]: https://github.com/tokio-rs/toasty/pull/922
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#934]: https://github.com/tokio-rs/toasty/pull/934
+[#937]: https://github.com/tokio-rs/toasty/pull/937
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#969]: https://github.com/tokio-rs/toasty/pull/969
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.6.0...toasty-sql-v0.6.1) - 2026-05-16
 
 - Internal improvements only
