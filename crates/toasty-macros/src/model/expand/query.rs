@@ -162,7 +162,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::BelongsToField>::Model);
+        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
@@ -182,7 +182,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::HasManyField>::Model);
+        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
@@ -202,7 +202,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::HasOneField>::Model);
+        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 

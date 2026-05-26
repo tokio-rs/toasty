@@ -1,6 +1,6 @@
 use toasty::Deferred;
 use toasty::schema::{
-    self, BelongsToField, CreateMeta, HasManyField, HasOneField, Load, Model, ModelSet, Register,
+    self, CreateMeta, Load, Model, ModelSet, Register, RelationManyField, RelationOneField,
 };
 use toasty::stmt::{Expr, Insert, IntoExpr, IntoInsert, Path};
 use toasty_core::stmt::{self, Value};
@@ -95,9 +95,9 @@ impl IntoExpr<Dummy> for DummyCreate {
     }
 }
 
-fn assert_has_many_field<F: HasManyField<Model = Dummy>>() {}
-fn assert_has_one_field<F: HasOneField<Model = Dummy>>() {}
-fn assert_belongs_to_field<F: BelongsToField<Model = Dummy>>() {}
+fn assert_has_many_field<F: RelationManyField<Model = Dummy>>() {}
+fn assert_has_one_field<F: RelationOneField<Model = Dummy>>() {}
+fn assert_belongs_to_field<F: RelationOneField<Model = Dummy>>() {}
 
 #[test]
 fn deferred_relation_field_shapes_are_supported() {

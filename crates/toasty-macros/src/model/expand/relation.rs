@@ -225,9 +225,9 @@ impl Expand<'_> {
             .iter()
             .filter_map(|field| {
                 let (ty, field_trait) = match &field.ty {
-                    FieldTy::BelongsTo(rel) => (&rel.ty, quote!(#toasty::BelongsToField)),
-                    FieldTy::HasMany(rel) => (&rel.ty, quote!(#toasty::HasManyField)),
-                    FieldTy::HasOne(rel) => (&rel.ty, quote!(#toasty::HasOneField)),
+                    FieldTy::BelongsTo(rel) => (&rel.ty, quote!(#toasty::RelationOneField)),
+                    FieldTy::HasMany(rel) => (&rel.ty, quote!(#toasty::RelationManyField)),
+                    FieldTy::HasOne(rel) => (&rel.ty, quote!(#toasty::RelationOneField)),
                     FieldTy::Primitive(_) => return None,
                 };
                 let field_ident = &field.name.ident;
@@ -270,7 +270,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target_ty = quote!(<#ty as #toasty::BelongsToField>::Model);
+        let target_ty = quote!(<#ty as #toasty::RelationOneField>::Model);
 
         let operands = rel.foreign_key.iter().map(|fk_field| {
             let source = &self.model.fields[fk_field.source];
@@ -311,7 +311,7 @@ impl Expand<'_> {
         );
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::BelongsToField>::One {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::One {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -319,7 +319,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <<#ty as #toasty::BelongsToField>::One>::from_stmt(
+                    <<#ty as #toasty::RelationOneField>::One>::from_stmt(
                         #target_ty::filter(#filter).into_statement().into_query().unwrap()
                     )
                 }
@@ -340,7 +340,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::HasManyField>::Model);
+        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -356,7 +356,7 @@ impl Expand<'_> {
                 pair_ident: &pair_ident,
                 field_ident,
                 ty,
-                field_trait: quote!(#toasty::HasManyField),
+                field_trait: quote!(#toasty::RelationManyField),
                 rel_span: rel.span,
                 relation_kind: "HasMany",
                 label: "Has many associations require the target to include a back-reference",
@@ -405,7 +405,7 @@ impl Expand<'_> {
                 pair_ident: &pair_ident,
                 field_ident,
                 ty,
-                field_trait: quote!(#toasty::HasOneField),
+                field_trait: quote!(#toasty::RelationOneField),
                 rel_span: rel.span,
                 relation_kind: "HasOne",
                 label: "Has one associations require the target to include a back-reference",
@@ -413,7 +413,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::HasOneField>::One {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::One {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -423,7 +423,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <<#ty as #toasty::HasOneField>::One>::from_stmt(
+                    <<#ty as #toasty::RelationOneField>::One>::from_stmt(
                         #toasty::stmt::Association::one(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()

@@ -70,7 +70,7 @@ impl Expand<'_> {
                     BelongsTo(rel) => {
                         self.expand_one_relation_field_method(
                             field_ident,
-                            quote!(#toasty::BelongsToField),
+                            quote!(#toasty::RelationOneField),
                             &rel.ty,
                             &field_offset,
                         )
@@ -78,7 +78,7 @@ impl Expand<'_> {
                     HasOne(rel) => {
                         self.expand_one_relation_field_method(
                             field_ident,
-                            quote!(#toasty::HasOneField),
+                            quote!(#toasty::RelationOneField),
                             &rel.ty,
                             &field_offset,
                         )
@@ -91,8 +91,8 @@ impl Expand<'_> {
                         };
 
                         quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> <<#ty as #toasty::HasManyField>::Model as #toasty::Model>::ManyField<__Origin> {
-                                <<<#ty as #toasty::HasManyField>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
+                            #vis fn #field_ident(&self) -> <<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin> {
+                                <<<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
                             }
                         }
                     }
@@ -178,7 +178,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
                         self.expand_list_relation_field_method(
                             field_ident,
-                            quote!(#toasty::BelongsToField),
+                            quote!(#toasty::RelationOneField),
                             ty,
                             &field_offset,
                         )
@@ -187,7 +187,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
                         self.expand_list_relation_field_method(
                             field_ident,
-                            quote!(#toasty::HasOneField),
+                            quote!(#toasty::RelationOneField),
                             ty,
                             &field_offset,
                         )
@@ -196,7 +196,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
                         self.expand_list_relation_field_method(
                             field_ident,
-                            quote!(#toasty::HasManyField),
+                            quote!(#toasty::RelationManyField),
                             ty,
                             &field_offset,
                         )

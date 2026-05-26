@@ -14,9 +14,8 @@ pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::create_meta::{assert_create_fields, const_contains},
     schema::{
-        Auto, BelongsToField, CreateField, CreateMeta, Deferred, DiscoverItem, Embed, Field,
-        HasManyField, HasOneField, Load, Model, Register, Scope, ValidateCreate,
-        generate_unique_id,
+        Auto, CreateField, CreateMeta, Deferred, DiscoverItem, Embed, Field, Load, Model, Register,
+        RelationManyField, RelationOneField, Scope, ValidateCreate, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
