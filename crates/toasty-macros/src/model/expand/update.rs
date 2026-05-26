@@ -66,35 +66,51 @@ impl Expand<'_> {
                 }
             }
             FieldTy::HasMany(rel) => {
-                let ty = &rel.ty;
-                let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+                if rel.via.is_some() {
+                    // Relation setters mutate membership through `Assign`
+                    // (set/insert/remove/apply). A via field has no direct
+                    // pair FK, and `Assignment` does not preserve enough type
+                    // information to reject only insert/create while accepting
+                    // narrower operations like remove.
+                    TokenStream::new()
+                } else {
+                    let ty = &rel.ty;
+                    let target = quote!(<#ty as #toasty::RelationManyField>::Model);
 
-                quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> Self {
-                        self.#set_field_ident(#field_ident);
-                        self
-                    }
+                    quote! {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> Self {
+                            self.#set_field_ident(#field_ident);
+                            self
+                        }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> &mut Self {
-                        let projection = #projection;
-                        #field_ident.assign(&mut self.assignments, projection);
-                        self
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> &mut Self {
+                            let projection = #projection;
+                            #field_ident.assign(&mut self.assignments, projection);
+                            self
+                        }
                     }
                 }
             }
             FieldTy::HasOne(rel) => {
-                let ty = &rel.ty;
+                if rel.via.is_some() {
+                    // See the has-many via case above. Any has-one membership
+                    // assignment would require choosing or creating an
+                    // intermediate record, which this setter cannot express.
+                    TokenStream::new()
+                } else {
+                    let ty = &rel.ty;
 
-                quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
-                        self.#set_field_ident(#field_ident);
-                        self
-                    }
+                    quote! {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
+                            self.#set_field_ident(#field_ident);
+                            self
+                        }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
-                        let projection = #projection;
-                        #field_ident.assign(&mut self.assignments, projection);
-                        self
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
+                            let projection = #projection;
+                            #field_ident.assign(&mut self.assignments, projection);
+                            self
+                        }
                     }
                 }
             }

@@ -158,30 +158,38 @@ impl Expand<'_> {
                         }
                     }
                     FieldTy::HasMany(rel) => {
-                        let singular = &rel.singular.ident;
-                        let plural = name;
-                        let ty = &rel.ty;
-                        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+                        if rel.via.is_some() {
+                            TokenStream::new()
+                        } else {
+                            let singular = &rel.singular.ident;
+                            let plural = name;
+                            let ty = &rel.ty;
+                            let target = quote!(<#ty as #toasty::RelationManyField>::Model);
 
-                        quote! {
-                            #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<#target>) -> Self {
-                                self.stmt.insert(#index_tokenized, #singular.into_expr());
-                                self
-                            }
+                            quote! {
+                                #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<#target>) -> Self {
+                                    self.stmt.insert(#index_tokenized, #singular.into_expr());
+                                    self
+                                }
 
-                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<#target>>) -> Self {
-                                self.stmt.insert_all(#index_tokenized, #plural.into_expr());
-                                self
+                                #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<#target>>) -> Self {
+                                    self.stmt.insert_all(#index_tokenized, #plural.into_expr());
+                                    self
+                                }
                             }
                         }
                     }
                     FieldTy::HasOne(rel) => {
-                        let ty = &rel.ty;
+                        if rel.via.is_some() {
+                            TokenStream::new()
+                        } else {
+                            let ty = &rel.ty;
 
-                        quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
-                                self.stmt.set(#index_tokenized, #name.into_expr());
-                                self
+                            quote! {
+                                #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
+                                    self.stmt.set(#index_tokenized, #name.into_expr());
+                                    self
+                                }
                             }
                         }
                     }

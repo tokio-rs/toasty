@@ -20,6 +20,11 @@ pub struct CreateField {
 /// Implemented on fields structs and relation scope types so that
 /// the `create!` macro can validate field sets through monomorphization.
 #[doc(hidden)]
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` does not carry Toasty create-field metadata",
+    label = "this type cannot be validated as a create target",
+    note = "Only Toasty model field paths and direct relation create scopes carry create-field metadata."
+)]
 pub trait ValidateCreate {
     const CREATE_META: &'static CreateMeta;
 }

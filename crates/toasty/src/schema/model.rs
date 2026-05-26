@@ -42,12 +42,18 @@ pub trait Model: Register + Load<Output = Self> + Sized {
     /// The has-many relation wrapper type for this model.
     type Many;
 
+    /// The has-many relation wrapper type for multi-step scopes.
+    type ViaMany;
+
     /// The field accessor type used when this model appears as the "many" side
     /// of a has-many relation, parameterized by the origin model.
     type ManyField<Origin>;
 
     /// The has-one relation wrapper type for this model (non-nullable).
     type One;
+
+    /// The has-one relation wrapper type for multi-step scopes (non-nullable).
+    type ViaOne;
 
     /// The field accessor type used when this model appears as the "one" side
     /// of a has-one relation, parameterized by the origin model.
@@ -56,6 +62,9 @@ pub trait Model: Register + Load<Output = Self> + Sized {
     /// The optional has-one relation wrapper type, used when the foreign key
     /// is nullable so the association is optional.
     type OptionOne;
+
+    /// The optional has-one relation wrapper type for multi-step scopes.
+    type ViaOptionOne;
 
     /// Metadata about the model's fields for compile-time validation of
     /// `create!` invocations.
