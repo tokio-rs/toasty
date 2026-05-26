@@ -1005,7 +1005,7 @@ pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test
     // Create a user with a todo
     let u1 = User::create()
         .name("User 1")
-        .todo(Todo::create().title("hello world"))
+        .todos([Todo::create().title("hello world")])
         .exec(&mut db)
         .await?;
 
@@ -1030,7 +1030,7 @@ pub async fn associate_new_user_with_todo_on_update_query_via_creation(
     // Create a user with a todo
     let u1 = User::create()
         .name("User 1")
-        .todo(Todo::create().title("a todo"))
+        .todos([Todo::create().title("a todo")])
         .exec(&mut db)
         .await?;
 
@@ -1078,7 +1078,7 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(User, Todo)).await;
 
     // Create a user with a todo
-    let u1 = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let u1 = User::create().todos([Todo::create()]).exec(&mut db).await?;
 
     // Get the todo
     let todos: Vec<_> = u1.todos().exec(&mut db).await?;
@@ -1111,7 +1111,7 @@ pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Res
 
     let u2 = User::create()
         .name("User 2")
-        .todo(&todo)
+        .todos([&todo])
         .exec(&mut db)
         .await?;
 

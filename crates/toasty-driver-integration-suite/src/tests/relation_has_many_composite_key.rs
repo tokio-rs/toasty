@@ -335,7 +335,7 @@ pub async fn composite_associate_new_user_with_todo_on_update_via_creation(
     let u1 = User::create()
         .revision(1)
         .name("User 1")
-        .todo(Todo::create().title("hello world"))
+        .todos([Todo::create().title("hello world")])
         .exec(&mut db)
         .await?;
 
@@ -359,7 +359,7 @@ pub async fn composite_associate_new_user_with_todo_on_update_query_via_creation
     let u1 = User::create()
         .revision(1)
         .name("User 1")
-        .todo(Todo::create().title("a todo"))
+        .todos([Todo::create().title("a todo")])
         .exec(&mut db)
         .await?;
 
@@ -390,7 +390,7 @@ pub async fn composite_assign_todo_that_already_has_user_on_create(test: &mut Te
     let u2 = User::create()
         .revision(1)
         .name("User 2")
-        .todo(&todo)
+        .todos([&todo])
         .exec(&mut db)
         .await?;
 
@@ -504,7 +504,7 @@ pub async fn composite_user_batch_create_todos_one_level(test: &mut Test) -> Res
 
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
+        .todos([Todo::create().title("Make pizza")])
         .exec(&mut db)
         .await?;
 
@@ -525,8 +525,8 @@ pub async fn composite_user_batch_create_two_todos_simple(test: &mut Test) -> Re
 
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
-        .todo(Todo::create().title("Sleep"))
+        .todos([Todo::create().title("Make pizza")])
+        .todos([Todo::create().title("Sleep")])
         .exec(&mut db)
         .await?;
 
@@ -576,8 +576,8 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
 
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
-        .todo(Todo::create().title("Sleep"))
+        .todos([Todo::create().title("Make pizza")])
+        .todos([Todo::create().title("Sleep")])
         .exec(&mut db)
         .await?;
 
@@ -618,8 +618,8 @@ pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut T
     let mut db = test.setup_db(models!(User, Todo)).await;
 
     let user = User::create()
-        .todo(Todo::create())
-        .todo(Todo::create())
+        .todos([Todo::create()])
+        .todos([Todo::create()])
         .exec(&mut db)
         .await?;
 
@@ -764,9 +764,9 @@ pub async fn composite_basic_has_many_and_belongs_to_preload(test: &mut Test) ->
 
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("todo 1"))
-        .todo(Todo::create().title("todo 2"))
-        .todo(Todo::create().title("todo 3"))
+        .todos([Todo::create().title("todo 1")])
+        .todos([Todo::create().title("todo 2")])
+        .todos([Todo::create().title("todo 3")])
         .exec(&mut db)
         .await?;
 
@@ -837,8 +837,8 @@ pub async fn composite_preload_has_many_with_optional_belongs_to(test: &mut Test
 
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("alpha"))
-        .todo(Todo::create().title("beta"))
+        .todos([Todo::create().title("alpha")])
+        .todos([Todo::create().title("beta")])
         .exec(&mut db)
         .await?;
 
@@ -857,8 +857,8 @@ pub async fn composite_nested_has_many_then_belongs_to_required(test: &mut Test)
 
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("alpha"))
-        .todo(Todo::create().title("beta"))
+        .todos([Todo::create().title("alpha")])
+        .todos([Todo::create().title("beta")])
         .exec(&mut db)
         .await?;
 

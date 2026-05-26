@@ -13,7 +13,7 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
     t.log().clear();
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("task"))
+        .todos([Todo::create().title("task")])
         .exec(&mut db)
         .await?;
 
@@ -98,14 +98,14 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
 
     // Seed the title that will cause the second INSERT to fail.
     User::create()
-        .todo(Todo::create().title("taken"))
+        .todos([Todo::create().title("taken")])
         .exec(&mut db)
         .await?;
 
     t.log().clear();
     assert_err!(
         User::create()
-            .todo(Todo::create().title("taken"))
+            .todos([Todo::create().title("taken")])
             .exec(&mut db)
             .await
     );
@@ -316,7 +316,7 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
 
     let mut db = t.setup_db(models!(User, Todo)).await;
 
-    let user = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let user = User::create().todos([Todo::create()]).exec(&mut db).await?;
     let todos: Vec<_> = user.todos().exec(&mut db).await?;
 
     t.log().clear();
@@ -378,7 +378,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
     let mut db = t.setup_db(models!(User, Todo)).await;
 
     let user1 = User::create().exec(&mut db).await?;
-    let user2 = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let user2 = User::create().todos([Todo::create()]).exec(&mut db).await?;
     let u2_todos: Vec<_> = user2.todos().exec(&mut db).await?;
 
     t.log().clear();
