@@ -335,7 +335,7 @@
 <a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">let </span>u1 = User::create()
 <a href=#336 id=336 data-nosnippet>336</a>        .revision(<span class="number">1</span>)
 <a href=#337 id=337 data-nosnippet>337</a>        .name(<span class="string">"User 1"</span>)
-<a href=#338 id=338 data-nosnippet>338</a>        .todo(Todo::create().title(<span class="string">"hello world"</span>))
+<a href=#338 id=338 data-nosnippet>338</a>        .todos([Todo::create().title(<span class="string">"hello world"</span>)])
 <a href=#339 id=339 data-nosnippet>339</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#340 id=340 data-nosnippet>340</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#341 id=341 data-nosnippet>341</a>
@@ -359,7 +359,7 @@
 <a href=#359 id=359 data-nosnippet>359</a>    <span class="kw">let </span>u1 = User::create()
 <a href=#360 id=360 data-nosnippet>360</a>        .revision(<span class="number">1</span>)
 <a href=#361 id=361 data-nosnippet>361</a>        .name(<span class="string">"User 1"</span>)
-<a href=#362 id=362 data-nosnippet>362</a>        .todo(Todo::create().title(<span class="string">"a todo"</span>))
+<a href=#362 id=362 data-nosnippet>362</a>        .todos([Todo::create().title(<span class="string">"a todo"</span>)])
 <a href=#363 id=363 data-nosnippet>363</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#364 id=364 data-nosnippet>364</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#365 id=365 data-nosnippet>365</a>
@@ -390,7 +390,7 @@
 <a href=#390 id=390 data-nosnippet>390</a>    <span class="kw">let </span>u2 = User::create()
 <a href=#391 id=391 data-nosnippet>391</a>        .revision(<span class="number">1</span>)
 <a href=#392 id=392 data-nosnippet>392</a>        .name(<span class="string">"User 2"</span>)
-<a href=#393 id=393 data-nosnippet>393</a>        .todo(<span class="kw-2">&amp;</span>todo)
+<a href=#393 id=393 data-nosnippet>393</a>        .todos([<span class="kw-2">&amp;</span>todo])
 <a href=#394 id=394 data-nosnippet>394</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#395 id=395 data-nosnippet>395</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#396 id=396 data-nosnippet>396</a>
@@ -504,7 +504,7 @@
 <a href=#504 id=504 data-nosnippet>504</a>
 <a href=#505 id=505 data-nosnippet>505</a>    <span class="kw">let </span>user = User::create()
 <a href=#506 id=506 data-nosnippet>506</a>        .name(<span class="string">"Ann Chovey"</span>)
-<a href=#507 id=507 data-nosnippet>507</a>        .todo(Todo::create().title(<span class="string">"Make pizza"</span>))
+<a href=#507 id=507 data-nosnippet>507</a>        .todos([Todo::create().title(<span class="string">"Make pizza"</span>)])
 <a href=#508 id=508 data-nosnippet>508</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#509 id=509 data-nosnippet>509</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#510 id=510 data-nosnippet>510</a>
@@ -525,8 +525,8 @@
 <a href=#525 id=525 data-nosnippet>525</a>
 <a href=#526 id=526 data-nosnippet>526</a>    <span class="kw">let </span>user = User::create()
 <a href=#527 id=527 data-nosnippet>527</a>        .name(<span class="string">"Ann Chovey"</span>)
-<a href=#528 id=528 data-nosnippet>528</a>        .todo(Todo::create().title(<span class="string">"Make pizza"</span>))
-<a href=#529 id=529 data-nosnippet>529</a>        .todo(Todo::create().title(<span class="string">"Sleep"</span>))
+<a href=#528 id=528 data-nosnippet>528</a>        .todos([Todo::create().title(<span class="string">"Make pizza"</span>)])
+<a href=#529 id=529 data-nosnippet>529</a>        .todos([Todo::create().title(<span class="string">"Sleep"</span>)])
 <a href=#530 id=530 data-nosnippet>530</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#531 id=531 data-nosnippet>531</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#532 id=532 data-nosnippet>532</a>
@@ -576,8 +576,8 @@
 <a href=#576 id=576 data-nosnippet>576</a>
 <a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">let </span>user = User::create()
 <a href=#578 id=578 data-nosnippet>578</a>        .name(<span class="string">"Ann Chovey"</span>)
-<a href=#579 id=579 data-nosnippet>579</a>        .todo(Todo::create().title(<span class="string">"Make pizza"</span>))
-<a href=#580 id=580 data-nosnippet>580</a>        .todo(Todo::create().title(<span class="string">"Sleep"</span>))
+<a href=#579 id=579 data-nosnippet>579</a>        .todos([Todo::create().title(<span class="string">"Make pizza"</span>)])
+<a href=#580 id=580 data-nosnippet>580</a>        .todos([Todo::create().title(<span class="string">"Sleep"</span>)])
 <a href=#581 id=581 data-nosnippet>581</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#582 id=582 data-nosnippet>582</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#583 id=583 data-nosnippet>583</a>
@@ -618,8 +618,8 @@
 <a href=#618 id=618 data-nosnippet>618</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User, Todo)).<span class="kw">await</span>;
 <a href=#619 id=619 data-nosnippet>619</a>
 <a href=#620 id=620 data-nosnippet>620</a>    <span class="kw">let </span>user = User::create()
-<a href=#621 id=621 data-nosnippet>621</a>        .todo(Todo::create())
-<a href=#622 id=622 data-nosnippet>622</a>        .todo(Todo::create())
+<a href=#621 id=621 data-nosnippet>621</a>        .todos([Todo::create()])
+<a href=#622 id=622 data-nosnippet>622</a>        .todos([Todo::create()])
 <a href=#623 id=623 data-nosnippet>623</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#624 id=624 data-nosnippet>624</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#625 id=625 data-nosnippet>625</a>
@@ -764,9 +764,9 @@
 <a href=#764 id=764 data-nosnippet>764</a>
 <a href=#765 id=765 data-nosnippet>765</a>    <span class="kw">let </span>user = User::create()
 <a href=#766 id=766 data-nosnippet>766</a>        .name(<span class="string">"Alice"</span>)
-<a href=#767 id=767 data-nosnippet>767</a>        .todo(Todo::create().title(<span class="string">"todo 1"</span>))
-<a href=#768 id=768 data-nosnippet>768</a>        .todo(Todo::create().title(<span class="string">"todo 2"</span>))
-<a href=#769 id=769 data-nosnippet>769</a>        .todo(Todo::create().title(<span class="string">"todo 3"</span>))
+<a href=#767 id=767 data-nosnippet>767</a>        .todos([Todo::create().title(<span class="string">"todo 1"</span>)])
+<a href=#768 id=768 data-nosnippet>768</a>        .todos([Todo::create().title(<span class="string">"todo 2"</span>)])
+<a href=#769 id=769 data-nosnippet>769</a>        .todos([Todo::create().title(<span class="string">"todo 3"</span>)])
 <a href=#770 id=770 data-nosnippet>770</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#771 id=771 data-nosnippet>771</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#772 id=772 data-nosnippet>772</a>
@@ -837,8 +837,8 @@
 <a href=#837 id=837 data-nosnippet>837</a>
 <a href=#838 id=838 data-nosnippet>838</a>    <span class="kw">let </span>user = User::create()
 <a href=#839 id=839 data-nosnippet>839</a>        .name(<span class="string">"Alice"</span>)
-<a href=#840 id=840 data-nosnippet>840</a>        .todo(Todo::create().title(<span class="string">"alpha"</span>))
-<a href=#841 id=841 data-nosnippet>841</a>        .todo(Todo::create().title(<span class="string">"beta"</span>))
+<a href=#840 id=840 data-nosnippet>840</a>        .todos([Todo::create().title(<span class="string">"alpha"</span>)])
+<a href=#841 id=841 data-nosnippet>841</a>        .todos([Todo::create().title(<span class="string">"beta"</span>)])
 <a href=#842 id=842 data-nosnippet>842</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#843 id=843 data-nosnippet>843</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#844 id=844 data-nosnippet>844</a>
@@ -857,8 +857,8 @@
 <a href=#857 id=857 data-nosnippet>857</a>
 <a href=#858 id=858 data-nosnippet>858</a>    <span class="kw">let </span>user = User::create()
 <a href=#859 id=859 data-nosnippet>859</a>        .name(<span class="string">"Alice"</span>)
-<a href=#860 id=860 data-nosnippet>860</a>        .todo(Todo::create().title(<span class="string">"alpha"</span>))
-<a href=#861 id=861 data-nosnippet>861</a>        .todo(Todo::create().title(<span class="string">"beta"</span>))
+<a href=#860 id=860 data-nosnippet>860</a>        .todos([Todo::create().title(<span class="string">"alpha"</span>)])
+<a href=#861 id=861 data-nosnippet>861</a>        .todos([Todo::create().title(<span class="string">"beta"</span>)])
 <a href=#862 id=862 data-nosnippet>862</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#863 id=863 data-nosnippet>863</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#864 id=864 data-nosnippet>864</a>

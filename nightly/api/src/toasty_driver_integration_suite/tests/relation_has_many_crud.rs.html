@@ -1005,7 +1005,7 @@
 <a href=#1005 id=1005 data-nosnippet>1005</a>    <span class="comment">// Create a user with a todo
 <a href=#1006 id=1006 data-nosnippet>1006</a>    </span><span class="kw">let </span>u1 = User::create()
 <a href=#1007 id=1007 data-nosnippet>1007</a>        .name(<span class="string">"User 1"</span>)
-<a href=#1008 id=1008 data-nosnippet>1008</a>        .todo(Todo::create().title(<span class="string">"hello world"</span>))
+<a href=#1008 id=1008 data-nosnippet>1008</a>        .todos([Todo::create().title(<span class="string">"hello world"</span>)])
 <a href=#1009 id=1009 data-nosnippet>1009</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#1010 id=1010 data-nosnippet>1010</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1011 id=1011 data-nosnippet>1011</a>
@@ -1030,7 +1030,7 @@
 <a href=#1030 id=1030 data-nosnippet>1030</a>    <span class="comment">// Create a user with a todo
 <a href=#1031 id=1031 data-nosnippet>1031</a>    </span><span class="kw">let </span>u1 = User::create()
 <a href=#1032 id=1032 data-nosnippet>1032</a>        .name(<span class="string">"User 1"</span>)
-<a href=#1033 id=1033 data-nosnippet>1033</a>        .todo(Todo::create().title(<span class="string">"a todo"</span>))
+<a href=#1033 id=1033 data-nosnippet>1033</a>        .todos([Todo::create().title(<span class="string">"a todo"</span>)])
 <a href=#1034 id=1034 data-nosnippet>1034</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#1035 id=1035 data-nosnippet>1035</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1036 id=1036 data-nosnippet>1036</a>
@@ -1078,7 +1078,7 @@
 <a href=#1078 id=1078 data-nosnippet>1078</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User, Todo)).<span class="kw">await</span>;
 <a href=#1079 id=1079 data-nosnippet>1079</a>
 <a href=#1080 id=1080 data-nosnippet>1080</a>    <span class="comment">// Create a user with a todo
-<a href=#1081 id=1081 data-nosnippet>1081</a>    </span><span class="kw">let </span>u1 = User::create().todo(Todo::create()).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1081 id=1081 data-nosnippet>1081</a>    </span><span class="kw">let </span>u1 = User::create().todos([Todo::create()]).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1082 id=1082 data-nosnippet>1082</a>
 <a href=#1083 id=1083 data-nosnippet>1083</a>    <span class="comment">// Get the todo
 <a href=#1084 id=1084 data-nosnippet>1084</a>    </span><span class="kw">let </span>todos: Vec&lt;<span class="kw">_</span>&gt; = u1.todos().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
@@ -1111,7 +1111,7 @@
 <a href=#1111 id=1111 data-nosnippet>1111</a>
 <a href=#1112 id=1112 data-nosnippet>1112</a>    <span class="kw">let </span>u2 = User::create()
 <a href=#1113 id=1113 data-nosnippet>1113</a>        .name(<span class="string">"User 2"</span>)
-<a href=#1114 id=1114 data-nosnippet>1114</a>        .todo(<span class="kw-2">&amp;</span>todo)
+<a href=#1114 id=1114 data-nosnippet>1114</a>        .todos([<span class="kw-2">&amp;</span>todo])
 <a href=#1115 id=1115 data-nosnippet>1115</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#1116 id=1116 data-nosnippet>1116</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#1117 id=1117 data-nosnippet>1117</a>

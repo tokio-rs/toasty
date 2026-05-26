@@ -31,8 +31,8 @@
 <a href=#31 id=31 data-nosnippet>31</a>
 <a href=#32 id=32 data-nosnippet>32</a>    <span class="comment">// Create a user with some todos
 <a href=#33 id=33 data-nosnippet>33</a>    </span><span class="kw">let </span>user = User::create()
-<a href=#34 id=34 data-nosnippet>34</a>        .todo(Todo::create())
-<a href=#35 id=35 data-nosnippet>35</a>        .todo(Todo::create())
+<a href=#34 id=34 data-nosnippet>34</a>        .todos([Todo::create()])
+<a href=#35 id=35 data-nosnippet>35</a>        .todos([Todo::create()])
 <a href=#36 id=36 data-nosnippet>36</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#37 id=37 data-nosnippet>37</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#38 id=38 data-nosnippet>38</a>
@@ -55,7 +55,7 @@
 <a href=#55 id=55 data-nosnippet>55</a>
 <a href=#56 id=56 data-nosnippet>56</a>    <span class="comment">// Create a second user w/ a TODO. We will ensure that unlinking *only*
 <a href=#57 id=57 data-nosnippet>57</a>    // unlinks records currently associated with the base model.
-<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">let </span>u2 = User::create().todo(Todo::create()).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">let </span>u2 = User::create().todos([Todo::create()]).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#59 id=59 data-nosnippet>59</a>    <span class="kw">let </span>u2_todos = u2.todos().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#60 id=60 data-nosnippet>60</a>
 <a href=#61 id=61 data-nosnippet>61</a>    <span class="comment">// Try unlinking u2's todo via user. This should fail

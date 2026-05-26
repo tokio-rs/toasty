@@ -13,9 +13,9 @@
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="comment">// Create a user with a few todos
 <a href=#14 id=14 data-nosnippet>14</a>    </span><span class="kw">let </span>user = User::create()
 <a href=#15 id=15 data-nosnippet>15</a>        .name(<span class="string">"x"</span>)
-<a href=#16 id=16 data-nosnippet>16</a>        .todo(Todo::create().category(<span class="kw-2">&amp;</span>cat1).title(<span class="string">"one"</span>))
-<a href=#17 id=17 data-nosnippet>17</a>        .todo(Todo::create().category(<span class="kw-2">&amp;</span>cat2).title(<span class="string">"two"</span>))
-<a href=#18 id=18 data-nosnippet>18</a>        .todo(Todo::create().category(<span class="kw-2">&amp;</span>cat2).title(<span class="string">"three"</span>))
+<a href=#16 id=16 data-nosnippet>16</a>        .todos([Todo::create().category(<span class="kw-2">&amp;</span>cat1).title(<span class="string">"one"</span>)])
+<a href=#17 id=17 data-nosnippet>17</a>        .todos([Todo::create().category(<span class="kw-2">&amp;</span>cat2).title(<span class="string">"two"</span>)])
+<a href=#18 id=18 data-nosnippet>18</a>        .todos([Todo::create().category(<span class="kw-2">&amp;</span>cat2).title(<span class="string">"three"</span>)])
 <a href=#19 id=19 data-nosnippet>19</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#20 id=20 data-nosnippet>20</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#21 id=21 data-nosnippet>21</a>
@@ -62,17 +62,17 @@
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="comment">// Create a board with 5 users
 <a href=#63 id=63 data-nosnippet>63</a>    </span><span class="kw">let </span>board = Board::create()
 <a href=#64 id=64 data-nosnippet>64</a>        .name(<span class="string">"Test Board"</span>)
-<a href=#65 id=65 data-nosnippet>65</a>        .user(User::create().name(<span class="string">"User 1"</span>))
-<a href=#66 id=66 data-nosnippet>66</a>        .user(User::create().name(<span class="string">"User 2"</span>))
-<a href=#67 id=67 data-nosnippet>67</a>        .user(User::create().name(<span class="string">"User 3"</span>))
-<a href=#68 id=68 data-nosnippet>68</a>        .user(User::create().name(<span class="string">"User 4"</span>))
-<a href=#69 id=69 data-nosnippet>69</a>        .user(User::create().name(<span class="string">"User 5"</span>))
+<a href=#65 id=65 data-nosnippet>65</a>        .users([User::create().name(<span class="string">"User 1"</span>)])
+<a href=#66 id=66 data-nosnippet>66</a>        .users([User::create().name(<span class="string">"User 2"</span>)])
+<a href=#67 id=67 data-nosnippet>67</a>        .users([User::create().name(<span class="string">"User 3"</span>)])
+<a href=#68 id=68 data-nosnippet>68</a>        .users([User::create().name(<span class="string">"User 4"</span>)])
+<a href=#69 id=69 data-nosnippet>69</a>        .users([User::create().name(<span class="string">"User 5"</span>)])
 <a href=#70 id=70 data-nosnippet>70</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#71 id=71 data-nosnippet>71</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#72 id=72 data-nosnippet>72</a>
 <a href=#73 id=73 data-nosnippet>73</a>    Board::create()
 <a href=#74 id=74 data-nosnippet>74</a>        .name(<span class="string">"Test Board2"</span>)
-<a href=#75 id=75 data-nosnippet>75</a>        .user(User::create().name(<span class="string">"User 6"</span>))
+<a href=#75 id=75 data-nosnippet>75</a>        .users([User::create().name(<span class="string">"User 6"</span>)])
 <a href=#76 id=76 data-nosnippet>76</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#77 id=77 data-nosnippet>77</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#78 id=78 data-nosnippet>78</a>

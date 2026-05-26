@@ -160,8 +160,8 @@
 <a href=#160 id=160 data-nosnippet>160</a>
 <a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">for </span>i <span class="kw">in </span><span class="number">1</span>..<span class="number">10 </span>{
 <a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span>u = Parent::create()
-<a href=#163 id=163 data-nosnippet>163</a>            .child(Child::create())
-<a href=#164 id=164 data-nosnippet>164</a>            .child(Child::create())
+<a href=#163 id=163 data-nosnippet>163</a>            .children([Child::create()])
+<a href=#164 id=164 data-nosnippet>164</a>            .children([Child::create()])
 <a href=#165 id=165 data-nosnippet>165</a>            .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#166 id=166 data-nosnippet>166</a>            .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#167 id=167 data-nosnippet>167</a>        <span class="macro">assert_eq!</span>(u.id, i);
