@@ -225,9 +225,9 @@
 <a href=#225 id=225 data-nosnippet>225</a>            .iter()
 <a href=#226 id=226 data-nosnippet>226</a>            .filter_map(|field| {
 <a href=#227 id=227 data-nosnippet>227</a>                <span class="kw">let </span>(ty, field_trait) = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
-<a href=#228 id=228 data-nosnippet>228</a>                    FieldTy::BelongsTo(rel) =&gt; (<span class="kw-2">&amp;</span>rel.ty, <span class="macro">quote!</span>(#toasty::BelongsToField)),
-<a href=#229 id=229 data-nosnippet>229</a>                    FieldTy::HasMany(rel) =&gt; (<span class="kw-2">&amp;</span>rel.ty, <span class="macro">quote!</span>(#toasty::HasManyField)),
-<a href=#230 id=230 data-nosnippet>230</a>                    FieldTy::HasOne(rel) =&gt; (<span class="kw-2">&amp;</span>rel.ty, <span class="macro">quote!</span>(#toasty::HasOneField)),
+<a href=#228 id=228 data-nosnippet>228</a>                    FieldTy::BelongsTo(rel) =&gt; (<span class="kw-2">&amp;</span>rel.ty, <span class="macro">quote!</span>(#toasty::RelationOneField)),
+<a href=#229 id=229 data-nosnippet>229</a>                    FieldTy::HasMany(rel) =&gt; (<span class="kw-2">&amp;</span>rel.ty, <span class="macro">quote!</span>(#toasty::RelationManyField)),
+<a href=#230 id=230 data-nosnippet>230</a>                    FieldTy::HasOne(rel) =&gt; (<span class="kw-2">&amp;</span>rel.ty, <span class="macro">quote!</span>(#toasty::RelationOneField)),
 <a href=#231 id=231 data-nosnippet>231</a>                    FieldTy::Primitive(<span class="kw">_</span>) =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
 <a href=#232 id=232 data-nosnippet>232</a>                };
 <a href=#233 id=233 data-nosnippet>233</a>                <span class="kw">let </span>field_ident = <span class="kw-2">&amp;</span>field.name.ident;
@@ -270,7 +270,7 @@
 <a href=#270 id=270 data-nosnippet>270</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
 <a href=#271 id=271 data-nosnippet>271</a>        <span class="kw">let </span>field_ident = <span class="kw-2">&amp;</span>field.name.ident;
 <a href=#272 id=272 data-nosnippet>272</a>        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">let </span>target_ty = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::Model);
+<a href=#273 id=273 data-nosnippet>273</a>        <span class="kw">let </span>target_ty = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Model);
 <a href=#274 id=274 data-nosnippet>274</a>
 <a href=#275 id=275 data-nosnippet>275</a>        <span class="kw">let </span>operands = rel.foreign_key.iter().map(|fk_field| {
 <a href=#276 id=276 data-nosnippet>276</a>            <span class="kw">let </span>source = <span class="kw-2">&amp;</span><span class="self">self</span>.model.fields[fk_field.source];
@@ -311,7 +311,7 @@
 <a href=#311 id=311 data-nosnippet>311</a>        );
 <a href=#312 id=312 data-nosnippet>312</a>
 <a href=#313 id=313 data-nosnippet>313</a>        <span class="macro">quote!</span> {
-<a href=#314 id=314 data-nosnippet>314</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::One {
+<a href=#314 id=314 data-nosnippet>314</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::One {
 <a href=#315 id=315 data-nosnippet>315</a>                <span class="comment">// Suppress the unused field warning
 <a href=#316 id=316 data-nosnippet>316</a>                </span><span class="kw">if </span><span class="bool-val">false </span>{
 <a href=#317 id=317 data-nosnippet>317</a>                    <span class="kw">let _ </span>= <span class="kw-2">&amp;</span><span class="self">self</span>.#field_ident;
@@ -319,7 +319,7 @@
 <a href=#319 id=319 data-nosnippet>319</a>
 <a href=#320 id=320 data-nosnippet>320</a>                {
 <a href=#321 id=321 data-nosnippet>321</a>                    <span class="kw">use </span>#toasty::IntoStatement;
-<a href=#322 id=322 data-nosnippet>322</a>                    &lt;&lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::One&gt;::from_stmt(
+<a href=#322 id=322 data-nosnippet>322</a>                    &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::One&gt;::from_stmt(
 <a href=#323 id=323 data-nosnippet>323</a>                        #target_ty::filter(#filter).into_statement().into_query().unwrap()
 <a href=#324 id=324 data-nosnippet>324</a>                    )
 <a href=#325 id=325 data-nosnippet>325</a>                }
@@ -340,7 +340,7 @@
 <a href=#340 id=340 data-nosnippet>340</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
 <a href=#341 id=341 data-nosnippet>341</a>        <span class="kw">let </span>field_ident = <span class="kw-2">&amp;</span>field.name.ident;
 <a href=#342 id=342 data-nosnippet>342</a>        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::HasManyField&gt;::Model);
+<a href=#343 id=343 data-nosnippet>343</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model);
 <a href=#344 id=344 data-nosnippet>344</a>
 <a href=#345 id=345 data-nosnippet>345</a>        <span class="comment">// A `via` relation reaches its target through a path of existing
 <a href=#346 id=346 data-nosnippet>346</a>        // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -356,7 +356,7 @@
 <a href=#356 id=356 data-nosnippet>356</a>                pair_ident: <span class="kw-2">&amp;</span>pair_ident,
 <a href=#357 id=357 data-nosnippet>357</a>                field_ident,
 <a href=#358 id=358 data-nosnippet>358</a>                ty,
-<a href=#359 id=359 data-nosnippet>359</a>                field_trait: <span class="macro">quote!</span>(#toasty::HasManyField),
+<a href=#359 id=359 data-nosnippet>359</a>                field_trait: <span class="macro">quote!</span>(#toasty::RelationManyField),
 <a href=#360 id=360 data-nosnippet>360</a>                rel_span: rel.span,
 <a href=#361 id=361 data-nosnippet>361</a>                relation_kind: <span class="string">"HasMany"</span>,
 <a href=#362 id=362 data-nosnippet>362</a>                label: <span class="string">"Has many associations require the target to include a back-reference"</span>,
@@ -405,7 +405,7 @@
 <a href=#405 id=405 data-nosnippet>405</a>                pair_ident: <span class="kw-2">&amp;</span>pair_ident,
 <a href=#406 id=406 data-nosnippet>406</a>                field_ident,
 <a href=#407 id=407 data-nosnippet>407</a>                ty,
-<a href=#408 id=408 data-nosnippet>408</a>                field_trait: <span class="macro">quote!</span>(#toasty::HasOneField),
+<a href=#408 id=408 data-nosnippet>408</a>                field_trait: <span class="macro">quote!</span>(#toasty::RelationOneField),
 <a href=#409 id=409 data-nosnippet>409</a>                rel_span: rel.span,
 <a href=#410 id=410 data-nosnippet>410</a>                relation_kind: <span class="string">"HasOne"</span>,
 <a href=#411 id=411 data-nosnippet>411</a>                label: <span class="string">"Has one associations require the target to include a back-reference"</span>,
@@ -413,7 +413,7 @@
 <a href=#413 id=413 data-nosnippet>413</a>        };
 <a href=#414 id=414 data-nosnippet>414</a>
 <a href=#415 id=415 data-nosnippet>415</a>        <span class="macro">quote!</span> {
-<a href=#416 id=416 data-nosnippet>416</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::HasOneField&gt;::One {
+<a href=#416 id=416 data-nosnippet>416</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::One {
 <a href=#417 id=417 data-nosnippet>417</a>                <span class="comment">// Suppress the unused field warning
 <a href=#418 id=418 data-nosnippet>418</a>                </span><span class="kw">if </span><span class="bool-val">false </span>{
 <a href=#419 id=419 data-nosnippet>419</a>                    <span class="kw">let _ </span>= <span class="kw-2">&amp;</span><span class="self">self</span>.#field_ident;
@@ -423,7 +423,7 @@
 <a href=#423 id=423 data-nosnippet>423</a>
 <a href=#424 id=424 data-nosnippet>424</a>                {
 <a href=#425 id=425 data-nosnippet>425</a>                    <span class="kw">use </span>#toasty::IntoStatement;
-<a href=#426 id=426 data-nosnippet>426</a>                    &lt;&lt;#ty <span class="kw">as </span>#toasty::HasOneField&gt;::One&gt;::from_stmt(
+<a href=#426 id=426 data-nosnippet>426</a>                    &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::One&gt;::from_stmt(
 <a href=#427 id=427 data-nosnippet>427</a>                        #toasty::stmt::Association::one(
 <a href=#428 id=428 data-nosnippet>428</a>                            <span class="self">self</span>.into_statement().into_query().unwrap().to_list(),
 <a href=#429 id=429 data-nosnippet>429</a>                            <span class="self">Self</span>::fields().#field_ident().into()

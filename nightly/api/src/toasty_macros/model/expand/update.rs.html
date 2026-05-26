@@ -53,12 +53,12 @@
 <a href=#53 id=53 data-nosnippet>53</a>                <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
 <a href=#54 id=54 data-nosnippet>54</a>
 <a href=#55 id=55 data-nosnippet>55</a>                <span class="macro">quote!</span> {
-<a href=#56 id=56 data-nosnippet>56</a>                    #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
+<a href=#56 id=56 data-nosnippet>56</a>                    #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
 <a href=#57 id=57 data-nosnippet>57</a>                        <span class="self">self</span>.#set_field_ident(#field_ident);
 <a href=#58 id=58 data-nosnippet>58</a>                        <span class="self">self
 <a href=#59 id=59 data-nosnippet>59</a>                    </span>}
 <a href=#60 id=60 data-nosnippet>60</a>
-<a href=#61 id=61 data-nosnippet>61</a>                    #vis <span class="kw">fn </span>#set_field_ident(<span class="kw-2">&amp;mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::Expr&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+<a href=#61 id=61 data-nosnippet>61</a>                    #vis <span class="kw">fn </span>#set_field_ident(<span class="kw-2">&amp;mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Expr&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
 <a href=#62 id=62 data-nosnippet>62</a>                        <span class="kw">let </span>projection = #projection;
 <a href=#63 id=63 data-nosnippet>63</a>                        #field_ident.assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>.assignments, projection);
 <a href=#64 id=64 data-nosnippet>64</a>                        <span class="self">self
@@ -67,7 +67,7 @@
 <a href=#67 id=67 data-nosnippet>67</a>            }
 <a href=#68 id=68 data-nosnippet>68</a>            FieldTy::HasMany(rel) =&gt; {
 <a href=#69 id=69 data-nosnippet>69</a>                <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#70 id=70 data-nosnippet>70</a>                <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::HasManyField&gt;::Model);
+<a href=#70 id=70 data-nosnippet>70</a>                <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model);
 <a href=#71 id=71 data-nosnippet>71</a>
 <a href=#72 id=72 data-nosnippet>72</a>                <span class="macro">quote!</span> {
 <a href=#73 id=73 data-nosnippet>73</a>                    #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;#toasty::List&lt;#target&gt;&gt;) -&gt; <span class="self">Self </span>{
@@ -86,12 +86,12 @@
 <a href=#86 id=86 data-nosnippet>86</a>                <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
 <a href=#87 id=87 data-nosnippet>87</a>
 <a href=#88 id=88 data-nosnippet>88</a>                <span class="macro">quote!</span> {
-<a href=#89 id=89 data-nosnippet>89</a>                    #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::HasOneField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
+<a href=#89 id=89 data-nosnippet>89</a>                    #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
 <a href=#90 id=90 data-nosnippet>90</a>                        <span class="self">self</span>.#set_field_ident(#field_ident);
 <a href=#91 id=91 data-nosnippet>91</a>                        <span class="self">self
 <a href=#92 id=92 data-nosnippet>92</a>                    </span>}
 <a href=#93 id=93 data-nosnippet>93</a>
-<a href=#94 id=94 data-nosnippet>94</a>                    #vis <span class="kw">fn </span>#set_field_ident(<span class="kw-2">&amp;mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::HasOneField&gt;::Expr&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+<a href=#94 id=94 data-nosnippet>94</a>                    #vis <span class="kw">fn </span>#set_field_ident(<span class="kw-2">&amp;mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Expr&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
 <a href=#95 id=95 data-nosnippet>95</a>                        <span class="kw">let </span>projection = #projection;
 <a href=#96 id=96 data-nosnippet>96</a>                        #field_ident.assign(<span class="kw-2">&amp;mut </span><span class="self">self</span>.assignments, projection);
 <a href=#97 id=97 data-nosnippet>97</a>                        <span class="self">self
@@ -324,15 +324,15 @@
 <a href=#324 id=324 data-nosnippet>324</a>                }
 <a href=#325 id=325 data-nosnippet>325</a>                FieldTy::BelongsTo(rel) =&gt; {
 <a href=#326 id=326 data-nosnippet>326</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#327 id=327 data-nosnippet>327</a>                    <span class="macro">quote!</span>(#i =&gt; &lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::reload(<span class="kw-2">&amp;mut </span>target.#field_ident, value)<span class="question-mark">?</span>,)
+<a href=#327 id=327 data-nosnippet>327</a>                    <span class="macro">quote!</span>(#i =&gt; &lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::reload(<span class="kw-2">&amp;mut </span>target.#field_ident, value)<span class="question-mark">?</span>,)
 <a href=#328 id=328 data-nosnippet>328</a>                }
 <a href=#329 id=329 data-nosnippet>329</a>                FieldTy::HasMany(rel) =&gt; {
 <a href=#330 id=330 data-nosnippet>330</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#331 id=331 data-nosnippet>331</a>                    <span class="macro">quote!</span>(#i =&gt; &lt;#ty <span class="kw">as </span>#toasty::HasManyField&gt;::reload(<span class="kw-2">&amp;mut </span>target.#field_ident, value)<span class="question-mark">?</span>,)
+<a href=#331 id=331 data-nosnippet>331</a>                    <span class="macro">quote!</span>(#i =&gt; &lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::reload(<span class="kw-2">&amp;mut </span>target.#field_ident, value)<span class="question-mark">?</span>,)
 <a href=#332 id=332 data-nosnippet>332</a>                }
 <a href=#333 id=333 data-nosnippet>333</a>                FieldTy::HasOne(rel) =&gt; {
 <a href=#334 id=334 data-nosnippet>334</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#335 id=335 data-nosnippet>335</a>                    <span class="macro">quote!</span>(#i =&gt; &lt;#ty <span class="kw">as </span>#toasty::HasOneField&gt;::reload(<span class="kw-2">&amp;mut </span>target.#field_ident, value)<span class="question-mark">?</span>,)
+<a href=#335 id=335 data-nosnippet>335</a>                    <span class="macro">quote!</span>(#i =&gt; &lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::reload(<span class="kw-2">&amp;mut </span>target.#field_ident, value)<span class="question-mark">?</span>,)
 <a href=#336 id=336 data-nosnippet>336</a>                }
 <a href=#337 id=337 data-nosnippet>337</a>            }
 <a href=#338 id=338 data-nosnippet>338</a>

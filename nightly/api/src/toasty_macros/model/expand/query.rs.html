@@ -162,7 +162,7 @@
 <a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
 <a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
 <a href=#164 id=164 data-nosnippet>164</a>        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::Model);
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Model);
 <a href=#166 id=166 data-nosnippet>166</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
 <a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">let </span>field_ident = <span class="kw-2">&amp;</span>field.name.ident;
 <a href=#168 id=168 data-nosnippet>168</a>
@@ -182,7 +182,7 @@
 <a href=#182 id=182 data-nosnippet>182</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
 <a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
 <a href=#184 id=184 data-nosnippet>184</a>        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#185 id=185 data-nosnippet>185</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::HasManyField&gt;::Model);
+<a href=#185 id=185 data-nosnippet>185</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model);
 <a href=#186 id=186 data-nosnippet>186</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
 <a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">let </span>field_ident = <span class="kw-2">&amp;</span>field.name.ident;
 <a href=#188 id=188 data-nosnippet>188</a>
@@ -202,7 +202,7 @@
 <a href=#202 id=202 data-nosnippet>202</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
 <a href=#203 id=203 data-nosnippet>203</a>        <span class="kw">let </span>vis = <span class="kw-2">&amp;</span><span class="self">self</span>.model.vis;
 <a href=#204 id=204 data-nosnippet>204</a>        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::HasOneField&gt;::Model);
+<a href=#205 id=205 data-nosnippet>205</a>        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Model);
 <a href=#206 id=206 data-nosnippet>206</a>        <span class="kw">let </span>model_ident = <span class="kw-2">&amp;</span><span class="self">self</span>.model.ident;
 <a href=#207 id=207 data-nosnippet>207</a>        <span class="kw">let </span>field_ident = <span class="kw-2">&amp;</span>field.name.ident;
 <a href=#208 id=208 data-nosnippet>208</a>

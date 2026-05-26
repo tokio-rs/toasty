@@ -145,7 +145,7 @@
 <a href=#145 id=145 data-nosnippet>145</a>                        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
 <a href=#146 id=146 data-nosnippet>146</a>
 <a href=#147 id=147 data-nosnippet>147</a>                        <span class="macro">quote!</span> {
-<a href=#148 id=148 data-nosnippet>148</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;&lt;#ty <span class="kw">as </span>#toasty::BelongsToField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
+<a href=#148 id=148 data-nosnippet>148</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
 <a href=#149 id=149 data-nosnippet>149</a>                                <span class="comment">// Silences unused field warning when the field is set on creation.
 <a href=#150 id=150 data-nosnippet>150</a>                                </span><span class="kw">if </span><span class="bool-val">false </span>{
 <a href=#151 id=151 data-nosnippet>151</a>                                    <span class="kw">let </span>m = &lt;#model_ident <span class="kw">as </span>#toasty::Load&gt;::load(Default::default()).unwrap();
@@ -161,7 +161,7 @@
 <a href=#161 id=161 data-nosnippet>161</a>                        <span class="kw">let </span>singular = <span class="kw-2">&amp;</span>rel.singular.ident;
 <a href=#162 id=162 data-nosnippet>162</a>                        <span class="kw">let </span>plural = name;
 <a href=#163 id=163 data-nosnippet>163</a>                        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#164 id=164 data-nosnippet>164</a>                        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::HasManyField&gt;::Model);
+<a href=#164 id=164 data-nosnippet>164</a>                        <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model);
 <a href=#165 id=165 data-nosnippet>165</a>
 <a href=#166 id=166 data-nosnippet>166</a>                        <span class="macro">quote!</span> {
 <a href=#167 id=167 data-nosnippet>167</a>                            #vis <span class="kw">fn </span>#singular(<span class="kw-2">mut </span><span class="self">self</span>, #singular: <span class="kw">impl </span>#toasty::IntoExpr&lt;#target&gt;) -&gt; <span class="self">Self </span>{
@@ -179,7 +179,7 @@
 <a href=#179 id=179 data-nosnippet>179</a>                        <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
 <a href=#180 id=180 data-nosnippet>180</a>
 <a href=#181 id=181 data-nosnippet>181</a>                        <span class="macro">quote!</span> {
-<a href=#182 id=182 data-nosnippet>182</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;&lt;#ty <span class="kw">as </span>#toasty::HasOneField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
+<a href=#182 id=182 data-nosnippet>182</a>                            #vis <span class="kw">fn </span>#name(<span class="kw-2">mut </span><span class="self">self</span>, #name: <span class="kw">impl </span>#toasty::IntoExpr&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Expr&gt;) -&gt; <span class="self">Self </span>{
 <a href=#183 id=183 data-nosnippet>183</a>                                <span class="self">self</span>.stmt.set(#index_tokenized, #name.into_expr());
 <a href=#184 id=184 data-nosnippet>184</a>                                <span class="self">self
 <a href=#185 id=185 data-nosnippet>185</a>                            </span>}
