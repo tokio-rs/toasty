@@ -198,6 +198,9 @@ impl Connection {
                 }
             }
             Operation::Scan(op) => self.exec_scan(schema, op).await,
+            Operation::RawSql(_) => Err(Error::unsupported_feature(
+                "raw SQL is only supported by SQL drivers",
+            )),
             Operation::Transaction(_) => Err(Error::unsupported_feature(
                 "transactions are not supported by the DynamoDB driver",
             )),

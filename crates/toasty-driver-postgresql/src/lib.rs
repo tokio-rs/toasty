@@ -27,7 +27,7 @@ use toasty_core::{
     Result, Schema,
     driver::{
         Capability, Driver, ExecResponse, Operation,
-        operation::{Transaction, TransactionMode},
+        operation::{RawSqlRet, Transaction, TransactionMode, TypedValue},
     },
     schema::{
         db::{self, Migration, Table},
@@ -39,6 +39,12 @@ use toasty_core::{
 use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
 use url::Url;
+
+enum SqlReturn {
+    Count,
+    Infer,
+    Types(Vec<stmt::Type>),
+}
 
 use crate::{oid_cache::OidCache, statement_cache::StatementCache};
 
@@ -312,6 +318,77 @@ impl Connection {
         Ok(Self::new(client))
     }
 
+    async fn exec_sql(
+        &mut self,
+        sql_as_str: &str,
+        typed_params: Vec<TypedValue>,
+        ret: SqlReturn,
+    ) -> Result<ExecResponse> {
+        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
+
+        self.oid_cache
+            .preload(&self.client, typed_params.iter().map(|tv| &tv.ty))
+            .await?;
+        let param_types: Vec<_> = typed_params
+            .iter()
+            .map(|tv| self.oid_cache.get(&tv.ty).clone())
+            .collect();
+
+        let values: Vec<_> = typed_params
+            .into_iter()
+            .map(|tv| Value::from(tv.value))
+            .collect();
+        let params = values
+            .iter()
+            .map(|param| param as &(dyn ToSql + Sync))
+            .collect::<Vec<_>>();
+
+        let statement = self
+            .statement_cache
+            .prepare_typed(&mut self.client, sql_as_str, &param_types)
+            .await
+            .map_err(classify_pg_error)?;
+
+        if matches!(ret, SqlReturn::Count) {
+            let count = self
+                .client
+                .execute(&statement, &params)
+                .await
+                .map_err(classify_pg_error)?;
+            return Ok(ExecResponse::count(count));
+        }
+
+        let rows = self
+            .client
+            .query(&statement, &params)
+            .await
+            .map_err(classify_pg_error)?;
+
+        let results = rows.into_iter().map(move |row| {
+            let mut results = Vec::new();
+
+            match &ret {
+                SqlReturn::Count => unreachable!(),
+                SqlReturn::Infer => {
+                    for (i, column) in row.columns().iter().enumerate() {
+                        results.push(Value::from_sql_infer(i, &row, column).into_inner());
+                    }
+                }
+                SqlReturn::Types(ret_tys) => {
+                    for (i, column) in row.columns().iter().enumerate() {
+                        results.push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
+                    }
+                }
+            }
+
+            Ok(ValueRecord::from_vec(results))
+        });
+
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
+            results,
+        )))
+    }
+
     /// Creates a table.
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::postgresql(schema);
@@ -384,80 +461,26 @@ impl toasty_core::driver::Connection for Connection {
                 );
                 (sql::Statement::from(query.stmt), query.params, query.ret)
             }
+            Operation::RawSql(op) => {
+                let ret = match op.ret {
+                    RawSqlRet::None => SqlReturn::Count,
+                    RawSqlRet::Infer => SqlReturn::Infer,
+                    RawSqlRet::Types(types) => SqlReturn::Types(types),
+                };
+                return self.exec_sql(&op.sql, op.params, ret).await;
+            }
             op => todo!("op={:#?}", op),
         };
 
-        let width = sql.returning_len();
-
         let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql);
 
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
-
-        self.oid_cache
-            .preload(&self.client, typed_params.iter().map(|tv| &tv.ty))
-            .await?;
-        let param_types: Vec<_> = typed_params
-            .iter()
-            .map(|tv| self.oid_cache.get(&tv.ty).clone())
-            .collect();
-
-        let values: Vec<_> = typed_params
-            .into_iter()
-            .map(|tv| Value::from(tv.value))
-            .collect();
-        let params = values
-            .iter()
-            .map(|param| param as &(dyn ToSql + Sync))
-            .collect::<Vec<_>>();
-
-        let statement = self
-            .statement_cache
-            .prepare_typed(&mut self.client, &sql_as_str, &param_types)
-            .await
-            .map_err(classify_pg_error)?;
-
-        if width.is_none() {
-            let count = self
-                .client
-                .execute(&statement, &params)
-                .await
-                .map_err(classify_pg_error)?;
-            return Ok(ExecResponse::count(count));
-        }
-
-        let rows = self
-            .client
-            .query(&statement, &params)
-            .await
-            .map_err(classify_pg_error)?;
-
-        if width.is_none() {
-            let [row] = &rows[..] else { todo!() };
-            let total = row.get::<usize, i64>(0);
-            let condition_matched = row.get::<usize, i64>(1);
-
-            if total == condition_matched {
-                Ok(ExecResponse::count(total as _))
-            } else {
-                Err(toasty_core::Error::condition_failed(
-                    "update condition did not match",
-                ))
-            }
+        let ret = if sql.returning_len().is_some() {
+            SqlReturn::Types(ret_tys.unwrap())
         } else {
-            let ret_tys = ret_tys.as_ref().unwrap().clone();
-            let results = rows.into_iter().map(move |row| {
-                let mut results = Vec::new();
-                for (i, column) in row.columns().iter().enumerate() {
-                    results.push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
-                }
+            SqlReturn::Count
+        };
 
-                Ok(ValueRecord::from_vec(results))
-            });
-
-            Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-                results,
-            )))
-        }
+        self.exec_sql(&sql_as_str, typed_params, ret).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

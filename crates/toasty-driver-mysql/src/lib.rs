@@ -25,7 +25,7 @@ use toasty_core::{
     Result, Schema,
     driver::{
         Capability, Driver, ExecResponse, Operation,
-        operation::{Transaction, TransactionMode},
+        operation::{RawSqlRet, Transaction, TransactionMode},
     },
     schema::{
         db::{self, Migration, Table},
@@ -35,6 +35,15 @@ use toasty_core::{
 };
 use toasty_sql::{self as sql};
 use url::Url;
+
+enum SqlReturn {
+    Count {
+        last_insert_id_hack: Option<u64>,
+        sql_is_insert: bool,
+    },
+    Infer,
+    Types(Vec<stmt::Type>),
+}
 
 /// Classifies a `mysql_async::Error` into a Toasty error.
 ///
@@ -198,6 +207,103 @@ impl Connection {
         }
     }
 
+    async fn exec_sql(
+        &mut self,
+        sql_as_str: &str,
+        args: Vec<mysql_async::Value>,
+        ret: SqlReturn,
+    ) -> Result<ExecResponse> {
+        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = args.len(), "executing SQL");
+
+        let statement = self
+            .conn
+            .prep(sql_as_str)
+            .await
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
+
+        if let SqlReturn::Count {
+            last_insert_id_hack,
+            sql_is_insert,
+        } = ret
+        {
+            let count = self
+                .conn
+                .exec_iter(&statement, mysql_async::Params::Positional(args))
+                .await
+                .map_err(|e| record_mysql_err(&self.valid, e))?
+                .affected_rows();
+
+            if let Some(num_rows) = last_insert_id_hack {
+                assert!(
+                    sql_is_insert,
+                    "last_insert_id_hack should only be used with INSERT statements"
+                );
+
+                let first_id: u64 = self
+                    .conn
+                    .query_first("SELECT LAST_INSERT_ID()")
+                    .await
+                    .map_err(|e| record_mysql_err(&self.valid, e))?
+                    .ok_or_else(|| {
+                        toasty_core::Error::driver_operation_failed(std::io::Error::other(
+                            "LAST_INSERT_ID() returned no rows",
+                        ))
+                    })?;
+
+                let results = (0..num_rows).map(move |offset| {
+                    let id = first_id + offset;
+                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
+                });
+
+                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
+                    results,
+                )));
+            }
+
+            return Ok(ExecResponse::count(count));
+        }
+
+        let rows: Vec<mysql_async::Row> = self
+            .conn
+            .exec(&statement, &args)
+            .await
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
+
+        let results = rows.into_iter().map(move |mut row| {
+            let mut results = Vec::new();
+
+            match &ret {
+                SqlReturn::Count { .. } => unreachable!(),
+                SqlReturn::Infer => {
+                    for i in 0..row.len() {
+                        let column = row.columns()[i].clone();
+                        results.push(Value::from_sql_infer(i, &mut row, &column).into_inner());
+                    }
+                }
+                SqlReturn::Types(returning) => {
+                    assert_eq!(
+                        row.len(),
+                        returning.len(),
+                        "row={row:#?}; returning={returning:#?}"
+                    );
+
+                    for i in 0..row.len() {
+                        let column = row.columns()[i].clone();
+                        results.push(
+                            Value::from_sql(i, &mut row, &column, &returning[i]).into_inner(),
+                        );
+                    }
+                }
+            }
+
+            Ok(ValueRecord::from_vec(results))
+        });
+
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
+            results,
+        )))
+    }
+
     /// Create a table and its indices from a schema definition.
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
@@ -244,6 +350,22 @@ impl toasty_core::driver::Connection for Connection {
                 op.ret,
                 op.last_insert_id_hack,
             ),
+            Operation::RawSql(op) => {
+                let args = op
+                    .params
+                    .into_iter()
+                    .map(|tv| Value::from(tv.value).to_value())
+                    .collect();
+                let ret = match op.ret {
+                    RawSqlRet::None => SqlReturn::Count {
+                        last_insert_id_hack: None,
+                        sql_is_insert: false,
+                    },
+                    RawSqlRet::Infer => SqlReturn::Infer,
+                    RawSqlRet::Types(types) => SqlReturn::Types(types),
+                };
+                return self.exec_sql(&op.sql, args, ret).await;
+            }
             Operation::Transaction(op) => {
                 // MySQL has no `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE`
                 // analogue; reject non-Default modes loudly rather than
@@ -270,8 +392,6 @@ impl toasty_core::driver::Connection for Connection {
         let (sql_as_str, arg_order) =
             sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
 
-        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
-
         // MySQL uses positional `?` without indices, so params must be reordered
         // to match the order `Expr::Arg(n)` placeholders appear in the SQL.
         let params: Vec<_> = arg_order
@@ -283,94 +403,15 @@ impl toasty_core::driver::Connection for Connection {
             .map(|param| param.to_value())
             .collect::<Vec<_>>();
 
-        let statement = self
-            .conn
-            .prep(&sql_as_str)
-            .await
-            .map_err(|e| record_mysql_err(&self.valid, e))?;
+        let ret = match ret {
+            Some(types) => SqlReturn::Types(types),
+            None => SqlReturn::Count {
+                last_insert_id_hack,
+                sql_is_insert: matches!(sql, sql::Statement::Insert(_)),
+            },
+        };
 
-        if ret.is_none() {
-            let count = self
-                .conn
-                .exec_iter(&statement, mysql_async::Params::Positional(args))
-                .await
-                .map_err(|e| record_mysql_err(&self.valid, e))?
-                .affected_rows();
-
-            // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
-            if let Some(num_rows) = last_insert_id_hack {
-                // Assert the previous statement was an INSERT
-                assert!(
-                    matches!(sql, sql::Statement::Insert(_)),
-                    "last_insert_id_hack should only be used with INSERT statements"
-                );
-
-                // Execute SELECT LAST_INSERT_ID() on the same connection
-                let first_id: u64 = self
-                    .conn
-                    .query_first("SELECT LAST_INSERT_ID()")
-                    .await
-                    .map_err(|e| record_mysql_err(&self.valid, e))?
-                    .ok_or_else(|| {
-                        toasty_core::Error::driver_operation_failed(std::io::Error::other(
-                            "LAST_INSERT_ID() returned no rows",
-                        ))
-                    })?;
-
-                // Generate rows with sequential IDs
-                let results = (0..num_rows).map(move |offset| {
-                    let id = first_id + offset;
-                    // Return a record with a single field containing the ID
-                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
-                });
-
-                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-                    results,
-                )));
-            }
-
-            return Ok(ExecResponse::count(count));
-        }
-
-        let rows: Vec<mysql_async::Row> = self
-            .conn
-            .exec(&statement, &args)
-            .await
-            .map_err(|e| record_mysql_err(&self.valid, e))?;
-
-        if let Some(returning) = ret {
-            let results = rows.into_iter().map(move |mut row| {
-                assert_eq!(
-                    row.len(),
-                    returning.len(),
-                    "row={row:#?}; returning={returning:#?}"
-                );
-
-                let mut results = Vec::new();
-                for i in 0..row.len() {
-                    let column = &row.columns()[i];
-                    results.push(Value::from_sql(i, &mut row, column, &returning[i]).into_inner());
-                }
-
-                Ok(ValueRecord::from_vec(results))
-            });
-
-            Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-                results,
-            )))
-        } else {
-            let [row] = &rows[..] else { todo!() };
-            let total = row.get::<i64, usize>(0).unwrap();
-            let condition_matched = row.get::<i64, usize>(1).unwrap();
-
-            if total == condition_matched {
-                Ok(ExecResponse::count(total as _))
-            } else {
-                Err(toasty_core::Error::condition_failed(
-                    "update condition did not match",
-                ))
-            }
-        }
+        self.exec_sql(&sql_as_str, args, ret).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

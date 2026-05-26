@@ -56,6 +56,7 @@ pub mod lift_belongs_to_complex_filter;
 pub mod query_count;
 pub mod query_in_list;
 pub mod raw_identifier_fields;
+pub mod raw_sql;
 pub mod record_not_found;
 pub mod relation_belongs_to_configured;
 pub mod relation_belongs_to_embed_key;
