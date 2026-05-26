@@ -1,4 +1,5 @@
 use mysql_async::{Column, Row, prelude::ToValue};
+use std::fmt;
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
@@ -113,9 +114,9 @@ fn typed_mysql_value_to_core(
         | CT::MYSQL_TYPE_BLOB
         | CT::MYSQL_TYPE_ENUM
         | CT::MYSQL_TYPE_SET => match ty {
-            stmt::Type::String => convert_or_null(value, stmt::Value::String),
-            stmt::Type::Uuid => convert_or_null(value, stmt::Value::Uuid),
-            stmt::Type::Bytes => convert_or_null(value, stmt::Value::Bytes),
+            stmt::Type::String => bytes_to_string_value(value),
+            stmt::Type::Uuid => bytes_to_uuid_value(value),
+            stmt::Type::Bytes => bytes_to_bytes_value(value),
             _ => todo!("ty={ty:#?}"),
         },
 
@@ -124,15 +125,15 @@ fn typed_mysql_value_to_core(
         | CT::MYSQL_TYPE_INT24
         | CT::MYSQL_TYPE_LONG
         | CT::MYSQL_TYPE_LONGLONG => match ty {
-            stmt::Type::Bool => convert_or_null(value, stmt::Value::Bool),
-            stmt::Type::I8 => convert_or_null(value, stmt::Value::I8),
-            stmt::Type::I16 => convert_or_null(value, stmt::Value::I16),
-            stmt::Type::I32 => convert_or_null(value, stmt::Value::I32),
-            stmt::Type::I64 => convert_or_null(value, stmt::Value::I64),
-            stmt::Type::U8 => convert_or_null(value, stmt::Value::U8),
-            stmt::Type::U16 => convert_or_null(value, stmt::Value::U16),
-            stmt::Type::U32 => convert_or_null(value, stmt::Value::U32),
-            stmt::Type::U64 => convert_or_null(value, stmt::Value::U64),
+            stmt::Type::Bool => integer_to_bool_value(value),
+            stmt::Type::I8 => integer_to_signed_value(value, stmt::Value::I8, "i8"),
+            stmt::Type::I16 => integer_to_signed_value(value, stmt::Value::I16, "i16"),
+            stmt::Type::I32 => integer_to_signed_value(value, stmt::Value::I32, "i32"),
+            stmt::Type::I64 => integer_to_signed_value(value, stmt::Value::I64, "i64"),
+            stmt::Type::U8 => integer_to_unsigned_value(value, stmt::Value::U8, "u8"),
+            stmt::Type::U16 => integer_to_unsigned_value(value, stmt::Value::U16, "u16"),
+            stmt::Type::U32 => integer_to_unsigned_value(value, stmt::Value::U32, "u32"),
+            stmt::Type::U64 => integer_to_unsigned_value(value, stmt::Value::U64, "u64"),
             _ => todo!("ty={ty:#?}"),
         },
 
@@ -248,6 +249,102 @@ fn typed_mysql_value_to_core(
             value,
             ty
         ),
+    }
+}
+
+fn bytes_to_string_value(value: mysql_async::Value) -> stmt::Value {
+    match value {
+        mysql_async::Value::Bytes(bytes) => stmt::Value::String(
+            String::from_utf8(bytes).expect("invalid UTF-8 in MySQL string value"),
+        ),
+        mysql_async::Value::NULL => stmt::Value::Null,
+        value => panic!("unexpected MySQL value for string: {value:#?}"),
+    }
+}
+
+fn bytes_to_uuid_value(value: mysql_async::Value) -> stmt::Value {
+    match value {
+        mysql_async::Value::Bytes(bytes) => {
+            let uuid = uuid::Uuid::from_slice(&bytes).or_else(|_| {
+                let s = std::str::from_utf8(&bytes).expect("invalid UTF-8 in MySQL UUID value");
+                uuid::Uuid::parse_str(s)
+            });
+
+            stmt::Value::Uuid(uuid.expect("failed to parse UUID from MySQL value"))
+        }
+        mysql_async::Value::NULL => stmt::Value::Null,
+        value => panic!("unexpected MySQL value for UUID: {value:#?}"),
+    }
+}
+
+fn bytes_to_bytes_value(value: mysql_async::Value) -> stmt::Value {
+    match value {
+        mysql_async::Value::Bytes(bytes) => stmt::Value::Bytes(bytes),
+        mysql_async::Value::NULL => stmt::Value::Null,
+        value => panic!("unexpected MySQL value for bytes: {value:#?}"),
+    }
+}
+
+fn integer_to_bool_value(value: mysql_async::Value) -> stmt::Value {
+    match integer_to_u128(value) {
+        Some(value) => stmt::Value::Bool(value != 0),
+        None => stmt::Value::Null,
+    }
+}
+
+fn integer_to_signed_value<T>(
+    value: mysql_async::Value,
+    constructor: impl FnOnce(T) -> stmt::Value,
+    ty: &str,
+) -> stmt::Value
+where
+    T: TryFrom<i128>,
+    T::Error: fmt::Debug,
+{
+    match integer_to_i128(value) {
+        Some(value) => constructor(
+            value
+                .try_into()
+                .unwrap_or_else(|_| panic!("MySQL {ty} value out of range")),
+        ),
+        None => stmt::Value::Null,
+    }
+}
+
+fn integer_to_unsigned_value<T>(
+    value: mysql_async::Value,
+    constructor: impl FnOnce(T) -> stmt::Value,
+    ty: &str,
+) -> stmt::Value
+where
+    T: TryFrom<u128>,
+    T::Error: fmt::Debug,
+{
+    match integer_to_u128(value) {
+        Some(value) => constructor(
+            value
+                .try_into()
+                .unwrap_or_else(|_| panic!("MySQL {ty} value out of range")),
+        ),
+        None => stmt::Value::Null,
+    }
+}
+
+fn integer_to_i128(value: mysql_async::Value) -> Option<i128> {
+    match value {
+        mysql_async::Value::Int(value) => Some(value as i128),
+        mysql_async::Value::UInt(value) => Some(value as i128),
+        mysql_async::Value::NULL => None,
+        value => panic!("unexpected MySQL integer value: {value:#?}"),
+    }
+}
+
+fn integer_to_u128(value: mysql_async::Value) -> Option<u128> {
+    match value {
+        mysql_async::Value::Int(value) => Some(value.try_into().expect("negative MySQL integer")),
+        mysql_async::Value::UInt(value) => Some(value as u128),
+        mysql_async::Value::NULL => None,
+        value => panic!("unexpected MySQL integer value: {value:#?}"),
     }
 }
 
