@@ -28,7 +28,7 @@
 <p><code>Value</code> represents any concrete data value that flows through the query
 pipeline: field values read from or written to the database, literal
 constants in expressions, and intermediate results during query evaluation.</p>
-<p>Each variant wraps a Rust type that corresponds to a [<code>Type</code>] variant.
+<p>Each variant wraps a Rust type that corresponds to a <a href="enum.Type.html" title="enum toasty::stmt::Type"><code>Type</code></a> variant.
 Use <a href="enum.Value.html#method.infer_ty" title="method toasty::stmt::Value::infer_ty"><code>Value::infer_ty</code></a> to obtain the matching type, and <a href="enum.Value.html#method.is_a" title="method toasty::stmt::Value::is_a"><code>Value::is_a</code></a>
 to check compatibility.</p>
 <h2 id="construction"><a class="doc-anchor" href="#construction">§</a>Construction</h2>
@@ -188,10 +188,10 @@ panicking if this is not a <a href="enum.Value.html#variant.Record" title="varia
 panicking if this is not a <a href="enum.Value.html#variant.Record" title="variant toasty::stmt::Value::Record"><code>Value::Record</code></a>.</p>
 <h5 id="panics-14"><a class="doc-anchor" href="#panics-14">§</a>Panics</h5>
 <p>Panics if the value is not a <code>Record</code> variant.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="method.is_a" class="method"><h4 class="code-header">pub fn <a href="#method.is_a" class="fn">is_a</a>(&amp;self, ty: &amp;Type) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this value is compatible with the given [<code>Type</code>].</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.is_a" class="method"><h4 class="code-header">pub fn <a href="#method.is_a" class="fn">is_a</a>(&amp;self, ty: &amp;<a class="enum" href="enum.Type.html" title="enum toasty::stmt::Type">Type</a>) -&gt; <a class="primitive" href="https://doc.rust-lang.org/1.95.0/std/primitive.bool.html">bool</a></h4></section></summary><div class="docblock"><p>Returns <code>true</code> if this value is compatible with the given <a href="enum.Type.html" title="enum toasty::stmt::Type"><code>Type</code></a>.</p>
 <p>Null values are compatible with any type. For union types, the value
 must be compatible with at least one member type.</p>
-</div></details><details class="toggle method-toggle" open><summary><section id="method.infer_ty" class="method"><h4 class="code-header">pub fn <a href="#method.infer_ty" class="fn">infer_ty</a>(&amp;self) -&gt; Type</h4></section></summary><div class="docblock"><p>Infers and returns the [<code>Type</code>] of this value.</p>
+</div></details><details class="toggle method-toggle" open><summary><section id="method.infer_ty" class="method"><h4 class="code-header">pub fn <a href="#method.infer_ty" class="fn">infer_ty</a>(&amp;self) -&gt; <a class="enum" href="enum.Type.html" title="enum toasty::stmt::Type">Type</a></h4></section></summary><div class="docblock"><p>Infers and returns the <a href="enum.Type.html" title="enum toasty::stmt::Type"><code>Type</code></a> of this value.</p>
 <h5 id="examples-4"><a class="doc-anchor" href="#examples-4">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">assert_eq!</span>(Value::from(<span class="number">42_i64</span>).infer_ty(), Type::I64);
 <span class="macro">assert_eq!</span>(Value::from(<span class="string">"hello"</span>).infer_ty(), Type::String);

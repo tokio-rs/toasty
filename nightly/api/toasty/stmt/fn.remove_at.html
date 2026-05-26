@@ -4,7 +4,7 @@ that removes the element at that position. Out-of-bounds indices are
 a no-op rather than an error — per-row failure semantics on a bulk
 update are rarely useful.</p>
 <p>Atomic against the existing column value. Backends that advertise
-<a href="../db/struct.Capability.html#structfield.vec_remove_at" title="field toasty::db::Capability::vec_remove_at"><code>Capability::vec_remove_at</code></a>
+<a href="../struct.Capability.html#structfield.vec_remove_at" title="field toasty::Capability::vec_remove_at"><code>Capability::vec_remove_at</code></a>
 support this — currently PostgreSQL only; other backends return an
 error.</p>
 <h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>

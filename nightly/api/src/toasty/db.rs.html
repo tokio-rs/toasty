@@ -11,7 +11,7 @@
 <a href=#11 id=11 data-nosnippet>11</a><span class="kw">pub use </span>connection::Connection;
 <a href=#12 id=12 data-nosnippet>12</a><span class="kw">pub use </span>executor::Executor;
 <a href=#13 id=13 data-nosnippet>13</a><span class="kw">pub use </span>pool::{Pool, PoolStatus};
-<a href=#14 id=14 data-nosnippet>14</a><span class="kw">pub use </span>toasty_core::driver::{Capability, Driver};
+<a href=#14 id=14 data-nosnippet>14</a><span class="kw">pub use </span>toasty_core::driver::{Capability, Driver, SqlPlaceholder};
 <a href=#15 id=15 data-nosnippet>15</a><span class="kw">pub use </span>tx::{Transaction, TransactionBuilder};
 <a href=#16 id=16 data-nosnippet>16</a>
 <a href=#17 id=17 data-nosnippet>17</a><span class="doccomment">/// Response from executing a statement, including pagination metadata.
@@ -23,7 +23,7 @@
 <a href=#23 id=23 data-nosnippet>23</a><span class="kw">use </span>crate::{<span class="prelude-ty">Result</span>, engine::Engine};
 <a href=#24 id=24 data-nosnippet>24</a>
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">use </span>async_trait::async_trait;
-<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>toasty_core::{Schema, stmt};
+<a href=#26 id=26 data-nosnippet>26</a><span class="kw">use </span>toasty_core::{Schema, driver::operation::RawSql, stmt};
 <a href=#27 id=27 data-nosnippet>27</a>
 <a href=#28 id=28 data-nosnippet>28</a><span class="kw">use </span>std::sync::Arc;
 <a href=#29 id=29 data-nosnippet>29</a>
@@ -177,8 +177,17 @@
 <a href=#177 id=177 data-nosnippet>177</a>        <span class="self">self</span>.exec_stmt(stmt, <span class="bool-val">false</span>).<span class="kw">await
 <a href=#178 id=178 data-nosnippet>178</a>    </span>}
 <a href=#179 id=179 data-nosnippet>179</a>
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">fn </span>schema(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;Schema&gt; {
-<a href=#181 id=181 data-nosnippet>181</a>        Db::schema(<span class="self">self</span>)
-<a href=#182 id=182 data-nosnippet>182</a>    }
-<a href=#183 id=183 data-nosnippet>183</a>}
+<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">async fn </span>exec_raw_sql(<span class="kw-2">&amp;mut </span><span class="self">self</span>, raw: RawSql) -&gt; <span class="prelude-ty">Result</span>&lt;ExecResponse&gt; {
+<a href=#181 id=181 data-nosnippet>181</a>        <span class="kw">let </span>conn = <span class="self">self</span>.connection().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#182 id=182 data-nosnippet>182</a>        conn.exec_raw_sql(raw).<span class="kw">await
+<a href=#183 id=183 data-nosnippet>183</a>    </span>}
+<a href=#184 id=184 data-nosnippet>184</a>
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="kw">fn </span>capability(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Capability {
+<a href=#186 id=186 data-nosnippet>186</a>        Db::capability(<span class="self">self</span>)
+<a href=#187 id=187 data-nosnippet>187</a>    }
+<a href=#188 id=188 data-nosnippet>188</a>
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">fn </span>schema(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw-2">&amp;</span>Arc&lt;Schema&gt; {
+<a href=#190 id=190 data-nosnippet>190</a>        Db::schema(<span class="self">self</span>)
+<a href=#191 id=191 data-nosnippet>191</a>    }
+<a href=#192 id=192 data-nosnippet>192</a>}
 </code></pre></div></section></main></body></html>

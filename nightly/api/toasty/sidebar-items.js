@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"derive":["Embed","Model"],"macro":["create","models","query"],"mod":["db","migration","schema","stmt"],"struct":["Error","ModelSet"],"trait":["UpdateTarget"],"type":["Result"]};
+window.SIDEBAR_ITEMS = {"derive":["Embed","Model"],"enum":["SqlPlaceholder"],"macro":["create","models","query"],"mod":["db","migration","schema","sql","stmt"],"struct":["Capability","Error","ModelSet"],"trait":["UpdateTarget"],"type":["Result"]};

@@ -69,14 +69,26 @@
 <a href=#69 id=69 data-nosnippet>69</a>    }
 <a href=#70 id=70 data-nosnippet>70</a>}
 <a href=#71 id=71 data-nosnippet>71</a>
-<a href=#72 id=72 data-nosnippet>72</a><span class="kw">fn </span>value_list_to_json_text(value: <span class="kw-2">&amp;</span>CoreValue) -&gt; String {
-<a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">let </span>json = toasty_sql::value_json::value_list_to_json(value);
-<a href=#74 id=74 data-nosnippet>74</a>    serde_json::to_string(<span class="kw-2">&amp;</span>json).expect(<span class="string">"serialize Vec&lt;scalar&gt; to JSON"</span>)
-<a href=#75 id=75 data-nosnippet>75</a>}
-<a href=#76 id=76 data-nosnippet>76</a>
-<a href=#77 id=77 data-nosnippet>77</a><span class="kw">fn </span>json_text_to_value_list(text: <span class="kw-2">&amp;</span>str, elem_ty: <span class="kw-2">&amp;</span>stmt::Type) -&gt; CoreValue {
-<a href=#78 id=78 data-nosnippet>78</a>    <span class="kw">let </span>json: serde_json::Value =
-<a href=#79 id=79 data-nosnippet>79</a>        serde_json::from_str(text).expect(<span class="string">"Turso returned non-JSON for a Vec&lt;scalar&gt; column"</span>);
-<a href=#80 id=80 data-nosnippet>80</a>    toasty_sql::value_json::value_list_from_json(json, elem_ty)
-<a href=#81 id=81 data-nosnippet>81</a>}
+<a href=#72 id=72 data-nosnippet>72</a><span class="doccomment">/// Converts a [`turso::Value`] back to a [`toasty_core::stmt::Value`] using
+<a href=#73 id=73 data-nosnippet>73</a>/// SQLite's runtime storage class.
+<a href=#74 id=74 data-nosnippet>74</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>from_turso_infer(value: TursoValue) -&gt; CoreValue {
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">match </span>value {
+<a href=#76 id=76 data-nosnippet>76</a>        TursoValue::Null =&gt; CoreValue::Null,
+<a href=#77 id=77 data-nosnippet>77</a>        TursoValue::Integer(v) =&gt; CoreValue::I64(v),
+<a href=#78 id=78 data-nosnippet>78</a>        TursoValue::Real(v) =&gt; CoreValue::F64(v),
+<a href=#79 id=79 data-nosnippet>79</a>        TursoValue::Text(v) =&gt; CoreValue::String(v),
+<a href=#80 id=80 data-nosnippet>80</a>        TursoValue::Blob(v) =&gt; CoreValue::Bytes(v),
+<a href=#81 id=81 data-nosnippet>81</a>    }
+<a href=#82 id=82 data-nosnippet>82</a>}
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a><span class="kw">fn </span>value_list_to_json_text(value: <span class="kw-2">&amp;</span>CoreValue) -&gt; String {
+<a href=#85 id=85 data-nosnippet>85</a>    <span class="kw">let </span>json = toasty_sql::value_json::value_list_to_json(value);
+<a href=#86 id=86 data-nosnippet>86</a>    serde_json::to_string(<span class="kw-2">&amp;</span>json).expect(<span class="string">"serialize Vec&lt;scalar&gt; to JSON"</span>)
+<a href=#87 id=87 data-nosnippet>87</a>}
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a><span class="kw">fn </span>json_text_to_value_list(text: <span class="kw-2">&amp;</span>str, elem_ty: <span class="kw-2">&amp;</span>stmt::Type) -&gt; CoreValue {
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span>json: serde_json::Value =
+<a href=#91 id=91 data-nosnippet>91</a>        serde_json::from_str(text).expect(<span class="string">"Turso returned non-JSON for a Vec&lt;scalar&gt; column"</span>);
+<a href=#92 id=92 data-nosnippet>92</a>    toasty_sql::value_json::value_list_from_json(json, elem_ty)
+<a href=#93 id=93 data-nosnippet>93</a>}
 </code></pre></div></section></main></body></html>

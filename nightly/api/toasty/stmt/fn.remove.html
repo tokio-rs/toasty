@@ -5,7 +5,7 @@ for <code>List&lt;T&gt;</code> (the collection).</p>
 <ul>
 <li><strong><code>Vec&lt;scalar&gt;</code> field</strong>: every element equal to the value is removed,
 atomically against the existing column value. Backends that advertise
-<a href="../db/struct.Capability.html#structfield.vec_remove" title="field toasty::db::Capability::vec_remove"><code>Capability::vec_remove</code></a>
+<a href="../struct.Capability.html#structfield.vec_remove" title="field toasty::Capability::vec_remove"><code>Capability::vec_remove</code></a>
 support this — currently PostgreSQL only; other backends return an
 error.</li>
 <li><strong>Has-many relation</strong>: the related record is dissociated. With an
