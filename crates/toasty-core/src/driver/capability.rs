@@ -127,9 +127,22 @@ pub struct Capability {
     /// Whether the database has a native prefix-match operator that does not
     /// require LIKE-style escaping. When `true`, `starts_with` is left in the
     /// AST and the driver renders it natively (DynamoDB's `begins_with()`,
-    /// PostgreSQL's `^@`). When `false`, the lowering rewrites it to a
-    /// `LIKE` expression — which requires `native_like` to be `true`.
+    /// PostgreSQL's `^@`, SQLite's `GLOB`, MySQL's `LIKE BINARY`). When
+    /// `false`, the lowering rewrites it to a `LIKE` expression — which
+    /// requires `native_like` to be `true`.
     pub native_starts_with: bool,
+
+    /// Whether `starts_with` should be rendered as a SQLite `GLOB 'prefix*'`
+    /// expression. When `true`, `extract_params` escapes GLOB metacharacters
+    /// (`*`, `?`, `[`) in the prefix and appends `*`; the serializer emits
+    /// `col GLOB ?`. Implies `native_starts_with`.
+    pub glob_starts_with: bool,
+
+    /// Whether `starts_with` should be rendered as MySQL `BINARY col LIKE ?
+    /// ESCAPE '!'`. When `true`, `extract_params` escapes LIKE metacharacters
+    /// using `!` as the escape char and appends `%`; the serializer emits
+    /// `BINARY col LIKE ? ESCAPE '!'`. Implies `native_starts_with`.
+    pub binary_like_starts_with: bool,
 
     /// Whether the database has a native `LIKE` expression. When `false`,
     /// `Expr::Like` cannot be sent to the driver; `starts_with` lowering
@@ -423,6 +436,24 @@ impl Capability {
             ));
         }
 
+        if self.glob_starts_with && !self.native_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "glob_starts_with is true but native_starts_with is false",
+            ));
+        }
+
+        if self.binary_like_starts_with && !self.native_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "binary_like_starts_with is true but native_starts_with is false",
+            ));
+        }
+
+        if self.glob_starts_with && self.binary_like_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "glob_starts_with and binary_like_starts_with cannot both be true",
+            ));
+        }
+
         if self.sql && self.sql_placeholder.is_none() {
             return Err(crate::Error::invalid_driver_configuration(
                 "sql is true but sql_placeholder is None",
@@ -506,7 +537,11 @@ impl Capability {
 
         index_or_predicate: true,
 
-        native_starts_with: false,
+        // SQLite's GLOB operator is case-sensitive and is used for starts_with.
+        // LIKE is preserved for user-supplied `.like()` calls.
+        native_starts_with: true,
+        glob_starts_with: true,
+        binary_like_starts_with: false,
         native_like: true,
 
         // SQLite's `LIKE` is case-insensitive for ASCII only; it has no
@@ -566,6 +601,8 @@ impl Capability {
 
         // PostgreSQL has the `^@` prefix-match operator.
         native_starts_with: true,
+        glob_starts_with: false,
+        binary_like_starts_with: false,
 
         // PostgreSQL is the only backend with a native `ILIKE` operator.
         native_ilike: true,
@@ -648,6 +685,10 @@ impl Capability {
         bind_list_param: true,
         vec_scalar: true,
 
+        // MySQL uses BINARY col LIKE ? ESCAPE '!' for case-sensitive starts_with.
+        glob_starts_with: false,
+        binary_like_starts_with: true,
+
         ..Self::SQLITE
     };
 
@@ -702,6 +743,8 @@ impl Capability {
 
         // DynamoDB has `begins_with()` but no LIKE or ILIKE.
         native_starts_with: true,
+        glob_starts_with: false,
+        binary_like_starts_with: false,
         native_like: false,
         native_ilike: false,
 
