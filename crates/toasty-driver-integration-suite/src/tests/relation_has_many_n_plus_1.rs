@@ -13,9 +13,9 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
     // Create a user with a few todos
     let user = User::create()
         .name("x")
-        .todo(Todo::create().category(&cat1).title("one"))
-        .todo(Todo::create().category(&cat2).title("two"))
-        .todo(Todo::create().category(&cat2).title("three"))
+        .todos([Todo::create().category(&cat1).title("one")])
+        .todos([Todo::create().category(&cat2).title("two")])
+        .todos([Todo::create().category(&cat2).title("three")])
         .exec(&mut db)
         .await?;
 
@@ -62,17 +62,17 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
     // Create a board with 5 users
     let board = Board::create()
         .name("Test Board")
-        .user(User::create().name("User 1"))
-        .user(User::create().name("User 2"))
-        .user(User::create().name("User 3"))
-        .user(User::create().name("User 4"))
-        .user(User::create().name("User 5"))
+        .users([User::create().name("User 1")])
+        .users([User::create().name("User 2")])
+        .users([User::create().name("User 3")])
+        .users([User::create().name("User 4")])
+        .users([User::create().name("User 5")])
         .exec(&mut db)
         .await?;
 
     Board::create()
         .name("Test Board2")
-        .user(User::create().name("User 6"))
+        .users([User::create().name("User 6")])
         .exec(&mut db)
         .await?;
 

@@ -161,17 +161,11 @@ impl Expand<'_> {
                         if rel.via.is_some() {
                             TokenStream::new()
                         } else {
-                            let singular = &rel.singular.ident;
                             let plural = name;
                             let ty = &rel.ty;
                             let target = quote!(<#ty as #toasty::RelationManyField>::Model);
 
                             quote! {
-                                #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<#target>) -> Self {
-                                    self.stmt.insert(#index_tokenized, #singular.into_expr());
-                                    self
-                                }
-
                                 #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<#target>>) -> Self {
                                     self.stmt.insert_all(#index_tokenized, #plural.into_expr());
                                     self
