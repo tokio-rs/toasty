@@ -143,10 +143,9 @@ impl Expand<'_> {
                 match &field.ty {
                     FieldTy::BelongsTo(rel) => {
                         let ty = &rel.ty;
-                        let target = quote!(<#ty as #toasty::BelongsToField>::Target);
 
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#target as #toasty::Relation>::Expr>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::BelongsToField>::Expr>) -> Self {
                                 // Silences unused field warning when the field is set on creation.
                                 if false {
                                     let m = <#model_ident as #toasty::Load>::load(Default::default()).unwrap();
@@ -162,15 +161,15 @@ impl Expand<'_> {
                         let singular = &rel.singular.ident;
                         let plural = name;
                         let ty = &rel.ty;
-                        let target = quote!(<#ty as #toasty::HasManyField>::Target);
+                        let target = quote!(<#ty as #toasty::HasManyField>::Model);
 
                         quote! {
-                            #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#target as #toasty::Relation>::Expr>) -> Self {
+                            #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<#target>) -> Self {
                                 self.stmt.insert(#index_tokenized, #singular.into_expr());
                                 self
                             }
 
-                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<<#target as #toasty::Relation>::Model>>) -> Self {
+                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<#target>>) -> Self {
                                 self.stmt.insert_all(#index_tokenized, #plural.into_expr());
                                 self
                             }
@@ -178,10 +177,9 @@ impl Expand<'_> {
                     }
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
-                        let target = quote!(<#ty as #toasty::HasOneField>::Target);
 
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#target as #toasty::Relation>::Expr>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::HasOneField>::Expr>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

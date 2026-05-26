@@ -137,14 +137,14 @@ impl Expand<'_> {
                                     index: #source,
                                 },
                                 target: {
-                                    type __RelationTarget = <#ty as #toasty::BelongsToField>::Target;
-                                    <__RelationTarget as #toasty::Relation>::field_name_to_id(#target)
+                                    type __RelationTarget = <#ty as #toasty::BelongsToField>::Model;
+                                    <__RelationTarget as #toasty::Model>::field_name_to_id(#target)
                                 },
                             }
                         }
                     });
 
-                    nullable = quote!(<#ty as #toasty::BelongsToField>::nullable());
+                    nullable = quote!(<#ty as #toasty::BelongsToField>::NULLABLE);
                     deferred = quote!(<#ty as #toasty::BelongsToField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::BelongsToField>::belongs_to_field_ty(
                         #toasty::core::schema::app::ForeignKey {
@@ -158,7 +158,7 @@ impl Expand<'_> {
                     let pair = expand_pair(toasty, quote!(#toasty::HasManyField), ty, rel.pair.as_ref());
                     let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
-                    nullable = quote!(<#ty as #toasty::HasManyField>::nullable());
+                    nullable = quote!(<#ty as #toasty::HasManyField>::NULLABLE);
                     deferred = quote!(<#ty as #toasty::HasManyField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::HasManyField>::has_many_field_ty(#singular_name, #pair, #via));
                 }
@@ -167,7 +167,7 @@ impl Expand<'_> {
                     let pair = expand_pair(toasty, quote!(#toasty::HasOneField), ty, rel.pair.as_ref());
                     let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
-                    nullable = quote!(<#ty as #toasty::HasOneField>::nullable());
+                    nullable = quote!(<#ty as #toasty::HasOneField>::NULLABLE);
                     deferred = quote!(<#ty as #toasty::HasOneField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::HasOneField>::has_one_field_ty(#pair, #via));
                 }
@@ -450,28 +450,19 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        {
-                            type __RelationTarget = <#ty as #toasty::BelongsToField>::Target;
-                            <<__RelationTarget as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
-                        }
+                        <<#ty as #toasty::BelongsToField>::Model as #toasty::Register>::register(model_set);
                     }
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        {
-                            type __RelationTarget = <#ty as #toasty::HasManyField>::Target;
-                            <<__RelationTarget as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
-                        }
+                        <<#ty as #toasty::HasManyField>::Model as #toasty::Register>::register(model_set);
                     }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        {
-                            type __RelationTarget = <#ty as #toasty::HasOneField>::Target;
-                            <<__RelationTarget as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
-                        }
+                        <<#ty as #toasty::HasOneField>::Model as #toasty::Register>::register(model_set);
                     }
                 }
             })
@@ -503,8 +494,8 @@ fn expand_pair(
             let name = ident.to_string();
             quote! {
                 Some({
-                    type __RelationTarget = <#target_ty as #field_trait>::Target;
-                    <__RelationTarget as #toasty::Relation>::field_name_to_id(#name)
+                    type __RelationTarget = <#target_ty as #field_trait>::Model;
+                    <__RelationTarget as #toasty::Model>::field_name_to_id(#name)
                 })
             }
         }

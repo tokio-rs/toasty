@@ -162,14 +162,14 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::BelongsToField>::Target);
+        let target = quote!(<#ty as #toasty::BelongsToField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
                 use #toasty::IntoStatement;
-                <#target as #toasty::Relation>::Query::from_stmt(
+                <<#target as #toasty::Model>::Query>::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_statement().into_query().unwrap()
@@ -182,14 +182,14 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::HasManyField>::Target);
+        let target = quote!(<#ty as #toasty::HasManyField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
                 use #toasty::IntoStatement;
-                <#target as #toasty::Relation>::Query::from_stmt(
+                <<#target as #toasty::Model>::Query>::from_stmt(
                     #toasty::stmt::Association::many(
                         self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_statement().into_query().unwrap()
@@ -202,14 +202,14 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::HasOneField>::Target);
+        let target = quote!(<#ty as #toasty::HasOneField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
                 use #toasty::IntoStatement;
-                <#target as #toasty::Relation>::Query::from_stmt(
+                <<#target as #toasty::Model>::Query>::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_statement().into_query().unwrap()

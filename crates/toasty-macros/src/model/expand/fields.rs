@@ -91,8 +91,8 @@ impl Expand<'_> {
                         };
 
                         quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> <<#ty as #toasty::HasManyField>::Target as #toasty::Relation>::ManyField<__Origin> {
-                                <<#ty as #toasty::HasManyField>::Target as #toasty::Relation>::ManyField::from_path(#path)
+                            #vis fn #field_ident(&self) -> <<#ty as #toasty::HasManyField>::Model as #toasty::Model>::ManyField<__Origin> {
+                                <<<#ty as #toasty::HasManyField>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
                             }
                         }
                     }
@@ -384,8 +384,8 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Relation>::ManyField<__Origin> {
-                <<#ty as #field_trait>::Target as #toasty::Relation>::ManyField::from_path(
+            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Model as #toasty::Model>::ManyField<__Origin> {
+                <<<#ty as #field_trait>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(
                     self.path().chain(
                         #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
                     )
