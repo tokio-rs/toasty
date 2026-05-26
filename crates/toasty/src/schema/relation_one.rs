@@ -7,6 +7,7 @@ use toasty_core::stmt;
 impl<M: Model> RelationOneField for M {
     type Model = M;
     type One = M::One;
+    type ViaOne = M::ViaOne;
     type Expr = M;
 
     const DEFERRED: bool = false;
@@ -28,6 +29,7 @@ impl<M: Model> RelationOneField for M {
 impl<M: Model> RelationOneField for Option<M> {
     type Model = M;
     type One = M::OptionOne;
+    type ViaOne = M::ViaOptionOne;
     type Expr = Option<M>;
 
     const DEFERRED: bool = false;
@@ -49,6 +51,7 @@ impl<M: Model> RelationOneField for Option<M> {
 impl<M: Model> RelationOneField for Deferred<M> {
     type Model = M;
     type One = M::One;
+    type ViaOne = M::ViaOne;
     type Expr = M;
 
     const DEFERRED: bool = true;
@@ -71,6 +74,7 @@ impl<M: Model> RelationOneField for Deferred<M> {
 impl<M: Model> RelationOneField for Deferred<Option<M>> {
     type Model = M;
     type One = M::OptionOne;
+    type ViaOne = M::ViaOptionOne;
     type Expr = Option<M>;
 
     const DEFERRED: bool = true;

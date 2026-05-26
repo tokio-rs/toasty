@@ -1,0 +1,21 @@
+error[E0599]: no method named `tags` found for struct `UserUpdate<__toasty_T>` in the current scope
+  --> tests/ui/update_via_relation_insert.rs:52:10
+   |
+ 1 |   #[derive(Debug, toasty::Model)]
+   |                   ------------- method `tags` not found for this struct
+...
+50 |       let _ = user
+   |               ----
+   |               |
+   |  _____________method `tags` is available on `&mut User`
+   | |
+51 | |         .update()
+52 | |         .tags(toasty::stmt::insert(Tag::create().id(1).name("urgent")));
+   | |         -^^^^ method not found in `UserUpdate<&mut User>`
+   | |_________|
+   |
+   |
+help: one of the expressions' fields has a method of the same name
+   |
+52 |         .target.tags(toasty::stmt::insert(Tag::create().id(1).name("urgent")));
+   |          +++++++

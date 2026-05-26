@@ -48,7 +48,7 @@ fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
 
     let scope_fields_call =
         quote_spanned! { span=> toasty::codegen_support::scope_fields(&__scope) };
-    let create_call = quote_spanned! { span=> __scope.create() };
+    let create_call = quote_spanned! { span=> toasty::codegen_support::create_in_scope(__scope) };
 
     let monomorphize_check = expand_monomorphize_check(&field_names);
 
@@ -57,7 +57,7 @@ fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
             let __scope = #expr;
 
             #monomorphize_check
-            fn __force_check<__S: toasty::codegen_support::ValidateCreate>(_: &__S) {
+            fn __force_check<__S: toasty::codegen_support::CreateScope>(_: &__S) {
                 let _ = __Check::<__S>::__ASSERT;
             }
             __force_check(&__scope);
@@ -178,10 +178,10 @@ fn field_name_strs(fields: &FieldSet) -> Vec<String> {
 /// `__check_create_fields` method instead, which has field-specific messages.
 fn expand_monomorphize_check(field_names: &[String]) -> TokenStream {
     quote! {
-        struct __Check<__S: toasty::codegen_support::ValidateCreate>(
+        struct __Check<__S: toasty::codegen_support::CreateScope>(
             std::marker::PhantomData<__S>,
         );
-        impl<__S: toasty::codegen_support::ValidateCreate> __Check<__S> {
+        impl<__S: toasty::codegen_support::CreateScope> __Check<__S> {
             const __ASSERT: () = toasty::codegen_support::assert_create_fields(
                 __S::CREATE_META,
                 &[ #( #field_names ),* ],

@@ -36,12 +36,12 @@ pub use register::{DiscoverItem, Register, generate_unique_id};
 mod num;
 
 mod relation;
-pub use relation::{RelationManyField, RelationOneField};
+pub use relation::{Direct, RelationManyField, RelationOneField, Via};
 
 mod relation_one;
 
 mod scope;
-pub use scope::Scope;
+pub use scope::{CreateScope, Scope};
 
 use crate::Result;
 

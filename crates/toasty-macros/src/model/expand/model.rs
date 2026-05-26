@@ -134,11 +134,14 @@ impl Expand<'_> {
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
-                type Many = Many;
+                type Many = Many<#toasty::Direct>;
+                type ViaMany = Many<#toasty::Via>;
                 type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type One = One;
+                type One = One<#toasty::Direct>;
+                type ViaOne = One<#toasty::Via>;
                 type OneField<__Origin> = #field_struct_ident<__Origin>;
-                type OptionOne = OptionOne;
+                type OptionOne = OptionOne<#toasty::Direct>;
+                type ViaOptionOne = OptionOne<#toasty::Via>;
 
                 const CREATE_META: #toasty::CreateMeta = #toasty::CreateMeta {
                     fields: &[ #create_meta_fields ],
