@@ -991,10 +991,14 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field.nullable || self.in_enum_variant`, and auto-increment from
     /// `field.is_auto_increment()`.
     fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
-        let mut storage_ty = db::Type::from_app(
+        let is_auto_increment = (field.is_auto_increment() || self.inherited_auto_increment)
+            && self.build.db.auto_increment;
+
+        let mut storage_ty = db::Type::from_app_column(
             &primitive.ty,
             primitive.storage_ty.as_ref(),
-            &self.build.db.storage_types,
+            self.build.db,
+            is_auto_increment,
         )
         .expect("unsupported storage type");
 
@@ -1018,8 +1022,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             storage_ty,
             nullable: field.nullable || self.in_enum_variant,
             primary_key: false,
-            auto_increment: (field.is_auto_increment() || self.inherited_auto_increment)
-                && self.build.db.auto_increment,
+            auto_increment: is_auto_increment,
             versionable: field.is_versionable(),
         });
 
