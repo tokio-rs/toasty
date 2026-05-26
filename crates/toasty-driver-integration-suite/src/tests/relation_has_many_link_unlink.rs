@@ -31,8 +31,8 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
 
     // Create a user with some todos
     let user = User::create()
-        .todo(Todo::create())
-        .todo(Todo::create())
+        .todos([Todo::create()])
+        .todos([Todo::create()])
         .exec(&mut db)
         .await?;
 
@@ -55,7 +55,7 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
 
     // Create a second user w/ a TODO. We will ensure that unlinking *only*
     // unlinks records currently associated with the base model.
-    let u2 = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let u2 = User::create().todos([Todo::create()]).exec(&mut db).await?;
     let u2_todos = u2.todos().exec(&mut db).await?;
 
     // Try unlinking u2's todo via user. This should fail

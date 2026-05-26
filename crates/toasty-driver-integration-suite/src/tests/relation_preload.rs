@@ -45,9 +45,9 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()
     // Create a user with a few todos
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("todo 1"))
-        .todo(Todo::create().title("todo 2"))
-        .todo(Todo::create().title("todo 3"))
+        .todos([Todo::create().title("todo 1")])
+        .todos([Todo::create().title("todo 2")])
+        .todos([Todo::create().title("todo 3")])
         .exec(&mut db)
         .await?;
 
@@ -402,9 +402,9 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
     let user = User::create()
         .name("Bob Smith")
         .profile(Profile::create().bio("Developer"))
-        .todo(Todo::create().title("Task 1"))
-        .todo(Todo::create().title("Task 2"))
-        .todo(Todo::create().title("Task 3"))
+        .todos([Todo::create().title("Task 1")])
+        .todos([Todo::create().title("Task 2")])
+        .todos([Todo::create().title("Task 3")])
         .exec(&mut db)
         .await?;
 
@@ -532,8 +532,8 @@ pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Resul
     // Create a user with linked todos
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("Task 1"))
-        .todo(Todo::create().title("Task 2"))
+        .todos([Todo::create().title("Task 1")])
+        .todos([Todo::create().title("Task 2")])
         .exec(&mut db)
         .await?;
 
@@ -761,19 +761,15 @@ pub async fn nested_has_many_preload(test: &mut Test) {
     // Create a user with todos, each with steps
     let user = User::create()
         .name("Alice")
-        .todo(
-            Todo::create()
-                .title("Todo 1")
-                .step(Step::create().description("Step 1a"))
-                .step(Step::create().description("Step 1b")),
-        )
-        .todo(
-            Todo::create()
-                .title("Todo 2")
-                .step(Step::create().description("Step 2a"))
-                .step(Step::create().description("Step 2b"))
-                .step(Step::create().description("Step 2c")),
-        )
+        .todos([Todo::create()
+            .title("Todo 1")
+            .steps([Step::create().description("Step 1a")])
+            .steps([Step::create().description("Step 1b")])])
+        .todos([Todo::create()
+            .title("Todo 2")
+            .steps([Step::create().description("Step 2a")])
+            .steps([Step::create().description("Step 2b")])
+            .steps([Step::create().description("Step 2c")])])
         .exec(&mut db)
         .await
         .unwrap();
@@ -860,12 +856,10 @@ pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()
 
     let user = User::create()
         .name("Alice")
-        .post(
-            Post::create()
-                .title("P1")
-                .detail(Detail::create().body("D1")),
-        )
-        .post(Post::create().title("P2")) // no detail
+        .posts([Post::create()
+            .title("P1")
+            .detail(Detail::create().body("D1"))])
+        .posts([Post::create().title("P2")]) // no detail
         .exec(&mut db)
         .await?;
 
@@ -950,16 +944,12 @@ pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()
 
     let user = User::create()
         .name("Bob")
-        .account(
-            Account::create()
-                .label("A1")
-                .settings(Settings::create().theme("dark")),
-        )
-        .account(
-            Account::create()
-                .label("A2")
-                .settings(Settings::create().theme("light")),
-        )
+        .accounts([Account::create()
+            .label("A1")
+            .settings(Settings::create().theme("dark"))])
+        .accounts([Account::create()
+            .label("A2")
+            .settings(Settings::create().theme("light"))])
         .exec(&mut db)
         .await?;
 
@@ -1037,8 +1027,8 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
 
     let cat = Category::create()
         .name("Electronics")
-        .item(Item::create().title("Phone").brand(&brand_a))
-        .item(Item::create().title("Laptop").brand(&brand_b))
+        .items([Item::create().title("Phone").brand(&brand_a)])
+        .items([Item::create().title("Laptop").brand(&brand_b)])
         .exec(&mut db)
         .await?;
 
@@ -1113,8 +1103,8 @@ pub async fn nested_has_many_then_shared_belongs_to(test: &mut Test) -> Result<(
     let brand = Brand::create().name("BrandA").exec(&mut db).await?;
     let cat = Category::create()
         .name("Electronics")
-        .item(Item::create().title("Phone").brand(&brand))
-        .item(Item::create().title("Laptop").brand(&brand))
+        .items([Item::create().title("Phone").brand(&brand)])
+        .items([Item::create().title("Laptop").brand(&brand)])
         .exec(&mut db)
         .await?;
 
@@ -1187,8 +1177,8 @@ pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result
 
     let team = Team::create()
         .name("Engineering")
-        .task(Task::create().title("Assigned").assignee(&person))
-        .task(Task::create().title("Unassigned"))
+        .tasks([Task::create().title("Assigned").assignee(&person)])
+        .tasks([Task::create().title("Unassigned")])
         .exec(&mut db)
         .await?;
 
@@ -1277,8 +1267,8 @@ pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()
         .profile(
             Profile::create()
                 .bio("hi")
-                .badge(Badge::create().label("Gold"))
-                .badge(Badge::create().label("Silver")),
+                .badges([Badge::create().label("Gold")])
+                .badges([Badge::create().label("Silver")]),
         )
         .exec(&mut db)
         .await?;
@@ -1371,8 +1361,8 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
         .invoice(
             Invoice::create()
                 .code("INV-001")
-                .line_item(LineItem::create().description("Widget"))
-                .line_item(LineItem::create().description("Gadget")),
+                .line_items([LineItem::create().description("Widget")])
+                .line_items([LineItem::create().description("Gadget")]),
         )
         .exec(&mut db)
         .await?;
@@ -1712,8 +1702,8 @@ pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result
 
     let post = Post::create()
         .title("Hello")
-        .tag(Tag::create().label("rust"))
-        .tag(Tag::create().label("orm"))
+        .tags([Tag::create().label("rust")])
+        .tags([Tag::create().label("orm")])
         .exec(&mut db)
         .await?;
 
@@ -1802,7 +1792,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
     let user = User::create()
         .name("Alice")
         .profile(Profile::create().bio("developer"))
-        .todo(Todo::create().title("Task 1"))
+        .todos([Todo::create().title("Task 1")])
         .exec(&mut db)
         .await?;
 
@@ -1820,7 +1810,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
     // User without profile
     let user2 = User::create()
         .name("Bob")
-        .todo(Todo::create().title("Task 2"))
+        .todos([Todo::create().title("Task 2")])
         .exec(&mut db)
         .await?;
 
@@ -1893,11 +1883,9 @@ pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test
 
     let user = User::create()
         .name("Alice")
-        .todo(
-            Todo::create()
-                .title("T1")
-                .step(Step::create().description("S1")),
-        )
+        .todos([Todo::create()
+            .title("T1")
+            .steps([Step::create().description("S1")])])
         .exec(&mut db)
         .await?;
 
@@ -1969,8 +1957,8 @@ pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result
 
     let project = Project::create()
         .name("Proj1")
-        .member(Member::create().name("Alice"))
-        .member(Member::create().name("Bob"))
+        .members([Member::create().name("Alice")])
+        .members([Member::create().name("Bob")])
         .exec(&mut db)
         .await?;
 
@@ -2164,7 +2152,7 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
     let user = User::create()
         .name("Alice")
         .config(Config::create().theme("dark"))
-        .todo(Todo::create().title("Task"))
+        .todos([Todo::create().title("Task")])
         .exec(&mut db)
         .await?;
 
@@ -2238,12 +2226,10 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
 
     let user = User::create()
         .name("Alice")
-        .todo(
-            Todo::create()
-                .title("With Steps")
-                .step(Step::create().description("S1")),
-        )
-        .todo(Todo::create().title("No Steps")) // empty nested
+        .todos([Todo::create()
+            .title("With Steps")
+            .steps([Step::create().description("S1")])])
+        .todos([Todo::create().title("No Steps")]) // empty nested
         .exec(&mut db)
         .await
         .unwrap();
