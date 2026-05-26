@@ -11,7 +11,7 @@ use toasty_core::stmt;
 /// impls is the source of truth for which Rust shapes are valid as a
 /// has-many field: anything outside those two combinations does not satisfy
 /// the trait.
-pub trait HasManyField: Load<Output = Self> {
+pub trait RelationManyField: Load<Output = Self> {
     /// The target model that this field references.
     type Model: Model;
 
@@ -35,17 +35,21 @@ pub trait HasManyField: Load<Output = Self> {
     /// `via` carries the fully resolved [`stmt::Path`] of a
     /// `#[has_many(via = a.b)]` multi-step relation, rooted at the declaring
     /// model. A `via` relation has no pair.
-    fn has_many_field_ty(singular: Name, pair: Option<FieldId>, via: Option<stmt::Path>)
-    -> FieldTy;
+    fn many_relation_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<stmt::Path>,
+    ) -> FieldTy;
 }
 
-/// A Rust field type that represents a `#[has_one]` relation.
+/// A Rust field type that represents a `#[has_one]` or `#[belongs_to]`
+/// relation.
 ///
 /// Implemented by `M`, `Option<M>`, `Deferred<M>`, and `Deferred<Option<M>>`
 /// where `M: Model`. The `Option<...>` wrappers carry nullability; the
 /// `Deferred<...>` wrappers carry deferred loading. Anything outside this
 /// shape does not satisfy the trait.
-pub trait HasOneField: Load<Output = Self> {
+pub trait RelationOneField: Load<Output = Self> {
     /// The target model that this field references.
     type Model: Model;
 
@@ -77,39 +81,9 @@ pub trait HasOneField: Load<Output = Self> {
     /// `via` carries the fully resolved [`stmt::Path`] of a
     /// `#[has_one(via = a.b)]` multi-step relation, rooted at the declaring
     /// model. A `via` relation has no pair.
-    fn has_one_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy;
-}
-
-/// A Rust field type that represents a `#[belongs_to]` relation.
-///
-/// Implemented by `M`, `Option<M>`, `Deferred<M>`, and `Deferred<Option<M>>`
-/// where `M: Model`. The `Option<...>` wrappers carry nullability; the
-/// `Deferred<...>` wrappers carry deferred loading. Anything outside this
-/// shape does not satisfy the trait.
-pub trait BelongsToField: Load<Output = Self> {
-    /// The target model that this field references.
-    type Model: Model;
-
-    /// The "one-side" accessor type produced by the field accessor. Resolves
-    /// to [`Model::One`] for non-nullable impls and [`Model::OptionOne`] for
-    /// nullable impls.
-    type One;
-
-    /// The expression-level type used in create/update setters. Resolves to
-    /// the unwrapped `Self::Model` for non-nullable impls and `Option<Self::Model>`
-    /// for nullable impls.
-    type Expr;
-
-    /// Whether the field stores its value in a deferred load slot.
-    const DEFERRED: bool;
-
-    /// Whether the field is nullable (i.e. wrapped in `Option`).
-    const NULLABLE: bool;
-
-    /// Reloads this relation field from a returned value.
-    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
+    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy;
 
     /// Build the [`FieldTy`] for a `BelongsTo` relation field, given the
     /// foreign key resolved from the field's `#[belongs_to(...)]` attribute.
-    fn belongs_to_field_ty(foreign_key: ForeignKey) -> FieldTy;
+    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy;
 }

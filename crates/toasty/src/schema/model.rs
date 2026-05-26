@@ -9,9 +9,8 @@ use toasty_core::schema::app::FieldId;
 /// Root models have primary keys, can be queried independently, and support
 /// full CRUD operations. They extend `Register` with queryability and
 /// deserialization capabilities, and carry the relation-target metadata
-/// that the [`HasManyField`](super::HasManyField),
-/// [`HasOneField`](super::HasOneField), and
-/// [`BelongsToField`](super::BelongsToField) traits project through when
+/// that the [`RelationManyField`](super::RelationManyField) and
+/// [`RelationOneField`](super::RelationOneField) traits project through when
 /// describing a field that references this model.
 pub trait Model: Register + Load<Output = Self> + Sized {
     /// Query builder type for this model

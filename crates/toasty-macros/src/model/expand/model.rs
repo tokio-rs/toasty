@@ -551,15 +551,15 @@ impl Expand<'_> {
                     }
                     FieldTy::BelongsTo(rel) => {
                         let ty = &rel.ty;
-                        quote!(#i => <#ty as #toasty::BelongsToField>::reload(&mut #field_access, value)?,)
+                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
                     }
                     FieldTy::HasMany(rel) => {
                         let ty = &rel.ty;
-                        quote!(#i => <#ty as #toasty::HasManyField>::reload(&mut #field_access, value)?,)
+                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
                     }
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
-                        quote!(#i => <#ty as #toasty::HasOneField>::reload(&mut #field_access, value)?,)
+                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
                     }
                 }
             })

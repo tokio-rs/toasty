@@ -53,12 +53,12 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::BelongsToField>::Expr>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::BelongsToField>::Expr>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
@@ -67,7 +67,7 @@ impl Expand<'_> {
             }
             FieldTy::HasMany(rel) => {
                 let ty = &rel.ty;
-                let target = quote!(<#ty as #toasty::HasManyField>::Model);
+                let target = quote!(<#ty as #toasty::RelationManyField>::Model);
 
                 quote! {
                     #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> Self {
@@ -86,12 +86,12 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::HasOneField>::Expr>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::HasOneField>::Expr>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
@@ -324,15 +324,15 @@ impl Expand<'_> {
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
-                    quote!(#i => <#ty as #toasty::BelongsToField>::reload(&mut target.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
-                    quote!(#i => <#ty as #toasty::HasManyField>::reload(&mut target.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    quote!(#i => <#ty as #toasty::HasOneField>::reload(&mut target.#field_ident, value)?,)
+                    quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
                 }
             }
 

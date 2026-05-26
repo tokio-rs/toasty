@@ -137,16 +137,16 @@ impl Expand<'_> {
                                     index: #source,
                                 },
                                 target: {
-                                    type __RelationTarget = <#ty as #toasty::BelongsToField>::Model;
+                                    type __RelationTarget = <#ty as #toasty::RelationOneField>::Model;
                                     <__RelationTarget as #toasty::Model>::field_name_to_id(#target)
                                 },
                             }
                         }
                     });
 
-                    nullable = quote!(<#ty as #toasty::BelongsToField>::NULLABLE);
-                    deferred = quote!(<#ty as #toasty::BelongsToField>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::BelongsToField>::belongs_to_field_ty(
+                    nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::RelationOneField>::belongs_to_relation_field_ty(
                         #toasty::core::schema::app::ForeignKey {
                             fields: vec![ #( #fk_fields ),* ],
                         },
@@ -155,21 +155,21 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
-                    let pair = expand_pair(toasty, quote!(#toasty::HasManyField), ty, rel.pair.as_ref());
+                    let pair = expand_pair(toasty, quote!(#toasty::RelationManyField), ty, rel.pair.as_ref());
                     let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
-                    nullable = quote!(<#ty as #toasty::HasManyField>::NULLABLE);
-                    deferred = quote!(<#ty as #toasty::HasManyField>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::HasManyField>::has_many_field_ty(#singular_name, #pair, #via));
+                    nullable = quote!(<#ty as #toasty::RelationManyField>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::RelationManyField>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::RelationManyField>::many_relation_field_ty(#singular_name, #pair, #via));
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    let pair = expand_pair(toasty, quote!(#toasty::HasOneField), ty, rel.pair.as_ref());
+                    let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
                     let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
-                    nullable = quote!(<#ty as #toasty::HasOneField>::NULLABLE);
-                    deferred = quote!(<#ty as #toasty::HasOneField>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::HasOneField>::has_one_field_ty(#pair, #via));
+                    nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::RelationOneField>::has_one_relation_field_ty(#pair, #via));
                 }
             }
 
@@ -450,19 +450,19 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::BelongsToField>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Register>::register(model_set);
                     }
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::HasManyField>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationManyField>::Model as #toasty::Register>::register(model_set);
                     }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::HasOneField>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Register>::register(model_set);
                     }
                 }
             })
@@ -503,7 +503,7 @@ fn expand_pair(
     }
 }
 
-/// Emit the `via` argument for `has_many_field_ty` / `has_one_field_ty`: a
+/// Emit the `via` argument for `many_relation_field_ty` / `has_one_relation_field_ty`: a
 /// fully resolved [`stmt::Path`] built by chaining the named segments onto the
 /// model's `Fields` struct (e.g. `User::fields().comments().article()`).
 ///

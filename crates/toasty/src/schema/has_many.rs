@@ -1,10 +1,10 @@
-use super::{Deferred, HasManyField, Load, Model, Register};
+use super::{Deferred, Load, Model, Register, RelationManyField};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
 use toasty_core::stmt;
 
-impl<M: Model> HasManyField for Vec<M> {
+impl<M: Model> RelationManyField for Vec<M> {
     type Model = M;
 
     const DEFERRED: bool = false;
@@ -13,16 +13,16 @@ impl<M: Model> HasManyField for Vec<M> {
         <Self as Load>::reload(target, value)
     }
 
-    fn has_many_field_ty(
+    fn many_relation_field_ty(
         singular: Name,
         pair: Option<FieldId>,
         via: Option<stmt::Path>,
     ) -> FieldTy {
-        has_many_field_ty::<M>(singular, pair, via)
+        many_relation_field_ty::<M>(singular, pair, via)
     }
 }
 
-impl<M: Model> HasManyField for Deferred<Vec<M>> {
+impl<M: Model> RelationManyField for Deferred<Vec<M>> {
     type Model = M;
 
     const DEFERRED: bool = true;
@@ -32,16 +32,16 @@ impl<M: Model> HasManyField for Deferred<Vec<M>> {
         Ok(())
     }
 
-    fn has_many_field_ty(
+    fn many_relation_field_ty(
         singular: Name,
         pair: Option<FieldId>,
         via: Option<stmt::Path>,
     ) -> FieldTy {
-        has_many_field_ty::<M>(singular, pair, via)
+        many_relation_field_ty::<M>(singular, pair, via)
     }
 }
 
-fn has_many_field_ty<M: Model>(
+fn many_relation_field_ty<M: Model>(
     singular: Name,
     pair: Option<FieldId>,
     via: Option<stmt::Path>,

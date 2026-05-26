@@ -1,8 +1,6 @@
 mod auto;
 pub use auto::Auto;
 
-mod belongs_to;
-
 /// Compile-time metadata and validation for `create!` macro field checking.
 pub mod create_meta;
 pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
@@ -21,8 +19,6 @@ mod jiff;
 
 mod has_many;
 
-mod has_one;
-
 pub(crate) mod lazy_slot;
 
 mod load;
@@ -40,7 +36,9 @@ pub use register::{DiscoverItem, Register, generate_unique_id};
 mod num;
 
 mod relation;
-pub use relation::{BelongsToField, HasManyField, HasOneField};
+pub use relation::{RelationManyField, RelationOneField};
+
+mod relation_one;
 
 mod scope;
 pub use scope::Scope;
