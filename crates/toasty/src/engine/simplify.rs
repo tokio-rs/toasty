@@ -223,22 +223,9 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
-        // If the update target is a query, start by simplifying the query, then
-        // rewriting it to be a filter.
-        if let stmt::UpdateTarget::Query(query) = &mut stmt.target {
-            self.visit_stmt_query_mut(query);
-
-            let stmt::ExprSet::Select(select) = &mut query.body else {
-                todo!()
-            };
-
-            assert!(select.returning.is_model());
-
-            stmt.filter.add_filter(select.filter.take());
-
-            stmt.target = stmt::UpdateTarget::Model(select.source.model_id_unwrap());
-        }
-
+        // `UpdateTarget::Query` is lifted into `UpdateTarget::Model` by the
+        // pre-lowering `lower::lift_update_query::LiftUpdateQuery` pass, not
+        // here.
         self.visit_update_target_mut(&mut stmt.target);
 
         let mut s = self.scope(&stmt.target);
