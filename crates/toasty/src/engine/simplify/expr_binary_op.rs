@@ -82,13 +82,14 @@ impl Simplify<'_> {
             //   → OR(subj == p1 AND e1 <op> rhs, subj == p2 AND e2 <op> rhs)
             //
             // Each arm is fully simplified inline. Arms that fold to false/null
-            // are pruned.
-            (Expr::Match(m), _) if m.subject.is_stable() => {
+            // are pruned. Comparison ops only — distributing arithmetic this
+            // way would produce a malformed boolean from a non-boolean term.
+            (Expr::Match(m), _) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let match_expr = lhs.take();
                 let other = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, true))
             }
-            (_, Expr::Match(m)) if m.subject.is_stable() => {
+            (_, Expr::Match(m)) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let other = lhs.take();
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))

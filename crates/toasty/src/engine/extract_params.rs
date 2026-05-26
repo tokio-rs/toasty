@@ -520,6 +520,12 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
                 // `Ty::Inferred(UnsignedInteger(8))` for a `usize`
                 // converted to `Value::U64`) is enough to bind the param.
                 stmt::Assignment::RemoveAt(_) | stmt::Assignment::Pop => {}
+                // `Add` / `Subtract` bind a scalar of the column's type
+                // (`col = col + $1`).
+                stmt::Assignment::Add(expr) | stmt::Assignment::Subtract(expr) => {
+                    let expected = ty_from_column(col.storage_ty.clone());
+                    check(expr, &expected, params);
+                }
                 stmt::Assignment::Insert(_) | stmt::Assignment::Batch(_) => continue,
             }
         }

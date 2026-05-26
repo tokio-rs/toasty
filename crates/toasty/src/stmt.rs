@@ -18,7 +18,8 @@ pub use insert::Insert;
 
 mod assignment;
 pub use assignment::{
-    Assign, Assignment, apply, clear, extend, insert, patch, pop, push, remove, remove_at, set,
+    Assign, Assignment, add, apply, clear, decrement, extend, increment, insert, patch, pop, push,
+    remove, remove_at, set, subtract,
 };
 
 mod into_expr;

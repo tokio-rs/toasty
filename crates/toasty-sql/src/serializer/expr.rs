@@ -207,6 +207,8 @@ impl ToSql for &stmt::BinaryOp {
             stmt::BinaryOp::Lt => "<",
             stmt::BinaryOp::Le => "<=",
             stmt::BinaryOp::Ne => "<>",
+            stmt::BinaryOp::Add => "+",
+            stmt::BinaryOp::Sub => "-",
         })
     }
 }

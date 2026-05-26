@@ -163,9 +163,18 @@ impl Connection {
         let mut refresh_after_update: Vec<(usize, &db::Column)> = vec![];
 
         for (projection, assignment) in op.assignments.iter() {
-            let (expr, is_append) = match assignment {
-                stmt::Assignment::Set(expr) => (expr, false),
-                stmt::Assignment::Append(expr) => (expr, true),
+            enum AssignKind {
+                Set,
+                Append,
+                Add,
+                Subtract,
+            }
+
+            let (expr, kind) = match assignment {
+                stmt::Assignment::Set(expr) => (expr, AssignKind::Set),
+                stmt::Assignment::Append(expr) => (expr, AssignKind::Append),
+                stmt::Assignment::Add(expr) => (expr, AssignKind::Add),
+                stmt::Assignment::Subtract(expr) => (expr, AssignKind::Subtract),
                 stmt::Assignment::Remove(_)
                 | stmt::Assignment::Pop
                 | stmt::Assignment::RemoveAt(_) => {
@@ -178,7 +187,9 @@ impl Connection {
                         "collection mutation reached DynamoDB driver — capability flag is off; assignment={assignment:#?}",
                     )
                 }
-                _ => todo!("only SET / APPEND supported in DynamoDB; got {assignment:#?}"),
+                _ => todo!(
+                    "only SET / APPEND / ADD / SUBTRACT supported in DynamoDB; got {assignment:#?}"
+                ),
             };
             let value = match expr {
                 stmt::Expr::Value(value) => value,
@@ -187,47 +198,78 @@ impl Connection {
 
             let column_ref = table.resolve(projection);
 
-            if is_append {
+            // `ret` carries the post-update column values back to the
+            // engine. `lower::returning::constantize_returning` inlines
+            // `Set` values at plan time, so the engine's returning
+            // projection covers only the columns that need a driver
+            // round-trip — `Append` / `Add` / `Subtract`. Skip `Set` here
+            // to keep the row shape aligned with that projection. The
+            // non-Set kinds push a placeholder then `refresh_after_update`
+            // fills in the post-update value from `UPDATED_NEW`.
+            if !matches!(kind, AssignKind::Set) {
                 refresh_after_update.push((ret.len(), column_ref));
+                ret.push(value.clone());
             }
-            ret.push(value.clone());
 
             let column = expr_attrs.column(column_ref).to_string();
 
-            if is_append {
-                // `stmt::push` / `stmt::extend` on a `Vec<scalar>` field map
-                // to DynamoDB's `list_append(path, :v)`, which atomically
-                // concatenates the given List `L` onto the existing list
-                // attribute (creating the attribute if absent).
-                let value = expr_attrs.value(value);
+            match kind {
+                AssignKind::Append => {
+                    // `stmt::push` / `stmt::extend` on a `Vec<scalar>` field
+                    // map to DynamoDB's `list_append(path, :v)`, which
+                    // atomically concatenates the given List `L` onto the
+                    // existing list attribute (creating the attribute if
+                    // absent).
+                    let value = expr_attrs.value(value);
 
-                if !update_expression_set.is_empty() {
-                    write!(update_expression_set, ", ").unwrap();
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(
+                        update_expression_set,
+                        "{column} = list_append(if_not_exists({column}, :__toasty_empty_list), {value})"
+                    )
+                    .unwrap();
+                    expr_attrs.attr_values.insert(
+                        ":__toasty_empty_list".to_string(),
+                        aws_sdk_dynamodb::types::AttributeValue::L(Vec::new()),
+                    );
                 }
+                AssignKind::Set if value.is_null() => {
+                    if !update_expression_remove.is_empty() {
+                        write!(update_expression_remove, ", ").unwrap();
+                    }
 
-                write!(
-                    update_expression_set,
-                    "{column} = list_append(if_not_exists({column}, :__toasty_empty_list), {value})"
-                )
-                .unwrap();
-                expr_attrs.attr_values.insert(
-                    ":__toasty_empty_list".to_string(),
-                    aws_sdk_dynamodb::types::AttributeValue::L(Vec::new()),
-                );
-            } else if value.is_null() {
-                if !update_expression_remove.is_empty() {
-                    write!(update_expression_remove, ", ").unwrap();
+                    write!(update_expression_remove, "{column}").unwrap();
                 }
+                AssignKind::Set => {
+                    let value = expr_attrs.value(value);
 
-                write!(update_expression_remove, "{column}").unwrap();
-            } else {
-                let value = expr_attrs.value(value);
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
 
-                if !update_expression_set.is_empty() {
-                    write!(update_expression_set, ", ").unwrap();
+                    write!(update_expression_set, "{column} = {value}").unwrap();
                 }
+                // `stmt::add` / `stmt::subtract` / `stmt::increment` /
+                // `stmt::decrement` map to DynamoDB's `SET col = col + :v` /
+                // `SET col = col - :v` form, which atomically combines the
+                // bound value with the current attribute value.
+                AssignKind::Add | AssignKind::Subtract => {
+                    let op = if matches!(kind, AssignKind::Add) {
+                        "+"
+                    } else {
+                        "-"
+                    };
+                    let value = expr_attrs.value(value);
 
-                write!(update_expression_set, "{column} = {value}").unwrap();
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(update_expression_set, "{column} = {column} {op} {value}").unwrap();
+                }
             }
         }
 

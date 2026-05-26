@@ -839,7 +839,9 @@ where
         | Assignment::Insert(expr)
         | Assignment::Remove(expr)
         | Assignment::Append(expr)
-        | Assignment::RemoveAt(expr) => {
+        | Assignment::RemoveAt(expr)
+        | Assignment::Add(expr)
+        | Assignment::Subtract(expr) => {
             v.visit_expr(expr);
         }
         Assignment::Pop => {}

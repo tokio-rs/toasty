@@ -216,6 +216,17 @@ enum CollectionOp<'a> {
     RemoveAt(&'a mut stmt::Expr),
 }
 
+/// Arithmetic assignment operator on a numeric scalar field.
+///
+/// `Add` and `Subtract` carry a value to combine atomically with the
+/// current column value (`col = col ± expr`). Like collection ops, they
+/// target a single-column primitive field and skip the `model_to_table`
+/// substitution.
+enum ArithmeticOp {
+    Add,
+    Subtract,
+}
+
 impl LowerStatement<'_, '_> {
     /// Lower a `Set` assignment — the only assignment that carries a whole
     /// *field value*.
@@ -331,6 +342,43 @@ impl LowerStatement<'_, '_> {
                 self.visit_expr_mut(expr);
                 out.remove_at(prim.column, expr.take());
             }
+        }
+    }
+
+    /// Lower an arithmetic assignment operator (`Add` / `Subtract`) on a
+    /// scalar numeric field. Mirrors `lower_collection_op`: single primitive
+    /// column, no `model_to_table` substitution needed.
+    fn lower_arithmetic_op(
+        &mut self,
+        out: &mut stmt::Assignments,
+        mapping: &toasty_core::schema::mapping::Model,
+        projection: &stmt::Projection,
+        op: ArithmeticOp,
+        expr: &mut stmt::Expr,
+    ) {
+        let Some(field) = mapping.resolve_field_mapping(projection) else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "invalid assignment projection: {projection:?}"
+                )));
+            return;
+        };
+
+        let Some(prim) = field.as_primitive() else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "arithmetic operator on non-primitive field: {projection:?}"
+                )));
+            return;
+        };
+
+        self.visit_expr_mut(expr);
+        let value = expr.take();
+        match op {
+            ArithmeticOp::Add => out.add(prim.column, value),
+            ArithmeticOp::Subtract => out.subtract(prim.column, value),
         }
     }
 }
@@ -468,6 +516,24 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         mapping,
                         projection,
                         CollectionOp::RemoveAt(expr),
+                    );
+                }
+                stmt::Assignment::Add(expr) => {
+                    self.lower_arithmetic_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        ArithmeticOp::Add,
+                        expr,
+                    );
+                }
+                stmt::Assignment::Subtract(expr) => {
+                    self.lower_arithmetic_op(
+                        &mut lowered,
+                        mapping,
+                        projection,
+                        ArithmeticOp::Subtract,
+                        expr,
                     );
                 }
                 stmt::Assignment::Batch(entries) => {

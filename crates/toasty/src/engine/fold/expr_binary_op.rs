@@ -37,6 +37,8 @@ pub(super) fn fold_expr_binary_op(op: BinaryOp, lhs: &mut Expr, rhs: &mut Expr) 
                 BinaryOp::Ge => {
                     PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
                 }
+                BinaryOp::Add => lhs_val.checked_add(rhs_val).map(Expr::from),
+                BinaryOp::Sub => lhs_val.checked_sub(rhs_val).map(Expr::from),
             }
         }
         // Boolean constant comparisons:
@@ -62,10 +64,11 @@ pub(super) fn fold_expr_binary_op(op: BinaryOp, lhs: &mut Expr, rhs: &mut Expr) 
         }
         // Canonicalization, `literal <op> col` → `col <op_commuted> literal`.
         // Heavyweight rules can then assume the literal (when present) is on
-        // the right.
+        // the right. Non-commutative ops (e.g. `Sub`) are left in place.
         (Expr::Value(_), rhs) if !rhs.is_value() => {
+            let commuted = op.commute()?;
             std::mem::swap(lhs, rhs);
-            Some(Expr::binary_op(lhs.take(), op.commute(), rhs.take()))
+            Some(Expr::binary_op(lhs.take(), commuted, rhs.take()))
         }
         _ => None,
     }

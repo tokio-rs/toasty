@@ -75,8 +75,9 @@ impl VisitMut for LiftInSubquery<'_> {
                     try_lift_relation_path_comparison(&self.cx, e.op, &e.lhs, &e.rhs)
                 {
                     *expr = lifted;
-                } else if let Some(lifted) =
-                    try_lift_relation_path_comparison(&self.cx, e.op.commute(), &e.rhs, &e.lhs)
+                } else if let Some(commuted) = e.op.commute()
+                    && let Some(lifted) =
+                        try_lift_relation_path_comparison(&self.cx, commuted, &e.rhs, &e.lhs)
                 {
                     *expr = lifted;
                 }

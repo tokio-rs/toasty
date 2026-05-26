@@ -201,6 +201,16 @@ impl Expr {
                     BinaryOp::Gt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Greater).into()),
                     BinaryOp::Le => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Greater).into()),
                     BinaryOp::Lt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Less).into()),
+                    BinaryOp::Add => lhs.checked_add(&rhs).ok_or_else(|| {
+                        crate::Error::expression_evaluation_failed(
+                            "arithmetic overflow or type mismatch in `+`",
+                        )
+                    }),
+                    BinaryOp::Sub => lhs.checked_sub(&rhs).ok_or_else(|| {
+                        crate::Error::expression_evaluation_failed(
+                            "arithmetic overflow or type mismatch in `-`",
+                        )
+                    }),
                 }
             }
             Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
@@ -474,6 +484,11 @@ fn any_all_compare(lhs: &Value, items: &[Value], op: BinaryOp, all: bool) -> Res
             BinaryOp::Gt => cmp_ordered(lhs, item)? == Ordering::Greater,
             BinaryOp::Le => cmp_ordered(lhs, item)? != Ordering::Greater,
             BinaryOp::Lt => cmp_ordered(lhs, item)? == Ordering::Less,
+            BinaryOp::Add | BinaryOp::Sub => {
+                return Err(crate::Error::expression_evaluation_failed(
+                    "ANY/ALL only supports comparison operators",
+                ));
+            }
         };
         if all {
             if !matches {
