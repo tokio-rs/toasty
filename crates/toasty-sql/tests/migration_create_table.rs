@@ -152,7 +152,7 @@ fn create_table_with_nullable_column() {
 fn create_table_with_auto_increment_sqlite() {
     let from = Schema::default();
 
-    let mut id_col = make_column(0, 0, "id", Type::Integer(8));
+    let mut id_col = make_column(0, 0, "id", Type::Integer(4));
     id_col.auto_increment = true;
 
     let to = Schema {
@@ -170,10 +170,9 @@ fn create_table_with_auto_increment_sqlite() {
     let sql = serialize_migration(&stmts, "sqlite");
 
     assert_eq!(sql.len(), 1);
-    assert!(
-        sql[0].contains("AUTOINCREMENT") || sql[0].contains("PRIMARY KEY"),
-        "expected auto increment handling, got: {}",
-        sql[0]
+    assert_eq!(
+        sql[0],
+        "CREATE TABLE \"counters\" (\n    \"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n    \"value\" INTEGER NOT NULL\n);"
     );
 }
 

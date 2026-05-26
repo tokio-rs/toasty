@@ -58,6 +58,32 @@ pub async fn auto_increment_explicit(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+#[driver_test(requires(auto_increment))]
+pub async fn auto_increment_i64_key(test: &mut Test) -> Result<()> {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: i64,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let first = toasty::create!(Item { name: "first" })
+        .exec(&mut db)
+        .await?;
+    let second = toasty::create!(Item { name: "second" })
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(first.id, 1);
+    assert_eq!(second.id, 2);
+
+    Ok(())
+}
+
 #[driver_test(id(ID), requires(auto_increment))]
 pub async fn auto_increment_implicit(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]

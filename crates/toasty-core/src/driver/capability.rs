@@ -58,6 +58,15 @@ pub struct Capability {
     /// Whether the database has an auto increment modifier for integer columns.
     pub auto_increment: bool,
 
+    /// Maximum storage width, in bytes, for auto-increment integer columns.
+    ///
+    /// Backends that require a particular declared type for auto-increment
+    /// columns use this to cap the storage type selected from the Rust field
+    /// type. SQLite requires the declared type to be `INTEGER` when using
+    /// `AUTOINCREMENT`; Toasty's SQLite serializer emits that spelling for
+    /// `Integer(4)`.
+    pub max_auto_increment_integer_width: Option<u8>,
+
     /// Whether the database supports `VARCHAR(n)` column types natively.
     ///
     /// Must be consistent with [`StorageTypes::varchar`]: when `true`,
@@ -476,6 +485,7 @@ impl Capability {
         returning_from_mutation: true,
         primary_key_ne_predicate: true,
         auto_increment: true,
+        max_auto_increment_integer_width: Some(4),
         bigdecimal_implemented: false,
 
         native_varchar: true,
@@ -551,6 +561,7 @@ impl Capability {
         schema_mutations: SchemaMutations::POSTGRESQL,
         select_for_update: true,
         auto_increment: true,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
 
         // PostgreSQL has the `^@` prefix-match operator.
@@ -606,6 +617,7 @@ impl Capability {
         select_for_update: true,
         returning_from_mutation: false,
         auto_increment: true,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: true,
 
         // MySQL has inline ENUM('a', 'b') column types
@@ -670,6 +682,7 @@ impl Capability {
         returning_from_mutation: false,
         primary_key_ne_predicate: false,
         auto_increment: false,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
         native_varchar: false,
         native_enum: false,
