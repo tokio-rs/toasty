@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-e153d388.js";
+            window.path_to_searchindex_js = "searchindex-53bca074.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -175,12 +175,13 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="updating-records"><a class="header" href="#updating-records">Updating Records</a></h1>
-<p>Toasty generates an update builder for each model. You can update a record
-through an instance method, through a query, or with a generated convenience
-method.</p>
+<p>To change field values on a record, use the <code>toasty::update!</code> macro.
+The macro takes a target — a loaded model instance or a query that
+selects which records to change — and a list of field assignments. It
+returns a builder; call <code>.exec(&amp;mut db)</code> to execute the update.</p>
+<p>To load an instance to update, see <a href="./querying-records.html">Querying Records</a>.
+To insert new records, see <a href="./creating-records.html">Creating Records</a>.</p>
 <h2 id="updating-an-instance"><a class="header" href="#updating-an-instance">Updating an instance</a></h2>
-<p>Call <code>.update()</code> on a mutable model instance, set the fields you want to change,
-and call <code>.exec(&amp;mut db)</code>:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -201,28 +202,21 @@ and call <code>.exec(&amp;mut db)</code>:</p>
 .exec(&amp;mut db)
 .await?;
 
-user.update()
-    .name("Alice Smith")
+toasty::update!(user { name: "Alice Smith" })
     .exec(&amp;mut db)
     .await?;
 
-// The instance is updated in place
 assert_eq!(user.name, "Alice Smith");
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<p>Only set the fields you want to change. Fields you don’t set keep their current
-values. The <code>.update()</code> method takes <code>&amp;mut self</code>, so you need a mutable binding.
-After <code>.exec()</code> completes, the instance reflects the new values.</p>
-<p>If the model has a <a href="./concurrency-control.html"><code>#[version]</code></a> field, instance
-updates are version-guarded: Toasty conditions the write on the version the
-instance was last loaded with and increments it atomically. If a concurrent
-writer has modified the record in the meantime, <code>.exec()</code> returns an error.</p>
-<p>The generated SQL looks like:</p>
+<p>The instance reflects the new values after <code>.exec()</code>. Fields not
+named in the macro keep their current values.</p>
+<p>The generated SQL:</p>
 <pre><code class="language-sql">UPDATE users SET name = 'Alice Smith' WHERE id = 1;
 </code></pre>
 <h2 id="updating-multiple-fields"><a class="header" href="#updating-multiple-fields">Updating multiple fields</a></h2>
-<p>Chain multiple setters to update several fields at once:</p>
+<p>List each field in the brace block:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -237,19 +231,19 @@ writer has modified the record in the meantime, <code>.exec()</code> returns an 
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span><span class="boring">let mut user = toasty::create!(User { name: "Alice", email: "alice@example.com" })
-</span><span class="boring">    .exec(&amp;mut db)
-</span><span class="boring">    .await?;
-</span>user.update()
-    .name("Alice Smith")
-    .email("alice.smith@example.com")
-    .exec(&amp;mut db)
-    .await?;
+</span><span class="boring">    .exec(&amp;mut db).await?;
+</span>toasty::update!(user {
+    name: "Alice Smith",
+    email: "alice.smith@example.com",
+})
+.exec(&amp;mut db)
+.await?;
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<h2 id="updating-by-query"><a class="header" href="#updating-by-query">Updating by query</a></h2>
-<p>You can update records without first loading them by building a query and calling
-<code>.update()</code> on it:</p>
+<h2 id="field-shorthand"><a class="header" href="#field-shorthand">Field shorthand</a></h2>
+<p>When a local variable has the same name as a field, write the name
+alone — the same shorthand Rust struct literals use:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -259,23 +253,157 @@ writer has modified the record in the meantime, <code>.exec()</code> returns an 
 </span><span class="boring">    #[auto]
 </span><span class="boring">    id: u64,
 </span><span class="boring">    name: String,
-</span><span class="boring">    #[unique]
-</span><span class="boring">    email: String,
 </span><span class="boring">}
-</span><span class="boring">async fn __example(mut db: toasty::Db, user_id: u64) -&gt; toasty::Result&lt;()&gt; {
-</span>User::filter_by_id(user_id)
-    .update()
-    .name("Bob")
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span><span class="boring">let mut user = toasty::create!(User { name: "Alice" })
+</span><span class="boring">    .exec(&amp;mut db).await?;
+</span>let name = "Alice Smith";
+toasty::update!(user { name })
     .exec(&amp;mut db)
     .await?;
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<p>This executes the update directly without loading the record first. The query
-determines which records to update, and the chained setters specify the new
-values.</p>
+<h2 id="modifying-vecscalar-fields"><a class="header" href="#modifying-vecscalar-fields">Modifying <code>Vec&lt;scalar&gt;</code> fields</a></h2>
+<p>Collection mutations live in <code>toasty::stmt</code>. The macro reaches them
+as method calls on the field:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct Article {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    tags: Vec&lt;String&gt;,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span><span class="boring">let mut article = toasty::create!(Article { tags: vec!["rust".to_string()] })
+</span><span class="boring">    .exec(&amp;mut db).await?;
+</span>toasty::update!(article { tags.push("toasty") })
+    .exec(&amp;mut db)
+    .await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p><code>tags.push("toasty")</code> lowers to <code>tags: toasty::stmt::push("toasty")</code>.
+The same syntax reaches every function in <code>toasty::stmt</code>:
+<code>tags.extend([...])</code>, <code>tags.pop()</code>, <code>tags.clear()</code>,
+<code>tags.remove("x")</code>. See <a href="./vec-scalar-fields.html#updating"><code>Vec&lt;scalar&gt;</code> Fields</a>
+for the full list and per-driver support.</p>
+<h2 id="updating-embedded-fields"><a class="header" href="#updating-embedded-fields">Updating embedded fields</a></h2>
+<p>A brace block on the right side of <code>field:</code> updates the named
+sub-fields of an <a href="./embedded-types.html">embedded struct</a>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Embed)]
+</span><span class="boring">struct Metadata {
+</span><span class="boring">    version: i64,
+</span><span class="boring">    status: String,
+</span><span class="boring">}
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct Document {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    title: String,
+</span><span class="boring">    meta: Metadata,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span><span class="boring">let mut doc = toasty::create!(Document {
+</span><span class="boring">    title: "Doc",
+</span><span class="boring">    meta: Metadata { version: 1, status: "draft".to_string() },
+</span><span class="boring">}).exec(&amp;mut db).await?;
+</span>toasty::update!(doc {
+    meta: { version: 2, status: "published" },
+})
+.exec(&amp;mut db)
+.await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>Sub-fields not listed keep their values. Brace blocks nest for
+embedded types within embedded types.</p>
+<p>To replace an embedded value wholesale, pass the typed value:</p>
+<pre><code class="language-rust ignore">toasty::update!(doc {
+    meta: Metadata { version: 2, status: "published".into() },
+})
+.exec(&amp;mut db).await?;</code></pre>
+<h2 id="inserting-has-many-children"><a class="header" href="#inserting-has-many-children">Inserting has-many children</a></h2>
+<p>A bracket-of-braces literal on a <a href="./has-many.html">has-many</a> field
+inserts new children. Each <code>{ ... }</code> is a create builder for the
+child model:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct User {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    name: String,
+</span><span class="boring">    #[has_many]
+</span><span class="boring">    todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
+</span><span class="boring">}
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct Todo {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    title: String,
+</span><span class="boring">    #[index]
+</span><span class="boring">    user_id: u64,
+</span><span class="boring">    #[belongs_to(key = user_id, references = id)]
+</span><span class="boring">    user: toasty::Deferred&lt;User&gt;,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span><span class="boring">let mut user = User::create().name("Alice").exec(&amp;mut db).await?;
+</span>toasty::update!(user {
+    todos: [{ title: "buy milk" }, { title: "walk dog" }],
+})
+.exec(&amp;mut db)
+.await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>Items can mix brace-block builders with <code>stmt::*</code> values:</p>
+<pre><code class="language-rust ignore">toasty::update!(user {
+    todos: [
+        { title: "new todo" },
+        toasty::stmt::remove(&amp;old_todo),
+    ],
+})
+.exec(&amp;mut db).await?;</code></pre>
+<h2 id="updating-by-query"><a class="header" href="#updating-by-query">Updating by query</a></h2>
+<p><code>update!</code> accepts any query builder as a target. The update applies
+to every record the query matches:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct User {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    #[index]
+</span><span class="boring">    name: String,
+</span><span class="boring">    #[unique]
+</span><span class="boring">    email: String,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db, user_id: u64) -&gt; toasty::Result&lt;()&gt; {
+</span>toasty::update!(User::filter_by_id(user_id) { name: "Bob" })
+    .exec(&amp;mut db)
+    .await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>Scoped queries like <code>user.todos().filter_by_done(false)</code> are query
+builders too. The query runs as part of the <code>UPDATE</code> statement; no
+records are loaded first.</p>
 <h2 id="update-by-indexed-field"><a class="header" href="#update-by-indexed-field">Update by indexed field</a></h2>
-<p>Toasty generates <code>update_by_*</code> convenience methods for key and indexed fields:</p>
+<p>Toasty generates <code>update_by_*</code> convenience methods for key and
+indexed fields:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -296,10 +424,11 @@ values.</p>
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<p>This is shorthand for <code>User::filter_by_id(user_id).update()</code>. Toasty generates
-<code>update_by_*</code> for each field that has <code>#[key]</code>, <code>#[unique]</code>, or <code>#[index]</code>.</p>
-<h2 id="setting-optional-fields-to-none"><a class="header" href="#setting-optional-fields-to-none">Setting optional fields to <code>None</code></a></h2>
-<p>To clear an optional field, pass <code>None</code> with the appropriate type annotation:</p>
+<p><code>User::update_by_id(user_id)</code> is shorthand for
+<code>User::filter_by_id(user_id).update()</code>. Toasty generates <code>update_by_*</code>
+for each field marked <code>#[key]</code>, <code>#[unique]</code>, or <code>#[index]</code>.</p>
+<h2 id="setting-an-optional-field-to-none"><a class="header" href="#setting-an-optional-field-to-none">Setting an optional field to <code>None</code></a></h2>
+<p>Pass <code>None</code> with the field’s type annotation:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -313,38 +442,65 @@ values.</p>
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
 </span><span class="boring">let mut user = toasty::create!(User { name: "Alice", bio: "Likes Rust" })
-</span><span class="boring">    .exec(&amp;mut db)
-</span><span class="boring">    .await?;
-</span>user.update()
-    .bio(Option::&lt;String&gt;::None)
+</span><span class="boring">    .exec(&amp;mut db).await?;
+</span>toasty::update!(user { bio: Option::&lt;String&gt;::None })
     .exec(&amp;mut db)
     .await?;
-
-assert!(user.bio.is_none());
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<h2 id="modifying-a-vecscalar-field"><a class="header" href="#modifying-a-vecscalar-field">Modifying a <code>Vec&lt;scalar&gt;</code> field</a></h2>
-<p>A <code>Vec&lt;scalar&gt;</code> field (e.g. <code>tags: Vec&lt;String&gt;</code>) supports whole-value
-replacement through the setter and a set of incremental builders —
-<code>stmt::push</code>, <code>stmt::extend</code>, <code>stmt::pop</code>, <code>stmt::remove</code>,
-<code>stmt::remove_at</code>, <code>stmt::clear</code>, and <code>stmt::apply</code>. See
-<a href="./vec-scalar-fields.html#updating"><code>Vec&lt;scalar&gt;</code> Fields</a> for the full
-treatment, including which builders each driver supports.</p>
-<h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
-<p>For a model with <code>#[key]</code> on <code>id</code> and <code>#[unique]</code> on <code>email</code>, Toasty generates:</p>
+<h2 id="concurrency-control"><a class="header" href="#concurrency-control">Concurrency control</a></h2>
+<p>When the model has a <a href="./concurrency-control.html"><code>#[version]</code></a> field,
+instance updates condition the write on the version the instance
+was loaded with and increment it atomically. If a concurrent writer
+has modified the record, <code>.exec()</code> returns an error.</p>
+<h2 id="building-updates-programmatically"><a class="header" href="#building-updates-programmatically">Building updates programmatically</a></h2>
+<p>The macro lists every field at the macro call site. To set fields
+based on a runtime condition, use the update builder directly:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct User {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    name: String,
+</span><span class="boring">    bio: Option&lt;String&gt;,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span><span class="boring">let mut user = toasty::create!(User { name: "Alice" }).exec(&amp;mut db).await?;
+</span>let mut builder = user.update().name("Alice Smith");
+
+if true /* some condition */ {
+    builder = builder.bio("Likes Rust");
+}
+
+builder.exec(&amp;mut db).await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>The chain form is also available for users who prefer it:</p>
+<pre><code class="language-rust ignore">user.update()
+    .name("Alice Smith")
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<h2 id="what-derivemodel-generates"><a class="header" href="#what-derivemodel-generates">What <code>#[derive(Model)]</code> generates</a></h2>
+<p>For a model <code>User</code> with <code>#[key]</code> on <code>id</code> and <code>#[unique]</code> on <code>email</code>,
+the derive generates:</p>
 <ul>
-<li><code>user.update()</code> — instance method (takes <code>&amp;mut self</code>), returns an update
-builder. After <code>.exec()</code>, the instance is reloaded with the new values.</li>
-<li><code>User::update_by_id(id)</code> — returns an update builder for the record matching
-the given key.</li>
-<li><code>User::update_by_email(email)</code> — returns an update builder for the record
-matching the given email.</li>
-<li>Any query builder’s <code>.update()</code> method — converts the query into an update
-builder.</li>
+<li><code>user.update()</code> — instance method (takes <code>&amp;mut self</code>), returns an
+update builder. After <code>.exec()</code>, the instance reloads with the new
+values.</li>
+<li><code>User::update_by_id(id)</code> — returns an update builder for the
+record matching the given key.</li>
+<li><code>User::update_by_email(email)</code> — returns an update builder for the
+record matching the given email.</li>
+<li><code>.update()</code> on any query builder — converts the query into an
+update builder.</li>
 </ul>
-<p>The update builder has a setter method for each field. Only the fields you set
-are included in the <code>UPDATE</code> statement.</p>
+<p>The update builder has a setter for each field. The <code>UPDATE</code>
+statement includes only the fields you set.</p>
 
                     </main>
 

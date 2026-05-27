@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"derive":["Embed","Model"],"macro":["create","query"]};
+window.SIDEBAR_ITEMS = {"derive":["Embed","Model"],"macro":["create","query","update"]};
