@@ -118,6 +118,103 @@ pub async fn update_macro_method_shorthand_push(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Method shorthand on a `Vec<scalar>` field: `tags.extend([..])`
+/// lowers to `tags: stmt::extend([..])` for an atomic batch append.
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn update_macro_method_shorthand_extend(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::update!(item { tags.extend(["b", "c"]) })
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec!["a".to_string(), "b".to_string(), "c".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// Method shorthand on a `Vec<scalar>` field: `tags.pop()` lowers to
+/// `tags: stmt::pop()` for an atomic trailing-element drop.
+#[driver_test(id(ID), requires(vec_pop))]
+pub async fn update_macro_method_shorthand_pop(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string(), "c".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::update!(item { tags.pop() }).exec(&mut db).await?;
+
+    let expected = vec!["a".to_string(), "b".to_string()];
+    assert_eq!(item.tags, expected);
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.tags, expected);
+
+    Ok(())
+}
+
+/// Method shorthand on a `Vec<scalar>` field: `tags.clear()` lowers to
+/// `tags: stmt::clear()`, replacing the field with an empty list.
+#[driver_test(id(ID), requires(vec_scalar))]
+pub async fn update_macro_method_shorthand_clear(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        tags: Vec<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let mut item = toasty::create!(Item {
+        tags: vec!["a".to_string(), "b".to_string()],
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::update!(item { tags.clear() }).exec(&mut db).await?;
+
+    assert!(item.tags.is_empty());
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert!(reloaded.tags.is_empty());
+
+    Ok(())
+}
+
 /// Update through a query builder target — no instance required.
 #[driver_test(id(ID))]
 pub async fn update_macro_query_target(test: &mut Test) -> Result<()> {
