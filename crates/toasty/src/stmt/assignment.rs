@@ -455,8 +455,11 @@ pub fn subtract<T>(value: impl IntoExpr<T>) -> Assignment<T> {
 ///     .await?;
 /// ```
 pub fn increment<T>() -> Assignment<T> {
+    // I8 so the literal fits every integer column on every backend —
+    // PG has no `(I64, INT2)` arm, so a wider variant panics on narrow
+    // (i8/i16/u8) columns.
     Assignment {
-        kind: AssignmentKind::Add(stmt::Expr::Value(stmt::Value::I64(1))),
+        kind: AssignmentKind::Add(stmt::Expr::Value(stmt::Value::I8(1))),
         _p: PhantomData,
     }
 }
@@ -473,7 +476,7 @@ pub fn increment<T>() -> Assignment<T> {
 /// ```
 pub fn decrement<T>() -> Assignment<T> {
     Assignment {
-        kind: AssignmentKind::Subtract(stmt::Expr::Value(stmt::Value::I64(1))),
+        kind: AssignmentKind::Subtract(stmt::Expr::Value(stmt::Value::I8(1))),
         _p: PhantomData,
     }
 }

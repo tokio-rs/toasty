@@ -264,6 +264,46 @@ pub async fn increment_unique_column(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test]
+pub async fn increment_narrow_integer_column(t: &mut Test) -> Result<()> {
+    // Regression: stmt::increment() / stmt::decrement() hardcoded
+    // Value::I64(1), which the PostgreSQL driver had no `(I64, INT2)` arm
+    // for — incrementing an `i8`, `i16`, or `u8` column panicked at value
+    // binding. The literal must encode in a value variant that fits any
+    // integer column on every backend.
+    #[derive(Debug, toasty::Model)]
+    struct Tally {
+        #[key]
+        id: uuid::Uuid,
+
+        count: i16,
+    }
+
+    let mut db = t.setup_db(models!(Tally)).await;
+    let mut tally = toasty::create!(Tally {
+        id: uuid::Uuid::new_v4(),
+        count: 10_i16,
+    })
+    .exec(&mut db)
+    .await?;
+
+    tally
+        .update()
+        .count(toasty::stmt::increment())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(Tally::get_by_id(&mut db, &tally.id).await?.count, 11);
+
+    tally
+        .update()
+        .count(toasty::stmt::decrement())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(Tally::get_by_id(&mut db, &tally.id).await?.count, 10);
+
+    Ok(())
+}
+
+#[driver_test]
 pub async fn filter_update_with_arithmetic(t: &mut Test) -> Result<()> {
     let (mut db, counter) = setup(t).await;
 
