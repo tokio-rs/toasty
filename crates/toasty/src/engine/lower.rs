@@ -1,6 +1,5 @@
 mod association;
 mod expr_or;
-mod expr_pattern;
 mod include;
 mod insert;
 mod lift_in_subquery;
@@ -754,11 +753,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
-            }
-            stmt::Expr::StartsWith(_)
-                if self.capability().sql && !self.capability().native_starts_with =>
-            {
-                self.lower_expr_starts_with(expr);
             }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
