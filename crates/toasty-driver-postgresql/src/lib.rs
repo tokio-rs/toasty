@@ -653,7 +653,6 @@ impl toasty_core::driver::Connection for Connection {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::path::PathBuf;
     use tokio_postgres::config::Host;
 
     fn cfg(url: &str) -> Config {
@@ -667,29 +666,51 @@ mod tests {
         assert_eq!(c.get_dbname(), Some("mydb"));
     }
 
-    #[test]
-    fn unix_socket_via_host_query_param() {
-        // Regression for #984: libpq lets a Unix-socket directory be
-        // supplied via `?host=/path`, since URL syntax cannot put a
-        // filesystem path in the authority.
-        let c = cfg("postgresql:///mydb?host=/tmp&user=myuser");
-        assert_eq!(c.get_hosts(), &[Host::Unix(PathBuf::from("/tmp"))]);
-        assert_eq!(c.get_user(), Some("myuser"));
-        assert_eq!(c.get_dbname(), Some("mydb"));
-    }
+    // `Host::Unix` only exists on Unix targets in tokio-postgres, so the
+    // tests that assert socket-path resolution are gated to those
+    // platforms. Windows builds still exercise the URL-parsing path via
+    // the non-Unix tests below.
+    #[cfg(unix)]
+    mod unix_socket {
+        use super::*;
+        use std::path::PathBuf;
 
-    #[test]
-    fn query_param_host_overrides_url_authority() {
-        // libpq semantics: a `host=` query parameter replaces (not
-        // appends to) the URL authority host. tokio-postgres's
-        // `Config::host` is additive across calls, so an authority
-        // host would otherwise be tried first and the configured
-        // socket reached only as a fallback.
-        let c = cfg("postgresql://example.com/mydb?host=/var/run/postgresql");
-        assert_eq!(
-            c.get_hosts(),
-            &[Host::Unix(PathBuf::from("/var/run/postgresql"))]
-        );
+        #[test]
+        fn unix_socket_via_host_query_param() {
+            // Regression for #984: libpq lets a Unix-socket directory be
+            // supplied via `?host=/path`, since URL syntax cannot put a
+            // filesystem path in the authority.
+            let c = cfg("postgresql:///mydb?host=/tmp&user=myuser");
+            assert_eq!(c.get_hosts(), &[Host::Unix(PathBuf::from("/tmp"))]);
+            assert_eq!(c.get_user(), Some("myuser"));
+            assert_eq!(c.get_dbname(), Some("mydb"));
+        }
+
+        #[test]
+        fn query_param_host_overrides_url_authority() {
+            // libpq semantics: a `host=` query parameter replaces (not
+            // appends to) the URL authority host. tokio-postgres's
+            // `Config::host` is additive across calls, so an authority
+            // host would otherwise be tried first and the configured
+            // socket reached only as a fallback.
+            let c = cfg("postgresql://example.com/mydb?host=/var/run/postgresql");
+            assert_eq!(
+                c.get_hosts(),
+                &[Host::Unix(PathBuf::from("/var/run/postgresql"))]
+            );
+        }
+
+        #[test]
+        fn query_param_port_user_password_dbname() {
+            let c = cfg(
+                "postgresql:///placeholder?host=/tmp&port=5433&user=alice&password=s3cret&dbname=real",
+            );
+            assert_eq!(c.get_hosts(), &[Host::Unix(PathBuf::from("/tmp"))]);
+            assert_eq!(c.get_ports(), &[5433]);
+            assert_eq!(c.get_user(), Some("alice"));
+            assert_eq!(c.get_password(), Some(&b"s3cret"[..]));
+            assert_eq!(c.get_dbname(), Some("real"));
+        }
     }
 
     #[test]
@@ -698,18 +719,6 @@ mod tests {
         // must replace the URL authority port for the same reason.
         let c = cfg("postgresql://example.com:5432/mydb?port=5433");
         assert_eq!(c.get_ports(), &[5433]);
-    }
-
-    #[test]
-    fn query_param_port_user_password_dbname() {
-        let c = cfg(
-            "postgresql:///placeholder?host=/tmp&port=5433&user=alice&password=s3cret&dbname=real",
-        );
-        assert_eq!(c.get_hosts(), &[Host::Unix(PathBuf::from("/tmp"))]);
-        assert_eq!(c.get_ports(), &[5433]);
-        assert_eq!(c.get_user(), Some("alice"));
-        assert_eq!(c.get_password(), Some(&b"s3cret"[..]));
-        assert_eq!(c.get_dbname(), Some("real"));
     }
 
     #[test]
