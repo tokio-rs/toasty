@@ -379,8 +379,17 @@ impl<T> Query<List<T>> {
     }
 }
 
-/// Single-row select: projects `Query<M>` onto `Query<T>`.
+/// Single-row select.
 impl<M: Model> Query<M> {
+    /// Project this single-row query onto an expression, narrowing the
+    /// returned shape from `M` to `T`.
+    ///
+    /// The mechanics mirror [`Query::<List<M>>::select`]; the difference is
+    /// the cardinality. A `Query<M>` returns one row, so the projected query
+    /// returns one `T` (or errors at execution if no row matches).
+    ///
+    /// `projection` is any `IntoExpr<T>` source: a field path
+    /// (`Model::fields().name()`), a tuple of paths, or another expression.
     pub fn select<E, T>(mut self, projection: E) -> Query<T>
     where
         E: IntoExpr<T>,
@@ -391,8 +400,14 @@ impl<M: Model> Query<M> {
     }
 }
 
-/// Optional-row select: projects `Query<Option<M>>` onto `Query<Option<T>>`.
+/// Optional-row select.
 impl<M: Model> Query<Option<M>> {
+    /// Project this optional-row query onto an expression, narrowing the
+    /// returned shape from `M` to `T`. The `Option` wrapping survives the
+    /// projection: a `Query<Option<M>>` becomes `Query<Option<T>>`.
+    ///
+    /// `projection` is any `IntoExpr<T>` source. See
+    /// [`Query::<List<M>>::select`] for the general projection rules.
     pub fn select<E, T>(mut self, projection: E) -> Query<Option<T>>
     where
         E: IntoExpr<T>,

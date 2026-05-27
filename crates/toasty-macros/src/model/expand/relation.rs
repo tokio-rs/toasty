@@ -337,34 +337,68 @@ impl Expand<'_> {
                 continue;
             }
 
-            let method = match kind {
-                WrapperKind::Many => quote! {
-                    #vis fn #field_ident(self) -> #toasty::stmt::Query<
-                        #toasty::List<<#ty as #toasty::Field>::ExprTarget>
-                    > {
-                        use #toasty::IntoStatement;
-                        let q: #toasty::stmt::Query<#toasty::List<#model_ident>> =
-                            self.stmt.into_statement().into_query().unwrap();
-                        q.select(#model_ident::fields().#field_ident())
-                    }
-                },
-                WrapperKind::One => quote! {
-                    #vis fn #field_ident(self) -> #toasty::stmt::Query<
-                        <#ty as #toasty::Field>::ExprTarget
-                    > {
-                        self.stmt.select(#model_ident::fields().#field_ident())
-                    }
-                },
-                WrapperKind::OptionOne => quote! {
-                    #vis fn #field_ident(self) -> #toasty::stmt::Query<
-                        #toasty::Option<<#ty as #toasty::Field>::ExprTarget>
-                    > {
-                        self.stmt.select(#model_ident::fields().#field_ident())
-                    }
-                },
+            let (doc, method) = match kind {
+                WrapperKind::Many => {
+                    let doc = format!(
+                        "Project the `{field_ident}` field across the related rows. \
+                         Returns a query that produces a `Vec` of `{field_ident}`'s value type.\n\n\
+                         `Deferred<T>` strips to `T` in the return type."
+                    );
+                    (
+                        doc,
+                        quote! {
+                            #vis fn #field_ident(self) -> #toasty::stmt::Query<
+                                #toasty::List<<#ty as #toasty::Field>::ExprTarget>
+                            > {
+                                use #toasty::IntoStatement;
+                                let q: #toasty::stmt::Query<#toasty::List<#model_ident>> =
+                                    self.stmt.into_statement().into_query().unwrap();
+                                q.select(#model_ident::fields().#field_ident())
+                            }
+                        },
+                    )
+                }
+                WrapperKind::One => {
+                    let doc = format!(
+                        "Project the `{field_ident}` field of the related row. \
+                         Returns a query that produces a single `{field_ident}` value \
+                         (errors at execution if no row matches).\n\n\
+                         `Deferred<T>` strips to `T` in the return type."
+                    );
+                    (
+                        doc,
+                        quote! {
+                            #vis fn #field_ident(self) -> #toasty::stmt::Query<
+                                <#ty as #toasty::Field>::ExprTarget
+                            > {
+                                self.stmt.select(#model_ident::fields().#field_ident())
+                            }
+                        },
+                    )
+                }
+                WrapperKind::OptionOne => {
+                    let doc = format!(
+                        "Project the `{field_ident}` field of the related row, if any. \
+                         Returns a query that produces `Option<{field_ident}'s value type>`.\n\n\
+                         `Deferred<T>` strips to `T` in the return type."
+                    );
+                    (
+                        doc,
+                        quote! {
+                            #vis fn #field_ident(self) -> #toasty::stmt::Query<
+                                #toasty::Option<<#ty as #toasty::Field>::ExprTarget>
+                            > {
+                                self.stmt.select(#model_ident::fields().#field_ident())
+                            }
+                        },
+                    )
+                }
             };
 
-            methods.extend(method);
+            methods.extend(quote! {
+                #[doc = #doc]
+                #method
+            });
         }
 
         methods

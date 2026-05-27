@@ -203,7 +203,15 @@ impl Expand<'_> {
                 }
             }
 
+            let doc = format!(
+                "Project the `{field_ident}` field, returning a query that \
+                 produces a `Vec` of its value type.\n\n\
+                 Equivalent to `self.select({model_ident}::fields().{field_ident}())`. \
+                 `Deferred<T>` strips to `T` in the return type."
+            );
+
             methods.extend(quote! {
+                #[doc = #doc]
                 #vis fn #field_ident(self) -> #toasty::stmt::Query<
                     #toasty::List<<#ty as #toasty::Field>::ExprTarget>
                 > {
