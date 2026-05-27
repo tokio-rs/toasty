@@ -86,6 +86,7 @@ pub mod select_projection_belongs_to;
 pub mod select_projection_embed;
 pub mod select_projection_has_many;
 pub mod select_projection_has_one;
+pub mod select_projection_relation_field;
 pub mod starts_with;
 pub mod tx_atomic_stmt;
 pub mod tx_interactive;

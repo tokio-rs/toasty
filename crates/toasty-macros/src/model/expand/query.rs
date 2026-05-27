@@ -4,6 +4,28 @@ use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 use proc_macro2::TokenStream;
 use quote::quote;
 
+/// Inherent method names emitted on the generated `{Model}Query` struct.
+/// A primitive field with one of these names cannot get a same-named
+/// projection method without producing a duplicate-definition error.
+const QUERY_STRUCT_RESERVED_METHODS: &[&str] = &[
+    "from_stmt",
+    "exec",
+    "first",
+    "one",
+    "get",
+    "update",
+    "count",
+    "select",
+    "delete",
+    "paginate",
+    "filter",
+    "order_by",
+    "latest_by",
+    "limit",
+    "offset",
+    "include",
+];
+
 impl Expand<'_> {
     pub(super) fn expand_query_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -14,6 +36,7 @@ impl Expand<'_> {
         let include_ty = util::ident("T");
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
+        let primitive_field_projections = self.expand_query_primitive_field_methods();
         let include = self.expand_include_method(&include_ty);
 
         quote! {
@@ -103,6 +126,7 @@ impl Expand<'_> {
 
                 #include
                 #relation_methods
+                #primitive_field_projections
             }
 
             impl #toasty::IntoStatement for #query_struct_ident {
@@ -154,6 +178,48 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
                 FieldTy::HasOne(rel) => Some(self.expand_has_one_method(field, rel)),
                 FieldTy::Primitive(..) => None,
+            })
+            .collect()
+    }
+
+    /// For each primitive field, emit a method that projects the query down
+    /// to just that column — `User::all().name().exec(&mut db)` returns
+    /// `Vec<String>`. Symmetric with the same method generated on `Many`,
+    /// so `.filter(...).name()` chains work too.
+    ///
+    /// Fields whose names collide with the built-in inherent methods on the
+    /// generated query struct (`first`, `one`, `count`, etc.) are skipped —
+    /// users can still project them via `.select(Model::fields().foo())`.
+    fn expand_query_primitive_field_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let field_ident = &field.name.ident;
+                if QUERY_STRUCT_RESERVED_METHODS.contains(&field_ident.to_string().as_str()) {
+                    return None;
+                }
+
+                Some(quote! {
+                    #vis fn #field_ident(self) -> #toasty::stmt::Query<#toasty::List<<#ty as #toasty::Field>::ExprTarget>>
+                    where
+                        #ty: #toasty::Field,
+                        <#ty as #toasty::Field>::Path<#model_ident>:
+                            Into<#toasty::Path<#model_ident, <#ty as #toasty::Field>::ExprTarget>>,
+                        <#ty as #toasty::Field>::ExprTarget: #toasty::Load,
+                    {
+                        let path: #toasty::Path<#model_ident, <#ty as #toasty::Field>::ExprTarget> =
+                            #model_ident::fields().#field_ident().into();
+                        self.stmt.select(path)
+                    }
+                })
             })
             .collect()
     }

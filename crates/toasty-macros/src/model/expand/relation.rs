@@ -4,6 +4,12 @@ use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 use proc_macro2::TokenStream;
 use quote::quote;
 
+/// Inherent method names emitted on the generated `Many<Kind>` struct.
+/// A primitive field with one of these names cannot get a same-named
+/// projection method without producing a duplicate-definition error.
+const MANY_RESERVED_METHODS: &[&str] =
+    &["from_stmt", "exec", "filter", "create", "insert", "remove"];
+
 struct PairBelongsToCheck<'a> {
     pair_ident: &'a syn::Ident,
     field_ident: &'a syn::Ident,
@@ -26,6 +32,7 @@ impl Expand<'_> {
         let field_list_struct_ident = &root.field_list_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
         let chain_methods = self.expand_many_chain_methods();
+        let many_field_projections = self.expand_many_primitive_field_methods();
 
         quote! {
             #vis struct Many<Kind = #toasty::Direct> {
@@ -54,6 +61,8 @@ impl Expand<'_> {
                 #filter_methods
 
                 #chain_methods
+
+                #many_field_projections
 
                 /// Iterate all entries in the relation
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
@@ -283,6 +292,50 @@ impl Expand<'_> {
                         <<<#ty as #field_trait>::Model as #toasty::Model>::ViaMany>::from_stmt(
                             self.stmt.chain_field(#field_offset)
                         )
+                    }
+                })
+            })
+            .collect()
+    }
+
+    /// For each primitive field on this model, emit a method on `Many` that
+    /// projects the relation query down to just that column. Returns a
+    /// `Query<List<FieldTy>>`, so `user.todos().title().exec(&mut db)` yields
+    /// `Vec<String>` without round-tripping whole rows.
+    ///
+    /// Fields whose names collide with the built-in inherent methods on
+    /// `Many` (`exec`, `filter`, `create`, `insert`, `remove`) are skipped —
+    /// users can still project them via `.select(Model::fields().foo())` after
+    /// converting the relation to a query.
+    pub(super) fn expand_many_primitive_field_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let field_ident = &field.name.ident;
+                if MANY_RESERVED_METHODS.contains(&field_ident.to_string().as_str()) {
+                    return None;
+                }
+
+                Some(quote! {
+                    #vis fn #field_ident(self) -> #toasty::stmt::Query<#toasty::List<<#ty as #toasty::Field>::ExprTarget>>
+                    where
+                        #ty: #toasty::Field,
+                        <#ty as #toasty::Field>::Path<#model_ident>:
+                            Into<#toasty::Path<#model_ident, <#ty as #toasty::Field>::ExprTarget>>,
+                        <#ty as #toasty::Field>::ExprTarget: #toasty::Load,
+                    {
+                        use #toasty::IntoStatement;
+                        let path: #toasty::Path<#model_ident, <#ty as #toasty::Field>::ExprTarget> =
+                            #model_ident::fields().#field_ident().into();
+                        self.into_statement().into_query().unwrap().select(path)
                     }
                 })
             })

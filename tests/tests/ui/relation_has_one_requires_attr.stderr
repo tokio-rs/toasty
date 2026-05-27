@@ -49,6 +49,33 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              bigdecimal::BigDecimal
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = help: see issue #48214
+   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `Profile` cannot be used as a field type
+  --> tests/ui/relation_has_one_requires_attr.rs:1:10
+   |
+ 1 | #[derive(toasty::Model)]
+   |          ^^^^^^^^^^^^^ this field's type is not storable
+   |
+help: the trait `toasty::schema::Field` is not implemented for `Profile`
+  --> tests/ui/relation_has_one_requires_attr.rs:11:1
+   |
+11 | struct Profile {
+   | ^^^^^^^^^^^^^^
+   = note: If `Profile` is a Toasty model, this is a relation field and must be annotated with `#[belongs_to]`, `#[has_one]`, or `#[has_many]`.
+   = note: Otherwise `Profile` must be a supported primitive (string, integer, bool, uuid, …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`).
+   = help: the following other types implement trait `toasty::schema::Field`:
+             Arc<T>
+             Box<T>
+             Deferred<T>
+             Option<T>
+             Rc<T>
+             Vec<T>
+             Vec<u8>
+             bigdecimal::BigDecimal
+           and $N others
+   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
    = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<Option<Profile>>` is not satisfied
@@ -118,6 +145,16 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              bigdecimal::BigDecimal
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+
+error[E0277]: the trait bound `toasty::stmt::Path<User, <Deferred<Option<Profile>> as toasty::schema::Field>::ExprTarget>: From<<Deferred<Option<Profile>> as toasty::schema::Field>::Path<User>>` is not satisfied
+ --> tests/ui/relation_has_one_requires_attr.rs:1:10
+  |
+1 | #[derive(toasty::Model)]
+  |          ^^^^^^^^^^^^^ unsatisfied trait bound
+  |
+  = help: the trait `From<<Deferred<Option<Profile>> as toasty::schema::Field>::Path<User>>` is not implemented for `toasty::stmt::Path<User, <Deferred<Option<Profile>> as toasty::schema::Field>::ExprTarget>`
+  = note: required for `<Deferred<Option<Profile>> as toasty::schema::Field>::Path<User>` to implement `Into<toasty::stmt::Path<User, <Deferred<Option<Profile>> as toasty::schema::Field>::ExprTarget>>`
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:7:5
