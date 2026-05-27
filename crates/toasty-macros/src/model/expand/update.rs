@@ -205,6 +205,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let update_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
+        let field_struct_ident = &self.model.kind.as_root_unwrap().field_struct_ident;
         let target_ty = util::ident("T");
         let builder_methods = self.expand_update_field_methods(false);
         let update_default_stmts = self.expand_update_default_stmts();
@@ -226,6 +227,16 @@ impl Expand<'_> {
             impl<#target_ty: #toasty::UpdateTarget> #update_struct_ident<#target_ty> {
                 fn apply_update_defaults(&mut self) {
                     #update_default_stmts
+                }
+
+                /// Return a fresh fields struct rooted at the model.
+                /// Used by `update!` to build `stmt::patch` paths for
+                /// embedded partial updates — the macro calls this on
+                /// the bound update builder, sidestepping the need to
+                /// keep the original target value accessible.
+                #[doc(hidden)]
+                pub fn __macro_fields_root(&self) -> #field_struct_ident<#model_ident> {
+                    #model_ident::fields()
                 }
 
                 #builder_methods
