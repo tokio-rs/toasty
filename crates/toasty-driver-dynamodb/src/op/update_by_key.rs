@@ -468,29 +468,70 @@ impl Connection {
                     )));
                 };
 
+                // Resolve each unique-column assignment to a concrete post-update
+                // value. `Set(v)` resolves to `v`; `Add(x)` / `Subtract(x)` resolve
+                // to `prev ± x` using the GET result above. The main-table update
+                // expression keeps the atomic `SET col = col ± :v` form, so
+                // atomicity is preserved by the transaction's `<col> = <prev>`
+                // condition below — if the column changed concurrently, the
+                // transaction is cancelled before the precomputed index entry is
+                // written.
+                let mut resolved_unique_values = HashMap::new();
+                for index_column in &index.columns {
+                    let column = index_column.table_column(schema);
+                    for (projection, assignment) in op.assignments.iter() {
+                        if *projection != column.id.index {
+                            continue;
+                        }
+                        let resolved = match assignment {
+                            stmt::Assignment::Set(stmt::Expr::Value(v)) => v.clone(),
+                            stmt::Assignment::Add(stmt::Expr::Value(delta))
+                            | stmt::Assignment::Subtract(stmt::Expr::Value(delta)) => {
+                                let prev = curr_unique_values.get(&column.name).ok_or_else(
+                                    || {
+                                        toasty_core::Error::invalid_statement(format!(
+                                            "arithmetic update on unique column {} requires an existing value",
+                                            column.name,
+                                        ))
+                                    },
+                                )?;
+                                let prev_value = Value::from_ddb(&column.ty, prev).into_inner();
+                                let result = match assignment {
+                                    stmt::Assignment::Add(_) => prev_value.checked_add(delta),
+                                    _ => prev_value.checked_sub(delta),
+                                };
+                                result.ok_or_else(|| {
+                                    toasty_core::Error::invalid_statement(format!(
+                                        "arithmetic overflow on unique column {}",
+                                        column.name,
+                                    ))
+                                })?
+                            }
+                            other => {
+                                return Err(toasty_core::Error::invalid_statement(format!(
+                                    "unsupported assignment on unique column {}: {other:#?}",
+                                    column.name,
+                                )));
+                            }
+                        };
+                        resolved_unique_values.insert(column.id, resolved);
+                    }
+                }
+
                 for index_column in &index.columns {
                     let column = index_column.table_column(schema);
 
-                    for (projection, assignment) in op.assignments.iter() {
-                        if *projection == column.id.index {
-                            if let Some(prev) = curr_unique_values.remove(&column.name) {
-                                let stmt::Assignment::Set(expr) = assignment else {
-                                    unreachable!(
-                                        "unique index assignments are always Set; got {assignment:#?}"
-                                    );
-                                };
-                                let stmt::Expr::Value(value) = expr else {
-                                    unreachable!(
-                                        "unique index assignment expression is always a Value; got {expr:#?}"
-                                    );
-                                };
-
-                                if Value::from_ddb(&column.ty, &prev).into_inner() != *value {
-                                    updated_unique_attrs.insert(column.id, prev);
-                                }
-                            } else {
-                                set_unique_attrs.insert(column.id, ());
+                    for (projection, _) in op.assignments.iter() {
+                        if *projection != column.id.index {
+                            continue;
+                        }
+                        let new_value = &resolved_unique_values[&column.id];
+                        if let Some(prev) = curr_unique_values.remove(&column.name) {
+                            if Value::from_ddb(&column.ty, &prev).into_inner() != *new_value {
+                                updated_unique_attrs.insert(column.id, prev);
                             }
+                        } else {
+                            set_unique_attrs.insert(column.id, ());
                         }
                     }
                 }
@@ -595,23 +636,7 @@ impl Connection {
 
                         for index_column in &index.columns {
                             let column = index_column.table_column(schema);
-                            let (_, assignment) = op
-                                .assignments
-                                .iter()
-                                .find(|(projection, _)| **projection == column_id.index)
-                                .unwrap();
-
-                            let stmt::Assignment::Set(expr) = assignment else {
-                                unreachable!(
-                                    "unique index assignments are always Set; got {assignment:#?}"
-                                );
-                            };
-                            let stmt::Expr::Value(value) = expr else {
-                                unreachable!(
-                                    "unique index assignment expression is always a Value; got {expr:#?}"
-                                );
-                            };
-
+                            let value = &resolved_unique_values[column_id];
                             if !value.is_null() {
                                 index_insert_items.insert(
                                     column.name.clone(),

@@ -230,6 +230,40 @@ pub async fn set_then_arithmetic_on_one_field(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test]
+pub async fn increment_unique_column(t: &mut Test) -> Result<()> {
+    // Regression: DynamoDB's unique-index update path assumes every
+    // assignment on a unique column is `Set` (`let Set(expr) = assignment
+    // else unreachable!()`). Filtering by projection alone lets `Add` /
+    // `Subtract` reach the let-else and panic. Incrementing a unique
+    // numeric column should succeed on every backend.
+    #[derive(Debug, toasty::Model)]
+    struct Slot {
+        #[key]
+        id: uuid::Uuid,
+
+        #[unique]
+        count: i64,
+    }
+
+    let mut db = t.setup_db(models!(Slot)).await;
+    let mut slot = toasty::create!(Slot {
+        id: uuid::Uuid::new_v4(),
+        count: 10,
+    })
+    .exec(&mut db)
+    .await?;
+
+    slot.update()
+        .count(toasty::stmt::increment())
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Slot::get_by_id(&mut db, &slot.id).await?;
+    assert_eq!(reloaded.count, 11);
+    Ok(())
+}
+
+#[driver_test]
 pub async fn filter_update_with_arithmetic(t: &mut Test) -> Result<()> {
     let (mut db, counter) = setup(t).await;
 
