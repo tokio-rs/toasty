@@ -379,6 +379,30 @@ impl<T> Query<List<T>> {
     }
 }
 
+/// Single-row select: projects `Query<M>` onto `Query<T>`.
+impl<M: Model> Query<M> {
+    pub fn select<E, T>(mut self, projection: E) -> Query<T>
+    where
+        E: IntoExpr<T>,
+        T: Load,
+    {
+        *self.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
+        Query::from_untyped(self.untyped)
+    }
+}
+
+/// Optional-row select: projects `Query<Option<M>>` onto `Query<Option<T>>`.
+impl<M: Model> Query<Option<M>> {
+    pub fn select<E, T>(mut self, projection: E) -> Query<Option<T>>
+    where
+        E: IntoExpr<T>,
+        T: Load,
+    {
+        *self.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
+        Query::from_untyped(self.untyped)
+    }
+}
+
 fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;

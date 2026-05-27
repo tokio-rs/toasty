@@ -16,6 +16,84 @@ use super::schema::{FieldTy, Model, ModelKind};
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
+/// Method names already defined on `{Model}Query`. Fields with these names
+/// don't get a generated projection method; a `#[deprecated]` marker is
+/// emitted instead so the user gets a warning at compile time.
+pub(super) const QUERY_RESERVED_METHODS: &[&str] = &[
+    "from_stmt",
+    "exec",
+    "first",
+    "one",
+    "get",
+    "update",
+    "count",
+    "select",
+    "delete",
+    "paginate",
+    "filter",
+    "order_by",
+    "latest_by",
+    "limit",
+    "offset",
+    "include",
+];
+
+/// Method names already defined on `Many<Kind>`.
+pub(super) const MANY_RESERVED_METHODS: &[&str] =
+    &["from_stmt", "exec", "filter", "create", "insert", "remove"];
+
+/// Method names already defined on `One<Kind>` and `OptionOne<Kind>`.
+pub(super) const ONE_RESERVED_METHODS: &[&str] = &["from_stmt", "exec", "create"];
+
+/// Emit a `#[deprecated]` marker that warns the user at compile time when a
+/// model field name collides with a wrapper method. The projection method is
+/// skipped (the existing builder method wins); the user can still project via
+/// `.select(Model::fields().<field>())`.
+///
+/// Emitted at module scope (not inside an `impl`) so that the `const` trigger
+/// reads the deprecated `fn` as a function pointer — that reference is what
+/// fires the deprecation warning at compile time.
+/// Returns true if `field_ident` collides with any reserved method on the
+/// model's query struct or its relation wrappers (`Many` / `One` /
+/// `OptionOne`).
+pub(super) fn projection_method_collides(field_ident: &syn::Ident) -> bool {
+    let name = field_ident.to_string();
+    QUERY_RESERVED_METHODS.contains(&name.as_str())
+        || MANY_RESERVED_METHODS.contains(&name.as_str())
+        || ONE_RESERVED_METHODS.contains(&name.as_str())
+}
+
+/// Emit a `#[deprecated]` marker for a field whose name collides with a
+/// wrapper method. The marker is named after the field (matching the
+/// would-be projection method) so the deprecation note reads naturally.
+/// The `const` trigger references the deprecated `fn` as a function pointer,
+/// which fires the warning at compile time.
+pub(super) fn projection_collision_warning(
+    field_ident: &syn::Ident,
+    model_ident: &syn::Ident,
+) -> TokenStream {
+    let trigger_ident = syn::Ident::new(
+        &format!("__toasty_projection_skipped_trigger_{field_ident}"),
+        field_ident.span(),
+    );
+    let note = format!(
+        "generated method `{field_ident}()` for field `{field_ident}` on `{model_ident}` \
+         shadows built-in method. \
+         Use `.select({model_ident}::fields().{field_ident}())` to project this field."
+    );
+
+    quote_spanned! { field_ident.span() =>
+        #[allow(non_snake_case, dead_code)]
+        #[doc(hidden)]
+        #[deprecated(note = #note)]
+        fn #field_ident() {}
+
+        #[allow(non_upper_case_globals, dead_code)]
+        #[doc(hidden)]
+        const #trigger_ident: fn() = #field_ident;
+    }
+}
+
 struct Expand<'a> {
     /// The model being expanded
     model: &'a Model,

@@ -222,6 +222,18 @@ impl Expand<'_> {
                 }
             }
 
+            impl<__Origin> #toasty::IntoExpr<#model_ident> for #field_struct_ident<__Origin> {
+                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+                    use #toasty::IntoExpr;
+                    self.path.into_expr()
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                    use #toasty::IntoExpr;
+                    self.path.by_ref()
+                }
+            }
+
             #( #variant_field_structs )*
         }
     }

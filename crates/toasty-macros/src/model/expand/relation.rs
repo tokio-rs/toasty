@@ -14,6 +14,13 @@ struct PairBelongsToCheck<'a> {
     label: &'static str,
 }
 
+#[derive(Clone, Copy)]
+enum WrapperKind {
+    Many,
+    One,
+    OptionOne,
+}
+
 impl Expand<'_> {
     pub(super) fn expand_relation_structs(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -26,6 +33,12 @@ impl Expand<'_> {
         let field_list_struct_ident = &root.field_list_struct_ident;
         let filter_methods = self.expand_relation_filter_methods();
         let chain_methods = self.expand_many_chain_methods();
+        let many_projection =
+            self.expand_wrapper_projection_methods(super::MANY_RESERVED_METHODS, WrapperKind::Many);
+        let one_projection =
+            self.expand_wrapper_projection_methods(super::ONE_RESERVED_METHODS, WrapperKind::One);
+        let option_one_projection = self
+            .expand_wrapper_projection_methods(super::ONE_RESERVED_METHODS, WrapperKind::OptionOne);
 
         quote! {
             #vis struct Many<Kind = #toasty::Direct> {
@@ -76,6 +89,8 @@ impl Expand<'_> {
                 {
                     <Self as #toasty::CreateScope>::create_in_scope(self)
                 }
+
+                #many_projection
             }
 
             impl Many<#toasty::Direct> {
@@ -118,6 +133,8 @@ impl Expand<'_> {
                 {
                     <Self as #toasty::CreateScope>::create_in_scope(self)
                 }
+
+                #one_projection
             }
 
             impl<Kind> #toasty::IntoStatement for One<Kind> {
@@ -148,6 +165,8 @@ impl Expand<'_> {
                 {
                     <Self as #toasty::CreateScope>::create_in_scope(self)
                 }
+
+                #option_one_projection
             }
 
             #[diagnostic::do_not_recommend]
@@ -251,6 +270,7 @@ impl Expand<'_> {
                     builder
                 }
             }
+
         }
     }
 
@@ -287,6 +307,67 @@ impl Expand<'_> {
                 })
             })
             .collect()
+    }
+
+    /// Emit projection methods on a wrapper struct (`Many`, `One`,
+    /// `OptionOne`) for each non-relation field on the target model. Fields
+    /// whose name appears in this wrapper's reserved-method list are skipped;
+    /// the collision warning is emitted once per field by
+    /// `expand_query_projection_methods` (the `Query` layer owns the
+    /// deduplicated warning so the markers don't collide across wrappers).
+    fn expand_wrapper_projection_methods(
+        &self,
+        reserved: &[&str],
+        kind: WrapperKind,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        let mut methods = TokenStream::new();
+
+        for field in &self.model.fields {
+            let ty = match &field.ty {
+                FieldTy::Primitive(ty) => ty,
+                _ => continue,
+            };
+            let field_ident = &field.name.ident;
+
+            if reserved.contains(&field_ident.to_string().as_str()) {
+                continue;
+            }
+
+            let method = match kind {
+                WrapperKind::Many => quote! {
+                    #vis fn #field_ident(self) -> #toasty::stmt::Query<
+                        #toasty::List<<#ty as #toasty::Field>::ExprTarget>
+                    > {
+                        use #toasty::IntoStatement;
+                        let q: #toasty::stmt::Query<#toasty::List<#model_ident>> =
+                            self.stmt.into_statement().into_query().unwrap();
+                        q.select(#model_ident::fields().#field_ident())
+                    }
+                },
+                WrapperKind::One => quote! {
+                    #vis fn #field_ident(self) -> #toasty::stmt::Query<
+                        <#ty as #toasty::Field>::ExprTarget
+                    > {
+                        self.stmt.select(#model_ident::fields().#field_ident())
+                    }
+                },
+                WrapperKind::OptionOne => quote! {
+                    #vis fn #field_ident(self) -> #toasty::stmt::Query<
+                        #toasty::Option<<#ty as #toasty::Field>::ExprTarget>
+                    > {
+                        self.stmt.select(#model_ident::fields().#field_ident())
+                    }
+                },
+            };
+
+            methods.extend(method);
+        }
+
+        methods
     }
 
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {

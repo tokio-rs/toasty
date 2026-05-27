@@ -1,0 +1,11 @@
+error: use of deprecated function `_::count`: generated method `count()` for field `count` on `Widget` shadows built-in method. Use `.select(Widget::fields().count())` to project this field.
+  --> tests/ui/projection_method_collision_query.rs:12:5
+   |
+12 |     count: i64,
+   |     ^^^^^
+   |
+note: the lint level is defined here
+  --> tests/ui/projection_method_collision_query.rs:5:9
+   |
+ 5 | #![deny(deprecated)]
+   |         ^^^^^^^^^^
