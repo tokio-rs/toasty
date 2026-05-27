@@ -170,6 +170,66 @@ pub async fn arithmetic_chains_with_other_updates(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test]
+pub async fn multiple_add_on_one_field(t: &mut Test) -> Result<()> {
+    // Regression: chaining two arithmetic ops on the same field used to crash
+    // lowering. `Assignments::add` batches duplicate keys into
+    // `Assignment::Batch([Add, Add])`, and `fold_append_batch` only handles
+    // `Append`. Two `stmt::add` on the same field should compose to a single
+    // net add of (2 + 3).
+    let (mut db, mut counter) = setup(t).await;
+
+    counter
+        .update()
+        .value(toasty::stmt::add(2))
+        .value(toasty::stmt::add(3))
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
+    assert_eq!(reloaded.value, 15);
+    Ok(())
+}
+
+#[driver_test]
+pub async fn subtract_then_add_on_one_field(t: &mut Test) -> Result<()> {
+    // Covers the sign-flip path in the arithmetic-batch fold: when
+    // `Subtract` leads, subsequent `Add` operands must flip to subtraction
+    // inside the running operand (`col - a + b = col - (a - b)`).
+    let (mut db, mut counter) = setup(t).await;
+
+    counter
+        .update()
+        .value(toasty::stmt::subtract(3))
+        .value(toasty::stmt::add(7))
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
+    assert_eq!(reloaded.value, 14);
+    Ok(())
+}
+
+#[driver_test]
+pub async fn set_then_arithmetic_on_one_field(t: &mut Test) -> Result<()> {
+    // Covers the Set+arithmetic fold: a literal write followed by an
+    // arithmetic op on the same field should reduce to `Set(literal ± op)`
+    // — Set clobbers prior state and absorbs subsequent arithmetic.
+    let (mut db, mut counter) = setup(t).await;
+
+    counter
+        .update()
+        .value(50)
+        .value(toasty::stmt::add(8))
+        .value(toasty::stmt::subtract(3))
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
+    assert_eq!(reloaded.value, 55);
+    Ok(())
+}
+
+#[driver_test]
 pub async fn filter_update_with_arithmetic(t: &mut Test) -> Result<()> {
     let (mut db, counter) = setup(t).await;
 
