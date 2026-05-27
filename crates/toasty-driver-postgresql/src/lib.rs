@@ -125,28 +125,12 @@ impl PostgreSQL {
 
         let mut config = Config::new();
 
-        // Host comes from the URL authority when present; otherwise from a
-        // `host=` query parameter (the libpq-compatible spelling that lets
-        // URLs reference Unix-domain sockets, e.g. `?host=/tmp`, since
-        // URL syntax cannot encode a path as the authority).
-        let mut host_set = false;
-        if let Some(host) = url.host_str()
-            && !host.is_empty()
-        {
-            config.host(host);
-            host_set = true;
-        }
-
         let dbname = percent_decode_str(url.path().trim_start_matches('/'))
             .decode_utf8()
             .map_err(|_| {
                 toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
             })?;
         config.dbname(&*dbname);
-
-        if let Some(port) = url.port() {
-            config.port(port);
-        }
 
         if !url.username().is_empty() {
             let user = percent_decode_str(url.username())
@@ -164,19 +148,23 @@ impl PostgreSQL {
         // libpq lets standard connection parameters appear in the query
         // string; honor the ones a Toasty user can reasonably set so that
         // `postgresql:///mydb?host=/tmp&user=alice` reaches the server.
+        // Single-valued setters (user, password, dbname, application_name)
+        // replace earlier calls, so we can apply them inline; host and
+        // port are list-valued — staged into Options below so a query
+        // parameter cleanly overrides the URL component instead of being
+        // appended as a fallback tokio-postgres would try first.
+        let mut host: Option<String> = None;
+        let mut port: Option<u16> = None;
+
         for (key, value) in url.query_pairs() {
             match key.as_ref() {
-                "host" => {
-                    config.host(&*value);
-                    host_set = true;
-                }
+                "host" => host = Some(value.into_owned()),
                 "port" => {
-                    let port = value.parse::<u16>().map_err(|_| {
+                    port = Some(value.parse::<u16>().map_err(|_| {
                         toasty_core::Error::invalid_connection_url(format!(
                             "invalid port in connection URL query parameter: {value}"
                         ))
-                    })?;
-                    config.port(port);
+                    })?);
                 }
                 "user" => {
                     config.user(&*value);
@@ -194,11 +182,18 @@ impl PostgreSQL {
             }
         }
 
-        if !host_set {
-            return Err(toasty_core::Error::invalid_connection_url(format!(
-                "missing host in connection URL; url={}",
-                url
-            )));
+        let host = host
+            .or_else(|| url.host_str().filter(|h| !h.is_empty()).map(String::from))
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url(format!(
+                    "missing host in connection URL; url={}",
+                    url
+                ))
+            })?;
+        config.host(&host);
+
+        if let Some(port) = port.or_else(|| url.port()) {
+            config.port(port);
         }
 
         #[cfg(feature = "tls")]
@@ -685,16 +680,24 @@ mod tests {
 
     #[test]
     fn query_param_host_overrides_url_authority() {
-        // libpq query parameters override URL components, so a `host=`
-        // query string wins over a host in the URL authority.
+        // libpq semantics: a `host=` query parameter replaces (not
+        // appends to) the URL authority host. tokio-postgres's
+        // `Config::host` is additive across calls, so an authority
+        // host would otherwise be tried first and the configured
+        // socket reached only as a fallback.
         let c = cfg("postgresql://example.com/mydb?host=/var/run/postgresql");
         assert_eq!(
             c.get_hosts(),
-            &[
-                Host::Tcp("example.com".into()),
-                Host::Unix(PathBuf::from("/var/run/postgresql")),
-            ]
+            &[Host::Unix(PathBuf::from("/var/run/postgresql"))]
         );
+    }
+
+    #[test]
+    fn query_param_port_overrides_url_port() {
+        // `Config::port` is additive too, so a `port=` query parameter
+        // must replace the URL authority port for the same reason.
+        let c = cfg("postgresql://example.com:5432/mydb?port=5433");
+        assert_eq!(c.get_ports(), &[5433]);
     }
 
     #[test]
