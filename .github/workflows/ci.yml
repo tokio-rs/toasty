@@ -220,6 +220,32 @@ jobs:
         - name: cargo run --bin example-hello-toasty
           run: cargo run --bin example-hello-toasty --features postgresql
 
+    test-postgresql-uds:
+        needs: check
+        name: PostgreSQL Unix-socket connectivity smoke test
+        runs-on: ubuntu-latest
+        # Uses the runner's preinstalled PostgreSQL rather than the service
+        # container, since service containers do not expose their UNIX
+        # socket to the host. Peer auth maps the runner OS user to a
+        # matching superuser role.
+        env:
+            TOASTY_TEST_POSTGRES_UDS_URL: postgresql:///runner?host=/var/run/postgresql&user=runner
+        steps:
+        - uses: actions/checkout@v6
+        - uses: dtolnay/rust-toolchain@master
+          with:
+            toolchain: ${{ env.RUST_STABLE_VERSION }}
+        - uses: Swatinem/rust-cache@v2
+          with:
+            save-if: ${{ github.ref == 'refs/heads/main' }}
+        - name: Start PostgreSQL and provision runner role
+          run: |
+            sudo systemctl start postgresql
+            sudo -u postgres createuser --superuser "$USER"
+            sudo -u postgres createdb "$USER"
+        - name: cargo test connect_via_unix_socket
+          run: cargo test --no-default-features --features postgresql --test postgresql connect_via_unix_socket -- --exact
+
     test-dynamodb:
         needs: check
         name: Run tests for DynamoDB

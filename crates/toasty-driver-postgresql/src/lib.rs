@@ -116,13 +116,6 @@ impl PostgreSQL {
             )));
         }
 
-        let host = url.host_str().ok_or_else(|| {
-            toasty_core::Error::invalid_connection_url(format!(
-                "missing host in connection URL; url={}",
-                url
-            ))
-        })?;
-
         if url.path().is_empty() {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
@@ -131,7 +124,18 @@ impl PostgreSQL {
         }
 
         let mut config = Config::new();
-        config.host(host);
+
+        // Host comes from the URL authority when present; otherwise from a
+        // `host=` query parameter (the libpq-compatible spelling that lets
+        // URLs reference Unix-domain sockets, e.g. `?host=/tmp`, since
+        // URL syntax cannot encode a path as the authority).
+        let mut host_set = false;
+        if let Some(host) = url.host_str()
+            && !host.is_empty()
+        {
+            config.host(host);
+            host_set = true;
+        }
 
         let dbname = percent_decode_str(url.path().trim_start_matches('/'))
             .decode_utf8()
@@ -157,10 +161,44 @@ impl PostgreSQL {
             config.password(percent_decode_str(password).collect::<Vec<u8>>());
         }
 
+        // libpq lets standard connection parameters appear in the query
+        // string; honor the ones a Toasty user can reasonably set so that
+        // `postgresql:///mydb?host=/tmp&user=alice` reaches the server.
         for (key, value) in url.query_pairs() {
-            if key == "application_name" {
-                config.application_name(&*value);
+            match key.as_ref() {
+                "host" => {
+                    config.host(&*value);
+                    host_set = true;
+                }
+                "port" => {
+                    let port = value.parse::<u16>().map_err(|_| {
+                        toasty_core::Error::invalid_connection_url(format!(
+                            "invalid port in connection URL query parameter: {value}"
+                        ))
+                    })?;
+                    config.port(port);
+                }
+                "user" => {
+                    config.user(&*value);
+                }
+                "password" => {
+                    config.password(value.as_bytes());
+                }
+                "dbname" => {
+                    config.dbname(&*value);
+                }
+                "application_name" => {
+                    config.application_name(&*value);
+                }
+                _ => {}
             }
+        }
+
+        if !host_set {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "missing host in connection URL; url={}",
+                url
+            )));
         }
 
         #[cfg(feature = "tls")]
@@ -614,5 +652,84 @@ impl toasty_core::driver::Connection for Connection {
             .await
             .map(|_| ())
             .map_err(toasty_core::Error::connection_lost)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::path::PathBuf;
+    use tokio_postgres::config::Host;
+
+    fn cfg(url: &str) -> Config {
+        PostgreSQL::new(url).expect("valid URL").config
+    }
+
+    #[test]
+    fn host_in_url_authority() {
+        let c = cfg("postgresql://example.com/mydb");
+        assert_eq!(c.get_hosts(), &[Host::Tcp("example.com".into())]);
+        assert_eq!(c.get_dbname(), Some("mydb"));
+    }
+
+    #[test]
+    fn unix_socket_via_host_query_param() {
+        // Regression for #984: libpq lets a Unix-socket directory be
+        // supplied via `?host=/path`, since URL syntax cannot put a
+        // filesystem path in the authority.
+        let c = cfg("postgresql:///mydb?host=/tmp&user=myuser");
+        assert_eq!(c.get_hosts(), &[Host::Unix(PathBuf::from("/tmp"))]);
+        assert_eq!(c.get_user(), Some("myuser"));
+        assert_eq!(c.get_dbname(), Some("mydb"));
+    }
+
+    #[test]
+    fn query_param_host_overrides_url_authority() {
+        // libpq query parameters override URL components, so a `host=`
+        // query string wins over a host in the URL authority.
+        let c = cfg("postgresql://example.com/mydb?host=/var/run/postgresql");
+        assert_eq!(
+            c.get_hosts(),
+            &[
+                Host::Tcp("example.com".into()),
+                Host::Unix(PathBuf::from("/var/run/postgresql")),
+            ]
+        );
+    }
+
+    #[test]
+    fn query_param_port_user_password_dbname() {
+        let c = cfg(
+            "postgresql:///placeholder?host=/tmp&port=5433&user=alice&password=s3cret&dbname=real",
+        );
+        assert_eq!(c.get_hosts(), &[Host::Unix(PathBuf::from("/tmp"))]);
+        assert_eq!(c.get_ports(), &[5433]);
+        assert_eq!(c.get_user(), Some("alice"));
+        assert_eq!(c.get_password(), Some(&b"s3cret"[..]));
+        assert_eq!(c.get_dbname(), Some("real"));
+    }
+
+    #[test]
+    fn application_name_query_param() {
+        let c = cfg("postgresql://localhost/mydb?application_name=my_app");
+        assert_eq!(c.get_application_name(), Some("my_app"));
+    }
+
+    #[test]
+    fn missing_host_rejected() {
+        let err = PostgreSQL::new("postgresql:///mydb").unwrap_err();
+        assert!(
+            err.to_string().contains("missing host"),
+            "expected missing-host error, got: {err}"
+        );
+    }
+
+    #[test]
+    fn invalid_port_query_param_rejected() {
+        let err = PostgreSQL::new("postgresql:///mydb?host=/tmp&port=not-a-number").unwrap_err();
+        assert!(
+            err.to_string().contains("invalid port"),
+            "expected invalid-port error, got: {err}"
+        );
     }
 }
