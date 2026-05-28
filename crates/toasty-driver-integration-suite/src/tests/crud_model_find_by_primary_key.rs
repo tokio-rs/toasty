@@ -31,17 +31,17 @@ pub async fn single_column_pk(test: &mut Test) -> Result<()> {
 #[driver_test]
 pub async fn composite_pk(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    #[key(one, two)]
+    #[key(part_a, part_b)]
     struct Pair {
-        one: String,
-        two: String,
+        part_a: String,
+        part_b: String,
     }
 
     let mut db = test.setup_db(models!(Pair)).await;
 
     toasty::create!(Pair::[
-        { one: "hello", two: "world" },
-        { one: "left",  two: "right" },
+        { part_a: "hello", part_b: "world" },
+        { part_a: "left",  part_b: "right" },
     ])
     .exec(&mut db)
     .await?;
@@ -49,8 +49,8 @@ pub async fn composite_pk(test: &mut Test) -> Result<()> {
     let found = Pair::find_by_primary_key(("hello".to_string(), "world".to_string()).into_expr())
         .get(&mut db)
         .await?;
-    assert_eq!(found.one, "hello");
-    assert_eq!(found.two, "world");
+    assert_eq!(found.part_a, "hello");
+    assert_eq!(found.part_b, "world");
 
     Ok(())
 }

@@ -150,7 +150,7 @@ fn non_enum_insert_keeps_default_types() {
     struct Item {
         #[key]
         id: String,
-        count: i64,
+        quantity: i64,
     }
 
     let schema = test_schema_with(&[Item::schema()]);

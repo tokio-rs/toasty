@@ -5,26 +5,26 @@ pub async fn filter_composite_key_in_list(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
-        one: String,
+        part_a: String,
 
         #[key]
-        two: String,
+        part_b: String,
     }
 
     let mut db = test.setup_db(models!(Item)).await;
 
     for i in 0..5 {
         Item::create()
-            .one(format!("one-{i}"))
-            .two(format!("two-{i}"))
+            .part_a(format!("a-{i}"))
+            .part_b(format!("b-{i}"))
             .exec(&mut db)
             .await?;
     }
 
     // Use the free function form with a tuple of field paths
     let items: Vec<_> = Item::filter(toasty::stmt::in_list::<(String, String)>(
-        (Item::fields().one(), Item::fields().two()),
-        [("one-1", "two-1"), ("one-3", "two-3")],
+        (Item::fields().part_a(), Item::fields().part_b()),
+        [("a-1", "b-1"), ("a-3", "b-3")],
     ))
     .exec(&mut db)
     .await?;
@@ -33,8 +33,8 @@ pub async fn filter_composite_key_in_list(test: &mut Test) -> Result<()> {
 
     for item in &items {
         assert!(
-            (item.one == "one-1" && item.two == "two-1")
-                || (item.one == "one-3" && item.two == "two-3")
+            (item.part_a == "a-1" && item.part_b == "b-1")
+                || (item.part_a == "a-3" && item.part_b == "b-3")
         );
     }
 
@@ -46,19 +46,19 @@ pub async fn filter_composite_key_in_list_empty(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
-        one: String,
+        part_a: String,
 
         #[key]
-        two: String,
+        part_b: String,
     }
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    Item::create().one("a").two("b").exec(&mut db).await?;
+    Item::create().part_a("a").part_b("b").exec(&mut db).await?;
 
     let empty: Vec<(String, String)> = vec![];
     let items: Vec<_> = Item::filter(toasty::stmt::in_list::<(String, String)>(
-        (Item::fields().one(), Item::fields().two()),
+        (Item::fields().part_a(), Item::fields().part_b()),
         empty,
     ))
     .exec(&mut db)
