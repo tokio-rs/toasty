@@ -350,8 +350,7 @@ fn ddb_expression(
             // A bare boolean column reference used as a predicate (result of
             // `field = true` simplification) needs an explicit equality check.
             if is_bool {
-                let true_val =
-                    attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::N("1".to_string()));
+                let true_val = attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::Bool(true));
                 format!("{col_alias} = {true_val}")
             } else {
                 col_alias
