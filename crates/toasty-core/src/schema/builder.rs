@@ -5,6 +5,7 @@ use crate::schema::mapping::TableToModel;
 use crate::schema::{Mapping, Schema, Table, TableId};
 use crate::{driver, stmt};
 use indexmap::IndexMap;
+use std::collections::HashSet;
 
 /// Constructs a [`Schema`] from an app-level schema and driver capabilities.
 ///
@@ -175,6 +176,32 @@ impl Default for Builder {
 impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
         let model_name = model.name().to_string();
+
+        // Collect field indices of Bool fields used as key/index attributes.
+        // These need db::Type::Integer(1) as their storage type on backends
+        // that don't support BOOL as a key attribute type (e.g. DynamoDB).
+        let bool_key_field_indices: HashSet<usize> = if let app::Model::Root(root) = &*model {
+            if !self.db.bool_key_type {
+                let index_key_fields: HashSet<app::FieldId> = root
+                    .indices
+                    .iter()
+                    .flat_map(|idx| idx.fields.iter().map(|f| f.field))
+                    .collect();
+                root.fields
+                    .iter()
+                    .filter(|f| {
+                        (f.primary_key || index_key_fields.contains(&f.id))
+                            && matches!(&f.ty, app::FieldTy::Primitive(p) if p.ty == stmt::Type::Bool)
+                    })
+                    .map(|f| f.id.index)
+                    .collect()
+            } else {
+                HashSet::new()
+            }
+        } else {
+            HashSet::new()
+        };
+
         let fields = match model {
             app::Model::Root(root) => &mut root.fields[..],
             app::Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
@@ -182,6 +209,14 @@ impl BuildSchema<'_> {
         };
         for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
+                // On backends that don't support BOOL as a key attribute type,
+                // store Bool key/index fields as Integer(1). The engine's
+                // cast mechanism converts Bool ↔ I8 transparently; the driver
+                // never needs to special-case bools-as-numbers.
+                if bool_key_field_indices.contains(&field.id.index) {
+                    primitive.storage_ty = Some(db::Type::Integer(1));
+                }
+
                 if matches!(primitive.ty, stmt::Type::List(_)) && !self.db.vec_scalar {
                     let field_name = field.name.app.as_deref().unwrap_or_else(|| {
                         panic!(

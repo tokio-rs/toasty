@@ -180,6 +180,10 @@ impl Type {
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
+            // Bool key/index fields stored as 1-byte integer (e.g. DynamoDB N("1"/"0")).
+            // The engine casts Bool <-> I8 transparently via encode_column /
+            // map_table_column_to_model; the driver handles them as plain numbers.
+            (Self::Integer(1), stmt::Type::Bool) => stmt::Type::I8,
             _ => ty.clone(),
         }
     }

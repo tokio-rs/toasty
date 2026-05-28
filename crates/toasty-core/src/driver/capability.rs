@@ -192,6 +192,16 @@ pub struct Capability {
     /// all.
     pub backward_pagination: bool,
 
+    /// Whether the backend supports `BOOL` as a key attribute type.
+    ///
+    /// DynamoDB only allows `S`, `N`, or `B` for primary-key and GSI key
+    /// attribute types; `BOOL` is rejected at the API level. SQL backends
+    /// have no such restriction. When `false`, the schema builder overrides
+    /// `storage_ty` for any `Bool` key/index field to `db::Type::Integer(1)`,
+    /// letting the engine cast `Bool ↔ I8` and the driver handle it as a
+    /// plain number — no driver-level bool-to-number special-casing needed.
+    pub bool_key_type: bool,
+
     /// The driver's bind layer accepts a single parameter whose value is
     /// `Value::List(items)` and type is `Type::List(elem)`, sending it as
     /// one protocol-level parameter (not N separate scalars).
@@ -441,6 +451,7 @@ impl Capability {
         primary_key_ne_predicate: true,
         auto_increment: true,
         bigdecimal_implemented: false,
+        bool_key_type: true,
 
         native_varchar: true,
 
@@ -632,6 +643,9 @@ impl Capability {
         primary_key_ne_predicate: false,
         auto_increment: false,
         bigdecimal_implemented: false,
+        // DynamoDB key attributes (primary key and GSI keys) only support
+        // S, N, or B — BOOL is not a valid key attribute type.
+        bool_key_type: false,
         native_varchar: false,
         native_enum: false,
         named_enum_types: false,
