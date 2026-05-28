@@ -44,7 +44,12 @@ impl<'stmt> IndexMatch<'stmt> {
                     self.match_expr_binary_op_column(cx, lhs, expr, e.op)
                 }
                 (_, stmt::Expr::Reference(rhs @ stmt::ExprReference::Column(_))) => {
-                    self.match_expr_binary_op_column(cx, rhs, expr, e.op.commute())
+                    match e.op.commute() {
+                        Some(op) => self.match_expr_binary_op_column(cx, rhs, expr, op),
+                        // Non-commutative op (e.g. `5 - col`) cannot be normalized
+                        // to column-on-left form; it's not an index match.
+                        None => false,
+                    }
                 }
                 // Neither operand is a bare column reference (e.g.
                 // `LENGTH(col) = 0` for `Vec::is_empty()`). This shape is not
@@ -321,7 +326,9 @@ impl<'stmt> IndexMatch<'stmt> {
                         ) => stmt::ExprBinaryOp {
                             lhs: Box::new(stmt::Expr::Reference(*column_ref)),
                             rhs: Box::new(lhs.clone()),
-                            op: binary_op.op.commute(),
+                            op: binary_op.op.commute().expect(
+                                "partition filter normalization reached a non-commutative op",
+                            ),
                         }
                         .into(),
                         _ => todo!("binary_op={binary_op:#?}"),

@@ -28,7 +28,7 @@ async fn setup(test: &mut Test) -> toasty::Db {
 }
 
 /// starts_with on the sort key. On DynamoDB this uses KeyConditionExpression;
-/// on SQL it lowers to LIKE.
+/// on SQL: SQLite/Turso use GLOB, MySQL uses BINARY LIKE, PostgreSQL uses `^@`.
 #[driver_test]
 pub async fn starts_with_sort_key(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -52,7 +52,7 @@ pub async fn starts_with_sort_key(test: &mut Test) -> Result<()> {
 }
 
 /// starts_with on a non-key attribute. On DynamoDB this uses FilterExpression;
-/// on SQL it lowers to LIKE.
+/// on SQL: SQLite/Turso use GLOB, MySQL uses BINARY LIKE, PostgreSQL uses `^@`.
 #[driver_test]
 pub async fn starts_with_non_key_attr(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -135,9 +135,8 @@ pub async fn starts_with_empty_prefix_sql(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// starts_with prefix containing SQL LIKE wildcards (`%`, `_`) and the
-/// chosen escape char (`!`). On SQL drivers the prefix is escaped before
-/// being lowered to LIKE so these characters match literally.
+/// starts_with prefix containing LIKE wildcards (`%`, `_`) and the escape
+/// char (`!`). These must match literally on all backends.
 #[driver_test]
 pub async fn starts_with_special_chars(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -245,6 +244,65 @@ pub async fn starts_with_optional_field(test: &mut Test) -> Result<()> {
     assert_eq!(items.len(), 2);
     assert_eq!(items[0].nickname.as_deref(), Some("Ali"));
     assert_eq!(items[1].nickname.as_deref(), Some("Alicia"));
+
+    Ok(())
+}
+
+/// starts_with is case-sensitive: a lowercase prefix must not match records
+/// whose values only start with the uppercase equivalent.
+#[driver_test]
+pub async fn starts_with_case_sensitive(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = sort_key)]
+    struct CaseItem {
+        partition_id: i64,
+        sort_key: String,
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(CaseItem)).await;
+
+    toasty::create!(CaseItem::[
+        { partition_id: 1_i64, sort_key: "1", name: "Alice" },
+        { partition_id: 1_i64, sort_key: "2", name: "alice" },
+        { partition_id: 1_i64, sort_key: "3", name: "ALICE" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Lowercase prefix — should match only the lowercase record.
+    let mut lower: Vec<CaseItem> = CaseItem::filter(
+        CaseItem::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(CaseItem::fields().name().starts_with("al".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+    lower.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(
+        lower.len(),
+        1,
+        "lowercase prefix should match only lowercase record"
+    );
+    assert_eq!(lower[0].name, "alice");
+
+    // Uppercase prefix — should match only the uppercase record.
+    let mut upper: Vec<CaseItem> = CaseItem::filter(
+        CaseItem::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(CaseItem::fields().name().starts_with("AL".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+    upper.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(
+        upper.len(),
+        1,
+        "uppercase prefix should match only uppercase record"
+    );
+    assert_eq!(upper[0].name, "ALICE");
 
     Ok(())
 }

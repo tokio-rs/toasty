@@ -680,8 +680,14 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
                 stmt::Assignment::RemoveAt(expr) => {
                     serialize_remove_at(f, &column.name, expr);
                 }
+                stmt::Assignment::Add(expr) => {
+                    fmt!(f, Ident(&column.name) " + " expr);
+                }
+                stmt::Assignment::Subtract(expr) => {
+                    fmt!(f, Ident(&column.name) " - " expr);
+                }
                 _ => todo!(
-                    "only SET / APPEND / REMOVE / POP / REMOVE_AT supported in SQL serialization; got {assignment:#?}"
+                    "only SET / APPEND / REMOVE / POP / REMOVE_AT / ADD / SUBTRACT supported in SQL serialization; got {assignment:#?}"
                 ),
             }
         }

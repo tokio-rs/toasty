@@ -130,6 +130,61 @@ The same syntax reaches every function in `toasty::stmt`:
 `tags.remove("x")`. See [`Vec<scalar>` Fields](./vec-scalar-fields.md#updating)
 for the full list and per-driver support.
 
+## Relative numeric updates
+
+Arithmetic builders in `toasty::stmt` update a numeric field relative
+to its stored value — incrementing a counter, crediting a balance.
+The macro reaches them as method calls on the field, the same shape
+as the collection mutations above:
+
+| Method | What it does |
+|---|---|
+| `field.increment()` | Add `1` to the field. |
+| `field.decrement()` | Subtract `1` from the field. |
+| `field.add(value)` | Add `value` to the field. |
+| `field.subtract(value)` | Subtract `value` from the field. |
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Account {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     balance: i64,
+#     login_count: i64,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+# let mut account = toasty::create!(Account { balance: 1000, login_count: 0 })
+#     .exec(&mut db).await?;
+// Credit an account by 100.
+toasty::update!(account { balance.add(100) })
+    .exec(&mut db)
+    .await?;
+
+// Debit by 25.
+toasty::update!(account { balance.subtract(25) })
+    .exec(&mut db)
+    .await?;
+
+// Bump a login counter.
+toasty::update!(account { login_count.increment() })
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Each operation is atomic against the existing column value — the
+database applies it to whatever the row currently holds, not to a
+client-side snapshot. Reading, modifying, and writing back from Rust
+is a three-step round trip a concurrent writer can interleave,
+dropping one of two updates on the same row; the arithmetic builders
+fold the read and write into one statement.
+
+These builders work on every backend and on every primitive numeric
+type Toasty supports.
+
 ## Updating embedded fields
 
 A brace block on the right side of `field:` updates the named

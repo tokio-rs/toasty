@@ -70,6 +70,15 @@ pub enum Assignment {
     /// on a bulk update are rarely useful.
     RemoveAt(Expr),
 
+    /// Add the expression to the current numeric column value (`col = col + expr`).
+    /// Atomic against the existing column value on every backend.
+    Add(Expr),
+
+    /// Subtract the expression from the current numeric column value
+    /// (`col = col - expr`). Atomic against the existing column value on
+    /// every backend.
+    Subtract(Expr),
+
     /// Multiple assignments on the same field.
     Batch(Vec<Assignment>),
 }
@@ -237,6 +246,36 @@ impl Assignments {
     {
         let key = key.into();
         let new = Assignment::RemoveAt(expr.into());
+        self.assignments
+            .entry(key)
+            .and_modify(|existing| existing.push(new.clone()))
+            .or_insert(new);
+    }
+
+    /// Adds an `Add` assignment for the given projection. The expression
+    /// should evaluate to a numeric value to add to the current column value.
+    /// Multiple ops on the same projection batch.
+    pub fn add<Q>(&mut self, key: Q, expr: impl Into<Expr>)
+    where
+        Q: Into<Projection>,
+    {
+        let key = key.into();
+        let new = Assignment::Add(expr.into());
+        self.assignments
+            .entry(key)
+            .and_modify(|existing| existing.push(new.clone()))
+            .or_insert(new);
+    }
+
+    /// Adds a `Subtract` assignment for the given projection. The expression
+    /// should evaluate to a numeric value to subtract from the current column
+    /// value. Multiple ops on the same projection batch.
+    pub fn subtract<Q>(&mut self, key: Q, expr: impl Into<Expr>)
+    where
+        Q: Into<Projection>,
+    {
+        let key = key.into();
+        let new = Assignment::Subtract(expr.into());
         self.assignments
             .entry(key)
             .and_modify(|existing| existing.push(new.clone()))
