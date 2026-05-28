@@ -22,6 +22,9 @@ pub use assignment::{
     remove, remove_at, set, subtract,
 };
 
+mod numeric;
+pub use numeric::Numeric;
+
 mod into_expr;
 pub use into_expr::IntoExpr;
 
