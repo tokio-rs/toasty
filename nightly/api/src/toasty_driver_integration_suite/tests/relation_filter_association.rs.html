@@ -87,121 +87,164 @@
 <a href=#87 id=87 data-nosnippet>87</a>    <span class="prelude-val">Ok</span>(())
 <a href=#88 id=88 data-nosnippet>88</a>}
 <a href=#89 id=89 data-nosnippet>89</a>
-<a href=#90 id=90 data-nosnippet>90</a><span class="doccomment">/// Filter through three chained HasOne associations: `A.b.c.name == ...`.
-<a href=#91 id=91 data-nosnippet>91</a></span><span class="attr">#[driver_test(id(ID), requires(sql))]
-<a href=#92 id=92 data-nosnippet>92</a></span><span class="kw">pub async fn </span>filter_by_nested_has_one_chain(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#93 id=93 data-nosnippet>93</a>    <span class="attr">#[derive(Debug, toasty::Model)]
-<a href=#94 id=94 data-nosnippet>94</a>    </span><span class="kw">struct </span>A {
-<a href=#95 id=95 data-nosnippet>95</a>        <span class="attr">#[key]
-<a href=#96 id=96 data-nosnippet>96</a>        #[auto]
-<a href=#97 id=97 data-nosnippet>97</a>        </span>id: ID,
-<a href=#98 id=98 data-nosnippet>98</a>
-<a href=#99 id=99 data-nosnippet>99</a>        label: String,
-<a href=#100 id=100 data-nosnippet>100</a>
-<a href=#101 id=101 data-nosnippet>101</a>        <span class="attr">#[has_one]
-<a href=#102 id=102 data-nosnippet>102</a>        </span>b: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;B&gt;&gt;,
-<a href=#103 id=103 data-nosnippet>103</a>    }
-<a href=#104 id=104 data-nosnippet>104</a>
-<a href=#105 id=105 data-nosnippet>105</a>    <span class="attr">#[derive(Debug, toasty::Model)]
-<a href=#106 id=106 data-nosnippet>106</a>    </span><span class="kw">struct </span>B {
-<a href=#107 id=107 data-nosnippet>107</a>        <span class="attr">#[key]
-<a href=#108 id=108 data-nosnippet>108</a>        #[auto]
-<a href=#109 id=109 data-nosnippet>109</a>        </span>id: ID,
-<a href=#110 id=110 data-nosnippet>110</a>
-<a href=#111 id=111 data-nosnippet>111</a>        <span class="attr">#[unique]
-<a href=#112 id=112 data-nosnippet>112</a>        </span>a_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
-<a href=#113 id=113 data-nosnippet>113</a>
-<a href=#114 id=114 data-nosnippet>114</a>        <span class="attr">#[belongs_to(key = a_id, references = id)]
-<a href=#115 id=115 data-nosnippet>115</a>        </span>a: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;A&gt;&gt;,
-<a href=#116 id=116 data-nosnippet>116</a>
-<a href=#117 id=117 data-nosnippet>117</a>        <span class="attr">#[has_one]
-<a href=#118 id=118 data-nosnippet>118</a>        </span>c: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
-<a href=#119 id=119 data-nosnippet>119</a>    }
-<a href=#120 id=120 data-nosnippet>120</a>
-<a href=#121 id=121 data-nosnippet>121</a>    <span class="attr">#[derive(Debug, toasty::Model)]
-<a href=#122 id=122 data-nosnippet>122</a>    </span><span class="kw">struct </span>C {
-<a href=#123 id=123 data-nosnippet>123</a>        <span class="attr">#[key]
-<a href=#124 id=124 data-nosnippet>124</a>        #[auto]
-<a href=#125 id=125 data-nosnippet>125</a>        </span>id: ID,
-<a href=#126 id=126 data-nosnippet>126</a>
-<a href=#127 id=127 data-nosnippet>127</a>        name: String,
-<a href=#128 id=128 data-nosnippet>128</a>
-<a href=#129 id=129 data-nosnippet>129</a>        <span class="attr">#[unique]
-<a href=#130 id=130 data-nosnippet>130</a>        </span>b_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
-<a href=#131 id=131 data-nosnippet>131</a>
-<a href=#132 id=132 data-nosnippet>132</a>        <span class="attr">#[belongs_to(key = b_id, references = id)]
-<a href=#133 id=133 data-nosnippet>133</a>        </span>b: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;B&gt;&gt;,
-<a href=#134 id=134 data-nosnippet>134</a>    }
-<a href=#135 id=135 data-nosnippet>135</a>
-<a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(A, B, C)).<span class="kw">await</span>;
-<a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>    <span class="macro">toasty::create!</span>(A::[
-<a href=#139 id=139 data-nosnippet>139</a>        { label: <span class="string">"match"</span>,    b: { c: { name: <span class="string">"target" </span>} } },
-<a href=#140 id=140 data-nosnippet>140</a>        { label: <span class="string">"no-match"</span>, b: { c: { name: <span class="string">"other" </span>} } },
-<a href=#141 id=141 data-nosnippet>141</a>    ])
-<a href=#142 id=142 data-nosnippet>142</a>    .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#143 id=143 data-nosnippet>143</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#144 id=144 data-nosnippet>144</a>
-<a href=#145 id=145 data-nosnippet>145</a>    <span class="kw">let </span>results: Vec&lt;A&gt; = A::filter(A::fields().b().c().name().eq(<span class="string">"target"</span>))
-<a href=#146 id=146 data-nosnippet>146</a>        .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#147 id=147 data-nosnippet>147</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#148 id=148 data-nosnippet>148</a>    <span class="macro">assert_eq!</span>(
-<a href=#149 id=149 data-nosnippet>149</a>        results.iter().map(|a| a.label.as_str()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
-<a href=#150 id=150 data-nosnippet>150</a>        [<span class="string">"match"</span>]
-<a href=#151 id=151 data-nosnippet>151</a>    );
-<a href=#152 id=152 data-nosnippet>152</a>
-<a href=#153 id=153 data-nosnippet>153</a>    <span class="prelude-val">Ok</span>(())
-<a href=#154 id=154 data-nosnippet>154</a>}
-<a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a><span class="doccomment">/// Filter through `BelongsTo → HasMany` with `.any()` — the queried model's
-<a href=#157 id=157 data-nosnippet>157</a>/// parent owns a collection, and the filter is a quantifier over that
-<a href=#158 id=158 data-nosnippet>158</a>/// collection (here, "sibling" todos sharing the same category).
-<a href=#159 id=159 data-nosnippet>159</a>///
-<a href=#160 id=160 data-nosnippet>160</a>/// Path `todo.category.todos.any(title == "salad")` lowers to an
-<a href=#161 id=161 data-nosnippet>161</a>/// `Expr::InSubquery` whose LHS is an `Expr::Project` through the
-<a href=#162 id=162 data-nosnippet>162</a>/// `BelongsTo`. Single-hop `parent.children.any(...)` already lifts (see
-<a href=#163 id=163 data-nosnippet>163</a>/// `relation_has_many_filter::filter_parent_by_child_field`); previously the
-<a href=#164 id=164 data-nosnippet>164</a>/// `BelongsTo`-then-`HasMany` chain hit a `todo!()` in
-<a href=#165 id=165 data-nosnippet>165</a>/// `LiftInSubquery::lift_in_subquery`.
-<a href=#166 id=166 data-nosnippet>166</a></span><span class="attr">#[driver_test(
-<a href=#167 id=167 data-nosnippet>167</a>    id(ID),
-<a href=#168 id=168 data-nosnippet>168</a>    requires(sql),
-<a href=#169 id=169 data-nosnippet>169</a>    scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation)
-<a href=#170 id=170 data-nosnippet>170</a>)]
-<a href=#171 id=171 data-nosnippet>171</a></span><span class="kw">pub async fn </span>filter_by_belongs_to_has_many_any(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#172 id=172 data-nosnippet>172</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
-<a href=#173 id=173 data-nosnippet>173</a>
-<a href=#174 id=174 data-nosnippet>174</a>    <span class="kw">let </span>food = <span class="macro">toasty::create!</span>(Category { name: <span class="string">"food" </span>})
-<a href=#175 id=175 data-nosnippet>175</a>        .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#176 id=176 data-nosnippet>176</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#177 id=177 data-nosnippet>177</a>    <span class="kw">let </span>drink = <span class="macro">toasty::create!</span>(Category { name: <span class="string">"drink" </span>})
-<a href=#178 id=178 data-nosnippet>178</a>        .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#179 id=179 data-nosnippet>179</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#180 id=180 data-nosnippet>180</a>    <span class="kw">let </span>user = <span class="macro">toasty::create!</span>(User { name: <span class="string">"Anchovy" </span>})
-<a href=#181 id=181 data-nosnippet>181</a>        .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#182 id=182 data-nosnippet>182</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#183 id=183 data-nosnippet>183</a>
-<a href=#184 id=184 data-nosnippet>184</a>    <span class="macro">toasty::create!</span>(Todo::[
-<a href=#185 id=185 data-nosnippet>185</a>        { title: <span class="string">"salad"</span>, user: <span class="kw-2">&amp;</span>user, category: <span class="kw-2">&amp;</span>food  },
-<a href=#186 id=186 data-nosnippet>186</a>        { title: <span class="string">"sushi"</span>, user: <span class="kw-2">&amp;</span>user, category: <span class="kw-2">&amp;</span>food  },
-<a href=#187 id=187 data-nosnippet>187</a>        { title: <span class="string">"tea"</span>,   user: <span class="kw-2">&amp;</span>user, category: <span class="kw-2">&amp;</span>drink },
-<a href=#188 id=188 data-nosnippet>188</a>    ])
-<a href=#189 id=189 data-nosnippet>189</a>    .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#190 id=190 data-nosnippet>190</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#191 id=191 data-nosnippet>191</a>
-<a href=#192 id=192 data-nosnippet>192</a>    <span class="comment">// Todos whose category has at least one todo titled "salad" — i.e.,
-<a href=#193 id=193 data-nosnippet>193</a>    // every todo in the "food" category.
-<a href=#194 id=194 data-nosnippet>194</a>    </span><span class="kw">let </span>todos: Vec&lt;Todo&gt; = Todo::filter(
-<a href=#195 id=195 data-nosnippet>195</a>        Todo::fields()
-<a href=#196 id=196 data-nosnippet>196</a>            .category()
-<a href=#197 id=197 data-nosnippet>197</a>            .todos()
-<a href=#198 id=198 data-nosnippet>198</a>            .any(Todo::fields().title().eq(<span class="string">"salad"</span>)),
-<a href=#199 id=199 data-nosnippet>199</a>    )
-<a href=#200 id=200 data-nosnippet>200</a>    .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#201 id=201 data-nosnippet>201</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#202 id=202 data-nosnippet>202</a>
-<a href=#203 id=203 data-nosnippet>203</a>    <span class="macro">assert_eq_unordered!</span>(todos.iter().map(|t| <span class="kw-2">&amp;</span>t.title[..]), [<span class="string">"salad"</span>, <span class="string">"sushi"</span>]);
-<a href=#204 id=204 data-nosnippet>204</a>
-<a href=#205 id=205 data-nosnippet>205</a>    <span class="prelude-val">Ok</span>(())
-<a href=#206 id=206 data-nosnippet>206</a>}
+<a href=#90 id=90 data-nosnippet>90</a><span class="doccomment">/// Filters through a relation field with `.like()`, e.g. finding profiles
+<a href=#91 id=91 data-nosnippet>91</a>/// whose user's name starts with "al". `LIKE` lowers to `Expr::Like`, not
+<a href=#92 id=92 data-nosnippet>92</a>/// `Expr::BinaryOp`, so the rewrite that turns a relation-path comparison into
+<a href=#93 id=93 data-nosnippet>93</a>/// a foreign-key subquery has to handle it explicitly; without that the query
+<a href=#94 id=94 data-nosnippet>94</a>/// panics.
+<a href=#95 id=95 data-nosnippet>95</a>///
+<a href=#96 id=96 data-nosnippet>96</a>/// Covers both relation directions: `BelongsTo` (child filtered by parent)
+<a href=#97 id=97 data-nosnippet>97</a>/// and `Has` (parent filtered by child).
+<a href=#98 id=98 data-nosnippet>98</a></span><span class="attr">#[driver_test(
+<a href=#99 id=99 data-nosnippet>99</a>    id(ID),
+<a href=#100 id=100 data-nosnippet>100</a>    requires(sql),
+<a href=#101 id=101 data-nosnippet>101</a>    scenario(<span class="kw">crate</span>::scenarios::has_one_optional_belongs_to)
+<a href=#102 id=102 data-nosnippet>102</a>)]
+<a href=#103 id=103 data-nosnippet>103</a></span><span class="kw">pub async fn </span>filter_by_relation_field_like(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#104 id=104 data-nosnippet>104</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="macro">toasty::create!</span>(User::[
+<a href=#107 id=107 data-nosnippet>107</a>        { name: <span class="string">"alice"</span>, profile: { bio: <span class="string">"alice's bio" </span>} },
+<a href=#108 id=108 data-nosnippet>108</a>        { name: <span class="string">"bob"</span>,   profile: { bio: <span class="string">"bob's bio" </span>} },
+<a href=#109 id=109 data-nosnippet>109</a>    ])
+<a href=#110 id=110 data-nosnippet>110</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#111 id=111 data-nosnippet>111</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="comment">// BelongsTo: filter children by a LIKE on the parent's field.
+<a href=#114 id=114 data-nosnippet>114</a>    </span><span class="kw">let </span>profiles: Vec&lt;Profile&gt; = Profile::filter(Profile::fields().user().name().like(<span class="string">"al%"</span>))
+<a href=#115 id=115 data-nosnippet>115</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#116 id=116 data-nosnippet>116</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#117 id=117 data-nosnippet>117</a>    <span class="macro">assert_eq!</span>(
+<a href=#118 id=118 data-nosnippet>118</a>        profiles.iter().map(|p| p.bio.as_str()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#119 id=119 data-nosnippet>119</a>        [<span class="string">"alice's bio"</span>]
+<a href=#120 id=120 data-nosnippet>120</a>    );
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="comment">// Has: filter parents by a LIKE on the child's field.
+<a href=#123 id=123 data-nosnippet>123</a>    </span><span class="kw">let </span>users: Vec&lt;User&gt; = User::filter(User::fields().profile().bio().like(<span class="string">"%'s bio"</span>))
+<a href=#124 id=124 data-nosnippet>124</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#125 id=125 data-nosnippet>125</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#126 id=126 data-nosnippet>126</a>    <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = users.iter().map(|u| u.name.as_str()).collect();
+<a href=#127 id=127 data-nosnippet>127</a>    names.sort_unstable();
+<a href=#128 id=128 data-nosnippet>128</a>    <span class="macro">assert_eq!</span>(names, [<span class="string">"alice"</span>, <span class="string">"bob"</span>]);
+<a href=#129 id=129 data-nosnippet>129</a>
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="prelude-val">Ok</span>(())
+<a href=#131 id=131 data-nosnippet>131</a>}
+<a href=#132 id=132 data-nosnippet>132</a>
+<a href=#133 id=133 data-nosnippet>133</a><span class="doccomment">/// Filter through three chained HasOne associations: `A.b.c.name == ...`.
+<a href=#134 id=134 data-nosnippet>134</a></span><span class="attr">#[driver_test(id(ID), requires(sql))]
+<a href=#135 id=135 data-nosnippet>135</a></span><span class="kw">pub async fn </span>filter_by_nested_has_one_chain(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#137 id=137 data-nosnippet>137</a>    </span><span class="kw">struct </span>A {
+<a href=#138 id=138 data-nosnippet>138</a>        <span class="attr">#[key]
+<a href=#139 id=139 data-nosnippet>139</a>        #[auto]
+<a href=#140 id=140 data-nosnippet>140</a>        </span>id: ID,
+<a href=#141 id=141 data-nosnippet>141</a>
+<a href=#142 id=142 data-nosnippet>142</a>        label: String,
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="attr">#[has_one]
+<a href=#145 id=145 data-nosnippet>145</a>        </span>b: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;B&gt;&gt;,
+<a href=#146 id=146 data-nosnippet>146</a>    }
+<a href=#147 id=147 data-nosnippet>147</a>
+<a href=#148 id=148 data-nosnippet>148</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#149 id=149 data-nosnippet>149</a>    </span><span class="kw">struct </span>B {
+<a href=#150 id=150 data-nosnippet>150</a>        <span class="attr">#[key]
+<a href=#151 id=151 data-nosnippet>151</a>        #[auto]
+<a href=#152 id=152 data-nosnippet>152</a>        </span>id: ID,
+<a href=#153 id=153 data-nosnippet>153</a>
+<a href=#154 id=154 data-nosnippet>154</a>        <span class="attr">#[unique]
+<a href=#155 id=155 data-nosnippet>155</a>        </span>a_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
+<a href=#156 id=156 data-nosnippet>156</a>
+<a href=#157 id=157 data-nosnippet>157</a>        <span class="attr">#[belongs_to(key = a_id, references = id)]
+<a href=#158 id=158 data-nosnippet>158</a>        </span>a: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;A&gt;&gt;,
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="attr">#[has_one]
+<a href=#161 id=161 data-nosnippet>161</a>        </span>c: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;C&gt;&gt;,
+<a href=#162 id=162 data-nosnippet>162</a>    }
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#165 id=165 data-nosnippet>165</a>    </span><span class="kw">struct </span>C {
+<a href=#166 id=166 data-nosnippet>166</a>        <span class="attr">#[key]
+<a href=#167 id=167 data-nosnippet>167</a>        #[auto]
+<a href=#168 id=168 data-nosnippet>168</a>        </span>id: ID,
+<a href=#169 id=169 data-nosnippet>169</a>
+<a href=#170 id=170 data-nosnippet>170</a>        name: String,
+<a href=#171 id=171 data-nosnippet>171</a>
+<a href=#172 id=172 data-nosnippet>172</a>        <span class="attr">#[unique]
+<a href=#173 id=173 data-nosnippet>173</a>        </span>b_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
+<a href=#174 id=174 data-nosnippet>174</a>
+<a href=#175 id=175 data-nosnippet>175</a>        <span class="attr">#[belongs_to(key = b_id, references = id)]
+<a href=#176 id=176 data-nosnippet>176</a>        </span>b: toasty::Deferred&lt;<span class="prelude-ty">Option</span>&lt;B&gt;&gt;,
+<a href=#177 id=177 data-nosnippet>177</a>    }
+<a href=#178 id=178 data-nosnippet>178</a>
+<a href=#179 id=179 data-nosnippet>179</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(A, B, C)).<span class="kw">await</span>;
+<a href=#180 id=180 data-nosnippet>180</a>
+<a href=#181 id=181 data-nosnippet>181</a>    <span class="macro">toasty::create!</span>(A::[
+<a href=#182 id=182 data-nosnippet>182</a>        { label: <span class="string">"match"</span>,    b: { c: { name: <span class="string">"target" </span>} } },
+<a href=#183 id=183 data-nosnippet>183</a>        { label: <span class="string">"no-match"</span>, b: { c: { name: <span class="string">"other" </span>} } },
+<a href=#184 id=184 data-nosnippet>184</a>    ])
+<a href=#185 id=185 data-nosnippet>185</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#186 id=186 data-nosnippet>186</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#187 id=187 data-nosnippet>187</a>
+<a href=#188 id=188 data-nosnippet>188</a>    <span class="kw">let </span>results: Vec&lt;A&gt; = A::filter(A::fields().b().c().name().eq(<span class="string">"target"</span>))
+<a href=#189 id=189 data-nosnippet>189</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#190 id=190 data-nosnippet>190</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#191 id=191 data-nosnippet>191</a>    <span class="macro">assert_eq!</span>(
+<a href=#192 id=192 data-nosnippet>192</a>        results.iter().map(|a| a.label.as_str()).collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;(),
+<a href=#193 id=193 data-nosnippet>193</a>        [<span class="string">"match"</span>]
+<a href=#194 id=194 data-nosnippet>194</a>    );
+<a href=#195 id=195 data-nosnippet>195</a>
+<a href=#196 id=196 data-nosnippet>196</a>    <span class="prelude-val">Ok</span>(())
+<a href=#197 id=197 data-nosnippet>197</a>}
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a><span class="doccomment">/// Filter through `BelongsTo → HasMany` with `.any()` — the queried model's
+<a href=#200 id=200 data-nosnippet>200</a>/// parent owns a collection, and the filter is a quantifier over that
+<a href=#201 id=201 data-nosnippet>201</a>/// collection (here, "sibling" todos sharing the same category).
+<a href=#202 id=202 data-nosnippet>202</a>///
+<a href=#203 id=203 data-nosnippet>203</a>/// Path `todo.category.todos.any(title == "salad")` lowers to an
+<a href=#204 id=204 data-nosnippet>204</a>/// `Expr::InSubquery` whose LHS is an `Expr::Project` through the
+<a href=#205 id=205 data-nosnippet>205</a>/// `BelongsTo`. Single-hop `parent.children.any(...)` already lifts (see
+<a href=#206 id=206 data-nosnippet>206</a>/// `relation_has_many_filter::filter_parent_by_child_field`); previously the
+<a href=#207 id=207 data-nosnippet>207</a>/// `BelongsTo`-then-`HasMany` chain hit a `todo!()` in
+<a href=#208 id=208 data-nosnippet>208</a>/// `LiftInSubquery::lift_in_subquery`.
+<a href=#209 id=209 data-nosnippet>209</a></span><span class="attr">#[driver_test(
+<a href=#210 id=210 data-nosnippet>210</a>    id(ID),
+<a href=#211 id=211 data-nosnippet>211</a>    requires(sql),
+<a href=#212 id=212 data-nosnippet>212</a>    scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation)
+<a href=#213 id=213 data-nosnippet>213</a>)]
+<a href=#214 id=214 data-nosnippet>214</a></span><span class="kw">pub async fn </span>filter_by_belongs_to_has_many_any(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="kw">let </span>food = <span class="macro">toasty::create!</span>(Category { name: <span class="string">"food" </span>})
+<a href=#218 id=218 data-nosnippet>218</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#219 id=219 data-nosnippet>219</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">let </span>drink = <span class="macro">toasty::create!</span>(Category { name: <span class="string">"drink" </span>})
+<a href=#221 id=221 data-nosnippet>221</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#222 id=222 data-nosnippet>222</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">let </span>user = <span class="macro">toasty::create!</span>(User { name: <span class="string">"Anchovy" </span>})
+<a href=#224 id=224 data-nosnippet>224</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#225 id=225 data-nosnippet>225</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#226 id=226 data-nosnippet>226</a>
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="macro">toasty::create!</span>(Todo::[
+<a href=#228 id=228 data-nosnippet>228</a>        { title: <span class="string">"salad"</span>, user: <span class="kw-2">&amp;</span>user, category: <span class="kw-2">&amp;</span>food  },
+<a href=#229 id=229 data-nosnippet>229</a>        { title: <span class="string">"sushi"</span>, user: <span class="kw-2">&amp;</span>user, category: <span class="kw-2">&amp;</span>food  },
+<a href=#230 id=230 data-nosnippet>230</a>        { title: <span class="string">"tea"</span>,   user: <span class="kw-2">&amp;</span>user, category: <span class="kw-2">&amp;</span>drink },
+<a href=#231 id=231 data-nosnippet>231</a>    ])
+<a href=#232 id=232 data-nosnippet>232</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#233 id=233 data-nosnippet>233</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="comment">// Todos whose category has at least one todo titled "salad" — i.e.,
+<a href=#236 id=236 data-nosnippet>236</a>    // every todo in the "food" category.
+<a href=#237 id=237 data-nosnippet>237</a>    </span><span class="kw">let </span>todos: Vec&lt;Todo&gt; = Todo::filter(
+<a href=#238 id=238 data-nosnippet>238</a>        Todo::fields()
+<a href=#239 id=239 data-nosnippet>239</a>            .category()
+<a href=#240 id=240 data-nosnippet>240</a>            .todos()
+<a href=#241 id=241 data-nosnippet>241</a>            .any(Todo::fields().title().eq(<span class="string">"salad"</span>)),
+<a href=#242 id=242 data-nosnippet>242</a>    )
+<a href=#243 id=243 data-nosnippet>243</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#244 id=244 data-nosnippet>244</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="macro">assert_eq_unordered!</span>(todos.iter().map(|t| <span class="kw-2">&amp;</span>t.title[..]), [<span class="string">"salad"</span>, <span class="string">"sushi"</span>]);
+<a href=#247 id=247 data-nosnippet>247</a>
+<a href=#248 id=248 data-nosnippet>248</a>    <span class="prelude-val">Ok</span>(())
+<a href=#249 id=249 data-nosnippet>249</a>}
 </code></pre></div></section></main></body></html>
