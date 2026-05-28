@@ -371,6 +371,8 @@ impl Type {
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }
+            // Integer-to-Bool: Bool key fields stored as Integer(1) cast back via I8.
+            (Value::I8(v), Self::Bool) => Value::Bool(v != 0),
             // Integer conversions - use TryFrom which provides error messages
             (value, Self::I8) => Value::I8(i8::try_from(value)?),
             (value, Self::I16) => Value::I16(i16::try_from(value)?),
