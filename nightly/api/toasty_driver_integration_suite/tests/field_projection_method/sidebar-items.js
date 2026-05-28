@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"mod":["batch_field_projection_with_full_model","batch_field_projections","many_wrapper_instance_projects_scalar_field","many_wrapper_projects_scalar_field","one_wrapper_projects_scalar_field","query_projects_scalar_field","query_projects_strips_deferred","query_projects_with_filter"]};

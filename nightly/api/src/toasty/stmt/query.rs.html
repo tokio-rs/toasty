@@ -16,7 +16,7 @@
 <a href=#16 id=16 data-nosnippet>16</a>/// | Type | `exec()` produces | Created by |
 <a href=#17 id=17 data-nosnippet>17</a>/// |---|---|---|
 <a href=#18 id=18 data-nosnippet>18</a>/// | `Query&lt;List&lt;M&gt;&gt;` | `Vec&lt;M&gt;` | [`Query::all`], [`Query::filter`] |
-<a href=#19 id=19 data-nosnippet>19</a>/// | `Query&lt;M&gt;` | `M` (errors if missing) | [`.exactly_one()`](Query::exactly_one) |
+<a href=#19 id=19 data-nosnippet>19</a>/// | `Query&lt;M&gt;` | `M` (errors if missing) | [`.one()`](Query::one) |
 <a href=#20 id=20 data-nosnippet>20</a>/// | `Query&lt;Option&lt;M&gt;&gt;` | `Option&lt;M&gt;` | [`.first()`](Query::first) |
 <a href=#21 id=21 data-nosnippet>21</a>///
 <a href=#22 id=22 data-nosnippet>22</a>/// # Building queries
@@ -300,7 +300,7 @@
 <a href=#300 id=300 data-nosnippet>300</a>    /// # }
 <a href=#301 id=301 data-nosnippet>301</a>    /// use toasty::stmt::{List, Query};
 <a href=#302 id=302 data-nosnippet>302</a>    ///
-<a href=#303 id=303 data-nosnippet>303</a>    /// let q: Query&lt;User&gt; = Query::&lt;List&lt;User&gt;&gt;::all().exactly_one();
+<a href=#303 id=303 data-nosnippet>303</a>    /// let q: Query&lt;User&gt; = Query::&lt;List&lt;User&gt;&gt;::all().one();
 <a href=#304 id=304 data-nosnippet>304</a>    /// let _list_q: Query&lt;List&lt;User&gt;&gt; = q.to_list();
 <a href=#305 id=305 data-nosnippet>305</a>    /// ```
 <a href=#306 id=306 data-nosnippet>306</a>    </span><span class="kw">pub fn </span>to_list(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; Query&lt;List&lt;T&gt;&gt; {
@@ -367,9 +367,9 @@
 <a href=#367 id=367 data-nosnippet>367</a>    /// # }
 <a href=#368 id=368 data-nosnippet>368</a>    /// use toasty::stmt::{List, Query};
 <a href=#369 id=369 data-nosnippet>369</a>    ///
-<a href=#370 id=370 data-nosnippet>370</a>    /// let q: Query&lt;User&gt; = Query::&lt;List&lt;User&gt;&gt;::all().exactly_one();
+<a href=#370 id=370 data-nosnippet>370</a>    /// let q: Query&lt;User&gt; = Query::&lt;List&lt;User&gt;&gt;::all().one();
 <a href=#371 id=371 data-nosnippet>371</a>    /// ```
-<a href=#372 id=372 data-nosnippet>372</a>    </span><span class="kw">pub fn </span>exactly_one(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; Query&lt;T&gt; {
+<a href=#372 id=372 data-nosnippet>372</a>    </span><span class="kw">pub fn </span>one(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; Query&lt;T&gt; {
 <a href=#373 id=373 data-nosnippet>373</a>        set_first(<span class="kw-2">&amp;mut </span><span class="self">self</span>.untyped);
 <a href=#374 id=374 data-nosnippet>374</a>
 <a href=#375 id=375 data-nosnippet>375</a>        Query {
@@ -379,270 +379,228 @@
 <a href=#379 id=379 data-nosnippet>379</a>    }
 <a href=#380 id=380 data-nosnippet>380</a>}
 <a href=#381 id=381 data-nosnippet>381</a>
-<a href=#382 id=382 data-nosnippet>382</a><span class="doccomment">/// Single-row select.
-<a href=#383 id=383 data-nosnippet>383</a></span><span class="kw">impl</span>&lt;M: Model&gt; Query&lt;M&gt; {
-<a href=#384 id=384 data-nosnippet>384</a>    <span class="doccomment">/// Project this single-row query onto an expression, narrowing the
-<a href=#385 id=385 data-nosnippet>385</a>    /// returned shape from `M` to `T`.
-<a href=#386 id=386 data-nosnippet>386</a>    ///
-<a href=#387 id=387 data-nosnippet>387</a>    /// The mechanics mirror [`Query::&lt;List&lt;M&gt;&gt;::select`]; the difference is
-<a href=#388 id=388 data-nosnippet>388</a>    /// the cardinality. A `Query&lt;M&gt;` returns one row, so the projected query
-<a href=#389 id=389 data-nosnippet>389</a>    /// returns one `T` (or errors at execution if no row matches).
-<a href=#390 id=390 data-nosnippet>390</a>    ///
-<a href=#391 id=391 data-nosnippet>391</a>    /// `projection` is any `IntoExpr&lt;T&gt;` source: a field path
-<a href=#392 id=392 data-nosnippet>392</a>    /// (`Model::fields().name()`), a tuple of paths, or another expression.
-<a href=#393 id=393 data-nosnippet>393</a>    </span><span class="kw">pub fn </span>select&lt;E, T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, projection: E) -&gt; Query&lt;T&gt;
-<a href=#394 id=394 data-nosnippet>394</a>    <span class="kw">where
-<a href=#395 id=395 data-nosnippet>395</a>        </span>E: IntoExpr&lt;T&gt;,
-<a href=#396 id=396 data-nosnippet>396</a>        T: Load,
-<a href=#397 id=397 data-nosnippet>397</a>    {
-<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw-2">*</span><span class="self">self</span>.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
-<a href=#399 id=399 data-nosnippet>399</a>        Query::from_untyped(<span class="self">self</span>.untyped)
-<a href=#400 id=400 data-nosnippet>400</a>    }
-<a href=#401 id=401 data-nosnippet>401</a>}
-<a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a><span class="doccomment">/// Optional-row select.
-<a href=#404 id=404 data-nosnippet>404</a></span><span class="kw">impl</span>&lt;M: Model&gt; Query&lt;<span class="prelude-ty">Option</span>&lt;M&gt;&gt; {
-<a href=#405 id=405 data-nosnippet>405</a>    <span class="doccomment">/// Project this optional-row query onto an expression, narrowing the
-<a href=#406 id=406 data-nosnippet>406</a>    /// returned shape from `M` to `T`. The `Option` wrapping survives the
-<a href=#407 id=407 data-nosnippet>407</a>    /// projection: a `Query&lt;Option&lt;M&gt;&gt;` becomes `Query&lt;Option&lt;T&gt;&gt;`.
-<a href=#408 id=408 data-nosnippet>408</a>    ///
-<a href=#409 id=409 data-nosnippet>409</a>    /// `projection` is any `IntoExpr&lt;T&gt;` source. See
-<a href=#410 id=410 data-nosnippet>410</a>    /// [`Query::&lt;List&lt;M&gt;&gt;::select`] for the general projection rules.
-<a href=#411 id=411 data-nosnippet>411</a>    </span><span class="kw">pub fn </span>select&lt;E, T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, projection: E) -&gt; Query&lt;<span class="prelude-ty">Option</span>&lt;T&gt;&gt;
-<a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">where
-<a href=#413 id=413 data-nosnippet>413</a>        </span>E: IntoExpr&lt;T&gt;,
-<a href=#414 id=414 data-nosnippet>414</a>        T: Load,
-<a href=#415 id=415 data-nosnippet>415</a>    {
-<a href=#416 id=416 data-nosnippet>416</a>        <span class="kw-2">*</span><span class="self">self</span>.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
-<a href=#417 id=417 data-nosnippet>417</a>        Query::from_untyped(<span class="self">self</span>.untyped)
-<a href=#418 id=418 data-nosnippet>418</a>    }
-<a href=#419 id=419 data-nosnippet>419</a>}
-<a href=#420 id=420 data-nosnippet>420</a>
-<a href=#421 id=421 data-nosnippet>421</a><span class="kw">fn </span>set_first(query: <span class="kw-2">&amp;mut </span>stmt::Query) {
-<a href=#422 id=422 data-nosnippet>422</a>    <span class="macro">assert!</span>(!query.single, <span class="string">"query is single"</span>);
-<a href=#423 id=423 data-nosnippet>423</a>    query.single = <span class="bool-val">true</span>;
-<a href=#424 id=424 data-nosnippet>424</a>    query.limit = <span class="prelude-val">Some</span>(stmt::Limit::Offset(stmt::LimitOffset {
-<a href=#425 id=425 data-nosnippet>425</a>        limit: stmt::Expr::from(<span class="number">1i64</span>),
-<a href=#426 id=426 data-nosnippet>426</a>        offset: <span class="prelude-val">None</span>,
-<a href=#427 id=427 data-nosnippet>427</a>    }));
-<a href=#428 id=428 data-nosnippet>428</a>}
-<a href=#429 id=429 data-nosnippet>429</a>
-<a href=#430 id=430 data-nosnippet>430</a><span class="kw">impl</span>&lt;T: Load&gt; Query&lt;T&gt; {
-<a href=#431 id=431 data-nosnippet>431</a>    <span class="doccomment">/// Execute this query against the given executor and return the result.
-<a href=#432 id=432 data-nosnippet>432</a>    ///
-<a href=#433 id=433 data-nosnippet>433</a>    /// The return type depends on the query's type parameter `T`:
-<a href=#434 id=434 data-nosnippet>434</a>    /// - `Query&lt;List&lt;M&gt;&gt;` returns `Vec&lt;M&gt;`.
-<a href=#435 id=435 data-nosnippet>435</a>    /// - `Query&lt;M&gt;` returns `M` (errors if no row matches).
-<a href=#436 id=436 data-nosnippet>436</a>    /// - `Query&lt;Option&lt;M&gt;&gt;` returns `Option&lt;M&gt;`.
-<a href=#437 id=437 data-nosnippet>437</a>    ///
-<a href=#438 id=438 data-nosnippet>438</a>    /// # Examples
+<a href=#382 id=382 data-nosnippet>382</a><span class="kw">fn </span>set_first(query: <span class="kw-2">&amp;mut </span>stmt::Query) {
+<a href=#383 id=383 data-nosnippet>383</a>    <span class="macro">assert!</span>(!query.single, <span class="string">"query is single"</span>);
+<a href=#384 id=384 data-nosnippet>384</a>    query.single = <span class="bool-val">true</span>;
+<a href=#385 id=385 data-nosnippet>385</a>    query.limit = <span class="prelude-val">Some</span>(stmt::Limit::Offset(stmt::LimitOffset {
+<a href=#386 id=386 data-nosnippet>386</a>        limit: stmt::Expr::from(<span class="number">1i64</span>),
+<a href=#387 id=387 data-nosnippet>387</a>        offset: <span class="prelude-val">None</span>,
+<a href=#388 id=388 data-nosnippet>388</a>    }));
+<a href=#389 id=389 data-nosnippet>389</a>}
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a><span class="kw">impl</span>&lt;T: Load&gt; Query&lt;T&gt; {
+<a href=#392 id=392 data-nosnippet>392</a>    <span class="doccomment">/// Execute this query against the given executor and return the result.
+<a href=#393 id=393 data-nosnippet>393</a>    ///
+<a href=#394 id=394 data-nosnippet>394</a>    /// The return type depends on the query's type parameter `T`:
+<a href=#395 id=395 data-nosnippet>395</a>    /// - `Query&lt;List&lt;M&gt;&gt;` returns `Vec&lt;M&gt;`.
+<a href=#396 id=396 data-nosnippet>396</a>    /// - `Query&lt;M&gt;` returns `M` (errors if no row matches).
+<a href=#397 id=397 data-nosnippet>397</a>    /// - `Query&lt;Option&lt;M&gt;&gt;` returns `Option&lt;M&gt;`.
+<a href=#398 id=398 data-nosnippet>398</a>    ///
+<a href=#399 id=399 data-nosnippet>399</a>    /// # Examples
+<a href=#400 id=400 data-nosnippet>400</a>    ///
+<a href=#401 id=401 data-nosnippet>401</a>    /// ```
+<a href=#402 id=402 data-nosnippet>402</a>    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+<a href=#403 id=403 data-nosnippet>403</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#404 id=404 data-nosnippet>404</a>    /// # struct User {
+<a href=#405 id=405 data-nosnippet>405</a>    /// #     #[key]
+<a href=#406 id=406 data-nosnippet>406</a>    /// #     id: i64,
+<a href=#407 id=407 data-nosnippet>407</a>    /// #     name: String,
+<a href=#408 id=408 data-nosnippet>408</a>    /// # }
+<a href=#409 id=409 data-nosnippet>409</a>    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+<a href=#410 id=410 data-nosnippet>410</a>    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
+<a href=#411 id=411 data-nosnippet>411</a>    /// # db.push_schema().await.unwrap();
+<a href=#412 id=412 data-nosnippet>412</a>    /// use toasty::stmt::{List, Query};
+<a href=#413 id=413 data-nosnippet>413</a>    ///
+<a href=#414 id=414 data-nosnippet>414</a>    /// let users: Vec&lt;User&gt; = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#415 id=415 data-nosnippet>415</a>    ///     .exec(&amp;mut db)
+<a href=#416 id=416 data-nosnippet>416</a>    ///     .await
+<a href=#417 id=417 data-nosnippet>417</a>    ///     .unwrap();
+<a href=#418 id=418 data-nosnippet>418</a>    /// # });
+<a href=#419 id=419 data-nosnippet>419</a>    /// ```
+<a href=#420 id=420 data-nosnippet>420</a>    </span><span class="kw">pub async fn </span>exec(<span class="self">self</span>, executor: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Executor) -&gt; <span class="prelude-ty">Result</span>&lt;T::Output&gt; {
+<a href=#421 id=421 data-nosnippet>421</a>        executor.exec(<span class="self">self</span>.into_statement()).<span class="kw">await
+<a href=#422 id=422 data-nosnippet>422</a>    </span>}
+<a href=#423 id=423 data-nosnippet>423</a>}
+<a href=#424 id=424 data-nosnippet>424</a>
+<a href=#425 id=425 data-nosnippet>425</a><span class="doccomment">/// Methods for list queries: `Query&lt;List&lt;M&gt;&gt;`
+<a href=#426 id=426 data-nosnippet>426</a></span><span class="kw">impl</span>&lt;M: Model&gt; Query&lt;List&lt;M&gt;&gt; {
+<a href=#427 id=427 data-nosnippet>427</a>    <span class="doccomment">/// Create a query that selects records of `M` matching `expr`.
+<a href=#428 id=428 data-nosnippet>428</a>    ///
+<a href=#429 id=429 data-nosnippet>429</a>    /// # Examples
+<a href=#430 id=430 data-nosnippet>430</a>    ///
+<a href=#431 id=431 data-nosnippet>431</a>    /// ```
+<a href=#432 id=432 data-nosnippet>432</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#433 id=433 data-nosnippet>433</a>    /// # struct User {
+<a href=#434 id=434 data-nosnippet>434</a>    /// #     #[key]
+<a href=#435 id=435 data-nosnippet>435</a>    /// #     id: i64,
+<a href=#436 id=436 data-nosnippet>436</a>    /// #     name: String,
+<a href=#437 id=437 data-nosnippet>437</a>    /// # }
+<a href=#438 id=438 data-nosnippet>438</a>    /// use toasty::stmt::{List, Query};
 <a href=#439 id=439 data-nosnippet>439</a>    ///
-<a href=#440 id=440 data-nosnippet>440</a>    /// ```
-<a href=#441 id=441 data-nosnippet>441</a>    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-<a href=#442 id=442 data-nosnippet>442</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#443 id=443 data-nosnippet>443</a>    /// # struct User {
-<a href=#444 id=444 data-nosnippet>444</a>    /// #     #[key]
-<a href=#445 id=445 data-nosnippet>445</a>    /// #     id: i64,
-<a href=#446 id=446 data-nosnippet>446</a>    /// #     name: String,
-<a href=#447 id=447 data-nosnippet>447</a>    /// # }
-<a href=#448 id=448 data-nosnippet>448</a>    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
-<a href=#449 id=449 data-nosnippet>449</a>    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
-<a href=#450 id=450 data-nosnippet>450</a>    /// # db.push_schema().await.unwrap();
-<a href=#451 id=451 data-nosnippet>451</a>    /// use toasty::stmt::{List, Query};
+<a href=#440 id=440 data-nosnippet>440</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::filter(User::fields().name().eq("Alice"));
+<a href=#441 id=441 data-nosnippet>441</a>    /// ```
+<a href=#442 id=442 data-nosnippet>442</a>    </span><span class="kw">pub fn </span>filter(expr: Expr&lt;bool&gt;) -&gt; <span class="self">Self </span>{
+<a href=#443 id=443 data-nosnippet>443</a>        <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::new_select(M::id(), expr.untyped);
+<a href=#444 id=444 data-nosnippet>444</a>        query.single = <span class="bool-val">false</span>;
+<a href=#445 id=445 data-nosnippet>445</a>        <span class="self">Self</span>::from_untyped(query)
+<a href=#446 id=446 data-nosnippet>446</a>    }
+<a href=#447 id=447 data-nosnippet>447</a>
+<a href=#448 id=448 data-nosnippet>448</a>    <span class="doccomment">/// Convert this list query into a count query that returns the number of
+<a href=#449 id=449 data-nosnippet>449</a>    /// matching records as a `u64`.
+<a href=#450 id=450 data-nosnippet>450</a>    ///
+<a href=#451 id=451 data-nosnippet>451</a>    /// The returned `Query&lt;u64&gt;` wraps a `SELECT COUNT(*)` query.
 <a href=#452 id=452 data-nosnippet>452</a>    ///
-<a href=#453 id=453 data-nosnippet>453</a>    /// let users: Vec&lt;User&gt; = Query::&lt;List&lt;User&gt;&gt;::all()
-<a href=#454 id=454 data-nosnippet>454</a>    ///     .exec(&amp;mut db)
-<a href=#455 id=455 data-nosnippet>455</a>    ///     .await
-<a href=#456 id=456 data-nosnippet>456</a>    ///     .unwrap();
-<a href=#457 id=457 data-nosnippet>457</a>    /// # });
-<a href=#458 id=458 data-nosnippet>458</a>    /// ```
-<a href=#459 id=459 data-nosnippet>459</a>    </span><span class="kw">pub async fn </span>exec(<span class="self">self</span>, executor: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Executor) -&gt; <span class="prelude-ty">Result</span>&lt;T::Output&gt; {
-<a href=#460 id=460 data-nosnippet>460</a>        executor.exec(<span class="self">self</span>.into_statement()).<span class="kw">await
-<a href=#461 id=461 data-nosnippet>461</a>    </span>}
-<a href=#462 id=462 data-nosnippet>462</a>}
-<a href=#463 id=463 data-nosnippet>463</a>
-<a href=#464 id=464 data-nosnippet>464</a><span class="doccomment">/// Methods for list queries: `Query&lt;List&lt;M&gt;&gt;`
-<a href=#465 id=465 data-nosnippet>465</a></span><span class="kw">impl</span>&lt;M: Model&gt; Query&lt;List&lt;M&gt;&gt; {
-<a href=#466 id=466 data-nosnippet>466</a>    <span class="doccomment">/// Create a query that selects records of `M` matching `expr`.
-<a href=#467 id=467 data-nosnippet>467</a>    ///
-<a href=#468 id=468 data-nosnippet>468</a>    /// # Examples
-<a href=#469 id=469 data-nosnippet>469</a>    ///
-<a href=#470 id=470 data-nosnippet>470</a>    /// ```
-<a href=#471 id=471 data-nosnippet>471</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#472 id=472 data-nosnippet>472</a>    /// # struct User {
-<a href=#473 id=473 data-nosnippet>473</a>    /// #     #[key]
-<a href=#474 id=474 data-nosnippet>474</a>    /// #     id: i64,
-<a href=#475 id=475 data-nosnippet>475</a>    /// #     name: String,
-<a href=#476 id=476 data-nosnippet>476</a>    /// # }
-<a href=#477 id=477 data-nosnippet>477</a>    /// use toasty::stmt::{List, Query};
-<a href=#478 id=478 data-nosnippet>478</a>    ///
-<a href=#479 id=479 data-nosnippet>479</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::filter(User::fields().name().eq("Alice"));
-<a href=#480 id=480 data-nosnippet>480</a>    /// ```
-<a href=#481 id=481 data-nosnippet>481</a>    </span><span class="kw">pub fn </span>filter(expr: Expr&lt;bool&gt;) -&gt; <span class="self">Self </span>{
-<a href=#482 id=482 data-nosnippet>482</a>        <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::new_select(M::id(), expr.untyped);
-<a href=#483 id=483 data-nosnippet>483</a>        query.single = <span class="bool-val">false</span>;
-<a href=#484 id=484 data-nosnippet>484</a>        <span class="self">Self</span>::from_untyped(query)
-<a href=#485 id=485 data-nosnippet>485</a>    }
-<a href=#486 id=486 data-nosnippet>486</a>
-<a href=#487 id=487 data-nosnippet>487</a>    <span class="doccomment">/// Convert this list query into a count query that returns the number of
-<a href=#488 id=488 data-nosnippet>488</a>    /// matching records as a `u64`.
-<a href=#489 id=489 data-nosnippet>489</a>    ///
-<a href=#490 id=490 data-nosnippet>490</a>    /// The returned `Query&lt;u64&gt;` wraps a `SELECT COUNT(*)` query.
-<a href=#491 id=491 data-nosnippet>491</a>    ///
-<a href=#492 id=492 data-nosnippet>492</a>    /// Named `count_rows` rather than `count` so that models with a field
-<a href=#493 id=493 data-nosnippet>493</a>    /// named `count` can still have a generated projection method.
-<a href=#494 id=494 data-nosnippet>494</a>    ///
-<a href=#495 id=495 data-nosnippet>495</a>    /// # Examples
-<a href=#496 id=496 data-nosnippet>496</a>    ///
-<a href=#497 id=497 data-nosnippet>497</a>    /// ```
-<a href=#498 id=498 data-nosnippet>498</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#499 id=499 data-nosnippet>499</a>    /// # struct User {
-<a href=#500 id=500 data-nosnippet>500</a>    /// #     #[key]
-<a href=#501 id=501 data-nosnippet>501</a>    /// #     id: i64,
-<a href=#502 id=502 data-nosnippet>502</a>    /// #     name: String,
-<a href=#503 id=503 data-nosnippet>503</a>    /// # }
-<a href=#504 id=504 data-nosnippet>504</a>    /// use toasty::stmt::{List, Query};
-<a href=#505 id=505 data-nosnippet>505</a>    ///
-<a href=#506 id=506 data-nosnippet>506</a>    /// let q: Query&lt;u64&gt; = Query::&lt;List&lt;User&gt;&gt;::all().count_rows();
-<a href=#507 id=507 data-nosnippet>507</a>    /// ```
-<a href=#508 id=508 data-nosnippet>508</a>    </span><span class="kw">pub fn </span>count_rows(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; Query&lt;u64&gt; {
-<a href=#509 id=509 data-nosnippet>509</a>        <span class="comment">// Set the returning clause to COUNT(*)
-<a href=#510 id=510 data-nosnippet>510</a>        </span><span class="kw-2">*</span><span class="self">self</span>.untyped.returning_mut_unwrap() = Returning::Project(stmt::Expr::count_star());
-<a href=#511 id=511 data-nosnippet>511</a>        <span class="self">self</span>.untyped.single = <span class="bool-val">true</span>;
-<a href=#512 id=512 data-nosnippet>512</a>
-<a href=#513 id=513 data-nosnippet>513</a>        Query::from_untyped(<span class="self">self</span>.untyped)
-<a href=#514 id=514 data-nosnippet>514</a>    }
-<a href=#515 id=515 data-nosnippet>515</a>
-<a href=#516 id=516 data-nosnippet>516</a>    <span class="doccomment">/// Project this list query onto an expression, narrowing the returned
-<a href=#517 id=517 data-nosnippet>517</a>    /// shape from `M` to `T`.
-<a href=#518 id=518 data-nosnippet>518</a>    ///
-<a href=#519 id=519 data-nosnippet>519</a>    /// `projection` can be any expression source: a single field path
-<a href=#520 id=520 data-nosnippet>520</a>    /// (returning `Vec&lt;T&gt;` for the field's Rust type), a tuple of field paths
-<a href=#521 id=521 data-nosnippet>521</a>    /// (returning `Vec` of a tuple), or any other type that implements
-<a href=#522 id=522 data-nosnippet>522</a>    /// `IntoExpr&lt;T&gt;`.  The default model projection is replaced wholesale by
-<a href=#523 id=523 data-nosnippet>523</a>    /// the columns the projection expression references.
-<a href=#524 id=524 data-nosnippet>524</a>    ///
-<a href=#525 id=525 data-nosnippet>525</a>    /// A multi-step (`via`) relation can be projected as well: a `has_many`
-<a href=#526 id=526 data-nosnippet>526</a>    /// `via` yields a `Vec` of the distinct targets reached through the path
-<a href=#527 id=527 data-nosnippet>527</a>    /// per row, and a single (`has_one`) `via` yields one target (or `None`).
-<a href=#528 id=528 data-nosnippet>528</a>    /// This is supported on SQL backends (SQLite, PostgreSQL, MySQL); it is
-<a href=#529 id=529 data-nosnippet>529</a>    /// not yet available on DynamoDB.
+<a href=#453 id=453 data-nosnippet>453</a>    /// # Examples
+<a href=#454 id=454 data-nosnippet>454</a>    ///
+<a href=#455 id=455 data-nosnippet>455</a>    /// ```
+<a href=#456 id=456 data-nosnippet>456</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#457 id=457 data-nosnippet>457</a>    /// # struct User {
+<a href=#458 id=458 data-nosnippet>458</a>    /// #     #[key]
+<a href=#459 id=459 data-nosnippet>459</a>    /// #     id: i64,
+<a href=#460 id=460 data-nosnippet>460</a>    /// #     name: String,
+<a href=#461 id=461 data-nosnippet>461</a>    /// # }
+<a href=#462 id=462 data-nosnippet>462</a>    /// use toasty::stmt::{List, Query};
+<a href=#463 id=463 data-nosnippet>463</a>    ///
+<a href=#464 id=464 data-nosnippet>464</a>    /// let q: Query&lt;u64&gt; = Query::&lt;List&lt;User&gt;&gt;::all().count();
+<a href=#465 id=465 data-nosnippet>465</a>    /// ```
+<a href=#466 id=466 data-nosnippet>466</a>    </span><span class="kw">pub fn </span>count(<span class="kw-2">mut </span><span class="self">self</span>) -&gt; Query&lt;u64&gt; {
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="comment">// Set the returning clause to COUNT(*)
+<a href=#468 id=468 data-nosnippet>468</a>        </span><span class="kw-2">*</span><span class="self">self</span>.untyped.returning_mut_unwrap() = Returning::Project(stmt::Expr::count_star());
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="self">self</span>.untyped.single = <span class="bool-val">true</span>;
+<a href=#470 id=470 data-nosnippet>470</a>
+<a href=#471 id=471 data-nosnippet>471</a>        Query::from_untyped(<span class="self">self</span>.untyped)
+<a href=#472 id=472 data-nosnippet>472</a>    }
+<a href=#473 id=473 data-nosnippet>473</a>
+<a href=#474 id=474 data-nosnippet>474</a>    <span class="doccomment">/// Project this list query onto an expression, narrowing the returned
+<a href=#475 id=475 data-nosnippet>475</a>    /// shape from `M` to `T`.
+<a href=#476 id=476 data-nosnippet>476</a>    ///
+<a href=#477 id=477 data-nosnippet>477</a>    /// `projection` can be any expression source: a single field path
+<a href=#478 id=478 data-nosnippet>478</a>    /// (returning `Vec&lt;T&gt;` for the field's Rust type), a tuple of field paths
+<a href=#479 id=479 data-nosnippet>479</a>    /// (returning `Vec` of a tuple), or any other type that implements
+<a href=#480 id=480 data-nosnippet>480</a>    /// `IntoExpr&lt;T&gt;`.  The default model projection is replaced wholesale by
+<a href=#481 id=481 data-nosnippet>481</a>    /// the columns the projection expression references.
+<a href=#482 id=482 data-nosnippet>482</a>    ///
+<a href=#483 id=483 data-nosnippet>483</a>    /// A multi-step (`via`) relation can be projected as well: a `has_many`
+<a href=#484 id=484 data-nosnippet>484</a>    /// `via` yields a `Vec` of the distinct targets reached through the path
+<a href=#485 id=485 data-nosnippet>485</a>    /// per row, and a single (`has_one`) `via` yields one target (or `None`).
+<a href=#486 id=486 data-nosnippet>486</a>    /// This is supported on SQL backends (SQLite, PostgreSQL, MySQL); it is
+<a href=#487 id=487 data-nosnippet>487</a>    /// not yet available on DynamoDB.
+<a href=#488 id=488 data-nosnippet>488</a>    ///
+<a href=#489 id=489 data-nosnippet>489</a>    /// # Examples
+<a href=#490 id=490 data-nosnippet>490</a>    ///
+<a href=#491 id=491 data-nosnippet>491</a>    /// ```
+<a href=#492 id=492 data-nosnippet>492</a>    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+<a href=#493 id=493 data-nosnippet>493</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#494 id=494 data-nosnippet>494</a>    /// # struct User {
+<a href=#495 id=495 data-nosnippet>495</a>    /// #     #[key]
+<a href=#496 id=496 data-nosnippet>496</a>    /// #     id: i64,
+<a href=#497 id=497 data-nosnippet>497</a>    /// #     name: String,
+<a href=#498 id=498 data-nosnippet>498</a>    /// # }
+<a href=#499 id=499 data-nosnippet>499</a>    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+<a href=#500 id=500 data-nosnippet>500</a>    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
+<a href=#501 id=501 data-nosnippet>501</a>    /// # db.push_schema().await.unwrap();
+<a href=#502 id=502 data-nosnippet>502</a>    /// use toasty::stmt::{List, Query};
+<a href=#503 id=503 data-nosnippet>503</a>    ///
+<a href=#504 id=504 data-nosnippet>504</a>    /// // Single-field projection: returns `Vec&lt;String&gt;`.
+<a href=#505 id=505 data-nosnippet>505</a>    /// let names: Vec&lt;String&gt; = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#506 id=506 data-nosnippet>506</a>    ///     .select(User::fields().name())
+<a href=#507 id=507 data-nosnippet>507</a>    ///     .exec(&amp;mut db)
+<a href=#508 id=508 data-nosnippet>508</a>    ///     .await
+<a href=#509 id=509 data-nosnippet>509</a>    ///     .unwrap();
+<a href=#510 id=510 data-nosnippet>510</a>    ///
+<a href=#511 id=511 data-nosnippet>511</a>    /// // Tuple projection: returns `Vec&lt;(i64, String)&gt;`.
+<a href=#512 id=512 data-nosnippet>512</a>    /// let pairs: Vec&lt;(i64, String)&gt; = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#513 id=513 data-nosnippet>513</a>    ///     .select((User::fields().id(), User::fields().name()))
+<a href=#514 id=514 data-nosnippet>514</a>    ///     .exec(&amp;mut db)
+<a href=#515 id=515 data-nosnippet>515</a>    ///     .await
+<a href=#516 id=516 data-nosnippet>516</a>    ///     .unwrap();
+<a href=#517 id=517 data-nosnippet>517</a>    /// # });
+<a href=#518 id=518 data-nosnippet>518</a>    /// ```
+<a href=#519 id=519 data-nosnippet>519</a>    </span><span class="kw">pub fn </span>select&lt;E, T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, projection: E) -&gt; Query&lt;List&lt;T&gt;&gt;
+<a href=#520 id=520 data-nosnippet>520</a>    <span class="kw">where
+<a href=#521 id=521 data-nosnippet>521</a>        </span>E: IntoExpr&lt;T&gt;,
+<a href=#522 id=522 data-nosnippet>522</a>        T: Load,
+<a href=#523 id=523 data-nosnippet>523</a>    {
+<a href=#524 id=524 data-nosnippet>524</a>        <span class="kw-2">*</span><span class="self">self</span>.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
+<a href=#525 id=525 data-nosnippet>525</a>
+<a href=#526 id=526 data-nosnippet>526</a>        Query::from_untyped(<span class="self">self</span>.untyped)
+<a href=#527 id=527 data-nosnippet>527</a>    }
+<a href=#528 id=528 data-nosnippet>528</a>
+<a href=#529 id=529 data-nosnippet>529</a>    <span class="doccomment">/// Create a query that selects all records of `M`.
 <a href=#530 id=530 data-nosnippet>530</a>    ///
 <a href=#531 id=531 data-nosnippet>531</a>    /// # Examples
 <a href=#532 id=532 data-nosnippet>532</a>    ///
 <a href=#533 id=533 data-nosnippet>533</a>    /// ```
-<a href=#534 id=534 data-nosnippet>534</a>    /// # tokio::runtime::Runtime::new().unwrap().block_on(async {
-<a href=#535 id=535 data-nosnippet>535</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#536 id=536 data-nosnippet>536</a>    /// # struct User {
-<a href=#537 id=537 data-nosnippet>537</a>    /// #     #[key]
-<a href=#538 id=538 data-nosnippet>538</a>    /// #     id: i64,
-<a href=#539 id=539 data-nosnippet>539</a>    /// #     name: String,
-<a href=#540 id=540 data-nosnippet>540</a>    /// # }
-<a href=#541 id=541 data-nosnippet>541</a>    /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
-<a href=#542 id=542 data-nosnippet>542</a>    /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
-<a href=#543 id=543 data-nosnippet>543</a>    /// # db.push_schema().await.unwrap();
-<a href=#544 id=544 data-nosnippet>544</a>    /// use toasty::stmt::{List, Query};
-<a href=#545 id=545 data-nosnippet>545</a>    ///
-<a href=#546 id=546 data-nosnippet>546</a>    /// // Single-field projection: returns `Vec&lt;String&gt;`.
-<a href=#547 id=547 data-nosnippet>547</a>    /// let names: Vec&lt;String&gt; = Query::&lt;List&lt;User&gt;&gt;::all()
-<a href=#548 id=548 data-nosnippet>548</a>    ///     .select(User::fields().name())
-<a href=#549 id=549 data-nosnippet>549</a>    ///     .exec(&amp;mut db)
-<a href=#550 id=550 data-nosnippet>550</a>    ///     .await
-<a href=#551 id=551 data-nosnippet>551</a>    ///     .unwrap();
-<a href=#552 id=552 data-nosnippet>552</a>    ///
-<a href=#553 id=553 data-nosnippet>553</a>    /// // Tuple projection: returns `Vec&lt;(i64, String)&gt;`.
-<a href=#554 id=554 data-nosnippet>554</a>    /// let pairs: Vec&lt;(i64, String)&gt; = Query::&lt;List&lt;User&gt;&gt;::all()
-<a href=#555 id=555 data-nosnippet>555</a>    ///     .select((User::fields().id(), User::fields().name()))
-<a href=#556 id=556 data-nosnippet>556</a>    ///     .exec(&amp;mut db)
-<a href=#557 id=557 data-nosnippet>557</a>    ///     .await
-<a href=#558 id=558 data-nosnippet>558</a>    ///     .unwrap();
-<a href=#559 id=559 data-nosnippet>559</a>    /// # });
-<a href=#560 id=560 data-nosnippet>560</a>    /// ```
-<a href=#561 id=561 data-nosnippet>561</a>    </span><span class="kw">pub fn </span>select&lt;E, T&gt;(<span class="kw-2">mut </span><span class="self">self</span>, projection: E) -&gt; Query&lt;List&lt;T&gt;&gt;
-<a href=#562 id=562 data-nosnippet>562</a>    <span class="kw">where
-<a href=#563 id=563 data-nosnippet>563</a>        </span>E: IntoExpr&lt;T&gt;,
-<a href=#564 id=564 data-nosnippet>564</a>        T: Load,
-<a href=#565 id=565 data-nosnippet>565</a>    {
-<a href=#566 id=566 data-nosnippet>566</a>        <span class="kw-2">*</span><span class="self">self</span>.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
-<a href=#567 id=567 data-nosnippet>567</a>
-<a href=#568 id=568 data-nosnippet>568</a>        Query::from_untyped(<span class="self">self</span>.untyped)
-<a href=#569 id=569 data-nosnippet>569</a>    }
-<a href=#570 id=570 data-nosnippet>570</a>
-<a href=#571 id=571 data-nosnippet>571</a>    <span class="doccomment">/// Create a query that selects all records of `M`.
-<a href=#572 id=572 data-nosnippet>572</a>    ///
-<a href=#573 id=573 data-nosnippet>573</a>    /// # Examples
-<a href=#574 id=574 data-nosnippet>574</a>    ///
-<a href=#575 id=575 data-nosnippet>575</a>    /// ```
-<a href=#576 id=576 data-nosnippet>576</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#577 id=577 data-nosnippet>577</a>    /// # struct User {
-<a href=#578 id=578 data-nosnippet>578</a>    /// #     #[key]
-<a href=#579 id=579 data-nosnippet>579</a>    /// #     id: i64,
-<a href=#580 id=580 data-nosnippet>580</a>    /// #     name: String,
-<a href=#581 id=581 data-nosnippet>581</a>    /// # }
-<a href=#582 id=582 data-nosnippet>582</a>    /// use toasty::stmt::{List, Query};
-<a href=#583 id=583 data-nosnippet>583</a>    ///
-<a href=#584 id=584 data-nosnippet>584</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::all();
-<a href=#585 id=585 data-nosnippet>585</a>    /// ```
-<a href=#586 id=586 data-nosnippet>586</a>    </span><span class="kw">pub fn </span>all() -&gt; <span class="self">Self </span>{
-<a href=#587 id=587 data-nosnippet>587</a>        <span class="kw">let </span>filter = stmt::Expr::Value(Value::from_bool(<span class="bool-val">true</span>));
-<a href=#588 id=588 data-nosnippet>588</a>        <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::new_select(M::id(), filter);
-<a href=#589 id=589 data-nosnippet>589</a>        query.single = <span class="bool-val">false</span>;
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="self">Self</span>::from_untyped(query)
-<a href=#591 id=591 data-nosnippet>591</a>    }
-<a href=#592 id=592 data-nosnippet>592</a>
-<a href=#593 id=593 data-nosnippet>593</a>    <span class="doccomment">/// Sort this query so the most recently inserted records on `field`
-<a href=#594 id=594 data-nosnippet>594</a>    /// appear first.
-<a href=#595 id=595 data-nosnippet>595</a>    ///
-<a href=#596 id=596 data-nosnippet>596</a>    /// Convenience for [`order_by`](Self::order_by) with [`Path::desc`].
-<a href=#597 id=597 data-nosnippet>597</a>    /// `field` must be a path rooted at this query's model `M`.
-<a href=#598 id=598 data-nosnippet>598</a>    ///
-<a href=#599 id=599 data-nosnippet>599</a>    /// # Examples
-<a href=#600 id=600 data-nosnippet>600</a>    ///
-<a href=#601 id=601 data-nosnippet>601</a>    /// ```
-<a href=#602 id=602 data-nosnippet>602</a>    /// # #[derive(Debug, toasty::Model)]
-<a href=#603 id=603 data-nosnippet>603</a>    /// # struct User {
-<a href=#604 id=604 data-nosnippet>604</a>    /// #     #[key]
-<a href=#605 id=605 data-nosnippet>605</a>    /// #     id: i64,
-<a href=#606 id=606 data-nosnippet>606</a>    /// #     name: String,
-<a href=#607 id=607 data-nosnippet>607</a>    /// # }
-<a href=#608 id=608 data-nosnippet>608</a>    /// use toasty::stmt::{List, Query};
-<a href=#609 id=609 data-nosnippet>609</a>    ///
-<a href=#610 id=610 data-nosnippet>610</a>    /// let mut q = Query::&lt;List&lt;User&gt;&gt;::all();
-<a href=#611 id=611 data-nosnippet>611</a>    /// q.latest_by(User::fields().id());
-<a href=#612 id=612 data-nosnippet>612</a>    /// ```
-<a href=#613 id=613 data-nosnippet>613</a>    </span><span class="kw">pub fn </span>latest_by&lt;U&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, field: Path&lt;M, U&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
-<a href=#614 id=614 data-nosnippet>614</a>        <span class="self">self</span>.order_by(field.desc())
-<a href=#615 id=615 data-nosnippet>615</a>    }
-<a href=#616 id=616 data-nosnippet>616</a>}
-<a href=#617 id=617 data-nosnippet>617</a>
-<a href=#618 id=618 data-nosnippet>618</a><span class="kw">impl</span>&lt;T&gt; IntoStatement <span class="kw">for </span>Query&lt;T&gt; {
-<a href=#619 id=619 data-nosnippet>619</a>    <span class="kw">type </span>Returning = T;
-<a href=#620 id=620 data-nosnippet>620</a>
-<a href=#621 id=621 data-nosnippet>621</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;T&gt; {
-<a href=#622 id=622 data-nosnippet>622</a>        Statement::from_untyped_stmt(<span class="self">self</span>.untyped.into())
-<a href=#623 id=623 data-nosnippet>623</a>    }
-<a href=#624 id=624 data-nosnippet>624</a>}
-<a href=#625 id=625 data-nosnippet>625</a>
-<a href=#626 id=626 data-nosnippet>626</a><span class="kw">impl</span>&lt;T&gt; IntoStatement <span class="kw">for </span><span class="kw-2">&amp;</span>Query&lt;T&gt; {
-<a href=#627 id=627 data-nosnippet>627</a>    <span class="kw">type </span>Returning = T;
-<a href=#628 id=628 data-nosnippet>628</a>
-<a href=#629 id=629 data-nosnippet>629</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;T&gt; {
-<a href=#630 id=630 data-nosnippet>630</a>        Statement::from_untyped_stmt(<span class="self">self</span>.clone().untyped.into())
-<a href=#631 id=631 data-nosnippet>631</a>    }
-<a href=#632 id=632 data-nosnippet>632</a>}
-<a href=#633 id=633 data-nosnippet>633</a>
-<a href=#634 id=634 data-nosnippet>634</a><span class="kw">impl</span>&lt;T&gt; Clone <span class="kw">for </span>Query&lt;T&gt; {
-<a href=#635 id=635 data-nosnippet>635</a>    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
-<a href=#636 id=636 data-nosnippet>636</a>        <span class="self">Self </span>{
-<a href=#637 id=637 data-nosnippet>637</a>            untyped: <span class="self">self</span>.untyped.clone(),
-<a href=#638 id=638 data-nosnippet>638</a>            _p: PhantomData,
-<a href=#639 id=639 data-nosnippet>639</a>        }
-<a href=#640 id=640 data-nosnippet>640</a>    }
-<a href=#641 id=641 data-nosnippet>641</a>}
-<a href=#642 id=642 data-nosnippet>642</a>
-<a href=#643 id=643 data-nosnippet>643</a><span class="kw">impl</span>&lt;T&gt; fmt::Debug <span class="kw">for </span>Query&lt;T&gt; {
-<a href=#644 id=644 data-nosnippet>644</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, fmt: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
-<a href=#645 id=645 data-nosnippet>645</a>        <span class="self">self</span>.untyped.fmt(fmt)
-<a href=#646 id=646 data-nosnippet>646</a>    }
-<a href=#647 id=647 data-nosnippet>647</a>}
+<a href=#534 id=534 data-nosnippet>534</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#535 id=535 data-nosnippet>535</a>    /// # struct User {
+<a href=#536 id=536 data-nosnippet>536</a>    /// #     #[key]
+<a href=#537 id=537 data-nosnippet>537</a>    /// #     id: i64,
+<a href=#538 id=538 data-nosnippet>538</a>    /// #     name: String,
+<a href=#539 id=539 data-nosnippet>539</a>    /// # }
+<a href=#540 id=540 data-nosnippet>540</a>    /// use toasty::stmt::{List, Query};
+<a href=#541 id=541 data-nosnippet>541</a>    ///
+<a href=#542 id=542 data-nosnippet>542</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::all();
+<a href=#543 id=543 data-nosnippet>543</a>    /// ```
+<a href=#544 id=544 data-nosnippet>544</a>    </span><span class="kw">pub fn </span>all() -&gt; <span class="self">Self </span>{
+<a href=#545 id=545 data-nosnippet>545</a>        <span class="kw">let </span>filter = stmt::Expr::Value(Value::from_bool(<span class="bool-val">true</span>));
+<a href=#546 id=546 data-nosnippet>546</a>        <span class="kw">let </span><span class="kw-2">mut </span>query = stmt::Query::new_select(M::id(), filter);
+<a href=#547 id=547 data-nosnippet>547</a>        query.single = <span class="bool-val">false</span>;
+<a href=#548 id=548 data-nosnippet>548</a>        <span class="self">Self</span>::from_untyped(query)
+<a href=#549 id=549 data-nosnippet>549</a>    }
+<a href=#550 id=550 data-nosnippet>550</a>
+<a href=#551 id=551 data-nosnippet>551</a>    <span class="doccomment">/// Sort this query so the most recently inserted records on `field`
+<a href=#552 id=552 data-nosnippet>552</a>    /// appear first.
+<a href=#553 id=553 data-nosnippet>553</a>    ///
+<a href=#554 id=554 data-nosnippet>554</a>    /// Convenience for [`order_by`](Self::order_by) with [`Path::desc`].
+<a href=#555 id=555 data-nosnippet>555</a>    /// `field` must be a path rooted at this query's model `M`.
+<a href=#556 id=556 data-nosnippet>556</a>    ///
+<a href=#557 id=557 data-nosnippet>557</a>    /// # Examples
+<a href=#558 id=558 data-nosnippet>558</a>    ///
+<a href=#559 id=559 data-nosnippet>559</a>    /// ```
+<a href=#560 id=560 data-nosnippet>560</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#561 id=561 data-nosnippet>561</a>    /// # struct User {
+<a href=#562 id=562 data-nosnippet>562</a>    /// #     #[key]
+<a href=#563 id=563 data-nosnippet>563</a>    /// #     id: i64,
+<a href=#564 id=564 data-nosnippet>564</a>    /// #     name: String,
+<a href=#565 id=565 data-nosnippet>565</a>    /// # }
+<a href=#566 id=566 data-nosnippet>566</a>    /// use toasty::stmt::{List, Query};
+<a href=#567 id=567 data-nosnippet>567</a>    ///
+<a href=#568 id=568 data-nosnippet>568</a>    /// let mut q = Query::&lt;List&lt;User&gt;&gt;::all();
+<a href=#569 id=569 data-nosnippet>569</a>    /// q.latest_by(User::fields().id());
+<a href=#570 id=570 data-nosnippet>570</a>    /// ```
+<a href=#571 id=571 data-nosnippet>571</a>    </span><span class="kw">pub fn </span>latest_by&lt;U&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, field: Path&lt;M, U&gt;) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self </span>{
+<a href=#572 id=572 data-nosnippet>572</a>        <span class="self">self</span>.order_by(field.desc())
+<a href=#573 id=573 data-nosnippet>573</a>    }
+<a href=#574 id=574 data-nosnippet>574</a>}
+<a href=#575 id=575 data-nosnippet>575</a>
+<a href=#576 id=576 data-nosnippet>576</a><span class="kw">impl</span>&lt;T&gt; IntoStatement <span class="kw">for </span>Query&lt;T&gt; {
+<a href=#577 id=577 data-nosnippet>577</a>    <span class="kw">type </span>Returning = T;
+<a href=#578 id=578 data-nosnippet>578</a>
+<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;T&gt; {
+<a href=#580 id=580 data-nosnippet>580</a>        Statement::from_untyped_stmt(<span class="self">self</span>.untyped.into())
+<a href=#581 id=581 data-nosnippet>581</a>    }
+<a href=#582 id=582 data-nosnippet>582</a>}
+<a href=#583 id=583 data-nosnippet>583</a>
+<a href=#584 id=584 data-nosnippet>584</a><span class="kw">impl</span>&lt;T&gt; IntoStatement <span class="kw">for </span><span class="kw-2">&amp;</span>Query&lt;T&gt; {
+<a href=#585 id=585 data-nosnippet>585</a>    <span class="kw">type </span>Returning = T;
+<a href=#586 id=586 data-nosnippet>586</a>
+<a href=#587 id=587 data-nosnippet>587</a>    <span class="kw">fn </span>into_statement(<span class="self">self</span>) -&gt; Statement&lt;T&gt; {
+<a href=#588 id=588 data-nosnippet>588</a>        Statement::from_untyped_stmt(<span class="self">self</span>.clone().untyped.into())
+<a href=#589 id=589 data-nosnippet>589</a>    }
+<a href=#590 id=590 data-nosnippet>590</a>}
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a><span class="kw">impl</span>&lt;T&gt; Clone <span class="kw">for </span>Query&lt;T&gt; {
+<a href=#593 id=593 data-nosnippet>593</a>    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#594 id=594 data-nosnippet>594</a>        <span class="self">Self </span>{
+<a href=#595 id=595 data-nosnippet>595</a>            untyped: <span class="self">self</span>.untyped.clone(),
+<a href=#596 id=596 data-nosnippet>596</a>            _p: PhantomData,
+<a href=#597 id=597 data-nosnippet>597</a>        }
+<a href=#598 id=598 data-nosnippet>598</a>    }
+<a href=#599 id=599 data-nosnippet>599</a>}
+<a href=#600 id=600 data-nosnippet>600</a>
+<a href=#601 id=601 data-nosnippet>601</a><span class="kw">impl</span>&lt;T&gt; fmt::Debug <span class="kw">for </span>Query&lt;T&gt; {
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, fmt: <span class="kw-2">&amp;mut </span>fmt::Formatter&lt;<span class="lifetime">'_</span>&gt;) -&gt; fmt::Result {
+<a href=#603 id=603 data-nosnippet>603</a>        <span class="self">self</span>.untyped.fmt(fmt)
+<a href=#604 id=604 data-nosnippet>604</a>    }
+<a href=#605 id=605 data-nosnippet>605</a>}
 </code></pre></div></section></main></body></html>

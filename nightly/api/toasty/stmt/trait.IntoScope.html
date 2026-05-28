@@ -12,7 +12,7 @@ query’s returning type and so distinguishes the three forms above. <code>IntoS
 erases that distinction, since the scope of an insert only cares about which
 rows the query addresses, not how many it would return on execution.</p>
 <p>For <code>Query&lt;Option&lt;M&gt;&gt;</code> and <code>Query&lt;M&gt;</code> — produced by <a href="struct.Query.html#method.first" title="method toasty::stmt::Query::first"><code>Query::first</code></a> and
-<a href="crate::stmt::Query::one"><code>Query::one</code></a> respectively — the <code>single</code> flag and the paired <code>LIMIT 1</code>
+<a href="struct.Query.html#method.one" title="method toasty::stmt::Query::one"><code>Query::one</code></a> respectively — the <code>single</code> flag and the paired <code>LIMIT 1</code>
 added by those narrowing methods are cleared, since <code>Statement&lt;List&lt;M&gt;&gt;</code>
 would otherwise be self-contradictory (“a list that returns one row”).</p>
 </div></details><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.into_scope" class="method"><a class="src rightside" href="../../src/toasty/stmt/scope.rs.html#25">Source</a><h4 class="code-header">fn <a href="#tymethod.into_scope" class="fn">into_scope</a>(self) -&gt; <a class="struct" href="struct.Statement.html" title="struct toasty::stmt::Statement">Statement</a>&lt;<a class="struct" href="struct.List.html" title="struct toasty::stmt::List">List</a>&lt;M&gt;&gt;</h4></section></summary><div class="docblock"><p>Lower <code>self</code> into a <code>Statement&lt;List&lt;M&gt;&gt;</code> for use as an insert scope.</p>
