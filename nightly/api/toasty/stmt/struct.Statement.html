@@ -6,7 +6,7 @@ type is <code>Statement&lt;List&lt;User&gt;&gt;</code>, not <code>Statement&lt;U
 <p>Common returning types:</p>
 <div><table><thead><tr><th>Statement kind</th><th><code>T</code></th><th><code>exec()</code> produces</th></tr></thead><tbody>
 <tr><td>Multi-row query</td><td><a href="struct.List.html" title="struct toasty::stmt::List"><code>List&lt;M&gt;</code></a></td><td><code>Vec&lt;M&gt;</code></td></tr>
-<tr><td>Single-row query (<code>.one()</code>)</td><td><code>M</code></td><td><code>M</code></td></tr>
+<tr><td>Single-row query (<code>.exactly_one()</code>)</td><td><code>M</code></td><td><code>M</code></td></tr>
 <tr><td>Optional query (<code>.first()</code>)</td><td><code>Option&lt;M&gt;</code></td><td><code>Option&lt;M&gt;</code></td></tr>
 <tr><td>Insert (create)</td><td><code>M</code></td><td><code>M</code></td></tr>
 <tr><td>Delete</td><td><code>()</code></td><td><code>()</code></td></tr>
