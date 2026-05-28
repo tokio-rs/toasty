@@ -30,7 +30,7 @@
 //! a `LiftInSubquery`.
 
 use toasty_core::{
-    schema::app::{BelongsTo, FieldId, FieldTy, ModelId},
+    schema::app::{self, BelongsTo, FieldId, FieldTy, ModelId},
     stmt::{self, Expr, ExprContext, IntoExprTarget, ResolvedRef, Visit, VisitMut},
 };
 
@@ -165,8 +165,13 @@ pub(super) fn lift_in_subquery(
 ) -> Option<stmt::Expr> {
     // The expression is a path expression referencing a relation.
     let field = match expr {
-        stmt::Expr::Project(_) => {
-            todo!()
+        // `Project(Ref(rel), [head, ...tail])` — the path traverses through a
+        // relation field (`rel`) before reaching the relation the subquery
+        // targets. Re-root the path at `rel`'s target model and rebuild as a
+        // nested IN-subquery on that model, then recurse to lift the outer
+        // `rel` hop.
+        stmt::Expr::Project(project_expr) => {
+            return lift_projection_in_subquery(cx, project_expr, query);
         }
         stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => {
             cx.resolve_expr_reference(expr_reference).as_field_unwrap()
@@ -186,6 +191,196 @@ pub(super) fn lift_in_subquery(
         FieldTy::Has(has) => lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query),
         _ => None,
     }
+}
+
+/// Lifts an `IN`-subquery whose left side is a path through a relation field.
+///
+/// `.any()` on a relation chain — for example, `Release.project.topics.any(name
+/// == "rust")` — builds an `InSubquery` whose LHS projects through the
+/// chain:
+///
+/// ```text
+/// InSubquery {
+///     expr:  Project(Ref(Release.project), [Project.topics_idx]),
+///     query: SELECT FROM Topic WHERE name == "rust",
+/// }
+/// ```
+///
+/// Two paths handle this:
+///
+/// **Fused.** [`try_fuse_paired_relations`] recognizes the common
+/// `BelongsTo → Has` chain over a shared primary key and emits a single
+/// FK-on-FK `IN` that bypasses the intermediate model:
+///
+/// ```text
+/// Release.project_id IN (SELECT Topic.project_id FROM Topic WHERE name == "rust")
+/// ```
+///
+/// **General.** For chains the fast path doesn't match (multi-hop
+/// projections, non-paired relations), re-root the projection at the
+/// relation's target model and wrap the original subquery in a nested `IN`
+/// against that model, then recurse on the outer hop. For the same input,
+/// the fallback produces:
+///
+/// ```text
+/// Release.project IN (
+///     SELECT FROM Project
+///     WHERE Project.topics IN (SELECT FROM Topic WHERE name == "rust")
+/// )
+/// ```
+///
+/// The recursive call lifts the outer `Release.project` hop via the standard
+/// `BelongsTo` branch; the inner `Project.topics` hop is lifted on the next
+/// visitor pass when [`LiftInSubquery`]'s children walk reaches it.
+fn lift_projection_in_subquery(
+    cx: &ExprContext,
+    project_expr: &stmt::ExprProject,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    let Expr::Reference(expr_ref) = &*project_expr.base else {
+        return None;
+    };
+    let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
+        return None;
+    };
+
+    let target_model_id = match &field.ty {
+        FieldTy::Has(rel) => rel.target,
+        FieldTy::Via(rel) => rel.target,
+        FieldTy::BelongsTo(rel) => rel.target,
+        _ => return None,
+    };
+
+    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
+
+    if tail.is_empty()
+        && let Some(direct) =
+            try_fuse_paired_relations(cx, field, target_model_id, *head_idx, query)
+    {
+        return Some(direct);
+    }
+
+    let target_field = Expr::ref_self_field(FieldId {
+        model: target_model_id,
+        index: *head_idx,
+    });
+    let inner_lhs = if tail.is_empty() {
+        target_field
+    } else {
+        Expr::project(target_field, stmt::Projection::from(tail))
+    };
+
+    let new_subquery = stmt::Query::new_select(
+        stmt::Source::from(target_model_id),
+        Expr::in_subquery(inner_lhs, query.clone()),
+    );
+
+    lift_in_subquery(cx, &project_expr.base, &new_subquery)
+}
+
+/// Fuses a `BelongsTo → Has` chain into a single FK-on-FK `IN` when both
+/// relations meet at the same primary key.
+///
+/// # Example
+///
+/// Given the schema:
+///
+/// ```text
+/// Todo     { category_id: Category.id, ... }   // BelongsTo  Todo.category
+/// Category { todos: HasMany Todo, ... }        // Has, paired with Todo.category
+/// ```
+///
+/// The path `Todo.category.todos` lifts as follows:
+///
+/// ```text
+/// // Input
+/// InSubquery {
+///     expr:  Project(Ref(Todo.category), [Category.todos_idx]),
+///     query: SELECT FROM Todo WHERE title == "salad",
+/// }
+///
+/// // Output
+/// InSubquery {
+///     expr:  Ref(Todo.category_id),
+///     query: SELECT Todo.category_id FROM Todo WHERE title == "salad",
+/// }
+/// ```
+///
+/// The outer relation's FK source columns become the LHS; the inner
+/// relation's paired-BelongsTo FK source columns become the subquery's
+/// returning list. The user's original filter is preserved verbatim.
+///
+/// # Why the fusion is sound
+///
+/// Composing the two hops without fusion routes through the intermediate
+/// model:
+///
+/// ```text
+/// Todo.category_id IN (
+///     SELECT Category.id FROM Category
+///     WHERE Category.id IN (SELECT Todo.category_id FROM Todo WHERE title == "salad")
+/// )
+/// ```
+///
+/// Both FKs target `Category.id`, so every value the innermost subquery
+/// returns exists in `Category.id` under FK integrity (which the engine
+/// already assumes). The middle filter therefore admits every row the inner
+/// returns, and the middle `SELECT Category.id` simply re-emits them. The
+/// `Category` scan is a no-op and can be dropped.
+///
+/// Returns `None` when the chain doesn't match the pattern — outer isn't a
+/// `BelongsTo`, inner isn't a `Has`, or the FK columns don't line up.
+fn try_fuse_paired_relations(
+    cx: &ExprContext,
+    outer_field: &app::Field,
+    target_model_id: ModelId,
+    head_idx: usize,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    let outer_belongs_to = match &outer_field.ty {
+        FieldTy::BelongsTo(rel) => rel,
+        _ => return None,
+    };
+
+    let target_model = cx.schema().app.model(target_model_id).as_root_unwrap();
+    let head_field = target_model.fields.get(head_idx)?;
+    let inner_has = match &head_field.ty {
+        FieldTy::Has(has) => has,
+        _ => return None,
+    };
+    let inner_pair = inner_has.pair(&cx.schema().app);
+
+    // Both FKs must reference the same PK columns in the same order.
+    if outer_belongs_to.foreign_key.fields.len() != inner_pair.foreign_key.fields.len() {
+        return None;
+    }
+    for (outer_fk, inner_fk) in outer_belongs_to
+        .foreign_key
+        .fields
+        .iter()
+        .zip(inner_pair.foreign_key.fields.iter())
+    {
+        if outer_fk.target != inner_fk.target {
+            return None;
+        }
+    }
+
+    let mut fused_subquery = query.clone();
+    fused_subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(
+        super::key_field_refs(0, inner_pair.foreign_key.fields.iter().map(|fk| fk.source)),
+    );
+
+    Some(stmt::Expr::in_subquery(
+        super::key_field_refs(
+            0,
+            outer_belongs_to
+                .foreign_key
+                .fields
+                .iter()
+                .map(|fk| fk.source),
+        ),
+        fused_subquery,
+    ))
 }
 
 /// Lift `project(ref_self_field(rel), [idx, ...]) op other` into a
