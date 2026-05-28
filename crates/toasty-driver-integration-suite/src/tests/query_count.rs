@@ -4,7 +4,7 @@ use crate::prelude::*;
 pub async fn count_empty_table(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
-    let count = User::all().count_rows().exec(&mut db).await?;
+    let count = User::all().count().exec(&mut db).await?;
     assert_eq!(count, 0);
 
     Ok(())
@@ -22,7 +22,7 @@ pub async fn count_after_inserts(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    let count = User::all().count_rows().exec(&mut db).await?;
+    let count = User::all().count().exec(&mut db).await?;
     assert_eq!(count, 3);
 
     Ok(())
@@ -40,13 +40,13 @@ pub async fn count_with_filter(t: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    let count = User::filter_by_name("a").count_rows().exec(&mut db).await?;
+    let count = User::filter_by_name("a").count().exec(&mut db).await?;
     assert_eq!(count, 2);
 
-    let count = User::filter_by_name("b").count_rows().exec(&mut db).await?;
+    let count = User::filter_by_name("b").count().exec(&mut db).await?;
     assert_eq!(count, 1);
 
-    let count = User::filter_by_name("c").count_rows().exec(&mut db).await?;
+    let count = User::filter_by_name("c").count().exec(&mut db).await?;
     assert_eq!(count, 0);
 
     Ok(())

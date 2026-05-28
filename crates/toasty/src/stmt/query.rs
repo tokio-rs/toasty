@@ -16,7 +16,7 @@ use toasty_core::stmt::{self, Returning};
 /// | Type | `exec()` produces | Created by |
 /// |---|---|---|
 /// | `Query<List<M>>` | `Vec<M>` | [`Query::all`], [`Query::filter`] |
-/// | `Query<M>` | `M` (errors if missing) | [`.exactly_one()`](Query::exactly_one) |
+/// | `Query<M>` | `M` (errors if missing) | [`.one()`](Query::one) |
 /// | `Query<Option<M>>` | `Option<M>` | [`.first()`](Query::first) |
 ///
 /// # Building queries
@@ -300,7 +300,7 @@ impl<T> Query<T> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let q: Query<User> = Query::<List<User>>::all().exactly_one();
+    /// let q: Query<User> = Query::<List<User>>::all().one();
     /// let _list_q: Query<List<User>> = q.to_list();
     /// ```
     pub fn to_list(mut self) -> Query<List<T>> {
@@ -367,54 +367,15 @@ impl<T> Query<List<T>> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let q: Query<User> = Query::<List<User>>::all().exactly_one();
+    /// let q: Query<User> = Query::<List<User>>::all().one();
     /// ```
-    pub fn exactly_one(mut self) -> Query<T> {
+    pub fn one(mut self) -> Query<T> {
         set_first(&mut self.untyped);
 
         Query {
             untyped: self.untyped,
             _p: PhantomData,
         }
-    }
-}
-
-/// Single-row select.
-impl<M: Model> Query<M> {
-    /// Project this single-row query onto an expression, narrowing the
-    /// returned shape from `M` to `T`.
-    ///
-    /// The mechanics mirror [`Query::<List<M>>::select`]; the difference is
-    /// the cardinality. A `Query<M>` returns one row, so the projected query
-    /// returns one `T` (or errors at execution if no row matches).
-    ///
-    /// `projection` is any `IntoExpr<T>` source: a field path
-    /// (`Model::fields().name()`), a tuple of paths, or another expression.
-    pub fn select<E, T>(mut self, projection: E) -> Query<T>
-    where
-        E: IntoExpr<T>,
-        T: Load,
-    {
-        *self.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
-        Query::from_untyped(self.untyped)
-    }
-}
-
-/// Optional-row select.
-impl<M: Model> Query<Option<M>> {
-    /// Project this optional-row query onto an expression, narrowing the
-    /// returned shape from `M` to `T`. The `Option` wrapping survives the
-    /// projection: a `Query<Option<M>>` becomes `Query<Option<T>>`.
-    ///
-    /// `projection` is any `IntoExpr<T>` source. See
-    /// [`Query::<List<M>>::select`] for the general projection rules.
-    pub fn select<E, T>(mut self, projection: E) -> Query<Option<T>>
-    where
-        E: IntoExpr<T>,
-        T: Load,
-    {
-        *self.untyped.returning_mut_unwrap() = Returning::Project(projection.into_expr().untyped);
-        Query::from_untyped(self.untyped)
     }
 }
 
@@ -489,9 +450,6 @@ impl<M: Model> Query<List<M>> {
     ///
     /// The returned `Query<u64>` wraps a `SELECT COUNT(*)` query.
     ///
-    /// Named `count_rows` rather than `count` so that models with a field
-    /// named `count` can still have a generated projection method.
-    ///
     /// # Examples
     ///
     /// ```
@@ -503,9 +461,9 @@ impl<M: Model> Query<List<M>> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let q: Query<u64> = Query::<List<User>>::all().count_rows();
+    /// let q: Query<u64> = Query::<List<User>>::all().count();
     /// ```
-    pub fn count_rows(mut self) -> Query<u64> {
+    pub fn count(mut self) -> Query<u64> {
         // Set the returning clause to COUNT(*)
         *self.untyped.returning_mut_unwrap() = Returning::Project(stmt::Expr::count_star());
         self.untyped.single = true;

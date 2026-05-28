@@ -41,7 +41,6 @@ pub mod field_auto;
 pub mod field_column_name;
 pub mod field_column_type;
 pub mod field_default_and_update;
-pub mod field_projection_method;
 pub mod field_version;
 pub mod field_version_newtype;
 pub mod filter_ilike;
