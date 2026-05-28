@@ -232,7 +232,7 @@ impl Expand<'_> {
             #toasty::IntoStatement::into_statement(
                 #query_struct_ident::default()
                     .#filter_method_ident( #( & self.#arg_idents ),* )
-                    .exactly_one()
+                    .one()
             )
         }
     }

@@ -14,7 +14,6 @@ impl Expand<'_> {
         let include_ty = util::ident("T");
         let filter_methods = self.expand_query_filter_methods();
         let relation_methods = self.expand_relation_methods();
-        let (projection_methods, projection_warnings) = self.expand_query_projection_methods();
         let include = self.expand_include_method(&include_ty);
 
         quote! {
@@ -38,20 +37,20 @@ impl Expand<'_> {
                     self.stmt.first()
                 }
 
-                #vis fn exactly_one(self) -> #toasty::stmt::Query<#model_ident> {
-                    self.stmt.exactly_one()
+                #vis fn one(self) -> #toasty::stmt::Query<#model_ident> {
+                    self.stmt.one()
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.exactly_one().exec(executor).await
+                    self.one().exec(executor).await
                 }
 
                 #vis fn update(self) -> #update_struct_ident {
                     #update_struct_ident::from(self)
                 }
 
-                #vis fn count_rows(self) -> #toasty::stmt::Query<u64> {
-                    self.stmt.count_rows()
+                #vis fn count(self) -> #toasty::stmt::Query<u64> {
+                    self.stmt.count()
                 }
 
                 #vis fn select<__E, __T>(
@@ -104,7 +103,6 @@ impl Expand<'_> {
 
                 #include
                 #relation_methods
-                #projection_methods
             }
 
             impl #toasty::IntoStatement for #query_struct_ident {
@@ -144,8 +142,6 @@ impl Expand<'_> {
                     #query_struct_ident { stmt: #toasty::stmt::Query::all() }
                 }
             }
-
-            #projection_warnings
         }
     }
 
@@ -160,59 +156,6 @@ impl Expand<'_> {
                 FieldTy::Primitive(..) => None,
             })
             .collect()
-    }
-
-    /// Emit a projection method for each non-relation field on the model's
-    /// query struct: `UserQuery::name(self) -> Query<List<String>>`, etc.
-    ///
-    /// The return type uses `<Ty as Field>::ExprTarget`, which delegates
-    /// through wrappers (`Deferred<T>` strips to `T::ExprTarget`).
-    ///
-    /// Returns `(in_impl, outside_impl)`: methods placed inside `impl Query`
-    /// and a sibling set of `#[deprecated]` markers for fields whose names
-    /// collide with a built-in wrapper method. One marker per field — the
-    /// trigger constant references the deprecated `fn`, which fires the
-    /// warning at compile time. Markers cover collisions on `{Model}Query`,
-    /// `Many`, `One`, and `OptionOne` collectively.
-    fn expand_query_projection_methods(&self) -> (TokenStream, TokenStream) {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
-
-        let mut methods = TokenStream::new();
-        let mut warnings = TokenStream::new();
-
-        for field in &self.model.fields {
-            let ty = match &field.ty {
-                FieldTy::Primitive(ty) => ty,
-                _ => continue,
-            };
-            let field_ident = &field.name.ident;
-
-            if super::projection_method_collides(field_ident) {
-                warnings.extend(super::projection_collision_warning(
-                    field_ident,
-                    model_ident,
-                ));
-                // Still skip the in-impl emission if it collides on this
-                // wrapper specifically; otherwise the method generates fine
-                // and the marker only documents collisions on the other
-                // wrappers (Many / One / OptionOne).
-                if super::QUERY_RESERVED_METHODS.contains(&field_ident.to_string().as_str()) {
-                    continue;
-                }
-            }
-
-            methods.extend(quote! {
-                #vis fn #field_ident(self) -> #toasty::stmt::Query<
-                    #toasty::List<<#ty as #toasty::Field>::ExprTarget>
-                > {
-                    self.stmt.select(#model_ident::fields().#field_ident())
-                }
-            });
-        }
-
-        (methods, warnings)
     }
 
     fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
