@@ -54,10 +54,13 @@ impl Model for Dummy {
     type Path<Origin> = Path<Origin, Self>;
     type PrimaryKey = i64;
     type Many = ();
+    type ViaMany = ();
     type ManyField<Origin> = ();
     type One = ();
+    type ViaOne = ();
     type OneField<Origin> = ();
     type OptionOne = ();
+    type ViaOptionOne = ();
 
     const CREATE_META: CreateMeta = CreateMeta {
         fields: &[],

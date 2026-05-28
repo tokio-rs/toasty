@@ -173,7 +173,7 @@ pub async fn eager_has_many_create_returning_loads_relations(t: &mut Test) -> Re
 
     let user = User::create()
         .name("Alice")
-        .post(Post::create().title("hello"))
+        .posts([Post::create().title("hello")])
         .exec(&mut db)
         .await?;
 

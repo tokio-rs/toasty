@@ -121,17 +121,24 @@ impl ToSql for &stmt::Expr {
                 }
             }
             stmt::Expr::StartsWith(expr) => {
-                // The lowering pass leaves `StartsWith` in place when
-                // `Capability::native_prefix_match_op` is true. PostgreSQL
-                // is the only such SQL flavor today (`^@` operator).
                 match f.serializer.flavor {
+                    // PostgreSQL's `^@` prefix-match operator; prefix is bound
+                    // as a plain string parameter.
                     Flavor::Postgresql => {
                         fmt!(f, expr.expr " ^@ " expr.prefix);
                     }
-                    Flavor::Sqlite | Flavor::Mysql => {
-                        unreachable!(
-                            "StartsWith should have been lowered to LIKE for non-PostgreSQL flavors"
-                        );
+                    // SQLite GLOB is case-sensitive.  extract_params has already
+                    // escaped GLOB metacharacters and appended `*` to the prefix
+                    // parameter, so we only need to emit the right operator.
+                    Flavor::Sqlite => {
+                        fmt!(f, expr.expr " GLOB " expr.prefix);
+                    }
+                    // MySQL LIKE is case-insensitive by default; casting the
+                    // column side to BINARY forces a case-sensitive byte
+                    // comparison.  extract_params has escaped `%`/`_`/`!` and
+                    // appended `%` to the prefix parameter.
+                    Flavor::Mysql => {
+                        fmt!(f, "BINARY " expr.expr " LIKE " expr.prefix " ESCAPE '!'");
                     }
                 }
             }

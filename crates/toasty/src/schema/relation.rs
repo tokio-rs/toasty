@@ -4,6 +4,19 @@ use toasty_core::schema::Name;
 use toasty_core::schema::app::{FieldId, FieldTy, ForeignKey};
 use toasty_core::stmt;
 
+/// Marker for a direct relation scope.
+///
+/// Direct relation scopes can create new records because Toasty can populate
+/// the target foreign key from the source record.
+pub enum Direct {}
+
+/// Marker for a multi-step relation scope.
+///
+/// Via relation scopes are queryable, but do not expose relation-scoped
+/// creation because creating the target would require materializing one or
+/// more intermediate records.
+pub enum Via {}
+
 /// A Rust field type that represents a `#[has_many]` relation.
 ///
 /// Implemented by [`Vec<M>`](Vec) (eager) and
@@ -57,6 +70,11 @@ pub trait RelationOneField: Load<Output = Self> {
     /// to [`Model::One`] for non-nullable impls and [`Model::OptionOne`] for
     /// nullable impls.
     type One;
+
+    /// The multi-step "one-side" accessor type produced by `via` relation
+    /// accessors. Resolves to [`Model::ViaOne`] for non-nullable impls and
+    /// [`Model::ViaOptionOne`] for nullable impls.
+    type ViaOne;
 
     /// The expression-level type used in create/update setters. Resolves to
     /// the unwrapped `Self::Model` for non-nullable impls and `Option<Self::Model>`

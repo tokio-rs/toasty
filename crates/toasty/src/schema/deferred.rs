@@ -127,7 +127,7 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
     }
 }
 
-impl<T: Field<Output = T>> Field for Deferred<T> {
+impl<T: Field> Field for Deferred<T> {
     type ExprTarget = T::ExprTarget;
     type Path<Origin> = T::Path<Origin>;
     type ListPath<Origin> = T::ListPath<Origin>;

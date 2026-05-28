@@ -1,9 +1,9 @@
 mod association;
 mod expr_or;
-mod expr_pattern;
 mod include;
 mod insert;
 mod lift_in_subquery;
+mod lift_update_query;
 mod paginate;
 mod relation;
 mod returning;
@@ -94,10 +94,14 @@ impl LoweringState<'_> {
         // converts `Source::Model` into `Source::Table`.  The IN-subquery
         // lift fires here too: code paths outside the lowering walk (e.g.
         // `ApplyInsertScope::apply_expr`) see the already-lifted form.
-        // The eq/ne operand rewrite (model→PK, BelongsTo→FK) fires inside
-        // the lowering walk itself via `LowerStatement::visit_expr_binary_op_mut`.
+        // `UpdateTarget::Query` is lifted into `UpdateTarget::Model` with
+        // the inner query's filter merged onto the outer update before the
+        // walk sees the target.  The eq/ne operand rewrite (model→PK,
+        // BelongsTo→FK) fires inside the lowering walk itself via
+        // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
         lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
+        lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
@@ -853,11 +857,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.state.hir[target_id].independent {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
-            }
-            stmt::Expr::StartsWith(_)
-                if self.capability().sql && !self.capability().native_starts_with =>
-            {
-                self.lower_expr_starts_with(expr);
             }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {

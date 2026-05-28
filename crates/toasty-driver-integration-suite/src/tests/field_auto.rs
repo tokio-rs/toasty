@@ -160,8 +160,8 @@ pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
 
     for i in 1..10 {
         let u = Parent::create()
-            .child(Child::create())
-            .child(Child::create())
+            .children([Child::create()])
+            .children([Child::create()])
             .exec(&mut db)
             .await?;
         assert_eq!(u.id, i);

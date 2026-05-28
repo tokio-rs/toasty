@@ -104,8 +104,8 @@ pub async fn boxed_u64_fk_batch_create(test: &mut Test) -> Result<()> {
     let user = User::create()
         .id(1)
         .name("Bob")
-        .todo(Todo::create().id(1).title("First task"))
-        .todo(Todo::create().id(2).title("Second task"))
+        .todos([Todo::create().id(1).title("First task")])
+        .todos([Todo::create().id(2).title("Second task")])
         .exec(&mut db)
         .await?;
 
@@ -235,8 +235,8 @@ pub async fn arc_u64_fk_crud(test: &mut Test) -> Result<()> {
     let user2 = User::create()
         .id(2)
         .name("Bob")
-        .todo(Todo::create().id(3).title("Batch 1"))
-        .todo(Todo::create().id(4).title("Batch 2"))
+        .todos([Todo::create().id(3).title("Batch 1")])
+        .todos([Todo::create().id(4).title("Batch 2")])
         .exec(&mut db)
         .await?;
 
@@ -311,8 +311,8 @@ pub async fn rc_u64_fk_crud(test: &mut Test) -> Result<()> {
     let user2 = User::create()
         .id(2)
         .name("Bob")
-        .todo(Todo::create().id(3).title("Batch 1"))
-        .todo(Todo::create().id(4).title("Batch 2"))
+        .todos([Todo::create().id(3).title("Batch 1")])
+        .todos([Todo::create().id(4).title("Batch 2")])
         .exec(&mut db)
         .await?;
 

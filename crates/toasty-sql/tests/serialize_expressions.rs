@@ -7,8 +7,6 @@
 //! to `SELECT <expr>`-equivalent SQL without needing a full table schema.
 //! The serializer is exercised in isolation — no lowering pipeline involved.
 
-use std::panic;
-
 use expect_test::expect;
 use toasty_core::{
     schema::db::Schema,
@@ -137,22 +135,15 @@ fn starts_with_uses_postgresql_prefix_operator() {
 }
 
 #[test]
-fn starts_with_panics_on_non_postgresql_flavors() {
-    // The lowering pass rewrites `StartsWith` to `LIKE` for MySQL/SQLite;
-    // hitting the serializer directly with `StartsWith` is `unreachable!`.
-    for render in [
-        render_mysql as fn(Expr) -> String,
-        render_sqlite as fn(Expr) -> String,
-    ] {
-        let result = panic::catch_unwind(|| {
-            let expr = Expr::starts_with(Expr::arg(0), Expr::arg(1));
-            render(expr)
-        });
-        assert!(
-            result.is_err(),
-            "expected StartsWith to panic on non-PG flavor"
-        );
-    }
+fn starts_with_uses_sqlite_glob_operator() {
+    let expr = Expr::starts_with(Expr::arg(0), Expr::arg(1));
+    expect!["VALUES (?1 GLOB ?2);"].assert_eq(&render_sqlite(expr));
+}
+
+#[test]
+fn starts_with_uses_mysql_binary_like_operator() {
+    let expr = Expr::starts_with(Expr::arg(0), Expr::arg(1));
+    expect!["VALUES ROW(BINARY ? LIKE ? ESCAPE '!');"].assert_eq(&render_mysql(expr));
 }
 
 // ---------- COUNT ----------

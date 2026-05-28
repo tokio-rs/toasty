@@ -434,7 +434,7 @@ pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
     let mut tx = db.transaction().await?;
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("task"))
+        .todos([Todo::create().title("task")])
         .exec(&mut tx)
         .await?;
     tx.commit().await?;

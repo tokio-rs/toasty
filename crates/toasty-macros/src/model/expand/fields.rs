@@ -129,6 +129,16 @@ impl Expand<'_> {
                     self.path.in_query(rhs)
                 }
 
+                /// Discard `self`'s origin parameter and return a fresh
+                /// fields struct typed against this model. Used by
+                /// `update!` to build `stmt::patch` paths for embedded
+                /// partial updates.
+                #[doc(hidden)]
+                pub fn into_root(self) -> #field_struct_ident<#model_ident> {
+                    let _ = self;
+                    #field_struct_ident::from_path(#toasty::Path::root())
+                }
+
                 #create_method
 
                 #( #methods )*

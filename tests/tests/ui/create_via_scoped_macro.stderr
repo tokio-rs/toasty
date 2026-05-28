@@ -1,0 +1,19 @@
+error[E0277]: this scope does not support scoped creation
+  --> tests/ui/create_via_scoped_macro.rs:47:13
+   |
+47 |     let _ = toasty::create!(in user.tags() { id: 1, name: "urgent" });
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this relation scope cannot create records
+   |
+help: the trait `toasty::schema::CreateScope` is not implemented for `_::Many<toasty::schema::Via>`
+  --> tests/ui/create_via_scoped_macro.rs:27:17
+   |
+27 | #[derive(Debug, toasty::Model)]
+   |                 ^^^^^^^^^^^^^
+   = note: Only direct relation scopes support scoped creation.
+   = note: Multi-step (`via`) relation scopes can be queried and filtered, but Toasty cannot create records through them because that would require creating or choosing intermediate records.
+note: required by a bound in `__force_check`
+  --> tests/ui/create_via_scoped_macro.rs:47:13
+   |
+47 |     let _ = toasty::create!(in user.tags() { id: 1, name: "urgent" });
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `__force_check`
+   = note: this error originates in the macro `toasty::create` (in Nightly builds, run with -Z macro-backtrace for more info)

@@ -16,7 +16,7 @@ use toasty_core::schema::app::ModelSet;
     note = "Otherwise `{Self}` must be a supported primitive (string, integer, bool, uuid, \
             …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`)."
 )]
-pub trait Field: Load {
+pub trait Field: Load<Output = Self> {
     /// The expression-level type of this field.
     ///
     /// This drives both the field's path target (the second parameter of
@@ -196,17 +196,16 @@ impl Field for Vec<u8> {
 /// `Vec<T>` of a non-byte element type is a collection model field. The
 /// bounds on `T` correspond to what the trait machinery does with elements:
 ///
-/// - `Field<Output = T>` — the schema layer describes each element via
-///   [`Load::ty()`](super::Load::ty); `Output = T` rules out wrappers like
-///   `Box<U>` (whose `Output` is `Box<U>`) at the element position because the
-///   load-side `Vec<T>: Load` impl is gated on `T: Load<Output = T>`.
+/// - [`Field`] — the schema layer describes each element via
+///   [`Load::ty()`](super::Load::ty). `Field` guarantees
+///   `Load<Output = T>`, matching the load-side `Vec<T>: Load` impl.
 /// - [`Scalar`] — opts the element type into the collection path. Keeps
 ///   `Vec<u8>` (bytes, not a collection) on the byte-array specialization
 ///   above and prevents nested collections like `Vec<Vec<U>>` until we
 ///   support them.
 impl<T> Field for Vec<T>
 where
-    T: Field<Output = T> + Scalar,
+    T: Field + Scalar,
 {
     // Use the `List<T>` marker as the expression target so the field's
     // path is `Path<_, List<T>>` (giving `contains`, `is_superset`, `len`,
@@ -325,7 +324,7 @@ impl<T: Field> Field for Option<T> {
     }
 }
 
-impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
+impl<T: Field> Field for std::sync::Arc<T> {
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -357,7 +356,7 @@ impl<T: Field<Output = T>> Field for std::sync::Arc<T> {
     }
 }
 
-impl<T: Field<Output = T>> Field for std::rc::Rc<T> {
+impl<T: Field> Field for std::rc::Rc<T> {
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -389,7 +388,7 @@ impl<T: Field<Output = T>> Field for std::rc::Rc<T> {
     }
 }
 
-impl<T: Field<Output = T>> Field for Box<T> {
+impl<T: Field> Field for Box<T> {
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;

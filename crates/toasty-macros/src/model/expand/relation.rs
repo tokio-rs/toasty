@@ -28,21 +28,27 @@ impl Expand<'_> {
         let chain_methods = self.expand_many_chain_methods();
 
         quote! {
-            #vis struct Many {
+            #vis struct Many<Kind = #toasty::Direct> {
                 stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>,
+                _kind: std::marker::PhantomData<Kind>,
             }
 
-            #vis struct One {
+            #vis struct One<Kind = #toasty::Direct> {
                 stmt: #toasty::stmt::Query<#model_ident>,
+                _kind: std::marker::PhantomData<Kind>,
             }
 
-            #vis struct OptionOne {
+            #vis struct OptionOne<Kind = #toasty::Direct> {
                 stmt: #toasty::stmt::Query<#toasty::Option<#model_ident>>,
+                _kind: std::marker::PhantomData<Kind>,
             }
 
-            impl Many {
-                pub fn from_stmt(stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>) -> Many {
-                    Many { stmt }
+            impl<Kind> Many<Kind> {
+                pub fn from_stmt(stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>) -> Many<Kind> {
+                    Many {
+                        stmt,
+                        _kind: std::marker::PhantomData,
+                    }
                 }
 
                 #filter_methods
@@ -64,12 +70,15 @@ impl Expand<'_> {
                     #query_ident::from_stmt(select.and(filter))
                 }
 
-                #vis fn create(self) -> #create_builder_ident {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
+                #vis fn create(self) -> <Self as #toasty::Scope>::Create
+                where
+                    Self: #toasty::CreateScope,
+                {
+                    <Self as #toasty::CreateScope>::create_in_scope(self)
                 }
+            }
 
+            impl Many<#toasty::Direct> {
                 /// Add an item to the association
                 #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
                     executor.exec(self.stmt.insert(item)).await
@@ -81,7 +90,7 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::IntoStatement for Many {
+            impl<Kind> #toasty::IntoStatement for Many<Kind> {
                 type Returning = #toasty::List<#model_ident>;
 
                 fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
@@ -90,24 +99,28 @@ impl Expand<'_> {
                 }
             }
 
-            impl One {
-                #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One {
-                    One { stmt: stmt.one() }
-                }
-
-                /// Create a new associated record
-                #vis fn create(self) -> #create_builder_ident {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
+            impl<Kind> One<Kind> {
+                #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One<Kind> {
+                    One {
+                        stmt: stmt.one(),
+                        _kind: std::marker::PhantomData,
+                    }
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     self.stmt.exec(executor).await
                 }
+
+                /// Create a new associated record.
+                #vis fn create(self) -> <Self as #toasty::Scope>::Create
+                where
+                    Self: #toasty::CreateScope,
+                {
+                    <Self as #toasty::CreateScope>::create_in_scope(self)
+                }
             }
 
-            impl #toasty::IntoStatement for One {
+            impl<Kind> #toasty::IntoStatement for One<Kind> {
                 type Returning = #model_ident;
 
                 fn into_statement(self) -> #toasty::Statement<#model_ident> {
@@ -116,25 +129,29 @@ impl Expand<'_> {
                 }
             }
 
-            impl OptionOne {
-                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne {
-                    OptionOne { stmt: stmt.first() }
-                }
-
-                /// Create a new associated record
-                #vis fn create(self) -> #create_builder_ident {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
+            impl<Kind> OptionOne<Kind> {
+                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne<Kind> {
+                    OptionOne {
+                        stmt: stmt.first(),
+                        _kind: std::marker::PhantomData,
+                    }
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     self.stmt.exec(executor).await
                 }
+
+                /// Create a new associated record.
+                #vis fn create(self) -> <Self as #toasty::Scope>::Create
+                where
+                    Self: #toasty::CreateScope,
+                {
+                    <Self as #toasty::CreateScope>::create_in_scope(self)
+                }
             }
 
             #[diagnostic::do_not_recommend]
-            impl #toasty::Scope for Many {
+            impl<Kind> #toasty::Scope for Many<Kind> {
                 type Item = #toasty::List<#model_ident>;
                 type Path<__Origin> = #field_list_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
@@ -153,7 +170,7 @@ impl Expand<'_> {
             }
 
             #[diagnostic::do_not_recommend]
-            impl #toasty::Scope for One {
+            impl<Kind> #toasty::Scope for One<Kind> {
                 type Item = #model_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
@@ -172,7 +189,7 @@ impl Expand<'_> {
             }
 
             #[diagnostic::do_not_recommend]
-            impl #toasty::Scope for OptionOne {
+            impl<Kind> #toasty::Scope for OptionOne<Kind> {
                 type Item = #model_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
@@ -191,31 +208,59 @@ impl Expand<'_> {
             }
 
             #[diagnostic::do_not_recommend]
-            impl #toasty::ValidateCreate for Many {
+            impl<Kind> #toasty::ValidateCreate for Many<Kind> {
                 const CREATE_META: &'static #toasty::CreateMeta =
                     &<#model_ident as #toasty::Model>::CREATE_META;
             }
 
             #[diagnostic::do_not_recommend]
-            impl #toasty::ValidateCreate for One {
+            impl #toasty::CreateScope for Many<#toasty::Direct> {
+                fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
+                    let mut builder = #create_builder_ident::default();
+                    builder.stmt.set_scope(self.stmt);
+                    builder
+                }
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl<Kind> #toasty::ValidateCreate for One<Kind> {
                 const CREATE_META: &'static #toasty::CreateMeta =
                     &<#model_ident as #toasty::Model>::CREATE_META;
             }
 
             #[diagnostic::do_not_recommend]
-            impl #toasty::ValidateCreate for OptionOne {
+            impl #toasty::CreateScope for One<#toasty::Direct> {
+                fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
+                    let mut builder = #create_builder_ident::default();
+                    builder.stmt.set_scope(self.stmt);
+                    builder
+                }
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl<Kind> #toasty::ValidateCreate for OptionOne<Kind> {
                 const CREATE_META: &'static #toasty::CreateMeta =
                     &<#model_ident as #toasty::Model>::CREATE_META;
+            }
+
+            #[diagnostic::do_not_recommend]
+            impl #toasty::CreateScope for OptionOne<#toasty::Direct> {
+                fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
+                    let mut builder = #create_builder_ident::default();
+                    builder.stmt.set_scope(self.stmt);
+                    builder
+                }
             }
         }
     }
 
     /// For each relation field on this model, emit a method on `Many` that
-    /// chains the field as the next path step and returns the target's `Many`.
+    /// chains the field as the next path step and returns the target's
+    /// `ViaMany`.
     /// This is the runtime analog of [`expand_list_relation_field_method`] on
     /// the field-list builder — a list-context traversal always yields a list,
     /// so all relation kinds (HasMany / HasOne / BelongsTo) flatten to the
-    /// target's `Many`.
+    /// target's `ViaMany`.
     pub(super) fn expand_many_chain_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -234,8 +279,8 @@ impl Expand<'_> {
                 let field_offset = util::int(field.id);
 
                 Some(quote! {
-                    #vis fn #field_ident(self) -> <<#ty as #field_trait>::Model as #toasty::Model>::Many {
-                        <<<#ty as #field_trait>::Model as #toasty::Model>::Many>::from_stmt(
+                    #vis fn #field_ident(self) -> <<#ty as #field_trait>::Model as #toasty::Model>::ViaMany {
+                        <<<#ty as #field_trait>::Model as #toasty::Model>::ViaMany>::from_stmt(
                             self.stmt.chain_field(#field_offset)
                         )
                     }
@@ -341,6 +386,11 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
         let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+        let relation_scope = if rel.via.is_some() {
+            quote!(ViaMany)
+        } else {
+            quote!(Many)
+        };
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -364,7 +414,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#target as #toasty::Model>::Many {
+            #vis fn #field_ident(&self) -> <#target as #toasty::Model>::#relation_scope {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -374,7 +424,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <<#target as #toasty::Model>::Many>::from_stmt(
+                    <<#target as #toasty::Model>::#relation_scope>::from_stmt(
                         #toasty::stmt::Association::many(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()
@@ -390,6 +440,11 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
+        let relation_scope = if rel.via.is_some() {
+            quote!(ViaOne)
+        } else {
+            quote!(One)
+        };
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -413,7 +468,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::One {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::#relation_scope {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -423,7 +478,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <<#ty as #toasty::RelationOneField>::One>::from_stmt(
+                    <<#ty as #toasty::RelationOneField>::#relation_scope>::from_stmt(
                         #toasty::stmt::Association::one(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()
