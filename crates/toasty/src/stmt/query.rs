@@ -16,7 +16,7 @@ use toasty_core::stmt::{self, Returning};
 /// | Type | `exec()` produces | Created by |
 /// |---|---|---|
 /// | `Query<List<M>>` | `Vec<M>` | [`Query::all`], [`Query::filter`] |
-/// | `Query<M>` | `M` (errors if missing) | [`.one()`](Query::one) |
+/// | `Query<M>` | `M` (errors if missing) | [`.exactly_one()`](Query::exactly_one) |
 /// | `Query<Option<M>>` | `Option<M>` | [`.first()`](Query::first) |
 ///
 /// # Building queries
@@ -300,7 +300,7 @@ impl<T> Query<T> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let q: Query<User> = Query::<List<User>>::all().one();
+    /// let q: Query<User> = Query::<List<User>>::all().exactly_one();
     /// let _list_q: Query<List<User>> = q.to_list();
     /// ```
     pub fn to_list(mut self) -> Query<List<T>> {
@@ -367,9 +367,9 @@ impl<T> Query<List<T>> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let q: Query<User> = Query::<List<User>>::all().one();
+    /// let q: Query<User> = Query::<List<User>>::all().exactly_one();
     /// ```
-    pub fn one(mut self) -> Query<T> {
+    pub fn exactly_one(mut self) -> Query<T> {
         set_first(&mut self.untyped);
 
         Query {

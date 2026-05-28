@@ -33,33 +33,33 @@ pub async fn model_level_single_key(test: &mut Test) -> Result<()> {
 #[driver_test]
 pub async fn model_level_composite_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    #[key(part_a, part_b)]
+    #[key(one, two)]
     struct Pair {
-        part_a: String,
+        one: String,
 
-        part_b: String,
+        two: String,
     }
 
     let mut db = test.setup_db(models!(Pair)).await;
 
     Pair::create()
-        .part_a("hello")
-        .part_b("world")
+        .one("hello")
+        .two("world")
         .exec(&mut db)
         .await?;
 
     Pair::create()
-        .part_a("left")
-        .part_b("right")
+        .one("left")
+        .two("right")
         .exec(&mut db)
         .await?;
 
-    let found = Pair::filter_by_part_a_and_part_b("hello", "world")
+    let found = Pair::filter_by_one_and_two("hello", "world")
         .get(&mut db)
         .await?;
 
-    assert_eq!(found.part_a, "hello");
-    assert_eq!(found.part_b, "world");
+    assert_eq!(found.one, "hello");
+    assert_eq!(found.two, "world");
 
     Ok(())
 }

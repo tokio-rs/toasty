@@ -117,7 +117,7 @@ impl Expand<'_> {
             impl<Kind> One<Kind> {
                 #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One<Kind> {
                     One {
-                        stmt: stmt.one(),
+                        stmt: stmt.exactly_one(),
                         _kind: std::marker::PhantomData,
                     }
                 }

@@ -23,7 +23,7 @@ pub(super) const QUERY_RESERVED_METHODS: &[&str] = &[
     "from_stmt",
     "exec",
     "first",
-    "one",
+    "exactly_one",
     "get",
     "update",
     "count_rows",

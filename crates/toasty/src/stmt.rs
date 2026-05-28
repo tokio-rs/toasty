@@ -77,7 +77,7 @@ use std::{fmt, marker::PhantomData};
 /// | Statement kind | `T` | `exec()` produces |
 /// |---|---|---|
 /// | Multi-row query | [`List<M>`] | `Vec<M>` |
-/// | Single-row query (`.one()`) | `M` | `M` |
+/// | Single-row query (`.exactly_one()`) | `M` | `M` |
 /// | Optional query (`.first()`) | `Option<M>` | `Option<M>` |
 /// | Insert (create) | `M` | `M` |
 /// | Delete | `()` | `()` |

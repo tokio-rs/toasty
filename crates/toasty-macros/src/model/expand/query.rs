@@ -38,12 +38,12 @@ impl Expand<'_> {
                     self.stmt.first()
                 }
 
-                #vis fn one(self) -> #toasty::stmt::Query<#model_ident> {
-                    self.stmt.one()
+                #vis fn exactly_one(self) -> #toasty::stmt::Query<#model_ident> {
+                    self.stmt.exactly_one()
                 }
 
                 #vis async fn get(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.one().exec(executor).await
+                    self.exactly_one().exec(executor).await
                 }
 
                 #vis fn update(self) -> #update_struct_ident {
