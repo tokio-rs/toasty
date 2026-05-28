@@ -30,7 +30,7 @@
 //! a `LiftInSubquery`.
 
 use toasty_core::{
-    schema::app::{BelongsTo, FieldId, FieldTy, ModelId},
+    schema::app::{self, BelongsTo, FieldId, FieldTy, ModelId},
     stmt::{self, Expr, ExprContext, IntoExprTarget, ResolvedRef, Visit, VisitMut},
 };
 
@@ -193,16 +193,45 @@ pub(super) fn lift_in_subquery(
     }
 }
 
-/// Lift `project(ref_self_field(rel), [head, ...tail]) IN (query)` by
-/// re-rooting the path at `rel`'s target model and wrapping the original
-/// subquery in a nested IN-subquery on that model.
+/// Lifts an `IN`-subquery whose left side is a path through a relation field.
 ///
-/// Example: `Release.project.topics IN (SELECT FROM Topic WHERE ...)` becomes
-/// `Release.project IN (SELECT FROM Project WHERE Project.topics IN
-/// (SELECT FROM Topic WHERE ...))`, after which the outer `BelongsTo` hop
-/// is lifted by [`lift_in_subquery`]'s standard branch. The inner subquery's
-/// IN is left for the [`LiftInSubquery`] visitor's children walk to lift on
-/// the next pass.
+/// `.any()` on a relation chain — for example, `Release.project.topics.any(name
+/// == "rust")` — builds an `InSubquery` whose LHS projects through the
+/// chain:
+///
+/// ```text
+/// InSubquery {
+///     expr:  Project(Ref(Release.project), [Project.topics_idx]),
+///     query: SELECT FROM Topic WHERE name == "rust",
+/// }
+/// ```
+///
+/// Two paths handle this:
+///
+/// **Fused.** [`try_fuse_paired_relations`] recognizes the common
+/// `BelongsTo → Has` chain over a shared primary key and emits a single
+/// FK-on-FK `IN` that bypasses the intermediate model:
+///
+/// ```text
+/// Release.project_id IN (SELECT Topic.project_id FROM Topic WHERE name == "rust")
+/// ```
+///
+/// **General.** For chains the fast path doesn't match (multi-hop
+/// projections, non-paired relations), re-root the projection at the
+/// relation's target model and wrap the original subquery in a nested `IN`
+/// against that model, then recurse on the outer hop. For the same input,
+/// the fallback produces:
+///
+/// ```text
+/// Release.project IN (
+///     SELECT FROM Project
+///     WHERE Project.topics IN (SELECT FROM Topic WHERE name == "rust")
+/// )
+/// ```
+///
+/// The recursive call lifts the outer `Release.project` hop via the standard
+/// `BelongsTo` branch; the inner `Project.topics` hop is lifted on the next
+/// visitor pass when [`LiftInSubquery`]'s children walk reaches it.
 fn lift_projection_in_subquery(
     cx: &ExprContext,
     project_expr: &stmt::ExprProject,
@@ -223,6 +252,14 @@ fn lift_projection_in_subquery(
     };
 
     let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
+
+    if tail.is_empty()
+        && let Some(direct) =
+            try_fuse_paired_relations(cx, field, target_model_id, *head_idx, query)
+    {
+        return Some(direct);
+    }
+
     let target_field = Expr::ref_self_field(FieldId {
         model: target_model_id,
         index: *head_idx,
@@ -239,6 +276,111 @@ fn lift_projection_in_subquery(
     );
 
     lift_in_subquery(cx, &project_expr.base, &new_subquery)
+}
+
+/// Fuses a `BelongsTo → Has` chain into a single FK-on-FK `IN` when both
+/// relations meet at the same primary key.
+///
+/// # Example
+///
+/// Given the schema:
+///
+/// ```text
+/// Todo     { category_id: Category.id, ... }   // BelongsTo  Todo.category
+/// Category { todos: HasMany Todo, ... }        // Has, paired with Todo.category
+/// ```
+///
+/// The path `Todo.category.todos` lifts as follows:
+///
+/// ```text
+/// // Input
+/// InSubquery {
+///     expr:  Project(Ref(Todo.category), [Category.todos_idx]),
+///     query: SELECT FROM Todo WHERE title == "salad",
+/// }
+///
+/// // Output
+/// InSubquery {
+///     expr:  Ref(Todo.category_id),
+///     query: SELECT Todo.category_id FROM Todo WHERE title == "salad",
+/// }
+/// ```
+///
+/// The outer relation's FK source columns become the LHS; the inner
+/// relation's paired-BelongsTo FK source columns become the subquery's
+/// returning list. The user's original filter is preserved verbatim.
+///
+/// # Why the fusion is sound
+///
+/// Composing the two hops without fusion routes through the intermediate
+/// model:
+///
+/// ```text
+/// Todo.category_id IN (
+///     SELECT Category.id FROM Category
+///     WHERE Category.id IN (SELECT Todo.category_id FROM Todo WHERE title == "salad")
+/// )
+/// ```
+///
+/// Both FKs target `Category.id`, so every value the innermost subquery
+/// returns exists in `Category.id` under FK integrity (which the engine
+/// already assumes). The middle filter therefore admits every row the inner
+/// returns, and the middle `SELECT Category.id` simply re-emits them. The
+/// `Category` scan is a no-op and can be dropped.
+///
+/// Returns `None` when the chain doesn't match the pattern — outer isn't a
+/// `BelongsTo`, inner isn't a `Has`, or the FK columns don't line up.
+fn try_fuse_paired_relations(
+    cx: &ExprContext,
+    outer_field: &app::Field,
+    target_model_id: ModelId,
+    head_idx: usize,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    let outer_belongs_to = match &outer_field.ty {
+        FieldTy::BelongsTo(rel) => rel,
+        _ => return None,
+    };
+
+    let target_model = cx.schema().app.model(target_model_id).as_root_unwrap();
+    let head_field = target_model.fields.get(head_idx)?;
+    let inner_has = match &head_field.ty {
+        FieldTy::Has(has) => has,
+        _ => return None,
+    };
+    let inner_pair = inner_has.pair(&cx.schema().app);
+
+    // Both FKs must reference the same PK columns in the same order.
+    if outer_belongs_to.foreign_key.fields.len() != inner_pair.foreign_key.fields.len() {
+        return None;
+    }
+    for (outer_fk, inner_fk) in outer_belongs_to
+        .foreign_key
+        .fields
+        .iter()
+        .zip(inner_pair.foreign_key.fields.iter())
+    {
+        if outer_fk.target != inner_fk.target {
+            return None;
+        }
+    }
+
+    let mut fused_subquery = query.clone();
+    fused_subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(
+        super::key_field_refs(0, inner_pair.foreign_key.fields.iter().map(|fk| fk.source)),
+    );
+
+    Some(stmt::Expr::in_subquery(
+        super::key_field_refs(
+            0,
+            outer_belongs_to
+                .foreign_key
+                .fields
+                .iter()
+                .map(|fk| fk.source),
+        ),
+        fused_subquery,
+    ))
 }
 
 /// Lift `project(ref_self_field(rel), [idx, ...]) op other` into a
