@@ -26,7 +26,7 @@ pub(super) const QUERY_RESERVED_METHODS: &[&str] = &[
     "one",
     "get",
     "update",
-    "count",
+    "count_rows",
     "select",
     "delete",
     "paginate",

@@ -50,8 +50,8 @@ impl Expand<'_> {
                     #update_struct_ident::from(self)
                 }
 
-                #vis fn count(self) -> #toasty::stmt::Query<u64> {
-                    self.stmt.count()
+                #vis fn count_rows(self) -> #toasty::stmt::Query<u64> {
+                    self.stmt.count_rows()
                 }
 
                 #vis fn select<__E, __T>(

@@ -489,6 +489,9 @@ impl<M: Model> Query<List<M>> {
     ///
     /// The returned `Query<u64>` wraps a `SELECT COUNT(*)` query.
     ///
+    /// Named `count_rows` rather than `count` so that models with a field
+    /// named `count` can still have a generated projection method.
+    ///
     /// # Examples
     ///
     /// ```
@@ -500,9 +503,9 @@ impl<M: Model> Query<List<M>> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let q: Query<u64> = Query::<List<User>>::all().count();
+    /// let q: Query<u64> = Query::<List<User>>::all().count_rows();
     /// ```
-    pub fn count(mut self) -> Query<u64> {
+    pub fn count_rows(mut self) -> Query<u64> {
         // Set the returning clause to COUNT(*)
         *self.untyped.returning_mut_unwrap() = Returning::Project(stmt::Expr::count_star());
         self.untyped.single = true;
