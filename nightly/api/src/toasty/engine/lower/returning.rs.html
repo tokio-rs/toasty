@@ -424,16 +424,18 @@
 <a href=#424 id=424 data-nosnippet>424</a>                        </span>stmt::Assignment::Append(<span class="kw">_</span>)
 <a href=#425 id=425 data-nosnippet>425</a>                        | stmt::Assignment::Pop
 <a href=#426 id=426 data-nosnippet>426</a>                        | stmt::Assignment::RemoveAt(<span class="kw">_</span>)
-<a href=#427 id=427 data-nosnippet>427</a>                        | stmt::Assignment::Remove(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
-<a href=#428 id=428 data-nosnippet>428</a>                        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(
-<a href=#429 id=429 data-nosnippet>429</a>                            <span class="string">"only SET / APPEND / collection mutations supported; got {assignment:#?}"
-<a href=#430 id=430 data-nosnippet>430</a>                        </span>),
-<a href=#431 id=431 data-nosnippet>431</a>                    }
-<a href=#432 id=432 data-nosnippet>432</a>                } <span class="kw">else </span>{
-<a href=#433 id=433 data-nosnippet>433</a>                    <span class="prelude-val">None
-<a href=#434 id=434 data-nosnippet>434</a>                </span>}
-<a href=#435 id=435 data-nosnippet>435</a>            }
-<a href=#436 id=436 data-nosnippet>436</a>        }
-<a href=#437 id=437 data-nosnippet>437</a>    }
-<a href=#438 id=438 data-nosnippet>438</a>}
+<a href=#427 id=427 data-nosnippet>427</a>                        | stmt::Assignment::Remove(<span class="kw">_</span>)
+<a href=#428 id=428 data-nosnippet>428</a>                        | stmt::Assignment::Add(<span class="kw">_</span>)
+<a href=#429 id=429 data-nosnippet>429</a>                        | stmt::Assignment::Subtract(<span class="kw">_</span>) =&gt; <span class="prelude-val">None</span>,
+<a href=#430 id=430 data-nosnippet>430</a>                        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(
+<a href=#431 id=431 data-nosnippet>431</a>                            <span class="string">"only SET / APPEND / collection / arithmetic mutations supported; got {assignment:#?}"
+<a href=#432 id=432 data-nosnippet>432</a>                        </span>),
+<a href=#433 id=433 data-nosnippet>433</a>                    }
+<a href=#434 id=434 data-nosnippet>434</a>                } <span class="kw">else </span>{
+<a href=#435 id=435 data-nosnippet>435</a>                    <span class="prelude-val">None
+<a href=#436 id=436 data-nosnippet>436</a>                </span>}
+<a href=#437 id=437 data-nosnippet>437</a>            }
+<a href=#438 id=438 data-nosnippet>438</a>        }
+<a href=#439 id=439 data-nosnippet>439</a>    }
+<a href=#440 id=440 data-nosnippet>440</a>}
 </code></pre></div></section></main></body></html>

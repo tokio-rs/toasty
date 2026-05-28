@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-53bca074.js";
+            window.path_to_searchindex_js = "searchindex-4dceee7b.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -1774,6 +1774,63 @@ The same syntax reaches every function in <code>toasty::stmt</code>:
 <code>tags.extend([...])</code>, <code>tags.pop()</code>, <code>tags.clear()</code>,
 <code>tags.remove("x")</code>. See <a href="#updating"><code>Vec&lt;scalar&gt;</code> Fields</a>
 for the full list and per-driver support.</p>
+<h2 id="relative-numeric-updates"><a class="header" href="#relative-numeric-updates">Relative numeric updates</a></h2>
+<p>Arithmetic builders in <code>toasty::stmt</code> update a numeric field relative
+to its stored value — incrementing a counter, crediting a balance.
+The macro reaches them as method calls on the field, the same shape
+as the collection mutations above:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>What it does</th></tr>
+</thead>
+<tbody>
+<tr><td><code>field.increment()</code></td><td>Add <code>1</code> to the field.</td></tr>
+<tr><td><code>field.decrement()</code></td><td>Subtract <code>1</code> from the field.</td></tr>
+<tr><td><code>field.add(value)</code></td><td>Add <code>value</code> to the field.</td></tr>
+<tr><td><code>field.subtract(value)</code></td><td>Subtract <code>value</code> from the field.</td></tr>
+</tbody>
+</table>
+</div>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct Account {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    balance: i64,
+</span><span class="boring">    login_count: i64,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span><span class="boring">let mut account = toasty::create!(Account { balance: 1000, login_count: 0 })
+</span><span class="boring">    .exec(&amp;mut db).await?;
+</span>// Credit an account by 100.
+toasty::update!(account { balance.add(100) })
+    .exec(&amp;mut db)
+    .await?;
+
+// Debit by 25.
+toasty::update!(account { balance.subtract(25) })
+    .exec(&amp;mut db)
+    .await?;
+
+// Bump a login counter.
+toasty::update!(account { login_count.increment() })
+    .exec(&amp;mut db)
+    .await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>Each operation is atomic against the existing column value — the
+database applies it to whatever the row currently holds, not to a
+client-side snapshot. Reading, modifying, and writing back from Rust
+is a three-step round trip a concurrent writer can interleave,
+dropping one of two updates on the same row; the arithmetic builders
+fold the read and write into one statement.</p>
+<p>These builders work on every backend and on every primitive numeric
+type Toasty supports.</p>
 <h2 id="updating-embedded-fields"><a class="header" href="#updating-embedded-fields">Updating embedded fields</a></h2>
 <p>A brace block on the right side of <code>field:</code> updates the named
 sub-fields of an <a href="#embedded-types">embedded struct</a>:</p>

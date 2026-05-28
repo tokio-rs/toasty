@@ -932,62 +932,69 @@
 <a href=#932 id=932 data-nosnippet>932</a>                <span class="string">"Pop / RemoveAt assignment on relation field — these only apply to Vec&lt;scalar&gt;"
 <a href=#933 id=933 data-nosnippet>933</a>            </span>)
 <a href=#934 id=934 data-nosnippet>934</a>        }
-<a href=#935 id=935 data-nosnippet>935</a>        stmt::Assignment::Batch(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(<span class="string">"Batch entries are flattened above"</span>),
-<a href=#936 id=936 data-nosnippet>936</a>    }
-<a href=#937 id=937 data-nosnippet>937</a>}
-<a href=#938 id=938 data-nosnippet>938</a>
-<a href=#939 id=939 data-nosnippet>939</a><span class="doccomment">/// Flatten a has-many `Batch` in place into single-op assignments that
-<a href=#940 id=940 data-nosnippet>940</a>/// `plan_stmt_update_relations` can dispatch one at a time.
-<a href=#941 id=941 data-nosnippet>941</a>///
-<a href=#942 id=942 data-nosnippet>942</a>/// `Insert` entries are folded into one multi-row INSERT via `Insert::merge`
-<a href=#943 id=943 data-nosnippet>943</a>/// — only one Insert can own the relation's returning slot per update, so
-<a href=#944 id=944 data-nosnippet>944</a>/// multiple inserts have to share a single sub-statement. The fold is done
-<a href=#945 id=945 data-nosnippet>945</a>/// in place via `retain_mut` (no extra allocation): non-`Insert` entries
-<a href=#946 id=946 data-nosnippet>946</a>/// (`Remove`, `Set`, …) keep their relative order, and the merged Insert is
-<a href=#947 id=947 data-nosnippet>947</a>/// appended last. Insert/Remove ops are independent, so the final
-<a href=#948 id=948 data-nosnippet>948</a>/// association set does not depend on their relative order.
-<a href=#949 id=949 data-nosnippet>949</a></span><span class="kw">fn </span>flatten_relation_batch(entries: <span class="kw-2">&amp;mut </span>Vec&lt;stmt::Assignment&gt;) {
-<a href=#950 id=950 data-nosnippet>950</a>    <span class="kw">let </span><span class="kw-2">mut </span>merged: <span class="prelude-ty">Option</span>&lt;stmt::Insert&gt; = <span class="prelude-val">None</span>;
-<a href=#951 id=951 data-nosnippet>951</a>
-<a href=#952 id=952 data-nosnippet>952</a>    entries.retain_mut(|entry| {
-<a href=#953 id=953 data-nosnippet>953</a>        <span class="comment">// Keep everything that isn't an Insert sub-statement in place.
-<a href=#954 id=954 data-nosnippet>954</a>        </span><span class="kw">if </span>!<span class="macro">matches!</span>(entry, stmt::Assignment::Insert(stmt::Expr::Stmt(<span class="kw">_</span>))) {
-<a href=#955 id=955 data-nosnippet>955</a>            <span class="kw">return </span><span class="bool-val">true</span>;
-<a href=#956 id=956 data-nosnippet>956</a>        }
-<a href=#957 id=957 data-nosnippet>957</a>
-<a href=#958 id=958 data-nosnippet>958</a>        <span class="comment">// Move the Insert out, leaving a throwaway placeholder that
-<a href=#959 id=959 data-nosnippet>959</a>        // `retain_mut` immediately drops since we return `false`.
-<a href=#960 id=960 data-nosnippet>960</a>        </span><span class="kw">let </span>stmt::Assignment::Insert(stmt::Expr::Stmt(expr_stmt)) =
-<a href=#961 id=961 data-nosnippet>961</a>            std::mem::replace(entry, stmt::Assignment::Pop)
-<a href=#962 id=962 data-nosnippet>962</a>        <span class="kw">else </span>{
-<a href=#963 id=963 data-nosnippet>963</a>            <span class="macro">unreachable!</span>()
-<a href=#964 id=964 data-nosnippet>964</a>        };
-<a href=#965 id=965 data-nosnippet>965</a>        <span class="kw">let </span>insert = <span class="kw">match </span><span class="kw-2">*</span>expr_stmt.stmt {
-<a href=#966 id=966 data-nosnippet>966</a>            stmt::Statement::Insert(insert) =&gt; insert,
-<a href=#967 id=967 data-nosnippet>967</a>            other =&gt; <span class="macro">todo!</span>(<span class="string">"non-Insert sub-statement in has-many Batch: {other:#?}"</span>),
-<a href=#968 id=968 data-nosnippet>968</a>        };
-<a href=#969 id=969 data-nosnippet>969</a>        <span class="kw">match </span><span class="kw-2">&amp;mut </span>merged {
-<a href=#970 id=970 data-nosnippet>970</a>            <span class="prelude-val">None </span>=&gt; merged = <span class="prelude-val">Some</span>(insert),
-<a href=#971 id=971 data-nosnippet>971</a>            <span class="prelude-val">Some</span>(acc) =&gt; acc.merge(insert),
-<a href=#972 id=972 data-nosnippet>972</a>        }
-<a href=#973 id=973 data-nosnippet>973</a>        <span class="bool-val">false
-<a href=#974 id=974 data-nosnippet>974</a>    </span>});
-<a href=#975 id=975 data-nosnippet>975</a>
-<a href=#976 id=976 data-nosnippet>976</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(insert) = merged {
-<a href=#977 id=977 data-nosnippet>977</a>        entries.push(stmt::Assignment::Insert(stmt::Expr::from(insert)));
-<a href=#978 id=978 data-nosnippet>978</a>    }
-<a href=#979 id=979 data-nosnippet>979</a>}
-<a href=#980 id=980 data-nosnippet>980</a>
-<a href=#981 id=981 data-nosnippet>981</a><span class="kw">fn </span>set_returning_slot(
-<a href=#982 id=982 data-nosnippet>982</a>    record: <span class="kw-2">&amp;mut </span>stmt::ExprRecord,
-<a href=#983 id=983 data-nosnippet>983</a>    index: usize,
-<a href=#984 id=984 data-nosnippet>984</a>    expr: stmt::Expr,
-<a href=#985 id=985 data-nosnippet>985</a>    deferred: bool,
-<a href=#986 id=986 data-nosnippet>986</a>) {
-<a href=#987 id=987 data-nosnippet>987</a>    record.fields[index] = <span class="kw">if </span>deferred {
-<a href=#988 id=988 data-nosnippet>988</a>        lazy_slot::loaded_expr(expr)
-<a href=#989 id=989 data-nosnippet>989</a>    } <span class="kw">else </span>{
-<a href=#990 id=990 data-nosnippet>990</a>        expr
-<a href=#991 id=991 data-nosnippet>991</a>    };
-<a href=#992 id=992 data-nosnippet>992</a>}
+<a href=#935 id=935 data-nosnippet>935</a>        <span class="comment">// Arithmetic ops only apply to scalar numeric model fields, never to
+<a href=#936 id=936 data-nosnippet>936</a>        // relations.
+<a href=#937 id=937 data-nosnippet>937</a>        </span>stmt::Assignment::Add(<span class="kw">_</span>) | stmt::Assignment::Subtract(<span class="kw">_</span>) =&gt; {
+<a href=#938 id=938 data-nosnippet>938</a>            <span class="macro">unreachable!</span>(
+<a href=#939 id=939 data-nosnippet>939</a>                <span class="string">"Add / Subtract assignment on relation field — these only apply to scalar numerics"
+<a href=#940 id=940 data-nosnippet>940</a>            </span>)
+<a href=#941 id=941 data-nosnippet>941</a>        }
+<a href=#942 id=942 data-nosnippet>942</a>        stmt::Assignment::Batch(<span class="kw">_</span>) =&gt; <span class="macro">unreachable!</span>(<span class="string">"Batch entries are flattened above"</span>),
+<a href=#943 id=943 data-nosnippet>943</a>    }
+<a href=#944 id=944 data-nosnippet>944</a>}
+<a href=#945 id=945 data-nosnippet>945</a>
+<a href=#946 id=946 data-nosnippet>946</a><span class="doccomment">/// Flatten a has-many `Batch` in place into single-op assignments that
+<a href=#947 id=947 data-nosnippet>947</a>/// `plan_stmt_update_relations` can dispatch one at a time.
+<a href=#948 id=948 data-nosnippet>948</a>///
+<a href=#949 id=949 data-nosnippet>949</a>/// `Insert` entries are folded into one multi-row INSERT via `Insert::merge`
+<a href=#950 id=950 data-nosnippet>950</a>/// — only one Insert can own the relation's returning slot per update, so
+<a href=#951 id=951 data-nosnippet>951</a>/// multiple inserts have to share a single sub-statement. The fold is done
+<a href=#952 id=952 data-nosnippet>952</a>/// in place via `retain_mut` (no extra allocation): non-`Insert` entries
+<a href=#953 id=953 data-nosnippet>953</a>/// (`Remove`, `Set`, …) keep their relative order, and the merged Insert is
+<a href=#954 id=954 data-nosnippet>954</a>/// appended last. Insert/Remove ops are independent, so the final
+<a href=#955 id=955 data-nosnippet>955</a>/// association set does not depend on their relative order.
+<a href=#956 id=956 data-nosnippet>956</a></span><span class="kw">fn </span>flatten_relation_batch(entries: <span class="kw-2">&amp;mut </span>Vec&lt;stmt::Assignment&gt;) {
+<a href=#957 id=957 data-nosnippet>957</a>    <span class="kw">let </span><span class="kw-2">mut </span>merged: <span class="prelude-ty">Option</span>&lt;stmt::Insert&gt; = <span class="prelude-val">None</span>;
+<a href=#958 id=958 data-nosnippet>958</a>
+<a href=#959 id=959 data-nosnippet>959</a>    entries.retain_mut(|entry| {
+<a href=#960 id=960 data-nosnippet>960</a>        <span class="comment">// Keep everything that isn't an Insert sub-statement in place.
+<a href=#961 id=961 data-nosnippet>961</a>        </span><span class="kw">if </span>!<span class="macro">matches!</span>(entry, stmt::Assignment::Insert(stmt::Expr::Stmt(<span class="kw">_</span>))) {
+<a href=#962 id=962 data-nosnippet>962</a>            <span class="kw">return </span><span class="bool-val">true</span>;
+<a href=#963 id=963 data-nosnippet>963</a>        }
+<a href=#964 id=964 data-nosnippet>964</a>
+<a href=#965 id=965 data-nosnippet>965</a>        <span class="comment">// Move the Insert out, leaving a throwaway placeholder that
+<a href=#966 id=966 data-nosnippet>966</a>        // `retain_mut` immediately drops since we return `false`.
+<a href=#967 id=967 data-nosnippet>967</a>        </span><span class="kw">let </span>stmt::Assignment::Insert(stmt::Expr::Stmt(expr_stmt)) =
+<a href=#968 id=968 data-nosnippet>968</a>            std::mem::replace(entry, stmt::Assignment::Pop)
+<a href=#969 id=969 data-nosnippet>969</a>        <span class="kw">else </span>{
+<a href=#970 id=970 data-nosnippet>970</a>            <span class="macro">unreachable!</span>()
+<a href=#971 id=971 data-nosnippet>971</a>        };
+<a href=#972 id=972 data-nosnippet>972</a>        <span class="kw">let </span>insert = <span class="kw">match </span><span class="kw-2">*</span>expr_stmt.stmt {
+<a href=#973 id=973 data-nosnippet>973</a>            stmt::Statement::Insert(insert) =&gt; insert,
+<a href=#974 id=974 data-nosnippet>974</a>            other =&gt; <span class="macro">todo!</span>(<span class="string">"non-Insert sub-statement in has-many Batch: {other:#?}"</span>),
+<a href=#975 id=975 data-nosnippet>975</a>        };
+<a href=#976 id=976 data-nosnippet>976</a>        <span class="kw">match </span><span class="kw-2">&amp;mut </span>merged {
+<a href=#977 id=977 data-nosnippet>977</a>            <span class="prelude-val">None </span>=&gt; merged = <span class="prelude-val">Some</span>(insert),
+<a href=#978 id=978 data-nosnippet>978</a>            <span class="prelude-val">Some</span>(acc) =&gt; acc.merge(insert),
+<a href=#979 id=979 data-nosnippet>979</a>        }
+<a href=#980 id=980 data-nosnippet>980</a>        <span class="bool-val">false
+<a href=#981 id=981 data-nosnippet>981</a>    </span>});
+<a href=#982 id=982 data-nosnippet>982</a>
+<a href=#983 id=983 data-nosnippet>983</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(insert) = merged {
+<a href=#984 id=984 data-nosnippet>984</a>        entries.push(stmt::Assignment::Insert(stmt::Expr::from(insert)));
+<a href=#985 id=985 data-nosnippet>985</a>    }
+<a href=#986 id=986 data-nosnippet>986</a>}
+<a href=#987 id=987 data-nosnippet>987</a>
+<a href=#988 id=988 data-nosnippet>988</a><span class="kw">fn </span>set_returning_slot(
+<a href=#989 id=989 data-nosnippet>989</a>    record: <span class="kw-2">&amp;mut </span>stmt::ExprRecord,
+<a href=#990 id=990 data-nosnippet>990</a>    index: usize,
+<a href=#991 id=991 data-nosnippet>991</a>    expr: stmt::Expr,
+<a href=#992 id=992 data-nosnippet>992</a>    deferred: bool,
+<a href=#993 id=993 data-nosnippet>993</a>) {
+<a href=#994 id=994 data-nosnippet>994</a>    record.fields[index] = <span class="kw">if </span>deferred {
+<a href=#995 id=995 data-nosnippet>995</a>        lazy_slot::loaded_expr(expr)
+<a href=#996 id=996 data-nosnippet>996</a>    } <span class="kw">else </span>{
+<a href=#997 id=997 data-nosnippet>997</a>        expr
+<a href=#998 id=998 data-nosnippet>998</a>    };
+<a href=#999 id=999 data-nosnippet>999</a>}
 </code></pre></div></section></main></body></html>
