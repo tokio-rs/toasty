@@ -10,7 +10,7 @@ scenario! {
         id: ID,
 
         label: String,
-        quantity: i64,
+        count: i64,
         active: bool,
         description: String,
     }
