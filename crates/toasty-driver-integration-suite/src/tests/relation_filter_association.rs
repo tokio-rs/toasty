@@ -87,6 +87,49 @@ pub async fn filter_by_belongs_to_field(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Filters through a relation field with `.like()`, e.g. finding profiles
+/// whose user's name starts with "al". `LIKE` lowers to `Expr::Like`, not
+/// `Expr::BinaryOp`, so the rewrite that turns a relation-path comparison into
+/// a foreign-key subquery has to handle it explicitly; without that the query
+/// panics.
+///
+/// Covers both relation directions: `BelongsTo` (child filtered by parent)
+/// and `Has` (parent filtered by child).
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_one_optional_belongs_to)
+)]
+pub async fn filter_by_relation_field_like(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[
+        { name: "alice", profile: { bio: "alice's bio" } },
+        { name: "bob",   profile: { bio: "bob's bio" } },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // BelongsTo: filter children by a LIKE on the parent's field.
+    let profiles: Vec<Profile> = Profile::filter(Profile::fields().user().name().like("al%"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(
+        profiles.iter().map(|p| p.bio.as_str()).collect::<Vec<_>>(),
+        ["alice's bio"]
+    );
+
+    // Has: filter parents by a LIKE on the child's field.
+    let users: Vec<User> = User::filter(User::fields().profile().bio().like("%'s bio"))
+        .exec(&mut db)
+        .await?;
+    let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+    names.sort_unstable();
+    assert_eq!(names, ["alice", "bob"]);
+
+    Ok(())
+}
+
 /// Filter through three chained HasOne associations: `A.b.c.name == ...`.
 #[driver_test(id(ID), requires(sql))]
 pub async fn filter_by_nested_has_one_chain(t: &mut Test) -> Result<()> {
