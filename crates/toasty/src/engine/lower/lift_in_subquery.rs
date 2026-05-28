@@ -13,9 +13,17 @@
 //!   foreign-key IN subquery against the related table.
 //!
 //! - [`try_lift_relation_path_comparison`] fires on `Expr::BinaryOp` where
-//!   one side is `project(ref_self_field(relation_field), [idx, ...])`.
-//!   It synthesises a subquery on the target model with the comparison
-//!   re-rooted there, then defers to [`lift_in_subquery`].
+//!   one side walks a relation field. For example, filtering profiles by
+//!   their user's name (`profile.user.name = 'alice'`) rewrites to:
+//!
+//!   ```text
+//!   Profile.user_id IN (SELECT User.id FROM User WHERE User.name = 'alice')
+//!   ```
+//!
+//! - [`try_lift_relation_path_like`] does the same for `LIKE`/`ILIKE`
+//!   (`profile.user.name LIKE 'al%'`). These are `Expr::Like`, not
+//!   `Expr::BinaryOp`, so they need their own entry point. Both rewrites
+//!   share [`lift_relation_path_predicate`].
 //!
 //! A pre-pass is necessary (rather than folding into
 //! `LowerStatement::visit_expr_mut` per #823's pattern) because not every
@@ -79,6 +87,11 @@ impl VisitMut for LiftInSubquery<'_> {
                     && let Some(lifted) =
                         try_lift_relation_path_comparison(&self.cx, commuted, &e.rhs, &e.lhs)
                 {
+                    *expr = lifted;
+                }
+            }
+            stmt::Expr::Like(e) => {
+                if let Some(lifted) = try_lift_relation_path_like(&self.cx, e) {
                     *expr = lifted;
                 }
             }
@@ -383,17 +396,79 @@ fn try_fuse_paired_relations(
     ))
 }
 
-/// Lift `project(ref_self_field(rel), [idx, ...]) op other` into a
-/// foreign-key-based comparison by synthesising an IN subquery on the
-/// relation's target model and deferring to [`lift_in_subquery`].
+/// Rewrites a comparison that walks a relation field into a foreign-key
+/// subquery.
 ///
-/// Returns `None` when `project_side` is not a project through a
-/// relation field reference.
+/// `Profile::filter(Profile::fields().user().name().eq("alice"))` starts as
+/// the filter `profile.user.name = 'alice'`, where the left side projects
+/// through the `user` relation. This moves the comparison into a subquery on
+/// the target model and defers to [`lift_in_subquery`]:
+///
+/// ```text
+/// Profile.user_id IN (SELECT User.id FROM User WHERE User.name = 'alice')
+/// ```
+///
+/// Returns `None` when `project_side` does not walk a relation field.
 pub(super) fn try_lift_relation_path_comparison(
     cx: &ExprContext,
     op: stmt::BinaryOp,
     project_side: &stmt::Expr,
     other_side: &stmt::Expr,
+) -> Option<stmt::Expr> {
+    lift_relation_path_predicate(cx, project_side, |target_lhs| {
+        Expr::binary_op(target_lhs, op, other_side.clone())
+    })
+}
+
+/// Rewrites a `LIKE`/`ILIKE` that walks a relation field into a foreign-key
+/// subquery — [`try_lift_relation_path_comparison`] for pattern matches.
+///
+/// `Profile::filter(Profile::fields().user().name().like("al%"))` rewrites to:
+///
+/// ```text
+/// Profile.user_id IN (SELECT User.id FROM User WHERE User.name LIKE 'al%')
+/// ```
+///
+/// `LIKE`/`ILIKE` are `Expr::Like`, not `Expr::BinaryOp`, so they never reach
+/// [`try_lift_relation_path_comparison`] and need this entry point. Without
+/// it the `user.name` path stays a projection through the relation, which the
+/// rest of lowering cannot turn into a column and so panics.
+///
+/// Returns `None` when the pattern's subject does not walk a relation field.
+pub(super) fn try_lift_relation_path_like(
+    cx: &ExprContext,
+    like: &stmt::ExprLike,
+) -> Option<stmt::Expr> {
+    lift_relation_path_predicate(cx, &like.expr, |target_lhs| {
+        stmt::ExprLike {
+            expr: Box::new(target_lhs),
+            pattern: like.pattern.clone(),
+            escape: like.escape,
+            case_insensitive: like.case_insensitive,
+        }
+        .into()
+    })
+}
+
+/// Shared core of the relation-path lifts.
+///
+/// `project_side` is the side of the predicate that walks a relation — the
+/// `profile.user.name` in `profile.user.name = 'alice'`. It is a projection
+/// whose first step names the `user` relation field on `Profile` and whose
+/// remaining steps index into `User`. This re-roots the path at the target
+/// model (so it reads `User.name`), builds a `SELECT` over `User` whose filter
+/// `make_filter` produces from the re-rooted path, and defers to
+/// [`lift_in_subquery`] to turn the relation reference into the foreign-key
+/// `IN` form.
+///
+/// `make_filter` is the only difference between callers: a binary op for
+/// comparisons, a `LIKE` for pattern matches.
+///
+/// Returns `None` when `project_side` does not walk a relation field.
+fn lift_relation_path_predicate(
+    cx: &ExprContext,
+    project_side: &stmt::Expr,
+    make_filter: impl FnOnce(stmt::Expr) -> stmt::Expr,
 ) -> Option<stmt::Expr> {
     let Expr::Project(project_expr) = project_side else {
         return None;
@@ -412,9 +487,9 @@ pub(super) fn try_lift_relation_path_comparison(
         _ => return None,
     };
 
-    // Re-root the projection at the target model: the leading index
-    // points at the relation field itself, the rest indexes into the
-    // related model's fields.
+    // The first step names the relation field on the source model; the
+    // rest index into the target model. Drop the first step and re-root the
+    // remainder at the target model.
     let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
     let target_field = Expr::ref_self_field(FieldId {
         model: target_model_id,
@@ -426,10 +501,8 @@ pub(super) fn try_lift_relation_path_comparison(
         Expr::project(target_field, stmt::Projection::from(tail))
     };
 
-    let subquery = stmt::Query::new_select(
-        stmt::Source::from(target_model_id),
-        Expr::binary_op(target_lhs, op, other_side.clone()),
-    );
+    let subquery =
+        stmt::Query::new_select(stmt::Source::from(target_model_id), make_filter(target_lhs));
 
     lift_in_subquery(cx, &project_expr.base, &subquery)
 }
