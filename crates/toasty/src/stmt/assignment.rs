@@ -405,6 +405,10 @@ pub fn apply<T>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
 
 /// Add a value to a numeric field (`col = col + value`).
 ///
+/// The [`Numeric`] bound restricts `T` to types Toasty knows how to do
+/// database arithmetic on, so misuse on a non-numeric column (e.g.
+/// `String`) is a compile error rather than a runtime database error.
+///
 /// The update is atomic against the existing column value on every backend.
 /// Use this when you want a relative update — e.g. crediting a balance —
 /// without a read-modify-write round trip from the client.
@@ -417,7 +421,7 @@ pub fn apply<T>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn add<T>(value: impl IntoExpr<T>) -> Assignment<T> {
+pub fn add<T: Numeric>(value: impl IntoExpr<T>) -> Assignment<T> {
     Assignment {
         kind: AssignmentKind::Add(value.into_expr().untyped),
         _p: PhantomData,
@@ -426,8 +430,8 @@ pub fn add<T>(value: impl IntoExpr<T>) -> Assignment<T> {
 
 /// Subtract a value from a numeric field (`col = col - value`).
 ///
-/// Mirror of [`add`]. Atomic against the existing column value on every
-/// backend.
+/// Mirror of [`add`]. See its docs for the [`Numeric`] bound. Atomic
+/// against the existing column value on every backend.
 ///
 /// # Examples
 ///
@@ -437,7 +441,7 @@ pub fn add<T>(value: impl IntoExpr<T>) -> Assignment<T> {
 ///     .exec(&mut db)
 ///     .await?;
 /// ```
-pub fn subtract<T>(value: impl IntoExpr<T>) -> Assignment<T> {
+pub fn subtract<T: Numeric>(value: impl IntoExpr<T>) -> Assignment<T> {
     Assignment {
         kind: AssignmentKind::Subtract(value.into_expr().untyped),
         _p: PhantomData,
