@@ -41,7 +41,7 @@ fn into_scope_from_option_clears_single_and_limit() {
 
 #[test]
 fn into_scope_from_one_clears_single_and_limit() {
-    let q: Query<User> = Query::<List<User>>::all().one();
+    let q: Query<User> = Query::<List<User>>::all().exactly_one();
 
     let pre = untyped_query(q.clone().into_statement());
     assert!(pre.single);
@@ -61,7 +61,7 @@ fn into_scope_preserves_filter_body() {
     let from_list = untyped_query(IntoScope::<User>::into_scope(list_q.clone()));
 
     let from_option = untyped_query(IntoScope::<User>::into_scope(list_q.clone().first()));
-    let from_one = untyped_query(IntoScope::<User>::into_scope(list_q.one()));
+    let from_one = untyped_query(IntoScope::<User>::into_scope(list_q.exactly_one()));
 
     assert_eq!(from_list.body, from_option.body);
     assert_eq!(from_list.body, from_one.body);

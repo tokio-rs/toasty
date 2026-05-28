@@ -195,3 +195,55 @@ pub async fn filter_by_nested_has_one_chain(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Filter through `BelongsTo → HasMany` with `.any()` — the queried model's
+/// parent owns a collection, and the filter is a quantifier over that
+/// collection (here, "sibling" todos sharing the same category).
+///
+/// Path `todo.category.todos.any(title == "salad")` lowers to an
+/// `Expr::InSubquery` whose LHS is an `Expr::Project` through the
+/// `BelongsTo`. Single-hop `parent.children.any(...)` already lifts (see
+/// `relation_has_many_filter::filter_parent_by_child_field`); previously the
+/// `BelongsTo`-then-`HasMany` chain hit a `todo!()` in
+/// `LiftInSubquery::lift_in_subquery`.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_multi_relation)
+)]
+pub async fn filter_by_belongs_to_has_many_any(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let food = toasty::create!(Category { name: "food" })
+        .exec(&mut db)
+        .await?;
+    let drink = toasty::create!(Category { name: "drink" })
+        .exec(&mut db)
+        .await?;
+    let user = toasty::create!(User { name: "Anchovy" })
+        .exec(&mut db)
+        .await?;
+
+    toasty::create!(Todo::[
+        { title: "salad", user: &user, category: &food  },
+        { title: "sushi", user: &user, category: &food  },
+        { title: "tea",   user: &user, category: &drink },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Todos whose category has at least one todo titled "salad" — i.e.,
+    // every todo in the "food" category.
+    let todos: Vec<Todo> = Todo::filter(
+        Todo::fields()
+            .category()
+            .todos()
+            .any(Todo::fields().title().eq("salad")),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq_unordered!(todos.iter().map(|t| &t.title[..]), ["salad", "sushi"]);
+
+    Ok(())
+}
