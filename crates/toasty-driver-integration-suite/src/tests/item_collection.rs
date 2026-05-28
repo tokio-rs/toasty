@@ -18,7 +18,7 @@ struct User {
     id: uuid::Uuid,
 
     #[has_many]
-    todos: toasty::HasMany<Todo>,
+    todos: toasty::Deferred<Vec<Todo>>,
 }
 
 /// A todo that belongs to a user and shares the same DynamoDB table.
@@ -37,7 +37,7 @@ struct Todo {
     user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -61,7 +61,7 @@ pub async fn validates_missing_local_key(test: &mut Test) {
         id: uuid::Uuid,
 
         #[has_many]
-        items: toasty::HasMany<Item>,
+        items: toasty::Deferred<Vec<Item>>,
     }
 
     // No #[key(partition = ..., local = ...)] — only a single-field PK.
@@ -77,7 +77,7 @@ pub async fn validates_missing_local_key(test: &mut Test) {
         root_id: uuid::Uuid,
 
         #[belongs_to(key = root_id, references = id)]
-        root: toasty::BelongsTo<Root>,
+        root: toasty::Deferred<Root>,
     }
 
     assert_err!(test.try_setup_db(models!(Root, Item)).await);
@@ -96,7 +96,7 @@ pub async fn validates_no_belongs_to_in_pk(test: &mut Test) {
         id: uuid::Uuid,
 
         #[has_many]
-        items: toasty::HasMany<Item>,
+        items: toasty::Deferred<Vec<Item>>,
     }
 
     // Compound key but neither field references a parent via BelongsTo —
@@ -114,7 +114,7 @@ pub async fn validates_no_belongs_to_in_pk(test: &mut Test) {
         root_id: uuid::Uuid,
 
         #[belongs_to(key = root_id, references = id)]
-        root: toasty::BelongsTo<Root>,
+        root: toasty::Deferred<Root>,
     }
 
     assert_err!(test.try_setup_db(models!(Root, Item)).await);
@@ -323,19 +323,15 @@ pub async fn delete_user_removes_todos(test: &mut Test) -> Result<()> {
 /// `item_collection` field on the app schema model is set to the parent model's id.
 #[driver_test]
 pub async fn schema_item_collection_field_set(test: &mut Test) {
-    use toasty::schema::Register;
+    use toasty::schema::Model;
 
     let _db = setup(test).await;
 
-    let todo_ic = <Todo as Register>::schema()
-        .as_root_unwrap()
-        .item_collection;
+    let todo_ic = <Todo as Model>::schema().as_root_unwrap().item_collection;
 
-    assert_eq!(todo_ic, Some(<User as Register>::id()));
+    assert_eq!(todo_ic, Some(<User as Model>::id()));
 
-    let user_ic = <User as Register>::schema()
-        .as_root_unwrap()
-        .item_collection;
+    let user_ic = <User as Model>::schema().as_root_unwrap().item_collection;
 
     assert_eq!(user_ic, None);
 }

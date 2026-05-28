@@ -366,7 +366,7 @@ impl Expand<'_> {
     fn expand_item_collection(&self) -> TokenStream {
         let toasty = &self.toasty;
         if let Some(ty) = &self.model.item_collection {
-            quote! { Some(<#ty as #toasty::Register>::id()) }
+            quote! { Some(<#ty as #toasty::Model>::id()) }
         } else {
             quote! { None }
         }

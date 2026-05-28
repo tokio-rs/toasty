@@ -332,8 +332,8 @@ impl BuildTableFromModels<'_> {
                 }
                 app::FieldTy::Embedded(_)
                 | app::FieldTy::BelongsTo(_)
-                | app::FieldTy::HasMany(_)
-                | app::FieldTy::HasOne(_) => {}
+                | app::FieldTy::Has(_)
+                | app::FieldTy::Via(_) => {}
             }
         }
 
@@ -1500,7 +1500,9 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field.nullable || self.force_nullable`, and auto-increment from
     /// `field.is_auto_increment()`.
     fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
-        let nullable = field.nullable || self.force_nullable;
+        let nullable = field.nullable
+            || self.force_nullable
+            || (self.build.force_non_pk_nullable && !field.primary_key);
         let is_auto_increment = (field.is_auto_increment() || self.inherited_auto_increment)
             && self.build.db.auto_increment;
 
@@ -1524,10 +1526,6 @@ impl<'a, 'b> MapField<'a, 'b> {
             table: self.build.table.id,
             index: self.build.table.columns.len(),
         };
-
-        let nullable = field.nullable
-            || self.in_enum_variant
-            || (self.build.force_non_pk_nullable && !field.primary_key);
 
         self.build.table.columns.push(db::Column {
             id,

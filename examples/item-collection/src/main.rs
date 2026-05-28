@@ -34,7 +34,7 @@ struct Tenant {
     name: String,
 
     #[has_many]
-    users: toasty::HasMany<User>,
+    users: toasty::Deferred<Vec<User>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -46,12 +46,12 @@ struct User {
     tenant_id: uuid::Uuid,
 
     #[belongs_to(key = tenant_id, references = id)]
-    tenant: toasty::BelongsTo<Tenant>,
+    tenant: toasty::Deferred<Tenant>,
 
     name: String,
 
     #[has_many]
-    todos: toasty::HasMany<Todo>,
+    todos: toasty::Deferred<Vec<Todo>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -65,7 +65,7 @@ struct Todo {
     user_id: String,
 
     #[belongs_to(key = [tenant_id, user_id], references = [tenant_id, id])]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }

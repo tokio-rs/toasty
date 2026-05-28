@@ -298,7 +298,7 @@ impl Connection {
 
         if let Some(columns) = &op.returning {
             for column_id in columns {
-                let column = schema.column(*column_id);
+                let column = schema.db.column(*column_id);
                 let placeholder = bound_values
                     .get(&column_id.index)
                     .map(|value| (*value).clone())
@@ -504,7 +504,7 @@ impl Connection {
                 // written.
                 let mut resolved_unique_values = HashMap::new();
                 for index_column in &index.columns {
-                    let column = index_column.table_column(schema);
+                    let column = index_column.table_column(&schema.db);
                     for (projection, assignment) in op.assignments.iter() {
                         if *projection != column.id.index {
                             continue;
@@ -662,25 +662,8 @@ impl Connection {
                         let mut index_insert_items = HashMap::new();
 
                         for index_column in &index.columns {
-                            let column = index_column.table_column(schema);
+                            let column = index_column.table_column(&schema.db);
                             let value = &resolved_unique_values[column_id];
-                            let (_, assignment) = op
-                                .assignments
-                                .iter()
-                                .find(|(projection, _)| **projection == column_id.index)
-                                .unwrap();
-
-                            let stmt::Assignment::Set(expr) = assignment else {
-                                unreachable!(
-                                    "unique index assignments are always Set; got {assignment:#?}"
-                                );
-                            };
-                            let stmt::Expr::Value(value) = expr else {
-                                unreachable!(
-                                    "unique index assignment expression is always a Value; got {expr:#?}"
-                                );
-                            };
-
                             if !value.is_null() {
                                 index_insert_items.insert(
                                     column.name.clone(),

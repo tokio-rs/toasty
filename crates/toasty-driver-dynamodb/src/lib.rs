@@ -560,9 +560,9 @@ fn ddb_expression(
 ) -> String {
     match expr {
         stmt::Expr::Between(expr_between) => {
-            let field = ddb_expression(cx, attrs, primary, &expr_between.expr);
-            let low = ddb_expression(cx, attrs, primary, &expr_between.low);
-            let high = ddb_expression(cx, attrs, primary, &expr_between.high);
+            let field = ddb_expression(schema, cx, attrs, primary, &expr_between.expr);
+            let low = ddb_expression(schema, cx, attrs, primary, &expr_between.low);
+            let high = ddb_expression(schema, cx, attrs, primary, &expr_between.high);
             format!("{field} BETWEEN {low} AND {high}")
         }
         stmt::Expr::BinaryOp(expr_binary_op) => {
@@ -694,7 +694,7 @@ fn ddb_expression(
             // (result of `field = true` simplification). In predicate position
             // this means "is true"; the `field = false` case arrives as
             // Not(Cast(col_ref, Bool)) and is handled by the Not arm above.
-            let col_alias = ddb_expression(cx, attrs, primary, &expr_cast.expr);
+            let col_alias = ddb_expression(schema, cx, attrs, primary, &expr_cast.expr);
             let true_val =
                 attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::N("1".to_string()));
             format!("{col_alias} = {true_val}")
