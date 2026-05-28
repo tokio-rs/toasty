@@ -424,9 +424,11 @@ impl stmt::Input for ConstantizeReturning<'_> {
                         stmt::Assignment::Append(_)
                         | stmt::Assignment::Pop
                         | stmt::Assignment::RemoveAt(_)
-                        | stmt::Assignment::Remove(_) => None,
+                        | stmt::Assignment::Remove(_)
+                        | stmt::Assignment::Add(_)
+                        | stmt::Assignment::Subtract(_) => None,
                         _ => todo!(
-                            "only SET / APPEND / collection mutations supported; got {assignment:#?}"
+                            "only SET / APPEND / collection / arithmetic mutations supported; got {assignment:#?}"
                         ),
                     }
                 } else {

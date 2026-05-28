@@ -932,6 +932,13 @@ fn relation_mutation(field: &Field, entry: stmt::Assignment) -> Mutation {
                 "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
             )
         }
+        // Arithmetic ops only apply to scalar numeric model fields, never to
+        // relations.
+        stmt::Assignment::Add(_) | stmt::Assignment::Subtract(_) => {
+            unreachable!(
+                "Add / Subtract assignment on relation field — these only apply to scalar numerics"
+            )
+        }
         stmt::Assignment::Batch(_) => unreachable!("Batch entries are flattened above"),
     }
 }
