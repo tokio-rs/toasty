@@ -165,8 +165,13 @@ pub(super) fn lift_in_subquery(
 ) -> Option<stmt::Expr> {
     // The expression is a path expression referencing a relation.
     let field = match expr {
-        stmt::Expr::Project(_) => {
-            todo!()
+        // `Project(Ref(rel), [head, ...tail])` — the path traverses through a
+        // relation field (`rel`) before reaching the relation the subquery
+        // targets. Re-root the path at `rel`'s target model and rebuild as a
+        // nested IN-subquery on that model, then recurse to lift the outer
+        // `rel` hop.
+        stmt::Expr::Project(project_expr) => {
+            return lift_projection_in_subquery(cx, project_expr, query);
         }
         stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => {
             cx.resolve_expr_reference(expr_reference).as_field_unwrap()
@@ -186,6 +191,54 @@ pub(super) fn lift_in_subquery(
         FieldTy::Has(has) => lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query),
         _ => None,
     }
+}
+
+/// Lift `project(ref_self_field(rel), [head, ...tail]) IN (query)` by
+/// re-rooting the path at `rel`'s target model and wrapping the original
+/// subquery in a nested IN-subquery on that model.
+///
+/// Example: `Release.project.topics IN (SELECT FROM Topic WHERE ...)` becomes
+/// `Release.project IN (SELECT FROM Project WHERE Project.topics IN
+/// (SELECT FROM Topic WHERE ...))`, after which the outer `BelongsTo` hop
+/// is lifted by [`lift_in_subquery`]'s standard branch. The inner subquery's
+/// IN is left for the [`LiftInSubquery`] visitor's children walk to lift on
+/// the next pass.
+fn lift_projection_in_subquery(
+    cx: &ExprContext,
+    project_expr: &stmt::ExprProject,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    let Expr::Reference(expr_ref) = &*project_expr.base else {
+        return None;
+    };
+    let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
+        return None;
+    };
+
+    let target_model_id = match &field.ty {
+        FieldTy::Has(rel) => rel.target,
+        FieldTy::Via(rel) => rel.target,
+        FieldTy::BelongsTo(rel) => rel.target,
+        _ => return None,
+    };
+
+    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
+    let target_field = Expr::ref_self_field(FieldId {
+        model: target_model_id,
+        index: *head_idx,
+    });
+    let inner_lhs = if tail.is_empty() {
+        target_field
+    } else {
+        Expr::project(target_field, stmt::Projection::from(tail))
+    };
+
+    let new_subquery = stmt::Query::new_select(
+        stmt::Source::from(target_model_id),
+        Expr::in_subquery(inner_lhs, query.clone()),
+    );
+
+    lift_in_subquery(cx, &project_expr.base, &new_subquery)
 }
 
 /// Lift `project(ref_self_field(rel), [idx, ...]) op other` into a
