@@ -167,6 +167,61 @@ assert!(user.bio.is_none());
 # }
 ```
 
+## Relative numeric updates
+
+To update a numeric field relative to its stored value — incrementing a
+counter, crediting a balance — pass an arithmetic builder from
+`toasty::stmt` to the setter:
+
+| Function | What it does |
+|---|---|
+| `stmt::increment()` | Add `1` to the field. |
+| `stmt::decrement()` | Subtract `1` from the field. |
+| `stmt::add(value)` | Add `value` to the field. |
+| `stmt::subtract(value)` | Subtract `value` from the field. |
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Account {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     balance: i64,
+#     login_count: i64,
+# }
+# async fn __example(mut db: toasty::Db, account_id: u64) -> toasty::Result<()> {
+// Credit an account by 100.
+Account::update_by_id(account_id)
+    .balance(toasty::stmt::add(100))
+    .exec(&mut db)
+    .await?;
+
+// Debit by 25.
+Account::update_by_id(account_id)
+    .balance(toasty::stmt::subtract(25))
+    .exec(&mut db)
+    .await?;
+
+// Bump a login counter.
+Account::update_by_id(account_id)
+    .login_count(toasty::stmt::increment())
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Each operation is atomic against the existing column value — the
+database applies it to whatever the row currently holds, not to a
+client-side snapshot. Reading, modifying, and writing back from Rust
+is a three-step round trip a concurrent writer can interleave,
+dropping one of two updates on the same row; the arithmetic builders
+fold the read and write into one statement.
+
+These builders work on every backend and on every primitive numeric
+type Toasty supports.
+
 ## Modifying a `Vec<scalar>` field
 
 A `Vec<scalar>` field (e.g. `tags: Vec<String>`) supports whole-value

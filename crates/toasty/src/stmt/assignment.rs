@@ -444,7 +444,15 @@ pub fn subtract<T>(value: impl IntoExpr<T>) -> Assignment<T> {
     }
 }
 
-/// Increment a numeric field by one. Shorthand for `stmt::add(1)`.
+/// Increment a numeric field by one.
+///
+/// The [`Numeric`] bound encodes the `1` literal in a value variant
+/// matching the field type, so `stmt::increment()` works on every
+/// supported numeric column (`i8`–`i64`, `u8`–`u64`, `f32`, `f64`) and
+/// on user newtypes that implement [`Numeric`].
+///
+/// Atomic against the existing column value on every backend, same as
+/// [`add`].
 ///
 /// # Examples
 ///
@@ -461,7 +469,10 @@ pub fn increment<T: Numeric>() -> Assignment<T> {
     }
 }
 
-/// Decrement a numeric field by one. Shorthand for `stmt::subtract(1)`.
+/// Decrement a numeric field by one.
+///
+/// Mirror of [`increment`]. See its docs for the [`Numeric`] bound and
+/// the set of supported field types.
 ///
 /// # Examples
 ///
