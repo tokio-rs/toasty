@@ -162,6 +162,11 @@ jobs:
         env:
             TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
             TOASTY_TEST_MYSQL_URL: mysql://toasty:toasty@localhost/toasty
+            # The MySQL service container eats into the 16 GB runner budget, and
+            # the integration test crate currently expands a lot of generated
+            # code per inline test model. With 4 parallel rustc instances the
+            # build OOMs. Raise this once the per-model codegen is trimmed down.
+            CARGO_BUILD_JOBS: 1
         steps:
         - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
@@ -195,6 +200,11 @@ jobs:
             TOASTY_CONNECTION_URL: postgresql://toasty:toasty@localhost/toasty
             TOASTY_TEST_POSTGRES_URL: postgresql://toasty:toasty@localhost/toasty
             TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
+            # The PostgreSQL service containers eat into the 16 GB runner budget,
+            # and the integration test crate currently expands a lot of generated
+            # code per inline test model. With 4 parallel rustc instances the
+            # build OOMs. Raise this once the per-model codegen is trimmed down.
+            CARGO_BUILD_JOBS: 1
         steps:
         - uses: actions/checkout@v6
         - uses: dtolnay/rust-toolchain@master
