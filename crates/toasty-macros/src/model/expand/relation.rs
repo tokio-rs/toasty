@@ -208,12 +208,6 @@ impl Expand<'_> {
             }
 
             #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::ValidateCreate for Many<Kind> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
-
-            #[diagnostic::do_not_recommend]
             impl #toasty::CreateScope for Many<#toasty::Direct> {
                 fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
                     let mut builder = #create_builder_ident::default();
@@ -223,24 +217,12 @@ impl Expand<'_> {
             }
 
             #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::ValidateCreate for One<Kind> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
-
-            #[diagnostic::do_not_recommend]
             impl #toasty::CreateScope for One<#toasty::Direct> {
                 fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
                     let mut builder = #create_builder_ident::default();
                     builder.stmt.set_scope(self.stmt);
                     builder
                 }
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::ValidateCreate for OptionOne<Kind> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
             }
 
             #[diagnostic::do_not_recommend]

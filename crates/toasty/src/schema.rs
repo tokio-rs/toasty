@@ -1,10 +1,6 @@
 mod auto;
 pub use auto::Auto;
 
-/// Compile-time metadata and validation for `create!` macro field checking.
-pub mod create_meta;
-pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
-
 mod deferred;
 pub use deferred::Deferred;
 
