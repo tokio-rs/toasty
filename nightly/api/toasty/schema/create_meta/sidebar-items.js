@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["assert_create_fields","const_contains"],"struct":["CreateField","CreateMeta"]};
