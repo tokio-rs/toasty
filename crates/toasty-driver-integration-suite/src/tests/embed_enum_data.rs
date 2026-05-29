@@ -32,28 +32,9 @@ pub async fn data_carrying_enum_schema(t: &mut Test) {
 /// Verifies that a mixed enum (some unit variants, some data variants) registers
 /// correctly: unit variants have empty `fields`, data variants have their fields
 /// with indices assigned starting from 0 and continuing globally across variants.
-#[driver_test]
-pub async fn mixed_enum_schema(test: &mut Test) {
-    #[allow(dead_code)]
-    #[derive(toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Failed { reason: String },
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(toasty::Model)]
-    #[allow(dead_code)]
-    struct Container {
-        #[key]
-        id: i64,
-        status: Status,
-    }
-
-    let db = test.setup_db(models!(Container)).await;
+#[driver_test(id(ID), scenario(crate::scenarios::task_with_status))]
+pub async fn mixed_enum_schema(t: &mut Test) {
+    let db = setup(t).await;
     let schema = db.schema();
 
     let status = &schema.app.models[&Status::id()];
@@ -166,28 +147,9 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
 
 /// End-to-end CRUD test for a mixed enum (unit variants and data variants).
 /// Verifies that both kinds round-trip correctly through the DB.
-#[driver_test]
-pub async fn mixed_enum_roundtrip(test: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Failed { reason: String },
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        title: String,
-        status: Status,
-    }
-
-    let mut db = test.setup_db(models!(Task)).await;
+#[driver_test(id(ID), scenario(crate::scenarios::task_with_status))]
+pub async fn mixed_enum_roundtrip(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
     let pending = Task::create()
         .title("Pending task")
