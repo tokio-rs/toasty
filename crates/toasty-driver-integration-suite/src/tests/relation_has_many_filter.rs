@@ -2,38 +2,13 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to_with_flags)
+)]
 pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-
-        title: String,
-
-        complete: bool,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create users
     let alice = User::create().name("Alice").exec(&mut db).await?;
@@ -46,6 +21,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("buy groceries")
         .complete(false)
+        .priority(0)
         .exec(&mut db)
         .await?;
 
@@ -54,6 +30,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("read book")
         .complete(true)
+        .priority(0)
         .exec(&mut db)
         .await?;
 
@@ -63,6 +40,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("clean house")
         .complete(true)
+        .priority(0)
         .exec(&mut db)
         .await?;
     carol
@@ -70,6 +48,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("write report")
         .complete(false)
+        .priority(0)
         .exec(&mut db)
         .await?;
 
@@ -98,43 +77,19 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to_with_flags)
+)]
 pub async fn filter_parent_no_matching_children(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-
-        title: String,
-
-        priority: i64,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create().name("Alice").exec(&mut db).await?;
     user.todos()
         .create()
         .title("low priority")
+        .complete(false)
         .priority(1)
         .exec(&mut db)
         .await?;

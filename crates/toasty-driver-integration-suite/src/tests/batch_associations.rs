@@ -156,113 +156,44 @@ pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
 }
 
 /// Batch association statements across different relations of the same parent.
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_two_children))]
 pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-        #[has_many]
-        posts: toasty::Deferred<Vec<Post>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-        title: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-        body: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo, Post)).await;
-    let user = User::create().exec(&mut db).await?;
+    let mut db = setup(t).await;
+    let user = User::create().name("Alice").exec(&mut db).await?;
 
     // Create across two different relations in one batch
-    let (todo, post): (Todo, Post) = toasty::batch((
-        user.todos().create().title("my todo"),
-        user.posts().create().body("my post"),
+    let (post, comment): (Post, Comment) = toasty::batch((
+        user.posts().create().title("my post"),
+        user.comments().create().text("my comment"),
     ))
     .exec(&mut db)
     .await?;
 
-    assert_eq!(todo.title, "my todo");
-    assert_eq!(todo.user_id, user.id);
-    assert_eq!(post.body, "my post");
+    assert_eq!(post.title, "my post");
     assert_eq!(post.user_id, user.id);
+    assert_eq!(comment.text, "my comment");
+    assert_eq!(comment.user_id, user.id);
 
     Ok(())
 }
 
 /// Batch queries across different relations of the same parent.
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_two_children))]
 pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-        #[has_many]
-        posts: toasty::Deferred<Vec<Post>>,
-    }
+    let mut db = setup(t).await;
+    let user = User::create().name("Alice").exec(&mut db).await?;
+    user.posts().create().title("t1").exec(&mut db).await?;
+    user.posts().create().title("t2").exec(&mut db).await?;
+    user.comments().create().text("p1").exec(&mut db).await?;
 
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-        title: String,
-    }
+    let (posts, comments): (Vec<Post>, Vec<Comment>) =
+        toasty::batch((user.posts(), user.comments()))
+            .exec(&mut db)
+            .await?;
 
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-        body: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo, Post)).await;
-    let user = User::create().exec(&mut db).await?;
-    user.todos().create().title("t1").exec(&mut db).await?;
-    user.todos().create().title("t2").exec(&mut db).await?;
-    user.posts().create().body("p1").exec(&mut db).await?;
-
-    let (todos, posts): (Vec<Todo>, Vec<Post>) = toasty::batch((user.todos(), user.posts()))
-        .exec(&mut db)
-        .await?;
-
-    assert_eq!(todos.len(), 2);
-    assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].body, "p1");
+    assert_eq!(posts.len(), 2);
+    assert_eq!(comments.len(), 1);
+    assert_eq!(comments[0].text, "p1");
 
     Ok(())
 }

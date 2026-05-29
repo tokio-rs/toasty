@@ -187,68 +187,30 @@ pub async fn chain_then_filter(test: &mut Test) -> Result<()> {
 
 /// Two HasMany hops in succession (`Author → posts → comments`). The lowering
 /// unfolds into nested IN-subqueries on each `BelongsTo` pair.
-#[driver_test]
+#[driver_test(id(ID), scenario(crate::scenarios::user_post_comment))]
 pub async fn has_many_through_has_many(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Author {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        #[has_many]
-        posts: toasty::Deferred<Vec<Post>>,
-    }
+    let mut db = setup(test).await;
 
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        #[index]
-        author_id: uuid::Uuid,
-        #[belongs_to(key = author_id, references = id)]
-        author: toasty::Deferred<Author>,
-        title: String,
-        #[has_many]
-        comments: toasty::Deferred<Vec<Comment>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Comment {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        #[index]
-        post_id: uuid::Uuid,
-        #[belongs_to(key = post_id, references = id)]
-        post: toasty::Deferred<Post>,
-        body: String,
-    }
-
-    let mut db = test.setup_db(models!(Author, Post, Comment)).await;
-
-    let alice = toasty::create!(Author { name: "Alice" })
+    let alice = toasty::create!(User { name: "Alice" })
         .exec(&mut db)
         .await?;
-    let bob = toasty::create!(Author { name: "Bob" })
-        .exec(&mut db)
-        .await?;
+    let bob = toasty::create!(User { name: "Bob" }).exec(&mut db).await?;
 
     let p1 = toasty::create!(Post {
         title: "p1",
-        author: &alice
+        user: &alice
     })
     .exec(&mut db)
     .await?;
     let p2 = toasty::create!(Post {
         title: "p2",
-        author: &alice
+        user: &alice
     })
     .exec(&mut db)
     .await?;
     let p3 = toasty::create!(Post {
         title: "p3",
-        author: &bob
+        user: &bob
     })
     .exec(&mut db)
     .await?;

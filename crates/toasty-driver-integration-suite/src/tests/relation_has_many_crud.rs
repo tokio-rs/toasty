@@ -765,36 +765,12 @@ pub async fn has_many_on_target_pk(_test: &mut Test) {}
 pub async fn has_many_when_target_indexes_fk_and_pk(_test: &mut Test) {}
 
 // When the FK is composite, things should still work
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
 pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[key(partition = user_id, local = id)]
-    struct Todo {
-        #[auto]
-        id: uuid::Uuid,
-
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user
-    let user = User::create().exec(&mut db).await?;
+    let user = User::create().name("User 1").exec(&mut db).await?;
 
     // No TODOs
     assert_eq!(0, user.todos().exec(&mut db).await?.len());
@@ -870,7 +846,7 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     }
 
     // Create a second user
-    let user2 = User::create().exec(&mut db).await?;
+    let user2 = User::create().name("User 2").exec(&mut db).await?;
 
     // No TODOs associated with `user2`
     assert_eq!(0, user2.todos().exec(&mut db).await?.len());
@@ -950,38 +926,15 @@ pub async fn belongs_to_required(test: &mut Test) {
     assert_err!(Todo::create().exec(&mut db).await);
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create().exec(&mut db).await?;
     let mut ids = vec![];
 
     for _ in 0..3 {
-        let todo = user.todos().create().exec(&mut db).await?;
+        let todo = user.todos().create().title("todo").exec(&mut db).await?;
         ids.push(todo.id);
     }
 
@@ -1215,37 +1168,13 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
 pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[key(partition = user_id, local = id)]
-    struct Todo {
-        #[auto]
-        id: uuid::Uuid,
-
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create users
-    let user1 = User::create().exec(&mut db).await?;
-    let user2 = User::create().exec(&mut db).await?;
+    let user1 = User::create().name("User 1").exec(&mut db).await?;
+    let user2 = User::create().name("User 2").exec(&mut db).await?;
 
     // Create a Todo associated with the user
     user1

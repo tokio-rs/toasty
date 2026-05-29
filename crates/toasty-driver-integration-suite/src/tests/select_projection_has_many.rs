@@ -9,157 +9,82 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
 pub async fn select_has_many_basic(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-
-        #[has_many]
-        posts: toasty::Deferred<Vec<Post>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     toasty::create!(User {
         name: "Alice",
-        posts: [Post::create().title("alpha"), Post::create().title("beta"),],
+        todos: [Todo::create().title("alpha"), Todo::create().title("beta"),],
     })
     .exec(&mut db)
     .await?;
 
-    let posts_per_user: Vec<Vec<Post>> = User::all()
-        .select(User::fields().posts())
+    let todos_per_user: Vec<Vec<Todo>> = User::all()
+        .select(User::fields().todos())
         .exec(&mut db)
         .await?;
 
-    assert_eq!(posts_per_user.len(), 1);
-    let mut titles: Vec<String> = posts_per_user[0].iter().map(|p| p.title.clone()).collect();
+    assert_eq!(todos_per_user.len(), 1);
+    let mut titles: Vec<String> = todos_per_user[0].iter().map(|p| p.title.clone()).collect();
     titles.sort();
     assert_eq!(titles, vec!["alpha".to_string(), "beta".to_string()]);
 
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
 pub async fn select_has_many_with_filter(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-
-        #[has_many]
-        posts: toasty::Deferred<Vec<Post>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     toasty::create!(User {
         name: "Alice",
-        posts: [Post::create().title("alpha")],
+        todos: [Todo::create().title("alpha")],
     })
     .exec(&mut db)
     .await?;
     toasty::create!(User {
         name: "Bob",
-        posts: [
-            Post::create().title("beta one"),
-            Post::create().title("beta two"),
+        todos: [
+            Todo::create().title("beta one"),
+            Todo::create().title("beta two"),
         ],
     })
     .exec(&mut db)
     .await?;
 
-    let posts_per_user: Vec<Vec<Post>> = User::filter(User::fields().name().eq("Bob"))
-        .select(User::fields().posts())
+    let todos_per_user: Vec<Vec<Todo>> = User::filter(User::fields().name().eq("Bob"))
+        .select(User::fields().todos())
         .exec(&mut db)
         .await?;
 
-    assert_eq!(posts_per_user.len(), 1);
-    let mut titles: Vec<String> = posts_per_user[0].iter().map(|p| p.title.clone()).collect();
+    assert_eq!(todos_per_user.len(), 1);
+    let mut titles: Vec<String> = todos_per_user[0].iter().map(|p| p.title.clone()).collect();
     titles.sort();
     assert_eq!(titles, vec!["beta one".to_string(), "beta two".to_string()]);
 
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
 pub async fn select_has_many_first(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-
-        #[has_many]
-        posts: toasty::Deferred<Vec<Post>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     toasty::create!(User {
         name: "Alice",
-        posts: [Post::create().title("alpha"), Post::create().title("beta"),],
+        todos: [Todo::create().title("alpha"), Todo::create().title("beta"),],
     })
     .exec(&mut db)
     .await?;
 
-    let posts: Option<Vec<Post>> = User::filter(User::fields().name().eq("Alice"))
-        .select(User::fields().posts())
+    let todos: Option<Vec<Todo>> = User::filter(User::fields().name().eq("Alice"))
+        .select(User::fields().todos())
         .first()
         .exec(&mut db)
         .await?;
 
-    let posts = posts.expect("first() returned None for a matching user");
-    let mut titles: Vec<String> = posts.iter().map(|p| p.title.clone()).collect();
+    let todos = todos.expect("first() returned None for a matching user");
+    let mut titles: Vec<String> = todos.iter().map(|p| p.title.clone()).collect();
     titles.sort();
     assert_eq!(titles, vec!["alpha".to_string(), "beta".to_string()]);
 

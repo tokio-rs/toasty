@@ -20,19 +20,9 @@ pub async fn update_macro_simple(test: &mut Test) -> Result<()> {
 }
 
 /// Multiple fields in one update call.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
 pub async fn update_macro_multiple_fields(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let mut user = User::create()
         .name("Carl")
@@ -216,19 +206,9 @@ pub async fn update_macro_method_shorthand_clear(test: &mut Test) -> Result<()> 
 }
 
 /// Update through a query builder target — no instance required.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn update_macro_query_target(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
 
     toasty::update!(User::filter_by_id(user.id) { name: "Bob" })

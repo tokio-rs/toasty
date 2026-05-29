@@ -72,59 +72,9 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_two_children))]
 pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[allow(dead_code)]
-        name: String,
-
-        #[has_many]
-        posts: toasty::Deferred<Vec<Post>>,
-
-        #[has_many]
-        comments: toasty::Deferred<Vec<Comment>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[allow(dead_code)]
-        title: String,
-
-        #[index]
-        #[allow(dead_code)]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Comment {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[allow(dead_code)]
-        text: String,
-
-        #[index]
-        #[allow(dead_code)]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Post, Comment)).await;
+    let mut db = setup(test).await;
 
     // Create a user
     let user = User::create().name("Test User").exec(&mut db).await?;
@@ -186,36 +136,9 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_one]
-        profile: toasty::Deferred<Option<Profile>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        bio: String,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile)).await;
+    let mut db = setup(test).await;
 
     // Create a user with a profile
     let user = User::create()
@@ -248,57 +171,9 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()>
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_profile_settings))]
 pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_one]
-        profile: toasty::Deferred<Option<Profile>>,
-
-        #[has_one]
-        settings: toasty::Deferred<Option<Settings>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        bio: String,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Settings {
-        #[key]
-        #[auto]
-        id: ID,
-
-        theme: String,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile, Settings)).await;
+    let mut db = setup(test).await;
 
     // Create a user with both profile and settings
     let user = User::create()
@@ -346,57 +221,9 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_profile_and_todos))]
 pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_one]
-        profile: toasty::Deferred<Option<Profile>>,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        bio: String,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with a profile and multiple todos
     let user = User::create()
@@ -451,39 +278,9 @@ pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        #[allow(dead_code)]
-        name: String,
-
-        #[has_many]
-        #[allow(dead_code)]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        #[allow(dead_code)]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        #[allow(dead_code)]
-        user: toasty::Deferred<User>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Query with include on empty table - should return empty result, not SQL error
     let users: Vec<User> = User::filter_by_name("foo")
@@ -497,41 +294,12 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
 
 /// `Deferred<Vec<T>>` + `Deferred<Option<T>>`: nullable FK allows children to
 /// exist without a parent. Tests preloading from both directions.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        title: String,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with linked todos
     let user = User::create()
-        .name("Alice")
         .todos([Todo::create().title("Task 1")])
         .todos([Todo::create().title("Task 2")])
         .exec(&mut db)
@@ -706,57 +474,9 @@ pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todo_step))]
 pub async fn nested_has_many_preload(test: &mut Test) {
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-
-        #[has_many]
-        steps: toasty::Deferred<Vec<Step>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Step {
-        #[key]
-        #[auto]
-        id: ID,
-
-        description: String,
-
-        #[index]
-        todo_id: ID,
-
-        #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::Deferred<Todo>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo, Step)).await;
+    let mut db = setup(test).await;
 
     // Create a user with todos, each with steps
     let user = User::create()
@@ -1829,57 +1549,9 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
 
 // ===== Deferred<T> (required) -> Deferred<T> (required) =====
 // Step belongs_to a Todo, Todo belongs_to a User (chain of belongs_to going up)
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todo_step))]
 pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-
-        #[has_many]
-        steps: toasty::Deferred<Vec<Step>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Step {
-        #[key]
-        #[auto]
-        id: ID,
-
-        description: String,
-
-        #[index]
-        todo_id: ID,
-
-        #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::Deferred<Todo>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo, Step)).await;
+    let mut db = setup(test).await;
 
     let user = User::create()
         .name("Alice")
@@ -2172,57 +1844,9 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
 // ===== HasMany -> HasMany (with empty nested collections) =====
 // Ensures that when some parents have children and others don't, nested preload
 // correctly assigns empty collections rather than panicking.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_todo_step))]
 pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::Deferred<Vec<Todo>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<User>,
-
-        #[has_many]
-        steps: toasty::Deferred<Vec<Step>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Step {
-        #[key]
-        #[auto]
-        id: ID,
-
-        description: String,
-
-        #[index]
-        todo_id: ID,
-
-        #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::Deferred<Todo>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo, Step)).await;
+    let mut db = setup(test).await;
 
     let user = User::create()
         .name("Alice")
