@@ -426,25 +426,6 @@ impl Expand<'_> {
                     Self::create(self)
                 }
             }
-
-            // ----- ValidateCreate impls (for `create!` macro field validation) -----
-            #[diagnostic::do_not_recommend]
-            impl #toasty::ValidateCreate for #query_struct_ident<#toasty::List<#model_ident>> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl #toasty::ValidateCreate for #query_struct_ident<#model_ident> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl #toasty::ValidateCreate for #query_struct_ident<#toasty::Option<#model_ident>> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
         }
     }
 

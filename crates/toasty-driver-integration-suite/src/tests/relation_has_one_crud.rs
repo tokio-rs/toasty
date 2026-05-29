@@ -295,35 +295,12 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        #[has_one]
-        profile: toasty::Deferred<Option<Profile>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile)).await;
-
-    let user = User::create().exec(&mut db).await?;
-    let profile = Profile::create().exec(&mut db).await?;
+    let user = User::create().name("Jane Doe").exec(&mut db).await?;
+    let profile = Profile::create().bio("a person").exec(&mut db).await?;
 
     User::filter_by_id(user.id)
         .update()

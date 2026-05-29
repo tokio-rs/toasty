@@ -5,29 +5,15 @@ use toasty_core::{
     stmt::{Assignment, Statement, UpdateTarget},
 };
 
-#[derive(Debug, toasty::Model)]
-struct Counter {
-    #[key]
-    id: uuid::Uuid,
-
-    value: i64,
-}
-
-async fn setup(t: &mut Test) -> (toasty::Db, Counter) {
-    let mut db = t.setup_db(models!(Counter)).await;
-    let counter = toasty::create!(Counter {
+#[driver_test(scenario(crate::scenarios::counter_value))]
+pub async fn increment_adds_one(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
         id: uuid::Uuid::new_v4(),
         value: 10,
     })
     .exec(&mut db)
-    .await
-    .unwrap();
-    (db, counter)
-}
-
-#[driver_test]
-pub async fn increment_adds_one(t: &mut Test) -> Result<()> {
-    let (mut db, mut counter) = setup(t).await;
+    .await?;
 
     counter
         .update()
@@ -40,9 +26,15 @@ pub async fn increment_adds_one(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn decrement_subtracts_one(t: &mut Test) -> Result<()> {
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     counter
         .update()
@@ -55,9 +47,15 @@ pub async fn decrement_subtracts_one(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn add_adds_value(t: &mut Test) -> Result<()> {
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     counter
         .update()
@@ -70,9 +68,15 @@ pub async fn add_adds_value(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn subtract_subtracts_value(t: &mut Test) -> Result<()> {
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     counter
         .update()
@@ -85,9 +89,15 @@ pub async fn subtract_subtracts_value(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn add_negative_value(t: &mut Test) -> Result<()> {
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     counter
         .update()
@@ -100,9 +110,15 @@ pub async fn add_negative_value(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn increment_emits_add_assignment(t: &mut Test) -> Result<()> {
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     let counter_table_id = table_id(&db, "counters");
     let is_sql = t.capability().sql;
@@ -169,14 +185,20 @@ pub async fn arithmetic_chains_with_other_updates(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn multiple_add_on_one_field(t: &mut Test) -> Result<()> {
     // Regression: chaining two arithmetic ops on the same field used to crash
     // lowering. `Assignments::add` batches duplicate keys into
     // `Assignment::Batch([Add, Add])`, and `fold_append_batch` only handles
     // `Append`. Two `stmt::add` on the same field should compose to a single
     // net add of (2 + 3).
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     counter
         .update()
@@ -190,12 +212,18 @@ pub async fn multiple_add_on_one_field(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn subtract_then_add_on_one_field(t: &mut Test) -> Result<()> {
     // Covers the sign-flip path in the arithmetic-batch fold: when
     // `Subtract` leads, subsequent `Add` operands must flip to subtraction
     // inside the running operand (`col - a + b = col - (a - b)`).
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     counter
         .update()
@@ -209,12 +237,18 @@ pub async fn subtract_then_add_on_one_field(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn set_then_arithmetic_on_one_field(t: &mut Test) -> Result<()> {
     // Covers the Set+arithmetic fold: a literal write followed by an
     // arithmetic op on the same field should reduce to `Set(literal ± op)`
     // — Set clobbers prior state and absorbs subsequent arithmetic.
-    let (mut db, mut counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     counter
         .update()
@@ -303,9 +337,15 @@ pub async fn increment_narrow_integer_column(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::counter_value))]
 pub async fn filter_update_with_arithmetic(t: &mut Test) -> Result<()> {
-    let (mut db, counter) = setup(t).await;
+    let mut db = setup(t).await;
+    let counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
 
     Counter::filter_by_id(counter.id)
         .update()

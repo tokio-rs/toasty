@@ -6,7 +6,6 @@ mod expr_exists;
 mod expr_intersects;
 mod expr_is_null;
 mod expr_is_superset;
-mod expr_let;
 mod expr_list;
 mod expr_map;
 mod expr_or;
@@ -72,7 +71,6 @@ impl VisitMut for Simplify<'_> {
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::Intersects(expr) => self.simplify_expr_intersects(expr),
             Expr::IsSuperset(expr) => self.simplify_expr_is_superset(expr),
-            Expr::Let(expr) => self.simplify_expr_let(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
             Expr::Or(expr) => self.simplify_expr_or(expr),

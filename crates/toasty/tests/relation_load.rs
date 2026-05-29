@@ -1,7 +1,5 @@
 use toasty::Deferred;
-use toasty::schema::{
-    self, CreateMeta, Load, Model, ModelSet, Register, RelationManyField, RelationOneField,
-};
+use toasty::schema::{self, Load, Model, ModelSet, Register, RelationManyField, RelationOneField};
 use toasty::stmt::{Expr, Insert, IntoExpr, IntoInsert, Path};
 use toasty_core::stmt::{self, Value};
 
@@ -57,11 +55,6 @@ impl Model for Dummy {
     type PrimaryKey = i64;
     type ManyField<Origin> = ();
     type OneField<Origin> = ();
-
-    const CREATE_META: CreateMeta = CreateMeta {
-        fields: &[],
-        model_name: "Dummy",
-    };
 
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path

@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.6.1...toasty-driver-dynamodb-v0.7.0) - 2026-05-29
+
+### Added
+
+- [**breaking**] Add increment, decrement, add, and subtract update operators ([#979])
+- Add raw SQL execution API ([#965])
+- *(turso)* Add Turso driver with transaction-mode-aware concurrent writes ([#938])
+
+### Fixed
+
+- *(dynamodb)* Omit empty ExpressionAttributeValues on IS NULL / IS NOT NULL scans ([#940])
+
+### Changed
+
+- [**breaking**] Require Deferred relation fields ([#954])
+- [**breaking**] *(core)* Move schema diff types to `schema::diff` ([#929])
+
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#940]: https://github.com/tokio-rs/toasty/pull/940
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#979]: https://github.com/tokio-rs/toasty/pull/979
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.6.0...toasty-driver-dynamodb-v0.6.1) - 2026-05-16
 
 - Internal improvements only.

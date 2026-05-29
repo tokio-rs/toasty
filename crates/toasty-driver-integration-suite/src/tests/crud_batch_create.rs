@@ -4,41 +4,22 @@ use crate::prelude::*;
 
 use toasty_core::driver::{Operation, operation::Transaction};
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        #[allow(dead_code)]
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(Todo)).await;
-
-    let res = Todo::create_many().exec(&mut db).await?;
+    let res = Post::create_many().exec(&mut db).await?;
     assert!(res.is_empty());
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_one(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(Todo)).await;
+    let mut db = setup(test).await;
 
     test.log().clear();
-    let res = Todo::create_many()
-        .item(Todo::create().title("hello"))
+    let res = Post::create_many()
+        .item(Post::create().title("hello"))
         .exec(&mut db)
         .await?;
 
@@ -51,29 +32,20 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
         assert!(test.log().is_empty());
     }
 
-    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).exec(&mut db).await?;
+    let reloaded: Vec<_> = Post::filter_by_id(res[0].id).exec(&mut db).await?;
     assert_eq!(1, reloaded.len());
     assert_eq!(reloaded[0].id, res[0].id);
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_many(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(Todo)).await;
+    let mut db = setup(test).await;
 
     test.log().clear();
-    let res = Todo::create_many()
-        .item(Todo::create().title("todo 1"))
-        .item(Todo::create().title("todo 2"))
+    let res = Post::create_many()
+        .item(Post::create().title("todo 1"))
+        .item(Post::create().title("todo 2"))
         .exec(&mut db)
         .await?;
 
@@ -88,10 +60,10 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
         assert!(test.log().is_empty());
     }
 
-    for todo in &res {
-        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).exec(&mut db).await?;
+    for post in &res {
+        let reloaded: Vec<_> = Post::filter_by_id(post.id).exec(&mut db).await?;
         assert_eq!(1, reloaded.len());
-        assert_eq!(reloaded[0].id, todo.id);
+        assert_eq!(reloaded[0].id, post.id);
     }
     Ok(())
 }
@@ -203,17 +175,9 @@ pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()
 
 /// Multi-row batch inside an explicit transaction executes as a single INSERT
 /// without extra savepoint wrapping (the statement is inherently atomic).
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(Todo)).await;
+    let mut db = setup(t).await;
 
     t.log().clear();
     let mut tx = db.transaction().await?;
@@ -227,9 +191,9 @@ pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Re
         })
     );
 
-    Todo::create_many()
-        .item(Todo::create().title("a"))
-        .item(Todo::create().title("b"))
+    Post::create_many()
+        .item(Post::create().title("a"))
+        .item(Post::create().title("b"))
         .exec(&mut tx)
         .await?;
 

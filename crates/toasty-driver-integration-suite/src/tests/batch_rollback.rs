@@ -210,27 +210,13 @@ pub async fn batch_array_creates_rolls_back_on_failure(t: &mut Test) -> Result<(
 
 /// When a batch of different models fails on the second create, the first
 /// model's create is rolled back too.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::two_models_unique_title)
+)]
 pub async fn batch_different_models_rolls_back_on_failure(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     // Seed the collision
     Post::create().title("taken").exec(&mut db).await?;
