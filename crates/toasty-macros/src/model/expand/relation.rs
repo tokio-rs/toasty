@@ -15,13 +15,6 @@ struct PairBelongsToCheck<'a> {
 }
 
 impl Expand<'_> {
-    /// Kept as an empty hook in the expansion sequence — the previous `Many`,
-    /// `One`, and `OptionOne` structs have been replaced by a single generic
-    /// `Query<T>` per model emitted by `expand_query_struct`.
-    pub(super) fn expand_relation_structs(&self) -> TokenStream {
-        TokenStream::new()
-    }
-
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {
         self.model
             .fields

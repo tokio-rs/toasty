@@ -35,7 +35,6 @@ impl Expand<'_> {
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
-        let relation_structs = self.expand_relation_structs();
         let storage_compat_checks = self.expand_storage_compat_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
         let version_compat_checks = self.expand_version_compat_checks();
@@ -47,7 +46,6 @@ impl Expand<'_> {
             #query_struct
             #create_builder
             #update_builder
-            #relation_structs
             #storage_compat_checks
             #auto_compat_checks
             #version_compat_checks
