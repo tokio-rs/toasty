@@ -17,22 +17,28 @@ pub async fn basic_embedded_struct(test: &mut Test) {
         city: String,
     }
 
-    let db = test.setup_db(models!(Address)).await;
+    // Embedded types are discovered through a containing model rather than
+    // being registered directly.
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Container {
+        #[key]
+        id: i64,
+        address: Address,
+    }
+
+    let db = test.setup_db(models!(Container)).await;
     let schema = db.schema();
 
     // Embedded models exist in app schema as Model::EmbeddedStruct
-    assert_struct!(schema.app.models, #{
-        Address::id(): toasty::schema::app::Model::EmbeddedStruct({
-            name.upper_camel_case(): "Address",
-            fields: [
-                { name.app: Some("street") },
-                { name.app: Some("city") },
-            ],
-        }),
-    });
-
-    // Embedded models don't create database tables (fields are flattened into parent)
-    assert!(schema.db.tables.is_empty());
+    let address = &schema.app.models[&Address::id()];
+    assert_struct!(address, toasty::schema::app::Model::EmbeddedStruct({
+        name.upper_camel_case(): "Address",
+        fields: [
+            { name.app: Some("street") },
+            { name.app: Some("city") },
+        ],
+    }));
 }
 
 /// Tests the complete schema generation and mapping for embedded fields:
@@ -55,7 +61,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
         address: Address,
     }
 
-    let db = test.setup_db(models!(User, Address)).await;
+    let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
     // Both embedded and root models exist in app schema
@@ -178,7 +184,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     let mut user = User::create()
         .name("Alice")
@@ -250,7 +256,7 @@ pub async fn embedded_struct_fields_codegen(test: &mut Test) {
         address: Address,
     }
 
-    let _db = test.setup_db(models!(User, Address)).await;
+    let _db = test.setup_db(models!(User)).await;
 
     // Direct chaining: User::fields().address().city()
     let _city_path = User::fields().address().city();
@@ -292,7 +298,7 @@ pub async fn query_embedded_struct_fields(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     // Create users in different countries and cities
     let users_data = [
@@ -392,7 +398,7 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
         stats: Stats,
     }
 
-    let mut db = t.setup_db(models!(Player, Stats)).await;
+    let mut db = t.setup_db(models!(Player)).await;
 
     for (name, score, rank) in [
         ("Alice", 100, 1),
@@ -456,7 +462,7 @@ pub async fn query_embedded_multiple_fields(t: &mut Test) -> Result<()> {
         coords: Coordinates,
     }
 
-    let mut db = t.setup_db(models!(Location, Coordinates)).await;
+    let mut db = t.setup_db(models!(Location)).await;
 
     for (name, x, y, z) in [
         ("Origin", 0, 0, 0),
@@ -527,7 +533,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
         meta: Metadata,
     }
 
-    let mut db = t.setup_db(models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document)).await;
 
     // Setup: Doc A (v1, draft), Doc B (v2, draft), Doc C (v1, published)
     for (title, version, status) in [
@@ -603,7 +609,7 @@ pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     // Create a user with initial address
     let mut user = User::create()
@@ -731,7 +737,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
         address: Address,
     }
 
-    let db = test.setup_db(models!(User, Address, City, Location)).await;
+    let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
     // All embedded models should exist in app schema
@@ -1030,7 +1036,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
         headquarters: Office,
     }
 
-    let mut db = t.setup_db(models!(Company, Office, Address)).await;
+    let mut db = t.setup_db(models!(Company)).await;
 
     // Create: nested embedded structs are flattened into a single row
     let mut company = Company::create()
@@ -1141,7 +1147,7 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
         headquarters: Office,
     }
 
-    let mut db = t.setup_db(models!(Company, Office, Address)).await;
+    let mut db = t.setup_db(models!(Company)).await;
 
     let mut company = Company::create()
         .name("Acme")
@@ -1239,7 +1245,7 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(models!(User, Address)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     let user = User::create()
         .name("Alice")
@@ -1306,7 +1312,7 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
         schedule: Schedule,
     }
 
-    let mut db = t.setup_db(models!(Event, Schedule)).await;
+    let mut db = t.setup_db(models!(Event)).await;
 
     let starts_at = jiff::Timestamp::from_second(1_700_000_000).unwrap();
     let due_date = jiff::civil::date(2025, 6, 15);
@@ -1362,7 +1368,7 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
         meta: Meta,
     }
 
-    let mut db = t.setup_db(models!(Task, Meta, Priority)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     let mut task = Task::create()
         .meta(Meta {
@@ -1411,7 +1417,7 @@ pub async fn embedded_struct_with_uuid_field(t: &mut Test) -> Result<()> {
         meta: Meta,
     }
 
-    let mut db = t.setup_db(models!(Item, Meta)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     let ref_id = Uuid::new_v4();
 

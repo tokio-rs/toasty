@@ -5,7 +5,7 @@ use toasty_core::stmt::{Expr, ExprCast, ExprReference, Type};
 #[test]
 fn redundant_cast_on_field_eliminated() {
     use crate as toasty;
-    use crate::schema::Register;
+    use crate::schema::Model;
 
     #[allow(dead_code)]
     #[derive(toasty::Model)]
@@ -38,7 +38,7 @@ fn redundant_cast_on_field_eliminated() {
 #[test]
 fn non_redundant_cast_on_field_kept() {
     use crate as toasty;
-    use crate::schema::Register;
+    use crate::schema::Model;
 
     #[allow(dead_code)]
     #[derive(toasty::Model)]

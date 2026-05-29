@@ -1,17 +1,17 @@
-use super::{Load, Register};
+use super::Load;
 use crate::stmt::{Expr, IntoExpr, IntoInsert, List, Path};
 
-use toasty_core::schema::app::FieldId;
+use toasty_core::schema::app::{self, FieldId, ModelId, ModelSet};
 
 /// Trait for root models that map to database tables and can be queried.
 ///
 /// Root models have primary keys, can be queried independently, and support
-/// full CRUD operations. They extend `Register` with queryability and
-/// deserialization capabilities, and carry the relation-target metadata
+/// full CRUD operations. They carry queryability and deserialization
+/// capabilities along with the relation-target metadata
 /// that the [`RelationManyField`](super::RelationManyField) and
 /// [`RelationOneField`](super::RelationOneField) traits project through when
 /// describing a field that references this model.
-pub trait Model: Register + Load<Output = Self> + Sized {
+pub trait Model: Load<Output = Self> + Sized {
     /// Query builder type for this model
     type Query;
 
@@ -64,6 +64,25 @@ pub trait Model: Register + Load<Output = Self> + Sized {
 
     /// The optional has-one relation wrapper type for multi-step scopes.
     type ViaOptionOne;
+
+    /// Unique identifier for this model within the schema.
+    ///
+    /// Identifiers are *not* unique across schemas.
+    fn id() -> ModelId;
+
+    /// Returns the schema definition for this model.
+    fn schema() -> app::Model;
+
+    /// Register this model and all models reachable through its fields into
+    /// the given [`ModelSet`].
+    ///
+    /// If this model is already present in the set (checked via
+    /// [`ModelSet::contains`]), the method returns immediately. Otherwise it
+    /// inserts the model and recursively registers any models referenced by
+    /// embedded or relation fields. This is the entry point used by
+    /// [`models!`](crate::models) to register root models; embedded types are
+    /// discovered transitively through their containing fields.
+    fn register(model_set: &mut ModelSet);
 
     /// Construct a model path from a [`Path`] targeting this model.
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin>;

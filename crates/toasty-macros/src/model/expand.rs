@@ -106,37 +106,20 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         #storage_compat_checks
 
-        impl #toasty::Register for #model_ident {
+        impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
                 static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
                 *ID.get_or_init(|| #toasty::generate_unique_id())
             }
 
             #model_schema
-
-            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                if model_set.contains(Self::id()) {
-                    return;
-                }
-                model_set.add(Self::schema());
-                #( #field_register_calls )*
-            }
         }
-
-        #toasty::inventory::submit! {
-            #toasty::DiscoverItem::new(
-                env!("CARGO_PKG_NAME"),
-                |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
-            )
-        }
-
-        impl #toasty::Embed for #model_ident {}
 
         impl #toasty::Load for #model_ident {
             type Output = Self;
 
             fn ty() -> #toasty::core::stmt::Type {
-                #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
+                #toasty::core::stmt::Type::Model(<Self as #toasty::Embed>::id())
             }
 
             fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
@@ -175,7 +158,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
-                        target: <Self as #toasty::Register>::id(),
+                        target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
@@ -189,7 +172,11 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
 
             fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                <Self as #toasty::Register>::register(model_set);
+                if model_set.contains(<Self as #toasty::Embed>::id()) {
+                    return;
+                }
+                model_set.add(<Self as #toasty::Embed>::schema());
+                #( #field_register_calls )*
             }
         }
 
@@ -253,14 +240,14 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         #storage_compat_checks
 
-        impl #toasty::Register for #model_ident {
+        impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
                 static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
                 *ID.get_or_init(|| #toasty::generate_unique_id())
             }
 
             fn schema() -> #toasty::core::schema::app::Model {
-                let id = Self::id();
+                let id = <Self as #toasty::Embed>::id();
                 #toasty::core::schema::app::Model::EmbeddedEnum(
                     #toasty::core::schema::app::EmbeddedEnum {
                         id,
@@ -277,23 +264,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 )
             }
 
-            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                if model_set.contains(Self::id()) {
-                    return;
-                }
-                model_set.add(Self::schema());
-                #( #field_register_calls )*
-            }
         }
-
-        #toasty::inventory::submit! {
-            #toasty::DiscoverItem::new(
-                env!("CARGO_PKG_NAME"),
-                |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
-            )
-        }
-
-        impl #toasty::Embed for #model_ident {}
 
         #load_impl
 
@@ -323,7 +294,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
-                        target: <Self as #toasty::Register>::id(),
+                        target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
@@ -337,7 +308,11 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
 
             fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                <Self as #toasty::Register>::register(model_set);
+                if model_set.contains(<Self as #toasty::Embed>::id()) {
+                    return;
+                }
+                model_set.add(<Self as #toasty::Embed>::schema());
+                #( #field_register_calls )*
             }
         }
 

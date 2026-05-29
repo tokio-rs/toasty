@@ -27,7 +27,7 @@ mod option;
 
 mod register;
 pub use register::inventory;
-pub use register::{DiscoverItem, Register, generate_unique_id};
+pub use register::{DiscoverItem, generate_unique_id};
 
 mod num;
 

@@ -33,9 +33,7 @@ pub async fn belongs_to_with_embed_pk(t: &mut Test) -> Result<()> {
         pub meeting: toasty::Deferred<Meeting>,
     }
 
-    let mut db = t
-        .setup_db(models!(Meeting, AgendaItem, MeetingId, AgendaItemId))
-        .await;
+    let mut db = t.setup_db(models!(Meeting, AgendaItem)).await;
 
     let meeting = toasty::create!(Meeting {
         id: MeetingId("m1".into()),

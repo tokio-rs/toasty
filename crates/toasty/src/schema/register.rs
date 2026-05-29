@@ -1,4 +1,4 @@
-use toasty_core::schema::app::{self, ModelId, ModelSet};
+use toasty_core::schema::app::{ModelId, ModelSet};
 
 /// Generate a unique model ID at runtime.
 ///
@@ -14,38 +14,14 @@ pub fn generate_unique_id() -> ModelId {
     ModelId(id)
 }
 
-/// Base trait for types that can be registered with the database schema.
+/// An item discovered at compile time by the `#[derive(Model)]` macro.
 ///
-/// This trait is implemented by both root models (via `Model`) and embedded
-/// types (via `Embed`). It provides the minimal interface needed for schema
-/// registration.
-pub trait Register {
-    /// Unique identifier for this type within the schema.
-    ///
-    /// Identifiers are *not* unique across schemas.
-    fn id() -> ModelId;
-
-    /// Returns the schema definition for this type.
-    fn schema() -> app::Model;
-
-    /// Register this model and all models reachable through its fields into the
-    /// given [`ModelSet`].
-    ///
-    /// If this model is already present in the set (checked via
-    /// [`ModelSet::contains`]), the method returns immediately. Otherwise it
-    /// inserts the model and recursively registers any models referenced by
-    /// embedded or relation fields.
-    fn register(model_set: &mut ModelSet);
-}
-
-/// An item discovered at compile time by the `#[derive(Model)]` or
-/// `#[derive(Embed)]` macros.
-///
-/// Each derived type emits an `inventory::submit!` call that creates a
+/// Each root model emits an `inventory::submit!` call that creates a
 /// `DiscoverItem` carrying the originating crate name (via
 /// `env!("CARGO_PKG_NAME")`) and a registration function.
 /// [`toasty::models!`] iterates over all submitted items filtered by crate
-/// name.
+/// name. Embedded types are not submitted directly; they are discovered
+/// transitively through the fields of the models that contain them.
 #[doc(hidden)]
 pub struct DiscoverItem {
     crate_name: &'static str,
@@ -107,8 +83,10 @@ pub use inventory;
 ///
 /// The macro accepts a comma-separated list of any combination of:
 ///
-/// - **Individual models** — a type path to a struct that derives `Model` or
-///   `Embed`. Module paths are supported (e.g. `my_module::MyModel`).
+/// - **Individual models** — a type path to a struct that derives `Model`.
+///   Module paths are supported (e.g. `my_module::MyModel`). Embedded types are
+///   not listed here; they are discovered through the fields of the models that
+///   contain them.
 /// - **`crate::*`** — registers every model discovered in the current crate.
 /// - **`some_crate::*`** — registers every model discovered in the named
 ///   external crate.
@@ -149,7 +127,7 @@ macro_rules! models {
 
     // Register single model with `models!(ModelName)`
     (@internal $set:ident $model:ty $(,$($rest:tt)*)?) => {{
-        <$model as ::toasty::schema::Register>::register(&mut $set);
+        <$model as ::toasty::schema::Model>::register(&mut $set);
         $(
             $crate::models!(@internal $set $($rest)*);
         )?

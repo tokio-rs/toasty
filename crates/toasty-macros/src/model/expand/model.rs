@@ -83,27 +83,10 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::Register for #model_ident {
-                fn id() -> #toasty::core::schema::app::ModelId {
-                    static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
-                    *ID.get_or_init(|| #toasty::generate_unique_id())
-                }
-
-                #model_schema
-
-                fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                    if model_set.contains(Self::id()) {
-                        return;
-                    }
-                    model_set.add(Self::schema());
-                    #( #field_register_calls )*
-                }
-            }
-
             #toasty::inventory::submit! {
                 #toasty::DiscoverItem::new(
                     env!("CARGO_PKG_NAME"),
-                    |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
+                    |model_set| { <#model_ident as #toasty::Model>::register(model_set); },
                 )
             }
 
@@ -111,7 +94,7 @@ impl Expand<'_> {
                 type Output = Self;
 
                 fn ty() -> #toasty::core::stmt::Type {
-                    #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
+                    #toasty::core::stmt::Type::Model(<Self as #toasty::Model>::id())
                 }
 
                 fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
@@ -136,6 +119,21 @@ impl Expand<'_> {
                 type OneField<__Origin> = #field_struct_ident<__Origin>;
                 type OptionOne = OptionOne<#toasty::Direct>;
                 type ViaOptionOne = OptionOne<#toasty::Via>;
+
+                fn id() -> #toasty::core::schema::app::ModelId {
+                    static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
+                    *ID.get_or_init(|| #toasty::generate_unique_id())
+                }
+
+                #model_schema
+
+                fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                    if model_set.contains(<Self as #toasty::Model>::id()) {
+                        return;
+                    }
+                    model_set.add(<Self as #toasty::Model>::schema());
+                    #( #field_register_calls )*
+                }
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)

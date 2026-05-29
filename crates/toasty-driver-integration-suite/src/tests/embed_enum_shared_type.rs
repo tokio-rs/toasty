@@ -32,7 +32,7 @@ pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
         priority: Priority,
     }
 
-    let mut db = t.setup_db(models!(Task, Bug, Priority)).await;
+    let mut db = t.setup_db(models!(Task, Bug)).await;
 
     // Create records in both tables
     let task = toasty::create!(Task {
@@ -110,7 +110,7 @@ pub async fn shared_enum_filter(t: &mut Test) -> Result<()> {
         priority: Priority,
     }
 
-    let mut db = t.setup_db(models!(Task, Bug, Priority)).await;
+    let mut db = t.setup_db(models!(Task, Bug)).await;
 
     // Seed data
     for (title, p) in [

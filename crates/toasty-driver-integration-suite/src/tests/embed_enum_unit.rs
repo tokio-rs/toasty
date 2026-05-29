@@ -36,7 +36,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(User, Status)).await;
+    let mut db = t.setup_db(models!(User)).await;
     let user_table = table_id(&db, "users");
 
     // Create: enum variant is stored as its discriminant (1 = Pending)
@@ -154,7 +154,7 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     // Create tasks with different statuses: 1 pending, 2 active, 1 done
     for (name, status) in [
@@ -285,23 +285,29 @@ pub async fn basic_embedded_enum(test: &mut Test) {
         Done,
     }
 
-    let db = test.setup_db(models!(Status)).await;
+    // Embedded types are discovered through a containing model rather than
+    // being registered directly.
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Container {
+        #[key]
+        id: i64,
+        status: Status,
+    }
+
+    let db = test.setup_db(models!(Container)).await;
     let schema = db.schema();
 
     // Embedded enums exist in app schema as Model::EmbeddedEnum
-    assert_struct!(schema.app.models, #{
-        Status::id(): toasty::schema::app::Model::EmbeddedEnum({
-            name.upper_camel_case(): "Status",
-            variants: [
-                _ { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1), .. },
-                _ { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2), .. },
-                _ { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3), .. },
-            ],
-        }),
-    });
-
-    // Embedded enums don't create database tables (stored as a column in parent)
-    assert!(schema.db.tables.is_empty());
+    let status = &schema.app.models[&Status::id()];
+    assert_struct!(status, toasty::schema::app::Model::EmbeddedEnum({
+        name.upper_camel_case(): "Status",
+        variants: [
+            _ { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1), .. },
+            _ { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2), .. },
+            _ { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3), .. },
+        ],
+    }));
 }
 
 /// Tests the complete schema generation and mapping for an embedded enum field:
@@ -328,7 +334,7 @@ pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
         status: Status,
     }
 
-    let db = test.setup_db(models!(User, Status)).await;
+    let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
     // Both embedded enum and root model exist in app schema

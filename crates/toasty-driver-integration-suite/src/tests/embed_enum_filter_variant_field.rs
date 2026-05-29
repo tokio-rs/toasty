@@ -22,7 +22,7 @@ pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     User::create()
         .name("Alice")
@@ -111,7 +111,7 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     User::create()
         .group("eng")
@@ -183,7 +183,7 @@ pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     User::create()
         .name("Alice")

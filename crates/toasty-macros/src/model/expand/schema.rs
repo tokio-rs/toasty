@@ -60,9 +60,18 @@ impl Expand<'_> {
             }
         };
 
+        // `id()` lives on `Model` for root models and on `Embed` for embedded
+        // structs; qualify the call so it resolves regardless of which trait
+        // impl this `schema()` body is emitted into.
+        let id_trait = match &self.model.kind {
+            ModelKind::Root(_) => quote!(#toasty::Model),
+            ModelKind::EmbeddedStruct(_) => quote!(#toasty::Embed),
+            ModelKind::EmbeddedEnum(_) => unreachable!(),
+        };
+
         quote! {
             fn schema() -> #toasty::core::schema::app::Model {
-                let id = #model_ident::id();
+                let id = <#model_ident as #id_trait>::id();
 
                 #model
             }
@@ -431,8 +440,8 @@ impl Expand<'_> {
     ///
     /// For primitive fields, no call is emitted (the default `Field::register`
     /// is a no-op). For embedded fields, `<Type as Field>::register` is called.
-    /// For relation fields (BelongsTo, HasMany, HasOne), `<TargetType as
-    /// Register>::register` is called directly.
+    /// For relation fields (BelongsTo, HasMany, HasOne), `<TargetModel as
+    /// Model>::register` is called directly.
     pub(super) fn expand_field_register_calls(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
 
@@ -450,19 +459,19 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Model>::register(model_set);
                     }
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::RelationManyField>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::register(model_set);
                     }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Model>::register(model_set);
                     }
                 }
             })

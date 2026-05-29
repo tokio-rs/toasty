@@ -81,12 +81,12 @@ impl<M: Model> Insert<M> {
     /// #     name: String,
     /// # }
     /// use toasty::stmt::Insert;
-    /// use toasty::schema::Register;
+    /// use toasty::schema::Model;
     ///
     /// // Construct from a raw untyped insert
     /// let raw = toasty_core::stmt::Insert {
     ///     target: toasty_core::stmt::InsertTarget::Model(
-    ///         <User as Register>::id(),
+    ///         <User as Model>::id(),
     ///     ),
     ///     source: toasty_core::stmt::Query::unit(),
     ///     returning: None,

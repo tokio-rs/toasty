@@ -1,4 +1,4 @@
-use toasty::schema::Register;
+use toasty::schema::Model;
 
 #[derive(Debug, toasty::Model)]
 struct ModelA {

@@ -20,7 +20,7 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
         metadata: toasty::Deferred<Metadata>,
     }
 
-    let mut db = t.setup_db(models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document)).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -92,7 +92,7 @@ pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(Person, ContactInfo, Metadata)).await;
+    let mut db = t.setup_db(models!(Person)).await;
 
     // INSERT...RETURNING must echo back the deferred sub-field nested two
     // levels deep (through the enum variant and through the embed struct).
@@ -162,7 +162,7 @@ pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Resu
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(Person, ContactInfo, Metadata)).await;
+    let mut db = t.setup_db(models!(Person)).await;
 
     let alice = toasty::create!(Person {
         name: "Alice".to_string(),
@@ -235,7 +235,7 @@ pub async fn deferred_embed_unit_enum(t: &mut Test) -> Result<()> {
         status: toasty::Deferred<Status>,
     }
 
-    let mut db = t.setup_db(models!(Document, Status)).await;
+    let mut db = t.setup_db(models!(Document)).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -280,7 +280,7 @@ pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
         contact: toasty::Deferred<ContactInfo>,
     }
 
-    let mut db = t.setup_db(models!(Person, ContactInfo)).await;
+    let mut db = t.setup_db(models!(Person)).await;
 
     let alice = toasty::create!(Person {
         name: "Alice".to_string(),
@@ -349,7 +349,7 @@ pub async fn deferred_embed_update_reloads(t: &mut Test) -> Result<()> {
         metadata: toasty::Deferred<Metadata>,
     }
 
-    let mut db = t.setup_db(models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document)).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -405,7 +405,7 @@ pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> 
         metadata: toasty::Deferred<Metadata>,
     }
 
-    let mut db = t.setup_db(models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document)).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -470,7 +470,7 @@ pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
         metadata: Metadata,
     }
 
-    let mut db = t.setup_db(models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document)).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -526,7 +526,7 @@ pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Resu
         metadata: Metadata,
     }
 
-    let mut db = t.setup_db(models!(Document, Metadata)).await;
+    let mut db = t.setup_db(models!(Document)).await;
 
     let mut doc = toasty::create!(Document {
         title: "Hello".to_string(),

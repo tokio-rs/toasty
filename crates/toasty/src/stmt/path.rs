@@ -1,10 +1,23 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::{Field, Register};
+use crate::schema::{Field, Load};
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
-    schema::app::VariantId,
+    schema::app::{ModelId, VariantId},
     stmt::{self, Direction, OrderByExpr},
 };
+
+/// Extract the [`ModelId`] of a schema model or embedded type `T`.
+///
+/// Both [`Model`](crate::schema::Model) and [`Embed`](crate::schema::Embed)
+/// implement [`Load`] with `ty()` returning [`stmt::Type::Model`], so this is
+/// how `Path` constructors recover a type's identity without a dedicated
+/// registration trait.
+fn model_id<T: Load>() -> ModelId {
+    match T::ty() {
+        stmt::Type::Model(id) => id,
+        ty => panic!("path root type is not a model or embedded type: {ty:?}"),
+    }
+}
 
 /// A typed path from a root model `T` to a field of type `U`.
 ///
@@ -39,7 +52,7 @@ pub struct Path<T, U> {
     _p: PhantomData<(T, U)>,
 }
 
-impl<T: Register> Path<T, T> {
+impl<T: Load> Path<T, T> {
     /// Create a path that points to the root model itself.
     ///
     /// # Examples
@@ -57,20 +70,20 @@ impl<T: Register> Path<T, T> {
     /// ```
     pub fn root() -> Self {
         Self {
-            untyped: stmt::Path::model(T::id()),
+            untyped: stmt::Path::model(model_id::<T>()),
             _p: PhantomData,
         }
     }
 }
 
-impl<M: Register> Path<List<M>, List<M>> {
+impl<M: Load> Path<List<M>, List<M>> {
     /// Create an identity path for a list of model `M`.
     ///
     /// This is the list counterpart of [`Path::root`] — it produces a
     /// `Path<List<M>, List<M>>` rooted at the model's identity.
     pub fn from_model_list() -> Self {
         Self {
-            untyped: stmt::Path::model(M::id()),
+            untyped: stmt::Path::model(model_id::<M>()),
             _p: PhantomData,
         }
     }
@@ -95,10 +108,10 @@ impl<T, U> Path<T, U> {
     /// ```
     pub fn from_field_index(index: usize) -> Self
     where
-        T: Register,
+        T: Load,
     {
         Self {
-            untyped: stmt::Path::from_index(T::id(), index),
+            untyped: stmt::Path::from_index(model_id::<T>(), index),
             _p: PhantomData,
         }
     }

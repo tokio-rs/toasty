@@ -314,7 +314,7 @@ impl Expand<'_> {
 
         quote! {
             fn field_name_to_id(name: &str) -> #toasty::core::schema::app::FieldId {
-                use #toasty::{Model, Register};
+                use #toasty::Model;
 
                 match name {
                     #( #fields )*
