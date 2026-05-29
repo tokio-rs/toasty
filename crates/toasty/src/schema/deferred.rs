@@ -12,6 +12,7 @@ use std::fmt;
 /// value.
 ///
 /// `Deferred<Option<T>>` is supported when the column is nullable.
+#[derive(Clone)]
 pub struct Deferred<T> {
     value: Option<Box<T>>,
 }
@@ -178,6 +179,10 @@ impl<T: fmt::Debug> fmt::Debug for Deferred<T> {
     }
 }
 
+/// Serializes transparently as the inner value: a loaded `Deferred<T>` encodes
+/// exactly as the `T` it holds, and an unloaded one as `null`. Round-trips with
+/// the [`Deserialize`](serde_core::Deserialize) impl below, preserving load
+/// state.
 #[cfg(feature = "serde")]
 impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -185,5 +190,20 @@ impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
         S: serde_core::Serializer,
     {
         self.value.serialize(serializer)
+    }
+}
+
+/// Deserializes transparently from the inner value, mirroring the
+/// [`Serialize`](serde_core::Serialize) impl above: a present value loads the
+/// field, `null` leaves it unloaded.
+#[cfg(feature = "serde")]
+impl<'de, T: serde_core::Deserialize<'de>> serde_core::Deserialize<'de> for Deferred<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde_core::Deserializer<'de>,
+    {
+        Ok(Self {
+            value: Option::<Box<T>>::deserialize(deserializer)?,
+        })
     }
 }
