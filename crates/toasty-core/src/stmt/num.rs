@@ -32,8 +32,6 @@ macro_rules! try_from {
             Value::U16(v) => <$ty>::try_from(v).ok(),
             Value::U32(v) => <$ty>::try_from(v).ok(),
             Value::U64(v) => <$ty>::try_from(v).ok(),
-            // Bool key fields are stored as Integer(1) and cast through I8.
-            Value::Bool(v) => <$ty>::try_from(if v { 1i8 } else { 0i8 }).ok(),
             _ => None,
         }
     };
