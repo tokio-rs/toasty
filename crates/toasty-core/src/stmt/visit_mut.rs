@@ -919,6 +919,7 @@ where
         Expr::StartsWith(expr) => v.visit_expr_starts_with_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
+        Expr::Static(expr) => v.visit_value_mut(expr),
     }
 }
 

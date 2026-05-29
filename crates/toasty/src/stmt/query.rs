@@ -213,7 +213,7 @@ impl<T> Query<T> {
     pub fn limit(&mut self, n: usize) -> &mut Self {
         let n = i64::try_from(n).expect("limit exceeds i64::MAX");
         self.untyped.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
-            limit: stmt::Value::from(n).into(),
+            limit: stmt::Expr::Static(stmt::Value::from(n)),
             offset: None,
         }));
         self
@@ -246,7 +246,7 @@ impl<T> Query<T> {
             Some(stmt::Limit::Offset(limit_offset)) => {
                 Some(stmt::Limit::Offset(stmt::LimitOffset {
                     limit: limit_offset.limit,
-                    offset: Some(stmt::Value::from(n).into()),
+                    offset: Some(stmt::Expr::Static(stmt::Value::from(n))),
                 }))
             }
             Some(stmt::Limit::Cursor(_)) => {
@@ -383,7 +383,7 @@ fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
     query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
-        limit: stmt::Expr::from(1i64),
+        limit: stmt::Expr::Static(stmt::Value::I64(1)),
         offset: None,
     }));
 }

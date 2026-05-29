@@ -917,6 +917,7 @@ where
         Expr::StartsWith(expr) => v.visit_expr_starts_with(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
         Expr::Value(expr) => v.visit_value(expr),
+        Expr::Static(expr) => v.visit_value(expr),
     }
 }
 

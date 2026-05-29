@@ -91,6 +91,7 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::Project(_)
         | Expr::Reference(_)
         | Expr::StartsWith(_)
+        | Expr::Static(_)
         | Expr::Stmt(_)
         | Expr::Value(_) => None,
     }

@@ -967,7 +967,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Extract page_size
         let page_size = match &cursor.page_size {
-            stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+            stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
             _ => return Ok(None),
         };
 
@@ -1875,7 +1875,7 @@ fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
 /// other shape — an invariant violation that `verify` should have caught.
 fn as_i64_literal(expr: &stmt::Expr) -> i64 {
     match expr {
-        stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
         _ => panic!("limit/offset must be an i64 literal; got {expr:#?}"),
     }
 }

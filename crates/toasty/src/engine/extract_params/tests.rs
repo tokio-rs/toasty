@@ -420,3 +420,59 @@ fn binary_like_glob_wildcards_are_literal() {
     assert_eq!(binary_like_prefix_pattern("foo*"), "foo*%");
     assert_eq!(binary_like_prefix_pattern("a?b"), "a?b%");
 }
+
+// ============================================================================
+// Expr::Static (schema-fixed leaves) survives extract-params
+// ============================================================================
+
+#[test]
+fn static_value_in_insert_row_is_not_extracted() {
+    // Mixed row: one user-supplied `Expr::Value` (extracted) and one
+    // engine-emitted `Expr::Static` (passes through).  Confirms the
+    // extract pass keys on the variant, not the value content.
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: String,
+    }
+
+    let schema = test_schema_with(&[Item::schema()]);
+
+    let mut stmt = stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(&schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![Expr::Record(stmt::ExprRecord {
+            fields: vec![
+                Expr::Static(Value::from("static-key")),
+                Expr::Value(Value::from("user-name")),
+            ],
+        })])),
+        returning: None,
+    });
+
+    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
+
+    // Only the `Expr::Value` is extracted; the `Expr::Static` passes through.
+    assert_eq!(params.len(), 1);
+    assert_eq!(params[0].value, Value::from("user-name"));
+
+    let stmt::Statement::Insert(insert) = &stmt else {
+        unreachable!()
+    };
+    let stmt::ExprSet::Values(values) = &insert.source.body else {
+        unreachable!()
+    };
+    let Expr::Record(record) = &values.rows[0] else {
+        unreachable!()
+    };
+    assert!(
+        matches!(&record.fields[0], Expr::Static(Value::String(s)) if s == "static-key"),
+        "Static leaf should survive extract-params, got {:#?}",
+        record.fields[0]
+    );
+    assert!(
+        matches!(&record.fields[1], Expr::Arg(_)),
+        "Value leaf should be extracted to Arg, got {:#?}",
+        record.fields[1]
+    );
+}
