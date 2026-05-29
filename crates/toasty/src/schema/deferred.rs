@@ -12,6 +12,22 @@ use std::fmt;
 /// value.
 ///
 /// `Deferred<Option<T>>` is supported when the column is nullable.
+///
+/// # Serde
+///
+/// With the `serde` feature a loaded `Deferred<T>` serializes transparently as
+/// its inner `T`, and any present value deserializes back to the loaded state.
+/// The unloaded state has no transparent encoding of its own — skip it on the
+/// way out and default it on the way in:
+///
+/// ```ignore
+/// #[serde(skip_serializing_if = "Deferred::is_unloaded", default)]
+/// notes: Deferred<Option<String>>,
+/// ```
+///
+/// Serializing an unloaded field without `skip_serializing_if` emits `null`,
+/// which does not round-trip (it reads back as loaded), so the annotation is
+/// expected on every deferred field.
 #[derive(Clone)]
 pub struct Deferred<T> {
     value: Option<Box<T>>,
@@ -179,10 +195,12 @@ impl<T: fmt::Debug> fmt::Debug for Deferred<T> {
     }
 }
 
-/// Serializes transparently as the inner value: a loaded `Deferred<T>` encodes
-/// exactly as the `T` it holds, and an unloaded one as `null`. Round-trips with
-/// the [`Deserialize`](serde_core::Deserialize) impl below, preserving load
-/// state.
+/// Serializes transparently: a loaded `Deferred<T>` encodes exactly as the
+/// inner `T`, an unloaded one as `null`.
+///
+/// The unloaded `null` is not a distinct marker — a loaded `Deferred<Option<T>>`
+/// holding `None` also encodes as `null` — so unloaded fields are meant to be
+/// skipped rather than serialized. See the type-level docs.
 #[cfg(feature = "serde")]
 impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -193,17 +211,15 @@ impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
     }
 }
 
-/// Deserializes transparently from the inner value, mirroring the
-/// [`Serialize`](serde_core::Serialize) impl above: a present value loads the
-/// field, `null` leaves it unloaded.
+/// Deserializes any present value — including `null` — as loaded, mirroring the
+/// transparent [`Serialize`](serde_core::Serialize) impl above. An absent field
+/// is left unloaded, but only via `#[serde(default)]`; see the type-level docs.
 #[cfg(feature = "serde")]
 impl<'de, T: serde_core::Deserialize<'de>> serde_core::Deserialize<'de> for Deferred<T> {
     fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
     where
         D: serde_core::Deserializer<'de>,
     {
-        Ok(Self {
-            value: Option::<Box<T>>::deserialize(deserializer)?,
-        })
+        Ok(Self::from(T::deserialize(deserializer)?))
     }
 }
