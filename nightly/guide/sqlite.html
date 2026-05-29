@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4dceee7b.js";
+            window.path_to_searchindex_js = "searchindex-d588147a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -189,7 +189,7 @@ writes, experimental flags).</p>
 <h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
 <p>Add the <code>sqlite</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["sqlite"] }
+toasty = { version = "0.7", features = ["sqlite"] }
 </code></pre>
 <p>Then pass a <code>sqlite:</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()

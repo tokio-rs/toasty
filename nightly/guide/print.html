@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-4dceee7b.js";
+            window.path_to_searchindex_js = "searchindex-d588147a.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -248,7 +248,7 @@ cd my-app
 </code></pre>
 <p>Add the following dependencies to <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["sqlite"] }
+toasty = { version = "0.7", features = ["sqlite"] }
 tokio = { version = "1", features = ["full"] }
 </code></pre>
 <p>The <code>sqlite</code> feature enables the SQLite driver. Toasty also supports
@@ -409,7 +409,7 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 </div>
 <p>Enable feature flags in your <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["sqlite", "jiff"] }
+toasty = { version = "0.7", features = ["sqlite", "jiff"] }
 </code></pre>
 <h2 id="optional-fields"><a class="header" href="#optional-fields">Optional fields</a></h2>
 <p>Wrap a field in <code>Option&lt;T&gt;</code> to make it nullable. An <code>Option&lt;T&gt;</code> field maps to a
@@ -2867,7 +2867,7 @@ field is set when the record is first inserted and never changes. The
 <code>updated_at</code> field is refreshed each time the record is updated.</p>
 <p>Timestamp fields require the <code>jiff</code> feature:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["sqlite", "jiff"] }
+toasty = { version = "0.7", features = ["sqlite", "jiff"] }
 </code></pre>
 <h2 id="date-and-time-fields"><a class="header" href="#date-and-time-fields">Date and time fields</a></h2>
 <p>With the <code>jiff</code> feature enabled, you can use these types for date and time
@@ -7439,8 +7439,8 @@ parsing and all migration subcommands:</p>
 <h2 id="setting-up-the-cli"><a class="header" href="#setting-up-the-cli">Setting up the CLI</a></h2>
 <p>Add <code>toasty-cli</code> to your project:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["sqlite"] }
-toasty-cli = "0.6"
+toasty = { version = "0.7", features = ["sqlite"] }
+toasty-cli = "0.7"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 </code></pre>
@@ -7688,7 +7688,7 @@ integrates with Toasty’s connection pool for retry and recovery.</p>
 <h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
 <p>Add the <code>postgresql</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["postgresql"] }
+toasty = { version = "0.7", features = ["postgresql"] }
 </code></pre>
 <p>Then pass a <code>postgresql://</code> (or <code>postgres://</code>) URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -7872,7 +7872,7 @@ with Toasty’s connection pool for retry and recovery.</p>
 <h2 id="enabling-the-driver-1"><a class="header" href="#enabling-the-driver-1">Enabling the driver</a></h2>
 <p>Add the <code>mysql</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["mysql"] }
+toasty = { version = "0.7", features = ["mysql"] }
 </code></pre>
 <p>Then pass a <code>mysql://</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -8089,7 +8089,7 @@ writes, experimental flags).</p>
 <h2 id="enabling-the-driver-2"><a class="header" href="#enabling-the-driver-2">Enabling the driver</a></h2>
 <p>Add the <code>sqlite</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["sqlite"] }
+toasty = { version = "0.7", features = ["sqlite"] }
 </code></pre>
 <p>Then pass a <code>sqlite:</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -8319,7 +8319,7 @@ experimental engine features.</p>
 <h2 id="enabling-the-driver-3"><a class="header" href="#enabling-the-driver-3">Enabling the driver</a></h2>
 <p>Add the <code>turso</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["turso"] }
+toasty = { version = "0.7", features = ["turso"] }
 </code></pre>
 <p>Then pass a <code>turso:</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -8521,7 +8521,7 @@ serve.</p>
 <h2 id="enabling-the-driver-4"><a class="header" href="#enabling-the-driver-4">Enabling the driver</a></h2>
 <p>Add the <code>dynamodb</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.6", features = ["dynamodb"] }
+toasty = { version = "0.7", features = ["dynamodb"] }
 </code></pre>
 <p>Then pass a <code>dynamodb://</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
