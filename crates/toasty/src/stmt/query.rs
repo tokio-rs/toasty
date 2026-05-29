@@ -79,6 +79,22 @@ impl<T> Query<T> {
         }
     }
 
+    /// Take the via association out of this query's source, if any.
+    ///
+    /// Returns `Some(_)` when the query was scoped from a relation traversal
+    /// (e.g. built via [`Query::from_assoc_many`](crate::stmt::Association::many)).
+    /// After the call the query no longer carries the association on its source.
+    #[doc(hidden)]
+    pub fn take_via_assoc(&mut self) -> Option<stmt::Association> {
+        let stmt::ExprSet::Select(select) = &mut self.untyped.body else {
+            return None;
+        };
+        let stmt::Source::Model(model) = &mut select.source else {
+            return None;
+        };
+        model.via.take()
+    }
+
     /// Convert a model expression to a query.
     ///
     /// # Examples

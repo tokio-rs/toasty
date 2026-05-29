@@ -23,14 +23,12 @@ impl Expand<'_> {
         quote! {
             #vis struct #query_struct_ident<__T = #toasty::List<#model_ident>> {
                 stmt: #toasty::stmt::Query<__T>,
-                scope: #toasty::Option<#toasty::core::stmt::Association>,
             }
 
             impl<__T> #toasty::Clone for #query_struct_ident<__T> {
                 fn clone(&self) -> Self {
                     Self {
                         stmt: self.stmt.clone(),
-                        scope: self.scope.clone(),
                     }
                 }
             }
@@ -38,7 +36,7 @@ impl Expand<'_> {
             // ----- Shared methods (all `T`) -----
             impl<__T> #query_struct_ident<__T> {
                 #vis const fn from_stmt(stmt: #toasty::stmt::Query<__T>) -> Self {
-                    Self { stmt, scope: #toasty::Option::None }
+                    Self { stmt }
                 }
 
                 #include
@@ -52,9 +50,8 @@ impl Expand<'_> {
                     assoc: #toasty::stmt::Association<#toasty::List<#model_ident>>,
                 ) -> Self {
                     use #toasty::IntoStatement;
-                    let scope = #toasty::Option::Some(assoc.untyped().clone());
                     let stmt = assoc.into_statement().into_query().unwrap();
-                    Self { stmt, scope }
+                    Self { stmt }
                 }
 
                 #filter_methods
@@ -66,14 +63,12 @@ impl Expand<'_> {
                 #vis fn first(self) -> #query_struct_ident<#toasty::Option<#model_ident>> {
                     #query_struct_ident {
                         stmt: self.stmt.first(),
-                        scope: self.scope,
                     }
                 }
 
                 #vis fn one(self) -> #query_struct_ident<#model_ident> {
                     #query_struct_ident {
                         stmt: self.stmt.one(),
-                        scope: self.scope,
                     }
                 }
 
@@ -111,7 +106,6 @@ impl Expand<'_> {
                 #vis fn filter(self, expr: #toasty::stmt::Expr<bool>) -> Self {
                     Self {
                         stmt: self.stmt.and(expr),
-                        scope: self.scope,
                     }
                 }
 
@@ -143,11 +137,11 @@ impl Expand<'_> {
                 /// Returns an error at exec time if the query is not scoped to
                 /// a single-step relation traversal.
                 #vis async fn insert(
-                    self,
+                    mut self,
                     executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
                 ) -> #toasty::Result<()> {
-                    match self.scope {
+                    match self.stmt.take_via_assoc() {
                         #toasty::Option::Some(untyped)
                             if untyped.path.projection.as_slice().len() == 1 =>
                         {
@@ -172,11 +166,11 @@ impl Expand<'_> {
                 /// Returns an error at exec time if the query is not scoped to
                 /// a single-step relation traversal.
                 #vis async fn remove(
-                    self,
+                    mut self,
                     executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
                 ) -> #toasty::Result<()> {
-                    match self.scope {
+                    match self.stmt.take_via_assoc() {
                         #toasty::Option::Some(untyped)
                             if untyped.path.projection.as_slice().len() == 1 =>
                         {
@@ -213,13 +207,12 @@ impl Expand<'_> {
                     assoc: #toasty::stmt::Association<#model_ident>,
                 ) -> Self {
                     use #toasty::IntoStatement;
-                    let scope = #toasty::Option::Some(assoc.untyped().clone());
                     let stmt = assoc
                         .into_statement()
                         .into_query()
                         .unwrap()
                         .one();
-                    Self { stmt, scope }
+                    Self { stmt }
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
@@ -243,13 +236,12 @@ impl Expand<'_> {
                     assoc: #toasty::stmt::Association<#model_ident>,
                 ) -> Self {
                     use #toasty::IntoStatement;
-                    let scope = #toasty::Option::Some(assoc.untyped().clone());
                     let stmt = assoc
                         .into_statement()
                         .into_query()
                         .unwrap()
                         .first();
-                    Self { stmt, scope }
+                    Self { stmt }
                 }
 
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
@@ -352,7 +344,6 @@ impl Expand<'_> {
                 fn default() -> Self {
                     Self {
                         stmt: #toasty::stmt::Query::all(),
-                        scope: #toasty::Option::None,
                     }
                 }
             }
@@ -471,8 +462,8 @@ impl Expand<'_> {
         // produced `<Target as Model>::Query` (a list-shaped query) for the
         // same reason.
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
-                let assoc = match self.scope {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
+                let assoc = match self.stmt.take_via_assoc() {
                     #toasty::Option::Some(untyped) => {
                         let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
                         assoc.chain_field::<#target>(#field_offset)
@@ -499,8 +490,8 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
-                let assoc = match self.scope {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
+                let assoc = match self.stmt.take_via_assoc() {
                     #toasty::Option::Some(untyped) => {
                         let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
                         assoc.chain_field::<#target>(#field_offset)
@@ -527,8 +518,8 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
-                let assoc = match self.scope {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
+                let assoc = match self.stmt.take_via_assoc() {
                     #toasty::Option::Some(untyped) => {
                         let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
                         assoc.chain_field::<#target>(#field_offset)
