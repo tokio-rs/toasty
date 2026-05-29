@@ -128,20 +128,16 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
-                type Query = #query_struct_ident;
+                type Query = #query_struct_ident<#toasty::List<Self>>;
+                type QueryOne = #query_struct_ident<Self>;
+                type QueryOptionOne = #query_struct_ident<#toasty::Option<Self>>;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
-                type Many = Many<#toasty::Direct>;
-                type ViaMany = Many<#toasty::Via>;
                 type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type One = One<#toasty::Direct>;
-                type ViaOne = One<#toasty::Via>;
                 type OneField<__Origin> = #field_struct_ident<__Origin>;
-                type OptionOne = OptionOne<#toasty::Direct>;
-                type ViaOptionOne = OptionOne<#toasty::Via>;
 
                 const CREATE_META: #toasty::CreateMeta = #toasty::CreateMeta {
                     fields: &[ #create_meta_fields ],
@@ -158,8 +154,30 @@ impl Expand<'_> {
                     #field_list_struct_ident::from_path(path)
                 }
 
-                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
+                fn find_by_primary_key(
+                    id: #toasty::stmt::Expr<Self::PrimaryKey>,
+                ) -> Self::Query {
                     #find_by_primary_key_body
+                }
+
+                fn query_one(query: Self::Query) -> Self::QueryOne {
+                    query.one()
+                }
+
+                fn query_first(query: Self::Query) -> Self::QueryOptionOne {
+                    query.first()
+                }
+
+                fn query_from_assoc_one(
+                    assoc: #toasty::stmt::Association<Self>,
+                ) -> Self::QueryOne {
+                    <Self::QueryOne>::from_assoc_one(assoc)
+                }
+
+                fn query_from_assoc_first(
+                    assoc: #toasty::stmt::Association<Self>,
+                ) -> Self::QueryOptionOne {
+                    <Self::QueryOptionOne>::from_assoc_first(assoc)
                 }
 
                 #field_name_to_id

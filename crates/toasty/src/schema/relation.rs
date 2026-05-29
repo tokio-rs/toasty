@@ -4,19 +4,6 @@ use toasty_core::schema::Name;
 use toasty_core::schema::app::{FieldId, FieldTy, ForeignKey};
 use toasty_core::stmt;
 
-/// Marker for a direct relation scope.
-///
-/// Direct relation scopes can create new records because Toasty can populate
-/// the target foreign key from the source record.
-pub enum Direct {}
-
-/// Marker for a multi-step relation scope.
-///
-/// Via relation scopes are queryable, but do not expose relation-scoped
-/// creation because creating the target would require materializing one or
-/// more intermediate records.
-pub enum Via {}
-
 /// A Rust field type that represents a `#[has_many]` relation.
 ///
 /// Implemented by [`Vec<M>`](Vec) (eager) and
@@ -66,15 +53,10 @@ pub trait RelationOneField: Load<Output = Self> {
     /// The target model that this field references.
     type Model: Model;
 
-    /// The "one-side" accessor type produced by the field accessor. Resolves
-    /// to [`Model::One`] for non-nullable impls and [`Model::OptionOne`] for
-    /// nullable impls.
+    /// The query type produced by the relation accessor. For non-nullable
+    /// impls this is `<Model as Model>::QueryOne`; for nullable impls it is
+    /// `<Model as Model>::QueryOptionOne`.
     type One;
-
-    /// The multi-step "one-side" accessor type produced by `via` relation
-    /// accessors. Resolves to [`Model::ViaOne`] for non-nullable impls and
-    /// [`Model::ViaOptionOne`] for nullable impls.
-    type ViaOne;
 
     /// The expression-level type used in create/update setters. Resolves to
     /// the unwrapped `Self::Model` for non-nullable impls and `Option<Self::Model>`
@@ -89,6 +71,16 @@ pub trait RelationOneField: Load<Output = Self> {
 
     /// Reloads this relation field from a returned value.
     fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
+
+    /// Narrow a list query targeting the related model into the appropriate
+    /// "one" query — `QueryOne` for non-nullable impls and `QueryOptionOne`
+    /// for nullable impls.
+    fn make_one(query: <Self::Model as Model>::Query) -> Self::One;
+
+    /// Build the appropriate "one" query from a singular association,
+    /// preserving the association's path so generated mutators (insert,
+    /// remove, create) can read it.
+    fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One;
 
     /// Build the [`FieldTy`] for a `HasOne` relation field, given an
     /// optional paired `BelongsTo` field on the target model resolved

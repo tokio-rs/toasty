@@ -13,8 +13,16 @@ use toasty_core::schema::app::FieldId;
 /// [`RelationOneField`](super::RelationOneField) traits project through when
 /// describing a field that references this model.
 pub trait Model: Register + Load<Output = Self> + Sized {
-    /// Query builder type for this model
+    /// List query builder for this model. Executes to `Vec<Self>`.
     type Query;
+
+    /// Single-row query builder for this model. Executes to `Self`, erroring
+    /// if no row matches. Returned by non-nullable relation accessors.
+    type QueryOne;
+
+    /// Optional single-row query builder for this model. Executes to
+    /// `Option<Self>`. Returned by nullable relation accessors.
+    type QueryOptionOne;
 
     /// Create builder type for this model
     type Create: Default + IntoInsert<Model = Self> + IntoExpr<Self>;
@@ -39,32 +47,13 @@ pub trait Model: Register + Load<Output = Self> + Sized {
     /// extractor for any `M: Model<PrimaryKey = Uuid>`.
     type PrimaryKey;
 
-    /// The has-many relation wrapper type for this model.
-    type Many;
-
-    /// The has-many relation wrapper type for multi-step scopes.
-    type ViaMany;
-
     /// The field accessor type used when this model appears as the "many" side
     /// of a has-many relation, parameterized by the origin model.
     type ManyField<Origin>;
 
-    /// The has-one relation wrapper type for this model (non-nullable).
-    type One;
-
-    /// The has-one relation wrapper type for multi-step scopes (non-nullable).
-    type ViaOne;
-
     /// The field accessor type used when this model appears as the "one" side
     /// of a has-one relation, parameterized by the origin model.
     type OneField<Origin>;
-
-    /// The optional has-one relation wrapper type, used when the foreign key
-    /// is nullable so the association is optional.
-    type OptionOne;
-
-    /// The optional has-one relation wrapper type for multi-step scopes.
-    type ViaOptionOne;
 
     /// Metadata about the model's fields for compile-time validation of
     /// `create!` invocations.
@@ -99,4 +88,20 @@ pub trait Model: Register + Load<Output = Self> + Sized {
     /// `IntoExpr` impl, subqueries that return a PK, or any other
     /// [`Expr`] of the correct type.
     fn find_by_primary_key(id: Expr<Self::PrimaryKey>) -> Self::Query;
+
+    /// Narrow a list query to a single-row query (errors at exec time if no
+    /// row matches). Used by the codegen for non-nullable relation accessors.
+    fn query_one(query: Self::Query) -> Self::QueryOne;
+
+    /// Narrow a list query to an optional single-row query. Used by the
+    /// codegen for nullable relation accessors.
+    fn query_first(query: Self::Query) -> Self::QueryOptionOne;
+
+    /// Build a single-row query from a singular association. Used by the
+    /// codegen for non-nullable has-one / belongs-to relation accessors.
+    fn query_from_assoc_one(assoc: crate::stmt::Association<Self>) -> Self::QueryOne;
+
+    /// Build an optional single-row query from a singular association. Used by
+    /// the codegen for nullable has-one / belongs-to relation accessors.
+    fn query_from_assoc_first(assoc: crate::stmt::Association<Self>) -> Self::QueryOptionOne;
 }

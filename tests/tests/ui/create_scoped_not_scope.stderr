@@ -1,12 +1,25 @@
-error[E0277]: this scope does not support scoped creation
+error[E0277]: this expression cannot be used as a Toasty create scope
   --> tests/ui/create_scoped_not_scope.rs:11:13
    |
 11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
-   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this relation scope cannot create records
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this expression does not support scoped creation
    |
-   = help: the trait `toasty::schema::CreateScope` is not implemented for `i64`
-   = note: Only direct relation scopes support scoped creation.
-   = note: Multi-step (`via`) relation scopes can be queried and filtered, but Toasty cannot create records through them because that would require creating or choosing intermediate records.
+   = help: the trait `toasty::schema::Scope` is not implemented for `i64`
+note: required by a bound in `__force_check`
+  --> tests/ui/create_scoped_not_scope.rs:11:13
+   |
+11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ required by this bound in `__force_check`
+   = note: this error originates in the macro `toasty::create` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `i64` does not carry Toasty create-field metadata
+  --> tests/ui/create_scoped_not_scope.rs:11:13
+   |
+11 |     let _ = toasty::create!(in 42_i64 { name: "Carl" });
+   |             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this type cannot be validated as a create target
+   |
+   = help: the trait `toasty::schema::ValidateCreate` is not implemented for `i64`
+   = note: Only Toasty model field paths and direct relation create scopes carry create-field metadata.
 note: required by a bound in `__force_check`
   --> tests/ui/create_scoped_not_scope.rs:11:13
    |

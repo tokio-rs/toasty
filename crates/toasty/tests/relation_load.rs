@@ -48,19 +48,15 @@ impl Register for Dummy {
 
 impl Model for Dummy {
     type Query = ();
+    type QueryOne = ();
+    type QueryOptionOne = ();
     type Create = DummyCreate;
     type Update<'a> = ();
     type UpdateQuery = ();
     type Path<Origin> = Path<Origin, Self>;
     type PrimaryKey = i64;
-    type Many = ();
-    type ViaMany = ();
     type ManyField<Origin> = ();
-    type One = ();
-    type ViaOne = ();
     type OneField<Origin> = ();
-    type OptionOne = ();
-    type ViaOptionOne = ();
 
     const CREATE_META: CreateMeta = CreateMeta {
         fields: &[],
@@ -78,6 +74,14 @@ impl Model for Dummy {
     }
 
     fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query {}
+
+    fn query_one(_query: Self::Query) -> Self::QueryOne {}
+
+    fn query_first(_query: Self::Query) -> Self::QueryOptionOne {}
+
+    fn query_from_assoc_one(_assoc: toasty::stmt::Association<Self>) -> Self::QueryOne {}
+
+    fn query_from_assoc_first(_assoc: toasty::stmt::Association<Self>) -> Self::QueryOptionOne {}
 }
 
 impl IntoInsert for DummyCreate {

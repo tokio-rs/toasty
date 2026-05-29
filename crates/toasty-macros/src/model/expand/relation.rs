@@ -1,4 +1,4 @@
-use super::{Expand, util};
+use super::Expand;
 use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -15,278 +15,11 @@ struct PairBelongsToCheck<'a> {
 }
 
 impl Expand<'_> {
+    /// Kept as an empty hook in the expansion sequence — the previous `Many`,
+    /// `One`, and `OptionOne` structs have been replaced by a single generic
+    /// `Query<T>` per model emitted by `expand_query_struct`.
     pub(super) fn expand_relation_structs(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
-        let root = self.model.kind.as_root_unwrap();
-        let query_ident = &root.query_struct_ident;
-        let create_builder_ident = &root.create_struct_ident;
-        let field_struct_ident = &root.field_struct_ident;
-        let field_list_struct_ident = &root.field_list_struct_ident;
-        let filter_methods = self.expand_relation_filter_methods();
-        let chain_methods = self.expand_many_chain_methods();
-
-        quote! {
-            #vis struct Many<Kind = #toasty::Direct> {
-                stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>,
-                _kind: std::marker::PhantomData<Kind>,
-            }
-
-            #vis struct One<Kind = #toasty::Direct> {
-                stmt: #toasty::stmt::Query<#model_ident>,
-                _kind: std::marker::PhantomData<Kind>,
-            }
-
-            #vis struct OptionOne<Kind = #toasty::Direct> {
-                stmt: #toasty::stmt::Query<#toasty::Option<#model_ident>>,
-                _kind: std::marker::PhantomData<Kind>,
-            }
-
-            impl<Kind> Many<Kind> {
-                pub fn from_stmt(stmt: #toasty::stmt::Association<#toasty::List<#model_ident>>) -> Many<Kind> {
-                    Many {
-                        stmt,
-                        _kind: std::marker::PhantomData,
-                    }
-                }
-
-                #filter_methods
-
-                #chain_methods
-
-                /// Iterate all entries in the relation
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    use #toasty::IntoStatement;
-                    self.into_statement().exec(executor).await
-                }
-
-                #vis fn filter(
-                    self,
-                    filter: #toasty::stmt::Expr<bool>
-                ) -> #query_ident {
-                    use #toasty::IntoStatement;
-                    let select = self.into_statement().into_query().unwrap();
-                    #query_ident::from_stmt(select.and(filter))
-                }
-
-                #vis fn create(self) -> <Self as #toasty::Scope>::Create
-                where
-                    Self: #toasty::CreateScope,
-                {
-                    <Self as #toasty::CreateScope>::create_in_scope(self)
-                }
-            }
-
-            impl Many<#toasty::Direct> {
-                /// Add an item to the association
-                #vis async fn insert(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
-                    executor.exec(self.stmt.insert(item)).await
-                }
-
-                /// Remove items from the association
-                #vis async fn remove(self, executor: &mut dyn #toasty::Executor, item: impl #toasty::IntoExpr<#model_ident>) -> #toasty::Result<()> {
-                    executor.exec(self.stmt.remove(item)).await
-                }
-            }
-
-            impl<Kind> #toasty::IntoStatement for Many<Kind> {
-                type Returning = #toasty::List<#model_ident>;
-
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
-                    use #toasty::IntoStatement;
-                    self.stmt.into_statement()
-                }
-            }
-
-            impl<Kind> One<Kind> {
-                #vis fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> One<Kind> {
-                    One {
-                        stmt: stmt.one(),
-                        _kind: std::marker::PhantomData,
-                    }
-                }
-
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.stmt.exec(executor).await
-                }
-
-                /// Create a new associated record.
-                #vis fn create(self) -> <Self as #toasty::Scope>::Create
-                where
-                    Self: #toasty::CreateScope,
-                {
-                    <Self as #toasty::CreateScope>::create_in_scope(self)
-                }
-            }
-
-            impl<Kind> #toasty::IntoStatement for One<Kind> {
-                type Returning = #model_ident;
-
-                fn into_statement(self) -> #toasty::Statement<#model_ident> {
-                    use #toasty::IntoStatement;
-                    self.stmt.into_statement()
-                }
-            }
-
-            impl<Kind> OptionOne<Kind> {
-                pub fn from_stmt(stmt: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> OptionOne<Kind> {
-                    OptionOne {
-                        stmt: stmt.first(),
-                        _kind: std::marker::PhantomData,
-                    }
-                }
-
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    self.stmt.exec(executor).await
-                }
-
-                /// Create a new associated record.
-                #vis fn create(self) -> <Self as #toasty::Scope>::Create
-                where
-                    Self: #toasty::CreateScope,
-                {
-                    <Self as #toasty::CreateScope>::create_in_scope(self)
-                }
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::Scope for Many<Kind> {
-                type Item = #toasty::List<#model_ident>;
-                type Path<__Origin> = #field_list_struct_ident<__Origin>;
-                type Create = #create_builder_ident;
-
-                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
-                    #field_list_struct_ident::from_path(path)
-                }
-
-                fn new_create() -> Self::Create {
-                    #create_builder_ident::default()
-                }
-
-                fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_list_struct_ident::from_path(#toasty::Path::from_model_list())
-                }
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::Scope for One<Kind> {
-                type Item = #model_ident;
-                type Path<__Origin> = #field_struct_ident<__Origin>;
-                type Create = #create_builder_ident;
-
-                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
-                    #field_struct_ident::from_path(path)
-                }
-
-                fn new_create() -> Self::Create {
-                    #create_builder_ident::default()
-                }
-
-                fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(#toasty::Path::root())
-                }
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::Scope for OptionOne<Kind> {
-                type Item = #model_ident;
-                type Path<__Origin> = #field_struct_ident<__Origin>;
-                type Create = #create_builder_ident;
-
-                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
-                    #field_struct_ident::from_path(path)
-                }
-
-                fn new_create() -> Self::Create {
-                    #create_builder_ident::default()
-                }
-
-                fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(#toasty::Path::root())
-                }
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::ValidateCreate for Many<Kind> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl #toasty::CreateScope for Many<#toasty::Direct> {
-                fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
-                }
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::ValidateCreate for One<Kind> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl #toasty::CreateScope for One<#toasty::Direct> {
-                fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
-                }
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl<Kind> #toasty::ValidateCreate for OptionOne<Kind> {
-                const CREATE_META: &'static #toasty::CreateMeta =
-                    &<#model_ident as #toasty::Model>::CREATE_META;
-            }
-
-            #[diagnostic::do_not_recommend]
-            impl #toasty::CreateScope for OptionOne<#toasty::Direct> {
-                fn create_in_scope(self) -> <Self as #toasty::Scope>::Create {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
-                }
-            }
-        }
-    }
-
-    /// For each relation field on this model, emit a method on `Many` that
-    /// chains the field as the next path step and returns the target's
-    /// `ViaMany`.
-    /// This is the runtime analog of [`expand_list_relation_field_method`] on
-    /// the field-list builder — a list-context traversal always yields a list,
-    /// so all relation kinds (HasMany / HasOne / BelongsTo) flatten to the
-    /// target's `ViaMany`.
-    pub(super) fn expand_many_chain_methods(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-
-        self.model
-            .fields
-            .iter()
-            .filter_map(|field| {
-                let (ty, field_trait) = match &field.ty {
-                    FieldTy::BelongsTo(rel) => (&rel.ty, quote!(#toasty::RelationOneField)),
-                    FieldTy::HasMany(rel) => (&rel.ty, quote!(#toasty::RelationManyField)),
-                    FieldTy::HasOne(rel) => (&rel.ty, quote!(#toasty::RelationOneField)),
-                    FieldTy::Primitive(_) => return None,
-                };
-                let field_ident = &field.name.ident;
-                let field_offset = util::int(field.id);
-
-                Some(quote! {
-                    #vis fn #field_ident(self) -> <<#ty as #field_trait>::Model as #toasty::Model>::ViaMany {
-                        <<<#ty as #field_trait>::Model as #toasty::Model>::ViaMany>::from_stmt(
-                            self.stmt.chain_field(#field_offset)
-                        )
-                    }
-                })
-            })
-            .collect()
+        TokenStream::new()
     }
 
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {
@@ -362,12 +95,7 @@ impl Expand<'_> {
                     let _ = &self.#field_ident;
                 }
 
-                {
-                    use #toasty::IntoStatement;
-                    <<#ty as #toasty::RelationOneField>::One>::from_stmt(
-                        #target_ty::filter(#filter).into_statement().into_query().unwrap()
-                    )
-                }
+                <#ty as #toasty::RelationOneField>::make_one(#target_ty::filter(#filter))
             }
 
             #[doc(hidden)]
@@ -386,11 +114,6 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
         let target = quote!(<#ty as #toasty::RelationManyField>::Model);
-        let relation_scope = if rel.via.is_some() {
-            quote!(ViaMany)
-        } else {
-            quote!(Many)
-        };
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -414,7 +137,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#target as #toasty::Model>::#relation_scope {
+            #vis fn #field_ident(&self) -> <#target as #toasty::Model>::Query {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -424,11 +147,11 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <<#target as #toasty::Model>::#relation_scope>::from_stmt(
+                    <<#target as #toasty::Model>::Query>::from_assoc_many(
                         #toasty::stmt::Association::many(
                             self.into_statement().into_query().unwrap().to_list(),
-                            Self::fields().#field_ident().into()
-                        )
+                            Self::fields().#field_ident().into(),
+                        ),
                     )
                 }
             }
@@ -440,11 +163,6 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let relation_scope = if rel.via.is_some() {
-            quote!(ViaOne)
-        } else {
-            quote!(One)
-        };
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -468,7 +186,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::#relation_scope {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::One {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -478,12 +196,11 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <<#ty as #toasty::RelationOneField>::#relation_scope>::from_stmt(
-                        #toasty::stmt::Association::one(
-                            self.into_statement().into_query().unwrap().to_list(),
-                            Self::fields().#field_ident().into()
-                        ).into_statement().into_query().unwrap()
-                    )
+                    let assoc = #toasty::stmt::Association::one(
+                        self.into_statement().into_query().unwrap().to_list(),
+                        Self::fields().#field_ident().into(),
+                    );
+                    <#ty as #toasty::RelationOneField>::make_one_from_assoc(assoc)
                 }
             }
         }
@@ -512,8 +229,8 @@ impl Expand<'_> {
             field_ident.span(),
         );
 
-        let verify_a = util::ident("A");
-        let verify_t = util::ident("T");
+        let verify_a = super::util::ident("A");
+        let verify_t = super::util::ident("T");
 
         let msg = format!(
             "{relation_kind} requires the {{{verify_a}}}::{pair_ident} field to be a relation to `Self`, but it was `{{Self}}` instead"

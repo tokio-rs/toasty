@@ -124,22 +124,6 @@ impl Expand<'_> {
         }
     }
 
-    pub(super) fn expand_query_filter_methods(&self) -> TokenStream {
-        self.filters
-            .iter()
-            // .filter(|f| !f.only_relation)
-            .map(|filter| {
-                let get_method = self.expand_model_get_method(filter, true);
-                let filter_method = self.expand_query_filter_method(filter);
-
-                quote! {
-                    #get_method
-                    #filter_method
-                }
-            })
-            .collect()
-    }
-
     pub(super) fn expand_relation_filter_methods(&self) -> TokenStream {
         self.filters
             .iter()
@@ -153,20 +137,6 @@ impl Expand<'_> {
                 )
             })
             .collect()
-    }
-
-    fn expand_query_filter_method(&self, filter: &Filter) -> TokenStream {
-        let vis = &self.model.vis;
-        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
-        let filter_method_ident = &filter.filter_method_ident;
-        let args = self.expand_filter_args(filter);
-        let expr = self.expand_query_filter_expr(filter);
-
-        quote! {
-            #vis fn #filter_method_ident(self, #( #args ),* ) -> #query_struct_ident {
-                self.filter(#expr)
-            }
-        }
     }
 
     fn expand_query_filter_expr(&self, filter: &Filter) -> TokenStream {

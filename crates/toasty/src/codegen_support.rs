@@ -14,9 +14,8 @@ pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::create_meta::{assert_create_fields, const_contains},
     schema::{
-        Auto, CreateField, CreateMeta, CreateScope, Deferred, Direct, DiscoverItem, Embed, Field,
-        Load, Model, Register, RelationManyField, RelationOneField, Scope, ValidateCreate, Via,
-        generate_unique_id,
+        Auto, CreateField, CreateMeta, Deferred, DiscoverItem, Embed, Field, Load, Model, Register,
+        RelationManyField, RelationOneField, Scope, ValidateCreate, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
@@ -24,7 +23,7 @@ pub use crate::{
 };
 #[cfg(feature = "serde")]
 pub use serde_json;
-pub use std::{convert::Into, default::Default, option::Option};
+pub use std::{clone::Clone, convert::Into, default::Default, option::Option};
 
 pub use self::version::Version;
 pub use toasty_core as core;
@@ -42,12 +41,12 @@ pub type FieldExprTarget<F> = <F as Field>::ExprTarget;
 /// obtain the field struct for nested builders. Because the macro has no
 /// type information, it cannot call `S::new_path_root()` directly — this function
 /// lets Rust infer `S` from the scope argument.
-pub fn scope_fields<S: CreateScope>(_scope: &S) -> S::Path<S::Item> {
+pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
     S::new_path_root()
 }
 
 /// Create a record inside a scoped create target.
-pub fn create_in_scope<S: CreateScope>(scope: S) -> S::Create {
+pub fn create_in_scope<S: Scope>(scope: S) -> S::Create {
     S::create_in_scope(scope)
 }
 
