@@ -103,27 +103,9 @@ pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
 }
 
 /// Filters data-carrying enum field using `ne()`.
-#[driver_test(requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_data_enum_ne(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .name("Alice")

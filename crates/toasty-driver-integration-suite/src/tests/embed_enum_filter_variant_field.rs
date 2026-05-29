@@ -2,27 +2,9 @@ use crate::prelude::*;
 
 /// Filtering by a field within a specific enum variant using the closure-based
 /// `.matches()` API: `contact().email().matches(|e| e.address().eq("x"))`.
-#[driver_test(requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .name("Alice")
@@ -163,27 +145,9 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
 /// `email().address().eq("x")` is equivalent to
 /// `email().matches(|e| e.address().eq("x"))` — the variant predicate is
 /// added automatically, so Phone-variant rows are excluded.
-#[driver_test(requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .name("Alice")

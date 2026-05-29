@@ -2,26 +2,9 @@ use crate::prelude::*;
 
 /// Verifies that a data-carrying enum has its variant fields registered in the app
 /// schema with globally-assigned field indices (indices are unique across all variants).
-#[driver_test]
-pub async fn data_carrying_enum_schema(test: &mut Test) {
-    #[allow(dead_code)]
-    #[derive(toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(toasty::Model)]
-    #[allow(dead_code)]
-    struct Container {
-        #[key]
-        id: i64,
-        contact: ContactInfo,
-    }
-
-    let db = test.setup_db(models!(Container)).await;
+#[driver_test(id(ID), scenario(crate::scenarios::user_contact_info))]
+pub async fn data_carrying_enum_schema(t: &mut Test) {
+    let db = setup(t).await;
     let schema = db.schema();
 
     let contact_info = &schema.app.models[&ContactInfo::id()];
@@ -138,26 +121,9 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
 
 /// End-to-end CRUD test for a data-carrying enum (all variants have fields).
 /// Creates records with different variants, reads them back, and verifies roundtrip.
-#[driver_test]
+#[driver_test(id(ID), scenario(crate::scenarios::user_contact_info))]
 pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let alice = User::create()
         .name("Alice")
