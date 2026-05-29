@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["filter_by_timestamp","latest_by_timestamp","order_by_timestamp","ty_date","ty_date_as_text","ty_datetime","ty_datetime_as_text","ty_datetime_precision_2","ty_time","ty_time_as_text","ty_time_precision_2","ty_timestamp","ty_timestamp_as_text","ty_timestamp_precision_2","ty_zoned"]};

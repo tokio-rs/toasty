@@ -1,0 +1,9 @@
+(function() {
+    const implementors = Object.fromEntries([["example_composite_key",[["impl Model for <a class=\"struct\" href=\"example_composite_key/struct.Todo.html\" title=\"struct example_composite_key::Todo\">Todo</a>",0],["impl Model for <a class=\"struct\" href=\"example_composite_key/struct.User.html\" title=\"struct example_composite_key::User\">User</a>",0]]],["example_hello_toasty",[["impl Model for <a class=\"struct\" href=\"example_hello_toasty/struct.Todo.html\" title=\"struct example_hello_toasty::Todo\">Todo</a>",0],["impl Model for <a class=\"struct\" href=\"example_hello_toasty/struct.User.html\" title=\"struct example_hello_toasty::User\">User</a>",0]]],["example_todo_with_cli",[["impl Model for <a class=\"struct\" href=\"example_todo_with_cli/struct.Todo.html\" title=\"struct example_todo_with_cli::Todo\">Todo</a>",0],["impl Model for <a class=\"struct\" href=\"example_todo_with_cli/struct.User.html\" title=\"struct example_todo_with_cli::User\">User</a>",0]]],["example_user_has_one_profile",[["impl Model for <a class=\"struct\" href=\"example_user_has_one_profile/struct.Profile.html\" title=\"struct example_user_has_one_profile::Profile\">Profile</a>",0],["impl Model for <a class=\"struct\" href=\"example_user_has_one_profile/struct.User.html\" title=\"struct example_user_has_one_profile::User\">User</a>",0]]],["tests_fixture_post",[["impl Model for <a class=\"struct\" href=\"tests_fixture_post/struct.Post.html\" title=\"struct tests_fixture_post::Post\">Post</a>",0]]],["tests_fixture_user",[["impl Model for <a class=\"struct\" href=\"tests_fixture_user/struct.User.html\" title=\"struct tests_fixture_user::User\">User</a>",0]]]]);
+    if (window.register_implementors) {
+        window.register_implementors(implementors);
+    } else {
+        window.pending_implementors = implementors;
+    }
+})()
+//{"start":59,"fragment_lengths":[313,309,314,358,162,162]}

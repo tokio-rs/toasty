@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["SqlPlaceholder"],"struct":["Builder","Capability","Connect","Connection","Db","ExecResponse","Pool","PoolStatus","Transaction","TransactionBuilder"],"trait":["Driver","Executor"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch_create_empty","batch_create_fails_if_any_record_missing_fields","batch_create_inside_transaction_uses_savepoints","batch_create_many","batch_create_model_with_unique_field_index_all_dups","batch_create_model_with_unique_field_index_all_unique","batch_create_one","batch_create_unique_violation_rolls_back"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["data_carrying_enum_db_schema","data_carrying_enum_schema","data_variant_roundtrip","data_variant_with_jiff_timestamp","data_variant_with_uuid_field","enum_in_enum_roundtrip","global_field_indices","mixed_enum_roundtrip","mixed_enum_schema","struct_in_data_variant"]};

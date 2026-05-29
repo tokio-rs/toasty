@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["batch_update_filter_all_match","batch_update_filter_no_match"]};

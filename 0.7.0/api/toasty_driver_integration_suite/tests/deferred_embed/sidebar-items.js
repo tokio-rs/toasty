@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["deferred_embed_data_enum","deferred_embed_struct","deferred_embed_unit_enum","deferred_embed_update_reloads","deferred_embed_with_deferred_sub_field","deferred_field_inside_embed","deferred_inside_embed_in_enum_variant","include_deferred_inside_embed_in_enum_variant","update_embed_by_value_with_deferred_sub_field"]};

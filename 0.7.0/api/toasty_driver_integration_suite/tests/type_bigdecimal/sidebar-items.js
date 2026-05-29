@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["ty_bigdecimal","ty_bigdecimal_as_numeric_arbitrary_precision","ty_bigdecimal_as_numeric_fixed_precision","ty_bigdecimal_as_text"]};

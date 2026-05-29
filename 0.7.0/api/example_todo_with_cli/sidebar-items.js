@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_db"],"struct":["Todo","User"]};
