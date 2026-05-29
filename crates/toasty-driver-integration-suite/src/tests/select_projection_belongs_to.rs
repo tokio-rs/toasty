@@ -5,44 +5,26 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-
-        #[index]
-        author_id: ID,
-
-        #[belongs_to(key = author_id, references = id)]
-        author: toasty::Deferred<User>,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     let alice = toasty::create!(User { name: "Alice" })
         .exec(&mut db)
         .await?;
-    toasty::create!(Post {
+    toasty::create!(Todo {
         title: "Hello",
-        author: alice
+        user: alice
     })
     .exec(&mut db)
     .await?;
 
-    let users: Vec<User> = Post::all()
-        .select(Post::fields().author())
+    let users: Vec<User> = Todo::all()
+        .select(Todo::fields().user())
         .exec(&mut db)
         .await?;
 
@@ -51,45 +33,27 @@ pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-
-        #[index]
-        author_id: ID,
-
-        #[belongs_to(key = author_id, references = id)]
-        author: toasty::Deferred<User>,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     let alice = toasty::create!(User { name: "Alice" })
         .exec(&mut db)
         .await?;
     let bob = toasty::create!(User { name: "Bob" }).exec(&mut db).await?;
-    toasty::create!(Post::[
-        { title: "Alpha", author: alice },
-        { title: "Beta",  author: bob },
+    toasty::create!(Todo::[
+        { title: "Alpha", user: alice },
+        { title: "Beta",  user: bob },
     ])
     .exec(&mut db)
     .await?;
 
-    let users: Vec<User> = Post::filter(Post::fields().title().eq("Beta"))
-        .select(Post::fields().author())
+    let users: Vec<User> = Todo::filter(Todo::fields().title().eq("Beta"))
+        .select(Todo::fields().user())
         .exec(&mut db)
         .await?;
 
@@ -98,44 +62,26 @@ pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn select_belongs_to_first(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-
-        #[index]
-        author_id: ID,
-
-        #[belongs_to(key = author_id, references = id)]
-        author: toasty::Deferred<User>,
-    }
-
-    let mut db = t.setup_db(models!(User, Post)).await;
+    let mut db = setup(t).await;
 
     let alice = toasty::create!(User { name: "Alice" })
         .exec(&mut db)
         .await?;
-    toasty::create!(Post {
+    toasty::create!(Todo {
         title: "Hello",
-        author: alice
+        user: alice
     })
     .exec(&mut db)
     .await?;
 
-    let user: Option<User> = Post::filter(Post::fields().title().eq("Hello"))
-        .select(Post::fields().author())
+    let user: Option<User> = Todo::filter(Todo::fields().title().eq("Hello"))
+        .select(Todo::fields().user())
         .first()
         .exec(&mut db)
         .await?;

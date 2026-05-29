@@ -25,63 +25,37 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Board {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        name: String,
-
-        #[has_many]
-        users: toasty::Deferred<Vec<User>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[index]
-        board_id: ID,
-
-        #[belongs_to(key = board_id, references = id)]
-        board: toasty::Deferred<Board>,
-    }
-
-    let mut db = test.setup_db(models!(Board, User)).await;
     if db.capability().sql {
         // Statement count is correct for DDB, but not MySQL
         return Ok(());
     }
-    // Create a board with 5 users
-    let board = Board::create()
+    // Create a user with 5 todos
+    let user = User::create()
         .name("Test Board")
-        .users([User::create().name("User 1")])
-        .users([User::create().name("User 2")])
-        .users([User::create().name("User 3")])
-        .users([User::create().name("User 4")])
-        .users([User::create().name("User 5")])
+        .todos([Todo::create().title("User 1")])
+        .todos([Todo::create().title("User 2")])
+        .todos([Todo::create().title("User 3")])
+        .todos([Todo::create().title("User 4")])
+        .todos([Todo::create().title("User 5")])
         .exec(&mut db)
         .await?;
 
-    Board::create()
+    User::create()
         .name("Test Board2")
-        .users([User::create().name("User 6")])
+        .todos([Todo::create().title("User 6")])
         .exec(&mut db)
         .await?;
 
     // Clear operation log before the query we want to test
     test.log().clear();
 
-    // Query board with .include(users())
-    let board_from_db = Board::filter_by_id(board.id)
-        .include(Board::fields().users())
+    // Query user with .include(todos())
+    let user_from_db = User::filter_by_id(user.id)
+        .include(User::fields().todos())
         .get(&mut db)
         .await?;
 
@@ -95,15 +69,15 @@ pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
         log
     );
 
-    // Check board ids
-    let from_db = board_from_db
-        .users
+    // Check todo ids
+    let from_db = user_from_db
+        .todos
         .get()
         .iter()
         .map(|u| u.id)
         .collect::<HashSet<_>>();
-    let expected = board
-        .users
+    let expected = user
+        .todos
         .get()
         .iter()
         .map(|u| u.id)
