@@ -1,4 +1,3 @@
-use super::create_meta::CreateMeta;
 use super::{Load, Register};
 use crate::stmt::{Expr, IntoExpr, IntoInsert, List, Path};
 
@@ -65,10 +64,6 @@ pub trait Model: Register + Load<Output = Self> + Sized {
 
     /// The optional has-one relation wrapper type for multi-step scopes.
     type ViaOptionOne;
-
-    /// Metadata about the model's fields for compile-time validation of
-    /// `create!` invocations.
-    const CREATE_META: CreateMeta;
 
     /// Construct a model path from a [`Path`] targeting this model.
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin>;

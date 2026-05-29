@@ -12,11 +12,9 @@ pub mod version;
 pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
-    schema::create_meta::{assert_create_fields, const_contains},
     schema::{
-        Auto, CreateField, CreateMeta, CreateScope, Deferred, Direct, DiscoverItem, Embed, Field,
-        Load, Model, Register, RelationManyField, RelationOneField, Scope, ValidateCreate, Via,
-        generate_unique_id,
+        Auto, CreateScope, Deferred, Direct, DiscoverItem, Embed, Field, Load, Model, Register,
+        RelationManyField, RelationOneField, Scope, Via, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

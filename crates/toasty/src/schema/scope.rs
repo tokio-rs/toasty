@@ -1,4 +1,4 @@
-use crate::{schema::ValidateCreate, stmt::Path};
+use crate::stmt::Path;
 
 /// A scope represents a context that contains items of a particular type.
 ///
@@ -46,7 +46,7 @@ pub trait Scope {
     note = "Only direct relation scopes support scoped creation.",
     note = "Multi-step (`via`) relation scopes can be queried and filtered, but Toasty cannot create records through them because that would require creating or choosing intermediate records."
 )]
-pub trait CreateScope: Scope + ValidateCreate {
+pub trait CreateScope: Scope {
     /// Create a record inside this scope.
     fn create_in_scope(self) -> Self::Create;
 }
