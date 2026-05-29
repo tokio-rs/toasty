@@ -7,6 +7,52 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.1...toasty-core-v0.7.0) - 2026-05-29
+
+### Added
+
+- [**breaking**] Increment, decrement, add, and subtract update operators ([#979])
+- Raw SQL execution API ([#965])
+- `Deferred<T>` type for relation fields, replacing `#[deferred]` attribute ([#961])
+- Eager loading of relation fields ([#958])
+- `.include()` support for multi-step `via` relations ([#946])
+- Migration core API export ([#944])
+- Turso driver with concurrent writes via TransactionMode ([#938])
+- TransactionMode for SQLite lock-acquisition control ([#931])
+- `SELECT DISTINCT` query serialization ([#934])
+- INNER join variant ([#922])
+- Multi-step (via) has_many and has_one relations ([#890])
+
+### Fixed
+
+- `starts_with` is now case-sensitive on SQLite and MySQL ([#983])
+- SQLite auto-increment integers limited to 4-byte storage ([#969])
+- [**breaking**] `.ilike()` operator is now PostgreSQL-only ([#937])
+
+### Changed
+
+- [**breaking**] Relation field variants consolidated into single `has` type ([#964])
+- [**breaking**] Deferred relation fields are now required ([#954])
+- [**breaking**] Schema diff types moved to `toasty_core::schema::diff` module ([#929])
+
+[#890]: https://github.com/tokio-rs/toasty/pull/890
+[#922]: https://github.com/tokio-rs/toasty/pull/922
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#934]: https://github.com/tokio-rs/toasty/pull/934
+[#937]: https://github.com/tokio-rs/toasty/pull/937
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#944]: https://github.com/tokio-rs/toasty/pull/944
+[#946]: https://github.com/tokio-rs/toasty/pull/946
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#958]: https://github.com/tokio-rs/toasty/pull/958
+[#961]: https://github.com/tokio-rs/toasty/pull/961
+[#964]: https://github.com/tokio-rs/toasty/pull/964
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#969]: https://github.com/tokio-rs/toasty/pull/969
+[#979]: https://github.com/tokio-rs/toasty/pull/979
+[#983]: https://github.com/tokio-rs/toasty/pull/983
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.0...toasty-core-v0.6.1) - 2026-05-16
 
 ### Added
