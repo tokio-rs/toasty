@@ -230,7 +230,8 @@ impl LowerStatement<'_, '_> {
                 expr_arg: &stmt::ExprArg,
                 projection: &stmt::Projection,
             ) -> Option<stmt::Expr> {
-                todo!("self={self:#?}; expr_arg={expr_arg:#?}; projection={projection:#?}");
+                let _ = (expr_arg, projection);
+                None
             }
 
             fn resolve_ref(

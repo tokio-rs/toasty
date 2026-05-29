@@ -180,7 +180,7 @@ Toasty sets the foreign key automatically:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -190,7 +190,7 @@ Toasty sets the foreign key automatically:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -231,7 +231,7 @@ BelongsTo/HasOne fields, and `[{ ... }, { ... }]` for HasMany fields:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -241,7 +241,7 @@ BelongsTo/HasOne fields, and `[{ ... }, { ... }]` for HasMany fields:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {

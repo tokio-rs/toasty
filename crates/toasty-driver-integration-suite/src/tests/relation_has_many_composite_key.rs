@@ -31,7 +31,7 @@ pub async fn composite_belongs_to_missing_index_is_error(test: &mut Test) -> Res
         revision: i64,
 
         #[has_many]
-        children: toasty::HasMany<Child>,
+        children: toasty::Deferred<Vec<Child>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -47,7 +47,7 @@ pub async fn composite_belongs_to_missing_index_is_error(test: &mut Test) -> Res
         parent_revision: i64,
 
         #[belongs_to(key = [parent_id, parent_revision], references = [id, revision])]
-        parent: toasty::BelongsTo<Parent>,
+        parent: toasty::Deferred<Parent>,
     }
 
     let err = test
@@ -277,42 +277,15 @@ pub async fn composite_belongs_to_required(test: &mut Test) {
     assert_err!(Todo::create().title("orphan").exec(&mut db).await);
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    // Composite FK where the FK is *optional* — modeled by leaving the
-    // partition-key column as `Option<ID>`. (NB: keys must still be
-    // populated when inserting, but the nullable FK exercises the
-    // belongs_to-optional codepath after the parent is deleted.)
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create().exec(&mut db).await?;
     let mut ids = vec![];
 
     for _ in 0..3 {
-        let todo = user.todos().create().exec(&mut db).await?;
+        let todo = user.todos().create().title("dummy").exec(&mut db).await?;
         ids.push(todo.id);
     }
 
@@ -335,7 +308,7 @@ pub async fn composite_associate_new_user_with_todo_on_update_via_creation(
     let u1 = User::create()
         .revision(1)
         .name("User 1")
-        .todo(Todo::create().title("hello world"))
+        .todos([Todo::create().title("hello world")])
         .exec(&mut db)
         .await?;
 
@@ -359,7 +332,7 @@ pub async fn composite_associate_new_user_with_todo_on_update_query_via_creation
     let u1 = User::create()
         .revision(1)
         .name("User 1")
-        .todo(Todo::create().title("a todo"))
+        .todos([Todo::create().title("a todo")])
         .exec(&mut db)
         .await?;
 
@@ -390,7 +363,7 @@ pub async fn composite_assign_todo_that_already_has_user_on_create(test: &mut Te
     let u2 = User::create()
         .revision(1)
         .name("User 2")
-        .todo(&todo)
+        .todos([&todo])
         .exec(&mut db)
         .await?;
 
@@ -504,7 +477,7 @@ pub async fn composite_user_batch_create_todos_one_level(test: &mut Test) -> Res
 
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
+        .todos([Todo::create().title("Make pizza")])
         .exec(&mut db)
         .await?;
 
@@ -525,8 +498,8 @@ pub async fn composite_user_batch_create_two_todos_simple(test: &mut Test) -> Re
 
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
-        .todo(Todo::create().title("Sleep"))
+        .todos([Todo::create().title("Make pizza")])
+        .todos([Todo::create().title("Sleep")])
         .exec(&mut db)
         .await?;
 
@@ -550,7 +523,7 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
 
         // Optional field exercises the RETURNING/constantize path that
         // regressed in #user_batch_create_todos_with_optional_field.
@@ -567,7 +540,7 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }
@@ -576,8 +549,8 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
 
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
-        .todo(Todo::create().title("Sleep"))
+        .todos([Todo::create().title("Make pizza")])
+        .todos([Todo::create().title("Sleep")])
         .exec(&mut db)
         .await?;
 
@@ -590,36 +563,13 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create()
-        .todo(Todo::create())
-        .todo(Todo::create())
+        .todos([Todo::create().title("dummy")])
+        .todos([Todo::create().title("dummy")])
         .exec(&mut db)
         .await?;
 
@@ -703,40 +653,17 @@ pub async fn composite_reassign_relation_required_belongs_to(test: &mut Test) ->
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_add_remove_multiple_relation_option_belongs_to(
     test: &mut Test,
 ) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create().exec(&mut db).await?;
 
-    let t1 = Todo::create().exec(&mut db).await?;
-    let t2 = Todo::create().exec(&mut db).await?;
-    let t3 = Todo::create().exec(&mut db).await?;
+    let t1 = Todo::create().title("dummy").exec(&mut db).await?;
+    let t2 = Todo::create().title("dummy").exec(&mut db).await?;
+    let t3 = Todo::create().title("dummy").exec(&mut db).await?;
 
     let ids = vec![t1.id, t2.id, t3.id];
 
@@ -764,9 +691,9 @@ pub async fn composite_basic_has_many_and_belongs_to_preload(test: &mut Test) ->
 
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("todo 1"))
-        .todo(Todo::create().title("todo 2"))
-        .todo(Todo::create().title("todo 3"))
+        .todos([Todo::create().title("todo 1")])
+        .todos([Todo::create().title("todo 2")])
+        .todos([Todo::create().title("todo 3")])
         .exec(&mut db)
         .await?;
 
@@ -804,41 +731,13 @@ pub async fn composite_preload_on_empty_query(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_preload_has_many_with_optional_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create()
-        .name("Alice")
-        .todo(Todo::create().title("alpha"))
-        .todo(Todo::create().title("beta"))
+        .todos([Todo::create().title("alpha")])
+        .todos([Todo::create().title("beta")])
         .exec(&mut db)
         .await?;
 
@@ -857,8 +756,8 @@ pub async fn composite_nested_has_many_then_belongs_to_required(test: &mut Test)
 
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("alpha"))
-        .todo(Todo::create().title("beta"))
+        .todos([Todo::create().title("alpha")])
+        .todos([Todo::create().title("beta")])
         .exec(&mut db)
         .await?;
 
@@ -892,7 +791,7 @@ pub async fn composite_crud_has_one_required(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -904,7 +803,7 @@ pub async fn composite_crud_has_one_required(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         bio: String,
     }
@@ -951,7 +850,7 @@ pub async fn composite_filter_by_belongs_to_field(test: &mut Test) -> Result<()>
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         bio: String,
     }
@@ -1029,7 +928,7 @@ pub async fn composite_select_belongs_to_basic(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        author: toasty::BelongsTo<User>,
+        author: toasty::Deferred<User>,
     }
 
     let mut db = test.setup_db(models!(User, Post)).await;

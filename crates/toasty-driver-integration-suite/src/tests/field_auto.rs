@@ -58,6 +58,32 @@ pub async fn auto_increment_explicit(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+#[driver_test(requires(auto_increment))]
+pub async fn auto_increment_i64_key(test: &mut Test) -> Result<()> {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: i64,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let first = toasty::create!(Item { name: "first" })
+        .exec(&mut db)
+        .await?;
+    let second = toasty::create!(Item { name: "second" })
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(first.id, 1);
+    assert_eq!(second.id, 2);
+
+    Ok(())
+}
+
 #[driver_test(id(ID), requires(auto_increment))]
 pub async fn auto_increment_implicit(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
@@ -113,7 +139,7 @@ pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
         id: u32,
 
         #[has_many]
-        children: toasty::HasMany<Child>,
+        children: toasty::Deferred<Vec<Child>>,
     }
 
     #[derive(toasty::Model)]
@@ -127,15 +153,15 @@ pub async fn auto_increment_with_associations(test: &mut Test) -> Result<()> {
 
         #[belongs_to(key = parent_id, references = id)]
         #[allow(dead_code)]
-        parent: toasty::BelongsTo<Parent>,
+        parent: toasty::Deferred<Parent>,
     }
 
     let mut db = test.setup_db(models!(Parent, Child)).await;
 
     for i in 1..10 {
         let u = Parent::create()
-            .child(Child::create())
-            .child(Child::create())
+            .children([Child::create()])
+            .children([Child::create()])
             .exec(&mut db)
             .await?;
         assert_eq!(u.id, i);

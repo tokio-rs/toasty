@@ -1,185 +1,65 @@
-use super::{Load, Register, Relation, Scope};
+use super::{Deferred, Load, Model, Register, RelationManyField};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
-use toasty_core::stmt::{self, Value};
+use toasty_core::stmt;
 
-use std::fmt;
+impl<M: Model> RelationManyField for Vec<M> {
+    type Model = M;
 
-/// A lazily-loaded has-many association.
-///
-/// `HasMany<T>` wraps an optional `Vec<T>` that is populated when the
-/// association is eagerly loaded (via `include`) or accessed through a
-/// generated relation accessor. Before loading, calling
-/// [`get`](HasMany::get) panics.
-///
-/// This type appears as a field on model structs for has-many relations.
-#[derive(Clone)]
-pub struct HasMany<T> {
-    values: Option<Vec<T>>,
-}
+    const DEFERRED: bool = false;
 
-impl<T: Relation> Load for HasMany<T> {
-    type Output = Self;
-
-    fn ty() -> stmt::Type {
-        stmt::Type::list(T::ty())
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
+        <Self as Load>::reload(target, value)
     }
 
-    fn load(input: Value) -> crate::Result<Self> {
-        match input {
-            Value::List(items) => {
-                let mut values = vec![];
-
-                for value in items {
-                    values.push(T::load_relation(value)?);
-                }
-
-                Ok(Self {
-                    values: Some(values),
-                })
-            }
-            Value::Null => Ok(Self::default()),
-            _ => todo!("unexpected input: input={:#?}", input),
-        }
-    }
-}
-
-impl<T: Relation> HasMany<T> {
-    /// Returns a slice of the loaded associated records.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the association has not been loaded. Use [`try_get`] to
-    /// handle the unloaded state without panicking.
-    ///
-    /// [`try_get`]: HasMany::try_get
-    #[track_caller]
-    pub fn get(&self) -> &[T] {
-        self.values
-            .as_ref()
-            .expect("association not loaded")
-            .as_slice()
-    }
-
-    /// Returns a slice of the loaded associated records, or `None` if the
-    /// association has not been loaded.
-    ///
-    /// This is the non-panicking counterpart to [`get`](HasMany::get). An
-    /// empty slice means the association is loaded and the record has no
-    /// related rows; `None` means the association has not been loaded.
-    pub fn try_get(&self) -> Option<&[T]> {
-        self.values.as_deref()
-    }
-
-    /// Returns `true` if the association has not been loaded yet.
-    pub fn is_unloaded(&self) -> bool {
-        self.values.is_none()
-    }
-
-    /// Clear the loaded values, returning this association to the unloaded
-    /// state.
-    pub fn unload(&mut self) {
-        self.values = None;
-    }
-}
-
-impl<T: Relation> Relation for HasMany<T> {
-    type Model = T::Model;
-    type Expr = T::Expr;
-    type Query = T::Query;
-    type Create = T::Create;
-    type Many = T::Many;
-    type ManyField<__Origin> = T::ManyField<__Origin>;
-    type One = T::One;
-    type OneField<__Origin> = T::OneField<__Origin>;
-    type OptionOne = T::OptionOne;
-
-    fn new_many_field<__Origin>(
-        path: crate::stmt::Path<__Origin, crate::stmt::List<Self::Model>>,
-    ) -> Self::ManyField<__Origin> {
-        T::new_many_field(path)
-    }
-
-    fn field_name_to_id(name: &str) -> toasty_core::schema::app::FieldId {
-        T::field_name_to_id(name)
-    }
-
-    fn nullable() -> bool {
-        T::nullable()
-    }
-
-    fn has_many_field_ty(
+    fn many_relation_field_ty(
         singular: Name,
         pair: Option<FieldId>,
         via: Option<stmt::Path>,
     ) -> FieldTy {
-        FieldTy::HasMany(app::HasMany {
-            target: <T::Model as Register>::id(),
-            expr_ty: stmt::Type::List(Box::new(stmt::Type::Model(<T::Model as Register>::id()))),
-            singular,
-            kind: has_kind(pair, via),
-        })
+        many_relation_field_ty::<M>(singular, pair, via)
     }
 }
 
-/// Build a [`HasKind`](app::HasKind) from the macro-supplied `pair` / `via`
-/// attributes. `via` declares a multi-step relation and carries the fully
-/// resolved [`stmt::Path`] emitted by the derive; otherwise the relation is
-/// direct, and a direct relation with no explicit `pair` gets a placeholder
-/// that the schema linker resolves.
-pub(super) fn has_kind(pair: Option<FieldId>, via: Option<stmt::Path>) -> app::HasKind {
+impl<M: Model> RelationManyField for Deferred<Vec<M>> {
+    type Model = M;
+
+    const DEFERRED: bool = true;
+
+    fn reload(target: &mut Self, _value: stmt::Value) -> crate::Result<()> {
+        target.unload();
+        Ok(())
+    }
+
+    fn many_relation_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<stmt::Path>,
+    ) -> FieldTy {
+        many_relation_field_ty::<M>(singular, pair, via)
+    }
+}
+
+fn many_relation_field_ty<M: Model>(
+    singular: Name,
+    pair: Option<FieldId>,
+    via: Option<stmt::Path>,
+) -> FieldTy {
+    let target = <M as Register>::id();
+    let expr_ty = stmt::Type::List(Box::new(stmt::Type::Model(target)));
+    let cardinality = app::Cardinality::Many { singular };
+
     match via {
-        Some(path) => app::HasKind::Via(app::Via::new(path)),
-        None => app::HasKind::Direct(pair.unwrap_or(FieldId {
-            model: ModelId(usize::MAX),
-            index: usize::MAX,
-        })),
-    }
-}
-
-impl<T: Relation> Scope for HasMany<T> {
-    type Item = crate::stmt::List<T::Model>;
-    type Path<Origin> = T::ManyField<Origin>;
-    type Create = T::Create;
-
-    fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::Item>) -> Self::Path<Origin> {
-        T::new_many_field(path)
-    }
-
-    fn new_create() -> Self::Create {
-        T::new_create()
-    }
-
-    fn new_path_root() -> Self::Path<Self::Item> {
-        T::new_many_field(crate::stmt::Path::from_model_list())
-    }
-}
-
-impl<T> Default for HasMany<T> {
-    fn default() -> Self {
-        Self { values: None }
-    }
-}
-
-impl<T: fmt::Debug> fmt::Debug for HasMany<T> {
-    fn fmt(&self, fmt: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self.values.as_ref() {
-            Some(t) => t.fmt(fmt),
-            None => {
-                write!(fmt, "<not loaded>")?;
-                Ok(())
-            }
-        }
-    }
-}
-
-#[cfg(feature = "serde")]
-impl<T: serde_core::Serialize> serde_core::Serialize for HasMany<T> {
-    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-    where
-        S: serde_core::Serializer,
-    {
-        self.values.serialize(serializer)
+        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+        None => FieldTy::Has(app::Has {
+            target,
+            expr_ty,
+            cardinality,
+            pair_id: pair.unwrap_or(FieldId {
+                model: ModelId(usize::MAX),
+                index: usize::MAX,
+            }),
+        }),
     }
 }

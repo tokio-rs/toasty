@@ -27,6 +27,11 @@ pub struct Capability {
     /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
 
+    /// Placeholder syntax accepted by the driver's SQL bind layer.
+    ///
+    /// SQL drivers set this to `Some`. Non-SQL drivers set this to `None`.
+    pub sql_placeholder: Option<SqlPlaceholder>,
+
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
@@ -52,6 +57,15 @@ pub struct Capability {
 
     /// Whether the database has an auto increment modifier for integer columns.
     pub auto_increment: bool,
+
+    /// Maximum storage width, in bytes, for auto-increment integer columns.
+    ///
+    /// Backends that require a particular declared type for auto-increment
+    /// columns use this to cap the storage type selected from the Rust field
+    /// type. SQLite requires the declared type to be `INTEGER` when using
+    /// `AUTOINCREMENT`; Toasty's SQLite serializer emits that spelling for
+    /// `Integer(4)`.
+    pub max_auto_increment_integer_width: Option<u8>,
 
     /// Whether the database supports `VARCHAR(n)` column types natively.
     ///
@@ -113,9 +127,22 @@ pub struct Capability {
     /// Whether the database has a native prefix-match operator that does not
     /// require LIKE-style escaping. When `true`, `starts_with` is left in the
     /// AST and the driver renders it natively (DynamoDB's `begins_with()`,
-    /// PostgreSQL's `^@`). When `false`, the lowering rewrites it to a
-    /// `LIKE` expression — which requires `native_like` to be `true`.
+    /// PostgreSQL's `^@`, SQLite's `GLOB`, MySQL's `LIKE BINARY`). When
+    /// `false`, the lowering rewrites it to a `LIKE` expression — which
+    /// requires `native_like` to be `true`.
     pub native_starts_with: bool,
+
+    /// Whether `starts_with` should be rendered as a SQLite `GLOB 'prefix*'`
+    /// expression. When `true`, `extract_params` escapes GLOB metacharacters
+    /// (`*`, `?`, `[`) in the prefix and appends `*`; the serializer emits
+    /// `col GLOB ?`. Implies `native_starts_with`.
+    pub glob_starts_with: bool,
+
+    /// Whether `starts_with` should be rendered as MySQL `BINARY col LIKE ?
+    /// ESCAPE '!'`. When `true`, `extract_params` escapes LIKE metacharacters
+    /// using `!` as the escape char and appends `%`; the serializer emits
+    /// `BINARY col LIKE ? ESCAPE '!'`. Implies `native_starts_with`.
+    pub binary_like_starts_with: bool,
 
     /// Whether the database has a native `LIKE` expression. When `false`,
     /// `Expr::Like` cannot be sent to the driver; `starts_with` lowering
@@ -371,6 +398,24 @@ pub struct SchemaMutations {
     pub alter_column_properties_atomic: bool,
 }
 
+/// SQL bind-parameter placeholder syntax accepted by a driver.
+///
+/// This describes the SQL text users must write when sending raw SQL through
+/// [`RawSql`](super::operation::RawSql). The SQL serializer uses the same
+/// value when rendering Toasty-generated SQL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqlPlaceholder {
+    /// Positional `?` placeholders, where parameter order is the occurrence
+    /// order in the SQL string.
+    QuestionMark,
+
+    /// Numbered `?1`, `?2`, ... placeholders.
+    NumberedQuestionMark,
+
+    /// Numbered `$1`, `$2`, ... placeholders.
+    DollarNumber,
+}
+
 impl Capability {
     /// Validates the consistency of the capability configuration.
     ///
@@ -398,6 +443,36 @@ impl Capability {
         if self.native_ilike && !self.native_like {
             return Err(crate::Error::invalid_driver_configuration(
                 "native_ilike is true but native_like is false",
+            ));
+        }
+
+        if self.glob_starts_with && !self.native_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "glob_starts_with is true but native_starts_with is false",
+            ));
+        }
+
+        if self.binary_like_starts_with && !self.native_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "binary_like_starts_with is true but native_starts_with is false",
+            ));
+        }
+
+        if self.glob_starts_with && self.binary_like_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "glob_starts_with and binary_like_starts_with cannot both be true",
+            ));
+        }
+
+        if self.sql && self.sql_placeholder.is_none() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is true but sql_placeholder is None",
+            ));
+        }
+
+        if !self.sql && self.sql_placeholder.is_some() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is false but sql_placeholder is Some",
             ));
         }
 
@@ -443,6 +518,7 @@ impl Capability {
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
         sql: true,
+        sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
@@ -450,6 +526,7 @@ impl Capability {
         returning_from_mutation: true,
         primary_key_ne_predicate: true,
         auto_increment: true,
+        max_auto_increment_integer_width: Some(4),
         bigdecimal_implemented: false,
         bool_key_type: true,
 
@@ -471,7 +548,11 @@ impl Capability {
 
         index_or_predicate: true,
 
-        native_starts_with: false,
+        // SQLite's GLOB operator is case-sensitive and is used for starts_with.
+        // LIKE is preserved for user-supplied `.like()` calls.
+        native_starts_with: true,
+        glob_starts_with: true,
+        binary_like_starts_with: false,
         native_like: true,
 
         // SQLite's `LIKE` is case-insensitive for ASCII only; it has no
@@ -521,14 +602,18 @@ impl Capability {
     /// PostgreSQL capabilities
     pub const POSTGRESQL: Self = Self {
         cte_with_update: true,
+        sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
         schema_mutations: SchemaMutations::POSTGRESQL,
         select_for_update: true,
         auto_increment: true,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
 
         // PostgreSQL has the `^@` prefix-match operator.
         native_starts_with: true,
+        glob_starts_with: false,
+        binary_like_starts_with: false,
 
         // PostgreSQL is the only backend with a native `ILIKE` operator.
         native_ilike: true,
@@ -574,11 +659,13 @@ impl Capability {
     /// MySQL capabilities
     pub const MYSQL: Self = Self {
         cte_with_update: false,
+        sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
         auto_increment: true,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: true,
 
         // MySQL has inline ENUM('a', 'b') column types
@@ -609,6 +696,10 @@ impl Capability {
         bind_list_param: true,
         vec_scalar: true,
 
+        // MySQL uses BINARY col LIKE ? ESCAPE '!' for case-sensitive starts_with.
+        glob_starts_with: false,
+        binary_like_starts_with: true,
+
         ..Self::SQLITE
     };
 
@@ -635,6 +726,7 @@ impl Capability {
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
         sql: false,
+        sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
@@ -642,6 +734,7 @@ impl Capability {
         returning_from_mutation: false,
         primary_key_ne_predicate: false,
         auto_increment: false,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
         // DynamoDB key attributes (primary key and GSI keys) only support
         // S, N, or B — BOOL is not a valid key attribute type.
@@ -664,6 +757,8 @@ impl Capability {
 
         // DynamoDB has `begins_with()` but no LIKE or ILIKE.
         native_starts_with: true,
+        glob_starts_with: false,
+        binary_like_starts_with: false,
         native_like: false,
         native_ilike: false,
 
@@ -890,6 +985,40 @@ mod tests {
     fn test_validate_dynamodb_capability() {
         // DynamoDB has native_varchar=false and varchar=None, should pass
         assert!(Capability::DYNAMODB.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_fails_when_sql_has_no_placeholder() {
+        let invalid = Capability {
+            sql_placeholder: None,
+            ..Capability::SQLITE
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("sql is true but sql_placeholder is None")
+        );
+    }
+
+    #[test]
+    fn test_validate_fails_when_non_sql_has_placeholder() {
+        let invalid = Capability {
+            sql_placeholder: Some(SqlPlaceholder::QuestionMark),
+            ..Capability::DYNAMODB
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("sql is false but sql_placeholder is Some")
+        );
     }
 
     #[test]

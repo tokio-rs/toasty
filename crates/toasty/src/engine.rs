@@ -23,7 +23,7 @@ use crate::Result;
 use std::sync::Arc;
 use toasty_core::{
     Connection, Schema,
-    driver::Capability,
+    driver::{Capability, operation::RawSql},
     stmt::{self, Statement},
 };
 
@@ -76,13 +76,6 @@ impl Engine {
 
         self.verify(&stmt)?;
 
-        if let stmt::Statement::Insert(stmt) = &stmt {
-            assert!(matches!(
-                stmt.returning,
-                Some(stmt::Returning::Model { .. })
-            ));
-        }
-
         // Lower the statement to High-level intermediate representation
         let hir = self.lower_stmt(stmt)?;
 
@@ -98,6 +91,23 @@ impl Engine {
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
         self.exec_plan(connection, plan, in_transaction).await
+    }
+
+    /// Executes user-authored SQL through the driver SQL path.
+    pub(crate) async fn exec_raw_sql(
+        &self,
+        connection: &mut dyn Connection,
+        raw: RawSql,
+    ) -> Result<toasty_core::driver::ExecResponse> {
+        if !self.capability.sql {
+            return Err(toasty_core::Error::unsupported_feature(
+                "raw SQL is only supported by SQL drivers",
+            ));
+        }
+
+        tracing::debug!("executing raw SQL");
+
+        connection.exec(&self.schema, raw.into()).await
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.

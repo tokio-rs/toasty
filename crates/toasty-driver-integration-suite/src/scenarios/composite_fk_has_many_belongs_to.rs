@@ -12,7 +12,7 @@ scenario! {
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -26,7 +26,7 @@ scenario! {
         user_revision: i64,
 
         #[belongs_to(key = [user_id, user_revision], references = [id, revision])]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }

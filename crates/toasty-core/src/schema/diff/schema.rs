@@ -1,5 +1,5 @@
 use super::{Context, RenameHints, Table, Type};
-use crate::schema::db::Schema as DbSchema;
+use crate::schema::db;
 
 /// The top-level diff between two database schemas.
 ///
@@ -9,23 +9,23 @@ use crate::schema::db::Schema as DbSchema;
 /// # Examples
 ///
 /// ```ignore
-/// use toasty_core::schema::{db::Schema as DbSchema, diff};
+/// use toasty_core::schema::{db, diff};
 ///
-/// let previous = DbSchema::default();
-/// let next = DbSchema::default();
+/// let previous = db::Schema::default();
+/// let next = db::Schema::default();
 /// let hints = diff::RenameHints::new();
 /// let d = diff::Schema::from(&previous, &next, &hints);
 /// assert!(d.is_empty());
 /// ```
 pub struct Schema<'a> {
-    previous: &'a DbSchema,
-    next: &'a DbSchema,
+    previous: &'a db::Schema,
+    next: &'a db::Schema,
     tables: Vec<Table<'a>>,
 }
 
 impl<'a> Schema<'a> {
     /// Computes the diff between two schemas, using the provided rename hints.
-    pub fn from(from: &'a DbSchema, to: &'a DbSchema, rename_hints: &'a RenameHints) -> Self {
+    pub fn from(from: &'a db::Schema, to: &'a db::Schema, rename_hints: &'a RenameHints) -> Self {
         let cx = Context::new(from, to, rename_hints);
         Self {
             previous: from,
@@ -50,12 +50,12 @@ impl<'a> Schema<'a> {
     }
 
     /// Returns the schema before the change.
-    pub fn previous(&self) -> &'a DbSchema {
+    pub fn previous(&self) -> &'a db::Schema {
         self.previous
     }
 
     /// Returns the schema after the change.
-    pub fn next(&self) -> &'a DbSchema {
+    pub fn next(&self) -> &'a db::Schema {
         self.next
     }
 }

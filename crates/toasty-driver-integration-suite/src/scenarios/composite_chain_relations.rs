@@ -29,7 +29,7 @@ scenario! {
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -43,13 +43,13 @@ scenario! {
         user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         category_id: uuid::Uuid,
         category_revision: i64,
 
         #[belongs_to(key = [category_id, category_revision], references = [id, revision])]
-        category: toasty::BelongsTo<Category>,
+        category: toasty::Deferred<Category>,
 
         title: String,
     }
@@ -63,7 +63,7 @@ scenario! {
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     async fn setup(test: &mut Test) -> toasty::Db {

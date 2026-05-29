@@ -1,12 +1,13 @@
 mod association;
 mod expr_or;
-mod expr_pattern;
 mod include;
 mod insert;
 mod lift_in_subquery;
+mod lift_update_query;
 mod paginate;
 mod relation;
 mod returning;
+mod via_join;
 
 #[cfg(test)]
 mod tests;
@@ -28,6 +29,35 @@ use toasty_core::{
 };
 
 use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
+
+/// Wrap a nullable single-relation subquery so a missing row passes through as
+/// `Null`, while a present row is transformed by `present`. Used when lowering
+/// `.include()`/`.select()` of nullable single (`Deferred<Option<_>>` /
+/// `Deferred<Option<_>>`) relations that need to project out of the subquery
+/// result:
+///
+/// ```text
+///   Let {
+///     binding: subquery,
+///     body: Match { subject: arg(0), arms: [Null → Null], else: present },
+///   }
+/// ```
+///
+/// The subquery result is bound as `arg(0)`; `present` is the expression for a
+/// non-null row and may reference that binding (e.g. project a field out of it).
+fn map_nullable_single(subquery: stmt::Expr, present: stmt::Expr) -> stmt::Expr {
+    stmt::Expr::Let(stmt::ExprLet {
+        bindings: vec![subquery],
+        body: Box::new(stmt::Expr::match_expr(
+            stmt::Expr::arg(0),
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::Null,
+                expr: stmt::Expr::Value(stmt::Value::Null),
+            }],
+            present,
+        )),
+    })
+}
 
 impl Engine {
     pub(super) fn lower_stmt(&self, stmt: stmt::Statement) -> Result<HirStatement> {
@@ -64,10 +94,14 @@ impl LoweringState<'_> {
         // converts `Source::Model` into `Source::Table`.  The IN-subquery
         // lift fires here too: code paths outside the lowering walk (e.g.
         // `ApplyInsertScope::apply_expr`) see the already-lifted form.
-        // The eq/ne operand rewrite (model→PK, BelongsTo→FK) fires inside
-        // the lowering walk itself via `LowerStatement::visit_expr_binary_op_mut`.
+        // `UpdateTarget::Query` is lifted into `UpdateTarget::Model` with
+        // the inner query's filter merged onto the outer update before the
+        // walk sees the target.  The eq/ne operand rewrite (model→PK,
+        // BelongsTo→FK) fires inside the lowering walk itself via
+        // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
         lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
+        lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
@@ -186,6 +220,17 @@ enum CollectionOp<'a> {
     RemoveAt(&'a mut stmt::Expr),
 }
 
+/// Arithmetic assignment operator on a numeric scalar field.
+///
+/// `Add` and `Subtract` carry a value to combine atomically with the
+/// current column value (`col = col ± expr`). Like collection ops, they
+/// target a single-column primitive field and skip the `model_to_table`
+/// substitution.
+enum ArithmeticOp {
+    Add,
+    Subtract,
+}
+
 impl LowerStatement<'_, '_> {
     /// Lower a `Set` assignment — the only assignment that carries a whole
     /// *field value*.
@@ -198,7 +243,7 @@ impl LowerStatement<'_, '_> {
     fn lower_set_assignment(
         &mut self,
         out: &mut stmt::Assignments,
-        mapping: &toasty_core::schema::mapping::Model,
+        mapping: &mapping::Model,
         projection: &stmt::Projection,
         expr: &mut stmt::Expr,
     ) {
@@ -243,7 +288,7 @@ impl LowerStatement<'_, '_> {
     fn lower_collection_op(
         &mut self,
         out: &mut stmt::Assignments,
-        mapping: &toasty_core::schema::mapping::Model,
+        mapping: &mapping::Model,
         projection: &stmt::Projection,
         op: CollectionOp,
     ) {
@@ -303,35 +348,194 @@ impl LowerStatement<'_, '_> {
             }
         }
     }
-}
 
-/// Fold a `Batch` of column-level ops into a single equivalent `Append`
-/// expression. Currently only handles the all-`Append` shape produced by
-/// `stmt::apply([stmt::push(..), ..])` / `stmt::extend`; other shapes
-/// (mixed Append/Pop/RemoveAt, …) need per-entry dispatch plus driver-side
-/// Batch composition. See #717.
-///
-/// Empty input yields an empty list expression — the surface `stmt::apply`
-/// API can't actually produce an empty `Batch`, but the helper doesn't
-/// depend on that: an empty list flows through as a no-op Append.
-fn fold_append_batch(entries: Vec<stmt::Assignment>) -> stmt::Expr {
-    let mut items = Vec::new();
-    for entry in entries {
-        match entry {
-            // `stmt::push` builds `Expr::List([elem])`; the fold pass
-            // collapses literal-only lists to `Expr::Value(Value::List)`.
-            stmt::Assignment::Append(stmt::Expr::List(list)) => {
-                items.extend(list.items);
-            }
-            stmt::Assignment::Append(stmt::Expr::Value(stmt::Value::List(values))) => {
-                items.extend(values.into_iter().map(stmt::Expr::from));
-            }
-            // Other batch entry kinds need per-entry dispatch and
-            // driver-side Batch composition.
-            other => todo!("batch entry kind not yet supported on Vec<scalar>: {other:#?}"),
+    /// Lower an arithmetic assignment operator (`Add` / `Subtract`) on a
+    /// scalar numeric field. Mirrors `lower_collection_op`: single primitive
+    /// column, no `model_to_table` substitution needed.
+    fn lower_arithmetic_op(
+        &mut self,
+        out: &mut stmt::Assignments,
+        mapping: &mapping::Model,
+        projection: &stmt::Projection,
+        op: ArithmeticOp,
+        expr: &mut stmt::Expr,
+    ) {
+        let Some(field) = mapping.resolve_field_mapping(projection) else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "invalid assignment projection: {projection:?}"
+                )));
+            return;
+        };
+
+        let Some(prim) = field.as_primitive() else {
+            self.state
+                .errors
+                .push(crate::Error::invalid_statement(format!(
+                    "arithmetic operator on non-primitive field: {projection:?}"
+                )));
+            return;
+        };
+
+        self.visit_expr_mut(expr);
+        let value = expr.take();
+        match op {
+            ArithmeticOp::Add => out.add(prim.column, value),
+            ArithmeticOp::Subtract => out.subtract(prim.column, value),
         }
     }
-    stmt::Expr::list_from_vec(items)
+
+    /// Dispatch a single owned assignment to the matching per-kind lowering
+    /// helper. `Batch` first folds via [`fold_batch`] and then recurses on
+    /// the folded result. A residual `Batch` (from a non-composable pair)
+    /// is unsupported today; see #717.
+    fn lower_owned_assignment(
+        &mut self,
+        out: &mut stmt::Assignments,
+        mapping: &mapping::Model,
+        projection: &stmt::Projection,
+        assignment: stmt::Assignment,
+    ) {
+        match assignment {
+            stmt::Assignment::Set(mut expr) => {
+                self.lower_set_assignment(out, mapping, projection, &mut expr);
+            }
+            stmt::Assignment::Append(mut expr) => {
+                self.lower_collection_op(out, mapping, projection, CollectionOp::Append(&mut expr));
+            }
+            stmt::Assignment::Remove(mut expr) => {
+                self.lower_collection_op(out, mapping, projection, CollectionOp::Remove(&mut expr));
+            }
+            stmt::Assignment::Pop => {
+                self.lower_collection_op(out, mapping, projection, CollectionOp::Pop);
+            }
+            stmt::Assignment::RemoveAt(mut expr) => {
+                self.lower_collection_op(
+                    out,
+                    mapping,
+                    projection,
+                    CollectionOp::RemoveAt(&mut expr),
+                );
+            }
+            stmt::Assignment::Add(mut expr) => {
+                self.lower_arithmetic_op(out, mapping, projection, ArithmeticOp::Add, &mut expr);
+            }
+            stmt::Assignment::Subtract(mut expr) => {
+                self.lower_arithmetic_op(
+                    out,
+                    mapping,
+                    projection,
+                    ArithmeticOp::Subtract,
+                    &mut expr,
+                );
+            }
+            stmt::Assignment::Batch(entries) => {
+                let folded = fold_batch(entries);
+                if matches!(folded, stmt::Assignment::Batch(_)) {
+                    todo!("non-composable batch shape on {projection:?}: {folded:#?}")
+                }
+                self.lower_owned_assignment(out, mapping, projection, folded);
+            }
+            stmt::Assignment::Insert(_) => {
+                // `Insert` only applies to has-many relation fields, which
+                // `plan_stmt_update_relations` consumes before table-level
+                // lowering runs.
+                todo!("Insert assignment is not produced for table lowering; got {assignment:#?}")
+            }
+        }
+    }
+}
+
+/// Fold a `Batch` of column-level ops on the same field into a single
+/// equivalent assignment, applied left-to-right via [`compose_assignment`].
+///
+/// The result is a non-`Batch` assignment when every pair composes; if any
+/// pair is not algebraically reducible (today: `Pop`/`Remove`/`RemoveAt`
+/// interleaved with other ops, or non-literal `Append` concat), the
+/// residual is returned as a `Batch` so the caller can error with the full
+/// shape for diagnostics.
+fn fold_batch(entries: Vec<stmt::Assignment>) -> stmt::Assignment {
+    let mut iter = entries.into_iter();
+    let mut acc = iter.next().expect("batch is non-empty");
+    for next in iter {
+        acc = compose_assignment(acc, next);
+    }
+    acc
+}
+
+/// Compose two assignments on the same field into a single equivalent
+/// assignment, in execution order. Returns the un-composed pair as a
+/// `Batch` when the combination is not algebraically reducible — the
+/// caller treats a residual `Batch` as an unsupported shape.
+fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::Assignment {
+    use stmt::Assignment::*;
+    match (acc, next) {
+        // `Set` clobbers everything that came before it.
+        (_, Set(v)) => Set(v),
+
+        // Arithmetic following `Set` rewrites the stored value.
+        (Set(v), Add(x)) => Set(stmt::Expr::add(v, x)),
+        (Set(v), Subtract(x)) => Set(stmt::Expr::sub(v, x)),
+
+        // Arithmetic on arithmetic: combine operands. With `Subtract` as
+        // the outer op, subsequent operand signs flip
+        // (col - a + b = col - (a - b); col - a - b = col - (a + b)).
+        (Add(a), Add(x)) => Add(stmt::Expr::add(a, x)),
+        (Add(a), Subtract(x)) => Add(stmt::Expr::sub(a, x)),
+        (Subtract(a), Add(x)) => Subtract(stmt::Expr::sub(a, x)),
+        (Subtract(a), Subtract(x)) => Subtract(stmt::Expr::add(a, x)),
+
+        // Two literal-list `Append`s concatenate. Non-literal Append
+        // shapes fall through to a residual `Batch`.
+        (Append(a), Append(b)) => match try_concat_list_literals(a, b) {
+            Ok(merged) => Append(merged),
+            Err((a, b)) => Batch(vec![Append(a), Append(b)]),
+        },
+
+        // A `Batch` accumulator absorbs the next entry as a tail. Arises
+        // when a previous compose failed to reduce a pair; collecting the
+        // rest preserves the full shape for the caller's error message.
+        (Batch(mut tail), next) => {
+            tail.push(next);
+            Batch(tail)
+        }
+
+        // Not composable today — return as a residual `Batch`.
+        (acc, next) => Batch(vec![acc, next]),
+    }
+}
+
+/// Concatenate two list-shaped expressions if both are literals (either
+/// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
+/// on failure so the caller can preserve the un-folded shape.
+fn try_concat_list_literals(
+    a: stmt::Expr,
+    b: stmt::Expr,
+) -> Result<stmt::Expr, (stmt::Expr, stmt::Expr)> {
+    if !is_list_literal(&a) || !is_list_literal(&b) {
+        return Err((a, b));
+    }
+    let mut items = take_list_items(a).expect("checked is_list_literal");
+    items.extend(take_list_items(b).expect("checked is_list_literal"));
+    Ok(stmt::Expr::list_from_vec(items))
+}
+
+fn is_list_literal(e: &stmt::Expr) -> bool {
+    matches!(
+        e,
+        stmt::Expr::List(_) | stmt::Expr::Value(stmt::Value::List(_))
+    )
+}
+
+fn take_list_items(e: stmt::Expr) -> Option<Vec<stmt::Expr>> {
+    match e {
+        stmt::Expr::List(list) => Some(list.items),
+        stmt::Expr::Value(stmt::Value::List(values)) => {
+            Some(values.into_iter().map(stmt::Expr::from).collect())
+        }
+        _ => None,
+    }
 }
 
 impl LowerStatement<'_, '_> {
@@ -396,76 +600,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
         let mut lowered = stmt::Assignments::default();
         let mapping = self.mapping_unwrap();
-
-        // Two lowering paths, divided by what the assignment carries:
-        //
-        // - `Set` carries a whole *field value*. It is the only assignment
-        //   that can target a multi-column field (embedded structs decompose
-        //   across columns, enums into a discriminant plus variants), so it
-        //   is the only one that needs the `model_to_table` substitution.
-        //
-        // - `Append` / `Remove` / `Pop` / `RemoveAt` are *collection
-        //   operators*. They carry operator operands (a list, an element,
-        //   an index, or nothing) and always target a single-column
-        //   `Vec<scalar>` field, so none needs `model_to_table`.
-        for (projection, assignment) in &mut *i {
-            match assignment {
-                stmt::Assignment::Set(expr) => {
-                    self.lower_set_assignment(&mut lowered, mapping, projection, expr);
-                }
-                stmt::Assignment::Append(expr) => {
-                    self.lower_collection_op(
-                        &mut lowered,
-                        mapping,
-                        projection,
-                        CollectionOp::Append(expr),
-                    );
-                }
-                stmt::Assignment::Remove(expr) => {
-                    self.lower_collection_op(
-                        &mut lowered,
-                        mapping,
-                        projection,
-                        CollectionOp::Remove(expr),
-                    );
-                }
-                stmt::Assignment::Pop => {
-                    self.lower_collection_op(&mut lowered, mapping, projection, CollectionOp::Pop);
-                }
-                stmt::Assignment::RemoveAt(expr) => {
-                    self.lower_collection_op(
-                        &mut lowered,
-                        mapping,
-                        projection,
-                        CollectionOp::RemoveAt(expr),
-                    );
-                }
-                stmt::Assignment::Batch(entries) => {
-                    // A `Batch` of column-level ops on the same field; built
-                    // when the `stmt::apply` surface API folds same-projection
-                    // ops together. Each entry should dispatch through the
-                    // per-op arms above — today only the all-`Append` shape
-                    // is wired up (see `fold_append_batch`). Other shapes
-                    // need driver-side Batch composition; see #717.
-                    let mut folded = fold_append_batch(std::mem::take(entries));
-                    self.lower_collection_op(
-                        &mut lowered,
-                        mapping,
-                        projection,
-                        CollectionOp::Append(&mut folded),
-                    );
-                }
-                stmt::Assignment::Insert(_) => {
-                    // `Insert` only applies to has-many relation fields,
-                    // which `plan_stmt_update_relations` consumes before
-                    // table-level lowering runs.
-                    todo!(
-                        "Insert assignment is not produced for table lowering; got {assignment:#?}"
-                    )
-                }
-            }
+        let assignments = std::mem::take(i);
+        for (projection, assignment) in assignments {
+            self.lower_owned_assignment(&mut lowered, mapping, &projection, assignment);
         }
-
         *i = lowered;
     }
 
@@ -720,11 +858,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
-            stmt::Expr::StartsWith(_)
-                if self.capability().sql && !self.capability().native_starts_with =>
-            {
-                self.lower_expr_starts_with(expr);
-            }
             stmt::Expr::Exists(_) if !self.capability().sql => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
@@ -800,14 +933,15 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     fn visit_returning_mut(&mut self, i: &mut stmt::Returning) {
         if let stmt::Returning::Model { include } = i {
             // Start from the schema's pre-computed default returning — every
-            // `#[deferred]` field, top-level or nested, is already `Null`.
+            // Deferred fields, top-level or nested, are already `Null`.
             // `process_top_level_includes` then splices loaded forms in for
             // the fields named by include paths (and for every deferred field
             // when this is an `INSERT ... RETURNING`).
             let mut returning = self.mapping_unwrap().default_returning.clone();
-            let include_paths = std::mem::take(include);
+            let mut include_paths = std::mem::take(include);
             let is_insert = self.cx.is_insert();
 
+            self.prepare_model_returning_for_context(&mut returning, &mut include_paths, is_insert);
             self.process_top_level_includes(&mut returning, &include_paths, is_insert);
 
             *i = stmt::Returning::Project(returning);
@@ -1035,7 +1169,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
                     match &field.ty {
                         app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
-                        app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => todo!(),
+                        app::FieldTy::Has(_) | app::FieldTy::Via(_) => todo!(),
                         app::FieldTy::BelongsTo(rel) => {
                             *operand = key_field_refs(
                                 nesting,

@@ -361,7 +361,7 @@ pub async fn composite_has_many_through_has_many(test: &mut Test) -> Result<()> 
         revision: i64,
         name: String,
         #[has_many]
-        posts: toasty::HasMany<Post>,
+        posts: toasty::Deferred<Vec<Post>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -373,10 +373,10 @@ pub async fn composite_has_many_through_has_many(test: &mut Test) -> Result<()> 
         author_id: uuid::Uuid,
         author_revision: i64,
         #[belongs_to(key = [author_id, author_revision], references = [id, revision])]
-        author: toasty::BelongsTo<Author>,
+        author: toasty::Deferred<Author>,
         title: String,
         #[has_many]
-        comments: toasty::HasMany<Comment>,
+        comments: toasty::Deferred<Vec<Comment>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -387,7 +387,7 @@ pub async fn composite_has_many_through_has_many(test: &mut Test) -> Result<()> 
         #[index]
         post_id: uuid::Uuid,
         #[belongs_to(key = post_id, references = id)]
-        post: toasty::BelongsTo<Post>,
+        post: toasty::Deferred<Post>,
         body: String,
     }
 

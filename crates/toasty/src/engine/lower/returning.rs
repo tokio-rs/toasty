@@ -1,5 +1,11 @@
 use indexmap::IndexMap;
-use toasty_core::{schema::db::ColumnId, stmt};
+use toasty_core::{
+    schema::{
+        app::{FieldTy, ModelId},
+        db::ColumnId,
+    },
+    stmt,
+};
 
 use crate::engine::lower::{LowerStatement, LoweringContext};
 
@@ -21,6 +27,49 @@ enum ConstantizeSource<'a> {
 }
 
 impl LowerStatement<'_, '_> {
+    /// Shape `Returning::Model` for the statement kind before include lowering.
+    ///
+    /// Plain relation fields are implicit includes, except local `has_many` /
+    /// `has_one` fields during insert returning. Those slots are filled from
+    /// nested relation inserts later in insert relation planning; building an
+    /// include subquery here would create a second, stale dependency for the
+    /// same returning slot.
+    pub(super) fn prepare_model_returning_for_context(
+        &self,
+        returning: &mut stmt::Expr,
+        include_paths: &mut Vec<stmt::Path>,
+        is_insert: bool,
+    ) {
+        let model = self.model_unwrap();
+        let stmt::Expr::Record(record) = returning else {
+            return;
+        };
+
+        if is_insert {
+            include_paths.retain(|path| {
+                !first_model_field(path, model.id)
+                    .is_some_and(|field| is_insert_local_eager_relation(&model.fields[field].ty))
+            });
+        }
+
+        for field in &model.fields {
+            if !field.ty.is_relation() || field.deferred {
+                continue;
+            }
+
+            if is_insert && is_insert_local_eager_relation(&field.ty) {
+                record[field.id.index] = match field.ty {
+                    FieldTy::Has(ref rel) if rel.is_many() => stmt::Expr::list_from_vec(vec![]),
+                    FieldTy::Has(_) => stmt::Expr::null(),
+                    _ => unreachable!(),
+                };
+                continue;
+            }
+
+            include_paths.push(stmt::Path::field(model.id, field.id.index));
+        }
+    }
+
     /// Attempts to evaluate an INSERT statement's RETURNING clause at compile
     /// time.
     ///
@@ -320,6 +369,18 @@ impl LowerStatement<'_, '_> {
     }
 }
 
+fn is_insert_local_eager_relation(field_ty: &FieldTy) -> bool {
+    matches!(field_ty, FieldTy::Has(_))
+}
+
+fn first_model_field(path: &stmt::Path, model_id: ModelId) -> Option<usize> {
+    if path.root.as_model()? != model_id {
+        return None;
+    }
+
+    path.projection.as_slice().first().copied()
+}
+
 impl stmt::Input for ConstantizeReturning<'_> {
     fn resolve_ref(
         &mut self,
@@ -363,9 +424,11 @@ impl stmt::Input for ConstantizeReturning<'_> {
                         stmt::Assignment::Append(_)
                         | stmt::Assignment::Pop
                         | stmt::Assignment::RemoveAt(_)
-                        | stmt::Assignment::Remove(_) => None,
+                        | stmt::Assignment::Remove(_)
+                        | stmt::Assignment::Add(_)
+                        | stmt::Assignment::Subtract(_) => None,
                         _ => todo!(
-                            "only SET / APPEND / collection mutations supported; got {assignment:#?}"
+                            "only SET / APPEND / collection / arithmetic mutations supported; got {assignment:#?}"
                         ),
                     }
                 } else {

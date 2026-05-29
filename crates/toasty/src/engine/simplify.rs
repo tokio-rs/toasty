@@ -170,6 +170,41 @@ impl VisitMut for Simplify<'_> {
         self.simplify_stmt_query_when_empty(stmt);
     }
 
+    fn visit_source_mut(&mut self, source: &mut stmt::Source) {
+        // A `Source::Table` JOIN constraint references columns in the
+        // source's own table list (`tbl_d_n.col`), so it must be simplified
+        // with that source in scope — not the outer query scope active here.
+        // Take the `from` items out so we can hold an immutable scope onto
+        // the (still table-list-bearing) source while simplifying the join
+        // constraint expressions, then put them back.
+        let from = match source {
+            stmt::Source::Table(table) if table.from.iter().any(|twj| !twj.joins.is_empty()) => {
+                Some(std::mem::take(&mut table.from))
+            }
+            _ => None,
+        };
+
+        if let Some(mut from) = from {
+            {
+                let mut scoped = self.scope(&*source);
+                for twj in &mut from {
+                    for join in &mut twj.joins {
+                        let (stmt::JoinOp::Inner(expr) | stmt::JoinOp::Left(expr)) =
+                            &mut join.constraint;
+                        scoped.visit_expr_mut(expr);
+                    }
+                }
+            }
+
+            if let stmt::Source::Table(table) = source {
+                table.from = from;
+            }
+            return;
+        }
+
+        stmt::visit_mut::visit_source_mut(self, source);
+    }
+
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
         if let stmt::Source::Model(model) = &mut stmt.source
             && let Some(via) = model.via.take()
@@ -188,22 +223,9 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
-        // If the update target is a query, start by simplifying the query, then
-        // rewriting it to be a filter.
-        if let stmt::UpdateTarget::Query(query) = &mut stmt.target {
-            self.visit_stmt_query_mut(query);
-
-            let stmt::ExprSet::Select(select) = &mut query.body else {
-                todo!()
-            };
-
-            assert!(select.returning.is_model());
-
-            stmt.filter.add_filter(select.filter.take());
-
-            stmt.target = stmt::UpdateTarget::Model(select.source.model_id_unwrap());
-        }
-
+        // `UpdateTarget::Query` is lifted into `UpdateTarget::Model` by the
+        // pre-lowering `lower::lift_update_query::LiftUpdateQuery` pass, not
+        // here.
         self.visit_update_target_mut(&mut stmt.target);
 
         let mut s = self.scope(&stmt.target);

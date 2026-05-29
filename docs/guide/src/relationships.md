@@ -61,7 +61,7 @@ struct User {
 
     // User's table has no FK — declares has_many
     #[has_many]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::Deferred<Vec<Post>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -75,7 +75,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -93,7 +93,7 @@ a model with two `BelongsTo` relations pointing to the same parent type), use
 ```rust,ignore
 // On User: the child's relation field is named "owner", not "user"
 #[has_many(pair = owner)]
-posts: toasty::HasMany<Post>,
+posts: toasty::Deferred<Vec<Post>>,
 ```
 
 You can define one-sided relationships with only `#[belongs_to]` on the child
@@ -102,6 +102,45 @@ when you need to navigate from child to parent but not the reverse. The opposite
 is not allowed — a `#[has_many]` or `#[has_one]` field always requires a
 matching `#[belongs_to]` on the target model, because Toasty needs the foreign
 key definition to know how the models connect.
+
+### Lazy and eager relation fields
+
+The relation field type controls when Toasty loads the related records.
+
+Use `Deferred<_>` for a lazy relation. A normal query leaves the field unloaded.
+Load it by calling the generated relation accessor, or preload it with
+`.include(...)`:
+
+```rust,ignore
+#[has_many]
+posts: toasty::Deferred<Vec<Post>>,
+
+let posts = user.posts().exec(&mut db).await?;
+```
+
+Use the relation value directly for an eager relation. Toasty loads the relation
+with every query that returns the model, as if the query had an implicit
+`.include(...)`:
+
+```rust,ignore
+#[has_many]
+posts: Vec<Post>,
+
+let user = User::filter_by_id(user_id).get(&mut db).await?;
+let post_count = user.posts.len();
+```
+
+The accepted eager field types are:
+
+| Attribute | Lazy field type | Eager field type |
+|---|---|---|
+| `#[has_many]` | `Deferred<Vec<T>>` | `Vec<T>` |
+| `#[has_one]` | `Deferred<T>` or `Deferred<Option<T>>` | `T` or `Option<T>` |
+| `#[belongs_to]` | `Deferred<T>` or `Deferred<Option<T>>` | `T` or `Option<T>` |
+
+Eager relations can load other eager relations. Toasty rejects schemas with an
+eager-load cycle, such as `User.posts: Vec<Post>` and `Post.user: User`. Wrap at
+least one relation in `Deferred<_>` to break the cycle.
 
 ## Required vs optional relationships
 
@@ -115,7 +154,7 @@ required or optional.
 user_id: u64,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::BelongsTo<User>,
+user: toasty::Deferred<User>,
 ```
 
 Every post must have a user. The `user_id` column is `NOT NULL` in the database.
@@ -127,7 +166,7 @@ Every post must have a user. The `user_id` column is `NOT NULL` in the database.
 user_id: Option<u64>,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::BelongsTo<Option<User>>,
+user: toasty::Deferred<Option<User>>,
 ```
 
 A post can exist without a user. The `user_id` column allows `NULL`.
@@ -160,7 +199,7 @@ the child in place.
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -170,7 +209,7 @@ the child in place.
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -203,9 +242,9 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 
 | You want to express… | Use | FK goes on |
 |---|---|---|
-| A post has one author | `Post` → `BelongsTo<User>` + `User` → `HasMany<Post>` | `posts.user_id` |
-| A user has one profile | `User` → `HasOne<Profile>` + `Profile` → `BelongsTo<User>` | `profiles.user_id` |
-| A comment belongs to a post | `Comment` → `BelongsTo<Post>` + `Post` → `HasMany<Comment>` | `comments.post_id` |
+| A post has one author | `Post` → `Deferred<User>` or `User` + `User` → `Deferred<Vec<Post>>` or `Vec<Post>` | `posts.user_id` |
+| A user has one profile | `User` → `Deferred<Profile>` or `Profile` + `Profile` → `Deferred<User>` or `User` | `profiles.user_id` |
+| A comment belongs to a post | `Comment` → `Deferred<Post>` or `Post` + `Post` → `Deferred<Vec<Comment>>` or `Vec<Comment>` | `comments.post_id` |
 
 When deciding between `HasOne` and `HasMany`, ask: "Can the parent have more
 than one?" If yes, use `HasMany`. If exactly one (or zero), use `HasOne`. The
@@ -231,7 +270,7 @@ struct Team {
     id: u64,
 
     #[has_many]
-    members: toasty::HasMany<Member>,
+    members: toasty::Deferred<Vec<Member>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -245,7 +284,7 @@ struct Member {
     team_id: u64,
 
     #[belongs_to(key = [org_id, team_id], references = [org_id, id])]
-    team: toasty::BelongsTo<Team>,
+    team: toasty::Deferred<Team>,
 }
 ```
 

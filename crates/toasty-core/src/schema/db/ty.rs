@@ -169,6 +169,26 @@ impl Type {
         }
     }
 
+    pub(crate) fn from_app_column(
+        ty: &stmt::Type,
+        hint: Option<&Type>,
+        db: &driver::Capability,
+        auto_increment: bool,
+    ) -> Result<Type> {
+        let mut storage_ty = Self::from_app(ty, hint, &db.storage_types)?;
+
+        if auto_increment && let Some(max) = db.max_auto_increment_integer_width {
+            match &mut storage_ty {
+                Type::Integer(size) | Type::UnsignedInteger(size) if *size > max => {
+                    *size = max;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(storage_ty)
+    }
+
     /// Determines the [`stmt::Type`] closest to this [`db::Type`] that should be used
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {

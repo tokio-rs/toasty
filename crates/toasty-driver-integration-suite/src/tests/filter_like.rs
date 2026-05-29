@@ -1,14 +1,9 @@
 use crate::prelude::*;
 
-#[derive(Debug, toasty::Model)]
-struct Item {
-    #[key]
-    id: i64,
-    name: String,
-}
-
-async fn setup(test: &mut Test) -> toasty::Db {
-    let mut db = test.setup_db(models!(Item)).await;
+/// LIKE with a prefix pattern — returns rows where name starts with "Al".
+#[driver_test(requires(sql), scenario(crate::scenarios::fixed_item_name))]
+pub async fn like_basic(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
     toasty::create!(Item::[
         { id: 1_i64, name: "Alice"   },
@@ -20,14 +15,6 @@ async fn setup(test: &mut Test) -> toasty::Db {
     .exec(&mut db)
     .await
     .unwrap();
-
-    db
-}
-
-/// LIKE with a prefix pattern — returns rows where name starts with "Al".
-#[driver_test(requires(sql))]
-pub async fn like_basic(test: &mut Test) -> Result<()> {
-    let mut db = setup(test).await;
 
     let mut items: Vec<Item> = Item::filter(Item::fields().name().like("Al%".to_string()))
         .exec(&mut db)
@@ -43,9 +30,20 @@ pub async fn like_basic(test: &mut Test) -> Result<()> {
 }
 
 /// LIKE with a pattern that matches nothing — returns empty result.
-#[driver_test(requires(sql))]
-pub async fn like_no_match(test: &mut Test) -> Result<()> {
-    let mut db = setup(test).await;
+#[driver_test(requires(sql), scenario(crate::scenarios::fixed_item_name))]
+pub async fn like_no_match(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(Item::[
+        { id: 1_i64, name: "Alice"   },
+        { id: 2_i64, name: "Alicia"  },
+        { id: 3_i64, name: "Bob"     },
+        { id: 4_i64, name: "Barry"   },
+        { id: 5_i64, name: "Charlie" },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
 
     let items: Vec<Item> = Item::filter(Item::fields().name().like("ZZ%".to_string()))
         .exec(&mut db)

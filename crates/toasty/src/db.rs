@@ -11,7 +11,7 @@ pub use connect::Connect;
 pub use connection::Connection;
 pub use executor::Executor;
 pub use pool::{Pool, PoolStatus};
-pub use toasty_core::driver::{Capability, Driver};
+pub use toasty_core::driver::{Capability, Driver, SqlPlaceholder};
 pub use tx::{Transaction, TransactionBuilder};
 
 /// Response from executing a statement, including pagination metadata.
@@ -23,7 +23,7 @@ pub(crate) use tx::ConnRef;
 use crate::{Result, engine::Engine};
 
 use async_trait::async_trait;
-use toasty_core::{Schema, stmt};
+use toasty_core::{Schema, driver::operation::RawSql, stmt};
 
 use std::sync::Arc;
 
@@ -175,6 +175,15 @@ impl Executor for Db {
 
     async fn exec_untyped(&mut self, stmt: stmt::Statement) -> Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
+    }
+
+    async fn exec_raw_sql(&mut self, raw: RawSql) -> Result<ExecResponse> {
+        let conn = self.connection().await?;
+        conn.exec_raw_sql(raw).await
+    }
+
+    fn capability(&mut self) -> &Capability {
+        Db::capability(self)
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

@@ -17,7 +17,7 @@ struct User {
     id: i64,
 
     #[has_many(pair = author)]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::Deferred<Vec<Post>>,
 }
 
 #[allow(dead_code)]
@@ -30,7 +30,7 @@ struct Post {
     user_id: i64,
 
     #[belongs_to(key = user_id, references = id)]
-    author: toasty::BelongsTo<User>,
+    author: toasty::Deferred<User>,
 }
 
 struct UserPostSchema {

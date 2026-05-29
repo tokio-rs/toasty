@@ -33,7 +33,6 @@ the entry lands here.
 - Composite unique constraints ([#639])
 - Partial / conditional unique constraints ([#640])
 - PostgreSQL dynamic index types — GIN, GiST, BRIN, HASH ([#673])
-- Partial model loading via `#[deferred]` / `Deferred<T>` ([design](design/deferred-fields.md))
 
 [#366]: https://github.com/tokio-rs/toasty/issues/366
 [#639]: https://github.com/tokio-rs/toasty/issues/639
@@ -83,7 +82,6 @@ the entry lands here.
 
 ## Relationships
 
-- Multi-step relations — `has_many` / `has_one` via a path of existing relations ([design](design/has-many-via.md))
 - Many-to-many
 - Polymorphic associations
 - Nested preloading — multi-level `.include()`
@@ -120,7 +118,6 @@ the entry lands here.
 ## Drivers
 
 - DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
-- Raw SQL escape hatch ([#93])
 - Connection pooling improvements ([#384])
 - New driver backends
   - MongoDB — `toasty-mongodb` ([#48])
@@ -142,7 +139,7 @@ the entry lands here.
 
 - `toasty::query!()` — succinct query syntax ([design](design/query-macro.md), [#808])
 - `toasty::create!()` — concise record creation ([design](design/static-assertions-create-macro.md))
-- `toasty::update!()` — concise updates
+- `toasty::update!()` — concise updates ([design](design/update-macro.md))
 - Derive macro for populating a struct from a query result ([#828])
 
 [#808]: https://github.com/tokio-rs/toasty/issues/808

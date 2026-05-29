@@ -12,10 +12,10 @@ scenario! {
         name: String,
 
         #[has_many(pair = author)]
-        authored_articles: toasty::HasMany<Article>,
+        authored_articles: toasty::Deferred<Vec<Article>>,
 
         #[has_many(pair = reviewer)]
-        reviewed_articles: toasty::HasMany<Article>,
+        reviewed_articles: toasty::Deferred<Vec<Article>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -33,10 +33,10 @@ scenario! {
         reviewer_id: ID,
 
         #[belongs_to(key = author_id, references = id)]
-        author: toasty::BelongsTo<User>,
+        author: toasty::Deferred<User>,
 
         #[belongs_to(key = reviewer_id, references = id)]
-        reviewer: toasty::BelongsTo<User>,
+        reviewer: toasty::Deferred<User>,
     }
 
     async fn setup(test: &mut Test) -> toasty::Db {

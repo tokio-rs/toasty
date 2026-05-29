@@ -5,6 +5,7 @@ use toasty_core::{
 };
 
 use crate::engine::{hir, lower::LowerStatement};
+use crate::schema::lazy_slot;
 
 #[derive(Debug)]
 enum Mutation {
@@ -39,7 +40,7 @@ trait RelationSource: std::fmt::Debug {
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr);
 
     /// Update a returning field expression
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr);
 
     /// Whether the source might produce zero rows. When true, relation
     /// mutations must be wrapped in a conditional to avoid FK updates when
@@ -206,10 +207,10 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         match &field.ty {
-            FieldTy::HasOne(..) => {
+            FieldTy::Has(rel) if rel.is_one() => {
                 self.relation_step(field, |lower| lower.plan_mut_has_one(field, op, source));
             }
-            FieldTy::HasMany(..) => {
+            FieldTy::Has(rel) if rel.is_many() => {
                 self.relation_step(field, |lower| lower.plan_mut_has_many(field, op, source));
             }
             FieldTy::BelongsTo(_) => {
@@ -221,12 +222,7 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_many = field.ty.as_has_many_unwrap();
-        // `via` relations are read-only — no mutation methods are generated
-        // for them, so this is only reached for direct relations.
-        let pair = has_many
-            .kind
-            .pair_id()
-            .expect("cannot mutate through a multi-step `via` relation");
+        let pair = has_many.pair_id;
         let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
@@ -234,10 +230,7 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_one = field.ty.as_has_one_unwrap();
-        let pair = has_one
-            .kind
-            .pair_id()
-            .expect("cannot mutate through a multi-step `via` relation");
+        let pair = has_one.pair_id;
         let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
@@ -421,7 +414,7 @@ impl LowerStatement<'_, '_> {
         // Run the canonical pipeline on the synthesized child insert and
         // stitch it onto the parent as an `Expr::Arg`.
         let arg = self.lower_sub_stmt(stmt::Statement::Insert(stmt));
-        source.set_returning_field(_field.id, arg);
+        source.set_returning_field(_field, arg);
     }
 
     fn plan_mut_belongs_to(
@@ -808,7 +801,7 @@ impl RelationSource for &stmt::Delete {
         unimplemented!("delete statements do not need to update field values");
     }
 
-    fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
+    fn set_returning_field(&mut self, _field: &Field, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
     }
 
@@ -828,7 +821,7 @@ impl RelationSource for UpdateRelationSource<'_> {
         self.assignments.set(field, expr);
     }
 
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr) {
         debug_assert!(self.returning_changed, "TODO");
 
         let Some(stmt::Returning::Project(stmt::Expr::Cast(expr_cast))) = self.returning else {
@@ -841,14 +834,14 @@ impl RelationSource for UpdateRelationSource<'_> {
 
         let position = path_field_set
             .iter()
-            .position(|field_id| field_id == field.index)
+            .position(|field_id| field_id == field.id.index)
             .unwrap();
 
         let stmt::Expr::Record(record) = &mut *expr_cast.expr else {
             todo!()
         };
 
-        set_returning_slot(record, position, expr);
+        set_returning_slot(record, position, expr, field.deferred);
     }
 
     fn needs_existence_check(&self) -> bool {
@@ -880,7 +873,7 @@ impl RelationSource for InsertRelationSource<'_> {
         self.row.as_record_mut_unwrap()[field.index] = expr;
     }
 
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr) {
         let record = match self.returning {
             Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
             Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
@@ -890,7 +883,7 @@ impl RelationSource for InsertRelationSource<'_> {
             _ => todo!("InsertRelationSource={self:#?}"),
         };
 
-        set_returning_slot(record, field.index, expr);
+        set_returning_slot(record, field.id.index, expr, field.deferred);
     }
 
     fn needs_existence_check(&self) -> bool {
@@ -939,6 +932,13 @@ fn relation_mutation(field: &Field, entry: stmt::Assignment) -> Mutation {
                 "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
             )
         }
+        // Arithmetic ops only apply to scalar numeric model fields, never to
+        // relations.
+        stmt::Assignment::Add(_) | stmt::Assignment::Subtract(_) => {
+            unreachable!(
+                "Add / Subtract assignment on relation field — these only apply to scalar numerics"
+            )
+        }
         stmt::Assignment::Batch(_) => unreachable!("Batch entries are flattened above"),
     }
 }
@@ -985,11 +985,15 @@ fn flatten_relation_batch(entries: &mut Vec<stmt::Assignment>) {
     }
 }
 
-fn set_returning_slot(record: &mut stmt::ExprRecord, index: usize, expr: stmt::Expr) {
-    assert!(
-        record.fields[index].is_value_null(),
-        "TODO: probably need to merge instead of overwrite; actual={:#?}",
-        record.fields[index]
-    );
-    record.fields[index] = expr;
+fn set_returning_slot(
+    record: &mut stmt::ExprRecord,
+    index: usize,
+    expr: stmt::Expr,
+    deferred: bool,
+) {
+    record.fields[index] = if deferred {
+        lazy_slot::loaded_expr(expr)
+    } else {
+        expr
+    };
 }

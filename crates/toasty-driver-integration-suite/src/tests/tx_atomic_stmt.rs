@@ -13,7 +13,7 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
     t.log().clear();
     let user = User::create()
         .name("Alice")
-        .todo(Todo::create().title("task"))
+        .todos([Todo::create().title("task")])
         .exec(&mut db)
         .await?;
 
@@ -75,7 +75,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
         id: u64,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -88,7 +88,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
         user_id: u64,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         #[unique]
         title: String,
@@ -98,14 +98,14 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
 
     // Seed the title that will cause the second INSERT to fail.
     User::create()
-        .todo(Todo::create().title("taken"))
+        .todos([Todo::create().title("taken")])
         .exec(&mut db)
         .await?;
 
     t.log().clear();
     assert_err!(
         User::create()
-            .todo(Todo::create().title("taken"))
+            .todos([Todo::create().title("taken")])
             .exec(&mut db)
             .await
     );
@@ -150,7 +150,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
         id: u64,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -166,7 +166,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
         user_id: u64,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = t.setup_db(models!(User, Profile)).await;
@@ -226,7 +226,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -239,7 +239,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }
@@ -289,34 +289,18 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
 /// its own BEGIN...COMMIT on drivers that don't support CTE-with-update
 /// (SQLite, MySQL). When nested inside an outer transaction it uses savepoints
 /// instead. On PostgreSQL the same operation is a single CTE-based QuerySql.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_nullable_fk)
+)]
 pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(t).await;
 
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
-
-    let user = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let user = User::create()
+        .todos([Todo::create().title("task")])
+        .exec(&mut db)
+        .await?;
     let todos: Vec<_> = user.todos().exec(&mut db).await?;
 
     t.log().clear();
@@ -350,35 +334,19 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
 /// When a standalone RMW condition fails (todo doesn't belong to this user),
 /// the driver should receive ROLLBACK on the RMW's own transaction.
 /// On PostgreSQL the CTE handles this in a single statement.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_nullable_fk)
+)]
 pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo)).await;
+    let mut db = setup(t).await;
 
     let user1 = User::create().exec(&mut db).await?;
-    let user2 = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let user2 = User::create()
+        .todos([Todo::create().title("task")])
+        .exec(&mut db)
+        .await?;
     let u2_todos: Vec<_> = user2.todos().exec(&mut db).await?;
 
     t.log().clear();

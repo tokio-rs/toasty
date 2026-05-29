@@ -1,19 +1,12 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
     if !t.capability().test_connection_pool {
         return Ok(());
     }
 
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-    }
-
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = setup(t).await;
 
     // Db is stateless — after setup_db, the connection used for push_schema has
     // been returned to the pool, so it should be available.
@@ -28,7 +21,7 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
     );
 
     // Execute an operation — it acquires a connection, runs, and returns it.
-    Item::create().exec(&mut db).await?;
+    User::create().name("dummy").exec(&mut db).await?;
 
     let status = db.pool().status();
     assert_eq!(
@@ -38,7 +31,7 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
 
     // Clone the handle — both share the same pool.
     let mut db2 = db.clone();
-    Item::create().exec(&mut db2).await?;
+    User::create().name("dummy").exec(&mut db2).await?;
 
     let status = db.pool().status();
     assert_eq!(
@@ -47,27 +40,20 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
     );
 
     // The original handle still works fine.
-    let item = Item::create().exec(&mut db).await?;
-    let found = Item::filter_by_id(item.id).exec(&mut db).await?;
+    let user = User::create().name("dummy").exec(&mut db).await?;
+    let found = User::filter_by_id(user.id).exec(&mut db).await?;
     assert_eq!(found.len(), 1);
 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     if !t.capability().test_connection_pool {
         return Ok(());
     }
 
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-    }
-
-    let db = t.setup_db(models!(Item)).await;
+    let db = setup(t).await;
 
     // All connections available since Db is stateless.
     let status = db.pool().status();
@@ -84,7 +70,7 @@ pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     );
 
     // Use the connection.
-    Item::create().exec(&mut conn).await?;
+    User::create().name("dummy").exec(&mut conn).await?;
 
     // Connection is still held.
     let status = db.pool().status();
@@ -109,23 +95,14 @@ pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn write_visible_on_same_handle(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Note {
-        #[key]
-        #[auto]
-        id: ID,
-
-        body: String,
-    }
-
-    let mut db = t.setup_db(models!(Note)).await;
+    let mut db = setup(t).await;
 
     // Write and immediately read on the same handle — must see the write.
-    let created = Note::create().body("hello").exec(&mut db).await?;
-    let found = Note::filter_by_id(created.id).get(&mut db).await?;
-    assert_eq!(found.body, "hello");
+    let created = User::create().name("hello").exec(&mut db).await?;
+    let found = User::filter_by_id(created.id).get(&mut db).await?;
+    assert_eq!(found.name, "hello");
 
     Ok(())
 }

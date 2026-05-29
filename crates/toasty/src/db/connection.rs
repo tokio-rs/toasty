@@ -7,7 +7,10 @@ use async_trait::async_trait;
 use std::sync::Arc;
 use toasty_core::{
     Schema,
-    driver::{ExecResponse, operation::Operation},
+    driver::{
+        Capability, ExecResponse,
+        operation::{Operation, RawSql},
+    },
     stmt,
 };
 use tokio::sync::oneshot;
@@ -68,6 +71,20 @@ impl Connection {
         rx.await.unwrap()
     }
 
+    pub(crate) async fn exec_raw_sql(&self, raw: RawSql) -> crate::Result<ExecResponse> {
+        let (tx, rx) = oneshot::channel();
+
+        self.handle()
+            .in_tx
+            .send(ConnectionOperation::ExecRawSql {
+                raw: Box::new(raw),
+                tx,
+            })
+            .unwrap();
+
+        rx.await.unwrap()
+    }
+
     /// Begin a transaction on this connection.
     ///
     /// Takes `&mut self` so the `Connection` is exclusively borrowed while
@@ -110,6 +127,14 @@ impl super::Executor for Connection {
         stmt: toasty_core::stmt::Statement,
     ) -> crate::Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
+    }
+
+    async fn exec_raw_sql(&mut self, raw: RawSql) -> crate::Result<ExecResponse> {
+        Connection::exec_raw_sql(self, raw).await
+    }
+
+    fn capability(&mut self) -> &Capability {
+        self.shared.engine.capability()
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

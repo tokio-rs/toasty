@@ -187,68 +187,30 @@ pub async fn chain_then_filter(test: &mut Test) -> Result<()> {
 
 /// Two HasMany hops in succession (`Author → posts → comments`). The lowering
 /// unfolds into nested IN-subqueries on each `BelongsTo` pair.
-#[driver_test]
+#[driver_test(id(ID), scenario(crate::scenarios::user_post_comment))]
 pub async fn has_many_through_has_many(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Author {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        #[has_many]
-        posts: toasty::HasMany<Post>,
-    }
+    let mut db = setup(test).await;
 
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        #[index]
-        author_id: uuid::Uuid,
-        #[belongs_to(key = author_id, references = id)]
-        author: toasty::BelongsTo<Author>,
-        title: String,
-        #[has_many]
-        comments: toasty::HasMany<Comment>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Comment {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        #[index]
-        post_id: uuid::Uuid,
-        #[belongs_to(key = post_id, references = id)]
-        post: toasty::BelongsTo<Post>,
-        body: String,
-    }
-
-    let mut db = test.setup_db(models!(Author, Post, Comment)).await;
-
-    let alice = toasty::create!(Author { name: "Alice" })
+    let alice = toasty::create!(User { name: "Alice" })
         .exec(&mut db)
         .await?;
-    let bob = toasty::create!(Author { name: "Bob" })
-        .exec(&mut db)
-        .await?;
+    let bob = toasty::create!(User { name: "Bob" }).exec(&mut db).await?;
 
     let p1 = toasty::create!(Post {
         title: "p1",
-        author: &alice
+        user: &alice
     })
     .exec(&mut db)
     .await?;
     let p2 = toasty::create!(Post {
         title: "p2",
-        author: &alice
+        user: &alice
     })
     .exec(&mut db)
     .await?;
     let p3 = toasty::create!(Post {
         title: "p3",
-        author: &bob
+        user: &bob
     })
     .exec(&mut db)
     .await?;
@@ -285,7 +247,7 @@ pub async fn three_step_chain(test: &mut Test) -> Result<()> {
         id: uuid::Uuid,
         name: String,
         #[has_many]
-        projects: toasty::HasMany<Project>,
+        projects: toasty::Deferred<Vec<Project>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -296,10 +258,10 @@ pub async fn three_step_chain(test: &mut Test) -> Result<()> {
         #[index]
         user_id: uuid::Uuid,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         name: String,
         #[has_many]
-        tasks: toasty::HasMany<Task>,
+        tasks: toasty::Deferred<Vec<Task>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -310,12 +272,12 @@ pub async fn three_step_chain(test: &mut Test) -> Result<()> {
         #[index]
         project_id: uuid::Uuid,
         #[belongs_to(key = project_id, references = id)]
-        project: toasty::BelongsTo<Project>,
+        project: toasty::Deferred<Project>,
         title: String,
         #[index]
         tag_id: uuid::Uuid,
         #[belongs_to(key = tag_id, references = id)]
-        tag: toasty::BelongsTo<Tag>,
+        tag: toasty::Deferred<Tag>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -325,7 +287,7 @@ pub async fn three_step_chain(test: &mut Test) -> Result<()> {
         id: uuid::Uuid,
         name: String,
         #[has_many]
-        tasks: toasty::HasMany<Task>,
+        tasks: toasty::Deferred<Vec<Task>>,
     }
 
     let mut db = test.setup_db(models!(User, Project, Task, Tag)).await;
@@ -393,7 +355,7 @@ pub async fn four_step_chain(test: &mut Test) -> Result<()> {
         id: uuid::Uuid,
         name: String,
         #[has_many]
-        teams: toasty::HasMany<Team>,
+        teams: toasty::Deferred<Vec<Team>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -404,10 +366,10 @@ pub async fn four_step_chain(test: &mut Test) -> Result<()> {
         #[index]
         org_id: uuid::Uuid,
         #[belongs_to(key = org_id, references = id)]
-        org: toasty::BelongsTo<Org>,
+        org: toasty::Deferred<Org>,
         name: String,
         #[has_many]
-        projects: toasty::HasMany<Project>,
+        projects: toasty::Deferred<Vec<Project>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -418,10 +380,10 @@ pub async fn four_step_chain(test: &mut Test) -> Result<()> {
         #[index]
         team_id: uuid::Uuid,
         #[belongs_to(key = team_id, references = id)]
-        team: toasty::BelongsTo<Team>,
+        team: toasty::Deferred<Team>,
         name: String,
         #[has_many]
-        issues: toasty::HasMany<Issue>,
+        issues: toasty::Deferred<Vec<Issue>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -432,12 +394,12 @@ pub async fn four_step_chain(test: &mut Test) -> Result<()> {
         #[index]
         project_id: uuid::Uuid,
         #[belongs_to(key = project_id, references = id)]
-        project: toasty::BelongsTo<Project>,
+        project: toasty::Deferred<Project>,
         title: String,
         #[index]
         tag_id: uuid::Uuid,
         #[belongs_to(key = tag_id, references = id)]
-        tag: toasty::BelongsTo<Tag>,
+        tag: toasty::Deferred<Tag>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -447,7 +409,7 @@ pub async fn four_step_chain(test: &mut Test) -> Result<()> {
         id: uuid::Uuid,
         name: String,
         #[has_many]
-        issues: toasty::HasMany<Issue>,
+        issues: toasty::Deferred<Vec<Issue>>,
     }
 
     let mut db = test.setup_db(models!(Org, Team, Project, Issue, Tag)).await;
@@ -530,7 +492,7 @@ pub async fn four_step_chain(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// `BelongsTo<Option<_>>` in the chain skips `NULL` foreign keys. Todos with
+/// `Deferred<Option<_>>` in the chain skips `NULL` foreign keys. Todos with
 /// no category contribute nothing to the chain.
 #[driver_test]
 pub async fn chain_skips_null_belongs_to(test: &mut Test) -> Result<()> {
@@ -541,7 +503,7 @@ pub async fn chain_skips_null_belongs_to(test: &mut Test) -> Result<()> {
         id: uuid::Uuid,
         name: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -552,12 +514,12 @@ pub async fn chain_skips_null_belongs_to(test: &mut Test) -> Result<()> {
         #[index]
         user_id: uuid::Uuid,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
         #[index]
         category_id: Option<uuid::Uuid>,
         #[belongs_to(key = category_id, references = id)]
-        category: toasty::BelongsTo<Option<Category>>,
+        category: toasty::Deferred<Option<Category>>,
     }
 
     #[derive(Debug, toasty::Model)]

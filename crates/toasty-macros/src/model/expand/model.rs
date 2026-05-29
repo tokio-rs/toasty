@@ -134,6 +134,14 @@ impl Expand<'_> {
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
+                type Many = Many<#toasty::Direct>;
+                type ViaMany = Many<#toasty::Via>;
+                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
+                type One = One<#toasty::Direct>;
+                type ViaOne = One<#toasty::Via>;
+                type OneField<__Origin> = #field_struct_ident<__Origin>;
+                type OptionOne = OptionOne<#toasty::Direct>;
+                type ViaOptionOne = OptionOne<#toasty::Via>;
 
                 const CREATE_META: #toasty::CreateMeta = #toasty::CreateMeta {
                     fields: &[ #create_meta_fields ],
@@ -144,26 +152,14 @@ impl Expand<'_> {
                     #field_struct_ident::from_path(path)
                 }
 
-                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
-                    #find_by_primary_key_body
-                }
-            }
-
-            impl #toasty::Relation for #model_ident {
-                type Model = #model_ident;
-                type Expr = #model_ident;
-                type Query = #query_struct_ident;
-                type Create = #create_struct_ident;
-                type Many = Many;
-                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type One = One;
-                type OneField<__Origin> = #field_struct_ident<__Origin>;
-                type OptionOne = OptionOne;
-
                 fn new_many_field<__Origin>(
-                    path: #toasty::Path<__Origin, #toasty::List<Self::Model>>,
+                    path: #toasty::Path<__Origin, #toasty::List<Self>>,
                 ) -> #field_list_struct_ident<__Origin> {
                     #field_list_struct_ident::from_path(path)
+                }
+
+                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
+                    #find_by_primary_key_body
                 }
 
                 #field_name_to_id
@@ -442,14 +438,9 @@ impl Expand<'_> {
                 }
             };
 
-            // For `#[deferred]` fields, encode at the inner type. `Deferred<T>`
-            // is a load-state wrapper, not a value type, so the splice site
-            // must talk in `T` — there is no meaningful `Expr<Deferred<T>>`.
-            let target_ty = if field.attrs.deferred {
-                quote!(<#ty as #toasty::Defer>::Inner)
-            } else {
-                quote!(#ty)
-            };
+            // Bind through `Field::ExprTarget` so wrappers such as
+            // `Deferred<T>` encode the underlying expression type.
+            let target_ty = quote!(FieldExprTarget<#ty>);
             quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
         });
 
@@ -489,14 +480,17 @@ impl Expand<'_> {
                 FieldTy::Primitive(ty) => {
                     quote!(#field_name <#ty as #toasty::Load>::load(record[#index_tokenized].take())?,)
                 }
-                FieldTy::BelongsTo(_) => {
-                    quote!(#field_name #toasty::BelongsTo::load(record[#index].take())?,)
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
-                FieldTy::HasMany(_) => {
-                    quote!(#field_name #toasty::HasMany::load(record[#index].take())?,)
+                FieldTy::HasMany(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
-                FieldTy::HasOne(_) => {
-                    quote!(#field_name #toasty::HasOne::load(record[#index].take())?,)
+                FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
             }
         });
@@ -528,7 +522,7 @@ impl Expand<'_> {
     /// - `SparseRecord` — partial update, reload only the named sub-fields.
     /// - `Record` — whole-embed update, reload every sub-field positionally.
     ///
-    /// The positional path matters for embeds with `#[deferred]` sub-fields:
+    /// The positional path matters for embeds with deferred sub-fields:
     /// the assigned record carries the inner T directly (because `IntoExpr<T>`
     /// for `Deferred<T>` unwraps), so each sub-field must go through `reload`
     /// — which knows to re-wrap a bare value as loaded — rather than through
@@ -558,8 +552,17 @@ impl Expand<'_> {
                     FieldTy::Primitive(ty) => {
                         quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
                     }
-                    _ => {
-                        quote!(#i => #field_access.unload(),)
+                    FieldTy::BelongsTo(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
+                    }
+                    FieldTy::HasMany(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
+                    }
+                    FieldTy::HasOne(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
                     }
                 }
             })

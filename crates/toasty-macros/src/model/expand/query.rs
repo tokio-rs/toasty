@@ -161,14 +161,15 @@ impl Expand<'_> {
     fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let target = &rel.ty;
+        let ty = &rel.ty;
+        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
                 use #toasty::IntoStatement;
-                <#target as #toasty::Relation>::Query::from_stmt(
+                <<#target as #toasty::Model>::Query>::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_statement().into_query().unwrap()
@@ -180,14 +181,15 @@ impl Expand<'_> {
     fn expand_has_many_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let target = &rel.ty;
+        let ty = &rel.ty;
+        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
                 use #toasty::IntoStatement;
-                <#target as #toasty::Relation>::Query::from_stmt(
+                <<#target as #toasty::Model>::Query>::from_stmt(
                     #toasty::stmt::Association::many(
                         self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_statement().into_query().unwrap()
@@ -199,14 +201,15 @@ impl Expand<'_> {
     fn expand_has_one_method(&self, field: &Field, rel: &HasOne) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let target = &rel.ty;
+        let ty = &rel.ty;
+        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Relation>::Query {
+            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
                 use #toasty::IntoStatement;
-                <#target as #toasty::Relation>::Query::from_stmt(
+                <<#target as #toasty::Model>::Query>::from_stmt(
                     #toasty::stmt::Association::many_via_one(
                         self.stmt, #model_ident::fields().#field_ident().into()
                     ).into_statement().into_query().unwrap()
@@ -222,7 +225,7 @@ impl Expand<'_> {
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
 
         // Always emit `include()` on root models. The macro can't see through a
-        // field's type to know whether an embedded type holds a `#[deferred]`
+        // field's type to know whether an embedded type holds a deferred
         // sub-field, so a stricter gate would deny `.include(metadata().notes())`
         // on a model whose only includable thing lives inside an embed.
         Some(quote! {

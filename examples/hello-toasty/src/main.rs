@@ -10,7 +10,7 @@ struct User {
     email: String,
 
     #[has_many]
-    todos: toasty::HasMany<Todo>,
+    todos: toasty::Deferred<Vec<Todo>>,
 
     moto: Option<String>,
 }
@@ -25,7 +25,7 @@ struct Todo {
     user_id: uuid::Uuid,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -41,7 +41,7 @@ async fn main() -> toasty::Result<()> {
         )
         .await?;
 
-    // For now, reset!s
+    // For now, resets
     db.push_schema().await?;
 
     println!("==> let u1 = create!(User)");
@@ -61,12 +61,12 @@ async fn main() -> toasty::Result<()> {
     .await?;
 
     // Find by ID
-    println!("==> let user = User::find_by_id(&u1.id)");
+    println!("==> let user = User::get_by_id(&u1.id)");
     let user = User::get_by_id(&mut db, &u1.id).await?;
     println!("USER = {user:#?}");
 
-    // Find by email!
-    println!("==> let user = User::find_by_email(&u1.email)");
+    // Find by email
+    println!("==> let user = User::get_by_email(&u1.email)");
     let mut user = User::get_by_email(&mut db, &u1.email).await?;
     println!("USER = {user:#?}");
 
@@ -116,7 +116,7 @@ async fn main() -> toasty::Result<()> {
     .exec(&mut db)
     .await?;
 
-    // Lets create a new user. This time, we will batch create todos for the
+    // Let's create a new user. This time, we will batch create todos for the
     // user
     let mut user = toasty::create!(User {
         name: "Ann Chovey",

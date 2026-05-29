@@ -22,7 +22,7 @@ struct Child {
         key = parent_id, references = id,
         key = parent_revision, references = revision,
     )]
-    parent: toasty::BelongsTo<Parent>,
+    parent: toasty::Deferred<Parent>,
 }
 
 fn main() {}

@@ -102,15 +102,11 @@ impl<'a> RewriteVia<'a> {
             // Direct has-one / has-many: filter the target by its paired
             // `BelongsTo` against the source query. Via relations were
             // already unfolded, so only direct kinds reach this arm.
-            app::FieldTy::HasOne(app::HasOne {
-                kind: app::HasKind::Direct(pair),
-                ..
-            })
-            | app::FieldTy::HasMany(app::HasMany {
-                kind: app::HasKind::Direct(pair),
-                ..
-            }) => stmt::Expr::in_subquery(stmt::Expr::ref_self_field(*pair), *association.source)
-                .into(),
+            app::FieldTy::Has(has) => stmt::Expr::in_subquery(
+                stmt::Expr::ref_self_field(has.pair_id),
+                *association.source,
+            )
+            .into(),
             _ => todo!("field={field:#?}"),
         }
     }
@@ -153,14 +149,7 @@ impl<'a> RewriteVia<'a> {
         // in place of the via field and continue. Handles via-of-via
         // naturally because the recursion re-examines the spliced steps.
         let via_path = match &field.ty {
-            app::FieldTy::HasMany(app::HasMany {
-                kind: app::HasKind::Via(via),
-                ..
-            })
-            | app::FieldTy::HasOne(app::HasOne {
-                kind: app::HasKind::Via(via),
-                ..
-            }) => Some(via.path.projection.as_slice()),
+            app::FieldTy::Via(via) => Some(via.path.projection.as_slice()),
             _ => None,
         };
         if let Some(via_steps) = via_path {
@@ -180,8 +169,8 @@ impl<'a> RewriteVia<'a> {
         }
 
         let next_model_id = match &field.ty {
-            app::FieldTy::HasMany(rel) => rel.target,
-            app::FieldTy::HasOne(rel) => rel.target,
+            app::FieldTy::Has(rel) => rel.target,
+            app::FieldTy::Via(rel) => rel.target,
             app::FieldTy::BelongsTo(rel) => rel.target,
             other => todo!("non-relation field in via path: {other:#?}"),
         };

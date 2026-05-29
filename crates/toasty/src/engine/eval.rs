@@ -76,6 +76,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
     match expr {
         Arg(_) => true,
         And(expr_and) => expr_and.operands.iter().all(verify_expr),
+        Or(expr_or) => expr_or.operands.iter().all(verify_expr),
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
         IsNull(expr) => verify_expr(&expr.expr),

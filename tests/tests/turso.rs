@@ -33,6 +33,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_time: false,
     native_datetime: false,
     native_array: false,
+    native_ilike: false,
     vec_scalar: true,
     vec_remove: false,
     vec_pop: false,
@@ -194,7 +195,7 @@ async fn immediate_mode_overrides_begin_concurrent() {
         tally: i64,
     }
 
-    let mut db = toasty::Db::builder()
+    let db = toasty::Db::builder()
         .models(toasty::models!(Counter))
         .max_pool_size(4)
         .build(Turso::in_memory().concurrent_writes())
@@ -243,7 +244,7 @@ async fn immediate_mode_overrides_begin_concurrent() {
 /// exclusion is what the test pins down.)
 #[tokio::test]
 async fn exclusive_mode_overrides_begin_concurrent() {
-    let mut db = toasty::Db::builder()
+    let db = toasty::Db::builder()
         .models(toasty::models!())
         .max_pool_size(4)
         .build(Turso::in_memory().concurrent_writes())

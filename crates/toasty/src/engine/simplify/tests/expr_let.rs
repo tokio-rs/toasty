@@ -58,17 +58,17 @@ fn body_with_match_inlined() {
     let schema = test_schema();
     let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
-    // The real-world pattern: nullable relation wrapping.
-    // Let { bindings: [Arg(0)], body: Match(Arg(0), [Null → I64(0)], Arg(0)) }
+    // The real-world pattern: nullable relation projection.
+    // Let { bindings: [Arg(0)], body: Match(Arg(0), [Null → Null], Arg(0)) }
     // With stable binding (say I64(5)):
-    // → Match(I64(5), [Null → I64(0)], I64(5))
+    // → Match(I64(5), [Null → Null], I64(5))
     let mut expr_let = ExprLet {
         bindings: vec![Expr::from(5i64)],
         body: Box::new(Expr::match_expr(
             Expr::arg(0),
             vec![MatchArm {
                 pattern: Value::Null,
-                expr: Expr::from(0i64),
+                expr: Expr::null(),
             }],
             Expr::arg(0),
         )),
@@ -79,7 +79,7 @@ fn body_with_match_inlined() {
         Expr::from(5i64),
         vec![MatchArm {
             pattern: Value::Null,
-            expr: Expr::from(0i64),
+            expr: Expr::null(),
         }],
         Expr::from(5i64),
     );
@@ -154,9 +154,9 @@ fn let_with_match_fully_simplified() {
     let schema = test_schema();
     let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
-    // Full pipeline: Let { bindings: [Null], body: Match(Arg(0), [Null→I64(0)], Arg(0)) }
-    // Step 1 (Let inlining): Match(Null, [Null→I64(0)], Null)
-    // Step 2 (Match folding): I64(0)
+    // Full pipeline: Let { bindings: [Null], body: Match(Arg(0), [Null→Null], Arg(0)) }
+    // Step 1 (Let inlining): Match(Null, [Null→Null], Null)
+    // Step 2 (Match folding): Null
     //
     // Because children are visited first, the Let body's Match is visited
     // before the Let itself. But the Let is what makes the Match's subject
@@ -169,7 +169,7 @@ fn let_with_match_fully_simplified() {
             Expr::arg(0),
             vec![MatchArm {
                 pattern: Value::Null,
-                expr: Expr::from(0i64),
+                expr: Expr::null(),
             }],
             Expr::arg(0),
         )),
@@ -191,7 +191,7 @@ fn let_with_match_fully_simplified() {
     // So the result is the un-folded Match with a constant subject.
     assert!(
         matches!(&expr, Expr::Match(m) if matches!(&*m.subject, Expr::Value(Value::Null)))
-            || matches!(&expr, Expr::Value(Value::I64(0))),
-        "expected either inlined Match(Null, ...) or fully folded I64(0), got: {expr:?}"
+            || matches!(&expr, Expr::Value(Value::Null)),
+        "expected either inlined Match(Null, ...) or fully folded Null, got: {expr:?}"
     );
 }

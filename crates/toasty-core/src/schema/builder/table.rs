@@ -414,7 +414,7 @@ impl BuildMapping<'_> {
     }
 
     /// Builds the model's default `RETURNING` expression — the same shape as
-    /// `table_to_model` but with every `#[deferred]` field, at this level or
+    /// `table_to_model` but with every deferred field, at this level or
     /// inside a nested embedded type, pre-masked to `Null`. Also writes each
     /// embed's own default expression into the corresponding mapping node so
     /// lowering can splice it in when an `.include()` activates a deferred
@@ -458,7 +458,7 @@ impl BuildMapping<'_> {
                 Ok(self.map_table_column_to_model(column_id, primitive))
             }
             app::FieldTy::Embedded(_) => self.populate_embed_default_returning(field, mapping),
-            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
                 Ok(stmt::Value::Null.into())
             }
         }
@@ -507,9 +507,8 @@ impl BuildMapping<'_> {
     /// field through [`Self::build_default_returning_field`] instead of
     /// the raw column emitter.
     ///
-    /// `#[deferred]` directly on a variant field is rejected by the macro,
-    /// so the only deferred fields reachable through this recursion live
-    /// inside an embed struct used as a variant field.
+    /// Deferred variant fields route through the same default-returning
+    /// masking as fields inside embedded structs.
     fn build_default_returning_enum(
         &self,
         model: &app::EmbeddedEnum,
@@ -759,7 +758,7 @@ impl BuildMapping<'_> {
                     _ => unreachable!("invalid schema"),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
                 Ok(stmt::Value::Null.into())
             }
         }
@@ -804,7 +803,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                     _ => unreachable!(),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
                 assert!(!self.in_enum_variant);
                 let bit = self.build.next_bit();
                 Ok(mapping::Field::Relation(mapping::FieldRelation {
@@ -992,10 +991,14 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field.nullable || self.in_enum_variant`, and auto-increment from
     /// `field.is_auto_increment()`.
     fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
-        let mut storage_ty = db::Type::from_app(
+        let is_auto_increment = (field.is_auto_increment() || self.inherited_auto_increment)
+            && self.build.db.auto_increment;
+
+        let mut storage_ty = db::Type::from_app_column(
             &primitive.ty,
             primitive.storage_ty.as_ref(),
-            &self.build.db.storage_types,
+            self.build.db,
+            is_auto_increment,
         )
         .expect("unsupported storage type");
 
@@ -1019,8 +1022,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             storage_ty,
             nullable: field.nullable || self.in_enum_variant,
             primary_key: false,
-            auto_increment: (field.is_auto_increment() || self.inherited_auto_increment)
-                && self.build.db.auto_increment,
+            auto_increment: is_auto_increment,
             versionable: field.is_versionable(),
         });
 

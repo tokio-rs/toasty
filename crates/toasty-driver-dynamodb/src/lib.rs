@@ -198,6 +198,9 @@ impl Connection {
                 }
             }
             Operation::Scan(op) => self.exec_scan(schema, op).await,
+            Operation::RawSql(_) => Err(Error::unsupported_feature(
+                "raw SQL is only supported by SQL drivers",
+            )),
             Operation::Transaction(_) => Err(Error::unsupported_feature(
                 "transactions are not supported by the DynamoDB driver",
             )),
@@ -341,6 +344,15 @@ fn ddb_expression(
                 stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
                 stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
                 stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
+                // DynamoDB condition expressions don't support arithmetic
+                // between operands. Arithmetic ops belong in update
+                // expressions (handled by `update_by_key.rs`), not in
+                // condition/filter expressions.
+                stmt::BinaryOp::Add | stmt::BinaryOp::Sub => {
+                    todo!(
+                        "arithmetic operators in DynamoDB condition expressions are not supported"
+                    )
+                }
             }
         }
         stmt::Expr::Reference(expr_reference) => {

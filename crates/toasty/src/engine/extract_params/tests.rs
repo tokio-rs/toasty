@@ -6,7 +6,7 @@ use toasty_core::{
     stmt::{self, Expr, Value},
 };
 
-use super::{Param, Ty, extract_params};
+use super::{Param, Ty, binary_like_prefix_pattern, extract_params, glob_prefix_pattern};
 
 // ============================================================================
 // Basic extraction
@@ -347,4 +347,76 @@ fn insert_target(schema: &toasty_core::Schema, table_name: &str) -> stmt::Insert
         table: table.id,
         columns: table.columns.iter().map(|c| c.id).collect(),
     })
+}
+
+// ============================================================================
+// glob_prefix_pattern
+// ============================================================================
+
+#[test]
+fn glob_plain_prefix() {
+    assert_eq!(glob_prefix_pattern("alpha"), "alpha*");
+}
+
+#[test]
+fn glob_empty_prefix() {
+    assert_eq!(glob_prefix_pattern(""), "*");
+}
+
+#[test]
+fn glob_escapes_star() {
+    assert_eq!(glob_prefix_pattern("100*off"), "100[*]off*");
+}
+
+#[test]
+fn glob_escapes_question_mark() {
+    assert_eq!(glob_prefix_pattern("a?b"), "a[?]b*");
+}
+
+#[test]
+fn glob_escapes_open_bracket() {
+    assert_eq!(glob_prefix_pattern("a[b"), "a[[]b*");
+}
+
+#[test]
+fn glob_like_wildcards_are_literal() {
+    // `%` and `_` are LIKE wildcards but not GLOB metacharacters.
+    assert_eq!(glob_prefix_pattern("100%"), "100%*");
+    assert_eq!(glob_prefix_pattern("a_b"), "a_b*");
+}
+
+// ============================================================================
+// binary_like_prefix_pattern
+// ============================================================================
+
+#[test]
+fn binary_like_plain_prefix() {
+    assert_eq!(binary_like_prefix_pattern("alpha"), "alpha%");
+}
+
+#[test]
+fn binary_like_empty_prefix() {
+    assert_eq!(binary_like_prefix_pattern(""), "%");
+}
+
+#[test]
+fn binary_like_escapes_percent() {
+    assert_eq!(binary_like_prefix_pattern("100%"), "100!%%");
+}
+
+#[test]
+fn binary_like_escapes_underscore() {
+    assert_eq!(binary_like_prefix_pattern("a_b"), "a!_b%");
+}
+
+#[test]
+fn binary_like_escapes_escape_char() {
+    assert_eq!(binary_like_prefix_pattern("!bang"), "!!bang%");
+}
+
+#[test]
+fn binary_like_glob_wildcards_are_literal() {
+    // `*` and `?` are GLOB metacharacters but not LIKE metacharacters.
+    assert_eq!(binary_like_prefix_pattern("foo*"), "foo*%");
+    assert_eq!(binary_like_prefix_pattern("a?b"), "a?b%");
 }

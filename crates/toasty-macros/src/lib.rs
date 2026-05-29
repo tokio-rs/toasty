@@ -11,6 +11,7 @@ extern crate proc_macro;
 mod create;
 mod model;
 mod query;
+mod update;
 
 use proc_macro::TokenStream;
 
@@ -335,6 +336,21 @@ use proc_macro::TokenStream;
 ///
 /// # Relation attributes
 ///
+/// Relation fields can be lazy or eager. Wrap the relation value in
+/// `toasty::Deferred<_>` for lazy loading; ordinary queries leave the field
+/// unloaded until the generated relation accessor or `.include(...)` loads it.
+/// Use the relation value directly for eager loading; every query that returns
+/// the model loads the relation as if the query included that field.
+///
+/// | Attribute | Lazy field type | Eager field type |
+/// |-----------|-----------------|------------------|
+/// | `#[belongs_to]` | `toasty::Deferred<T>` or `toasty::Deferred<Option<T>>` | `T` or `Option<T>` |
+/// | `#[has_many]` | `toasty::Deferred<Vec<T>>` | `Vec<T>` |
+/// | `#[has_one]` | `toasty::Deferred<T>` or `toasty::Deferred<Option<T>>` | `T` or `Option<T>` |
+///
+/// Toasty rejects schemas with eager-load cycles. If two relation paths point
+/// back to each other, wrap at least one field in `toasty::Deferred<_>`.
+///
 /// ## `#[belongs_to(...)]` — foreign-key reference
 ///
 /// Declares a many-to-one (or one-to-one) association through a foreign
@@ -355,8 +371,15 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #     user_id: i64,
 /// #[belongs_to(key = user_id, references = id)]
-/// user: toasty::BelongsTo<User>,
+/// user: toasty::Deferred<User>,
 /// # }
+/// ```
+///
+/// To load the relation with every `Example` query, omit `Deferred`:
+///
+/// ```ignore
+/// #[belongs_to(key = user_id, references = id)]
+/// user: User,
 /// ```
 ///
 /// | Parameter | Meaning |
@@ -382,7 +405,7 @@ use proc_macro::TokenStream;
 /// #     org_id: i64,
 /// #     tenant_id: i64,
 /// #[belongs_to(key = [org_id, tenant_id], references = [id, tenant_id])]
-/// org: toasty::BelongsTo<Org>,
+/// org: toasty::Deferred<Org>,
 /// # }
 /// ```
 ///
@@ -408,7 +431,7 @@ use proc_macro::TokenStream;
 /// manager_id: Option<i64>,
 ///
 /// #[belongs_to(key = manager_id, references = id)]
-/// manager: toasty::BelongsTo<Option<User>>,
+/// manager: toasty::Deferred<Option<User>>,
 /// # }
 /// ```
 ///
@@ -427,7 +450,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -435,8 +458,15 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_many]
-/// posts: toasty::HasMany<Post>,
+/// posts: toasty::Deferred<Vec<Post>>,
 /// # }
+/// ```
+///
+/// To load the collection with every `Example` query, use `Vec<Post>`:
+///
+/// ```ignore
+/// #[has_many]
+/// posts: Vec<Post>,
 /// ```
 ///
 /// Toasty generates an accessor method (e.g. `.posts()`) and an insert
@@ -459,11 +489,63 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     parent_id: Option<i64>,
 /// #     #[belongs_to(key = parent_id, references = id)]
-/// #     parent: toasty::BelongsTo<Option<Self>>,
+/// #     parent: toasty::Deferred<Option<Self>>,
 /// #[has_many(pair = parent)]
-/// children: toasty::HasMany<Person>,
+/// children: toasty::Deferred<Vec<Person>>,
 /// # }
 /// ```
+///
+/// ### `via` — multi-step relations
+///
+/// Instead of pairing with a `belongs_to`, a `has_many` can reach its target
+/// through a path of existing relations with `via`. The path is a dotted
+/// chain of relation fields, read left to right starting from this model. A
+/// `via` relation owns no foreign key — it is derived from the relations it
+/// traverses — so it takes no `pair`:
+///
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Comment {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// #     #[index]
+/// #     article_id: i64,
+/// #     #[belongs_to(key = article_id, references = id)]
+/// #     article: toasty::Deferred<Article>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Article {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     comments: toasty::Deferred<Vec<Comment>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     comments: toasty::Deferred<Vec<Comment>>,
+/// // User → comments → article
+/// #[has_many(via = comments.article)]
+/// commented_articles: toasty::Deferred<Vec<Article>>,
+/// # }
+/// ```
+///
+/// The target type is `Article` because the path `comments.article` ends
+/// there. A `via` relation is read-only and yields distinct targets — a target
+/// reached through several intermediates appears once. Query, filter, and order
+/// it like any other relation. Preloading it with `.include()` or projecting it
+/// with `.select()` is supported on SQL backends; both are not yet available on
+/// DynamoDB.
 ///
 /// ## `#[has_one]` — one-to-one association
 ///
@@ -480,7 +562,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -488,8 +570,15 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_one]
-/// profile: toasty::HasOne<Profile>,
+/// profile: toasty::Deferred<Profile>,
 /// # }
+/// ```
+///
+/// To load the relation with every `Example` query, omit `Deferred`:
+///
+/// ```ignore
+/// #[has_one]
+/// profile: Profile,
 /// ```
 ///
 /// Wrap in `Option` for an optional association:
@@ -504,7 +593,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -512,7 +601,53 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_one]
-/// profile: toasty::HasOne<Option<Profile>>,
+/// profile: toasty::Deferred<Option<Profile>>,
+/// # }
+/// ```
+///
+/// The eager optional form is `Option<Profile>`.
+///
+/// ### `via` — multi-step relations
+///
+/// Like `#[has_many]`, a `#[has_one]` can reach its target through a path of
+/// existing relations with `via` (see the `#[has_many]` `via` section above for
+/// the full rules). Declare it when the path is expected to reach at most one
+/// target:
+///
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Subscription {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[unique]
+/// #     account_id: Option<i64>,
+/// #     #[belongs_to(key = account_id, references = id)]
+/// #     account: toasty::Deferred<Option<Account>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Account {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[unique]
+/// #     user_id: Option<i64>,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<Option<User>>,
+/// #     #[has_one]
+/// #     subscription: toasty::Deferred<Option<Subscription>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_one]
+/// #     account: toasty::Deferred<Option<Account>>,
+/// // User → account → subscription
+/// #[has_one(via = account.subscription)]
+/// subscription: toasty::Deferred<Option<Subscription>>,
 /// # }
 /// ```
 ///
@@ -528,6 +663,8 @@ use proc_macro::TokenStream;
 /// - `#[column]`, `#[default]`, and `#[update]` cannot be used on relation
 ///   fields (`BelongsTo`, `HasMany`, `HasOne`).
 /// - A field can have at most one relation attribute.
+/// - Eager relation fields cannot form a cycle. Use `toasty::Deferred<_>` on at
+///   least one edge of a bidirectional relation.
 /// - `Self` can be used as a type in relation fields for self-referential
 ///   models.
 ///
@@ -552,7 +689,7 @@ use proc_macro::TokenStream;
 ///     updated_at: jiff::Timestamp,
 ///
 ///     #[has_many]
-///     posts: toasty::HasMany<Post>,
+///     posts: toasty::Deferred<Vec<Post>>,
 /// }
 ///
 /// #[derive(Debug, toasty::Model)]
@@ -569,14 +706,14 @@ use proc_macro::TokenStream;
 ///     user_id: i64,
 ///
 ///     #[belongs_to(key = user_id, references = id)]
-///     user: toasty::BelongsTo<User>,
+///     user: toasty::Deferred<User>,
 /// }
 /// ```
 #[proc_macro_derive(
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        version, deferred
+        version
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
@@ -926,7 +1063,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// [`Embed`]: toasty::Embed
 /// [`Register`]: toasty::Register
-#[proc_macro_derive(Embed, attributes(column, deferred, index, unique))]
+#[proc_macro_derive(Embed, attributes(column, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
@@ -1371,7 +1508,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1382,7 +1519,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// # async fn example(mut db: toasty::Db, user: User) -> toasty::Result<()> {
 /// let todo = toasty::create!(in user.todos() { title: "buy milk" })
@@ -1553,7 +1690,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(Todo {
 ///     title: "buy milk",
@@ -1582,7 +1719,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1593,7 +1730,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(User {
 ///     name: "Alice",
@@ -1623,7 +1760,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1634,9 +1771,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// #     #[has_many]
-/// #     tags: toasty::HasMany<Tag>,
+/// #     tags: toasty::Deferred<Vec<Tag>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Tag {
@@ -1647,7 +1784,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     todo_id: i64,
 /// #     #[belongs_to(key = todo_id, references = id)]
-/// #     todo: toasty::BelongsTo<Todo>,
+/// #     todo: toasty::Deferred<Todo>,
 /// # }
 /// let _ = toasty::create!(User {
 ///     name: "Alice",
@@ -1669,9 +1806,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// | `Option<T>` | Defaults to `None` (`NULL`) |
 /// | `#[default(expr)]` | Uses the default expression |
 /// | `#[update(expr)]` | Uses the expression as the initial value |
-/// | `HasMany<T>` | No related records created |
-/// | `HasOne<Option<T>>` | No related record created |
-/// | `BelongsTo<Option<T>>` | Foreign key set to `NULL` |
+/// | `#[has_many] Deferred<Vec<T>>` or `#[has_many] Vec<T>` | No related records created |
+/// | `#[has_one] Deferred<Option<T>>` or `#[has_one] Option<T>` | No related record created |
+/// | `#[belongs_to] Deferred<Option<T>>` or `#[belongs_to] Option<T>` | Foreign key set to `NULL` |
 ///
 /// Required fields (`String`, `i64`, non-optional `BelongsTo`, etc.) that are
 /// missing do not cause a compile-time error. The insert fails at runtime with
@@ -1697,7 +1834,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// // Error: remove the type prefix `User` — use `{ ... }` without a type name
 /// toasty::create!(Todo { user: User { name: "Alice" } })
@@ -1721,7 +1858,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(Todo { user: { name: "Alice" } });
 /// ```
@@ -1769,6 +1906,224 @@ pub fn query(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn create(input: TokenStream) -> TokenStream {
     match create::generate(input.into()) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// Expands struct-literal syntax into update-builder method chains. Returns
+/// the same builder `target.update()` would return — call
+/// `.exec(&mut db).await?` to execute the update.
+///
+/// # Syntax
+///
+/// ```ignore
+/// toasty::update!(target { field: value, ... })
+/// ```
+///
+/// `target` is any expression that has an `.update()` method — a model
+/// instance, a query builder, or a scoped relation accessor.
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User, id: i64) -> toasty::Result<()> {
+/// // Instance target
+/// toasty::update!(user { name: "Alice Smith" })
+///     .exec(&mut db).await?;
+///
+/// // Query target
+/// toasty::update!(User::filter_by_id(id) { name: "Bob" })
+///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Instance targets do not consume the binding — the macro expands to
+/// `user.update()`, which auto-borrows `&mut user` the same way the
+/// chain form does. `user` stays owned after the macro returns.
+///
+/// # Field shapes
+///
+/// ## Explicit
+///
+/// `field: expr` sets the field to `expr`:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     email: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     name: "Alice Smith",
+///     email: "alice.smith@example.com",
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// `expr` is any Rust expression. For collection fields, pass a
+/// `toasty::stmt::*` combinator (e.g. `stmt::push("x")`,
+/// `stmt::apply([...])`) for non-set semantics.
+///
+/// ## Shorthand
+///
+/// `field` alone is equivalent to `field: field`, matching Rust struct
+/// literal shorthand:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// let name = "Alice Smith";
+/// toasty::update!(user { name }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Method shorthand
+///
+/// `field.combinator(args)` is shorthand for
+/// `field: toasty::stmt::combinator(args)`. Any function in `toasty::stmt`
+/// works; missing functions surface as ordinary "no function" errors:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct Article {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     tags: Vec<String>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut article: Article) -> toasty::Result<()> {
+/// // tags.push("rust") expands to tags: stmt::push("rust")
+/// toasty::update!(article { tags.push("rust") })
+///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// The shorthand is one method call deep. For chained expressions, use
+/// the explicit `field: expr` form.
+///
+/// ## Embedded patch
+///
+/// `field: { sub: val, ... }` partially updates an embedded struct
+/// field, leaving sub-fields not listed unchanged. Expands to
+/// `stmt::apply([stmt::patch(...), ...])`:
+///
+/// ```no_run
+/// # #[derive(toasty::Embed)]
+/// # struct Metadata { version: i64, status: String }
+/// # #[derive(toasty::Model)]
+/// # struct Document {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     meta: Metadata,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut doc: Document) -> toasty::Result<()> {
+/// toasty::update!(doc {
+///     meta: { version: 2, status: "published" },
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Sub-fields nest to arbitrary depth. To replace an embedded value
+/// wholesale, pass the typed value directly: `meta: Metadata { ... }`.
+///
+/// ## Has-many insert
+///
+/// `field: [{ ... }, ...]` inserts new children of a has-many relation.
+/// Each `{ ... }` becomes a create builder wrapped in
+/// `stmt::insert(...)`; the whole list is wrapped in
+/// `stmt::apply([...])`:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     #[has_many]
+/// #     todos: toasty::Deferred<Vec<Todo>>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     todos: [{ title: "buy milk" }, { title: "walk dog" }],
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Items can also be plain expressions, mixed in with builder
+/// shorthands — useful for combining inserts and removals:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     todos: toasty::Deferred<Vec<Todo>>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User, old: Todo) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     todos: [{ title: "new" }, toasty::stmt::remove(&old)],
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Field validation
+///
+/// The macro emits a method call per named field on the update builder.
+/// A field name the model does not expose for update fails with the
+/// compiler's standard "no method named …" error at the macro call
+/// site.
+#[proc_macro]
+pub fn update(input: TokenStream) -> TokenStream {
+    match update::generate(input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }

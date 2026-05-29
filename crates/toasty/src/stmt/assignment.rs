@@ -1,4 +1,4 @@
-use super::{IntoExpr, List, Path};
+use super::{IntoExpr, List, Numeric, Path};
 use std::marker::PhantomData;
 use toasty_core::stmt;
 
@@ -44,6 +44,8 @@ enum AssignmentKind {
     Append(stmt::Expr),
     Pop,
     RemoveAt(stmt::Expr),
+    Add(stmt::Expr),
+    Subtract(stmt::Expr),
     Patch {
         path_projection: stmt::Projection,
         inner: Box<AssignmentKind>,
@@ -60,6 +62,8 @@ impl AssignmentKind {
             AssignmentKind::Append(expr) => assignments.append(projection, expr),
             AssignmentKind::Pop => assignments.pop(projection),
             AssignmentKind::RemoveAt(expr) => assignments.remove_at(projection, expr),
+            AssignmentKind::Add(expr) => assignments.add(projection, expr),
+            AssignmentKind::Subtract(expr) => assignments.subtract(projection, expr),
             AssignmentKind::Patch {
                 path_projection,
                 inner,
@@ -395,6 +399,96 @@ pub fn apply<T>(ops: impl IntoIterator<Item = Assignment<T>>) -> Assignment<T> {
     let ops: Vec<AssignmentKind> = ops.into_iter().map(|a| a.kind).collect();
     Assignment {
         kind: AssignmentKind::Apply(ops),
+        _p: PhantomData,
+    }
+}
+
+/// Add a value to a numeric field (`col = col + value`).
+///
+/// The [`Numeric`] bound restricts `T` to types Toasty knows how to do
+/// database arithmetic on, so misuse on a non-numeric column (e.g.
+/// `String`) is a compile error rather than a runtime database error.
+///
+/// The update is atomic against the existing column value on every backend.
+/// Use this when you want a relative update — e.g. crediting a balance —
+/// without a read-modify-write round trip from the client.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .balance(stmt::add(10))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn add<T: Numeric>(value: impl IntoExpr<T>) -> Assignment<T> {
+    Assignment {
+        kind: AssignmentKind::Add(value.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Subtract a value from a numeric field (`col = col - value`).
+///
+/// Mirror of [`add`]. See its docs for the [`Numeric`] bound. Atomic
+/// against the existing column value on every backend.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .balance(stmt::subtract(5))
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn subtract<T: Numeric>(value: impl IntoExpr<T>) -> Assignment<T> {
+    Assignment {
+        kind: AssignmentKind::Subtract(value.into_expr().untyped),
+        _p: PhantomData,
+    }
+}
+
+/// Increment a numeric field by one.
+///
+/// The [`Numeric`] bound encodes the `1` literal in a value variant
+/// matching the field type, so `stmt::increment()` works on every
+/// supported numeric column (`i8`–`i64`, `u8`–`u64`, `f32`, `f64`) and
+/// on user newtypes that implement [`Numeric`].
+///
+/// Atomic against the existing column value on every backend, same as
+/// [`add`].
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .login_count(stmt::increment())
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn increment<T: Numeric>() -> Assignment<T> {
+    Assignment {
+        kind: AssignmentKind::Add(stmt::Expr::Value(T::one())),
+        _p: PhantomData,
+    }
+}
+
+/// Decrement a numeric field by one.
+///
+/// Mirror of [`increment`]. See its docs for the [`Numeric`] bound and
+/// the set of supported field types.
+///
+/// # Examples
+///
+/// ```ignore
+/// user.update()
+///     .lives_left(stmt::decrement())
+///     .exec(&mut db)
+///     .await?;
+/// ```
+pub fn decrement<T: Numeric>() -> Assignment<T> {
+    Assignment {
+        kind: AssignmentKind::Subtract(stmt::Expr::Value(T::one())),
         _p: PhantomData,
     }
 }
