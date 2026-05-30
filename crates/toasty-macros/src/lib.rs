@@ -29,7 +29,8 @@ use proc_macro::TokenStream;
 /// - A [`Model`] trait implementation, including the associated `Query`,
 ///   `Create`, and `Update` builder types.
 /// - A [`Load`] implementation for deserializing rows from the database.
-/// - A [`Register`] implementation for schema registration at runtime.
+/// - The [`Model`] trait's schema-registration methods (`id`, `schema`,
+///   `register`) used to register the model at runtime.
 /// - Static query methods such as `all()`, `filter(expr)`,
 ///   `filter_by_<field>()`, and `get_by_<key>()`.
 /// - Instance methods `update()` and `delete()`.
@@ -40,7 +41,6 @@ use proc_macro::TokenStream;
 ///
 /// [`Model`]: toasty::schema::Model
 /// [`Load`]: toasty::schema::Load
-/// [`Register`]: toasty::schema::Register
 ///
 /// # Struct-level attributes
 ///
@@ -757,7 +757,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// Applying `#[derive(Embed)]` to a struct generates:
 ///
-/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct returned by `<Type>::fields()` for building
 ///   filter expressions on individual fields.
 /// - An `Update` struct used by the parent model's update builder for
@@ -843,7 +843,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// Applying `#[derive(Embed)]` to an enum generates:
 ///
-/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct with `is_<variant>()` methods and comparison
 ///   methods (`eq`, `ne`, `in_list`).
 /// - For data-carrying variants, per-variant handle types with a
@@ -1062,7 +1062,6 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
-/// [`Register`]: toasty::Register
 #[proc_macro_derive(Embed, attributes(column, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {

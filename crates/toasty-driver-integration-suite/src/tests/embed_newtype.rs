@@ -5,43 +5,26 @@ use crate::prelude::*;
 
 /// Tests that a newtype embedded struct (`struct Email(String)`) is registered
 /// in the app schema with `app: None` on its inner field.
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_email))]
 pub async fn basic_newtype_embed(test: &mut Test) {
-    #[derive(Debug, toasty::Embed)]
-    struct Email(String);
-
-    let db = test.setup_db(models!(Email)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
-    assert_struct!(schema.app.models, #{
-        Email::id(): toasty::schema::app::Model::EmbeddedStruct({
-            name.upper_camel_case(): "Email",
-            fields: [
-                { name.app: None },
-            ],
-        }),
-    });
-
-    assert!(schema.db.tables.is_empty());
+    let email = &schema.app.models[&Email::id()];
+    assert_struct!(email, toasty::schema::app::Model::EmbeddedStruct({
+        name.upper_camel_case(): "Email",
+        fields: [
+            { name.app: None },
+        ],
+    }));
 }
 
 /// Tests that a newtype field produces a single column whose name matches the
 /// parent field — `email: Email` where `struct Email(String)` produces column
 /// `email`, not `email_0`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(sql), scenario(crate::scenarios::user_with_email))]
 pub async fn newtype_column_name(test: &mut Test) {
-    #[derive(Debug, toasty::Embed)]
-    struct Email(String);
-
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        id: String,
-        #[allow(dead_code)]
-        email: Email,
-    }
-
-    let db = test.setup_db(models!(User, Email)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     assert_struct!(schema.db.tables, [
@@ -94,7 +77,7 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
         email: Email,
     }
 
-    let mut db = t.setup_db(models!(User, Email)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     // Create + read back
     let mut user = toasty::create!(User {
@@ -184,7 +167,7 @@ pub async fn newtype_unique_constraint(t: &mut Test) -> Result<()> {
         email: Email,
     }
 
-    let mut db = t.setup_db(models!(User, Email)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     toasty::create!(User {
         name: "Alice",
@@ -226,7 +209,7 @@ pub async fn newtype_index(t: &mut Test) -> Result<()> {
         email: Email,
     }
 
-    let mut db = t.setup_db(models!(User, Email)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     toasty::create!(User {
         name: "Alice",
@@ -267,7 +250,7 @@ pub async fn newtype_numeric(t: &mut Test) -> Result<()> {
         score: Score,
     }
 
-    let mut db = t.setup_db(models!(Player, Score)).await;
+    let mut db = t.setup_db(models!(Player)).await;
 
     toasty::create!(Player {
         name: "Alice",
@@ -308,7 +291,7 @@ pub async fn newtype_auto_uuid_key(t: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = t.setup_db(models!(User, UserId)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     let user = toasty::create!(User { name: "Alice" })
         .exec(&mut db)
@@ -339,7 +322,7 @@ pub async fn newtype_auto_increment_key(t: &mut Test) -> Result<()> {
         item: String,
     }
 
-    let mut db = t.setup_db(models!(Order, OrderId)).await;
+    let mut db = t.setup_db(models!(Order)).await;
 
     let o1 = toasty::create!(Order { item: "Widget" })
         .exec(&mut db)
@@ -375,7 +358,7 @@ pub async fn newtype_auto_nested_proxy(t: &mut Test) -> Result<()> {
         item: String,
     }
 
-    let mut db = t.setup_db(models!(Order, Outer, Inner)).await;
+    let mut db = t.setup_db(models!(Order)).await;
 
     let o1 = toasty::create!(Order { item: "A" }).exec(&mut db).await?;
     let o2 = toasty::create!(Order { item: "B" }).exec(&mut db).await?;
@@ -400,7 +383,7 @@ pub async fn newtype_as_primary_key(t: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = t.setup_db(models!(User, UserId)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     let user = toasty::create!(User {
         id: UserId("user-1".into()),
@@ -436,7 +419,7 @@ pub async fn newtype_uuid_get_by_id(t: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = t.setup_db(models!(User, UserId)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     let id = uuid::Uuid::new_v4();
     toasty::create!(User {
@@ -475,7 +458,7 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
         address: Address,
     }
 
-    let mut db = t.setup_db(models!(User, Address, ZipCode)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     // Create + read back
     let user = toasty::create!(User {
@@ -529,7 +512,7 @@ pub async fn newtype_key_and_predicate(t: &mut Test) -> Result<()> {
         name: String,
     }
 
-    let mut db = t.setup_db(models!(Item, Region)).await;
+    let mut db = t.setup_db(models!(Item)).await;
 
     toasty::create!(Item {
         region: Region("us-east".into()),

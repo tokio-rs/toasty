@@ -7,7 +7,8 @@ use toasty_core::schema::app::ModelSet;
 /// This trait captures the information needed to register a field's type in the
 /// app schema (nullability, [`FieldTy`](toasty_core::schema::app::FieldTy)) as
 /// well as runtime helpers for building field paths and update builders.
-/// It is used by the `Register::schema()` implementation that the macro expands.
+/// It is used by the `schema()` implementation that the macro expands for
+/// [`Model`](super::Model) and [`Embed`](super::Embed) types.
 #[diagnostic::on_unimplemented(
     message = "`{Self}` cannot be used as a field type",
     label = "this field's type is not storable",
@@ -109,8 +110,9 @@ pub trait Field: Load<Output = Self> {
     /// [`ModelSet`].
     ///
     /// The default implementation is a no-op, suitable for primitive types.
-    /// Embedded types override this to call their own
-    /// [`Register::register`](super::Register::register).
+    /// Embedded types override this to register themselves and recurse into
+    /// their own fields, which is how embeds are discovered transitively from
+    /// the models that contain them.
     fn register(_model_set: &mut ModelSet) {}
 }
 

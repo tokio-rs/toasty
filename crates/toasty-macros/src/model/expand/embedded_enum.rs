@@ -39,7 +39,7 @@ impl Expand<'_> {
                     p.into_stmt()
                 };
                 let variant_id = #toasty::core::schema::app::VariantId {
-                    model: <#model_ident as #toasty::Register>::id(),
+                    model: <#model_ident as #toasty::Embed>::id(),
                     index: #variant_idx,
                 };
                 #toasty::stmt::Expr::from_untyped(
@@ -166,7 +166,7 @@ impl Expand<'_> {
 
                         fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                             let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Register>::id(),
+                                model: <#model_ident as #toasty::Embed>::id(),
                                 index: #variant_idx,
                             };
                             self.parent_path().into_variant(variant_id)
@@ -181,7 +181,7 @@ impl Expand<'_> {
                                 p.into_stmt()
                             };
                             let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Register>::id(),
+                                model: <#model_ident as #toasty::Embed>::id(),
                                 index: #variant_idx,
                             };
                             let is_var = #toasty::stmt::Expr::from_untyped(
@@ -522,7 +522,7 @@ impl Expand<'_> {
     pub(super) fn expand_enum_primitive_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         if self.expand_enum_has_data_variants() {
-            quote! { #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id()) }
+            quote! { #toasty::core::stmt::Type::Model(<Self as #toasty::Embed>::id()) }
         } else if self.uses_string_discriminants() {
             quote! { #toasty::core::stmt::Type::String }
         } else {

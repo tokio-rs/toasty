@@ -1,4 +1,4 @@
-use super::{Deferred, Load, Model, Register, RelationManyField};
+use super::{Deferred, Load, Model, RelationManyField};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
@@ -46,7 +46,7 @@ fn many_relation_field_ty<M: Model>(
     pair: Option<FieldId>,
     via: Option<stmt::Path>,
 ) -> FieldTy {
-    let target = <M as Register>::id();
+    let target = <M as Model>::id();
     let expr_ty = stmt::Type::List(Box::new(stmt::Type::Model(target)));
     let cardinality = app::Cardinality::Many { singular };
 

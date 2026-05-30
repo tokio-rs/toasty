@@ -1,4 +1,4 @@
-use super::{Deferred, Load, Model, Register, RelationOneField};
+use super::{Deferred, Load, Model, RelationOneField};
 
 use toasty_core::schema::app::ModelId;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ForeignKey};
@@ -95,7 +95,7 @@ impl<M: Model> RelationOneField for Deferred<Option<M>> {
 }
 
 fn has_one_relation_field_ty<M: Model>(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-    let target = <M as Register>::id();
+    let target = <M as Model>::id();
     let expr_ty = stmt::Type::Model(target);
     let cardinality = app::Cardinality::One;
 
@@ -114,7 +114,7 @@ fn has_one_relation_field_ty<M: Model>(pair: Option<FieldId>, via: Option<stmt::
 }
 
 fn belongs_to_relation_field_ty<M: Model>(foreign_key: ForeignKey) -> FieldTy {
-    let target = <M as Register>::id();
+    let target = <M as Model>::id();
 
     FieldTy::BelongsTo(app::BelongsTo {
         target,

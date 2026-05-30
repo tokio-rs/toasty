@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::test_util::*;
-use crate::schema::Register;
+use crate::schema::{Embed, Model};
 use toasty_core::{
     schema::db,
     stmt::{self, Expr, Value},
