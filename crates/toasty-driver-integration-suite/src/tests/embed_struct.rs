@@ -207,7 +207,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
 /// - Chaining works: User::fields().address().city()
 /// - Both model and embedded struct have fields() methods
 /// This is purely a compile-time test validating the generated API.
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_zip_address))]
+#[driver_test(scenario(crate::scenarios::user_with_zip_address::id_uuid))]
 pub async fn embedded_struct_fields_codegen(test: &mut Test) {
     let _db = setup(test).await;
 

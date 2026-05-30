@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Filters unit enum field using `ne()`.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -30,7 +30,7 @@ pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
 }
 
 /// Filters unit enum field using `in_list()`.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -63,7 +63,7 @@ pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
 }
 
 /// Filters data-carrying enum field using `ne()`.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_data_enum_ne(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

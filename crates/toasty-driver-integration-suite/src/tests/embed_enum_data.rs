@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Verifies that a data-carrying enum has its variant fields registered in the app
 /// schema with globally-assigned field indices (indices are unique across all variants).
-#[driver_test(id(ID), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(scenario(crate::scenarios::user_contact_info))]
 pub async fn data_carrying_enum_schema(t: &mut Test) {
     let db = setup(t).await;
     let schema = db.schema();
@@ -32,7 +32,7 @@ pub async fn data_carrying_enum_schema(t: &mut Test) {
 /// Verifies that a mixed enum (some unit variants, some data variants) registers
 /// correctly: unit variants have empty `fields`, data variants have their fields
 /// with indices assigned starting from 0 and continuing globally across variants.
-#[driver_test(id(ID), scenario(crate::scenarios::task_with_status))]
+#[driver_test(scenario(crate::scenarios::task_with_status))]
 pub async fn mixed_enum_schema(t: &mut Test) {
     let db = setup(t).await;
     let schema = db.schema();
@@ -102,7 +102,7 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
 
 /// End-to-end CRUD test for a data-carrying enum (all variants have fields).
 /// Creates records with different variants, reads them back, and verifies roundtrip.
-#[driver_test(id(ID), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(scenario(crate::scenarios::user_contact_info))]
 pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -147,7 +147,7 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
 
 /// End-to-end CRUD test for a mixed enum (unit variants and data variants).
 /// Verifies that both kinds round-trip correctly through the DB.
-#[driver_test(id(ID), scenario(crate::scenarios::task_with_status))]
+#[driver_test(scenario(crate::scenarios::task_with_status))]
 pub async fn mixed_enum_roundtrip(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

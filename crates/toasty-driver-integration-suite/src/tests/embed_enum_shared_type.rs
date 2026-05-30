@@ -56,7 +56,7 @@ pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
 }
 
 /// Filter by enum value on two models that share the same enum type.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_bug_priority))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_bug_priority::id_uuid))]
 pub async fn shared_enum_filter(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

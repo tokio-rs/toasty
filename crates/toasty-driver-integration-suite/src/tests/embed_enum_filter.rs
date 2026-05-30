@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Filtering by a data-carrying enum value using a SQL WHERE clause.
 /// DynamoDB does not support arbitrary filter predicates, so this is SQL-only.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -35,7 +35,7 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Filtering by variant alone (discriminant-only check) using `is_{variant}()`.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -80,7 +80,7 @@ pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
 }
 
 /// Filtering a unit-only enum by variant using `is_{variant}()`.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -214,7 +214,7 @@ pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> 
 /// Creates records with different data-carrying enum variants and retrieves them
 /// by primary key, verifying enum values round-trip correctly. This exercises
 /// the same create + read path on all drivers including DynamoDB.
-#[driver_test(id(ID), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(scenario(crate::scenarios::user_contact_info))]
 pub async fn create_and_get_data_enum(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

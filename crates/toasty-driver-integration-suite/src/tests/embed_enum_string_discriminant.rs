@@ -306,9 +306,8 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
 
 /// Tests filtering by variant with string discriminants.
 #[driver_test(
-    id(ID),
     requires(scan),
-    scenario(crate::scenarios::task_with_string_status)
+    scenario(crate::scenarios::task_with_string_status::id_uuid)
 )]
 pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
@@ -337,7 +336,7 @@ pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
 }
 
 /// Verifies the schema registers string discriminants with the correct type.
-#[driver_test(id(ID), scenario(crate::scenarios::task_with_string_status))]
+#[driver_test(scenario(crate::scenarios::task_with_string_status::id_uuid))]
 pub async fn string_discriminant_schema_registration(t: &mut Test) {
     let db = setup(t).await;
     let schema = db.schema();

@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Filtering by a field within a specific enum variant using the closure-based
 /// `.matches()` API: `contact().email().matches(|e| e.address().eq("x"))`.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -145,7 +145,7 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
 /// `email().address().eq("x")` is equivalent to
 /// `email().matches(|e| e.address().eq("x"))` — the variant predicate is
 /// added automatically, so Phone-variant rows are excluded.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_contact_info))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

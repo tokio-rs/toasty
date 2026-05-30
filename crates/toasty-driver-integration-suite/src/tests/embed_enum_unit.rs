@@ -132,7 +132,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 /// column to an I64 discriminant, not a string or other type. On SQL the predicate
 /// is emitted as `column = $0` with an I64 param; on DynamoDB it lowers to a
 /// `Scan` whose filter inlines the I64 value directly.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
