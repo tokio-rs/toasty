@@ -34,6 +34,7 @@ pub mod user_unique_email;
 pub mod user_unique_email_with_name;
 pub mod user_with_active;
 pub mod user_with_age;
+pub mod user_with_status;
 pub mod versioned_item;
 pub mod versioned_user_unique_email;
 pub mod widget_mixed_types;

@@ -273,29 +273,9 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
 /// Tests that embedded enums are registered in the app schema but don't create
 /// their own database tables (they're inlined into parent models as a single column).
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_status))]
 pub async fn basic_embedded_enum(test: &mut Test) {
-    #[derive(toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    // Embedded types are discovered through a containing model rather than
-    // being registered directly.
-    #[derive(toasty::Model)]
-    #[allow(dead_code)]
-    struct Container {
-        #[key]
-        id: i64,
-        status: Status,
-    }
-
-    let db = test.setup_db(models!(Container)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     // Embedded enums exist in app schema as Model::EmbeddedEnum
@@ -314,27 +294,9 @@ pub async fn basic_embedded_enum(test: &mut Test) {
 /// - App schema: enum field with correct type reference
 /// - DB schema: enum field stored as a single INTEGER column
 /// - Mapping: enum field maps directly to a primitive column (discriminant IS the value)
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_status))]
 pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
-    #[derive(toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(toasty::Model)]
-    struct User {
-        #[key]
-        id: String,
-        #[allow(dead_code)]
-        status: Status,
-    }
-
-    let db = test.setup_db(models!(User)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     // Both embedded enum and root model exist in app schema

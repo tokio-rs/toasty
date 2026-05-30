@@ -1,0 +1,26 @@
+use crate::prelude::*;
+
+scenario! {
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        id: String,
+
+        status: Status,
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Status {
+        #[column(variant = 1)]
+        Pending,
+        #[column(variant = 2)]
+        Active,
+        #[column(variant = 3)]
+        Done,
+    }
+
+    async fn setup(test: &mut Test) -> toasty::Db {
+        test.setup_db(models!(User)).await
+    }
+}
