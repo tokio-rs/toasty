@@ -60,3 +60,102 @@ pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     let expr: stmt::Expr<T> = value.into_expr();
     expr.into()
 }
+
+/// Insert `item` into the relation that produced this list query.
+///
+/// Generated code emits `Query<List<M>>::insert` as a one-line forward to
+/// this helper. The query must be scoped to a single-step relation
+/// traversal; multi-step traversals and unscoped queries return an
+/// `unsupported_feature` error.
+pub async fn relation_insert<M, E>(
+    mut query: stmt::Query<List<M>>,
+    executor: &mut dyn Executor,
+    item: E,
+) -> Result<()>
+where
+    M: Model,
+    E: IntoExpr<M>,
+{
+    match query.take_via_assoc() {
+        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
+            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
+            executor.exec(assoc.insert(item)).await
+        }
+        Some(_) => Err(Error::unsupported_feature(
+            "insert is not supported on multi-step relation traversals",
+        )),
+        None => Err(Error::unsupported_feature(
+            "insert requires a relation-scoped query",
+        )),
+    }
+}
+
+/// Remove `item` from the relation that produced this list query.
+///
+/// Counterpart to [`relation_insert`]; the same scoping rules apply.
+pub async fn relation_remove<M, E>(
+    mut query: stmt::Query<List<M>>,
+    executor: &mut dyn Executor,
+    item: E,
+) -> Result<()>
+where
+    M: Model,
+    E: IntoExpr<M>,
+{
+    match query.take_via_assoc() {
+        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
+            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
+            executor.exec(assoc.remove(item)).await
+        }
+        Some(_) => Err(Error::unsupported_feature(
+            "remove is not supported on multi-step relation traversals",
+        )),
+        None => Err(Error::unsupported_feature(
+            "remove requires a relation-scoped query",
+        )),
+    }
+}
+
+/// Continue a `has_many` traversal from `query` along `path`.
+///
+/// If `query` was already scoped from a relation traversal, append
+/// `field_offset` to that traversal's path so the result remains a single
+/// chained association. Otherwise build a fresh `Association::many` rooted
+/// at `query`. Used by generated `.field()` chain methods on the per-model
+/// `Query<List<Source>>` for `has_many` relations.
+pub fn chain_or_build_many<Source, Target>(
+    mut query: stmt::Query<List<Source>>,
+    field_offset: usize,
+    path: stmt::Path<Source, List<Target>>,
+) -> stmt::Association<List<Target>>
+where
+    Source: Model,
+    Target: Model,
+{
+    match query.take_via_assoc() {
+        Some(untyped) => stmt::Association::<List<Source>>::from_untyped(untyped)
+            .chain_field::<Target>(field_offset),
+        None => stmt::Association::many(query, path),
+    }
+}
+
+/// Continue a `belongs_to` / `has_one` traversal from `query` along `path`.
+///
+/// Mirrors [`chain_or_build_many`] for singular relation steps: when no
+/// existing traversal is present the fresh association is built via
+/// [`stmt::Association::many_via_one`].
+pub fn chain_or_build_many_via_one<Source, Target>(
+    mut query: stmt::Query<List<Source>>,
+    field_offset: usize,
+    path: stmt::Path<Source, Target>,
+) -> stmt::Association<List<Target>>
+where
+    Source: Model,
+    Target: Model,
+{
+    match query.take_via_assoc() {
+        Some(untyped) => stmt::Association::<List<Source>>::from_untyped(untyped)
+            .chain_field::<Target>(field_offset),
+        None => stmt::Association::many_via_one(query, path),
+    }
+}

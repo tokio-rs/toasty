@@ -137,28 +137,11 @@ impl Expand<'_> {
                 /// Returns an error at exec time if the query is not scoped to
                 /// a single-step relation traversal.
                 #vis async fn insert(
-                    mut self,
+                    self,
                     executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
                 ) -> #toasty::Result<()> {
-                    match self.stmt.take_via_assoc() {
-                        #toasty::Option::Some(untyped)
-                            if untyped.path.projection.as_slice().len() == 1 =>
-                        {
-                            let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
-                            executor.exec(assoc.insert(item)).await
-                        }
-                        #toasty::Option::Some(_) => {
-                            #toasty::Result::Err(#toasty::Error::unsupported_feature(
-                                "insert is not supported on multi-step relation traversals",
-                            ))
-                        }
-                        #toasty::Option::None => {
-                            #toasty::Result::Err(#toasty::Error::unsupported_feature(
-                                "insert requires a relation-scoped query",
-                            ))
-                        }
-                    }
+                    #toasty::relation_insert(self.stmt, executor, item).await
                 }
 
                 /// Remove an item from the relation this query was scoped from.
@@ -166,28 +149,11 @@ impl Expand<'_> {
                 /// Returns an error at exec time if the query is not scoped to
                 /// a single-step relation traversal.
                 #vis async fn remove(
-                    mut self,
+                    self,
                     executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
                 ) -> #toasty::Result<()> {
-                    match self.stmt.take_via_assoc() {
-                        #toasty::Option::Some(untyped)
-                            if untyped.path.projection.as_slice().len() == 1 =>
-                        {
-                            let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
-                            executor.exec(assoc.remove(item)).await
-                        }
-                        #toasty::Option::Some(_) => {
-                            #toasty::Result::Err(#toasty::Error::unsupported_feature(
-                                "remove is not supported on multi-step relation traversals",
-                            ))
-                        }
-                        #toasty::Option::None => {
-                            #toasty::Result::Err(#toasty::Error::unsupported_feature(
-                                "remove requires a relation-scoped query",
-                            ))
-                        }
-                    }
+                    #toasty::relation_remove(self.stmt, executor, item).await
                 }
 
                 #vis fn create(self) -> #create_builder_ident {
@@ -430,10 +396,10 @@ impl Expand<'_> {
 
     /// Per-relation-field accessor methods on `Query<List<M>>`. Replaces the
     /// previous methods that lived on the old `UserQuery` and `Many` structs,
-    /// unifying their behaviour. If the current query is already scoped from a
-    /// relation traversal (`scope.is_some()`), extend the existing path via
-    /// `chain_field`; otherwise build a fresh association rooted at the current
-    /// query.
+    /// unifying their behaviour. Dispatches to `chain_or_build_many` /
+    /// `chain_or_build_many_via_one` which handle both the "already scoped
+    /// from a traversal — extend the path" and "fresh query — start a new
+    /// association" branches.
     fn expand_query_list_relation_methods(&self) -> TokenStream {
         self.model
             .fields
@@ -462,19 +428,12 @@ impl Expand<'_> {
         // produced `<Target as Model>::Query` (a list-shaped query) for the
         // same reason.
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
-                let assoc = match self.stmt.take_via_assoc() {
-                    #toasty::Option::Some(untyped) => {
-                        let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
-                        assoc.chain_field::<#target>(#field_offset)
-                    }
-                    #toasty::Option::None => {
-                        #toasty::stmt::Association::many_via_one(
-                            self.stmt,
-                            #model_ident::fields().#field_ident().into(),
-                        )
-                    }
-                };
+            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
+                let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
+                    self.stmt,
+                    #field_offset,
+                    #model_ident::fields().#field_ident().into(),
+                );
                 <<#target as #toasty::Model>::Query>::from_assoc_many(assoc)
             }
         }
@@ -490,19 +449,12 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
-                let assoc = match self.stmt.take_via_assoc() {
-                    #toasty::Option::Some(untyped) => {
-                        let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
-                        assoc.chain_field::<#target>(#field_offset)
-                    }
-                    #toasty::Option::None => {
-                        #toasty::stmt::Association::many(
-                            self.stmt,
-                            #model_ident::fields().#field_ident().into(),
-                        )
-                    }
-                };
+            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
+                let assoc = #toasty::chain_or_build_many::<#model_ident, #target>(
+                    self.stmt,
+                    #field_offset,
+                    #model_ident::fields().#field_ident().into(),
+                );
                 <<#target as #toasty::Model>::Query>::from_assoc_many(assoc)
             }
         }
@@ -518,19 +470,12 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
-                let assoc = match self.stmt.take_via_assoc() {
-                    #toasty::Option::Some(untyped) => {
-                        let assoc = <#toasty::stmt::Association<#toasty::List<#model_ident>>>::from_untyped(untyped);
-                        assoc.chain_field::<#target>(#field_offset)
-                    }
-                    #toasty::Option::None => {
-                        #toasty::stmt::Association::many_via_one(
-                            self.stmt,
-                            #model_ident::fields().#field_ident().into(),
-                        )
-                    }
-                };
+            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
+                let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
+                    self.stmt,
+                    #field_offset,
+                    #model_ident::fields().#field_ident().into(),
+                );
                 <<#target as #toasty::Model>::Query>::from_assoc_many(assoc)
             }
         }
