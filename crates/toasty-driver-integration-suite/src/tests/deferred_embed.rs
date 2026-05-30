@@ -2,25 +2,9 @@ use crate::prelude::*;
 
 // ---------- Deferred<Embed> on a struct embed ----------
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::document_deferred_metadata))]
 pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Metadata {
-        author: String,
-        notes: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-        metadata: toasty::Deferred<Metadata>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -67,32 +51,9 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
 // sub-fields. The lowering has to descend through the enum's `Match`
 // expression to mask / wrap those sub-fields.
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::person_contact_deferred_metadata))]
 pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Metadata {
-        author: String,
-        notes: toasty::Deferred<String>,
-    }
-
-    #[derive(Debug, toasty::Embed)]
-    enum ContactInfo {
-        Email { address: String, metadata: Metadata },
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Person {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(Person)).await;
+    let mut db = setup(t).await;
 
     // INSERT...RETURNING must echo back the deferred sub-field nested two
     // levels deep (through the enum variant and through the embed struct).
@@ -137,32 +98,9 @@ pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
 // engine flattens into `[contact_idx, variant_idx, …]` projections and
 // dispatches into the matching arm of the embed enum's `Match`.
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::person_contact_deferred_metadata))]
 pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Metadata {
-        author: String,
-        notes: toasty::Deferred<String>,
-    }
-
-    #[derive(Debug, toasty::Embed)]
-    enum ContactInfo {
-        Email { address: String, metadata: Metadata },
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Person {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(Person)).await;
+    let mut db = setup(t).await;
 
     let alice = toasty::create!(Person {
         name: "Alice".to_string(),
@@ -331,25 +269,9 @@ pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
 
 // ---------- Updating a deferred embed reloads with the new value ----------
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::document_deferred_metadata))]
 pub async fn deferred_embed_update_reloads(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Metadata {
-        author: String,
-        notes: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-        metadata: toasty::Deferred<Metadata>,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -451,26 +373,9 @@ pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> 
 
 // ---------- Deferred<T> inside an Embed (per-column) ----------
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::document_metadata_deferred_notes))]
 pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Metadata {
-        author: String,
-        notes: toasty::Deferred<String>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        metadata: Metadata,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let created = toasty::create!(Document {
         title: "Hello".to_string(),
@@ -507,26 +412,9 @@ pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
 // via `From<T>` (`.into()`), the encoder unwraps it through
 // `Deferred<T>: IntoExpr<T>`, and the column is written.
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::document_metadata_deferred_notes))]
 pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Metadata {
-        author: String,
-        notes: toasty::Deferred<String>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-
-        metadata: Metadata,
-    }
-
-    let mut db = t.setup_db(models!(Document)).await;
+    let mut db = setup(t).await;
 
     let mut doc = toasty::create!(Document {
         title: "Hello".to_string(),
