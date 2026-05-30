@@ -1,29 +1,9 @@
 use crate::prelude::*;
 
 /// Filters unit enum field using `ne()`.
-#[driver_test(requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task)).await;
+    let mut db = setup(t).await;
 
     for (name, status) in [
         ("A", Status::Pending),
@@ -50,29 +30,9 @@ pub async fn filter_unit_enum_ne(t: &mut Test) -> Result<()> {
 }
 
 /// Filters unit enum field using `in_list()`.
-#[driver_test(requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_unit_enum_in_list(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task)).await;
+    let mut db = setup(t).await;
 
     for (name, status) in [
         ("A", Status::Pending),

@@ -80,29 +80,9 @@ pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
 }
 
 /// Filtering a unit-only enum by variant using `is_{variant}()`.
-#[driver_test(requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task)).await;
+    let mut db = setup(t).await;
 
     Task::create()
         .name("A")

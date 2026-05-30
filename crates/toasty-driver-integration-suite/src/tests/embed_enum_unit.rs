@@ -132,29 +132,9 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 /// column to an I64 discriminant, not a string or other type. On SQL the predicate
 /// is emitted as `column = $0` with an I64 param; on DynamoDB it lowers to a
 /// `Scan` whose filter inlines the I64 value directly.
-#[driver_test(requires(scan))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task)).await;
+    let mut db = setup(t).await;
 
     // Create tasks with different statuses: 1 pending, 2 active, 1 done
     for (name, status) in [

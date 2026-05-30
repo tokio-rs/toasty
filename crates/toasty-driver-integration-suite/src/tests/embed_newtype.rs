@@ -5,20 +5,9 @@ use crate::prelude::*;
 
 /// Tests that a newtype embedded struct (`struct Email(String)`) is registered
 /// in the app schema with `app: None` on its inner field.
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_email))]
 pub async fn basic_newtype_embed(test: &mut Test) {
-    #[derive(Debug, toasty::Embed)]
-    struct Email(String);
-
-    #[derive(toasty::Model)]
-    #[allow(dead_code)]
-    struct Container {
-        #[key]
-        id: i64,
-        email: Email,
-    }
-
-    let db = test.setup_db(models!(Container)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     let email = &schema.app.models[&Email::id()];
@@ -33,20 +22,9 @@ pub async fn basic_newtype_embed(test: &mut Test) {
 /// Tests that a newtype field produces a single column whose name matches the
 /// parent field — `email: Email` where `struct Email(String)` produces column
 /// `email`, not `email_0`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(sql), scenario(crate::scenarios::user_with_email))]
 pub async fn newtype_column_name(test: &mut Test) {
-    #[derive(Debug, toasty::Embed)]
-    struct Email(String);
-
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        id: String,
-        #[allow(dead_code)]
-        email: Email,
-    }
-
-    let db = test.setup_db(models!(User)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     assert_struct!(schema.db.tables, [
