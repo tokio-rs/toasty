@@ -17,6 +17,7 @@ pub mod has_one_optional_belongs_to;
 pub mod in_list_item;
 pub mod tagged_item;
 pub mod task_with_status;
+pub mod task_with_string_status;
 pub mod two_models;
 pub mod two_models_unique_title;
 pub mod user_account_subscription;
