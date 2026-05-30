@@ -23,7 +23,7 @@
 <a href=#23 id=23 data-nosnippet>23</a>        priority: Priority,
 <a href=#24 id=24 data-nosnippet>24</a>    }
 <a href=#25 id=25 data-nosnippet>25</a>
-<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Task, Priority)).<span class="kw">await</span>;
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Task)).<span class="kw">await</span>;
 <a href=#27 id=27 data-nosnippet>27</a>
 <a href=#28 id=28 data-nosnippet>28</a>    <span class="comment">// -- Create with each variant --
 <a href=#29 id=29 data-nosnippet>29</a>    </span><span class="kw">let </span>t1 = <span class="macro">toasty::create!</span>(Task {
@@ -115,7 +115,7 @@
 <a href=#115 id=115 data-nosnippet>115</a>        status: Status,
 <a href=#116 id=116 data-nosnippet>116</a>    }
 <a href=#117 id=117 data-nosnippet>117</a>
-<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Task, Status)).<span class="kw">await</span>;
+<a href=#118 id=118 data-nosnippet>118</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Task)).<span class="kw">await</span>;
 <a href=#119 id=119 data-nosnippet>119</a>
 <a href=#120 id=120 data-nosnippet>120</a>    <span class="kw">for </span>(name, status) <span class="kw">in </span>[
 <a href=#121 id=121 data-nosnippet>121</a>        (<span class="string">"A"</span>, Status::Pending),
@@ -186,7 +186,7 @@
 <a href=#186 id=186 data-nosnippet>186</a>        status: Status,
 <a href=#187 id=187 data-nosnippet>187</a>    }
 <a href=#188 id=188 data-nosnippet>188</a>
-<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Ticket, Priority, Status)).<span class="kw">await</span>;
+<a href=#189 id=189 data-nosnippet>189</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Ticket)).<span class="kw">await</span>;
 <a href=#190 id=190 data-nosnippet>190</a>
 <a href=#191 id=191 data-nosnippet>191</a>    <span class="kw">let </span>ticket = <span class="macro">toasty::create!</span>(Ticket {
 <a href=#192 id=192 data-nosnippet>192</a>        priority: Priority::High,
@@ -234,7 +234,7 @@
 <a href=#234 id=234 data-nosnippet>234</a>        priority: Priority,
 <a href=#235 id=235 data-nosnippet>235</a>    }
 <a href=#236 id=236 data-nosnippet>236</a>
-<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Task, Priority)).<span class="kw">await</span>;
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Task)).<span class="kw">await</span>;
 <a href=#238 id=238 data-nosnippet>238</a>
 <a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">let </span>task = <span class="macro">toasty::create!</span>(Task {
 <a href=#240 id=240 data-nosnippet>240</a>        priority: Priority::Medium

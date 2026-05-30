@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a>                    p.into_stmt()
 <a href=#40 id=40 data-nosnippet>40</a>                };
 <a href=#41 id=41 data-nosnippet>41</a>                <span class="kw">let </span>variant_id = #toasty::core::schema::app::VariantId {
-<a href=#42 id=42 data-nosnippet>42</a>                    model: &lt;#model_ident <span class="kw">as </span>#toasty::Register&gt;::id(),
+<a href=#42 id=42 data-nosnippet>42</a>                    model: &lt;#model_ident <span class="kw">as </span>#toasty::Embed&gt;::id(),
 <a href=#43 id=43 data-nosnippet>43</a>                    index: #variant_idx,
 <a href=#44 id=44 data-nosnippet>44</a>                };
 <a href=#45 id=45 data-nosnippet>45</a>                #toasty::stmt::Expr::from_untyped(
@@ -166,7 +166,7 @@
 <a href=#166 id=166 data-nosnippet>166</a>
 <a href=#167 id=167 data-nosnippet>167</a>                        <span class="kw">fn </span>path(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; #toasty::Path&lt;__Origin, #model_ident&gt; {
 <a href=#168 id=168 data-nosnippet>168</a>                            <span class="kw">let </span>variant_id = #toasty::core::schema::app::VariantId {
-<a href=#169 id=169 data-nosnippet>169</a>                                model: &lt;#model_ident <span class="kw">as </span>#toasty::Register&gt;::id(),
+<a href=#169 id=169 data-nosnippet>169</a>                                model: &lt;#model_ident <span class="kw">as </span>#toasty::Embed&gt;::id(),
 <a href=#170 id=170 data-nosnippet>170</a>                                index: #variant_idx,
 <a href=#171 id=171 data-nosnippet>171</a>                            };
 <a href=#172 id=172 data-nosnippet>172</a>                            <span class="self">self</span>.parent_path().into_variant(variant_id)
@@ -181,7 +181,7 @@
 <a href=#181 id=181 data-nosnippet>181</a>                                p.into_stmt()
 <a href=#182 id=182 data-nosnippet>182</a>                            };
 <a href=#183 id=183 data-nosnippet>183</a>                            <span class="kw">let </span>variant_id = #toasty::core::schema::app::VariantId {
-<a href=#184 id=184 data-nosnippet>184</a>                                model: &lt;#model_ident <span class="kw">as </span>#toasty::Register&gt;::id(),
+<a href=#184 id=184 data-nosnippet>184</a>                                model: &lt;#model_ident <span class="kw">as </span>#toasty::Embed&gt;::id(),
 <a href=#185 id=185 data-nosnippet>185</a>                                index: #variant_idx,
 <a href=#186 id=186 data-nosnippet>186</a>                            };
 <a href=#187 id=187 data-nosnippet>187</a>                            <span class="kw">let </span>is_var = #toasty::stmt::Expr::from_untyped(
@@ -522,7 +522,7 @@
 <a href=#522 id=522 data-nosnippet>522</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_enum_primitive_ty(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
 <a href=#523 id=523 data-nosnippet>523</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
 <a href=#524 id=524 data-nosnippet>524</a>        <span class="kw">if </span><span class="self">self</span>.expand_enum_has_data_variants() {
-<a href=#525 id=525 data-nosnippet>525</a>            <span class="macro">quote!</span> { #toasty::core::stmt::Type::Model(&lt;<span class="self">Self </span><span class="kw">as </span>#toasty::Register&gt;::id()) }
+<a href=#525 id=525 data-nosnippet>525</a>            <span class="macro">quote!</span> { #toasty::core::stmt::Type::Model(&lt;<span class="self">Self </span><span class="kw">as </span>#toasty::Embed&gt;::id()) }
 <a href=#526 id=526 data-nosnippet>526</a>        } <span class="kw">else if </span><span class="self">self</span>.uses_string_discriminants() {
 <a href=#527 id=527 data-nosnippet>527</a>            <span class="macro">quote!</span> { #toasty::core::stmt::Type::String }
 <a href=#528 id=528 data-nosnippet>528</a>        } <span class="kw">else </span>{

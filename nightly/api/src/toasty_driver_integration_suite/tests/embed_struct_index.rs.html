@@ -21,7 +21,7 @@
 <a href=#21 id=21 data-nosnippet>21</a>        </span>contact: Contact,
 <a href=#22 id=22 data-nosnippet>22</a>    }
 <a href=#23 id=23 data-nosnippet>23</a>
-<a href=#24 id=24 data-nosnippet>24</a>    <span class="kw">let </span>db = test.setup_db(<span class="macro">models!</span>(User, Contact)).<span class="kw">await</span>;
+<a href=#24 id=24 data-nosnippet>24</a>    <span class="kw">let </span>db = test.setup_db(<span class="macro">models!</span>(User)).<span class="kw">await</span>;
 <a href=#25 id=25 data-nosnippet>25</a>    <span class="kw">let </span>schema = db.schema();
 <a href=#26 id=26 data-nosnippet>26</a>
 <a href=#27 id=27 data-nosnippet>27</a>    <span class="comment">// The embedded struct should carry its indices in the app schema
@@ -84,7 +84,7 @@
 <a href=#84 id=84 data-nosnippet>84</a>        contact: Contact,
 <a href=#85 id=85 data-nosnippet>85</a>    }
 <a href=#86 id=86 data-nosnippet>86</a>
-<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User, Contact)).<span class="kw">await</span>;
+<a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(User)).<span class="kw">await</span>;
 <a href=#88 id=88 data-nosnippet>88</a>
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="comment">// Create a user with a contact email
 <a href=#90 id=90 data-nosnippet>90</a>    </span>User::create()
@@ -155,7 +155,7 @@
 <a href=#155 id=155 data-nosnippet>155</a>        </span>address: Address,
 <a href=#156 id=156 data-nosnippet>156</a>    }
 <a href=#157 id=157 data-nosnippet>157</a>
-<a href=#158 id=158 data-nosnippet>158</a>    <span class="kw">let </span>db = test.setup_db(<span class="macro">models!</span>(User, Address, Geo)).<span class="kw">await</span>;
+<a href=#158 id=158 data-nosnippet>158</a>    <span class="kw">let </span>db = test.setup_db(<span class="macro">models!</span>(User)).<span class="kw">await</span>;
 <a href=#159 id=159 data-nosnippet>159</a>    <span class="kw">let </span>schema = db.schema();
 <a href=#160 id=160 data-nosnippet>160</a>
 <a href=#161 id=161 data-nosnippet>161</a>    <span class="kw">let </span>table = <span class="kw-2">&amp;</span>schema.db.tables[<span class="number">0</span>];

@@ -459,7 +459,7 @@
 <a href=#459 id=459 data-nosnippet>459</a>
 <a href=#460 id=460 data-nosnippet>460</a><span class="kw">async fn </span>insert_row&lt;M: Model&gt;(db: <span class="kw-2">&amp;mut </span>toasty::Db, fields: Vec&lt;stmt::Expr&gt;) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#461 id=461 data-nosnippet>461</a>    <span class="kw">let </span>insert = stmt::Insert {
-<a href=#462 id=462 data-nosnippet>462</a>        target: stmt::InsertTarget::Model(&lt;M <span class="kw">as </span>toasty::schema::Register&gt;::id()),
+<a href=#462 id=462 data-nosnippet>462</a>        target: stmt::InsertTarget::Model(&lt;M <span class="kw">as </span>toasty::schema::Model&gt;::id()),
 <a href=#463 id=463 data-nosnippet>463</a>        source: stmt::Query::new_single(<span class="macro">vec!</span>[stmt::Expr::record(fields)]),
 <a href=#464 id=464 data-nosnippet>464</a>        returning: <span class="prelude-val">None</span>,
 <a href=#465 id=465 data-nosnippet>465</a>    };

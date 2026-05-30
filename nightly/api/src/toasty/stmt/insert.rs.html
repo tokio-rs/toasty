@@ -81,12 +81,12 @@
 <a href=#81 id=81 data-nosnippet>81</a>    /// #     name: String,
 <a href=#82 id=82 data-nosnippet>82</a>    /// # }
 <a href=#83 id=83 data-nosnippet>83</a>    /// use toasty::stmt::Insert;
-<a href=#84 id=84 data-nosnippet>84</a>    /// use toasty::schema::Register;
+<a href=#84 id=84 data-nosnippet>84</a>    /// use toasty::schema::Model;
 <a href=#85 id=85 data-nosnippet>85</a>    ///
 <a href=#86 id=86 data-nosnippet>86</a>    /// // Construct from a raw untyped insert
 <a href=#87 id=87 data-nosnippet>87</a>    /// let raw = toasty_core::stmt::Insert {
 <a href=#88 id=88 data-nosnippet>88</a>    ///     target: toasty_core::stmt::InsertTarget::Model(
-<a href=#89 id=89 data-nosnippet>89</a>    ///         &lt;User as Register&gt;::id(),
+<a href=#89 id=89 data-nosnippet>89</a>    ///         &lt;User as Model&gt;::id(),
 <a href=#90 id=90 data-nosnippet>90</a>    ///     ),
 <a href=#91 id=91 data-nosnippet>91</a>    ///     source: toasty_core::stmt::Query::unit(),
 <a href=#92 id=92 data-nosnippet>92</a>    ///     returning: None,

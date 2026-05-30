@@ -23,7 +23,8 @@ table.</p>
 <li>A <a href="toasty::schema::Model"><code>Model</code></a> trait implementation, including the associated <code>Query</code>,
 <code>Create</code>, and <code>Update</code> builder types.</li>
 <li>A <a href="toasty::schema::Load"><code>Load</code></a> implementation for deserializing rows from the database.</li>
-<li>A <a href="toasty::schema::Register"><code>Register</code></a> implementation for schema registration at runtime.</li>
+<li>The <a href="toasty::schema::Model"><code>Model</code></a> trait’s schema-registration methods (<code>id</code>, <code>schema</code>,
+<code>register</code>) used to register the model at runtime.</li>
 <li>Static query methods such as <code>all()</code>, <code>filter(expr)</code>,
 <code>filter_by_&lt;field&gt;()</code>, and <code>get_by_&lt;key&gt;()</code>.</li>
 <li>Instance methods <code>update()</code> and <code>delete()</code>.</li>
