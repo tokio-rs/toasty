@@ -89,7 +89,26 @@ pub trait Model: Load<Output = Self> + Sized {
 
     /// Construct a path rooted at this model.
     fn new_root_path() -> Self::Path<Self> {
-        Self::new_path(Path::root())
+        Self::new_path(Self::path_root())
+    }
+
+    /// An identity [`Path`] rooted at this model.
+    ///
+    /// This is how `Path` recovers a model's [`ModelId`] without a dedicated
+    /// registration trait: the model supplies its own id via [`id`](Self::id).
+    fn path_root() -> Path<Self, Self> {
+        Path::from_model_id(Self::id())
+    }
+
+    /// A [`Path`] from this model to the field at `index`.
+    fn path_field<U>(index: usize) -> Path<Self, U> {
+        Path::field_at(Self::id(), index)
+    }
+
+    /// An identity [`Path`] rooted at a list of this model, used as the root of
+    /// has-many relation scopes.
+    fn path_model_list() -> Path<List<Self>, List<Self>> {
+        Path::from_model_id(Self::id())
     }
 
     /// Return a fresh, default-initialized create builder.

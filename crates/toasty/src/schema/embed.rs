@@ -1,3 +1,4 @@
+use crate::stmt::Path;
 use toasty_core::schema::app::{self, ModelId};
 
 /// Trait for embedded types that are flattened into their parent model's table.
@@ -17,4 +18,24 @@ pub trait Embed {
 
     /// Returns the schema definition for this embedded type.
     fn schema() -> app::Model;
+
+    /// An identity [`Path`] rooted at this embedded type.
+    ///
+    /// This is how `Path` recovers an embedded type's [`ModelId`] without a
+    /// dedicated registration trait: the type supplies its own id via
+    /// [`id`](Self::id).
+    fn path_root() -> Path<Self, Self>
+    where
+        Self: Sized,
+    {
+        Path::from_model_id(Self::id())
+    }
+
+    /// A [`Path`] from this embedded type to the field at `index`.
+    fn path_field<U>(index: usize) -> Path<Self, U>
+    where
+        Self: Sized,
+    {
+        Path::field_at(Self::id(), index)
+    }
 }

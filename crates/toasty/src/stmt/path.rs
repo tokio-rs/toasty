@@ -1,23 +1,10 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::{Field, Load};
+use crate::schema::Field;
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
     schema::app::{ModelId, VariantId},
     stmt::{self, Direction, OrderByExpr},
 };
-
-/// Extract the [`ModelId`] of a schema model or embedded type `T`.
-///
-/// Both [`Model`](crate::schema::Model) and [`Embed`](crate::schema::Embed)
-/// implement [`Load`] with `ty()` returning [`stmt::Type::Model`], so this is
-/// how `Path` constructors recover a type's identity without a dedicated
-/// registration trait.
-fn model_id<T: Load>() -> ModelId {
-    match T::ty() {
-        stmt::Type::Model(id) => id,
-        ty => panic!("path root type is not a model or embedded type: {ty:?}"),
-    }
-}
 
 /// A typed path from a root model `T` to a field of type `U`.
 ///
@@ -52,66 +39,30 @@ pub struct Path<T, U> {
     _p: PhantomData<(T, U)>,
 }
 
-impl<T: Load> Path<T, T> {
-    /// Create a path that points to the root model itself.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::Path;
-    ///
-    /// let root = Path::<User, User>::root();
-    /// ```
-    pub fn root() -> Self {
-        Self {
-            untyped: stmt::Path::model(model_id::<T>()),
-            _p: PhantomData,
-        }
-    }
-}
-
-impl<M: Load> Path<List<M>, List<M>> {
-    /// Create an identity path for a list of model `M`.
-    ///
-    /// This is the list counterpart of [`Path::root`] — it produces a
-    /// `Path<List<M>, List<M>>` rooted at the model's identity.
-    pub fn from_model_list() -> Self {
-        Self {
-            untyped: stmt::Path::model(model_id::<M>()),
-            _p: PhantomData,
-        }
-    }
-}
-
 impl<T, U> Path<T, U> {
-    /// Create a path to the field at `index` on model `T`.
+    /// Create a path rooted at the model (or embedded type) identified by
+    /// `model`.
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::Path;
-    ///
-    /// // Path to the second field (name, index 1)
-    /// let path = Path::<User, String>::from_field_index(1);
-    /// ```
-    pub fn from_field_index(index: usize) -> Self
-    where
-        T: Load,
-    {
+    /// This is the low-level constructor behind the `path_root` and
+    /// `path_model_list` helpers on the [`Model`](crate::schema::Model) and
+    /// [`Embed`](crate::schema::Embed) traits, which supply the [`ModelId`]
+    /// from their own `id()`.
+    pub(crate) fn from_model_id(model: ModelId) -> Self {
         Self {
-            untyped: stmt::Path::from_index(model_id::<T>(), index),
+            untyped: stmt::Path::model(model),
+            _p: PhantomData,
+        }
+    }
+
+    /// Create a path to the field at `index` on the model (or embedded type)
+    /// identified by `model`.
+    ///
+    /// Low-level constructor behind the `path_field` helpers on the
+    /// [`Model`](crate::schema::Model) and [`Embed`](crate::schema::Embed)
+    /// traits.
+    pub(crate) fn field_at(model: ModelId, index: usize) -> Self {
+        Self {
+            untyped: stmt::Path::from_index(model, index),
             _p: PhantomData,
         }
     }
@@ -128,9 +79,9 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// # use toasty::stmt::Path;
+    /// # use toasty::schema::Model;
     /// # use toasty_core::schema::app::{ModelId, VariantId};
-    /// let path = Path::<User, String>::from_field_index(1);
+    /// let path = User::path_field::<String>(1);
     /// let variant_id = VariantId { model: ModelId(0), index: 0 };
     /// let _variant_path = path.into_variant(variant_id);
     /// ```
@@ -158,9 +109,10 @@ impl<T, U> Path<T, U> {
     /// #     name: String,
     /// # }
     /// use toasty::stmt::Path;
+    /// use toasty::schema::Model;
     ///
-    /// let user_path = Path::<User, User>::root();
-    /// let name_path = Path::<User, String>::from_field_index(1);
+    /// let user_path = User::path_root();
+    /// let name_path = User::path_field::<String>(1);
     /// let _chained: Path<User, String> = user_path.chain(name_path);
     /// ```
     pub fn chain<X, V>(mut self, other: impl Into<Path<X, V>>) -> Path<T, V> {
@@ -349,10 +301,11 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{List, Path, Query};
+    /// use toasty::stmt::{List, Query};
+    /// use toasty::schema::Model;
     ///
     /// // A path targeting User values
-    /// let path = Path::<User, User>::root();
+    /// let path = User::path_root();
     /// // A subquery returning List<User>
     /// let subquery = Query::<List<User>>::filter(User::fields().name().eq("Alice"));
     /// let filter = path.in_query(subquery);
@@ -431,10 +384,11 @@ impl<T, U> Path<T, List<U>> {
     /// #     id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Path, List};
+    /// use toasty::stmt::List;
+    /// use toasty::schema::Model;
     ///
     /// // Find users that have at least one todo with "urgent" in the title
-    /// let todos_path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let todos_path = User::path_field::<List<Todo>>(2);
     /// let filter = todos_path.any(Todo::fields().title().eq("urgent"));
     /// ```
     pub fn any(self, filter: Expr<bool>) -> Expr<bool>
@@ -469,10 +423,11 @@ impl<T, U> Path<T, List<U>> {
     /// #     id: i64,
     /// #     complete: bool,
     /// # }
-    /// use toasty::stmt::{Path, List};
+    /// use toasty::stmt::List;
+    /// use toasty::schema::Model;
     ///
     /// // Find users whose todos are all complete
-    /// let todos_path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let todos_path = User::path_field::<List<Todo>>(2);
     /// let filter = todos_path.all(Todo::fields().complete().eq(true));
     /// ```
     pub fn all(self, filter: Expr<bool>) -> Expr<bool>

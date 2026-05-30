@@ -391,13 +391,14 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin> {
                 <<<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin>>::from_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
             }
@@ -415,6 +416,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         // Construct the chained path with the field's `ExprTarget` as the
@@ -425,7 +427,7 @@ impl Expand<'_> {
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, <#ty as #toasty::Field>::ExprTarget>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field::<<#ty as #toasty::Field>::ExprTarget>(#field_offset)
                     )
                 )
             }

@@ -10,6 +10,10 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
+        // Cloned so the field-method closure below can capture it by move while
+        // `into_root` keeps using the original.
+        let field_schema_trait = schema_trait.clone();
 
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
@@ -56,7 +60,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
                         let span = field_ident.span();
                         let path = quote! {
-                            self.path().chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
+                            self.path().chain(<#model_ident as #field_schema_trait>::path_field(#field_offset))
                         };
 
                         quote_spanned! { span=>
@@ -105,7 +109,7 @@ impl Expand<'_> {
                 #[doc(hidden)]
                 pub fn into_root(self) -> #field_struct_ident<#model_ident> {
                     let _ = self;
-                    #field_struct_ident::from_path(#toasty::Path::root())
+                    #field_struct_ident::from_path(<#model_ident as #schema_trait>::path_root())
                 }
 
                 #create_method
@@ -261,17 +265,17 @@ impl Expand<'_> {
     }
 
     pub(super) fn expand_model_field_struct_init(&self) -> TokenStream {
-        let toasty = &self.toasty;
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
 
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
         quote!(
             #vis fn fields() -> #field_struct_ident<#model_ident> {
                 #field_struct_ident {
-                    path: #toasty::Path::root(),
+                    path: <#model_ident as #schema_trait>::path_root(),
                 }
             }
         )
@@ -284,6 +288,20 @@ impl Expand<'_> {
             ModelKind::Root(root) => &root.field_struct_ident,
             ModelKind::EmbeddedStruct(embedded) => &embedded.field_struct_ident,
             ModelKind::EmbeddedEnum(e) => &e.field_struct_ident,
+        }
+    }
+
+    /// The schema trait (`Model` or `Embed`) implemented by the type being
+    /// expanded. The `path_root` / `path_field` constructors live on both, so
+    /// generated field accessors dispatch through whichever one this type
+    /// implements.
+    pub(super) fn schema_trait(&self) -> TokenStream {
+        use crate::model::schema::ModelKind;
+
+        let toasty = &self.toasty;
+        match &self.model.kind {
+            ModelKind::Root(_) => quote!(#toasty::Model),
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => quote!(#toasty::Embed),
         }
     }
 
@@ -335,13 +353,14 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::ListPath<__Origin> {
                 <#ty as #toasty::Field>::new_list_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
             }
@@ -360,13 +379,14 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Model as #toasty::Model>::ManyField<__Origin> {
                 <<<#ty as #field_trait>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
             }
