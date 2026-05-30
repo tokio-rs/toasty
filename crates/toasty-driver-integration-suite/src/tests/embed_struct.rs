@@ -9,25 +9,9 @@ use crate::prelude::*;
 
 /// Tests that embedded structs are registered in the app schema but don't create
 /// their own database tables (they're inlined into parent models).
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_address))]
 pub async fn basic_embedded_struct(test: &mut Test) {
-    #[derive(toasty::Embed)]
-    struct Address {
-        street: String,
-        city: String,
-    }
-
-    // Embedded types are discovered through a containing model rather than
-    // being registered directly.
-    #[derive(toasty::Model)]
-    #[allow(dead_code)]
-    struct Container {
-        #[key]
-        id: i64,
-        address: Address,
-    }
-
-    let db = test.setup_db(models!(Container)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     // Embedded models exist in app schema as Model::EmbeddedStruct
@@ -45,23 +29,9 @@ pub async fn basic_embedded_struct(test: &mut Test) {
 /// - App schema: embedded field with correct type reference
 /// - DB schema: embedded fields flattened to columns (address_street, address_city)
 /// - Mapping: projection expressions for field lowering/lifting
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_address))]
 pub async fn root_model_with_embedded_field(test: &mut Test) {
-    #[derive(toasty::Embed)]
-    struct Address {
-        street: String,
-        city: String,
-    }
-
-    #[derive(toasty::Model)]
-    struct User {
-        #[key]
-        id: String,
-        #[allow(dead_code)]
-        address: Address,
-    }
-
-    let db = test.setup_db(models!(User)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     // Both embedded and root models exist in app schema
@@ -237,26 +207,9 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
 /// - Chaining works: User::fields().address().city()
 /// - Both model and embedded struct have fields() methods
 /// This is purely a compile-time test validating the generated API.
-#[driver_test]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_zip_address))]
 pub async fn embedded_struct_fields_codegen(test: &mut Test) {
-    #[derive(Debug, toasty::Embed)]
-    struct Address {
-        street: String,
-        city: String,
-        zip: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        address: Address,
-    }
-
-    let _db = test.setup_db(models!(User)).await;
+    let _db = setup(test).await;
 
     // Direct chaining: User::fields().address().city()
     let _city_path = User::fields().address().city();
@@ -591,25 +544,9 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
 /// Tests partial updates of embedded struct fields via `stmt::patch` /
 /// `stmt::apply`. This validates that individual fields within an embedded
 /// struct can be updated without replacing the entire struct.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_zip_address))]
 pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Address {
-        street: String,
-        city: String,
-        zip: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-        address: Address,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     // Create a user with initial address
     let mut user = User::create()
@@ -1013,30 +950,9 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 /// Tests CRUD operations with 2-level nested embedded structs.
 /// Validates that creating, reading, updating (instance and query-based),
 /// and deleting records with nested embedded structs works end-to-end.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::company_office_address))]
 pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Address {
-        street: String,
-        city: String,
-    }
-
-    #[derive(Debug, toasty::Embed)]
-    struct Office {
-        name: String,
-        address: Address,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Company {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-        headquarters: Office,
-    }
-
-    let mut db = t.setup_db(models!(Company)).await;
+    let mut db = setup(t).await;
 
     // Create: nested embedded structs are flattened into a single row
     let mut company = Company::create()
@@ -1124,30 +1040,9 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
 /// `stmt::patch` calls. Validates that patching a leaf field inside an
 /// outer embedded struct updates only that leaf, leaving all other fields
 /// unchanged in the database.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::company_office_address))]
 pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Address {
-        street: String,
-        city: String,
-    }
-
-    #[derive(Debug, toasty::Embed)]
-    struct Office {
-        name: String,
-        address: Address,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Company {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-        headquarters: Office,
-    }
-
-    let mut db = t.setup_db(models!(Company)).await;
+    let mut db = setup(t).await;
 
     let mut company = Company::create()
         .name("Acme")
@@ -1227,25 +1122,9 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
 /// `User::filter_by_id(id).update().address(stmt::patch(...))` follows a different
 /// code path than the instance-based `user.update().address(stmt::patch(...))`,
 /// so both need coverage.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_zip_address))]
 pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    struct Address {
-        street: String,
-        city: String,
-        zip: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-        address: Address,
-    }
-
-    let mut db = t.setup_db(models!(User)).await;
+    let mut db = setup(t).await;
 
     let user = User::create()
         .name("Alice")
