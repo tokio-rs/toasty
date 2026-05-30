@@ -161,11 +161,12 @@ impl<T> Query<T> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{List, Path, Query};
+    /// use toasty::stmt::{List, Query};
+    /// use toasty::schema::Model;
     ///
     /// let mut q = Query::<List<User>>::all();
     /// // Include the field at index 1 (name)
-    /// q.include(Path::<User, String>::from_field_index(1));
+    /// q.include(User::path_field::<String>(1));
     /// ```
     pub fn include(&mut self, path: impl Into<stmt::Path>) -> &mut Self {
         self.untyped.include(path.into());

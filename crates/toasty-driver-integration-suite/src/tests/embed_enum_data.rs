@@ -2,86 +2,64 @@ use crate::prelude::*;
 
 /// Verifies that a data-carrying enum has its variant fields registered in the app
 /// schema with globally-assigned field indices (indices are unique across all variants).
-#[driver_test]
-pub async fn data_carrying_enum_schema(test: &mut Test) {
-    #[allow(dead_code)]
-    #[derive(toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    let db = test.setup_db(models!(ContactInfo)).await;
+#[driver_test(scenario(crate::scenarios::user_contact_info))]
+pub async fn data_carrying_enum_schema(t: &mut Test) {
+    let db = setup(t).await;
     let schema = db.schema();
 
-    assert_struct!(schema.app.models, #{
-        ContactInfo::id(): toasty::schema::app::Model::EmbeddedEnum({
-            name.upper_camel_case(): "ContactInfo",
-            variants: [
-                {
-                    name.upper_camel_case(): "Email",
-                    discriminant: toasty_core::stmt::Value::I64(1),
-                    ..
-                },
-                {
-                    name.upper_camel_case(): "Phone",
-                    discriminant: toasty_core::stmt::Value::I64(2),
-                    ..
-                },
-            ],
-            fields: [
-                { id.index: 0, name.app: Some("address") },
-                { id.index: 1, name.app: Some("number") },
-            ],
-        }),
-    });
+    let contact_info = &schema.app.models[&ContactInfo::id()];
+    assert_struct!(contact_info, toasty::schema::app::Model::EmbeddedEnum({
+        name.upper_camel_case(): "ContactInfo",
+        variants: [
+            {
+                name.upper_camel_case(): "Email",
+                discriminant: toasty_core::stmt::Value::I64(1),
+                ..
+            },
+            {
+                name.upper_camel_case(): "Phone",
+                discriminant: toasty_core::stmt::Value::I64(2),
+                ..
+            },
+        ],
+        fields: [
+            { id.index: 0, name.app: Some("address") },
+            { id.index: 1, name.app: Some("number") },
+        ],
+    }));
 }
 
 /// Verifies that a mixed enum (some unit variants, some data variants) registers
 /// correctly: unit variants have empty `fields`, data variants have their fields
 /// with indices assigned starting from 0 and continuing globally across variants.
-#[driver_test]
-pub async fn mixed_enum_schema(test: &mut Test) {
-    #[allow(dead_code)]
-    #[derive(toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Failed { reason: String },
-        #[column(variant = 3)]
-        Done,
-    }
-
-    let db = test.setup_db(models!(Status)).await;
+#[driver_test(scenario(crate::scenarios::task_with_status))]
+pub async fn mixed_enum_schema(t: &mut Test) {
+    let db = setup(t).await;
     let schema = db.schema();
 
-    assert_struct!(schema.app.models, #{
-        Status::id(): toasty::schema::app::Model::EmbeddedEnum({
-            variants: [
-                {
-                    name.upper_camel_case(): "Pending",
-                    discriminant: toasty_core::stmt::Value::I64(1),
-                    ..
-                },
-                {
-                    name.upper_camel_case(): "Failed",
-                    discriminant: toasty_core::stmt::Value::I64(2),
-                    ..
-                },
-                {
-                    name.upper_camel_case(): "Done",
-                    discriminant: toasty_core::stmt::Value::I64(3),
-                    ..
-                },
-            ],
-            fields: [
-                { id.index: 0, name.app: Some("reason") },
-            ],
-        }),
-    });
+    let status = &schema.app.models[&Status::id()];
+    assert_struct!(status, toasty::schema::app::Model::EmbeddedEnum({
+        variants: [
+            {
+                name.upper_camel_case(): "Pending",
+                discriminant: toasty_core::stmt::Value::I64(1),
+                ..
+            },
+            {
+                name.upper_camel_case(): "Failed",
+                discriminant: toasty_core::stmt::Value::I64(2),
+                ..
+            },
+            {
+                name.upper_camel_case(): "Done",
+                discriminant: toasty_core::stmt::Value::I64(3),
+                ..
+            },
+        ],
+        fields: [
+            { id.index: 0, name.app: Some("reason") },
+        ],
+    }));
 }
 
 /// Verifies DB columns for a data-carrying enum: discriminant column + one nullable
@@ -105,7 +83,7 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
         contact: ContactInfo,
     }
 
-    let db = test.setup_db(models!(User, ContactInfo)).await;
+    let db = test.setup_db(models!(User)).await;
     let schema = db.schema();
 
     // The DB table has disc col + one col per variant field (2 variants × 1 field each).
@@ -124,26 +102,9 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
 
 /// End-to-end CRUD test for a data-carrying enum (all variants have fields).
 /// Creates records with different variants, reads them back, and verifies roundtrip.
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_contact_info))]
 pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = test.setup_db(models!(User, ContactInfo)).await;
+    let mut db = setup(test).await;
 
     let alice = User::create()
         .name("Alice")
@@ -186,28 +147,9 @@ pub async fn data_variant_roundtrip(test: &mut Test) -> Result<()> {
 
 /// End-to-end CRUD test for a mixed enum (unit variants and data variants).
 /// Verifies that both kinds round-trip correctly through the DB.
-#[driver_test]
-pub async fn mixed_enum_roundtrip(test: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Failed { reason: String },
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        title: String,
-        status: Status,
-    }
-
-    let mut db = test.setup_db(models!(Task, Status)).await;
+#[driver_test(scenario(crate::scenarios::task_with_status))]
+pub async fn mixed_enum_roundtrip(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
     let pending = Task::create()
         .title("Pending task")
@@ -266,7 +208,7 @@ pub async fn data_variant_with_uuid_field(test: &mut Test) -> Result<()> {
         order_ref: OrderRef,
     }
 
-    let mut db = test.setup_db(models!(Order, OrderRef)).await;
+    let mut db = test.setup_db(models!(Order)).await;
 
     let internal_id = uuid::Uuid::new_v4();
 
@@ -317,7 +259,7 @@ pub async fn data_variant_with_jiff_timestamp(test: &mut Test) -> Result<()> {
         time: EventTime,
     }
 
-    let mut db = test.setup_db(models!(Event, EventTime)).await;
+    let mut db = test.setup_db(models!(Event)).await;
 
     let ts = jiff::Timestamp::from_second(1_700_000_000).unwrap();
 
@@ -366,7 +308,7 @@ pub async fn struct_in_data_variant(test: &mut Test) -> Result<()> {
         destination: Destination,
     }
 
-    let mut db = test.setup_db(models!(Shipment, Destination, Address)).await;
+    let mut db = test.setup_db(models!(Shipment)).await;
 
     let digital = Shipment::create()
         .destination(Destination::Digital {
@@ -435,7 +377,7 @@ pub async fn enum_in_enum_roundtrip(test: &mut Test) -> Result<()> {
         notification: Notification,
     }
 
-    let mut db = test.setup_db(models!(Alert, Notification, Channel)).await;
+    let mut db = test.setup_db(models!(Alert)).await;
 
     let a1 = Alert::create()
         .notification(Notification::Send {
@@ -495,17 +437,24 @@ pub async fn global_field_indices(test: &mut Test) {
         Purchase { item_id: String, amount: i64 },
     }
 
-    let db = test.setup_db(models!(Event)).await;
+    #[derive(toasty::Model)]
+    #[allow(dead_code)]
+    struct Container {
+        #[key]
+        id: i64,
+        event: Event,
+    }
+
+    let db = test.setup_db(models!(Container)).await;
     let schema = db.schema();
 
-    assert_struct!(schema.app.models, #{
-        Event::id(): toasty::schema::app::Model::EmbeddedEnum({
-            fields: [
-                { id.index: 0, name.app: Some("user_id") },
-                { id.index: 1, name.app: Some("ip") },
-                { id.index: 2, name.app: Some("item_id") },
-                { id.index: 3, name.app: Some("amount") },
-            ],
-        }),
-    });
+    let event = &schema.app.models[&Event::id()];
+    assert_struct!(event, toasty::schema::app::Model::EmbeddedEnum({
+        fields: [
+            { id.index: 0, name.app: Some("user_id") },
+            { id.index: 1, name.app: Some("ip") },
+            { id.index: 2, name.app: Some("item_id") },
+            { id.index: 3, name.app: Some("amount") },
+        ],
+    }));
 }

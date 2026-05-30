@@ -5,34 +5,9 @@ use crate::prelude::*;
 /// On PostgreSQL, both tables should share the same `CREATE TYPE priority …`
 /// enum type. This test verifies that CRUD and filter operations work correctly
 /// when the enum type is reused across tables.
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::task_bug_priority))]
 pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Priority {
-        Low,
-        Medium,
-        High,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-        priority: Priority,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Bug {
-        #[key]
-        #[auto]
-        id: ID,
-        summary: String,
-        priority: Priority,
-    }
-
-    let mut db = t.setup_db(models!(Task, Bug, Priority)).await;
+    let mut db = setup(t).await;
 
     // Create records in both tables
     let task = toasty::create!(Task {
@@ -81,36 +56,9 @@ pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
 }
 
 /// Filter by enum value on two models that share the same enum type.
-#[driver_test(requires(scan))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_bug_priority::id_uuid))]
 pub async fn shared_enum_filter(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Priority {
-        Low,
-        Medium,
-        High,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        title: String,
-        priority: Priority,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Bug {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        summary: String,
-        priority: Priority,
-    }
-
-    let mut db = t.setup_db(models!(Task, Bug, Priority)).await;
+    let mut db = setup(t).await;
 
     // Seed data
     for (title, p) in [

@@ -5,7 +5,7 @@ use toasty_core::stmt::{Expr, ExprIsNull, ExprReference, Value};
 #[test]
 fn is_null_non_nullable_field() {
     use crate as toasty;
-    use crate::schema::Register;
+    use crate::schema::Model;
 
     #[allow(dead_code)]
     #[derive(toasty::Model)]

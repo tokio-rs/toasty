@@ -1,5 +1,5 @@
 use toasty::Deferred;
-use toasty::schema::{self, Load, Model, ModelSet, Register, RelationManyField, RelationOneField};
+use toasty::schema::{self, Load, Model, ModelSet, RelationManyField, RelationOneField};
 use toasty::stmt::{Expr, Insert, IntoExpr, IntoInsert, Path};
 use toasty_core::stmt::{self, Value};
 
@@ -32,18 +32,6 @@ impl Load for Dummy {
     }
 }
 
-impl Register for Dummy {
-    fn id() -> schema::app::ModelId {
-        schema::app::ModelId(usize::MAX)
-    }
-
-    fn schema() -> schema::app::Model {
-        panic!("not needed for relation lazy-slot decode tests")
-    }
-
-    fn register(_model_set: &mut ModelSet) {}
-}
-
 impl Model for Dummy {
     type Query = ();
     type QueryOne = ();
@@ -55,6 +43,16 @@ impl Model for Dummy {
     type PrimaryKey = i64;
     type ManyField<Origin> = ();
     type OneField<Origin> = ();
+
+    fn id() -> schema::app::ModelId {
+        schema::app::ModelId(usize::MAX)
+    }
+
+    fn schema() -> schema::app::Model {
+        panic!("not needed for relation lazy-slot decode tests")
+    }
+
+    fn register(_model_set: &mut ModelSet) {}
 
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path

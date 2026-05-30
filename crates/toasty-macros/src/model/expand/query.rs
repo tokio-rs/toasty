@@ -364,7 +364,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_list_struct_ident::from_path(#toasty::Path::from_model_list())
+                    #field_list_struct_ident::from_path(<#model_ident as #toasty::Model>::path_model_list())
                 }
 
                 fn create_in_scope(self) -> Self::Create {
@@ -387,7 +387,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(#toasty::Path::root())
+                    #field_struct_ident::from_path(<#model_ident as #toasty::Model>::path_root())
                 }
 
                 fn create_in_scope(self) -> Self::Create {
@@ -410,7 +410,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(#toasty::Path::root())
+                    #field_struct_ident::from_path(<#model_ident as #toasty::Model>::path_root())
                 }
 
                 fn create_in_scope(self) -> Self::Create {
