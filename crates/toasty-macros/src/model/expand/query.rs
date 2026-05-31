@@ -40,6 +40,14 @@ impl Expand<'_> {
                 }
 
                 #include
+
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<__T::Output>
+                where
+                    __T: #toasty::Load,
+                {
+                    use #toasty::IntoStatement;
+                    executor.exec(self.stmt.into_statement()).await
+                }
             }
 
             // ----- Shared `create` (any `T` whose query can scope an insert) -----
@@ -67,10 +75,6 @@ impl Expand<'_> {
                 }
 
                 #filter_methods
-
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Vec<#model_ident>> {
-                    executor.exec(self.stmt.into()).await
-                }
 
                 #vis fn first(self) -> #query_struct_ident<#toasty::Option<#model_ident>> {
                     #query_struct_ident {
@@ -169,24 +173,6 @@ impl Expand<'_> {
                 }
 
                 #relation_methods
-            }
-
-            // ----- Single-row impl -----
-            impl #query_struct_ident<#model_ident> {
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    use #toasty::IntoStatement;
-                    let stmt: #toasty::Statement<#model_ident> = self.stmt.into_statement();
-                    executor.exec(stmt).await
-                }
-            }
-
-            // ----- Optional single-row impl -----
-            impl #query_struct_ident<#toasty::Option<#model_ident>> {
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
-                    use #toasty::IntoStatement;
-                    let stmt: #toasty::Statement<#toasty::Option<#model_ident>> = self.stmt.into_statement();
-                    executor.exec(stmt).await
-                }
             }
 
             // ----- IntoStatement / IntoScope -----
