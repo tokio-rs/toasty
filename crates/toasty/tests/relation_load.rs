@@ -33,9 +33,7 @@ impl Load for Dummy {
 }
 
 impl Model for Dummy {
-    type Query = ();
-    type QueryOne = ();
-    type QueryOptionOne = ();
+    type Query<T> = ();
     type Create = DummyCreate;
     type Update<'a> = ();
     type UpdateQuery = ();
@@ -64,15 +62,13 @@ impl Model for Dummy {
         panic!("not needed for relation lazy-slot decode tests")
     }
 
-    fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query {}
+    fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query<toasty::stmt::List<Self>> {}
 
-    fn query_one(_query: Self::Query) -> Self::QueryOne {}
+    fn wrap_query<T>(_stmt: toasty::stmt::Query<T>) -> Self::Query<T> {}
 
-    fn query_first(_query: Self::Query) -> Self::QueryOptionOne {}
+    fn query_one(_query: Self::Query<toasty::stmt::List<Self>>) -> Self::Query<Self> {}
 
-    fn query_from_assoc_one(_assoc: toasty::stmt::Association<Self>) -> Self::QueryOne {}
-
-    fn query_from_assoc_first(_assoc: toasty::stmt::Association<Self>) -> Self::QueryOptionOne {}
+    fn query_first(_query: Self::Query<toasty::stmt::List<Self>>) -> Self::Query<Option<Self>> {}
 }
 
 impl IntoInsert for DummyCreate {

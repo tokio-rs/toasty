@@ -1,12 +1,13 @@
 use super::{Deferred, Load, Model, RelationOneField};
 
+use crate::stmt::{IntoStatement, List};
 use toasty_core::schema::app::ModelId;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ForeignKey};
 use toasty_core::stmt;
 
 impl<M: Model> RelationOneField for M {
     type Model = M;
-    type One = <M as Model>::QueryOne;
+    type One = <M as Model>::Query<M>;
     type Expr = M;
 
     const DEFERRED: bool = false;
@@ -16,12 +17,12 @@ impl<M: Model> RelationOneField for M {
         <Self as Load>::reload(target, value)
     }
 
-    fn make_one(query: <Self::Model as Model>::Query) -> Self::One {
+    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
         <M as Model>::query_one(query)
     }
 
     fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::query_from_assoc_one(assoc)
+        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().one())
     }
 
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
@@ -35,7 +36,7 @@ impl<M: Model> RelationOneField for M {
 
 impl<M: Model> RelationOneField for Option<M> {
     type Model = M;
-    type One = <M as Model>::QueryOptionOne;
+    type One = <M as Model>::Query<Option<M>>;
     type Expr = Option<M>;
 
     const DEFERRED: bool = false;
@@ -45,12 +46,12 @@ impl<M: Model> RelationOneField for Option<M> {
         <Self as Load>::reload(target, value)
     }
 
-    fn make_one(query: <Self::Model as Model>::Query) -> Self::One {
+    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
         <M as Model>::query_first(query)
     }
 
     fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::query_from_assoc_first(assoc)
+        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().first())
     }
 
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
@@ -64,7 +65,7 @@ impl<M: Model> RelationOneField for Option<M> {
 
 impl<M: Model> RelationOneField for Deferred<M> {
     type Model = M;
-    type One = <M as Model>::QueryOne;
+    type One = <M as Model>::Query<M>;
     type Expr = M;
 
     const DEFERRED: bool = true;
@@ -75,12 +76,12 @@ impl<M: Model> RelationOneField for Deferred<M> {
         Ok(())
     }
 
-    fn make_one(query: <Self::Model as Model>::Query) -> Self::One {
+    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
         <M as Model>::query_one(query)
     }
 
     fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::query_from_assoc_one(assoc)
+        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().one())
     }
 
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
@@ -94,7 +95,7 @@ impl<M: Model> RelationOneField for Deferred<M> {
 
 impl<M: Model> RelationOneField for Deferred<Option<M>> {
     type Model = M;
-    type One = <M as Model>::QueryOptionOne;
+    type One = <M as Model>::Query<Option<M>>;
     type Expr = Option<M>;
 
     const DEFERRED: bool = true;
@@ -105,12 +106,12 @@ impl<M: Model> RelationOneField for Deferred<Option<M>> {
         Ok(())
     }
 
-    fn make_one(query: <Self::Model as Model>::Query) -> Self::One {
+    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
         <M as Model>::query_first(query)
     }
 
     fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::query_from_assoc_first(assoc)
+        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().first())
     }
 
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {

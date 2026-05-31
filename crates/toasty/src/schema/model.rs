@@ -12,16 +12,16 @@ use toasty_core::schema::app::{self, FieldId, ModelId, ModelSet};
 /// [`RelationOneField`](super::RelationOneField) traits project through when
 /// describing a field that references this model.
 pub trait Model: Load<Output = Self> + Sized {
-    /// List query builder for this model. Executes to `Vec<Self>`.
-    type Query;
-
-    /// Single-row query builder for this model. Executes to `Self`, erroring
-    /// if no row matches. Returned by non-nullable relation accessors.
-    type QueryOne;
-
-    /// Optional single-row query builder for this model. Executes to
-    /// `Option<Self>`. Returned by nullable relation accessors.
-    type QueryOptionOne;
+    /// Query builder for this model, parameterized by what it executes to.
+    ///
+    /// The single generic `T` selects the result shape:
+    ///
+    /// - `Query<List<Self>>` — list query, executes to `Vec<Self>`.
+    /// - `Query<Self>` — single-row query, executes to `Self`, erroring if no
+    ///   row matches. Returned by non-nullable relation accessors.
+    /// - `Query<Option<Self>>` — optional single-row query, executes to
+    ///   `Option<Self>`. Returned by nullable relation accessors.
+    type Query<T>;
 
     /// Create builder type for this model
     type Create: Default + IntoInsert<Model = Self> + IntoExpr<Self>;
@@ -120,21 +120,19 @@ pub trait Model: Load<Output = Self> + Sized {
     /// [`PrimaryKey`](Self::PrimaryKey) type — bare PK values via their
     /// `IntoExpr` impl, subqueries that return a PK, or any other
     /// [`Expr`] of the correct type.
-    fn find_by_primary_key(id: Expr<Self::PrimaryKey>) -> Self::Query;
+    fn find_by_primary_key(id: Expr<Self::PrimaryKey>) -> Self::Query<List<Self>>;
+
+    /// Wrap a raw statement-level [`Query`](crate::stmt::Query) in this model's
+    /// query builder, preserving the result shape `T`. This is the single
+    /// constructor generic code uses to build any query shape; callers narrow
+    /// at the statement level (`.one()`, `.first()`) before wrapping.
+    fn wrap_query<T>(stmt: crate::stmt::Query<T>) -> Self::Query<T>;
 
     /// Narrow a list query to a single-row query (errors at exec time if no
     /// row matches). Used by the codegen for non-nullable relation accessors.
-    fn query_one(query: Self::Query) -> Self::QueryOne;
+    fn query_one(query: Self::Query<List<Self>>) -> Self::Query<Self>;
 
     /// Narrow a list query to an optional single-row query. Used by the
     /// codegen for nullable relation accessors.
-    fn query_first(query: Self::Query) -> Self::QueryOptionOne;
-
-    /// Build a single-row query from a singular association. Used by the
-    /// codegen for non-nullable has-one / belongs-to relation accessors.
-    fn query_from_assoc_one(assoc: crate::stmt::Association<Self>) -> Self::QueryOne;
-
-    /// Build an optional single-row query from a singular association. Used by
-    /// the codegen for nullable has-one / belongs-to relation accessors.
-    fn query_from_assoc_first(assoc: crate::stmt::Association<Self>) -> Self::QueryOptionOne;
+    fn query_first(query: Self::Query<List<Self>>) -> Self::Query<Option<Self>>;
 }

@@ -54,8 +54,8 @@ pub trait RelationOneField: Load<Output = Self> {
     type Model: Model;
 
     /// The query type produced by the relation accessor. For non-nullable
-    /// impls this is `<Model as Model>::QueryOne`; for nullable impls it is
-    /// `<Model as Model>::QueryOptionOne`.
+    /// impls this is `<Model as Model>::Query<Model>`; for nullable impls it is
+    /// `<Model as Model>::Query<Option<Model>>`.
     type One;
 
     /// The expression-level type used in create/update setters. Resolves to
@@ -73,9 +73,9 @@ pub trait RelationOneField: Load<Output = Self> {
     fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
 
     /// Narrow a list query targeting the related model into the appropriate
-    /// "one" query — `QueryOne` for non-nullable impls and `QueryOptionOne`
-    /// for nullable impls.
-    fn make_one(query: <Self::Model as Model>::Query) -> Self::One;
+    /// "one" query — `Query<Model>` for non-nullable impls and
+    /// `Query<Option<Model>>` for nullable impls.
+    fn make_one(query: <Self::Model as Model>::Query<crate::stmt::List<Self::Model>>) -> Self::One;
 
     /// Build the appropriate "one" query from a singular association,
     /// preserving the association's path so generated mutators (insert,

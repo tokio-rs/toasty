@@ -105,9 +105,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
-                type Query = #query_struct_ident<#toasty::List<Self>>;
-                type QueryOne = #query_struct_ident<Self>;
-                type QueryOptionOne = #query_struct_ident<#toasty::Option<Self>>;
+                type Query<__T> = #query_struct_ident<__T>;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
@@ -143,28 +141,26 @@ impl Expand<'_> {
 
                 fn find_by_primary_key(
                     id: #toasty::stmt::Expr<Self::PrimaryKey>,
-                ) -> Self::Query {
+                ) -> Self::Query<#toasty::List<Self>> {
                     #find_by_primary_key_body
                 }
 
-                fn query_one(query: Self::Query) -> Self::QueryOne {
+                fn wrap_query<__T>(
+                    stmt: #toasty::stmt::Query<__T>,
+                ) -> Self::Query<__T> {
+                    #query_struct_ident::from_stmt(stmt)
+                }
+
+                fn query_one(
+                    query: Self::Query<#toasty::List<Self>>,
+                ) -> Self::Query<Self> {
                     query.one()
                 }
 
-                fn query_first(query: Self::Query) -> Self::QueryOptionOne {
+                fn query_first(
+                    query: Self::Query<#toasty::List<Self>>,
+                ) -> Self::Query<#toasty::Option<Self>> {
                     query.first()
-                }
-
-                fn query_from_assoc_one(
-                    assoc: #toasty::stmt::Association<Self>,
-                ) -> Self::QueryOne {
-                    <Self::QueryOne>::from_assoc_one(assoc)
-                }
-
-                fn query_from_assoc_first(
-                    assoc: #toasty::stmt::Association<Self>,
-                ) -> Self::QueryOptionOne {
-                    <Self::QueryOptionOne>::from_assoc_first(assoc)
                 }
 
                 #field_name_to_id

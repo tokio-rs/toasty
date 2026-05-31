@@ -130,7 +130,7 @@ impl Expand<'_> {
         };
 
         quote! {
-            #vis fn #field_ident(&self) -> <#target as #toasty::Model>::Query {
+            #vis fn #field_ident(&self) -> <#target as #toasty::Model>::Query<#toasty::List<#target>> {
                 // Suppress the unused field warning
                 if false {
                     let _ = &self.#field_ident;
@@ -140,7 +140,7 @@ impl Expand<'_> {
 
                 {
                     use #toasty::IntoStatement;
-                    <<#target as #toasty::Model>::Query>::from_assoc_many(
+                    <<#target as #toasty::Model>::Query<#toasty::List<#target>>>::from_assoc_many(
                         #toasty::stmt::Association::many(
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into(),

@@ -167,20 +167,6 @@ impl Expand<'_> {
 
             // ----- Single-row impl -----
             impl #query_struct_ident<#model_ident> {
-                /// Construct a single-row query from a singular association.
-                #[doc(hidden)]
-                #vis fn from_assoc_one(
-                    assoc: #toasty::stmt::Association<#model_ident>,
-                ) -> Self {
-                    use #toasty::IntoStatement;
-                    let stmt = assoc
-                        .into_statement()
-                        .into_query()
-                        .unwrap()
-                        .one();
-                    Self { stmt }
-                }
-
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     use #toasty::IntoStatement;
                     let stmt: #toasty::Statement<#model_ident> = self.stmt.into_statement();
@@ -196,20 +182,6 @@ impl Expand<'_> {
 
             // ----- Optional single-row impl -----
             impl #query_struct_ident<#toasty::Option<#model_ident>> {
-                /// Construct an optional single-row query from a singular association.
-                #[doc(hidden)]
-                #vis fn from_assoc_first(
-                    assoc: #toasty::stmt::Association<#model_ident>,
-                ) -> Self {
-                    use #toasty::IntoStatement;
-                    let stmt = assoc
-                        .into_statement()
-                        .into_query()
-                        .unwrap()
-                        .first();
-                    Self { stmt }
-                }
-
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#toasty::Option<#model_ident>> {
                     use #toasty::IntoStatement;
                     let stmt: #toasty::Statement<#toasty::Option<#model_ident>> = self.stmt.into_statement();
@@ -428,13 +400,13 @@ impl Expand<'_> {
         // produced `<Target as Model>::Query` (a list-shaped query) for the
         // same reason.
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
+            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query<#toasty::List<#target>> {
                 let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
                     #model_ident::fields().#field_ident().into(),
                 );
-                <<#target as #toasty::Model>::Query>::from_assoc_many(assoc)
+                <<#target as #toasty::Model>::Query<#toasty::List<#target>>>::from_assoc_many(assoc)
             }
         }
     }
@@ -449,13 +421,13 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
+            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query<#toasty::List<#target>> {
                 let assoc = #toasty::chain_or_build_many::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
                     #model_ident::fields().#field_ident().into(),
                 );
-                <<#target as #toasty::Model>::Query>::from_assoc_many(assoc)
+                <<#target as #toasty::Model>::Query<#toasty::List<#target>>>::from_assoc_many(assoc)
             }
         }
     }
@@ -470,13 +442,13 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
+            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query<#toasty::List<#target>> {
                 let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
                     #model_ident::fields().#field_ident().into(),
                 );
-                <<#target as #toasty::Model>::Query>::from_assoc_many(assoc)
+                <<#target as #toasty::Model>::Query<#toasty::List<#target>>>::from_assoc_many(assoc)
             }
         }
     }
