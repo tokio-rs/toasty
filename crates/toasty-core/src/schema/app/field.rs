@@ -259,12 +259,12 @@ impl Field {
         })
     }
 
-    /// If the field is a relation, return the relation's target ModelId.
+    /// If the field is a relation, return the model its relation scope queries.
     pub fn relation_target_id(&self) -> Option<ModelId> {
         match &self.ty {
             FieldTy::BelongsTo(belongs_to) => Some(belongs_to.target),
             FieldTy::Has(has) => Some(has.target),
-            FieldTy::Via(via) => Some(via.target),
+            FieldTy::Via(via) => Some(via.final_model),
             _ => None,
         }
     }

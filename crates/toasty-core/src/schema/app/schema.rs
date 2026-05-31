@@ -1,4 +1,4 @@
-use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
+use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId, Via};
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
@@ -55,6 +55,85 @@ pub struct Schema {
 #[derive(Default)]
 struct Builder {
     models: IndexMap<ModelId, Model>,
+}
+
+struct ViaSplit {
+    final_model: ModelId,
+    relation_path: stmt::Path,
+    terminal_projection: stmt::Projection,
+}
+
+fn is_model_terminal_via(via: &Via) -> bool {
+    via.terminal_projection.is_identity()
+}
+
+fn resolve_projection<'a>(
+    models: &'a IndexMap<ModelId, Model>,
+    root: &'a Model,
+    projection: &stmt::Projection,
+) -> Option<Resolved<'a>> {
+    let [first, rest @ ..] = projection.as_slice() else {
+        return None;
+    };
+
+    // Get the first field from the root model
+    let mut current_field = root.as_root_unwrap().fields.get(*first)?;
+
+    // Walk through remaining steps. Uses a manual iterator because embedded
+    // enums consume two steps (variant discriminant + field index).
+    let mut steps = rest.iter();
+    while let Some(step) = steps.next() {
+        match &current_field.ty {
+            FieldTy::Primitive(..) => {
+                // Cannot project through primitive fields
+                return None;
+            }
+            FieldTy::Embedded(embedded) => {
+                let target = models.get(&embedded.target)?;
+                match target {
+                    Model::EmbeddedStruct(s) => {
+                        current_field = s.fields.get(*step)?;
+                    }
+                    Model::EmbeddedEnum(e) => {
+                        let variant = e.variants.get(*step)?;
+
+                        // Check if there's a field index step after the variant
+                        if let Some(field_step) = steps.next() {
+                            // Two steps: variant disc + field index -> field
+                            current_field = e.fields.get(*field_step)?;
+                        } else {
+                            // Single step: variant discriminant only -> variant
+                            return Some(Resolved::Variant(variant));
+                        }
+                    }
+                    _ => return None,
+                }
+            }
+            FieldTy::BelongsTo(belongs_to) => {
+                current_field = models
+                    .get(&belongs_to.target)?
+                    .as_root_unwrap()
+                    .fields
+                    .get(*step)?;
+            }
+            FieldTy::Has(has) => {
+                current_field = models
+                    .get(&has.target)?
+                    .as_root_unwrap()
+                    .fields
+                    .get(*step)?;
+            }
+            FieldTy::Via(via) => {
+                current_field = models
+                    .get(&via.final_model)?
+                    .as_root_unwrap()
+                    .fields
+                    .get(*step)?;
+            }
+        };
+    }
+
+    Some(Resolved::Field(current_field))
 }
 
 impl Schema {
@@ -128,56 +207,7 @@ impl Schema {
         root: &'a Model,
         projection: &stmt::Projection,
     ) -> Option<Resolved<'a>> {
-        let [first, rest @ ..] = projection.as_slice() else {
-            return None;
-        };
-
-        // Get the first field from the root model
-        let mut current_field = root.as_root_unwrap().fields.get(*first)?;
-
-        // Walk through remaining steps. Uses a manual iterator because
-        // embedded enums consume two steps (variant discriminant + field index).
-        let mut steps = rest.iter();
-        while let Some(step) = steps.next() {
-            match &current_field.ty {
-                FieldTy::Primitive(..) => {
-                    // Cannot project through primitive fields
-                    return None;
-                }
-                FieldTy::Embedded(embedded) => {
-                    let target = self.model(embedded.target);
-                    match target {
-                        Model::EmbeddedStruct(s) => {
-                            current_field = s.fields.get(*step)?;
-                        }
-                        Model::EmbeddedEnum(e) => {
-                            let variant = e.variants.get(*step)?;
-
-                            // Check if there's a field index step after the variant
-                            if let Some(field_step) = steps.next() {
-                                // Two steps: variant disc + field index → field
-                                current_field = e.fields.get(*field_step)?;
-                            } else {
-                                // Single step: variant discriminant only → variant
-                                return Some(Resolved::Variant(variant));
-                            }
-                        }
-                        _ => return None,
-                    }
-                }
-                FieldTy::BelongsTo(belongs_to) => {
-                    current_field = belongs_to.target(self).as_root_unwrap().fields.get(*step)?;
-                }
-                FieldTy::Has(has) => {
-                    current_field = has.target(self).as_root_unwrap().fields.get(*step)?;
-                }
-                FieldTy::Via(via) => {
-                    current_field = via.target(self).as_root_unwrap().fields.get(*step)?;
-                }
-            };
-        }
-
-        Some(Resolved::Field(current_field))
+        resolve_projection(&self.models, root, projection)
     }
 
     /// Resolve a projection to a field, walking through the schema.
@@ -221,10 +251,15 @@ impl Builder {
         })
     }
 
+    fn field(&self, id: FieldId) -> &Field {
+        &self.models[&id.model].as_root_unwrap().fields[id.index]
+    }
+
     fn process_models(&mut self) -> Result<()> {
         // All models have been discovered and initialized at some level, now do
         // the relation linking.
         self.link_relations()?;
+        self.link_via_relations()?;
         self.verify_no_eager_load_cycles()?;
 
         Ok(())
@@ -444,6 +479,254 @@ impl Builder {
         }
 
         Ok(())
+    }
+
+    fn link_via_relations(&mut self) -> crate::Result<()> {
+        let mut fields = vec![];
+
+        for model in self.models.values() {
+            if model.is_embedded() {
+                continue;
+            }
+
+            for field in &model.as_root_unwrap().fields {
+                if matches!(field.ty, FieldTy::Via(_)) {
+                    fields.push(field.id);
+                }
+            }
+        }
+
+        let mut visiting = HashSet::new();
+        let mut resolved = HashSet::new();
+
+        for field_id in fields {
+            self.resolve_via_field(field_id, &mut visiting, &mut resolved)?;
+        }
+
+        Ok(())
+    }
+
+    fn resolve_via_field(
+        &mut self,
+        field_id: FieldId,
+        visiting: &mut HashSet<FieldId>,
+        resolved: &mut HashSet<FieldId>,
+    ) -> crate::Result<()> {
+        if resolved.contains(&field_id) {
+            return Ok(());
+        }
+
+        if !visiting.insert(field_id) {
+            return Err(crate::Error::invalid_schema(format!(
+                "cycle detected while resolving `via` relation `{}`",
+                self.format_field(field_id)
+            )));
+        }
+
+        let declared_path = match &self.field(field_id).ty {
+            FieldTy::Via(via) => via.declared_path.clone(),
+            _ => unreachable!("resolve_via_field called for a non-via field"),
+        };
+
+        let split = self.split_via_path(field_id, &declared_path, visiting, resolved)?;
+        let field = &mut self.models[&field_id.model].as_root_mut_unwrap().fields[field_id.index];
+        let FieldTy::Via(via) = &mut field.ty else {
+            unreachable!("resolve_via_field called for a non-via field");
+        };
+        via.final_model = split.final_model;
+        via.path = split.relation_path;
+        via.terminal_projection = split.terminal_projection;
+
+        visiting.remove(&field_id);
+        resolved.insert(field_id);
+
+        Ok(())
+    }
+
+    fn split_via_path(
+        &mut self,
+        field_id: FieldId,
+        declared_path: &stmt::Path,
+        visiting: &mut HashSet<FieldId>,
+        resolved: &mut HashSet<FieldId>,
+    ) -> crate::Result<ViaSplit> {
+        let root = field_id.model;
+        if declared_path.root.as_model_unwrap() != root {
+            return Err(crate::Error::invalid_schema(format!(
+                "`via` relation `{}` declares a path rooted at a different model",
+                self.format_field(field_id)
+            )));
+        }
+
+        if declared_path.projection.is_empty() {
+            return Err(crate::Error::invalid_schema(format!(
+                "`via` relation `{}` must contain at least one path segment",
+                self.format_field(field_id)
+            )));
+        }
+
+        let mut relation_path = stmt::Path::model(root);
+        let mut current_model = root;
+        let steps = declared_path.projection.as_slice();
+        let mut index = 0;
+
+        while index < steps.len() {
+            let step = steps[index];
+            let step_field_id = FieldId {
+                model: current_model,
+                index: step,
+            };
+            let step_field = self.resolve_via_path_step(field_id, step_field_id)?;
+
+            match &step_field.ty {
+                FieldTy::BelongsTo(rel) => {
+                    relation_path.projection.push(step);
+                    current_model = rel.target;
+                    index += 1;
+                }
+                FieldTy::Has(rel) => {
+                    relation_path.projection.push(step);
+                    current_model = rel.target;
+                    index += 1;
+                }
+                FieldTy::Via(_) => {
+                    self.resolve_via_field(step_field_id, visiting, resolved)?;
+                    let nested = match &self.field(step_field_id).ty {
+                        FieldTy::Via(via) => via.clone(),
+                        _ => unreachable!("nested via field changed type while resolving"),
+                    };
+
+                    if is_model_terminal_via(&nested) {
+                        relation_path.chain(&nested.path);
+                        current_model = nested.final_model;
+                        index += 1;
+                    } else if index + 1 == steps.len() {
+                        relation_path.chain(&nested.path);
+                        return self.via_split(
+                            field_id,
+                            nested.final_model,
+                            relation_path,
+                            nested.terminal_projection,
+                        );
+                    } else {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "`via` relation `{}` uses projected via field `{}` as an intermediate relation step",
+                            self.format_field(field_id),
+                            self.format_field(step_field_id)
+                        )));
+                    }
+                }
+                FieldTy::Primitive(_) | FieldTy::Embedded(_) => {
+                    if relation_path.projection.is_empty() {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "`via` relation `{}` must include at least one relation step before projecting a field",
+                            self.format_field(field_id)
+                        )));
+                    }
+
+                    let terminal_projection = stmt::Projection::from(&steps[index..]);
+                    self.validate_terminal_projection(
+                        field_id,
+                        current_model,
+                        &terminal_projection,
+                    )?;
+
+                    return Ok(ViaSplit {
+                        final_model: current_model,
+                        relation_path,
+                        terminal_projection,
+                    });
+                }
+            }
+        }
+
+        if relation_path.projection.is_empty() {
+            return Err(crate::Error::invalid_schema(format!(
+                "`via` relation `{}` must include at least one relation step",
+                self.format_field(field_id)
+            )));
+        }
+
+        self.via_split(
+            field_id,
+            current_model,
+            relation_path,
+            stmt::Projection::identity(),
+        )
+    }
+
+    fn resolve_via_path_step(&self, via_field: FieldId, step: FieldId) -> crate::Result<&Field> {
+        self.models
+            .get(&step.model)
+            .and_then(Model::as_root)
+            .and_then(|model| model.fields.get(step.index))
+            .ok_or_else(|| {
+                crate::Error::invalid_schema(format!(
+                    "`via` relation `{}` contains an invalid path segment",
+                    self.format_field(via_field)
+                ))
+            })
+    }
+
+    fn via_split(
+        &self,
+        via_field: FieldId,
+        final_model: ModelId,
+        relation_path: stmt::Path,
+        terminal_projection: stmt::Projection,
+    ) -> crate::Result<ViaSplit> {
+        if relation_path.projection.is_empty() {
+            return Err(crate::Error::invalid_schema(format!(
+                "`via` relation `{}` must include at least one relation step",
+                self.format_field(via_field)
+            )));
+        }
+
+        Ok(ViaSplit {
+            final_model,
+            relation_path,
+            terminal_projection,
+        })
+    }
+
+    fn validate_terminal_projection(
+        &self,
+        via_field: FieldId,
+        final_model: ModelId,
+        projection: &stmt::Projection,
+    ) -> crate::Result<()> {
+        let Some(resolved) =
+            resolve_projection(&self.models, &self.models[&final_model], projection)
+        else {
+            return Err(crate::Error::invalid_schema(format!(
+                "`via` relation `{}` has an invalid terminal projection",
+                self.format_field(via_field)
+            )));
+        };
+
+        let Resolved::Field(field) = resolved else {
+            return Ok(());
+        };
+
+        if field.ty.is_relation() {
+            return Err(crate::Error::invalid_schema(format!(
+                "`via` relation `{}` terminal projection resolves to relation `{}`",
+                self.format_field(via_field),
+                self.format_field(field.id)
+            )));
+        }
+
+        Ok(())
+    }
+
+    fn format_field(&self, field_id: FieldId) -> String {
+        let model = &self.models[&field_id.model];
+        let field = &model.as_root_unwrap().fields[field_id.index];
+        format!(
+            "{}::{}",
+            model.name().upper_camel_case(),
+            field.name.app_unwrap()
+        )
     }
 
     fn find_belongs_to_pair(

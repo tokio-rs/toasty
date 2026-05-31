@@ -259,7 +259,7 @@ fn lift_projection_in_subquery(
 
     let target_model_id = match &field.ty {
         FieldTy::Has(rel) => rel.target,
-        FieldTy::Via(rel) => rel.target,
+        FieldTy::Via(rel) => rel.final_model,
         FieldTy::BelongsTo(rel) => rel.target,
         _ => return None,
     };
@@ -482,7 +482,7 @@ fn lift_relation_path_predicate(
 
     let target_model_id = match &field.ty {
         FieldTy::Has(rel) => rel.target,
-        FieldTy::Via(rel) => rel.target,
+        FieldTy::Via(rel) => rel.final_model,
         FieldTy::BelongsTo(rel) => rel.target,
         _ => return None,
     };

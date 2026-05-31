@@ -53,6 +53,18 @@ pub struct SourceModel {
     pub via: Option<Association>,
 }
 
+impl SourceModel {
+    /// Create a model source for a projected `via` relation whose final model
+    /// is resolved during statement lowering.
+    #[doc(hidden)]
+    pub fn unresolved_via(via: Association) -> Self {
+        Self {
+            id: ModelId::placeholder(),
+            via: Some(via),
+        }
+    }
+}
+
 impl Source {
     /// Creates a table source from explicit table refs and a table-with-joins
     /// specification.

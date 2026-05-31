@@ -355,11 +355,19 @@ impl Expand<'_> {
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
-                    quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
+                    if rel.via.is_some() {
+                        quote!(#i => <#ty as #toasty::ViaManyField>::reload(&mut target.#field_ident, value)?,)
+                    } else {
+                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
+                    }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
+                    if rel.via.is_some() {
+                        quote!(#i => <#ty as #toasty::ViaOneField>::reload(&mut target.#field_ident, value)?,)
+                    } else {
+                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
+                    }
                 }
             }
 

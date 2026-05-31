@@ -14,7 +14,8 @@ pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
         Auto, CreateScope, Deferred, Direct, DiscoverItem, Embed, Field, Load, Model, Register,
-        RelationManyField, RelationOneField, Scope, Via, generate_unique_id,
+        RelationManyField, RelationOneField, Scope, Via, ViaManyField, ViaOneField,
+        generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

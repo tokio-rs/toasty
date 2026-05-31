@@ -160,59 +160,87 @@ impl Expand<'_> {
 
     fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
-        let model_ident = &self.model.ident;
-        let field_ident = &field.name.ident;
-
-        quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
-                use #toasty::IntoStatement;
-                <<#target as #toasty::Model>::Query>::from_stmt(
-                    #toasty::stmt::Association::many_via_one(
-                        self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_statement().into_query().unwrap()
-                )
-            }
-        }
+        self.expand_direct_query_relation_method(
+            field,
+            quote!(#toasty::RelationOneField),
+            ty,
+            quote!(many_via_one),
+        )
     }
 
     fn expand_has_many_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
-        let model_ident = &self.model.ident;
-        let field_ident = &field.name.ident;
 
-        quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
-                use #toasty::IntoStatement;
-                <<#target as #toasty::Model>::Query>::from_stmt(
-                    #toasty::stmt::Association::many(
-                        self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_statement().into_query().unwrap()
-                )
-            }
+        if rel.via.is_some() {
+            self.expand_via_query_relation_method(field, quote!(#toasty::ViaManyField), ty)
+        } else {
+            self.expand_direct_query_relation_method(
+                field,
+                quote!(#toasty::RelationManyField),
+                ty,
+                quote!(many),
+            )
         }
     }
 
     fn expand_has_one_method(&self, field: &Field, rel: &HasOne) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
+
+        if rel.via.is_some() {
+            self.expand_via_query_relation_method(field, quote!(#toasty::ViaOneField), ty)
+        } else {
+            self.expand_direct_query_relation_method(
+                field,
+                quote!(#toasty::RelationOneField),
+                ty,
+                quote!(many_via_one),
+            )
+        }
+    }
+
+    fn expand_direct_query_relation_method(
+        &self,
+        field: &Field,
+        field_trait: TokenStream,
+        ty: &syn::Type,
+        association: TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let field_ident = &field.name.ident;
+        let target = quote!(<#ty as #field_trait>::Model);
+
+        quote! {
+            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query {
+                use #toasty::IntoStatement;
+                <<#target as #toasty::Model>::Query>::from_stmt(
+                    #toasty::stmt::Association::#association(
+                        self.stmt, #model_ident::fields().#field_ident().into()
+                    ).into_statement().into_query().unwrap()
+                )
+            }
+        }
+    }
+
+    fn expand_via_query_relation_method(
+        &self,
+        field: &Field,
+        field_trait: TokenStream,
+        ty: &syn::Type,
+    ) -> TokenStream {
+        let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(mut self) -> <#target as #toasty::Model>::Query {
-                use #toasty::IntoStatement;
-                <<#target as #toasty::Model>::Query>::from_stmt(
-                    #toasty::stmt::Association::many_via_one(
-                        self.stmt, #model_ident::fields().#field_ident().into()
-                    ).into_statement().into_query().unwrap()
+            #vis fn #field_ident(self) -> <#ty as #field_trait>::Query {
+                <#ty as #field_trait>::query_from_association(
+                    self.stmt,
+                    #model_ident::fields().#field_ident().into(),
                 )
             }
         }

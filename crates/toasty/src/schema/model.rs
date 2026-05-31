@@ -1,5 +1,5 @@
 use super::{Load, Register};
-use crate::stmt::{Expr, IntoExpr, IntoInsert, List, Path};
+use crate::stmt::{Association, Expr, IntoExpr, IntoInsert, List, Path, Query};
 
 use toasty_core::schema::app::FieldId;
 
@@ -81,6 +81,24 @@ pub trait Model: Register + Load<Output = Self> + Sized {
     /// Construct a [`ManyField`](Self::ManyField) from a path targeting a list
     /// of this model.
     fn new_many_field<Origin>(path: Path<Origin, List<Self>>) -> Self::ManyField<Origin>;
+
+    /// Construct a model-terminal multi-step has-many scope.
+    #[doc(hidden)]
+    fn new_via_many(_stmt: Association<List<Self>>) -> Self::ViaMany {
+        panic!("model-terminal via-many scopes are only available on generated models")
+    }
+
+    /// Construct a model-terminal non-null multi-step has-one scope.
+    #[doc(hidden)]
+    fn new_via_one(_stmt: Query<List<Self>>) -> Self::ViaOne {
+        panic!("model-terminal via-one scopes are only available on generated models")
+    }
+
+    /// Construct a model-terminal optional multi-step has-one scope.
+    #[doc(hidden)]
+    fn new_via_option_one(_stmt: Query<List<Self>>) -> Self::ViaOptionOne {
+        panic!("model-terminal via-option-one scopes are only available on generated models")
+    }
 
     /// Map a field name string to its [`FieldId`].
     ///

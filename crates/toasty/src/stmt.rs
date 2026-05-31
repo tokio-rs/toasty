@@ -51,6 +51,9 @@ pub use paginate::Paginate;
 mod path;
 pub use path::Path;
 
+mod projected;
+pub use projected::{ProjectedMany, ProjectedOne};
+
 pub use crate::schema::Auto;
 use crate::{Executor, schema::Load};
 

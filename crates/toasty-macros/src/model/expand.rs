@@ -210,6 +210,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 )
             }
         }
+
     })
 }
 
@@ -358,6 +359,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 )
             }
         }
+
     })
 }
 
@@ -414,19 +416,34 @@ impl Expand<'_> {
         field_offset: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
-        let span = field_ident.span();
+        self.expand_field_path_accessor(
+            field_ident,
+            field_offset,
+            quote!(<#ty as #field_trait>::Model),
+            quote!(<<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin>),
+            |path| {
+                quote! {
+                    <<<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin>>::from_path(#path)
+                }
+            },
+        )
+    }
 
-        quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin> {
-                <<<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin>>::from_path(
-                    self.path().chain(
-                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
-                    )
-                )
-            }
-        }
+    /// Generates a field accessor method for a `HasOne(via = ...)` relation.
+    fn expand_one_via_field_method(
+        &self,
+        field_ident: &syn::Ident,
+        ty: &syn::Type,
+        field_offset: &TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        self.expand_field_path_accessor(
+            field_ident,
+            field_offset,
+            quote!(<#ty as #toasty::ViaOneField>::PathTarget),
+            quote!(<#ty as #toasty::ViaOneField>::Path<__Origin>),
+            |path| quote!(<#ty as #toasty::ViaOneField>::new_path(#path)),
+        )
     }
 
     /// Generates a field accessor method for a primitive field using the
@@ -438,21 +455,45 @@ impl Expand<'_> {
         field_offset: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let model_ident = &self.model.ident;
-        let span = field_ident.span();
 
         // Construct the chained path with the field's `ExprTarget` as the
         // tag, so `new_path` receives exactly the type it expects. For
         // `Vec<scalar>` this is
         // `List<T>`; for everything else it is the field's Rust type.
+        self.expand_field_path_accessor(
+            field_ident,
+            field_offset,
+            quote!(<#ty as #toasty::Field>::ExprTarget),
+            quote!(<#ty as #toasty::Field>::Path<__Origin>),
+            |path| quote!(<#ty as #toasty::Field>::new_path(#path)),
+        )
+    }
+
+    fn expand_field_path_accessor<F>(
+        &self,
+        field_ident: &syn::Ident,
+        field_offset: &TokenStream,
+        path_target: TokenStream,
+        return_ty: TokenStream,
+        build_body: F,
+    ) -> TokenStream
+    where
+        F: FnOnce(TokenStream) -> TokenStream,
+    {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let span = field_ident.span();
+        let path = quote! {
+            self.path().chain(
+                #toasty::Path::<#model_ident, #path_target>::from_field_index(#field_offset)
+            )
+        };
+        let body = build_body(path);
+
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
-                <#ty as #toasty::Field>::new_path(
-                    self.path().chain(
-                        #toasty::Path::<#model_ident, <#ty as #toasty::Field>::ExprTarget>::from_field_index(#field_offset)
-                    )
-                )
+            #vis fn #field_ident(&self) -> #return_ty {
+                #body
             }
         }
     }

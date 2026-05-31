@@ -60,9 +60,11 @@ impl stmt::Visit for Verify<'_, '_> {
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
         stmt::visit::visit_stmt_select(self, i);
 
+        let model = source_model_id_for_filter(self.schema, &i.source);
+
         VerifyExpr {
             schema: self.schema,
-            model: i.source.model_id_unwrap(),
+            model,
             capability: self.capability,
             error: &mut *self.error,
         }
@@ -185,6 +187,33 @@ fn assert_i64_literal(expr: &stmt::Expr, what: &str) {
         matches!(expr, stmt::Expr::Value(stmt::Value::I64(_))),
         "{what} must be a Value::I64 literal; got {expr:#?}"
     );
+}
+
+fn source_model_id_for_filter(schema: &Schema, source: &stmt::Source) -> ModelId {
+    let stmt::Source::Model(model) = source else {
+        return source.model_id_unwrap();
+    };
+
+    let Some(association) = &model.via else {
+        return model.id;
+    };
+
+    let source_model_id = association
+        .source
+        .body
+        .as_select_unwrap()
+        .source
+        .model_id_unwrap();
+    let path = &association.path;
+    let root = schema.app.model(source_model_id);
+    let Some(field) = schema.app.resolve_field(root, &path.projection) else {
+        return model.id;
+    };
+    let toasty_core::schema::app::FieldTy::Via(via) = &field.ty else {
+        return model.id;
+    };
+
+    via.final_model
 }
 
 impl VerifyExpr<'_, '_> {

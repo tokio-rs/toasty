@@ -155,21 +155,47 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
-                    let pair = expand_pair(toasty, quote!(#toasty::RelationManyField), ty, rel.pair.as_ref());
-                    let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
-                    nullable = quote!(<#ty as #toasty::RelationManyField>::NULLABLE);
-                    deferred = quote!(<#ty as #toasty::RelationManyField>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::RelationManyField>::many_relation_field_ty(#singular_name, #pair, #via));
+                    if rel.via.is_some() {
+                        let via = expand_via(
+                            toasty,
+                            model_ident,
+                            quote!(<#ty as #toasty::ViaManyField>::PathTarget),
+                            rel.via.as_ref(),
+                        );
+
+                        nullable = quote!(<#ty as #toasty::ViaManyField>::NULLABLE);
+                        deferred = quote!(<#ty as #toasty::ViaManyField>::DEFERRED);
+                        field_ty = quote!(<#ty as #toasty::ViaManyField>::many_via_field_ty(#singular_name, #via.unwrap()));
+                    } else {
+                        let pair = expand_pair(toasty, quote!(#toasty::RelationManyField), ty, rel.pair.as_ref());
+
+                        nullable = quote!(<#ty as #toasty::RelationManyField>::NULLABLE);
+                        deferred = quote!(<#ty as #toasty::RelationManyField>::DEFERRED);
+                        field_ty = quote!(<#ty as #toasty::RelationManyField>::many_relation_field_ty(#singular_name, #pair, None));
+                    }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
-                    let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
-                    nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
-                    deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::RelationOneField>::has_one_relation_field_ty(#pair, #via));
+                    if rel.via.is_some() {
+                        let via = expand_via(
+                            toasty,
+                            model_ident,
+                            quote!(<#ty as #toasty::ViaOneField>::PathTarget),
+                            rel.via.as_ref(),
+                        );
+
+                        nullable = quote!(<#ty as #toasty::ViaOneField>::NULLABLE);
+                        deferred = quote!(<#ty as #toasty::ViaOneField>::DEFERRED);
+                        field_ty = quote!(<#ty as #toasty::ViaOneField>::has_one_via_field_ty(#via.unwrap()));
+                    } else {
+                        let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
+
+                        nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
+                        deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
+                        field_ty = quote!(<#ty as #toasty::RelationOneField>::has_one_relation_field_ty(#pair, None));
+                    }
                 }
             }
 
@@ -455,14 +481,26 @@ impl Expand<'_> {
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
-                    quote! {
-                        <<#ty as #toasty::RelationManyField>::Model as #toasty::Register>::register(model_set);
+                    if rel.via.is_some() {
+                        quote! {
+                            <#ty as #toasty::ViaManyField>::register(model_set);
+                        }
+                    } else {
+                        quote! {
+                            <<#ty as #toasty::RelationManyField>::Model as #toasty::Register>::register(model_set);
+                        }
                     }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    quote! {
-                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Register>::register(model_set);
+                    if rel.via.is_some() {
+                        quote! {
+                            <#ty as #toasty::ViaOneField>::register(model_set);
+                        }
+                    } else {
+                        quote! {
+                            <<#ty as #toasty::RelationOneField>::Model as #toasty::Register>::register(model_set);
+                        }
                     }
                 }
             })
@@ -516,6 +554,7 @@ fn expand_pair(
 fn expand_via(
     toasty: &TokenStream,
     model_ident: &syn::Ident,
+    path_target: TokenStream,
     via: Option<&Vec<syn::Ident>>,
 ) -> TokenStream {
     let Some(segments) = via else {
@@ -529,7 +568,7 @@ fn expand_via(
 
     quote! {
         Some({
-            let __via_typed: #toasty::Path<#model_ident, _> = (#chain).into();
+            let __via_typed: #toasty::Path<#model_ident, #path_target> = (#chain).into();
             let __via_untyped: #toasty::core::stmt::Path = __via_typed.into();
             __via_untyped
         })

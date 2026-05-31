@@ -61,12 +61,36 @@ impl<'a> RewriteVia<'a> {
             && let stmt::Source::Model(model) = &mut select.source
             && let Some(via) = model.via.take()
         {
+            if let Some(app_via) = self.resolve_via_association(&via) {
+                model.id = app_via.final_model;
+                apply_terminal_projection(select, app_via);
+            }
+
             // Create a new scope to indicate we are operating in the
             // context of stmt.target
             let mut s = self.scope(&select.source);
 
             let filter = s.rewrite_association_as_filter(via);
             select.filter = stmt::Filter::and(select.filter.take(), filter);
+        }
+    }
+
+    fn resolve_via_association(&self, association: &stmt::Association) -> Option<&'a app::Via> {
+        let source_model_id = association
+            .source
+            .body
+            .as_select_unwrap()
+            .source
+            .model_id_unwrap();
+        let root = self.schema().app.model(source_model_id);
+        let field = self
+            .schema()
+            .app
+            .resolve_field(root, &association.path.projection)?;
+
+        match &field.ty {
+            app::FieldTy::Via(via) => Some(via),
+            _ => None,
         }
     }
 
@@ -170,7 +194,7 @@ impl<'a> RewriteVia<'a> {
 
         let next_model_id = match &field.ty {
             app::FieldTy::Has(rel) => rel.target,
-            app::FieldTy::Via(rel) => rel.target,
+            app::FieldTy::Via(rel) => rel.final_model,
             app::FieldTy::BelongsTo(rel) => rel.target,
             other => todo!("non-relation field in via path: {other:#?}"),
         };
@@ -225,4 +249,39 @@ impl VisitMut for RewriteVia<'_> {
         self.rewrite_via_for_query(i);
         stmt::visit_mut::visit_stmt_query_mut(self, i);
     }
+}
+
+fn apply_terminal_projection(select: &mut stmt::Select, via: &app::Via) {
+    if via.terminal_projection.is_identity() {
+        return;
+    }
+
+    let stmt::Returning::Model { include } = &select.returning else {
+        return;
+    };
+    if !include.is_empty() {
+        return;
+    }
+
+    select.returning = stmt::Returning::Project(terminal_projection_expr(
+        via.final_model,
+        &via.terminal_projection,
+    ));
+}
+
+fn terminal_projection_expr(root: app::ModelId, projection: &stmt::Projection) -> stmt::Expr {
+    let [first, rest @ ..] = projection.as_slice() else {
+        return stmt::Expr::ref_ancestor_model(0);
+    };
+
+    let mut expr = stmt::Expr::ref_self_field(app::FieldId {
+        model: root,
+        index: *first,
+    });
+
+    if !rest.is_empty() {
+        expr = stmt::Expr::project(expr, rest);
+    }
+
+    expr
 }

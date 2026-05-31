@@ -1,8 +1,8 @@
 error[E0277]: `Profile` cannot be used as a field type
-  --> tests/ui/relation_has_one_requires_attr.rs:7:5
+  --> tests/ui/relation_has_one_requires_attr.rs:1:10
    |
- 7 |     profile: toasty::Deferred<Option<Profile>>,
-   |     ^^^^^^^ this field's type is not storable
+ 1 | #[derive(toasty::Model)]
+   |          ^^^^^^^^^^^^^ this field's type is not storable
    |
 help: the trait `toasty::schema::Field` is not implemented for `Profile`
   --> tests/ui/relation_has_one_requires_attr.rs:11:1
@@ -24,6 +24,7 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
    = note: required for `Deferred<Option<Profile>>` to implement `toasty::schema::Field`
+   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: `Profile` cannot be used as a field type
   --> tests/ui/relation_has_one_requires_attr.rs:1:10

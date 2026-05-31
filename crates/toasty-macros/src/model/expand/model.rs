@@ -147,6 +147,18 @@ impl Expand<'_> {
                     #field_list_struct_ident::from_path(path)
                 }
 
+                fn new_via_many(stmt: #toasty::stmt::Association<#toasty::List<Self>>) -> Self::ViaMany {
+                    Many::<#toasty::Via>::from_stmt(stmt)
+                }
+
+                fn new_via_one(stmt: #toasty::stmt::Query<#toasty::List<Self>>) -> Self::ViaOne {
+                    One::<#toasty::Via>::from_stmt(stmt)
+                }
+
+                fn new_via_option_one(stmt: #toasty::stmt::Query<#toasty::List<Self>>) -> Self::ViaOptionOne {
+                    OptionOne::<#toasty::Via>::from_stmt(stmt)
+                }
+
                 fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
                     #find_by_primary_key_body
                 }
@@ -547,11 +559,19 @@ impl Expand<'_> {
                     }
                     FieldTy::HasMany(rel) => {
                         let ty = &rel.ty;
-                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
+                        if rel.via.is_some() {
+                            quote!(#i => <#ty as #toasty::ViaManyField>::reload(&mut #field_access, value)?,)
+                        } else {
+                            quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
+                        }
                     }
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
-                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
+                        if rel.via.is_some() {
+                            quote!(#i => <#ty as #toasty::ViaOneField>::reload(&mut #field_access, value)?,)
+                        } else {
+                            quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
+                        }
                     }
                 }
             })

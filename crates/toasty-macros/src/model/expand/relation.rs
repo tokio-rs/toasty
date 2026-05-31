@@ -245,30 +245,91 @@ impl Expand<'_> {
     /// target's `ViaMany`.
     pub(super) fn expand_many_chain_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
 
         self.model
             .fields
             .iter()
             .filter_map(|field| {
-                let (ty, field_trait) = match &field.ty {
-                    FieldTy::BelongsTo(rel) => (&rel.ty, quote!(#toasty::RelationOneField)),
-                    FieldTy::HasMany(rel) => (&rel.ty, quote!(#toasty::RelationManyField)),
-                    FieldTy::HasOne(rel) => (&rel.ty, quote!(#toasty::RelationOneField)),
-                    FieldTy::Primitive(_) => return None,
-                };
                 let field_ident = &field.name.ident;
-                let field_offset = util::int(field.id);
 
-                Some(quote! {
-                    #vis fn #field_ident(self) -> <<#ty as #field_trait>::Model as #toasty::Model>::ViaMany {
-                        <<<#ty as #field_trait>::Model as #toasty::Model>::ViaMany>::from_stmt(
-                            self.stmt.chain_field(#field_offset)
-                        )
+                match &field.ty {
+                    FieldTy::HasMany(rel) if rel.via.is_some() => {
+                        Some(self.expand_many_via_chain_method(
+                            field_ident,
+                            &rel.ty,
+                            quote!(#toasty::ViaManyField),
+                        ))
                     }
-                })
+                    FieldTy::HasOne(rel) if rel.via.is_some() => {
+                        Some(self.expand_many_via_chain_method(
+                            field_ident,
+                            &rel.ty,
+                            quote!(#toasty::ViaOneField),
+                        ))
+                    }
+                    FieldTy::BelongsTo(rel) => Some(self.expand_many_direct_chain_method(
+                        field_ident,
+                        quote!(#toasty::RelationOneField),
+                        &rel.ty,
+                        field.id,
+                    )),
+                    FieldTy::HasMany(rel) => Some(self.expand_many_direct_chain_method(
+                        field_ident,
+                        quote!(#toasty::RelationManyField),
+                        &rel.ty,
+                        field.id,
+                    )),
+                    FieldTy::HasOne(rel) => Some(self.expand_many_direct_chain_method(
+                        field_ident,
+                        quote!(#toasty::RelationOneField),
+                        &rel.ty,
+                        field.id,
+                    )),
+                    FieldTy::Primitive(_) => None,
+                }
             })
             .collect()
+    }
+
+    fn expand_many_direct_chain_method(
+        &self,
+        field_ident: &syn::Ident,
+        field_trait: TokenStream,
+        ty: &syn::Type,
+        field_id: usize,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let field_offset = util::int(field_id);
+
+        quote! {
+            #vis fn #field_ident(self) -> <<#ty as #field_trait>::Model as #toasty::Model>::ViaMany {
+                <<<#ty as #field_trait>::Model as #toasty::Model>::ViaMany>::from_stmt(
+                    self.stmt.chain_field(#field_offset)
+                )
+            }
+        }
+    }
+
+    fn expand_many_via_chain_method(
+        &self,
+        field_ident: &syn::Ident,
+        ty: &syn::Type,
+        field_trait: TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            #vis fn #field_ident(self) -> <#ty as #field_trait>::Query {
+                use #toasty::IntoStatement;
+                <#ty as #field_trait>::query_from_association(
+                    self.into_statement().into_query().unwrap(),
+                    #model_ident::fields().#field_ident().into(),
+                )
+            }
+        }
     }
 
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {
@@ -367,33 +428,30 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
-        let relation_scope = if rel.via.is_some() {
-            quote!(ViaMany)
-        } else {
-            quote!(Many)
-        };
-
-        // A `via` relation reaches its target through a path of existing
-        // relations; it has no paired `BelongsTo`, so skip the back-reference
-        // check that direct has-many relations emit.
-        let pair_check = if rel.via.is_some() {
-            quote! {}
-        } else {
-            let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
-                &self.model.name.ident.to_string(),
-                rel.span,
-            ));
-            self.expand_pair_belongs_to_check(PairBelongsToCheck {
-                pair_ident: &pair_ident,
+        if rel.via.is_some() {
+            return self.expand_model_via_relation_method(
                 field_ident,
                 ty,
-                field_trait: quote!(#toasty::RelationManyField),
-                rel_span: rel.span,
-                relation_kind: "HasMany",
-                label: "Has many associations require the target to include a back-reference",
-            })
-        };
+                quote!(#toasty::ViaManyField),
+            );
+        }
+
+        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+        let relation_scope = quote!(Many);
+
+        let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
+            &self.model.name.ident.to_string(),
+            rel.span,
+        ));
+        let pair_check = self.expand_pair_belongs_to_check(PairBelongsToCheck {
+            pair_ident: &pair_ident,
+            field_ident,
+            ty,
+            field_trait: quote!(#toasty::RelationManyField),
+            rel_span: rel.span,
+            relation_kind: "HasMany",
+            label: "Has many associations require the target to include a back-reference",
+        });
 
         quote! {
             #vis fn #field_ident(&self) -> <#target as #toasty::Model>::#relation_scope {
@@ -422,32 +480,29 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let relation_scope = if rel.via.is_some() {
-            quote!(ViaOne)
-        } else {
-            quote!(One)
-        };
-
-        // A `via` relation reaches its target through a path of existing
-        // relations; it has no paired `BelongsTo`, so skip the back-reference
-        // check that direct has-one relations emit.
-        let pair_check = if rel.via.is_some() {
-            quote! {}
-        } else {
-            let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
-                &self.model.name.ident.to_string(),
-                rel.span,
-            ));
-            self.expand_pair_belongs_to_check(PairBelongsToCheck {
-                pair_ident: &pair_ident,
+        if rel.via.is_some() {
+            return self.expand_model_via_relation_method(
                 field_ident,
                 ty,
-                field_trait: quote!(#toasty::RelationOneField),
-                rel_span: rel.span,
-                relation_kind: "HasOne",
-                label: "Has one associations require the target to include a back-reference",
-            })
-        };
+                quote!(#toasty::ViaOneField),
+            );
+        }
+
+        let relation_scope = quote!(One);
+
+        let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
+            &self.model.name.ident.to_string(),
+            rel.span,
+        ));
+        let pair_check = self.expand_pair_belongs_to_check(PairBelongsToCheck {
+            pair_ident: &pair_ident,
+            field_ident,
+            ty,
+            field_trait: quote!(#toasty::RelationOneField),
+            rel_span: rel.span,
+            relation_kind: "HasOne",
+            label: "Has one associations require the target to include a back-reference",
+        });
 
         quote! {
             #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::#relation_scope {
@@ -465,6 +520,32 @@ impl Expand<'_> {
                             self.into_statement().into_query().unwrap().to_list(),
                             Self::fields().#field_ident().into()
                         ).into_statement().into_query().unwrap()
+                    )
+                }
+            }
+        }
+    }
+
+    fn expand_model_via_relation_method(
+        &self,
+        field_ident: &syn::Ident,
+        ty: &syn::Type,
+        field_trait: TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+
+        quote! {
+            #vis fn #field_ident(&self) -> <#ty as #field_trait>::Scope {
+                if false {
+                    let _ = &self.#field_ident;
+                }
+
+                {
+                    use #toasty::IntoStatement;
+                    <#ty as #field_trait>::scope_from_association(
+                        self.into_statement().into_query().unwrap().to_list(),
+                        Self::fields().#field_ident().into(),
                     )
                 }
             }
