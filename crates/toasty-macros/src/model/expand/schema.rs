@@ -164,9 +164,9 @@ impl Expand<'_> {
                             rel.via.as_ref(),
                         );
 
-                        nullable = quote!(<#ty as #toasty::ViaManyField>::NULLABLE);
+                        nullable = quote!(false);
                         deferred = quote!(<#ty as #toasty::ViaManyField>::DEFERRED);
-                        field_ty = quote!(<#ty as #toasty::ViaManyField>::many_via_field_ty(#singular_name, #via.unwrap()));
+                        field_ty = quote!(#toasty::many_via_field_ty::<#ty>(#singular_name, #via.unwrap()));
                     } else {
                         let pair = expand_pair(toasty, quote!(#toasty::RelationManyField), ty, rel.pair.as_ref());
 
@@ -188,7 +188,7 @@ impl Expand<'_> {
 
                         nullable = quote!(<#ty as #toasty::ViaOneField>::NULLABLE);
                         deferred = quote!(<#ty as #toasty::ViaOneField>::DEFERRED);
-                        field_ty = quote!(<#ty as #toasty::ViaOneField>::has_one_via_field_ty(#via.unwrap()));
+                        field_ty = quote!(#toasty::has_one_via_field_ty::<#ty>(#via.unwrap()));
                     } else {
                         let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
 
@@ -457,8 +457,10 @@ impl Expand<'_> {
     ///
     /// For primitive fields, no call is emitted (the default `Field::register`
     /// is a no-op). For embedded fields, `<Type as Field>::register` is called.
-    /// For relation fields (BelongsTo, HasMany, HasOne), `<TargetType as
-    /// Register>::register` is called directly.
+    /// For direct relation fields (BelongsTo, HasMany, HasOne), `<TargetType as
+    /// Register>::register` is called directly. Via fields do not register
+    /// their terminal model here; their declared paths necessarily traverse
+    /// real relation fields, and those fields register the reachable models.
     pub(super) fn expand_field_register_calls(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
 
@@ -482,9 +484,7 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     if rel.via.is_some() {
-                        quote! {
-                            <#ty as #toasty::ViaManyField>::register(model_set);
-                        }
+                        quote! {}
                     } else {
                         quote! {
                             <<#ty as #toasty::RelationManyField>::Model as #toasty::Register>::register(model_set);
@@ -494,9 +494,7 @@ impl Expand<'_> {
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     if rel.via.is_some() {
-                        quote! {
-                            <#ty as #toasty::ViaOneField>::register(model_set);
-                        }
+                        quote! {}
                     } else {
                         quote! {
                             <<#ty as #toasty::RelationOneField>::Model as #toasty::Register>::register(model_set);

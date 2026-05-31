@@ -61,3 +61,26 @@ pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     let expr: stmt::Expr<T> = value.into_expr();
     expr.into()
 }
+
+/// Build the schema field type for a `#[has_many(via = ...)]` field.
+pub fn many_via_field_ty<T: ViaManyField>(
+    singular: core::schema::Name,
+    declared_path: core::stmt::Path,
+) -> core::schema::app::FieldTy {
+    core::schema::app::FieldTy::Via(core::schema::app::Via::unresolved(
+        T::ty(),
+        core::schema::app::Cardinality::Many { singular },
+        declared_path,
+    ))
+}
+
+/// Build the schema field type for a `#[has_one(via = ...)]` field.
+pub fn has_one_via_field_ty<T: ViaOneField>(
+    declared_path: core::stmt::Path,
+) -> core::schema::app::FieldTy {
+    core::schema::app::FieldTy::Via(core::schema::app::Via::unresolved(
+        T::ty(),
+        core::schema::app::Cardinality::One,
+        declared_path,
+    ))
+}

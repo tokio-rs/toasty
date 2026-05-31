@@ -124,21 +124,11 @@ pub trait ViaManyField: Load<Output = Self> {
     /// Whether the field stores its value in a deferred load slot.
     const DEFERRED: bool;
 
-    /// A via has-many is a collection; the collection itself is always present
-    /// even when empty, so it is never nullable.
-    const NULLABLE: bool = false;
-
     /// Reloads this relation field from a returned value.
     fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
 
-    /// Register models referenced by this field type.
-    fn register(_model_set: &mut toasty_core::schema::app::ModelSet) {}
-
     /// Build the accessor path from a raw path.
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin>;
-
-    /// Build the [`FieldTy`] for this via field.
-    fn many_via_field_ty(singular: Name, declared_path: stmt::Path) -> FieldTy;
 
     /// Build a relation scope from an associated source query and path.
     fn scope_from_association<Source: Model>(
@@ -184,9 +174,6 @@ pub trait ViaOneField: Load<Output = Self> {
     /// Reloads this relation field from a returned value.
     fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
 
-    /// Register models referenced by this field type.
-    fn register(_model_set: &mut toasty_core::schema::app::ModelSet) {}
-
     /// Build the single-source accessor path from a raw path.
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin>;
 
@@ -194,9 +181,6 @@ pub trait ViaOneField: Load<Output = Self> {
     fn new_many_path<Origin>(
         path: crate::stmt::Path<Origin, Self::ManyPathTarget>,
     ) -> Self::ManyPath<Origin>;
-
-    /// Build the [`FieldTy`] for this via field.
-    fn has_one_via_field_ty(declared_path: stmt::Path) -> FieldTy;
 
     /// Build a relation scope from an associated source query and path.
     fn scope_from_association<Source: Model>(
@@ -223,16 +207,8 @@ impl<M: Model> ViaManyField for Vec<M> {
         <Self as Load>::reload(target, value)
     }
 
-    fn register(model_set: &mut toasty_core::schema::app::ModelSet) {
-        M::register(model_set);
-    }
-
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin> {
         M::new_many_field(path)
-    }
-
-    fn many_via_field_ty(singular: Name, declared_path: stmt::Path) -> FieldTy {
-        many_via_field_ty::<Self>(singular, declared_path)
     }
 
     fn scope_from_association<Source: Model>(
@@ -263,16 +239,8 @@ impl<M: Model> ViaManyField for Deferred<Vec<M>> {
         Ok(())
     }
 
-    fn register(model_set: &mut toasty_core::schema::app::ModelSet) {
-        M::register(model_set);
-    }
-
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin> {
         M::new_many_field(path)
-    }
-
-    fn many_via_field_ty(singular: Name, declared_path: stmt::Path) -> FieldTy {
-        many_via_field_ty::<Self>(singular, declared_path)
     }
 
     fn scope_from_association<Source: Model>(
@@ -305,10 +273,6 @@ impl<M: Model> ViaOneField for M {
         <Self as Load>::reload(target, value)
     }
 
-    fn register(model_set: &mut toasty_core::schema::app::ModelSet) {
-        M::register(model_set);
-    }
-
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin> {
         M::new_path(path)
     }
@@ -317,10 +281,6 @@ impl<M: Model> ViaOneField for M {
         path: crate::stmt::Path<Origin, Self::ManyPathTarget>,
     ) -> Self::ManyPath<Origin> {
         M::new_many_field(path)
-    }
-
-    fn has_one_via_field_ty(declared_path: stmt::Path) -> FieldTy {
-        has_one_via_field_ty::<Self>(declared_path)
     }
 
     fn scope_from_association<Source: Model>(
@@ -357,10 +317,6 @@ impl<M: Model> ViaOneField for Option<M> {
         <Self as Load>::reload(target, value)
     }
 
-    fn register(model_set: &mut toasty_core::schema::app::ModelSet) {
-        M::register(model_set);
-    }
-
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin> {
         M::new_path(path)
     }
@@ -369,10 +325,6 @@ impl<M: Model> ViaOneField for Option<M> {
         path: crate::stmt::Path<Origin, Self::ManyPathTarget>,
     ) -> Self::ManyPath<Origin> {
         M::new_many_field(path)
-    }
-
-    fn has_one_via_field_ty(declared_path: stmt::Path) -> FieldTy {
-        has_one_via_field_ty::<Self>(declared_path)
     }
 
     fn scope_from_association<Source: Model>(
@@ -410,10 +362,6 @@ impl<M: Model> ViaOneField for Deferred<M> {
         Ok(())
     }
 
-    fn register(model_set: &mut toasty_core::schema::app::ModelSet) {
-        M::register(model_set);
-    }
-
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin> {
         M::new_path(path)
     }
@@ -422,10 +370,6 @@ impl<M: Model> ViaOneField for Deferred<M> {
         path: crate::stmt::Path<Origin, Self::ManyPathTarget>,
     ) -> Self::ManyPath<Origin> {
         M::new_many_field(path)
-    }
-
-    fn has_one_via_field_ty(declared_path: stmt::Path) -> FieldTy {
-        has_one_via_field_ty::<Self>(declared_path)
     }
 
     fn scope_from_association<Source: Model>(
@@ -463,10 +407,6 @@ impl<M: Model> ViaOneField for Deferred<Option<M>> {
         Ok(())
     }
 
-    fn register(model_set: &mut toasty_core::schema::app::ModelSet) {
-        M::register(model_set);
-    }
-
     fn new_path<Origin>(path: crate::stmt::Path<Origin, Self::PathTarget>) -> Self::Path<Origin> {
         M::new_path(path)
     }
@@ -475,10 +415,6 @@ impl<M: Model> ViaOneField for Deferred<Option<M>> {
         path: crate::stmt::Path<Origin, Self::ManyPathTarget>,
     ) -> Self::ManyPath<Origin> {
         M::new_many_field(path)
-    }
-
-    fn has_one_via_field_ty(declared_path: stmt::Path) -> FieldTy {
-        has_one_via_field_ty::<Self>(declared_path)
     }
 
     fn scope_from_association<Source: Model>(
@@ -529,10 +465,6 @@ macro_rules! impl_projected_via_field {
                 <$ty as Field>::new_list_path(path)
             }
 
-            fn has_one_via_field_ty(declared_path: stmt::Path) -> FieldTy {
-                has_one_via_field_ty::<Self>(declared_path)
-            }
-
             fn scope_from_association<Source: Model>(
                 source: crate::stmt::Query<crate::stmt::List<Source>>,
                 path: crate::stmt::Path<Source, Self::PathTarget>,
@@ -576,10 +508,6 @@ macro_rules! impl_projected_via_field {
                 <$ty as Field>::new_list_path(path)
             }
 
-            fn has_one_via_field_ty(declared_path: stmt::Path) -> FieldTy {
-                has_one_via_field_ty::<Self>(declared_path)
-            }
-
             fn scope_from_association<Source: Model>(
                 source: crate::stmt::Query<crate::stmt::List<Source>>,
                 path: crate::stmt::Path<Source, Self::PathTarget>,
@@ -611,10 +539,6 @@ macro_rules! impl_projected_via_field {
                 path: crate::stmt::Path<Origin, Self::PathTarget>,
             ) -> Self::Path<Origin> {
                 <$ty as Field>::new_list_path(path)
-            }
-
-            fn many_via_field_ty(singular: Name, declared_path: stmt::Path) -> FieldTy {
-                many_via_field_ty::<Self>(singular, declared_path)
             }
 
             fn scope_from_association<Source: Model>(
@@ -649,10 +573,6 @@ macro_rules! impl_projected_via_field {
                 path: crate::stmt::Path<Origin, Self::PathTarget>,
             ) -> Self::Path<Origin> {
                 <$ty as Field>::new_list_path(path)
-            }
-
-            fn many_via_field_ty(singular: Name, declared_path: stmt::Path) -> FieldTy {
-                many_via_field_ty::<Self>(singular, declared_path)
             }
 
             fn scope_from_association<Source: Model>(
@@ -705,19 +625,3 @@ impl_projected_via_fields!(rust_decimal::Decimal);
 
 #[cfg(feature = "bigdecimal")]
 impl_projected_via_fields!(bigdecimal::BigDecimal);
-
-fn many_via_field_ty<T: Load>(singular: Name, declared_path: stmt::Path) -> FieldTy {
-    FieldTy::Via(toasty_core::schema::app::Via::unresolved(
-        T::ty(),
-        toasty_core::schema::app::Cardinality::Many { singular },
-        declared_path,
-    ))
-}
-
-fn has_one_via_field_ty<T: Load>(declared_path: stmt::Path) -> FieldTy {
-    FieldTy::Via(toasty_core::schema::app::Via::unresolved(
-        T::ty(),
-        toasty_core::schema::app::Cardinality::One,
-        declared_path,
-    ))
-}
