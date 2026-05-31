@@ -180,7 +180,10 @@ impl Connection {
     ) -> Result<ExecResponse> {
         tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
 
-        let mut stmt = self.connection.prepare_cached(sql_str).unwrap();
+        let mut stmt = self
+            .connection
+            .prepare_cached(sql_str)
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         let params = typed_params
             .into_iter()
@@ -197,7 +200,7 @@ impl Connection {
 
         let mut rows = stmt
             .query(rusqlite::params_from_iter(params.iter()))
-            .unwrap();
+            .map_err(toasty_core::Error::driver_operation_failed)?;
 
         let mut values = vec![];
         let column_count = rows.as_ref().map(|stmt| stmt.column_count()).unwrap_or(0);
