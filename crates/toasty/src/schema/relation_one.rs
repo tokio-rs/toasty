@@ -1,13 +1,13 @@
-use super::{Deferred, Load, Model, RelationOneField};
+use super::{Deferred, Load, Model, QueryMany, QueryOne, QueryOptionOne, RelationOneField};
 
-use crate::stmt::{IntoStatement, List};
+use crate::stmt::IntoStatement;
 use toasty_core::schema::app::ModelId;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ForeignKey};
 use toasty_core::stmt;
 
 impl<M: Model> RelationOneField for M {
     type Model = M;
-    type One = <M as Model>::Query<M>;
+    type One = QueryOne<M>;
     type Expr = M;
 
     const DEFERRED: bool = false;
@@ -17,7 +17,7 @@ impl<M: Model> RelationOneField for M {
         <Self as Load>::reload(target, value)
     }
 
-    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
         <M as Model>::query_one(query)
     }
 
@@ -36,7 +36,7 @@ impl<M: Model> RelationOneField for M {
 
 impl<M: Model> RelationOneField for Option<M> {
     type Model = M;
-    type One = <M as Model>::Query<Option<M>>;
+    type One = QueryOptionOne<M>;
     type Expr = Option<M>;
 
     const DEFERRED: bool = false;
@@ -46,7 +46,7 @@ impl<M: Model> RelationOneField for Option<M> {
         <Self as Load>::reload(target, value)
     }
 
-    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
         <M as Model>::query_first(query)
     }
 
@@ -65,7 +65,7 @@ impl<M: Model> RelationOneField for Option<M> {
 
 impl<M: Model> RelationOneField for Deferred<M> {
     type Model = M;
-    type One = <M as Model>::Query<M>;
+    type One = QueryOne<M>;
     type Expr = M;
 
     const DEFERRED: bool = true;
@@ -76,7 +76,7 @@ impl<M: Model> RelationOneField for Deferred<M> {
         Ok(())
     }
 
-    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
         <M as Model>::query_one(query)
     }
 
@@ -95,7 +95,7 @@ impl<M: Model> RelationOneField for Deferred<M> {
 
 impl<M: Model> RelationOneField for Deferred<Option<M>> {
     type Model = M;
-    type One = <M as Model>::Query<Option<M>>;
+    type One = QueryOptionOne<M>;
     type Expr = Option<M>;
 
     const DEFERRED: bool = true;
@@ -106,7 +106,7 @@ impl<M: Model> RelationOneField for Deferred<Option<M>> {
         Ok(())
     }
 
-    fn make_one(query: <Self::Model as Model>::Query<List<Self::Model>>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
         <M as Model>::query_first(query)
     }
 

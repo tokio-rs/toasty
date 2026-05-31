@@ -395,18 +395,16 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         // Belongs-to via the source side is always singular and may be
-        // nullable; both cases collapse to `Query<List<Target>>` here because
-        // we are starting from a list of source rows. The earlier macro
-        // produced `<Target as Model>::Query` (a list-shaped query) for the
-        // same reason.
+        // nullable; both cases collapse to `QueryMany<Target>` here because we
+        // are starting from a list of source rows.
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query<#toasty::List<#target>> {
+            #vis fn #field_ident(self) -> #toasty::QueryMany<#target> {
                 let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
                     #model_ident::fields().#field_ident().into(),
                 );
-                <<#target as #toasty::Model>::Query<#toasty::List<#target>>>::from_assoc_many(assoc)
+                <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
             }
         }
     }
@@ -421,13 +419,13 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query<#toasty::List<#target>> {
+            #vis fn #field_ident(self) -> #toasty::QueryMany<#target> {
                 let assoc = #toasty::chain_or_build_many::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
                     #model_ident::fields().#field_ident().into(),
                 );
-                <<#target as #toasty::Model>::Query<#toasty::List<#target>>>::from_assoc_many(assoc)
+                <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
             }
         }
     }
@@ -442,13 +440,13 @@ impl Expand<'_> {
         let field_offset = util::int(field.id);
 
         quote! {
-            #vis fn #field_ident(self) -> <#target as #toasty::Model>::Query<#toasty::List<#target>> {
+            #vis fn #field_ident(self) -> #toasty::QueryMany<#target> {
                 let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
                     #model_ident::fields().#field_ident().into(),
                 );
-                <<#target as #toasty::Model>::Query<#toasty::List<#target>>>::from_assoc_many(assoc)
+                <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
             }
         }
     }

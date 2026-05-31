@@ -1,4 +1,4 @@
-use super::{Load, Model};
+use super::{Load, Model, QueryMany};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{FieldId, FieldTy, ForeignKey};
@@ -75,7 +75,7 @@ pub trait RelationOneField: Load<Output = Self> {
     /// Narrow a list query targeting the related model into the appropriate
     /// "one" query — `Query<Model>` for non-nullable impls and
     /// `Query<Option<Model>>` for nullable impls.
-    fn make_one(query: <Self::Model as Model>::Query<crate::stmt::List<Self::Model>>) -> Self::One;
+    fn make_one(query: QueryMany<Self::Model>) -> Self::One;
 
     /// Build the appropriate "one" query from a singular association,
     /// preserving the association's path so generated mutators (insert,

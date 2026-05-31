@@ -21,7 +21,7 @@ mod load;
 pub use load::Load;
 
 mod model;
-pub use model::Model;
+pub use model::{Model, QueryMany, QueryOne, QueryOptionOne};
 
 mod option;
 

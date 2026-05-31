@@ -13,8 +13,8 @@ pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
-        Auto, Deferred, DiscoverItem, Embed, Field, Load, Model, RelationManyField,
-        RelationOneField, Scope, generate_unique_id,
+        Auto, Deferred, DiscoverItem, Embed, Field, Load, Model, QueryMany, QueryOne,
+        QueryOptionOne, RelationManyField, RelationOneField, Scope, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

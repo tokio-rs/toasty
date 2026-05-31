@@ -136,3 +136,16 @@ pub trait Model: Load<Output = Self> + Sized {
     /// codegen for nullable relation accessors.
     fn query_first(query: Self::Query<List<Self>>) -> Self::Query<Option<Self>>;
 }
+
+/// List query builder for model `M` (executes to `Vec<M>`). Names the
+/// `<M as Model>::Query<List<M>>` instantiation of the [`Model::Query`] GAT so
+/// the long projection stays out of relation-accessor signatures and the
+/// errors they produce.
+pub type QueryMany<M> = <M as Model>::Query<List<M>>;
+
+/// Single-row query builder for model `M` (executes to `M`). See [`QueryMany`].
+pub type QueryOne<M> = <M as Model>::Query<M>;
+
+/// Optional single-row query builder for model `M` (executes to `Option<M>`).
+/// See [`QueryMany`].
+pub type QueryOptionOne<M> = <M as Model>::Query<Option<M>>;
