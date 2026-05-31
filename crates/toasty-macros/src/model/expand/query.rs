@@ -176,55 +176,19 @@ impl Expand<'_> {
             }
 
             // ----- IntoStatement / IntoScope -----
-            impl #toasty::IntoStatement for #query_struct_ident<#toasty::List<#model_ident>> {
-                type Returning = #toasty::List<#model_ident>;
+            impl<__T> #toasty::IntoStatement for #query_struct_ident<__T> {
+                type Returning = __T;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<__T> {
                     use #toasty::IntoStatement;
                     self.stmt.into_statement()
                 }
             }
 
-            impl #toasty::IntoStatement for &#query_struct_ident<#toasty::List<#model_ident>> {
-                type Returning = #toasty::List<#model_ident>;
+            impl<__T> #toasty::IntoStatement for &#query_struct_ident<__T> {
+                type Returning = __T;
 
-                fn into_statement(self) -> #toasty::Statement<#toasty::List<#model_ident>> {
-                    use #toasty::IntoStatement;
-                    self.stmt.clone().into_statement()
-                }
-            }
-
-            impl #toasty::IntoStatement for #query_struct_ident<#model_ident> {
-                type Returning = #model_ident;
-
-                fn into_statement(self) -> #toasty::Statement<#model_ident> {
-                    use #toasty::IntoStatement;
-                    self.stmt.into_statement()
-                }
-            }
-
-            impl #toasty::IntoStatement for &#query_struct_ident<#model_ident> {
-                type Returning = #model_ident;
-
-                fn into_statement(self) -> #toasty::Statement<#model_ident> {
-                    use #toasty::IntoStatement;
-                    self.stmt.clone().into_statement()
-                }
-            }
-
-            impl #toasty::IntoStatement for #query_struct_ident<#toasty::Option<#model_ident>> {
-                type Returning = #toasty::Option<#model_ident>;
-
-                fn into_statement(self) -> #toasty::Statement<#toasty::Option<#model_ident>> {
-                    use #toasty::IntoStatement;
-                    self.stmt.into_statement()
-                }
-            }
-
-            impl #toasty::IntoStatement for &#query_struct_ident<#toasty::Option<#model_ident>> {
-                type Returning = #toasty::Option<#model_ident>;
-
-                fn into_statement(self) -> #toasty::Statement<#toasty::Option<#model_ident>> {
+                fn into_statement(self) -> #toasty::Statement<__T> {
                     use #toasty::IntoStatement;
                     self.stmt.clone().into_statement()
                 }
