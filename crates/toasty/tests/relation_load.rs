@@ -33,20 +33,14 @@ impl Load for Dummy {
 }
 
 impl Model for Dummy {
-    type Query = ();
+    type Query<T> = ();
     type Create = DummyCreate;
     type Update<'a> = ();
     type UpdateQuery = ();
     type Path<Origin> = Path<Origin, Self>;
     type PrimaryKey = i64;
-    type Many = ();
-    type ViaMany = ();
     type ManyField<Origin> = ();
-    type One = ();
-    type ViaOne = ();
     type OneField<Origin> = ();
-    type OptionOne = ();
-    type ViaOptionOne = ();
 
     fn id() -> schema::app::ModelId {
         schema::app::ModelId(usize::MAX)
@@ -68,7 +62,13 @@ impl Model for Dummy {
         panic!("not needed for relation lazy-slot decode tests")
     }
 
-    fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query {}
+    fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query<toasty::stmt::List<Self>> {}
+
+    fn wrap_query<T>(_stmt: toasty::stmt::Query<T>) -> Self::Query<T> {}
+
+    fn query_one(_query: Self::Query<toasty::stmt::List<Self>>) -> Self::Query<Self> {}
+
+    fn query_first(_query: Self::Query<toasty::stmt::List<Self>>) -> Self::Query<Option<Self>> {}
 }
 
 impl IntoInsert for DummyCreate {

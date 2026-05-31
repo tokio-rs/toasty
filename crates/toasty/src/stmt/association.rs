@@ -23,6 +23,24 @@ pub struct Association<T> {
     _p: PhantomData<T>,
 }
 
+impl<T> Association<T> {
+    /// Borrow the underlying untyped association.
+    pub fn untyped(&self) -> &stmt::Association {
+        &self.untyped
+    }
+
+    /// Construct a typed association from a raw untyped one. Used by
+    /// generated code that re-types an association after carrying it through
+    /// an untyped storage slot.
+    #[doc(hidden)]
+    pub fn from_untyped(untyped: stmt::Association) -> Self {
+        Self {
+            untyped,
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<M: Model> Association<List<M>> {
     /// Create a has-many association from `source` following `path`.
     ///

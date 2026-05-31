@@ -105,20 +105,14 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
-                type Query = #query_struct_ident;
+                type Query<__T> = #query_struct_ident<__T>;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
-                type Many = Many<#toasty::Direct>;
-                type ViaMany = Many<#toasty::Via>;
                 type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type One = One<#toasty::Direct>;
-                type ViaOne = One<#toasty::Via>;
                 type OneField<__Origin> = #field_struct_ident<__Origin>;
-                type OptionOne = OptionOne<#toasty::Direct>;
-                type ViaOptionOne = OptionOne<#toasty::Via>;
 
                 fn id() -> #toasty::core::schema::app::ModelId {
                     static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
@@ -145,8 +139,28 @@ impl Expand<'_> {
                     #field_list_struct_ident::from_path(path)
                 }
 
-                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
+                fn find_by_primary_key(
+                    id: #toasty::stmt::Expr<Self::PrimaryKey>,
+                ) -> Self::Query<#toasty::List<Self>> {
                     #find_by_primary_key_body
+                }
+
+                fn wrap_query<__T>(
+                    stmt: #toasty::stmt::Query<__T>,
+                ) -> Self::Query<__T> {
+                    #query_struct_ident::from_stmt(stmt)
+                }
+
+                fn query_one(
+                    query: Self::Query<#toasty::List<Self>>,
+                ) -> Self::Query<Self> {
+                    query.one()
+                }
+
+                fn query_first(
+                    query: Self::Query<#toasty::List<Self>>,
+                ) -> Self::Query<#toasty::Option<Self>> {
+                    query.first()
                 }
 
                 #field_name_to_id

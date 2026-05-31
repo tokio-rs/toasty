@@ -1,21 +1,8 @@
 use super::{Load, Model};
 
 use toasty_core::schema::Name;
-use toasty_core::schema::app::{FieldId, FieldTy, ForeignKey};
+use toasty_core::schema::app::{FieldId, FieldTy};
 use toasty_core::stmt;
-
-/// Marker for a direct relation scope.
-///
-/// Direct relation scopes can create new records because Toasty can populate
-/// the target foreign key from the source record.
-pub enum Direct {}
-
-/// Marker for a multi-step relation scope.
-///
-/// Via relation scopes are queryable, but do not expose relation-scoped
-/// creation because creating the target would require materializing one or
-/// more intermediate records.
-pub enum Via {}
 
 /// A Rust field type that represents a `#[has_many]` relation.
 ///
@@ -53,55 +40,4 @@ pub trait RelationManyField: Load<Output = Self> {
         pair: Option<FieldId>,
         via: Option<stmt::Path>,
     ) -> FieldTy;
-}
-
-/// A Rust field type that represents a `#[has_one]` or `#[belongs_to]`
-/// relation.
-///
-/// Implemented by `M`, `Option<M>`, `Deferred<M>`, and `Deferred<Option<M>>`
-/// where `M: Model`. The `Option<...>` wrappers carry nullability; the
-/// `Deferred<...>` wrappers carry deferred loading. Anything outside this
-/// shape does not satisfy the trait.
-pub trait RelationOneField: Load<Output = Self> {
-    /// The target model that this field references.
-    type Model: Model;
-
-    /// The "one-side" accessor type produced by the field accessor. Resolves
-    /// to [`Model::One`] for non-nullable impls and [`Model::OptionOne`] for
-    /// nullable impls.
-    type One;
-
-    /// The multi-step "one-side" accessor type produced by `via` relation
-    /// accessors. Resolves to [`Model::ViaOne`] for non-nullable impls and
-    /// [`Model::ViaOptionOne`] for nullable impls.
-    type ViaOne;
-
-    /// The expression-level type used in create/update setters. Resolves to
-    /// the unwrapped `Self::Model` for non-nullable impls and `Option<Self::Model>`
-    /// for nullable impls.
-    type Expr;
-
-    /// Whether the field stores its value in a deferred load slot.
-    const DEFERRED: bool;
-
-    /// Whether the field is nullable (i.e. wrapped in `Option`).
-    const NULLABLE: bool;
-
-    /// Reloads this relation field from a returned value.
-    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
-
-    /// Build the [`FieldTy`] for a `HasOne` relation field, given an
-    /// optional paired `BelongsTo` field on the target model resolved
-    /// from `#[has_one(pair = <field>)]`. When `None`, the linker selects
-    /// the pair by searching the target for a unique `BelongsTo` back to
-    /// the source.
-    ///
-    /// `via` carries the fully resolved [`stmt::Path`] of a
-    /// `#[has_one(via = a.b)]` multi-step relation, rooted at the declaring
-    /// model. A `via` relation has no pair.
-    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy;
-
-    /// Build the [`FieldTy`] for a `BelongsTo` relation field, given the
-    /// foreign key resolved from the field's `#[belongs_to(...)]` attribute.
-    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy;
 }

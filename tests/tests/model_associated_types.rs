@@ -10,7 +10,7 @@ struct User {
 
 // Type aliases for User's associated types
 #[allow(dead_code)]
-type UserQuery = <User as Model>::Query;
+type UserQuery = <User as Model>::Query<toasty::stmt::List<User>>;
 #[allow(dead_code)]
 type UserCreate = <User as Model>::Create;
 #[allow(dead_code)]
@@ -24,7 +24,7 @@ fn check_type<T>(_value: &T) {}
 
 // Test that Model::Query can be used in generic contexts
 #[allow(dead_code)]
-fn use_model_query_in_generic<M: Model>(_query: M::Query) {}
+fn use_model_query_in_generic<M: Model>(_query: M::Query<toasty::stmt::List<M>>) {}
 
 // Test that Model::Create can be used in generic contexts
 #[allow(dead_code)]
@@ -44,7 +44,7 @@ fn model_query_type_is_accessible() {
     let query = User::all();
 
     // Verify that the type matches Model::Query associated type
-    check_type::<<User as Model>::Query>(&query);
+    check_type::<<User as Model>::Query<toasty::stmt::List<User>>>(&query);
 }
 
 #[test]

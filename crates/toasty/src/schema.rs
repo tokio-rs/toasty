@@ -21,7 +21,7 @@ mod load;
 pub use load::Load;
 
 mod model;
-pub use model::Model;
+pub use model::{Model, QueryMany, QueryOne, QueryOptionOne};
 
 mod option;
 
@@ -32,12 +32,13 @@ pub use register::{DiscoverItem, generate_unique_id};
 mod num;
 
 mod relation;
-pub use relation::{Direct, RelationManyField, RelationOneField, Via};
+pub use relation::RelationManyField;
 
 mod relation_one;
+pub use relation_one::RelationOneField;
 
 mod scope;
-pub use scope::{CreateScope, Scope};
+pub use scope::Scope;
 
 use crate::Result;
 

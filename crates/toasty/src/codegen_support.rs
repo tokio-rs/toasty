@@ -13,8 +13,8 @@ pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
-        Auto, CreateScope, Deferred, Direct, DiscoverItem, Embed, Field, Load, Model,
-        RelationManyField, RelationOneField, Scope, Via, generate_unique_id,
+        Auto, Deferred, DiscoverItem, Embed, Field, Load, Model, QueryMany, QueryOne,
+        QueryOptionOne, RelationManyField, RelationOneField, Scope, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
@@ -22,7 +22,7 @@ pub use crate::{
 };
 #[cfg(feature = "serde")]
 pub use serde_json;
-pub use std::{convert::Into, default::Default, option::Option};
+pub use std::{clone::Clone, convert::Into, default::Default, option::Option};
 
 pub use self::version::Version;
 pub use toasty_core as core;
@@ -40,12 +40,12 @@ pub type FieldExprTarget<F> = <F as Field>::ExprTarget;
 /// obtain the field struct for nested builders. Because the macro has no
 /// type information, it cannot call `S::new_path_root()` directly — this function
 /// lets Rust infer `S` from the scope argument.
-pub fn scope_fields<S: CreateScope>(_scope: &S) -> S::Path<S::Item> {
+pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
     S::new_path_root()
 }
 
 /// Create a record inside a scoped create target.
-pub fn create_in_scope<S: CreateScope>(scope: S) -> S::Create {
+pub fn create_in_scope<S: Scope>(scope: S) -> S::Create {
     S::create_in_scope(scope)
 }
 
@@ -59,4 +59,103 @@ pub fn create_in_scope<S: CreateScope>(scope: S) -> S::Create {
 pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     let expr: stmt::Expr<T> = value.into_expr();
     expr.into()
+}
+
+/// Insert `item` into the relation that produced this list query.
+///
+/// Generated code emits `Query<List<M>>::insert` as a one-line forward to
+/// this helper. The query must be scoped to a single-step relation
+/// traversal; multi-step traversals and unscoped queries return an
+/// `unsupported_feature` error.
+pub async fn relation_insert<M, E>(
+    mut query: stmt::Query<List<M>>,
+    executor: &mut dyn Executor,
+    item: E,
+) -> Result<()>
+where
+    M: Model,
+    E: IntoExpr<M>,
+{
+    match query.take_via_assoc() {
+        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
+            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
+            executor.exec(assoc.insert(item)).await
+        }
+        Some(_) => Err(Error::unsupported_feature(
+            "insert is not supported on multi-step relation traversals",
+        )),
+        None => Err(Error::unsupported_feature(
+            "insert requires a relation-scoped query",
+        )),
+    }
+}
+
+/// Remove `item` from the relation that produced this list query.
+///
+/// Counterpart to [`relation_insert`]; the same scoping rules apply.
+pub async fn relation_remove<M, E>(
+    mut query: stmt::Query<List<M>>,
+    executor: &mut dyn Executor,
+    item: E,
+) -> Result<()>
+where
+    M: Model,
+    E: IntoExpr<M>,
+{
+    match query.take_via_assoc() {
+        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
+            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
+            executor.exec(assoc.remove(item)).await
+        }
+        Some(_) => Err(Error::unsupported_feature(
+            "remove is not supported on multi-step relation traversals",
+        )),
+        None => Err(Error::unsupported_feature(
+            "remove requires a relation-scoped query",
+        )),
+    }
+}
+
+/// Continue a `has_many` traversal from `query` along `path`.
+///
+/// If `query` was already scoped from a relation traversal, append
+/// `field_offset` to that traversal's path so the result remains a single
+/// chained association. Otherwise build a fresh `Association::many` rooted
+/// at `query`. Used by generated `.field()` chain methods on the per-model
+/// `Query<List<Source>>` for `has_many` relations.
+pub fn chain_or_build_many<Source, Target>(
+    mut query: stmt::Query<List<Source>>,
+    field_offset: usize,
+    path: stmt::Path<Source, List<Target>>,
+) -> stmt::Association<List<Target>>
+where
+    Source: Model,
+    Target: Model,
+{
+    match query.take_via_assoc() {
+        Some(untyped) => stmt::Association::<List<Source>>::from_untyped(untyped)
+            .chain_field::<Target>(field_offset),
+        None => stmt::Association::many(query, path),
+    }
+}
+
+/// Continue a `belongs_to` / `has_one` traversal from `query` along `path`.
+///
+/// Mirrors [`chain_or_build_many`] for singular relation steps: when no
+/// existing traversal is present the fresh association is built via
+/// [`stmt::Association::many_via_one`].
+pub fn chain_or_build_many_via_one<Source, Target>(
+    mut query: stmt::Query<List<Source>>,
+    field_offset: usize,
+    path: stmt::Path<Source, Target>,
+) -> stmt::Association<List<Target>>
+where
+    Source: Model,
+    Target: Model,
+{
+    match query.take_via_assoc() {
+        Some(untyped) => stmt::Association::<List<Source>>::from_untyped(untyped)
+            .chain_field::<Target>(field_offset),
+        None => stmt::Association::many_via_one(query, path),
+    }
 }
