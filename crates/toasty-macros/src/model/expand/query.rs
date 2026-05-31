@@ -16,7 +16,7 @@ impl Expand<'_> {
         let field_list_struct_ident = &self.model.kind.as_root_unwrap().field_list_struct_ident;
 
         let include_ty = util::ident("T");
-        let filter_methods = self.expand_query_list_filter_methods();
+        let filter_methods = self.expand_relation_filter_methods();
         let relation_methods = self.expand_query_list_relation_methods();
         let include = self.expand_include_method(&include_ty);
 
@@ -300,14 +300,6 @@ impl Expand<'_> {
                 }
             }
         }
-    }
-
-    /// Filter methods on `Query<List<M>>` — merge of `expand_query_filter_methods`
-    /// and `expand_relation_filter_methods`. Both forms went into different
-    /// structs before unification; they share the same method shape (take
-    /// `self`, return `Query<List<M>>`).
-    fn expand_query_list_filter_methods(&self) -> TokenStream {
-        self.expand_relation_filter_methods()
     }
 
     /// Per-relation-field accessor methods on `Query<List<M>>`. Replaces the
