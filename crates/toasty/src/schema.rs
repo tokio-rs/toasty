@@ -32,9 +32,10 @@ pub use register::{DiscoverItem, generate_unique_id};
 mod num;
 
 mod relation;
-pub use relation::{RelationManyField, RelationOneField};
+pub use relation::RelationManyField;
 
 mod relation_one;
+pub use relation_one::RelationOneField;
 
 mod scope;
 pub use scope::Scope;
