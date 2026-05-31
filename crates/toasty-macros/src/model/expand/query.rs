@@ -42,6 +42,18 @@ impl Expand<'_> {
                 #include
             }
 
+            // ----- Shared `create` (any `T` whose query can scope an insert) -----
+            impl<__T> #query_struct_ident<__T>
+            where
+                #toasty::stmt::Query<__T>: #toasty::stmt::IntoScope<#model_ident>,
+            {
+                #vis fn create(self) -> #create_builder_ident {
+                    let mut builder = #create_builder_ident::default();
+                    builder.stmt.set_scope(self.stmt);
+                    builder
+                }
+            }
+
             // ----- List<M>-specific methods -----
             impl #query_struct_ident<#toasty::List<#model_ident>> {
                 /// Construct a list query from a many-style association.
@@ -156,12 +168,6 @@ impl Expand<'_> {
                     #toasty::relation_remove(self.stmt, executor, item).await
                 }
 
-                #vis fn create(self) -> #create_builder_ident {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
-                }
-
                 #relation_methods
             }
 
@@ -172,12 +178,6 @@ impl Expand<'_> {
                     let stmt: #toasty::Statement<#model_ident> = self.stmt.into_statement();
                     executor.exec(stmt).await
                 }
-
-                #vis fn create(self) -> #create_builder_ident {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
-                }
             }
 
             // ----- Optional single-row impl -----
@@ -186,12 +186,6 @@ impl Expand<'_> {
                     use #toasty::IntoStatement;
                     let stmt: #toasty::Statement<#toasty::Option<#model_ident>> = self.stmt.into_statement();
                     executor.exec(stmt).await
-                }
-
-                #vis fn create(self) -> #create_builder_ident {
-                    let mut builder = #create_builder_ident::default();
-                    builder.stmt.set_scope(self.stmt);
-                    builder
                 }
             }
 
