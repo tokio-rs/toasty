@@ -70,18 +70,19 @@
 <a href=#70 id=70 data-nosnippet>70</a>    <span class="kw">async fn </span>fetch&lt;M&gt;(db: <span class="kw-2">&amp;mut </span>toasty::Db, id: String) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;M&gt;&gt;
 <a href=#71 id=71 data-nosnippet>71</a>    <span class="kw">where
 <a href=#72 id=72 data-nosnippet>72</a>        </span>M: toasty::schema::Model&lt;PrimaryKey = String&gt;,
-<a href=#73 id=73 data-nosnippet>73</a>        M::Query: toasty::stmt::IntoStatement&lt;Returning = toasty::stmt::List&lt;M&gt;&gt;,
-<a href=#74 id=74 data-nosnippet>74</a>    {
-<a href=#75 id=75 data-nosnippet>75</a>        <span class="kw">use </span>toasty::stmt::IntoStatement;
-<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">let </span>stmt = M::find_by_primary_key(id.into_expr()).into_statement();
-<a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">let </span>executor: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>toasty::Executor = db;
-<a href=#78 id=78 data-nosnippet>78</a>        executor.exec(stmt).<span class="kw">await
-<a href=#79 id=79 data-nosnippet>79</a>    </span>}
-<a href=#80 id=80 data-nosnippet>80</a>
-<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">let </span>widgets: Vec&lt;Widget&gt; = fetch(<span class="kw-2">&amp;mut </span>db, <span class="string">"w1"</span>.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#82 id=82 data-nosnippet>82</a>    <span class="macro">assert_eq!</span>(widgets.len(), <span class="number">1</span>);
-<a href=#83 id=83 data-nosnippet>83</a>    <span class="macro">assert_eq!</span>(widgets[<span class="number">0</span>].name, <span class="string">"alpha"</span>);
-<a href=#84 id=84 data-nosnippet>84</a>
-<a href=#85 id=85 data-nosnippet>85</a>    <span class="prelude-val">Ok</span>(())
-<a href=#86 id=86 data-nosnippet>86</a>}
+<a href=#73 id=73 data-nosnippet>73</a>        M::Query&lt;toasty::stmt::List&lt;M&gt;&gt;:
+<a href=#74 id=74 data-nosnippet>74</a>            toasty::stmt::IntoStatement&lt;Returning = toasty::stmt::List&lt;M&gt;&gt;,
+<a href=#75 id=75 data-nosnippet>75</a>    {
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="kw">use </span>toasty::stmt::IntoStatement;
+<a href=#77 id=77 data-nosnippet>77</a>        <span class="kw">let </span>stmt = M::find_by_primary_key(id.into_expr()).into_statement();
+<a href=#78 id=78 data-nosnippet>78</a>        <span class="kw">let </span>executor: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>toasty::Executor = db;
+<a href=#79 id=79 data-nosnippet>79</a>        executor.exec(stmt).<span class="kw">await
+<a href=#80 id=80 data-nosnippet>80</a>    </span>}
+<a href=#81 id=81 data-nosnippet>81</a>
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">let </span>widgets: Vec&lt;Widget&gt; = fetch(<span class="kw-2">&amp;mut </span>db, <span class="string">"w1"</span>.to_string()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#83 id=83 data-nosnippet>83</a>    <span class="macro">assert_eq!</span>(widgets.len(), <span class="number">1</span>);
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="macro">assert_eq!</span>(widgets[<span class="number">0</span>].name, <span class="string">"alpha"</span>);
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>    <span class="prelude-val">Ok</span>(())
+<a href=#87 id=87 data-nosnippet>87</a>}
 </code></pre></div></section></main></body></html>

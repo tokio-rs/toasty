@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Direct","Via"],"fn":["from_macro","generate_unique_id"],"mod":["app","db","diff","mapping"],"struct":["Deferred","ModelSet"],"trait":["Auto","Embed","Field","Load","Model","RelationManyField","RelationOneField","Scalar","Scope"]};
+window.SIDEBAR_ITEMS = {"fn":["from_macro","generate_unique_id"],"mod":["app","db","diff","mapping"],"struct":["Deferred","ModelSet"],"trait":["Auto","Embed","Field","Load","Model","RelationManyField","RelationOneField","Scalar","Scope"],"type":["QueryMany","QueryOne","QueryOptionOne"]};
