@@ -1,6 +1,5 @@
 use super::{Deferred, Load, Model, QueryMany, QueryOne, QueryOptionOne, RelationOneField};
 
-use crate::stmt::IntoStatement;
 use toasty_core::schema::app::ModelId;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ForeignKey};
 use toasty_core::stmt;
@@ -19,10 +18,6 @@ impl<M: Model> RelationOneField for M {
 
     fn make_one(query: QueryMany<Self::Model>) -> Self::One {
         <M as Model>::query_one(query)
-    }
-
-    fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().one())
     }
 
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
@@ -48,10 +43,6 @@ impl<M: Model> RelationOneField for Option<M> {
 
     fn make_one(query: QueryMany<Self::Model>) -> Self::One {
         <M as Model>::query_first(query)
-    }
-
-    fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().first())
     }
 
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
@@ -80,10 +71,6 @@ impl<M: Model> RelationOneField for Deferred<M> {
         <M as Model>::query_one(query)
     }
 
-    fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().one())
-    }
-
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
         has_one_relation_field_ty::<M>(pair, via)
     }
@@ -108,10 +95,6 @@ impl<M: Model> RelationOneField for Deferred<Option<M>> {
 
     fn make_one(query: QueryMany<Self::Model>) -> Self::One {
         <M as Model>::query_first(query)
-    }
-
-    fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One {
-        <M as Model>::wrap_query(assoc.into_statement().into_query().unwrap().first())
     }
 
     fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {

@@ -75,12 +75,12 @@ pub trait RelationOneField: Load<Output = Self> {
     /// Narrow a list query targeting the related model into the appropriate
     /// "one" query — `Query<Model>` for non-nullable impls and
     /// `Query<Option<Model>>` for nullable impls.
+    ///
+    /// Relation accessors build the list query (from a filter or by wrapping a
+    /// singular association via [`Model::wrap_query`]) and pass it here; the
+    /// association's path is preserved through the wrap so generated mutators
+    /// (insert, remove, create) can read it.
     fn make_one(query: QueryMany<Self::Model>) -> Self::One;
-
-    /// Build the appropriate "one" query from a singular association,
-    /// preserving the association's path so generated mutators (insert,
-    /// remove, create) can read it.
-    fn make_one_from_assoc(assoc: crate::stmt::Association<Self::Model>) -> Self::One;
 
     /// Build the [`FieldTy`] for a `HasOne` relation field, given an
     /// optional paired `BelongsTo` field on the target model resolved
