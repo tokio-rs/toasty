@@ -177,7 +177,7 @@ impl Expand<'_> {
                     path: #toasty::core::stmt::Path,
                     _terminal_owner: #toasty::core::schema::app::ModelId,
                 ) -> #toasty::core::schema::app::FieldTy {
-                    #toasty::model_via_field_ty::<#model_ident>(singular, path)
+                    #toasty::via::model_via_field_ty::<#model_ident>(singular, path)
                 }
 
                 fn make_via_query(

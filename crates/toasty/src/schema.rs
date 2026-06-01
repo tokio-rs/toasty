@@ -41,7 +41,7 @@ mod scope;
 pub use scope::Scope;
 
 mod via;
-pub use via::{ManyViaElem, ViaManyField, model_via_field_ty};
+pub use via::{ManyViaElem, ViaManyField};
 
 use crate::Result;
 

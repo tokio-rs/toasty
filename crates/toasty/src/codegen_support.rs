@@ -8,6 +8,7 @@ pub mod auto;
 pub mod newtype;
 pub mod storage;
 pub mod version;
+pub mod via;
 
 pub use crate::schema::inventory;
 pub use crate::{
@@ -15,7 +16,7 @@ pub use crate::{
     schema::{
         Auto, Deferred, DiscoverItem, Embed, Field, Load, ManyViaElem, Model, QueryMany, QueryOne,
         QueryOptionOne, RelationManyField, RelationOneField, Scope, ViaManyField,
-        generate_unique_id, model_via_field_ty,
+        generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
