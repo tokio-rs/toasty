@@ -307,7 +307,7 @@ impl<T, U> Path<T, U> {
     /// // A path targeting User values
     /// let path = User::path_root();
     /// // A subquery returning List<User>
-    /// let subquery = Query::<List<User>>::filter(User::fields().name().eq("Alice"));
+    /// let subquery = Query::<List<User>>::all().filter(User::fields().name().eq("Alice"));
     /// let filter = path.in_query(subquery);
     /// ```
     pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
@@ -329,8 +329,8 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// let mut q = User::all();
-    /// q.order_by(User::fields().name().asc());
+    /// let q = User::all()
+    ///     .order_by(User::fields().name().asc());
     /// ```
     pub fn asc(self) -> OrderByExpr {
         OrderByExpr {
@@ -350,8 +350,8 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// let mut q = User::all();
-    /// q.order_by(User::fields().name().desc());
+    /// let q = User::all()
+    ///     .order_by(User::fields().name().desc());
     /// ```
     pub fn desc(self) -> OrderByExpr {
         OrderByExpr {
@@ -396,7 +396,7 @@ impl<T, U> Path<T, List<U>> {
         U: crate::schema::Model,
     {
         // Build a query on the child model filtered by `filter`
-        let child_query = super::Query::<List<U>>::filter(filter);
+        let child_query = super::Query::<List<U>>::all().filter(filter);
         self.build_filter(move |path| stmt::Expr::in_subquery(path, child_query.untyped))
     }
 
@@ -435,7 +435,7 @@ impl<T, U> Path<T, List<U>> {
         U: crate::schema::Model,
     {
         // parent NOT IN (SELECT child_fk FROM child WHERE NOT filter)
-        let child_query = super::Query::<List<U>>::filter(filter.not());
+        let child_query = super::Query::<List<U>>::all().filter(filter.not());
         self.build_filter(move |path| {
             stmt::Expr::not(stmt::Expr::in_subquery(path, child_query.untyped))
         })

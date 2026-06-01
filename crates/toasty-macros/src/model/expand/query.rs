@@ -121,31 +121,35 @@ impl Expand<'_> {
 
                 #vis fn filter(self, expr: #toasty::stmt::Expr<bool>) -> Self {
                     Self {
-                        stmt: self.stmt.and(expr),
+                        stmt: self.stmt.filter(expr),
                     }
                 }
 
-                #vis fn order_by(mut self, order_by: impl Into<#toasty::stmt::OrderBy>) -> Self {
-                    self.stmt.order_by(order_by);
-                    self
+                #vis fn order_by(self, order_by: impl Into<#toasty::stmt::OrderBy>) -> Self {
+                    Self {
+                        stmt: self.stmt.order_by(order_by),
+                    }
                 }
 
                 #vis fn latest_by<#include_ty>(
-                    mut self,
+                    self,
                     field: #toasty::stmt::Path<#model_ident, #include_ty>,
                 ) -> Self {
-                    self.stmt.latest_by(field);
-                    self
+                    Self {
+                        stmt: self.stmt.latest_by(field),
+                    }
                 }
 
-                #vis fn limit(mut self, n: usize) -> Self {
-                    self.stmt.limit(n);
-                    self
+                #vis fn limit(self, n: usize) -> Self {
+                    Self {
+                        stmt: self.stmt.limit(n),
+                    }
                 }
 
-                #vis fn offset(mut self, n: usize) -> Self {
-                    self.stmt.offset(n);
-                    self
+                #vis fn offset(self, n: usize) -> Self {
+                    Self {
+                        stmt: self.stmt.offset(n),
+                    }
                 }
 
                 /// Add an item to the relation this query was scoped from.
@@ -398,11 +402,12 @@ impl Expand<'_> {
         // on a model whose only includable thing lives inside an embed.
         Some(quote! {
             #vis fn include<#include_ty>(
-                mut self,
+                self,
                 path: impl #toasty::Into<#toasty::Path<#model_ident, #include_ty>>,
             ) -> Self {
-                self.stmt.include(path.into());
-                self
+                Self {
+                    stmt: self.stmt.include(path.into()),
+                }
             }
         })
     }

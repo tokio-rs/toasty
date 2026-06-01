@@ -67,7 +67,7 @@ impl<M: Model> Association<List<M>> {
     /// use toasty::stmt::{Association, List, Query};
     /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
+    /// let source = Query::<List<User>>::all().filter(User::fields().id().eq(1));
     /// let path = User::path_field::<List<Todo>>(2);
     /// let _assoc = Association::many(source, path);
     /// ```
@@ -150,7 +150,7 @@ impl<M: Model> Association<List<M>> {
     /// use toasty::stmt::{Association, Expr, List, Query};
     /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
+    /// let source = Query::<List<User>>::all().filter(User::fields().id().eq(1));
     /// let path = User::path_field::<List<Todo>>(2);
     /// let assoc = Association::many(source, path);
     ///
@@ -197,7 +197,7 @@ impl<M: Model> Association<List<M>> {
     /// use toasty::stmt::{Association, Expr, List, Query};
     /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
+    /// let source = Query::<List<User>>::all().filter(User::fields().id().eq(1));
     /// let path = User::path_field::<List<Todo>>(2);
     /// let assoc = Association::many(source, path);
     ///
@@ -279,7 +279,7 @@ impl<M: Model> Association<M> {
     /// use toasty::stmt::{Association, List, Query};
     /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<Todo>>::filter(Todo::fields().id().eq(1));
+    /// let source = Query::<List<Todo>>::all().filter(Todo::fields().id().eq(1));
     /// let path = Todo::path_field::<User>(1);
     /// let _assoc = Association::one(source, path);
     /// ```
