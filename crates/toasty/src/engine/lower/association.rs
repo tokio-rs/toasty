@@ -61,6 +61,29 @@ impl<'a> RewriteVia<'a> {
             && let stmt::Source::Model(model) = &mut select.source
             && let Some(via) = model.via.take()
         {
+            // A scalar-terminal via used as a query source selects the
+            // projected terminal column from the via target. The macro can't
+            // name the target (the model the relation chain reaches), so it
+            // leaves a placeholder source id and no projection; fill both in
+            // from the schema's resolved `Via` before unfolding the chain into
+            // a filter.
+            let scalar_terminal =
+                self.schema()
+                    .app
+                    .resolve_field_path(&via.path)
+                    .and_then(|field| match &field.ty {
+                        app::FieldTy::Via(v) => v.terminal.map(|terminal| (v.target, terminal)),
+                        _ => None,
+                    });
+
+            if let Some((target, _)) = scalar_terminal {
+                model.id = target;
+            }
+            if let Some((target, terminal)) = scalar_terminal {
+                select.returning =
+                    stmt::Returning::Project(stmt::Path::field(target, terminal).into_stmt());
+            }
+
             // Create a new scope to indicate we are operating in the
             // context of stmt.target
             let mut s = self.scope(&select.source);

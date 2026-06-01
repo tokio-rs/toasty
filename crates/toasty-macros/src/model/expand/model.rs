@@ -175,15 +175,12 @@ impl Expand<'_> {
                 fn via_field_ty(
                     singular: #toasty::core::schema::Name,
                     path: #toasty::core::stmt::Path,
-                    _terminal_owner: #toasty::core::schema::app::ModelId,
                 ) -> #toasty::core::schema::app::FieldTy {
                     #toasty::via::model_via_field_ty::<#model_ident>(singular, path)
                 }
 
                 fn make_via_query(
                     assoc: #toasty::stmt::Association<#toasty::List<#model_ident>>,
-                    _target: #toasty::core::schema::app::ModelId,
-                    _terminal: usize,
                 ) -> Self::Query {
                     <#query_struct_ident<#toasty::List<#model_ident>>>::from_assoc_many(assoc)
                 }

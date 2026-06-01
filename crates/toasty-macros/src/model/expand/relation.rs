@@ -113,14 +113,12 @@ impl Expand<'_> {
         // navigation method works whether the terminal is a model — keeping
         // the rich `QueryMany<M>` builder — or a scalar field, where it yields
         // a plain `Query<List<scalar>>` projecting that field.
-        if let Some(segments) = &rel.via {
-            let model_ident = &self.model.ident;
-            let terminal_ty = quote!(#toasty::List<<#ty as #toasty::ViaManyField>::Target>);
-            let full_path =
-                super::schema::expand_via_path(toasty, model_ident, segments, &terminal_ty);
-            let terminal_owner =
-                super::schema::expand_via_terminal_owner(toasty, model_ident, segments);
-
+        if rel.via.is_some() {
+            // The association references the via field; its target and (for a
+            // scalar terminal) terminal projection are resolved during lowering
+            // from the schema, so nothing here needs the path's shape. The
+            // declared element type is validated against the path by the typed
+            // accessor and by the `schema()` expansion's terminal pin.
             return quote! {
                 #vis fn #field_ident(&self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Query {
                     // Suppress the unused field warning
@@ -135,20 +133,7 @@ impl Expand<'_> {
                             __source,
                             Self::fields().#field_ident(),
                         );
-                        // The terminal field (scalar terminals only) is the via
-                        // path's last step, on the model the relation chain
-                        // reaches.
-                        let __via_path: #toasty::core::stmt::Path = #full_path;
-                        let __terminal = *__via_path
-                            .projection
-                            .as_slice()
-                            .last()
-                            .expect("via path has at least one step");
-                        <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(
-                            __assoc,
-                            #terminal_owner,
-                            __terminal,
-                        )
+                        <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(__assoc)
                     }
                 }
             };

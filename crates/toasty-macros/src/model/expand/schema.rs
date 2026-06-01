@@ -175,14 +175,13 @@ impl Expand<'_> {
                             quote!(#toasty::List<<#ty as #toasty::ViaManyField>::Target>);
                         let full_path =
                             expand_via_path(toasty, model_ident, segments, &terminal_ty);
-                        let terminal_owner = expand_via_terminal_owner(toasty, model_ident, segments);
 
                         // A has-many collection is always present, never null.
                         nullable = quote!(false);
                         deferred = quote!(<#ty as #toasty::ViaManyField>::DEFERRED);
                         field_ty = quote!(
                             <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::via_field_ty(
-                                #singular_name, #full_path, #terminal_owner,
+                                #singular_name, #full_path,
                             )
                         );
                     } else {
@@ -624,25 +623,4 @@ pub(super) fn expand_via_path(
             __via_untyped
         }
     }
-}
-
-/// Emit the [`ModelId`] of the model that owns the via path's *terminal*
-/// segment, by chaining the path's relation prefix (all but the last segment)
-/// onto the model's `Fields` struct and reading its `target_model_id()`. For a
-/// scalar-terminal via this is the via target (the model the relation chain
-/// reaches); a relation-terminal via ignores it (the per-model `ViaTarget`
-/// impl uses `Self::id()`).
-pub(super) fn expand_via_terminal_owner(
-    toasty: &TokenStream,
-    model_ident: &syn::Ident,
-    segments: &[syn::Ident],
-) -> TokenStream {
-    let prefix = &segments[..segments.len() - 1];
-    let mut chain = quote! { #model_ident::fields() };
-    for segment in prefix {
-        chain = quote_spanned! { segment.span()=> #chain.#segment() };
-    }
-
-    let _ = toasty;
-    quote! { (#chain).target_model_id() }
 }

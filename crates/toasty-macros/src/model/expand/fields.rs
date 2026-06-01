@@ -21,15 +21,6 @@ impl Expand<'_> {
                 #vis fn create(&self) -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
-
-                /// The id of the model this path points at. Used by generated
-                /// `#[has_many(via = …)]` code to resolve the model that owns a
-                /// scalar terminal field when the relation-chain prefix ends in
-                /// a singular relation.
-                #[doc(hidden)]
-                #vis fn target_model_id(&self) -> #toasty::core::schema::app::ModelId {
-                    <#model_ident as #toasty::Model>::id()
-                }
             }
         } else {
             TokenStream::new()
@@ -236,8 +227,8 @@ impl Expand<'_> {
             TokenStream::new()
         };
 
-        // any() / all() / target_model_id() are only available on root models
-        // (they require the `Model` trait bound).
+        // any() / all() are only available on root models (they require the
+        // `Model` trait bound).
         let any_method = if is_root {
             quote! {
                 /// Filter the parent model by a condition on the associated
@@ -253,15 +244,6 @@ impl Expand<'_> {
                 /// associated records).
                 #vis fn all(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
                     self.path.all(filter)
-                }
-
-                /// The id of the model this list path points at. Used by
-                /// generated `#[has_many(via = …)]` code to resolve the model
-                /// that owns a scalar terminal field from the relation-chain
-                /// prefix.
-                #[doc(hidden)]
-                #vis fn target_model_id(&self) -> #toasty::core::schema::app::ModelId {
-                    <#model_ident as #toasty::Model>::id()
                 }
             }
         } else {

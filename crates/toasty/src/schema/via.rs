@@ -5,6 +5,10 @@ use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldTy, ModelId, Via};
 use toasty_core::stmt;
 
+/// Placeholder via target for a scalar terminal, overwritten when `toasty-core`
+/// resolves the relation chain while linking. It must never reach a query.
+const UNRESOLVED_TARGET: ModelId = ModelId(usize::MAX);
+
 /// Implemented by a `#[has_many(via = …)]` field's Rust type, exposing the
 /// via's [`Target`](Self::Target) — the terminal type the path projects.
 ///
@@ -55,21 +59,20 @@ pub trait ViaTarget {
     /// terminal element type is `Self`.
     ///
     /// `path` is the fully-resolved field path (rooted at the declaring
-    /// model), including the terminal step. `terminal_owner` is the model that
-    /// owns the path's last segment: a scalar terminal uses it as the via
-    /// target, while a model terminal ignores it in favour of `Self::id()`.
-    fn via_field_ty(singular: Name, path: stmt::Path, terminal_owner: ModelId) -> FieldTy;
+    /// model), including the terminal step. The via target is `Self::id()` for
+    /// a model terminal; for a scalar terminal it is the model the relation
+    /// chain reaches, which the path alone can't name here — so the scalar
+    /// impls leave it unset and `toasty-core` fills it in while linking.
+    fn via_field_ty(singular: Name, path: stmt::Path) -> FieldTy;
 
     /// Wrap a via-field association into the navigation query.
     ///
-    /// `target` and `terminal` describe a scalar terminal (the model the
-    /// relation chain reaches and the projected field's index on it); a model
-    /// terminal ignores them.
-    fn make_via_query(
-        assoc: Association<List<Self>>,
-        target: ModelId,
-        terminal: usize,
-    ) -> Self::Query
+    /// A scalar terminal yields a query whose source model and terminal
+    /// projection are filled in during lowering ([`RewriteVia`]) from the
+    /// core-resolved schema, so neither is needed here.
+    ///
+    /// [`RewriteVia`]: ../../engine/lower/association/struct.RewriteVia.html
+    fn make_via_query(assoc: Association<List<Self>>) -> Self::Query
     where
         Self: Sized;
 }
@@ -82,21 +85,18 @@ macro_rules! impl_via_many_scalar {
             impl ViaTarget for $t {
                 type Query = Query<List<$t>>;
 
-                fn via_field_ty(
-                    singular: Name,
-                    path: stmt::Path,
-                    terminal_owner: ModelId,
-                ) -> FieldTy {
-                    // The terminal scalar field is the path's last step, on the
-                    // model the relation chain reaches.
+                fn via_field_ty(singular: Name, path: stmt::Path) -> FieldTy {
+                    // The terminal scalar field is the path's last step.
                     let terminal = *path
                         .projection
                         .as_slice()
                         .last()
                         .expect("via path has at least one step");
                     let expr_ty = stmt::Type::List(Box::new(<$t as Load>::ty()));
+                    // `target` (the model the relation chain reaches) is resolved
+                    // in core's link phase; leave a placeholder it overwrites.
                     FieldTy::Via(Via::new(
-                        terminal_owner,
+                        UNRESOLVED_TARGET,
                         expr_ty,
                         app::Cardinality::Many { singular },
                         path,
@@ -104,29 +104,18 @@ macro_rules! impl_via_many_scalar {
                     ))
                 }
 
-                fn make_via_query(
-                    assoc: Association<List<$t>>,
-                    target: ModelId,
-                    terminal: usize,
-                ) -> Self::Query {
-                    // Iterate the via target's rows (the via association is
-                    // unfolded into a reachability filter during lowering) and
-                    // project the terminal field — the same shape as
-                    // `.select(Target::fields().field())`. Built like a
-                    // relation-via source query (`Query::builder(SourceModel)`)
-                    // so it lowers identically, then the returning is set to the
-                    // terminal column. `distinct` collapses duplicate terminal
+                fn make_via_query(assoc: Association<List<$t>>) -> Self::Query {
+                    // A via-as-source query whose source model and terminal
+                    // projection RewriteVia fills in from the resolved schema
+                    // (see its scalar branch). The placeholder source id is
+                    // overwritten there. `distinct` collapses duplicate terminal
                     // values, matching the include path.
                     let mut query = stmt::Query::builder(stmt::SourceModel {
-                        id: target,
+                        id: UNRESOLVED_TARGET,
                         via: Some(assoc.untyped),
                     })
                     .build();
-                    let select = query.body.as_select_mut_unwrap();
-                    select.returning = stmt::Returning::Project(
-                        stmt::Path::field(target, terminal).into_stmt(),
-                    );
-                    select.distinct = true;
+                    query.body.as_select_mut_unwrap().distinct = true;
                     Query::from_untyped(query)
                 }
             }
