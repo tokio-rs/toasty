@@ -34,6 +34,7 @@ pub mod user_org_project_todo;
 pub mod user_post_comment;
 pub mod user_profile_and_todos;
 pub mod user_profile_settings;
+pub mod user_tag_names;
 pub mod user_todo_step;
 pub mod user_two_children;
 pub mod user_unique_email;

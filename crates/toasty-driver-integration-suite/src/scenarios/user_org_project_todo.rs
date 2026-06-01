@@ -32,6 +32,12 @@ scenario! {
         // The second step expands into another via path (via-of-via).
         #[has_many(via = organizations.todos)]
         nested_todos: toasty::Deferred<Vec<Todo>>,
+
+        // A via-of-via with a *scalar* terminal: the chain routes through
+        // `Organization::todos` (itself a via), then projects `Todo::title`.
+        // Exercises the nested-via splice on the scalar-terminal code paths.
+        #[has_many(via = organizations.todos.title)]
+        nested_todo_titles: toasty::Deferred<Vec<String>>,
     }
 
     #[derive(Debug, toasty::Model)]

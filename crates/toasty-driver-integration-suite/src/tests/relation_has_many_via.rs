@@ -410,6 +410,79 @@ pub async fn include_via_nested_via(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A via-of-via with a **scalar terminal**: `nested_todo_titles` routes through
+/// `organizations.todos` — where `Organization::todos` is itself a via — then
+/// projects `Todo::title`. This drives the nested-via splice
+/// (`flatten_via_steps` / `RewriteVia`) on the *scalar*-terminal code paths,
+/// which the model via-of-via ([`include_via_nested_via`]) leaves untested.
+/// Distinct values still apply, so a title shared by todos in different orgs
+/// collapses to one. Navigation and `.include()` must agree.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_org_project_todo)
+)]
+pub async fn scalar_via_of_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let org_a = toasty::create!(Organization {
+        name: "A-Co",
+        user: &alice
+    })
+    .exec(&mut db)
+    .await?;
+    let org_b = toasty::create!(Organization {
+        name: "B-Co",
+        user: &alice
+    })
+    .exec(&mut db)
+    .await?;
+    let proj_a = toasty::create!(Project {
+        name: "p-a",
+        organization: &org_a
+    })
+    .exec(&mut db)
+    .await?;
+    let proj_b = toasty::create!(Project {
+        name: "p-b",
+        organization: &org_b
+    })
+    .exec(&mut db)
+    .await?;
+
+    // "y" appears under todos in *both* orgs — distinct values collapse it.
+    toasty::create!(Todo::[
+        { title: "x", project: &proj_a },
+        { title: "y", project: &proj_a },
+        { title: "y", project: &proj_b },
+        { title: "z", project: &proj_b },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Navigation projects the titles through the nested via.
+    let titles = alice.nested_todo_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["x", "y", "z"]);
+
+    // `.include()` agrees.
+    let loaded = User::filter_by_id(alice.id)
+        .include(User::fields().nested_todo_titles())
+        .get(&mut db)
+        .await?;
+    let titles: Vec<&str> = loaded
+        .nested_todo_titles
+        .get()
+        .iter()
+        .map(|t| &t[..])
+        .collect();
+    assert_eq_unordered!(titles, ["x", "y", "z"]);
+
+    Ok(())
+}
+
 /// A user with no intermediates yields an empty included set — the
 /// `INNER JOIN` excludes them but the parent row is still returned.
 #[driver_test(
@@ -613,6 +686,107 @@ pub async fn query_scalar_via_returns_distinct_titles(test: &mut Test) -> Result
     Ok(())
 }
 
+/// Pins the **distinct *values*** decision against the alternative (distinct
+/// *targets*). The case that tells them apart is a user commenting on two
+/// *different* articles that happen to share a title: the model-via reaches two
+/// distinct targets, but the scalar via collapses their equal terminal values
+/// to one — `["Rust"]`, not `["Rust", "Rust"]`.
+///
+/// [`query_scalar_via_returns_distinct_titles`] can't distinguish the two
+/// semantics: it dedups a single target reached through several comments, which
+/// both semantics collapse identically. Navigation and `.include()` must agree.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
+pub async fn scalar_via_distinct_values_across_distinct_targets(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    // Two *different* articles that happen to share the title "Rust".
+    let articles = toasty::create!(Article::[{ title: "Rust" }, { title: "Rust" }])
+        .exec(&mut db)
+        .await?;
+    let (rust_a, rust_b) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust_a },
+        { body: "a2", user: &alice, article: rust_b },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // The targets are genuinely distinct: the model-via reaches both articles.
+    let commented = alice.commented_articles().exec(&mut db).await?;
+    assert_eq!(commented.len(), 2);
+
+    // ...but the scalar via yields distinct *values*: the shared title collapses
+    // to one. Distinct *targets* would instead give ["Rust", "Rust"].
+    let titles = alice.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust"]);
+
+    // `.include()` agrees with navigation.
+    let loaded = User::filter_by_id(alice.id)
+        .include(User::fields().commented_article_titles())
+        .get(&mut db)
+        .await?;
+    let titles: Vec<&str> = loaded
+        .commented_article_titles
+        .get()
+        .iter()
+        .map(|t| &t[..])
+        .collect();
+    assert_eq_unordered!(titles, ["Rust"]);
+
+    Ok(())
+}
+
+/// A 2-step scalar via (`comments.body`): the terminal field sits directly on
+/// the first relation's target, so the relation chain is a single step
+/// (`[comments]`) — the minimal scalar-via walk, distinct from the 3-step
+/// `comments.article.title`. Distinct values still apply, so a body repeated
+/// across comments appears once. Navigation and `.include()` must agree.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
+pub async fn query_scalar_via_two_step(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let article = toasty::create!(Article { title: "Rust" })
+        .exec(&mut db)
+        .await?;
+
+    // "a1" twice, "a2" once — distinct *values* collapse "a1".
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: &article },
+        { body: "a1", user: &alice, article: &article },
+        { body: "a2", user: &alice, article: &article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let bodies = alice.comment_bodies().exec(&mut db).await?;
+    assert_eq_unordered!(bodies.iter().map(|b| &b[..]), ["a1", "a2"]);
+
+    let loaded = User::filter_by_id(alice.id)
+        .include(User::fields().comment_bodies())
+        .get(&mut db)
+        .await?;
+    let bodies: Vec<&str> = loaded.comment_bodies.get().iter().map(|b| &b[..]).collect();
+    assert_eq_unordered!(bodies, ["a1", "a2"]);
+
+    Ok(())
+}
+
 /// `.include()` of a scalar-terminal `via` loads the projected titles onto each
 /// parent, grouped by user, with duplicates collapsed.
 #[driver_test(
@@ -750,6 +924,52 @@ pub async fn select_scalar_via(test: &mut Test) -> Result<()> {
     assert_eq!(1, titles_per_user.len());
     let titles: Vec<&str> = titles_per_user[0].iter().map(|t| &t[..]).collect();
     assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+
+    Ok(())
+}
+
+/// A **non-deferred** scalar via (`tag_names: Vec<String>`, no `Deferred`) is an
+/// eager relation edge: querying the parent auto-loads the projected terminal
+/// values without an explicit `.include()`. Every other via scenario wraps the
+/// field in `Deferred`, so this is the only test exercising the
+/// `ViaManyField for Vec<E>` (`DEFERRED = false`) impl and via auto-loading. The
+/// load groups per user and collapses duplicate values, like the explicit
+/// `.include()` paths.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_tag_names))]
+pub async fn eager_scalar_via_auto_loads(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+    let (alice, bob) = (&users[0], &users[1]);
+
+    toasty::create!(Tag::[
+        { name: "rust", user: alice },
+        { name: "rust", user: alice },
+        { name: "db", user: alice },
+        { name: "sql", user: bob },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // No `.include()`: the eager via loads on a plain query.
+    let loaded: Vec<User> = User::all().exec(&mut db).await?;
+    assert_eq!(2, loaded.len());
+
+    for user in &loaded {
+        let names: Vec<&str> = user.tag_names.iter().map(|n| &n[..]).collect();
+        match &user.name[..] {
+            // "rust" was tagged twice but the via yields distinct values.
+            "Alice" => {
+                assert_eq_unordered!(names, ["rust", "db"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(names, ["sql"]);
+            }
+            other => panic!("unexpected user {other}"),
+        }
+    }
 
     Ok(())
 }
