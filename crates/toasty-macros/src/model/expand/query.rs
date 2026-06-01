@@ -318,10 +318,13 @@ impl Expand<'_> {
             .iter()
             .filter_map(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => Some(self.expand_belongs_to_method(field, rel)),
-                // A `via` relation is navigated from a model instance (see the
-                // relation method in `relation.rs`), not chained on a query: it
-                // has no paired FK to extend an association path through, and a
-                // scalar terminal has no `RelationManyField::Model`.
+                // Skip `via` fields: the chained accessor returns
+                // `QueryMany<<ty as RelationManyField>::Model>`, but a scalar
+                // terminal (`Vec<String>`) has no `RelationManyField` impl, so
+                // it can't compile. The attribute doesn't reveal whether the
+                // terminal is a model or a scalar, so skip all vias uniformly.
+                // A via is navigated from a model instance instead
+                // (`user.tag_names()`, see relation.rs).
                 FieldTy::HasMany(rel) if rel.via.is_some() => None,
                 FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
                 FieldTy::HasOne(rel) => Some(self.expand_has_one_method(field, rel)),
