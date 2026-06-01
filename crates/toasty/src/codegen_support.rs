@@ -15,7 +15,7 @@ pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
         Auto, Deferred, DiscoverItem, Embed, Field, Load, Model, QueryMany, QueryOne,
-        QueryOptionOne, RelationManyField, RelationOneField, Scope, ViaMany, ViaManyField,
+        QueryOptionOne, RelationManyField, RelationOneField, Scope, ViaMany, ViaManyField, ViaPath,
         ViaTarget, generate_unique_id,
     },
     stmt::CreateMany,

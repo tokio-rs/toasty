@@ -74,7 +74,7 @@ impl Expand<'_> {
                             // `ViaManyField`, which works for scalar terminals too
                             // (where there is no `RelationManyField::Model`).
                             quote_spanned! { span=>
-                                #vis fn #field_ident(&self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Path<__Origin> {
+                                #vis fn #field_ident(&self) -> #toasty::ViaPath<#ty, __Origin> {
                                     <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(#path)
                                 }
                             }
@@ -202,7 +202,7 @@ impl Expand<'_> {
                         let span = field_ident.span();
                         let schema_trait = self.schema_trait();
                         quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Path<__Origin> {
+                            #vis fn #field_ident(&self) -> #toasty::ViaPath<#ty, __Origin> {
                                 <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(
                                     self.path().chain(
                                         <#model_ident as #schema_trait>::path_field(#field_offset)

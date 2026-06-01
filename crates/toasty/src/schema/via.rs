@@ -43,6 +43,15 @@ impl<E: ViaTarget> ViaManyField for Deferred<Vec<E>> {
 /// same way.
 pub type ViaMany<F> = <<F as ViaManyField>::Target as ViaTarget>::Query;
 
+/// The typed path handle a `#[has_many(via = …)]` field's accessor returns for
+/// a field of type `F` (e.g. `Vec<String>`, `Deferred<Vec<Article>>`), rooted
+/// at `Origin`.
+///
+/// Resolves to the terminal type's [`ViaTarget::Path`]: the model's chainable
+/// `ManyField` for a model terminal, `Path<Origin, List<scalar>>` for a scalar.
+/// Mirrors [`ViaMany`], which aliases the navigation query the same way.
+pub type ViaPath<F, Origin> = <<F as ViaManyField>::Target as ViaTarget>::Path<Origin>;
+
 /// A type that can be the terminal element of a `#[has_many(via = …)]`
 /// relation.
 ///
