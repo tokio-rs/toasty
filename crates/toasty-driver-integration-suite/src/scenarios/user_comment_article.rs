@@ -17,6 +17,10 @@ scenario! {
         // User → comments → article
         #[has_many(via = comments.article)]
         commented_articles: toasty::Deferred<Vec<Article>>,
+
+        // User → comments → article → title (scalar terminal)
+        #[has_many(via = comments.article.title)]
+        commented_article_titles: toasty::Deferred<Vec<String>>,
     }
 
     #[derive(Debug, toasty::Model)]

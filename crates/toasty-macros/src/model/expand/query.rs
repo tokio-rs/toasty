@@ -318,6 +318,11 @@ impl Expand<'_> {
             .iter()
             .filter_map(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => Some(self.expand_belongs_to_method(field, rel)),
+                // A `via` relation is navigated from a model instance (see the
+                // relation method in `relation.rs`), not chained on a query: it
+                // has no paired FK to extend an association path through, and a
+                // scalar terminal has no `RelationManyField::Model`.
+                FieldTy::HasMany(rel) if rel.via.is_some() => None,
                 FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
                 FieldTy::HasOne(rel) => Some(self.expand_has_one_method(field, rel)),
                 FieldTy::Primitive(..) => None,

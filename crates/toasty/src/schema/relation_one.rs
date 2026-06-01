@@ -168,7 +168,7 @@ fn has_one_relation_field_ty<M: Model>(pair: Option<FieldId>, via: Option<stmt::
     let cardinality = app::Cardinality::One;
 
     match via {
-        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path, None)),
         None => FieldTy::Has(app::Has {
             target,
             expr_ty,

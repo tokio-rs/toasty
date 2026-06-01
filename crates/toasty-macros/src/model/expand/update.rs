@@ -355,7 +355,13 @@ impl Expand<'_> {
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
-                    quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
+                    if rel.via.is_some() {
+                        // A via field has no `RelationManyField` impl (its
+                        // element may be a scalar); reload through `Load`.
+                        quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
+                    } else {
+                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
+                    }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;

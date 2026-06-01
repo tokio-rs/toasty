@@ -560,3 +560,159 @@ pub async fn select_via_has_one(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+// ===== Scalar-terminal `via`: the path ends in a field, not a relation =====
+//
+// `#[has_many(via = comments.article.title)] commented_article_titles:
+// Vec<String>` projects the `title` of every article a user has commented on.
+// The relation chain (`comments.article`) is the same as `commented_articles`;
+// the extra `.title` step makes the field a `Vec<String>` of distinct titles.
+
+/// Querying a scalar-terminal `via` projects the terminal field across the
+/// relation path, yielding distinct values — a title reached through several
+/// comments appears once.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
+pub async fn query_scalar_via_returns_distinct_titles(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+    let (alice, bob) = (&users[0], &users[1]);
+
+    let articles = toasty::create!(Article::[
+        { title: "Rust" },
+        { title: "Toasty" },
+        { title: "SQL" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (rust, toasty_article, sql) = (&articles[0], &articles[1], &articles[2]);
+
+    // Alice → Rust (twice), Toasty.  Bob → SQL.
+    toasty::create!(Comment::[
+        { body: "a1", user: alice, article: rust },
+        { body: "a2", user: alice, article: rust },
+        { body: "a3", user: alice, article: toasty_article },
+        { body: "b1", user: bob, article: sql },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Rust appears once even though Alice commented on it twice.
+    let titles = alice.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust", "Toasty"]);
+
+    let titles = bob.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["SQL"]);
+
+    Ok(())
+}
+
+/// `.include()` of a scalar-terminal `via` loads the projected titles onto each
+/// parent, grouped by user, with duplicates collapsed.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
+pub async fn include_scalar_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[
+        { name: "Alice" },
+        { name: "Bob" },
+        { name: "Charlie" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (alice, bob) = (&users[0], &users[1]);
+
+    let articles = toasty::create!(Article::[
+        { title: "Rust" },
+        { title: "Toasty" },
+        { title: "SQL" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (rust, toasty_article, sql) = (&articles[0], &articles[1], &articles[2]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: alice, article: rust },
+        { body: "a2", user: alice, article: rust },
+        { body: "a3", user: alice, article: toasty_article },
+        { body: "b1", user: bob, article: sql },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().commented_article_titles())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(3, loaded.len());
+
+    for user in &loaded {
+        let titles: Vec<&str> = user
+            .commented_article_titles
+            .get()
+            .iter()
+            .map(|t| &t[..])
+            .collect();
+        match &user.name[..] {
+            "Alice" => {
+                assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(titles, ["SQL"]);
+            }
+            "Charlie" => assert!(titles.is_empty(), "Charlie has no comments; got {titles:?}"),
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    Ok(())
+}
+
+/// `.select()` of a scalar-terminal `via` returns the projected titles per
+/// parent row.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
+pub async fn select_scalar_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let articles = toasty::create!(Article::[{ title: "Rust" }, { title: "Toasty" }])
+        .exec(&mut db)
+        .await?;
+    let (rust, toasty_article) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust },
+        { body: "a2", user: &alice, article: rust },
+        { body: "a3", user: &alice, article: toasty_article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let titles_per_user: Vec<Vec<String>> = User::all()
+        .select(User::fields().commented_article_titles())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, titles_per_user.len());
+    let titles: Vec<&str> = titles_per_user[0].iter().map(|t| &t[..]).collect();
+    assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+
+    Ok(())
+}

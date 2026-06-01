@@ -147,9 +147,18 @@ impl<'a> RewriteVia<'a> {
 
         // If this step names a via relation, splice the via's resolved path
         // in place of the via field and continue. Handles via-of-via
-        // naturally because the recursion re-examines the spliced steps.
+        // naturally because the recursion re-examines the spliced steps. A
+        // scalar-terminal via contributes only its relation chain to the
+        // reachability filter — the terminal field is a projection, handled by
+        // the query's returning, not the filter.
         let via_path = match &field.ty {
-            app::FieldTy::Via(via) => Some(via.path.projection.as_slice()),
+            app::FieldTy::Via(via) => {
+                let projection = via.path.projection.as_slice();
+                Some(match via.terminal {
+                    Some(_) => &projection[..projection.len() - 1],
+                    None => projection,
+                })
+            }
             _ => None,
         };
         if let Some(via_steps) = via_path {

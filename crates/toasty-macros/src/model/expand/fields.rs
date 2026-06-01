@@ -21,6 +21,15 @@ impl Expand<'_> {
                 #vis fn create(&self) -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
+
+                /// The id of the model this path points at. Used by generated
+                /// `#[has_many(via = …)]` code to resolve the model that owns a
+                /// scalar terminal field when the relation-chain prefix ends in
+                /// a singular relation.
+                #[doc(hidden)]
+                #vis fn target_model_id(&self) -> #toasty::core::schema::app::ModelId {
+                    <#model_ident as #toasty::Model>::id()
+                }
             }
         } else {
             TokenStream::new()
@@ -63,9 +72,22 @@ impl Expand<'_> {
                             self.path().chain(<#model_ident as #field_schema_trait>::path_field(#field_offset))
                         };
 
-                        quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> <<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin> {
-                                <<<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
+                        if rel.via.is_some() {
+                            // A `via` field is a projection handle: it only needs
+                            // to be includable / selectable (`Into<stmt::Path>`),
+                            // so expose a plain list path. The element comes from
+                            // `ManyViaElem`, which works for scalar terminals too
+                            // (where there is no `RelationManyField::Model`).
+                            quote_spanned! { span=>
+                                #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ManyViaElem>::Elem>> {
+                                    #path
+                                }
+                            }
+                        } else {
+                            quote_spanned! { span=>
+                                #vis fn #field_ident(&self) -> <<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin> {
+                                    <<<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
+                                }
                             }
                         }
                     }
@@ -175,6 +197,22 @@ impl Expand<'_> {
                             &field_offset,
                         )
                     }
+                    HasMany(rel) if rel.via.is_some() => {
+                        // See the `via` branch in `expand_field_struct`: a via
+                        // field is a plain list-path projection handle, and its
+                        // element comes from `ManyViaElem` so scalar terminals
+                        // work too.
+                        let ty = &rel.ty;
+                        let span = field_ident.span();
+                        let schema_trait = self.schema_trait();
+                        quote_spanned! { span=>
+                            #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ManyViaElem>::Elem>> {
+                                self.path().chain(
+                                    <#model_ident as #schema_trait>::path_field(#field_offset)
+                                )
+                            }
+                        }
+                    }
                     HasMany(rel) => {
                         let ty = &rel.ty;
                         self.expand_list_relation_field_method(
@@ -198,7 +236,8 @@ impl Expand<'_> {
             TokenStream::new()
         };
 
-        // any() / all() are only available on root models (requires Model trait bound)
+        // any() / all() / target_model_id() are only available on root models
+        // (they require the `Model` trait bound).
         let any_method = if is_root {
             quote! {
                 /// Filter the parent model by a condition on the associated
@@ -214,6 +253,15 @@ impl Expand<'_> {
                 /// associated records).
                 #vis fn all(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
                     self.path.all(filter)
+                }
+
+                /// The id of the model this list path points at. Used by
+                /// generated `#[has_many(via = …)]` code to resolve the model
+                /// that owns a scalar terminal field from the relation-chain
+                /// prefix.
+                #[doc(hidden)]
+                #vis fn target_model_id(&self) -> #toasty::core::schema::app::ModelId {
+                    <#model_ident as #toasty::Model>::id()
                 }
             }
         } else {

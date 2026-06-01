@@ -166,6 +166,29 @@ impl Expand<'_> {
                 #field_name_to_id
             }
 
+            // A relation-terminal `#[has_many(via = …)]` reaching this model
+            // keeps its rich per-model query builder. Scalar terminals route
+            // through the per-primitive `ViaManyField` impls instead.
+            impl #toasty::ViaManyField for #model_ident {
+                type Query = #query_struct_ident<#toasty::List<#model_ident>>;
+
+                fn via_field_ty(
+                    singular: #toasty::core::schema::Name,
+                    path: #toasty::core::stmt::Path,
+                    _terminal_owner: #toasty::core::schema::app::ModelId,
+                ) -> #toasty::core::schema::app::FieldTy {
+                    #toasty::model_via_field_ty::<#model_ident>(singular, path)
+                }
+
+                fn make_via_query(
+                    assoc: #toasty::stmt::Association<#toasty::List<#model_ident>>,
+                    _target: #toasty::core::schema::app::ModelId,
+                    _terminal: usize,
+                ) -> Self::Query {
+                    <#query_struct_ident<#toasty::List<#model_ident>>>::from_assoc_many(assoc)
+                }
+            }
+
             impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
                 fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
                     #into_expr_body_val
@@ -559,7 +582,13 @@ impl Expand<'_> {
                     }
                     FieldTy::HasMany(rel) => {
                         let ty = &rel.ty;
-                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
+                        if rel.via.is_some() {
+                            // A via field has no `RelationManyField` impl (its
+                            // element may be a scalar); reload through `Load`.
+                            quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
+                        } else {
+                            quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
+                        }
                     }
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;

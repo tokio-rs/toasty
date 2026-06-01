@@ -40,6 +40,9 @@ pub use relation_one::RelationOneField;
 mod scope;
 pub use scope::Scope;
 
+mod via;
+pub use via::{ManyViaElem, ViaManyField, model_via_field_ty};
+
 use crate::Result;
 
 pub use toasty_core::schema::{app, app::ModelSet, db, diff, mapping};

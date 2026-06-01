@@ -39,6 +39,31 @@ impl<T> Association<T> {
             _p: PhantomData,
         }
     }
+
+    /// Construct an association from `source` following `path`, without
+    /// requiring the returning type `T` to be a model.
+    ///
+    /// Used by generated `#[has_many(via = …)]` navigation methods, whose
+    /// terminal may be a scalar (`Path<S, List<String>>`). The [`many`](Self::many) /
+    /// [`one`](Self::one) constructors bound the element on [`Model`]; this one
+    /// only bounds the *source* model `S`, so it works for both relation- and
+    /// scalar-terminal vias.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the root of `path` does not match the model id of `S`.
+    #[doc(hidden)]
+    pub fn from_source_and_path<S: Model>(source: super::Query<List<S>>, path: Path<S, T>) -> Self {
+        assert_eq!(path.untyped.root.as_model_unwrap(), S::id());
+
+        Self {
+            untyped: stmt::Association {
+                source: Box::new(source.untyped),
+                path: path.untyped,
+            },
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<M: Model> Association<List<M>> {
