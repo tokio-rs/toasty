@@ -75,7 +75,7 @@ impl Expand<'_> {
                 }
 
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
-                    #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
+                    #query_struct_ident::from_stmt(#toasty::stmt::Query::all().filter(expr))
                 }
 
                 #vis fn delete(self) -> #toasty::stmt::Delete<()> {
