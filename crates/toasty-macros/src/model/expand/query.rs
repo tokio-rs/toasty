@@ -318,14 +318,9 @@ impl Expand<'_> {
             .iter()
             .filter_map(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => Some(self.expand_belongs_to_method(field, rel)),
-                // Skip `via` fields: the chained accessor returns
-                // `QueryMany<<ty as RelationManyField>::Model>`, but a scalar
-                // terminal (`Vec<String>`) has no `RelationManyField` impl, so
-                // it can't compile. The attribute doesn't reveal whether the
-                // terminal is a model or a scalar, so skip all vias uniformly.
-                // A via is navigated from a model instance instead
-                // (`user.tag_names()`, see relation.rs).
-                FieldTy::HasMany(rel) if rel.via.is_some() => None,
+                FieldTy::HasMany(rel) if rel.via.is_some() => {
+                    Some(self.expand_has_many_via_method(field, rel))
+                }
                 FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
                 FieldTy::HasOne(rel) => Some(self.expand_has_one_method(field, rel)),
                 FieldTy::Primitive(..) => None,
@@ -353,6 +348,30 @@ impl Expand<'_> {
                     #model_ident::fields().#field_ident().into(),
                 );
                 <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
+            }
+        }
+    }
+
+    /// Chained accessor for a `#[has_many(via = …)]` field. Builds an
+    /// association from the current query following the via field, then routes
+    /// through [`ViaTarget`] — keyed on the terminal type — so it works for a
+    /// model terminal (`QueryMany<M>`) and a scalar terminal
+    /// (`Query<List<scalar>>`) alike. Mirrors the instance accessor in
+    /// `relation.rs`; here the source query is `self.stmt` directly.
+    fn expand_has_many_via_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let ty = &rel.ty;
+        let model_ident = &self.model.ident;
+        let field_ident = &field.name.ident;
+
+        quote! {
+            #vis fn #field_ident(self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Query {
+                let __assoc = #toasty::stmt::Association::from_source_and_path(
+                    self.stmt,
+                    #model_ident::fields().#field_ident(),
+                );
+                <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(__assoc)
             }
         }
     }

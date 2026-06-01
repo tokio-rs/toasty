@@ -678,6 +678,43 @@ pub async fn include_scalar_via(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A scalar-terminal `via` can also be navigated off a query (not just a
+/// loaded instance): `User::filter(…).article_titles()` yields the distinct
+/// titles reachable from the matched users.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_comment_article)
+)]
+pub async fn query_chain_scalar_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let articles = toasty::create!(Article::[{ title: "Rust" }, { title: "Toasty" }])
+        .exec(&mut db)
+        .await?;
+    let (rust, toasty_article) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust },
+        { body: "a2", user: &alice, article: rust },
+        { body: "a3", user: &alice, article: toasty_article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let titles = User::filter(User::fields().name().eq("Alice"))
+        .commented_article_titles()
+        .exec(&mut db)
+        .await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust", "Toasty"]);
+
+    Ok(())
+}
+
 /// `.select()` of a scalar-terminal `via` returns the projected titles per
 /// parent row.
 #[driver_test(
