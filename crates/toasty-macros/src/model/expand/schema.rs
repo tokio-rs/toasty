@@ -598,14 +598,24 @@ pub(super) fn expand_via_path(
         chain = quote_spanned! { segment.span()=> #chain.#segment() };
     }
 
-    // Span the ascription to the terminal segment so a type mismatch points at
-    // the offending path step rather than the derive.
+    // Pin the typed path's terminal to `terminal_ty`. When it disagrees with
+    // the path, the `.into()` has no matching conversion. Point that failure at
+    // the offending path step rather than the derive:
+    //
+    // - Bind the chain to a local first, so the conversion's receiver is that
+    //   local (emitted at the terminal span) rather than the chain expression,
+    //   whose root `Model::fields()` carries the derive call site.
+    // - Span the whole target annotation — including the interpolated
+    //   `terminal_ty`, which `quote_spanned!` would otherwise leave at the
+    //   derive — to the terminal segment via `respan`.
     let span = segments
         .last()
         .map_or_else(proc_macro2::Span::call_site, syn::Ident::span);
+    let typed_path_ty = util::respan(quote!(#toasty::Path<#model_ident, #terminal_ty>), span);
     quote_spanned! { span=>
         {
-            let __via_typed: #toasty::Path<#model_ident, #terminal_ty> = (#chain).into();
+            let __via_chain = #chain;
+            let __via_typed: #typed_path_ty = __via_chain.into();
             let __via_untyped: #toasty::core::stmt::Path = __via_typed.into();
             __via_untyped
         }
