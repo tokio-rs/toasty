@@ -615,6 +615,10 @@ pub(super) fn expand_via_path(
     quote_spanned! { span=>
         {
             let __via_chain = #chain;
+            // The chain terminal is a `FieldList` for a plain relation step (a
+            // real conversion to `Path`) but already a `Path` for a scalar or
+            // via-of-via terminal, where `.into()` is identity — allow that.
+            #[allow(clippy::useless_conversion)]
             let __via_typed: #typed_path_ty = __via_chain.into();
             let __via_untyped: #toasty::core::stmt::Path = __via_typed.into();
             __via_untyped
