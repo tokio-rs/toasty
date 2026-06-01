@@ -13,15 +13,15 @@ use toasty_core::stmt;
 /// shape does not satisfy the trait.
 pub trait RelationOneField: Load<Output = Self> {
     /// The target model that this field references.
-    type Model: Model;
+    type Target: Model;
 
     /// The query type produced by the relation accessor. For non-nullable
-    /// impls this is `<Model as Model>::Query<Model>`; for nullable impls it is
-    /// `<Model as Model>::Query<Option<Model>>`.
+    /// impls this is `<Target as Model>::Query<Target>`; for nullable impls it is
+    /// `<Target as Model>::Query<Option<Target>>`.
     type One;
 
     /// The expression-level type used in create/update setters. Resolves to
-    /// the unwrapped `Self::Model` for non-nullable impls and `Option<Self::Model>`
+    /// the unwrapped `Self::Target` for non-nullable impls and `Option<Self::Target>`
     /// for nullable impls.
     type Expr;
 
@@ -42,7 +42,7 @@ pub trait RelationOneField: Load<Output = Self> {
     /// singular association via [`Model::wrap_query`]) and pass it here; the
     /// association's path is preserved through the wrap so generated mutators
     /// (insert, remove, create) can read it.
-    fn make_one(query: QueryMany<Self::Model>) -> Self::One;
+    fn make_one(query: QueryMany<Self::Target>) -> Self::One;
 
     /// Build the [`FieldTy`] for a `HasOne` relation field, given an
     /// optional paired `BelongsTo` field on the target model resolved
@@ -61,7 +61,7 @@ pub trait RelationOneField: Load<Output = Self> {
 }
 
 impl<M: Model> RelationOneField for M {
-    type Model = M;
+    type Target = M;
     type One = QueryOne<M>;
     type Expr = M;
 
@@ -72,7 +72,7 @@ impl<M: Model> RelationOneField for M {
         <Self as Load>::reload(target, value)
     }
 
-    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_one(query)
     }
 
@@ -86,7 +86,7 @@ impl<M: Model> RelationOneField for M {
 }
 
 impl<M: Model> RelationOneField for Option<M> {
-    type Model = M;
+    type Target = M;
     type One = QueryOptionOne<M>;
     type Expr = Option<M>;
 
@@ -97,7 +97,7 @@ impl<M: Model> RelationOneField for Option<M> {
         <Self as Load>::reload(target, value)
     }
 
-    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_first(query)
     }
 
@@ -111,7 +111,7 @@ impl<M: Model> RelationOneField for Option<M> {
 }
 
 impl<M: Model> RelationOneField for Deferred<M> {
-    type Model = M;
+    type Target = M;
     type One = QueryOne<M>;
     type Expr = M;
 
@@ -123,7 +123,7 @@ impl<M: Model> RelationOneField for Deferred<M> {
         Ok(())
     }
 
-    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_one(query)
     }
 
@@ -137,7 +137,7 @@ impl<M: Model> RelationOneField for Deferred<M> {
 }
 
 impl<M: Model> RelationOneField for Deferred<Option<M>> {
-    type Model = M;
+    type Target = M;
     type One = QueryOptionOne<M>;
     type Expr = Option<M>;
 
@@ -149,7 +149,7 @@ impl<M: Model> RelationOneField for Deferred<Option<M>> {
         Ok(())
     }
 
-    fn make_one(query: QueryMany<Self::Model>) -> Self::One {
+    fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_first(query)
     }
 

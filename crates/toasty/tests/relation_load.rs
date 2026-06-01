@@ -89,9 +89,9 @@ impl IntoExpr<Dummy> for DummyCreate {
     }
 }
 
-fn assert_has_many_field<F: RelationManyField<Model = Dummy>>() {}
-fn assert_has_one_field<F: RelationOneField<Model = Dummy>>() {}
-fn assert_belongs_to_field<F: RelationOneField<Model = Dummy>>() {}
+fn assert_has_many_field<F: RelationManyField<Target = Dummy>>() {}
+fn assert_has_one_field<F: RelationOneField<Target = Dummy>>() {}
+fn assert_belongs_to_field<F: RelationOneField<Target = Dummy>>() {}
 
 #[test]
 fn deferred_relation_field_shapes_are_supported() {

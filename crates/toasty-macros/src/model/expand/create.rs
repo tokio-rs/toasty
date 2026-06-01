@@ -163,7 +163,7 @@ impl Expand<'_> {
                         } else {
                             let plural = name;
                             let ty = &rel.ty;
-                            let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+                            let target = quote!(<#ty as #toasty::RelationManyField>::Target);
 
                             quote! {
                                 #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<#target>>) -> Self {

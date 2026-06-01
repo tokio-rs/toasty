@@ -75,7 +75,7 @@ impl Expand<'_> {
                     TokenStream::new()
                 } else {
                     let ty = &rel.ty;
-                    let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+                    let target = quote!(<#ty as #toasty::RelationManyField>::Target);
 
                     quote! {
                         #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> Self {

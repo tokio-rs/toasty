@@ -329,7 +329,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
+        let target = quote!(<#ty as #toasty::RelationOneField>::Target);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
         let field_offset = util::int(field.id);
@@ -353,7 +353,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+        let target = quote!(<#ty as #toasty::RelationManyField>::Target);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
         let field_offset = util::int(field.id);
@@ -374,7 +374,7 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
+        let target = quote!(<#ty as #toasty::RelationOneField>::Target);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
         let field_offset = util::int(field.id);
