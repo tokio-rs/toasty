@@ -64,14 +64,18 @@ impl Expand<'_> {
                         };
 
                         if rel.via.is_some() {
-                            // A `via` field is a projection handle: it only needs
-                            // to be includable / selectable (`Into<stmt::Path>`),
-                            // so expose a plain list path. The element comes from
+                            // A `via` step returns its terminal's path handle
+                            // (`ViaTarget::Path`): a model terminal yields a
+                            // chainable `ManyField`, so a scalar terminal can
+                            // follow a via intermediate (`a.b.field` where `b` is
+                            // a via); a scalar terminal yields a plain list path,
+                            // a leaf. Both stay includable / selectable
+                            // (`Into<stmt::Path>`). The element type comes from
                             // `ViaManyField`, which works for scalar terminals too
                             // (where there is no `RelationManyField::Model`).
                             quote_spanned! { span=>
-                                #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ViaManyField>::Target>> {
-                                    #path
+                                #vis fn #field_ident(&self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Path<__Origin> {
+                                    <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(#path)
                                 }
                             }
                         } else {
@@ -190,16 +194,19 @@ impl Expand<'_> {
                     }
                     HasMany(rel) if rel.via.is_some() => {
                         // See the `via` branch in `expand_field_struct`: a via
-                        // field is a plain list-path projection handle, and its
-                        // element comes from `ViaManyField` so scalar terminals
-                        // work too.
+                        // step returns its terminal's `ViaTarget::Path` handle —
+                        // a chainable `ManyField` for a model terminal, a plain
+                        // list path for a scalar terminal — and its element type
+                        // comes from `ViaManyField` so scalar terminals work too.
                         let ty = &rel.ty;
                         let span = field_ident.span();
                         let schema_trait = self.schema_trait();
                         quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ViaManyField>::Target>> {
-                                self.path().chain(
-                                    <#model_ident as #schema_trait>::path_field(#field_offset)
+                            #vis fn #field_ident(&self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Path<__Origin> {
+                                <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(
+                                    self.path().chain(
+                                        <#model_ident as #schema_trait>::path_field(#field_offset)
+                                    )
                                 )
                             }
                         }

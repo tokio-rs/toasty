@@ -171,6 +171,15 @@ impl Expand<'_> {
             // through the per-primitive `ViaTarget` impls instead.
             impl #toasty::ViaTarget for #model_ident {
                 type Query = #query_struct_ident<#toasty::List<#model_ident>>;
+                type Path<__Origin> = <#model_ident as #toasty::Model>::ManyField<__Origin>;
+
+                fn new_path<__Origin>(
+                    path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
+                ) -> Self::Path<__Origin> {
+                    // A model terminal keeps navigating, so hand back its
+                    // chainable `ManyField`.
+                    <#model_ident as #toasty::Model>::new_many_field(path)
+                }
 
                 fn via_field_ty(
                     singular: #toasty::core::schema::Name,

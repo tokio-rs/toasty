@@ -367,9 +367,13 @@ impl Expand<'_> {
 
         quote! {
             #vis fn #field_ident(self) -> #toasty::ViaMany<#ty> {
+                // The accessor returns the terminal's `ViaTarget::Path` (a
+                // `ManyField` for a model terminal, a `Path` for a scalar);
+                // `.into()` collapses either into the `Path` the association
+                // needs.
                 let __assoc = #toasty::stmt::Association::from_source_and_path(
                     self.stmt,
-                    #model_ident::fields().#field_ident(),
+                    #model_ident::fields().#field_ident().into(),
                 );
                 <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(__assoc)
             }

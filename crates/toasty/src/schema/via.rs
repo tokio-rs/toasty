@@ -1,5 +1,5 @@
 use super::{Deferred, Load};
-use crate::stmt::{Association, List, Query};
+use crate::stmt::{Association, List, Path, Query};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldTy, ModelId, Via};
@@ -64,6 +64,20 @@ pub trait ViaTarget {
     /// method.
     type Query;
 
+    /// The typed path handle a `#[has_many(via = …)]` field's accessor returns,
+    /// parameterized by the origin model. Mirrors [`Model::Path`] for the
+    /// via-many case.
+    ///
+    /// A **model** terminal returns that model's chainable
+    /// [`ManyField`](crate::schema::Model::ManyField) — a `Path` wrapper that
+    /// adds field accessors, so navigation can continue *through* a via step
+    /// (e.g. `organizations.todos.title`, where `organizations.todos` is itself
+    /// a via). A **scalar** terminal returns a plain list [`Path`]: a leaf with
+    /// nothing further to chain.
+    ///
+    /// [`Model::Path`]: crate::schema::Model::Path
+    type Path<Origin>;
+
     /// Build the [`FieldTy::Via`] for a `#[has_many(via = …)]` field whose
     /// terminal element type is `Self`.
     ///
@@ -73,6 +87,13 @@ pub trait ViaTarget {
     /// chain reaches, which the path alone can't name here — so the scalar
     /// impls leave it unset and `toasty-core` fills it in while linking.
     fn via_field_ty(singular: Name, path: stmt::Path) -> FieldTy;
+
+    /// Build the [`Path`](Self::Path) handle from the typed `path` reaching this
+    /// terminal. A model terminal wraps the path in its chainable `ManyField`; a
+    /// scalar terminal is a leaf, so the path is the handle.
+    fn new_path<Origin>(path: Path<Origin, List<Self>>) -> Self::Path<Origin>
+    where
+        Self: Sized;
 
     /// Wrap a via-field association into the navigation query.
     ///
@@ -93,6 +114,12 @@ macro_rules! impl_via_many_scalar {
         $(
             impl ViaTarget for $t {
                 type Query = Query<List<$t>>;
+                type Path<Origin> = Path<Origin, List<$t>>;
+
+                fn new_path<Origin>(path: Path<Origin, List<$t>>) -> Self::Path<Origin> {
+                    // A scalar terminal is a leaf — the path is the handle.
+                    path
+                }
 
                 fn via_field_ty(singular: Name, path: stmt::Path) -> FieldTy {
                     // The terminal scalar field is the path's last step.

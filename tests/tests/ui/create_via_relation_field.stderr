@@ -12,18 +12,3 @@ error[E0599]: no method named `tags` found for struct `UserCreate` in the curren
    | |        -^^^^ method not found in `UserCreate`
    | |________|
    |
-
-error[E0599]: no method named `create` found for struct `toasty::stmt::Path<T, U>` in the current scope
-  --> tests/ui/create_via_relation_field.rs:46:9
-   |
-43 |       let _ = toasty::create!(User {
-   |                               ----
-   |                               |
-   |  _____________________________method `create` is available on `&UserFields<User>`
-   | |
-44 | |         id: 1,
-45 | |         name: "Alice",
-46 | |         tags: [{ id: 1, name: "urgent" }],
-   | |        -^^^^ method not found in `toasty::stmt::Path<User, toasty::stmt::List<Tag>>`
-   | |________|
-   |
