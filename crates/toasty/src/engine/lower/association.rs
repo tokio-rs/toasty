@@ -61,12 +61,24 @@ impl<'a> RewriteVia<'a> {
             && let stmt::Source::Model(model) = &mut select.source
             && let Some(via) = model.via.take()
         {
-            // A scalar-terminal via used as a query source selects the
-            // projected terminal column from the via target. The macro can't
-            // name the target (the model the relation chain reaches), so it
-            // leaves a placeholder source id and no projection; fill both in
-            // from the schema's resolved `Via` before unfolding the chain into
-            // a filter.
+            // Complete a scalar-terminal via used as a query source. For
+            // `#[has_many(via = todos.tags.name)]`, `user.tag_names()` selects
+            // the `name` column from `Tag` (the model the chain reaches), not
+            // whole `Tag` records:
+            //
+            //     SELECT DISTINCT tag.name      -- returning: project Tag.name
+            //     FROM tag                      -- source model: Tag (the via target)
+            //     WHERE <tag reachable from user>  -- the chain, unfolded below
+            //
+            // The navigation method can't build this: it runs in user code with
+            // no linked schema, so it can't name the target model and emits a
+            // placeholder source id with no projection. The resolved `Via` is
+            // available here, so set the source model (the FROM table) and the
+            // terminal projection (the RETURNING) before unfolding the chain
+            // into the WHERE filter.
+            //
+            // A model-terminal via has `terminal == None` — its source already
+            // selects whole target records — so this is a no-op there.
             let scalar_terminal =
                 self.schema()
                     .app
