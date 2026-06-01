@@ -120,7 +120,7 @@ impl Expand<'_> {
             // declared element type is validated against the path by the typed
             // accessor and by the `schema()` expansion's terminal pin.
             return quote! {
-                #vis fn #field_ident(&self) -> <#ty as #toasty::ViaManyField>::Query {
+                #vis fn #field_ident(&self) -> #toasty::ViaMany<#ty> {
                     // Suppress the unused field warning
                     if false {
                         let _ = &self.#field_ident;
@@ -133,7 +133,7 @@ impl Expand<'_> {
                             __source,
                             Self::fields().#field_ident(),
                         );
-                        <#ty as #toasty::ViaManyField>::make_via_query(__assoc)
+                        <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(__assoc)
                     }
                 }
             };
