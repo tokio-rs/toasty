@@ -8,7 +8,7 @@ use toasty_core::stmt;
 
 /// Build the [`FieldTy::Via`] for a relation-terminal `#[has_many(via = …)]`
 /// field reaching model `M`. The per-model
-/// [`ViaManyField`](crate::schema::ViaManyField) impl the derive emits
+/// [`ViaTarget`](crate::schema::ViaTarget) impl the derive emits
 /// delegates here so the construction (and `Box`/type plumbing) stays in this
 /// crate.
 pub fn model_via_field_ty<M: Model>(singular: Name, path: stmt::Path) -> FieldTy {

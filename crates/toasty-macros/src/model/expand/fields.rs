@@ -76,10 +76,10 @@ impl Expand<'_> {
                             // A `via` field is a projection handle: it only needs
                             // to be includable / selectable (`Into<stmt::Path>`),
                             // so expose a plain list path. The element comes from
-                            // `ManyViaElem`, which works for scalar terminals too
+                            // `ViaManyField`, which works for scalar terminals too
                             // (where there is no `RelationManyField::Model`).
                             quote_spanned! { span=>
-                                #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ManyViaElem>::Elem>> {
+                                #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ViaManyField>::Target>> {
                                     #path
                                 }
                             }
@@ -200,13 +200,13 @@ impl Expand<'_> {
                     HasMany(rel) if rel.via.is_some() => {
                         // See the `via` branch in `expand_field_struct`: a via
                         // field is a plain list-path projection handle, and its
-                        // element comes from `ManyViaElem` so scalar terminals
+                        // element comes from `ViaManyField` so scalar terminals
                         // work too.
                         let ty = &rel.ty;
                         let span = field_ident.span();
                         let schema_trait = self.schema_trait();
                         quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ManyViaElem>::Elem>> {
+                            #vis fn #field_ident(&self) -> #toasty::Path<__Origin, #toasty::List<<#ty as #toasty::ViaManyField>::Target>> {
                                 self.path().chain(
                                     <#model_ident as #schema_trait>::path_field(#field_offset)
                                 )

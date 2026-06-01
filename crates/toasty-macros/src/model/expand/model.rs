@@ -168,8 +168,8 @@ impl Expand<'_> {
 
             // A relation-terminal `#[has_many(via = …)]` reaching this model
             // keeps its rich per-model query builder. Scalar terminals route
-            // through the per-primitive `ViaManyField` impls instead.
-            impl #toasty::ViaManyField for #model_ident {
+            // through the per-primitive `ViaTarget` impls instead.
+            impl #toasty::ViaTarget for #model_ident {
                 type Query = #query_struct_ident<#toasty::List<#model_ident>>;
 
                 fn via_field_ty(

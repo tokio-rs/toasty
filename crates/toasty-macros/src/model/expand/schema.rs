@@ -166,7 +166,7 @@ impl Expand<'_> {
                     let singular_name = expand_name(toasty, &rel.singular);
 
                     if let Some(segments) = &rel.via {
-                        // A `via` field routes through `ViaManyField`, keyed on
+                        // A `via` field routes through `ViaTarget`, keyed on
                         // the terminal element type, so it works whether the
                         // terminal is a model or a scalar — without requiring
                         // `RelationManyField` (which needs the element to be a
@@ -176,9 +176,9 @@ impl Expand<'_> {
 
                         // A has-many collection is always present, never null.
                         nullable = quote!(false);
-                        deferred = quote!(<#ty as #toasty::ManyViaElem>::DEFERRED);
+                        deferred = quote!(<#ty as #toasty::ViaManyField>::DEFERRED);
                         field_ty = quote!(
-                            <<#ty as #toasty::ManyViaElem>::Elem as #toasty::ViaManyField>::via_field_ty(
+                            <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::via_field_ty(
                                 #singular_name, #full_path, #terminal_owner,
                             )
                         );
@@ -590,7 +590,7 @@ pub(super) fn expand_via_path(
 /// segment, by chaining the path's relation prefix (all but the last segment)
 /// onto the model's `Fields` struct and reading its `target_model_id()`. For a
 /// scalar-terminal via this is the via target (the model the relation chain
-/// reaches); a relation-terminal via ignores it (the per-model `ViaManyField`
+/// reaches); a relation-terminal via ignores it (the per-model `ViaTarget`
 /// impl uses `Self::id()`).
 pub(super) fn expand_via_terminal_owner(
     toasty: &TokenStream,

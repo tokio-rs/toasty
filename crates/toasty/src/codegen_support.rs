@@ -14,8 +14,8 @@ pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
-        Auto, Deferred, DiscoverItem, Embed, Field, Load, ManyViaElem, Model, QueryMany, QueryOne,
-        QueryOptionOne, RelationManyField, RelationOneField, Scope, ViaManyField,
+        Auto, Deferred, DiscoverItem, Embed, Field, Load, Model, QueryMany, QueryOne,
+        QueryOptionOne, RelationManyField, RelationOneField, Scope, ViaManyField, ViaTarget,
         generate_unique_id,
     },
     stmt::CreateMany,

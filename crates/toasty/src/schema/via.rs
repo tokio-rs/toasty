@@ -5,28 +5,28 @@ use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldTy, ModelId, Via};
 use toasty_core::stmt;
 
-/// Element extraction for a `#[has_many]` field's Rust type.
+/// Implemented by a `#[has_many(via = …)]` field's Rust type, exposing the
+/// via's [`Target`](Self::Target) — the terminal type the path projects.
 ///
 /// Blanket-implemented over `Vec<E>` and [`Deferred<Vec<E>>`](Deferred) for
-/// every `E`, so the derive can name a has-many field's element type — and
-/// route it through [`ViaManyField`] — without requiring `E: Model`. A single
-/// blanket impl per outer shape keeps it coherent with the per-element
-/// `ViaManyField` impls.
-pub trait ManyViaElem {
-    /// The collection's element type.
-    type Elem: ViaManyField;
+/// every `E`, so the derive can route a via field through [`ViaTarget`]
+/// without requiring `E: Model`. A single blanket impl per outer shape keeps
+/// it coherent with the per-target `ViaTarget` impls.
+pub trait ViaManyField {
+    /// The via's terminal type — the model or scalar the path projects.
+    type Target: ViaTarget;
 
     /// Whether the field stores its value in a deferred load slot.
     const DEFERRED: bool;
 }
 
-impl<E: ViaManyField> ManyViaElem for Vec<E> {
-    type Elem = E;
+impl<E: ViaTarget> ViaManyField for Vec<E> {
+    type Target = E;
     const DEFERRED: bool = false;
 }
 
-impl<E: ViaManyField> ManyViaElem for Deferred<Vec<E>> {
-    type Elem = E;
+impl<E: ViaTarget> ViaManyField for Deferred<Vec<E>> {
+    type Target = E;
     const DEFERRED: bool = true;
 }
 
@@ -46,7 +46,7 @@ impl<E: ViaManyField> ManyViaElem for Deferred<Vec<E>> {
 ///   relation-terminal via keeps its rich `QueryMany<M>` API).
 /// - This module emits an impl for each scalar primitive, setting
 ///   [`Query`](Self::Query) to the plain [`Query<List<Self>>`].
-pub trait ViaManyField {
+pub trait ViaTarget {
     /// The query builder returned by the generated has-many-via navigation
     /// method.
     type Query;
@@ -74,12 +74,12 @@ pub trait ViaManyField {
         Self: Sized;
 }
 
-/// Emit `ViaManyField` for scalar primitives. Each impl is concrete, so it
+/// Emit `ViaTarget` for scalar primitives. Each impl is concrete, so it
 /// stays disjoint from the per-model impls the derive macro generates.
 macro_rules! impl_via_many_scalar {
     ( $( $t:ty ),* $(,)? ) => {
         $(
-            impl ViaManyField for $t {
+            impl ViaTarget for $t {
                 type Query = Query<List<$t>>;
 
                 fn via_field_ty(

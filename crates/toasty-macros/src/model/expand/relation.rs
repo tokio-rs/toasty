@@ -109,7 +109,7 @@ impl Expand<'_> {
 
         // A `via` relation reaches its terminal through a path of existing
         // relations rather than a single foreign key. It routes through
-        // `ViaManyField` (keyed on the terminal element type) so the
+        // `ViaTarget` (keyed on the terminal element type) so the
         // navigation method works whether the terminal is a model — keeping
         // the rich `QueryMany<M>` builder — or a scalar field, where it yields
         // a plain `Query<List<scalar>>` projecting that field.
@@ -120,7 +120,7 @@ impl Expand<'_> {
                 super::schema::expand_via_terminal_owner(toasty, model_ident, segments);
 
             return quote! {
-                #vis fn #field_ident(&self) -> <<#ty as #toasty::ManyViaElem>::Elem as #toasty::ViaManyField>::Query {
+                #vis fn #field_ident(&self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Query {
                     // Suppress the unused field warning
                     if false {
                         let _ = &self.#field_ident;
@@ -142,7 +142,7 @@ impl Expand<'_> {
                             .as_slice()
                             .last()
                             .expect("via path has at least one step");
-                        <<#ty as #toasty::ManyViaElem>::Elem as #toasty::ViaManyField>::make_via_query(
+                        <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(
                             __assoc,
                             #terminal_owner,
                             __terminal,
