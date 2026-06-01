@@ -115,7 +115,9 @@ impl Expand<'_> {
         // a plain `Query<List<scalar>>` projecting that field.
         if let Some(segments) = &rel.via {
             let model_ident = &self.model.ident;
-            let full_path = super::schema::expand_via_path(toasty, model_ident, segments);
+            let terminal_ty = quote!(#toasty::List<<#ty as #toasty::ViaManyField>::Target>);
+            let full_path =
+                super::schema::expand_via_path(toasty, model_ident, segments, &terminal_ty);
             let terminal_owner =
                 super::schema::expand_via_terminal_owner(toasty, model_ident, segments);
 

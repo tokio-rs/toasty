@@ -171,7 +171,10 @@ impl Expand<'_> {
                         // terminal is a model or a scalar — without requiring
                         // `RelationManyField` (which needs the element to be a
                         // model).
-                        let full_path = expand_via_path(toasty, model_ident, segments);
+                        let terminal_ty =
+                            quote!(#toasty::List<<#ty as #toasty::ViaManyField>::Target>);
+                        let full_path =
+                            expand_via_path(toasty, model_ident, segments, &terminal_ty);
                         let terminal_owner = expand_via_terminal_owner(toasty, model_ident, segments);
 
                         // A has-many collection is always present, never null.
@@ -193,7 +196,15 @@ impl Expand<'_> {
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
-                    let via = expand_via(toasty, model_ident, rel.via.as_ref());
+                    // A has-one via reaches a single model; pin the path's
+                    // terminal to that model so a mismatched declaration is a
+                    // compile error rather than a runtime load failure.
+                    let via = expand_via(
+                        toasty,
+                        model_ident,
+                        rel.via.as_ref(),
+                        &quote!(<#ty as #toasty::RelationOneField>::Model),
+                    );
 
                     nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
                     deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
@@ -552,34 +563,49 @@ fn expand_via(
     toasty: &TokenStream,
     model_ident: &syn::Ident,
     via: Option<&Vec<syn::Ident>>,
+    terminal_ty: &TokenStream,
 ) -> TokenStream {
     let Some(segments) = via else {
         return quote! { None };
     };
 
-    let path = expand_via_path(toasty, model_ident, segments);
+    let path = expand_via_path(toasty, model_ident, segments, terminal_ty);
     quote! { Some(#path) }
 }
 
 /// Emit the fully-resolved [`stmt::Path`] for a `via` relation: chain the named
 /// segments onto the model's `Fields` struct (e.g.
 /// `User::fields().comments().article()`) and convert to an `stmt::Path`.
+///
 /// Resolution happens at Rust-compile time — a misspelled segment surfaces as
 /// "no method named `foo` found", and an intermediate that is not navigable
 /// fails to chain, so only the terminal segment may be a scalar field.
+///
+/// `terminal_ty` is the type the path's terminal must reach, derived from the
+/// declared field (e.g. `List<i64>` for `Vec<i64>`). Pinning the typed path's
+/// second parameter to it — rather than leaving it inferred — is what rejects a
+/// field whose declared element type disagrees with the path
+/// (`#[has_many(via = a.b.title)] x: Vec<i64>` where `title` is a `String`), so
+/// the mismatch is a compile error here instead of a runtime load failure.
 pub(super) fn expand_via_path(
     toasty: &TokenStream,
     model_ident: &syn::Ident,
     segments: &[syn::Ident],
+    terminal_ty: &TokenStream,
 ) -> TokenStream {
     let mut chain = quote! { #model_ident::fields() };
     for segment in segments {
         chain = quote_spanned! { segment.span()=> #chain.#segment() };
     }
 
-    quote! {
+    // Span the ascription to the terminal segment so a type mismatch points at
+    // the offending path step rather than the derive.
+    let span = segments
+        .last()
+        .map_or_else(proc_macro2::Span::call_site, syn::Ident::span);
+    quote_spanned! { span=>
         {
-            let __via_typed: #toasty::Path<#model_ident, _> = (#chain).into();
+            let __via_typed: #toasty::Path<#model_ident, #terminal_ty> = (#chain).into();
             let __via_untyped: #toasty::core::stmt::Path = __via_typed.into();
             __via_untyped
         }
