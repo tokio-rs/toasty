@@ -67,7 +67,7 @@
 <a href=#67 id=67 data-nosnippet>67</a>    /// use toasty::stmt::{Association, List, Query};
 <a href=#68 id=68 data-nosnippet>68</a>    /// use toasty::schema::Model;
 <a href=#69 id=69 data-nosnippet>69</a>    ///
-<a href=#70 id=70 data-nosnippet>70</a>    /// let source = Query::&lt;List&lt;User&gt;&gt;::filter(User::fields().id().eq(1));
+<a href=#70 id=70 data-nosnippet>70</a>    /// let source = Query::&lt;List&lt;User&gt;&gt;::all().filter(User::fields().id().eq(1));
 <a href=#71 id=71 data-nosnippet>71</a>    /// let path = User::path_field::&lt;List&lt;Todo&gt;&gt;(2);
 <a href=#72 id=72 data-nosnippet>72</a>    /// let _assoc = Association::many(source, path);
 <a href=#73 id=73 data-nosnippet>73</a>    /// ```
@@ -150,7 +150,7 @@
 <a href=#150 id=150 data-nosnippet>150</a>    /// use toasty::stmt::{Association, Expr, List, Query};
 <a href=#151 id=151 data-nosnippet>151</a>    /// use toasty::schema::Model;
 <a href=#152 id=152 data-nosnippet>152</a>    ///
-<a href=#153 id=153 data-nosnippet>153</a>    /// let source = Query::&lt;List&lt;User&gt;&gt;::filter(User::fields().id().eq(1));
+<a href=#153 id=153 data-nosnippet>153</a>    /// let source = Query::&lt;List&lt;User&gt;&gt;::all().filter(User::fields().id().eq(1));
 <a href=#154 id=154 data-nosnippet>154</a>    /// let path = User::path_field::&lt;List&lt;Todo&gt;&gt;(2);
 <a href=#155 id=155 data-nosnippet>155</a>    /// let assoc = Association::many(source, path);
 <a href=#156 id=156 data-nosnippet>156</a>    ///
@@ -197,7 +197,7 @@
 <a href=#197 id=197 data-nosnippet>197</a>    /// use toasty::stmt::{Association, Expr, List, Query};
 <a href=#198 id=198 data-nosnippet>198</a>    /// use toasty::schema::Model;
 <a href=#199 id=199 data-nosnippet>199</a>    ///
-<a href=#200 id=200 data-nosnippet>200</a>    /// let source = Query::&lt;List&lt;User&gt;&gt;::filter(User::fields().id().eq(1));
+<a href=#200 id=200 data-nosnippet>200</a>    /// let source = Query::&lt;List&lt;User&gt;&gt;::all().filter(User::fields().id().eq(1));
 <a href=#201 id=201 data-nosnippet>201</a>    /// let path = User::path_field::&lt;List&lt;Todo&gt;&gt;(2);
 <a href=#202 id=202 data-nosnippet>202</a>    /// let assoc = Association::many(source, path);
 <a href=#203 id=203 data-nosnippet>203</a>    ///
@@ -279,7 +279,7 @@
 <a href=#279 id=279 data-nosnippet>279</a>    /// use toasty::stmt::{Association, List, Query};
 <a href=#280 id=280 data-nosnippet>280</a>    /// use toasty::schema::Model;
 <a href=#281 id=281 data-nosnippet>281</a>    ///
-<a href=#282 id=282 data-nosnippet>282</a>    /// let source = Query::&lt;List&lt;Todo&gt;&gt;::filter(Todo::fields().id().eq(1));
+<a href=#282 id=282 data-nosnippet>282</a>    /// let source = Query::&lt;List&lt;Todo&gt;&gt;::all().filter(Todo::fields().id().eq(1));
 <a href=#283 id=283 data-nosnippet>283</a>    /// let path = Todo::path_field::&lt;User&gt;(1);
 <a href=#284 id=284 data-nosnippet>284</a>    /// let _assoc = Association::one(source, path);
 <a href=#285 id=285 data-nosnippet>285</a>    /// ```

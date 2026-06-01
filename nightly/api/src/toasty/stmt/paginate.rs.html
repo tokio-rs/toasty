@@ -28,8 +28,8 @@
 <a href=#28 id=28 data-nosnippet>28</a>/// # db.push_schema().await.unwrap();
 <a href=#29 id=29 data-nosnippet>29</a>/// use toasty::stmt::{List, Paginate, Query};
 <a href=#30 id=30 data-nosnippet>30</a>///
-<a href=#31 id=31 data-nosnippet>31</a>/// let mut q = Query::&lt;List&lt;User&gt;&gt;::all();
-<a href=#32 id=32 data-nosnippet>32</a>/// q.order_by(User::fields().name().asc());
+<a href=#31 id=31 data-nosnippet>31</a>/// let q = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#32 id=32 data-nosnippet>32</a>///     .order_by(User::fields().name().asc());
 <a href=#33 id=33 data-nosnippet>33</a>/// let page = Paginate::new(q, 20)
 <a href=#34 id=34 data-nosnippet>34</a>///     .exec(&amp;mut db)
 <a href=#35 id=35 data-nosnippet>35</a>///     .await
@@ -69,8 +69,8 @@
 <a href=#69 id=69 data-nosnippet>69</a>    /// # }
 <a href=#70 id=70 data-nosnippet>70</a>    /// use toasty::stmt::{List, Paginate, Query};
 <a href=#71 id=71 data-nosnippet>71</a>    ///
-<a href=#72 id=72 data-nosnippet>72</a>    /// let mut q = Query::&lt;List&lt;User&gt;&gt;::all();
-<a href=#73 id=73 data-nosnippet>73</a>    /// q.order_by(User::fields().name().asc());
+<a href=#72 id=72 data-nosnippet>72</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#73 id=73 data-nosnippet>73</a>    ///     .order_by(User::fields().name().asc());
 <a href=#74 id=74 data-nosnippet>74</a>    /// let _paginator = Paginate::new(q, 20);
 <a href=#75 id=75 data-nosnippet>75</a>    /// ```
 <a href=#76 id=76 data-nosnippet>76</a>    </span><span class="kw">pub fn </span>new(<span class="kw-2">mut </span>query: Query&lt;List&lt;M&gt;&gt;, per_page: usize) -&gt; <span class="self">Self </span>{
@@ -112,8 +112,8 @@
 <a href=#112 id=112 data-nosnippet>112</a>    /// # }
 <a href=#113 id=113 data-nosnippet>113</a>    /// use toasty::stmt::{List, Paginate, Query};
 <a href=#114 id=114 data-nosnippet>114</a>    ///
-<a href=#115 id=115 data-nosnippet>115</a>    /// let mut q = Query::&lt;List&lt;User&gt;&gt;::all();
-<a href=#116 id=116 data-nosnippet>116</a>    /// q.order_by(User::fields().id().asc());
+<a href=#115 id=115 data-nosnippet>115</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#116 id=116 data-nosnippet>116</a>    ///     .order_by(User::fields().id().asc());
 <a href=#117 id=117 data-nosnippet>117</a>    /// let paginator = Paginate::new(q, 10)
 <a href=#118 id=118 data-nosnippet>118</a>    ///     .after(toasty_core::stmt::Value::from(42_i64));
 <a href=#119 id=119 data-nosnippet>119</a>    /// ```
@@ -148,8 +148,8 @@
 <a href=#148 id=148 data-nosnippet>148</a>    /// # }
 <a href=#149 id=149 data-nosnippet>149</a>    /// use toasty::stmt::{List, Paginate, Query};
 <a href=#150 id=150 data-nosnippet>150</a>    ///
-<a href=#151 id=151 data-nosnippet>151</a>    /// let mut q = Query::&lt;List&lt;User&gt;&gt;::all();
-<a href=#152 id=152 data-nosnippet>152</a>    /// q.order_by(User::fields().id().asc());
+<a href=#151 id=151 data-nosnippet>151</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#152 id=152 data-nosnippet>152</a>    ///     .order_by(User::fields().id().asc());
 <a href=#153 id=153 data-nosnippet>153</a>    /// let paginator = Paginate::new(q, 10)
 <a href=#154 id=154 data-nosnippet>154</a>    ///     .before(toasty_core::stmt::Value::from(100_i64));
 <a href=#155 id=155 data-nosnippet>155</a>    /// ```
@@ -188,8 +188,8 @@
 <a href=#188 id=188 data-nosnippet>188</a>    /// # db.push_schema().await.unwrap();
 <a href=#189 id=189 data-nosnippet>189</a>    /// use toasty::stmt::{List, Paginate, Query};
 <a href=#190 id=190 data-nosnippet>190</a>    ///
-<a href=#191 id=191 data-nosnippet>191</a>    /// let mut q = Query::&lt;List&lt;User&gt;&gt;::all();
-<a href=#192 id=192 data-nosnippet>192</a>    /// q.order_by(User::fields().name().asc());
+<a href=#191 id=191 data-nosnippet>191</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::all()
+<a href=#192 id=192 data-nosnippet>192</a>    ///     .order_by(User::fields().name().asc());
 <a href=#193 id=193 data-nosnippet>193</a>    /// let page = Paginate::new(q, 20)
 <a href=#194 id=194 data-nosnippet>194</a>    ///     .exec(&amp;mut db)
 <a href=#195 id=195 data-nosnippet>195</a>    ///     .await

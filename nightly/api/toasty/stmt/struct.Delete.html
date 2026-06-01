@@ -10,7 +10,7 @@ deletes do not return the removed records.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty::stmt::{List, Query};
 
-Query::&lt;List&lt;User&gt;&gt;::filter(User::fields().id().eq(<span class="number">1</span>))
+Query::&lt;List&lt;User&gt;&gt;::all().filter(User::fields().id().eq(<span class="number">1</span>))
     .delete()
     .exec(<span class="kw-2">&amp;mut </span>db)
     .<span class="kw">await

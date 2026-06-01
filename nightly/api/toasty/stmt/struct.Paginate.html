@@ -8,8 +8,8 @@ forward and backward navigation using opaque cursors.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty::stmt::{List, Paginate, Query};
 
-<span class="kw">let </span><span class="kw-2">mut </span>q = Query::&lt;List&lt;User&gt;&gt;::all();
-q.order_by(User::fields().name().asc());
+<span class="kw">let </span>q = Query::&lt;List&lt;User&gt;&gt;::all()
+    .order_by(User::fields().name().asc());
 <span class="kw">let </span>page = Paginate::new(q, <span class="number">20</span>)
     .exec(<span class="kw-2">&amp;mut </span>db)
     .<span class="kw">await
@@ -25,8 +25,8 @@ it) and <strong>must</strong> have an <code>order_by</code> clause.</p>
 <h5 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty::stmt::{List, Paginate, Query};
 
-<span class="kw">let </span><span class="kw-2">mut </span>q = Query::&lt;List&lt;User&gt;&gt;::all();
-q.order_by(User::fields().name().asc());
+<span class="kw">let </span>q = Query::&lt;List&lt;User&gt;&gt;::all()
+    .order_by(User::fields().name().asc());
 <span class="kw">let </span>_paginator = Paginate::new(q, <span class="number">20</span>);</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.after" class="method"><a class="src rightside" href="../../src/toasty/stmt/paginate.rs.html#120-127">Source</a><h4 class="code-header">pub fn <a href="#method.after" class="fn">after</a>(self, key: impl <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;Expr&gt;) -&gt; Self</h4></section></summary><div class="docblock"><p>Set the cursor for forward pagination.</p>
 <p>Records returned will come <strong>after</strong> <code>key</code> in the current sort order.
 Obtain <code>key</code> from <a href="struct.Page.html#structfield.next_cursor" title="field toasty::stmt::Page::next_cursor"><code>Page::next_cursor</code></a> of a
@@ -36,8 +36,8 @@ previous page.</p>
 <h5 id="examples-1"><a class="doc-anchor" href="#examples-1">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty::stmt::{List, Paginate, Query};
 
-<span class="kw">let </span><span class="kw-2">mut </span>q = Query::&lt;List&lt;User&gt;&gt;::all();
-q.order_by(User::fields().id().asc());
+<span class="kw">let </span>q = Query::&lt;List&lt;User&gt;&gt;::all()
+    .order_by(User::fields().id().asc());
 <span class="kw">let </span>paginator = Paginate::new(q, <span class="number">10</span>)
     .after(toasty_core::stmt::Value::from(<span class="number">42_i64</span>));</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.before" class="method"><a class="src rightside" href="../../src/toasty/stmt/paginate.rs.html#156-163">Source</a><h4 class="code-header">pub fn <a href="#method.before" class="fn">before</a>(self, key: impl <a class="trait" href="https://doc.rust-lang.org/1.95.0/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;Expr&gt;) -&gt; Self</h4></section></summary><div class="docblock"><p>Set the cursor for backward pagination.</p>
 <p>Records returned will come <strong>before</strong> <code>key</code> in the current sort order.
@@ -49,8 +49,8 @@ reversed). Obtain <code>key</code> from
 <h5 id="examples-2"><a class="doc-anchor" href="#examples-2">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty::stmt::{List, Paginate, Query};
 
-<span class="kw">let </span><span class="kw-2">mut </span>q = Query::&lt;List&lt;User&gt;&gt;::all();
-q.order_by(User::fields().id().asc());
+<span class="kw">let </span>q = Query::&lt;List&lt;User&gt;&gt;::all()
+    .order_by(User::fields().id().asc());
 <span class="kw">let </span>paginator = Paginate::new(q, <span class="number">10</span>)
     .before(toasty_core::stmt::Value::from(<span class="number">100_i64</span>));</code></pre></div></div></details></div></details><details class="toggle implementors-toggle" open><summary><section id="impl-Paginate%3CM%3E-1" class="impl"><a class="src rightside" href="../../src/toasty/stmt/paginate.rs.html#166-246">Source</a><a href="#impl-Paginate%3CM%3E-1" class="anchor">§</a><h3 class="code-header">impl&lt;M: <a class="trait" href="../schema/trait.Load.html" title="trait toasty::schema::Load">Load</a>&gt; <a class="struct" href="struct.Paginate.html" title="struct toasty::stmt::Paginate">Paginate</a>&lt;M&gt;</h3></section></summary><div class="impl-items"><details class="toggle method-toggle" open><summary><section id="method.exec" class="method"><a class="src rightside" href="../../src/toasty/stmt/paginate.rs.html#199-245">Source</a><h4 class="code-header">pub async fn <a href="#method.exec" class="fn">exec</a>(self, executor: &amp;mut dyn <a class="trait" href="../db/trait.Executor.html" title="trait toasty::db::Executor">Executor</a>) -&gt; <a class="type" href="../type.Result.html" title="type toasty::Result">Result</a>&lt;<a class="struct" href="struct.Page.html" title="struct toasty::stmt::Page">Page</a>&lt;M::<a class="associatedtype" href="../schema/trait.Load.html#associatedtype.Output" title="type toasty::schema::Load::Output">Output</a>&gt;&gt;</h4></section></summary><div class="docblock"><p>Execute the paginated query and return a <a href="struct.Page.html" title="struct toasty::stmt::Page"><code>Page</code></a>.</p>
 <p>The returned page contains up to <code>per_page</code> items along with optional
@@ -62,8 +62,8 @@ until <code>next_cursor</code> is <code>None</code> to consume the full result s
 <h5 id="examples-3"><a class="doc-anchor" href="#examples-3">§</a>Examples</h5>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty::stmt::{List, Paginate, Query};
 
-<span class="kw">let </span><span class="kw-2">mut </span>q = Query::&lt;List&lt;User&gt;&gt;::all();
-q.order_by(User::fields().name().asc());
+<span class="kw">let </span>q = Query::&lt;List&lt;User&gt;&gt;::all()
+    .order_by(User::fields().name().asc());
 <span class="kw">let </span>page = Paginate::new(q, <span class="number">20</span>)
     .exec(<span class="kw-2">&amp;mut </span>db)
     .<span class="kw">await
