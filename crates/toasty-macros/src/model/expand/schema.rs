@@ -180,9 +180,7 @@ impl Expand<'_> {
                         nullable = quote!(false);
                         deferred = quote!(<#ty as #toasty::ViaManyField>::DEFERRED);
                         field_ty = quote!(
-                            <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::via_field_ty(
-                                #singular_name, #full_path,
-                            )
+                            <#ty as #toasty::ViaManyField>::via_field_ty(#singular_name, #full_path)
                         );
                     } else {
                         let pair = expand_pair(toasty, quote!(#toasty::RelationManyField), ty, rel.pair.as_ref());

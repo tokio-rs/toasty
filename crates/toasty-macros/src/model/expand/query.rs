@@ -366,12 +366,12 @@ impl Expand<'_> {
         let field_ident = &field.name.ident;
 
         quote! {
-            #vis fn #field_ident(self) -> <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::Query {
+            #vis fn #field_ident(self) -> <#ty as #toasty::ViaManyField>::Query {
                 let __assoc = #toasty::stmt::Association::from_source_and_path(
                     self.stmt,
                     #model_ident::fields().#field_ident(),
                 );
-                <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(__assoc)
+                <#ty as #toasty::ViaManyField>::make_via_query(__assoc)
             }
         }
     }

@@ -20,18 +20,44 @@ pub trait ViaManyField {
     /// The via's terminal type — the model or scalar the path projects.
     type Target: ViaTarget;
 
+    /// The query builder the generated navigation methods return. Forwards to
+    /// the terminal's [`ViaTarget::Query`] so the derive can name it in one hop
+    /// (`<Field as ViaManyField>::Query`) instead of projecting through both
+    /// traits.
+    type Query;
+
     /// Whether the field stores its value in a deferred load slot.
     const DEFERRED: bool;
+
+    /// Build the field's [`FieldTy::Via`]. Forwards to
+    /// [`ViaTarget::via_field_ty`] on the terminal type.
+    fn via_field_ty(singular: Name, path: stmt::Path) -> FieldTy {
+        <Self::Target as ViaTarget>::via_field_ty(singular, path)
+    }
+
+    /// Wrap a via-field association into the navigation query. Forwards to
+    /// [`ViaTarget::make_via_query`] on the terminal type.
+    fn make_via_query(assoc: Association<List<Self::Target>>) -> Self::Query;
 }
 
 impl<E: ViaTarget> ViaManyField for Vec<E> {
     type Target = E;
+    type Query = <E as ViaTarget>::Query;
     const DEFERRED: bool = false;
+
+    fn make_via_query(assoc: Association<List<E>>) -> Self::Query {
+        <E as ViaTarget>::make_via_query(assoc)
+    }
 }
 
 impl<E: ViaTarget> ViaManyField for Deferred<Vec<E>> {
     type Target = E;
+    type Query = <E as ViaTarget>::Query;
     const DEFERRED: bool = true;
+
+    fn make_via_query(assoc: Association<List<E>>) -> Self::Query {
+        <E as ViaTarget>::make_via_query(assoc)
+    }
 }
 
 /// A type that can be the terminal element of a `#[has_many(via = …)]`
