@@ -225,9 +225,108 @@ impl Builder {
         // All models have been discovered and initialized at some level, now do
         // the relation linking.
         self.link_relations()?;
+        self.resolve_via_targets()?;
         self.verify_no_eager_load_cycles()?;
 
         Ok(())
+    }
+
+    /// Resolve the `target` of every scalar-terminal `via` relation.
+    ///
+    /// A relation-terminal via knows its target at macro-expansion time (the
+    /// field's element type). A scalar-terminal via does not — the model that
+    /// owns the projected field is whatever the relation chain reaches — so the
+    /// derive leaves `target` unset and it is computed here by walking the
+    /// chain. Runs after [`link_relations`](Self::link_relations) so every
+    /// `Has`/`BelongsTo` target is final.
+    fn resolve_via_targets(&mut self) -> crate::Result<()> {
+        // Collect first; the walk borrows other models immutably.
+        let mut updates = Vec::new();
+
+        for curr in 0..self.models.len() {
+            if self.models[curr].is_embedded() {
+                continue;
+            }
+            let src = self.models[curr].id();
+            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
+                let field = &self.models[curr].as_root_unwrap().fields[index];
+                let FieldTy::Via(via) = &field.ty else {
+                    continue;
+                };
+                let Some(terminal) = via.terminal else {
+                    continue;
+                };
+
+                // The relation chain is the path minus its terminal field.
+                let projection = via.path.projection.as_slice();
+                let relation_steps = &projection[..projection.len() - 1];
+                let field_name = field.name.app_unwrap().to_string();
+                let target = self.walk_via_relation_chain(src, relation_steps, &field_name)?;
+
+                // The terminal must be a stored scalar on the reached model.
+                let terminal_field = &self.models[&target].as_root_unwrap().fields[terminal];
+                if !matches!(terminal_field.ty, FieldTy::Primitive(_)) {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "the `via` terminal `{}::{}` is not a scalar field",
+                        self.models[&target].name().upper_camel_case(),
+                        terminal_field.name.app_unwrap(),
+                    )));
+                }
+
+                updates.push((curr, index, target));
+            }
+        }
+
+        for (curr, index, target) in updates {
+            if let FieldTy::Via(via) = &mut self.models[curr].as_root_mut_unwrap().fields[index].ty
+            {
+                via.target = target;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Walk a via relation chain, splicing any nested via's own chain, and
+    /// return the model it reaches. Every step must be a relation.
+    fn walk_via_relation_chain(
+        &self,
+        declaring: ModelId,
+        steps: &[usize],
+        field_name: &str,
+    ) -> crate::Result<ModelId> {
+        let mut current = declaring;
+        let mut queue: Vec<usize> = steps.iter().rev().copied().collect();
+
+        while let Some(idx) = queue.pop() {
+            let field = &self.models[&current].as_root_unwrap().fields[idx];
+            match &field.ty {
+                FieldTy::Has(has) => current = has.target,
+                FieldTy::BelongsTo(belongs_to) => current = belongs_to.target,
+                // A nested via contributes its own relation chain (its terminal,
+                // if scalar, is not part of the path through it).
+                FieldTy::Via(inner) => {
+                    let inner_projection = inner.path.projection.as_slice();
+                    let inner_steps = match inner.terminal {
+                        Some(_) => &inner_projection[..inner_projection.len() - 1],
+                        None => inner_projection,
+                    };
+                    for step in inner_steps.iter().rev() {
+                        queue.push(*step);
+                    }
+                }
+                _ => {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "the `via` path for `{}::{}` traverses `{}`, which is not a relation",
+                        self.models[&declaring].name().upper_camel_case(),
+                        field_name,
+                        field.name.app_unwrap(),
+                    )));
+                }
+            }
+        }
+
+        Ok(current)
     }
 
     fn verify_no_eager_load_cycles(&self) -> crate::Result<()> {

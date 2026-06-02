@@ -17,6 +17,16 @@ scenario! {
         // User → comments → article
         #[has_many(via = comments.article)]
         commented_articles: toasty::Deferred<Vec<Article>>,
+
+        // User → comments → article → title (scalar terminal)
+        #[has_many(via = comments.article.title)]
+        commented_article_titles: toasty::Deferred<Vec<String>>,
+
+        // User → comments → body: a 2-step scalar terminal. The terminal field
+        // sits directly on the first relation's target, so the relation chain is
+        // a single step — the minimal scalar-via walk.
+        #[has_many(via = comments.body)]
+        comment_bodies: toasty::Deferred<Vec<String>>,
     }
 
     #[derive(Debug, toasty::Model)]
