@@ -39,11 +39,9 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// `Deferred<Option<EmbeddedType>>` is not covered here. `Option<Embed>`
-// itself isn't yet supported as a model field — the schema layer has no
-// representation for a nullable embedded type, so the column-type lowering
-// errors out with "type Model(...) is not supported by this database".
-// Tracking that gap is orthogonal to deferred fields.
+// `Deferred<Option<EmbeddedType>>` is not covered here. `Option<Embed>` is
+// supported on its own (see `embed_optional_struct`); combining it with
+// `Deferred` is a separate concern, orthogonal to deferred fields.
 
 // ---------- Deferred<T> inside an embed struct that's nested in an enum variant ----------
 //

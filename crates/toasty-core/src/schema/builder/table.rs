@@ -77,6 +77,13 @@ struct MapField<'a, 'b> {
     /// since only the active variant's columns are populated.
     in_enum_variant: bool,
 
+    /// When true, columns are created nullable regardless of the field's own
+    /// nullability. Set while processing the fields of a nullable embed
+    /// (`Option<Embed>`), since the entire embed may be absent (all columns
+    /// NULL). Propagated into nested embeds so every flattened leaf column of
+    /// an optional embed is nullable.
+    in_nullable_embed: bool,
+
     /// Base expression for the current nesting level.
     ///
     /// `None` at the top level. `Expr::Project(source_ref, proj)` at any nested
@@ -488,6 +495,15 @@ impl BuildMapping<'_> {
                         .collect::<Result<_>>()?;
                     stmt::Expr::record(exprs)
                 };
+                // A nullable embed's default-returning expression must also
+                // collapse to `Null` when the embed is absent, so an
+                // INSERT...RETURNING of a `None` echoes back `None` rather than
+                // `Some` of all-NULL fields.
+                let expr = if field.nullable {
+                    self.wrap_nullable_embed_record(s, expr)
+                } else {
+                    expr
+                };
                 s.default_returning = expr.clone();
                 Ok(expr)
             }
@@ -719,6 +735,7 @@ impl BuildMapping<'_> {
         &self,
         model: &app::EmbeddedStruct,
         mapping: &mapping::FieldStruct,
+        nullable: bool,
     ) -> Result<stmt::Expr> {
         let exprs: Vec<stmt::Expr> = model
             .fields
@@ -726,7 +743,50 @@ impl BuildMapping<'_> {
             .enumerate()
             .map(|(index, field)| self.build_table_to_model_field(field, &mapping.fields[index]))
             .collect::<Result<_>>()?;
-        Ok(stmt::Expr::record(exprs))
+        let record = stmt::Expr::record(exprs);
+
+        if nullable {
+            Ok(self.wrap_nullable_embed_record(mapping, record))
+        } else {
+            Ok(record)
+        }
+    }
+
+    /// Wraps an embedded struct's reconstructed `record` so that a row in which
+    /// every flattened column of the embed is NULL decodes to `Value::Null`
+    /// (which `Option<Embed>::load` turns into `None`), while any present row
+    /// decodes to the record. Used for nullable embeds (`Option<Embed>`).
+    ///
+    /// The sentinel is the conjunction of `IS NULL` over *every* flattened leaf
+    /// column of the embed. When every inner field is itself nullable, a `Some`
+    /// whose fields are all `None` is indistinguishable from `None` — both store
+    /// all-NULL columns and both decode to `None`. This is inherent to flattened
+    /// storage without a dedicated presence column.
+    fn wrap_nullable_embed_record(
+        &self,
+        mapping: &mapping::FieldStruct,
+        record: stmt::Expr,
+    ) -> stmt::Expr {
+        let null_tests: Vec<stmt::Expr> = mapping
+            .columns
+            .keys()
+            .map(|column_id| {
+                stmt::Expr::is_null(stmt::Expr::column(stmt::ExprColumn {
+                    nesting: 0,
+                    table: 0,
+                    column: column_id.index,
+                }))
+            })
+            .collect();
+
+        stmt::Expr::match_expr(
+            stmt::Expr::and_from_vec(null_tests),
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::Bool(true),
+                expr: stmt::Expr::null(),
+            }],
+            record,
+        )
     }
 
     fn build_table_to_model_field(
@@ -753,7 +813,7 @@ impl BuildMapping<'_> {
                         let mapping = mapping
                             .as_struct()
                             .expect("embedded struct field should have struct mapping");
-                        self.build_table_to_model_field_struct(embedded, mapping)
+                        self.build_table_to_model_field_struct(embedded, mapping, field.nullable)
                     }
                     _ => unreachable!("invalid schema"),
                 }
@@ -771,6 +831,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             build,
             prefix: vec![],
             in_enum_variant: false,
+            in_nullable_embed: false,
             field_base: None,
             field_expr_base: stmt::Expr::arg(0),
             inherited_auto_increment: false,
@@ -928,12 +989,38 @@ impl<'a, 'b> MapField<'a, 'b> {
         // newtypes, but `Foo { a, b: Bar(u64) }` would not propagate it
         // from any outer past the `Foo` layer.
         let single_field = embedded_struct.fields.len() == 1;
+
+        // For a nullable embed (`Option<Embed>`) the whole embed may be absent.
+        // Capture a reference to the embed field's value in the *parent* context
+        // before descending; it becomes the subject of the per-column null
+        // guard installed below.
+        let embed_field_expr = field.nullable.then(|| self.field_expr(field, field_index));
+
         let mut child = self.for_struct(field, field_index);
         if single_field {
             child.inherited_auto_increment |= field.is_auto_increment();
         } else {
             child.inherited_auto_increment = false;
         }
+
+        if let Some(embed_field_expr) = embed_field_expr {
+            // Force every flattened column nullable (the embed may be NULL) and
+            // wrap each column's lowering expression so a `None` embed encodes
+            // every column to NULL. Without the guard, projecting a column out
+            // of a `Value::Null` embed panics (`Value::entry`). Mirrors the
+            // discriminant guard installed by `for_variant`.
+            child.in_nullable_embed = true;
+            let null_guard = stmt::Expr::match_expr(
+                stmt::Expr::is_null(embed_field_expr),
+                vec![stmt::MatchArm {
+                    pattern: stmt::Value::Bool(true),
+                    expr: stmt::Expr::null(),
+                }],
+                stmt::Expr::arg(0),
+            );
+            child.field_expr_base.substitute(&[null_guard]);
+        }
+
         let nested_fields = child.map_fields(&embedded_struct.fields)?;
 
         let columns: indexmap::IndexMap<ColumnId, usize> =
@@ -1020,7 +1107,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             name: self.column_name(field),
             ty: storage_ty.bridge_type(&primitive.ty),
             storage_ty,
-            nullable: field.nullable || self.in_enum_variant,
+            nullable: field.nullable || self.in_enum_variant || self.in_nullable_embed,
             primary_key: false,
             auto_increment: is_auto_increment,
             versionable: field.is_versionable(),
@@ -1101,6 +1188,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             build: self.build,
             prefix,
             in_enum_variant: self.in_enum_variant,
+            in_nullable_embed: self.in_nullable_embed,
             field_base: self.field_base.clone(),
             field_expr_base: self.field_expr_base.clone(),
             inherited_auto_increment: self.inherited_auto_increment,

@@ -8,7 +8,20 @@ impl ToSql for &stmt::Expr {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Expr::And(expr) => {
-                fmt!(f, Delimited(&expr.operands, " AND "));
+                // `AND` binds tighter than `OR`, so an `OR` operand must be
+                // parenthesized to preserve grouping — otherwise
+                // `a AND (b OR c)` would serialize as `a AND b OR c`, which
+                // SQL parses as `(a AND b) OR c`.
+                let mut sep = "";
+                for operand in &expr.operands {
+                    f.dst.push_str(sep);
+                    sep = " AND ";
+                    if matches!(operand, stmt::Expr::Or(_)) {
+                        fmt!(f, "(" operand ")");
+                    } else {
+                        fmt!(f, operand);
+                    }
+                }
             }
             stmt::Expr::BinaryOp(expr) => {
                 assert!(!expr.lhs.is_value_null());

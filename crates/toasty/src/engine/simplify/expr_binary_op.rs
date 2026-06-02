@@ -180,7 +180,7 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if term.is_false() || matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if is_dead_filter_term(&term) {
                 continue;
             }
 
@@ -212,11 +212,28 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if !term.is_false() && !matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if !is_dead_filter_term(&term) {
                 operands.push(term);
             }
         }
 
         Expr::or_from_vec(operands)
+    }
+}
+
+/// Returns `true` if `term` can never evaluate to `true` in a boolean filter
+/// context, so it may be dropped from an `OR` of guarded match arms.
+///
+/// Covers the constant dead values plus an `AND` carrying a `NULL` (or `false`)
+/// operand — e.g. an arm that compares the `NULL` branch of a nullable-embed
+/// sentinel (`Match(all_null, [true => null], record)`) against a value, which
+/// folds to `… AND NULL`. SQL tolerates that (it evaluates to NULL/false), but
+/// DynamoDB rejects a bare value placeholder in a `FilterExpression`, so the
+/// dead term must be pruned rather than serialized.
+fn is_dead_filter_term(term: &Expr) -> bool {
+    match term {
+        Expr::Value(stmt::Value::Null) | Expr::Value(stmt::Value::Bool(false)) => true,
+        Expr::And(and) => and.operands.iter().any(is_dead_filter_term),
+        _ => false,
     }
 }

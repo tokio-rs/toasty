@@ -1,4 +1,5 @@
 pub mod company_office_address;
+pub mod company_optional_office;
 pub mod composite_chain_relations;
 pub mod composite_fk_has_many_belongs_to;
 pub mod composite_has_many_belongs_to;
@@ -8,6 +9,7 @@ pub mod deferred_json_document;
 pub mod deferred_optional_document;
 pub mod document_deferred_metadata;
 pub mod document_metadata_deferred_notes;
+pub mod document_optional_metadata;
 pub mod fixed_item_name;
 pub mod fixed_item_name_quantity;
 pub mod has_many_belongs_to;
