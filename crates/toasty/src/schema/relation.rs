@@ -18,10 +18,6 @@ pub trait RelationManyField: Load<Output = Self> {
     /// Whether the field stores its value in a deferred load slot.
     const DEFERRED: bool;
 
-    /// A has-many is a collection; the collection itself is always present
-    /// even when empty, so a has-many field is never nullable.
-    const NULLABLE: bool = false;
-
     /// Reloads this relation field from a returned value.
     fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
 
