@@ -433,40 +433,52 @@
 <a href=#433 id=433 data-nosnippet>433</a>            <span class="kw">let </span>inner = ddb_expression(cx, attrs, primary, <span class="kw-2">&amp;</span>expr.expr);
 <a href=#434 id=434 data-nosnippet>434</a>            <span class="macro">format!</span>(<span class="string">"size({inner})"</span>)
 <a href=#435 id=435 data-nosnippet>435</a>        }
-<a href=#436 id=436 data-nosnippet>436</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"FILTER = {:#?}"</span>, expr),
-<a href=#437 id=437 data-nosnippet>437</a>    }
-<a href=#438 id=438 data-nosnippet>438</a>}
-<a href=#439 id=439 data-nosnippet>439</a>
-<a href=#440 id=440 data-nosnippet>440</a><span class="attr">#[derive(Default)]
-<a href=#441 id=441 data-nosnippet>441</a></span><span class="kw">struct </span>ExprAttrs {
-<a href=#442 id=442 data-nosnippet>442</a>    columns: HashMap&lt;ColumnId, String&gt;,
-<a href=#443 id=443 data-nosnippet>443</a>    attr_names: HashMap&lt;String, String&gt;,
-<a href=#444 id=444 data-nosnippet>444</a>    attr_values: HashMap&lt;String, AttributeValue&gt;,
-<a href=#445 id=445 data-nosnippet>445</a>}
-<a href=#446 id=446 data-nosnippet>446</a>
-<a href=#447 id=447 data-nosnippet>447</a><span class="kw">impl </span>ExprAttrs {
-<a href=#448 id=448 data-nosnippet>448</a>    <span class="kw">fn </span>column(<span class="kw-2">&amp;mut </span><span class="self">self</span>, column: <span class="kw-2">&amp;</span>Column) -&gt; <span class="kw-2">&amp;</span>str {
-<a href=#449 id=449 data-nosnippet>449</a>        <span class="kw">use </span>std::collections::hash_map::Entry;
-<a href=#450 id=450 data-nosnippet>450</a>
-<a href=#451 id=451 data-nosnippet>451</a>        <span class="kw">match </span><span class="self">self</span>.columns.entry(column.id) {
-<a href=#452 id=452 data-nosnippet>452</a>            Entry::Vacant(e) =&gt; {
-<a href=#453 id=453 data-nosnippet>453</a>                <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"#col_{}"</span>, column.id.index);
-<a href=#454 id=454 data-nosnippet>454</a>                <span class="self">self</span>.attr_names.insert(name.clone(), column.name.clone());
-<a href=#455 id=455 data-nosnippet>455</a>                e.insert(name)
-<a href=#456 id=456 data-nosnippet>456</a>            }
-<a href=#457 id=457 data-nosnippet>457</a>            Entry::Occupied(e) =&gt; e.into_mut(),
-<a href=#458 id=458 data-nosnippet>458</a>        }
-<a href=#459 id=459 data-nosnippet>459</a>    }
-<a href=#460 id=460 data-nosnippet>460</a>
-<a href=#461 id=461 data-nosnippet>461</a>    <span class="kw">fn </span>value(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: <span class="kw-2">&amp;</span>stmt::Value) -&gt; String {
-<a href=#462 id=462 data-nosnippet>462</a>        <span class="self">self</span>.ddb_value(Value::from(val.clone()).to_ddb())
-<a href=#463 id=463 data-nosnippet>463</a>    }
-<a href=#464 id=464 data-nosnippet>464</a>
-<a href=#465 id=465 data-nosnippet>465</a>    <span class="kw">fn </span>ddb_value(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: AttributeValue) -&gt; String {
-<a href=#466 id=466 data-nosnippet>466</a>        <span class="kw">let </span>i = <span class="self">self</span>.attr_values.len();
-<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">":v_{i}"</span>);
-<a href=#468 id=468 data-nosnippet>468</a>        <span class="self">self</span>.attr_values.insert(name.clone(), val);
-<a href=#469 id=469 data-nosnippet>469</a>        name
-<a href=#470 id=470 data-nosnippet>470</a>    }
-<a href=#471 id=471 data-nosnippet>471</a>}
+<a href=#436 id=436 data-nosnippet>436</a>        stmt::Expr::Cast(expr_cast) <span class="kw">if </span>expr_cast.ty == stmt::Type::Bool =&gt; {
+<a href=#437 id=437 data-nosnippet>437</a>            <span class="comment">// Bool key/index fields bridge through I8 (db::Type::Integer(1) via
+<a href=#438 id=438 data-nosnippet>438</a>            // bridge_type). The lowering wraps the I8 column ref in
+<a href=#439 id=439 data-nosnippet>439</a>            // Cast(col_ref, Bool) when the field appears as a bare predicate
+<a href=#440 id=440 data-nosnippet>440</a>            // (result of `field = true` simplification). In predicate position
+<a href=#441 id=441 data-nosnippet>441</a>            // this means "is true"; the `field = false` case arrives as
+<a href=#442 id=442 data-nosnippet>442</a>            // Not(Cast(col_ref, Bool)) and is handled by the Not arm above.
+<a href=#443 id=443 data-nosnippet>443</a>            </span><span class="kw">let </span>col_alias = ddb_expression(cx, attrs, primary, <span class="kw-2">&amp;</span>expr_cast.expr);
+<a href=#444 id=444 data-nosnippet>444</a>            <span class="kw">let </span>true_val =
+<a href=#445 id=445 data-nosnippet>445</a>                attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::N(<span class="string">"1"</span>.to_string()));
+<a href=#446 id=446 data-nosnippet>446</a>            <span class="macro">format!</span>(<span class="string">"{col_alias} = {true_val}"</span>)
+<a href=#447 id=447 data-nosnippet>447</a>        }
+<a href=#448 id=448 data-nosnippet>448</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"FILTER = {:#?}"</span>, expr),
+<a href=#449 id=449 data-nosnippet>449</a>    }
+<a href=#450 id=450 data-nosnippet>450</a>}
+<a href=#451 id=451 data-nosnippet>451</a>
+<a href=#452 id=452 data-nosnippet>452</a><span class="attr">#[derive(Default)]
+<a href=#453 id=453 data-nosnippet>453</a></span><span class="kw">struct </span>ExprAttrs {
+<a href=#454 id=454 data-nosnippet>454</a>    columns: HashMap&lt;ColumnId, String&gt;,
+<a href=#455 id=455 data-nosnippet>455</a>    attr_names: HashMap&lt;String, String&gt;,
+<a href=#456 id=456 data-nosnippet>456</a>    attr_values: HashMap&lt;String, AttributeValue&gt;,
+<a href=#457 id=457 data-nosnippet>457</a>}
+<a href=#458 id=458 data-nosnippet>458</a>
+<a href=#459 id=459 data-nosnippet>459</a><span class="kw">impl </span>ExprAttrs {
+<a href=#460 id=460 data-nosnippet>460</a>    <span class="kw">fn </span>column(<span class="kw-2">&amp;mut </span><span class="self">self</span>, column: <span class="kw-2">&amp;</span>Column) -&gt; <span class="kw-2">&amp;</span>str {
+<a href=#461 id=461 data-nosnippet>461</a>        <span class="kw">use </span>std::collections::hash_map::Entry;
+<a href=#462 id=462 data-nosnippet>462</a>
+<a href=#463 id=463 data-nosnippet>463</a>        <span class="kw">match </span><span class="self">self</span>.columns.entry(column.id) {
+<a href=#464 id=464 data-nosnippet>464</a>            Entry::Vacant(e) =&gt; {
+<a href=#465 id=465 data-nosnippet>465</a>                <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">"#col_{}"</span>, column.id.index);
+<a href=#466 id=466 data-nosnippet>466</a>                <span class="self">self</span>.attr_names.insert(name.clone(), column.name.clone());
+<a href=#467 id=467 data-nosnippet>467</a>                e.insert(name)
+<a href=#468 id=468 data-nosnippet>468</a>            }
+<a href=#469 id=469 data-nosnippet>469</a>            Entry::Occupied(e) =&gt; e.into_mut(),
+<a href=#470 id=470 data-nosnippet>470</a>        }
+<a href=#471 id=471 data-nosnippet>471</a>    }
+<a href=#472 id=472 data-nosnippet>472</a>
+<a href=#473 id=473 data-nosnippet>473</a>    <span class="kw">fn </span>value(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: <span class="kw-2">&amp;</span>stmt::Value) -&gt; String {
+<a href=#474 id=474 data-nosnippet>474</a>        <span class="self">self</span>.ddb_value(Value::from(val.clone()).to_ddb())
+<a href=#475 id=475 data-nosnippet>475</a>    }
+<a href=#476 id=476 data-nosnippet>476</a>
+<a href=#477 id=477 data-nosnippet>477</a>    <span class="kw">fn </span>ddb_value(<span class="kw-2">&amp;mut </span><span class="self">self</span>, val: AttributeValue) -&gt; String {
+<a href=#478 id=478 data-nosnippet>478</a>        <span class="kw">let </span>i = <span class="self">self</span>.attr_values.len();
+<a href=#479 id=479 data-nosnippet>479</a>        <span class="kw">let </span>name = <span class="macro">format!</span>(<span class="string">":v_{i}"</span>);
+<a href=#480 id=480 data-nosnippet>480</a>        <span class="self">self</span>.attr_values.insert(name.clone(), val);
+<a href=#481 id=481 data-nosnippet>481</a>        name
+<a href=#482 id=482 data-nosnippet>482</a>    }
+<a href=#483 id=483 data-nosnippet>483</a>}
 </code></pre></div></section></main></body></html>

@@ -200,24 +200,28 @@
 <a href=#200 id=200 data-nosnippet>200</a>            <span class="comment">// Let engine handle UTC conversion
 <a href=#201 id=201 data-nosnippet>201</a>            </span><span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
 <a href=#202 id=202 data-nosnippet>202</a>            </span>(<span class="self">Self</span>::Timestamp(<span class="kw">_</span>) | <span class="self">Self</span>::DateTime(<span class="kw">_</span>), stmt::Type::Zoned) =&gt; stmt::Type::Timestamp,
-<a href=#203 id=203 data-nosnippet>203</a>            <span class="kw">_ </span>=&gt; ty.clone(),
-<a href=#204 id=204 data-nosnippet>204</a>        }
-<a href=#205 id=205 data-nosnippet>205</a>    }
-<a href=#206 id=206 data-nosnippet>206</a>
-<a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>driver::Capability) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#208 id=208 data-nosnippet>208</a>        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
-<a href=#209 id=209 data-nosnippet>209</a>            Type::VarChar(size) =&gt; <span class="kw">match </span>db.storage_types.varchar {
-<a href=#210 id=210 data-nosnippet>210</a>                <span class="prelude-val">Some</span>(max) <span class="kw">if </span>size &gt; max =&gt; <span class="prelude-val">Err</span>(<span class="kw">crate</span>::Error::unsupported_feature(<span class="macro">format!</span>(
-<a href=#211 id=211 data-nosnippet>211</a>                    <span class="string">"VARCHAR({}) exceeds database maximum of {}"</span>,
-<a href=#212 id=212 data-nosnippet>212</a>                    size, max
-<a href=#213 id=213 data-nosnippet>213</a>                ))),
-<a href=#214 id=214 data-nosnippet>214</a>                <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="kw">crate</span>::Error::unsupported_feature(
-<a href=#215 id=215 data-nosnippet>215</a>                    <span class="string">"VARCHAR type is not supported by this database"</span>,
-<a href=#216 id=216 data-nosnippet>216</a>                )),
-<a href=#217 id=217 data-nosnippet>217</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">Ok</span>(()),
-<a href=#218 id=218 data-nosnippet>218</a>            },
-<a href=#219 id=219 data-nosnippet>219</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Ok</span>(()),
-<a href=#220 id=220 data-nosnippet>220</a>        }
-<a href=#221 id=221 data-nosnippet>221</a>    }
-<a href=#222 id=222 data-nosnippet>222</a>}
+<a href=#203 id=203 data-nosnippet>203</a>            <span class="comment">// Bool key/index fields stored as 1-byte integer (e.g. DynamoDB N("1"/"0")).
+<a href=#204 id=204 data-nosnippet>204</a>            // The engine casts Bool &lt;-&gt; I8 transparently via encode_column /
+<a href=#205 id=205 data-nosnippet>205</a>            // map_table_column_to_model; the driver handles them as plain numbers.
+<a href=#206 id=206 data-nosnippet>206</a>            </span>(<span class="self">Self</span>::Integer(<span class="number">1</span>), stmt::Type::Bool) =&gt; stmt::Type::I8,
+<a href=#207 id=207 data-nosnippet>207</a>            <span class="kw">_ </span>=&gt; ty.clone(),
+<a href=#208 id=208 data-nosnippet>208</a>        }
+<a href=#209 id=209 data-nosnippet>209</a>    }
+<a href=#210 id=210 data-nosnippet>210</a>
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>verify(<span class="kw-2">&amp;</span><span class="self">self</span>, db: <span class="kw-2">&amp;</span>driver::Capability) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#212 id=212 data-nosnippet>212</a>        <span class="kw">match </span><span class="kw-2">*</span><span class="self">self </span>{
+<a href=#213 id=213 data-nosnippet>213</a>            Type::VarChar(size) =&gt; <span class="kw">match </span>db.storage_types.varchar {
+<a href=#214 id=214 data-nosnippet>214</a>                <span class="prelude-val">Some</span>(max) <span class="kw">if </span>size &gt; max =&gt; <span class="prelude-val">Err</span>(<span class="kw">crate</span>::Error::unsupported_feature(<span class="macro">format!</span>(
+<a href=#215 id=215 data-nosnippet>215</a>                    <span class="string">"VARCHAR({}) exceeds database maximum of {}"</span>,
+<a href=#216 id=216 data-nosnippet>216</a>                    size, max
+<a href=#217 id=217 data-nosnippet>217</a>                ))),
+<a href=#218 id=218 data-nosnippet>218</a>                <span class="prelude-val">None </span>=&gt; <span class="prelude-val">Err</span>(<span class="kw">crate</span>::Error::unsupported_feature(
+<a href=#219 id=219 data-nosnippet>219</a>                    <span class="string">"VARCHAR type is not supported by this database"</span>,
+<a href=#220 id=220 data-nosnippet>220</a>                )),
+<a href=#221 id=221 data-nosnippet>221</a>                <span class="kw">_ </span>=&gt; <span class="prelude-val">Ok</span>(()),
+<a href=#222 id=222 data-nosnippet>222</a>            },
+<a href=#223 id=223 data-nosnippet>223</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Ok</span>(()),
+<a href=#224 id=224 data-nosnippet>224</a>        }
+<a href=#225 id=225 data-nosnippet>225</a>    }
+<a href=#226 id=226 data-nosnippet>226</a>}
 </code></pre></div></section></main></body></html>
