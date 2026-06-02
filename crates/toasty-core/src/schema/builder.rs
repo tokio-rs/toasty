@@ -177,30 +177,26 @@ impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
         let model_name = model.name().to_string();
 
-        // Collect field indices of Bool fields used as key/index attributes.
-        // These need db::Type::Integer(1) as their storage type on backends
-        // that don't support BOOL as a key attribute type (e.g. DynamoDB).
-        let bool_key_field_indices: HashSet<usize> = if let app::Model::Root(root) = &*model {
-            if !self.db.bool_key_type {
-                let index_key_fields: HashSet<app::FieldId> = root
-                    .indices
-                    .iter()
-                    .flat_map(|idx| idx.fields.iter().map(|f| f.field))
-                    .collect();
-                root.fields
-                    .iter()
-                    .filter(|f| {
-                        (f.primary_key || index_key_fields.contains(&f.id))
-                            && matches!(&f.ty, app::FieldTy::Primitive(p) if p.ty == stmt::Type::Bool)
-                    })
-                    .map(|f| f.id.index)
-                    .collect()
-            } else {
-                HashSet::new()
+        // Collect Bool fields used as key/index attributes on backends that
+        // don't support BOOL as a key attribute type (e.g. DynamoDB). These
+        // need db::Type::Integer(1) as their storage type.
+        let mut bool_key_fields: HashSet<app::FieldId> = HashSet::new();
+        if let app::Model::Root(root) = &*model
+            && !self.db.bool_key_type
+        {
+            let index_key_fields: HashSet<app::FieldId> = root
+                .indices
+                .iter()
+                .flat_map(|idx| idx.fields.iter().map(|f| f.field))
+                .collect();
+            for f in &root.fields {
+                if (f.primary_key || index_key_fields.contains(&f.id))
+                    && matches!(&f.ty, app::FieldTy::Primitive(p) if matches!(p.ty, stmt::Type::Bool))
+                {
+                    bool_key_fields.insert(f.id);
+                }
             }
-        } else {
-            HashSet::new()
-        };
+        }
 
         let fields = match model {
             app::Model::Root(root) => &mut root.fields[..],
@@ -213,7 +209,7 @@ impl BuildSchema<'_> {
                 // store Bool key/index fields as Integer(1). The engine's
                 // cast mechanism converts Bool ↔ I8 transparently; the driver
                 // never needs to special-case bools-as-numbers.
-                if bool_key_field_indices.contains(&field.id.index) {
+                if bool_key_fields.contains(&field.id) {
                     primitive.storage_ty = Some(db::Type::Integer(1));
                 }
 
