@@ -613,17 +613,20 @@ pub async fn composite_index_sort_key_range_filter(t: &mut Test) -> Result<()> {
 /// `composite_unique_index_unsupported_on_dynamodb`.
 #[driver_test(requires(sql))]
 pub async fn composite_unique_index_enforced(t: &mut Test) -> Result<()> {
+    // Short model/field names keep the auto-generated index name within
+    // MySQL's 64-char identifier limit once the test harness table prefix is
+    // applied.
     #[derive(Debug, toasty::Model)]
-    #[unique(coa_id, combination_hash)]
-    struct AccountCombination {
+    #[unique(org_id, slug)]
+    struct Account {
         #[key]
         #[auto]
         id: u64,
-        coa_id: i64,
-        combination_hash: String,
+        org_id: i64,
+        slug: String,
     }
 
-    let mut db = t.setup_db(models!(AccountCombination)).await;
+    let mut db = t.setup_db(models!(Account)).await;
 
     // The one non-primary-key index must be unique and span both columns.
     let index = db.schema().db.tables[0]
@@ -634,43 +637,43 @@ pub async fn composite_unique_index_enforced(t: &mut Test) -> Result<()> {
     assert!(index.unique);
     assert_eq!(index.columns.len(), 2);
 
-    toasty::create!(AccountCombination {
-        coa_id: 1_i64,
-        combination_hash: "abc"
+    toasty::create!(Account {
+        org_id: 1_i64,
+        slug: "abc"
     })
     .exec(&mut db)
     .await?;
 
-    // The same (coa_id, combination_hash) combination is rejected.
+    // The same (org_id, slug) combination is rejected.
     assert_err!(
-        toasty::create!(AccountCombination {
-            coa_id: 1_i64,
-            combination_hash: "abc"
+        toasty::create!(Account {
+            org_id: 1_i64,
+            slug: "abc"
         })
         .exec(&mut db)
         .await
     );
 
-    // The same combination_hash under a different coa_id is allowed —
-    // uniqueness is on the combination, not either column alone.
-    toasty::create!(AccountCombination {
-        coa_id: 2_i64,
-        combination_hash: "abc"
+    // The same slug under a different org_id is allowed — uniqueness is on the
+    // combination, not either column alone.
+    toasty::create!(Account {
+        org_id: 2_i64,
+        slug: "abc"
     })
     .exec(&mut db)
     .await?;
 
-    // The same coa_id with a different combination_hash is also allowed.
-    toasty::create!(AccountCombination {
-        coa_id: 1_i64,
-        combination_hash: "xyz"
+    // The same org_id with a different slug is also allowed.
+    toasty::create!(Account {
+        org_id: 1_i64,
+        slug: "xyz"
     })
     .exec(&mut db)
     .await?;
 
     // The generated full-key getter resolves a single record.
-    let row = AccountCombination::get_by_coa_id_and_combination_hash(&mut db, 2_i64, "abc").await?;
-    assert_eq!(row.coa_id, 2);
+    let row = Account::get_by_org_id_and_slug(&mut db, 2_i64, "abc").await?;
+    assert_eq!(row.org_id, 2);
 
     Ok(())
 }
@@ -682,15 +685,15 @@ pub async fn composite_unique_index_enforced(t: &mut Test) -> Result<()> {
 #[driver_test(requires(not(sql)))]
 pub async fn composite_unique_index_unsupported_on_dynamodb(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    #[unique(coa_id, combination_hash)]
-    struct AccountCombination {
+    #[unique(org_id, slug)]
+    struct Account {
         #[key]
         id: String,
-        coa_id: String,
-        combination_hash: String,
+        org_id: String,
+        slug: String,
     }
 
-    let err = assert_err!(t.try_setup_db(models!(AccountCombination)).await);
+    let err = assert_err!(t.try_setup_db(models!(Account)).await);
     assert!(
         err.is_unsupported_feature(),
         "expected unsupported_feature error, got: {err}"
