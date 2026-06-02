@@ -51,7 +51,7 @@
 <a href=#51 id=51 data-nosnippet>51</a>    <span class="kw">let </span>cardinality = app::Cardinality::Many { singular };
 <a href=#52 id=52 data-nosnippet>52</a>
 <a href=#53 id=53 data-nosnippet>53</a>    <span class="kw">match </span>via {
-<a href=#54 id=54 data-nosnippet>54</a>        <span class="prelude-val">Some</span>(path) =&gt; FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+<a href=#54 id=54 data-nosnippet>54</a>        <span class="prelude-val">Some</span>(path) =&gt; FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path, <span class="prelude-val">None</span>)),
 <a href=#55 id=55 data-nosnippet>55</a>        <span class="prelude-val">None </span>=&gt; FieldTy::Has(app::Has {
 <a href=#56 id=56 data-nosnippet>56</a>            target,
 <a href=#57 id=57 data-nosnippet>57</a>            expr_ty,

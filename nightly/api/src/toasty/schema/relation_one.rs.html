@@ -168,7 +168,7 @@
 <a href=#168 id=168 data-nosnippet>168</a>    <span class="kw">let </span>cardinality = app::Cardinality::One;
 <a href=#169 id=169 data-nosnippet>169</a>
 <a href=#170 id=170 data-nosnippet>170</a>    <span class="kw">match </span>via {
-<a href=#171 id=171 data-nosnippet>171</a>        <span class="prelude-val">Some</span>(path) =&gt; FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+<a href=#171 id=171 data-nosnippet>171</a>        <span class="prelude-val">Some</span>(path) =&gt; FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path, <span class="prelude-val">None</span>)),
 <a href=#172 id=172 data-nosnippet>172</a>        <span class="prelude-val">None </span>=&gt; FieldTy::Has(app::Has {
 <a href=#173 id=173 data-nosnippet>173</a>            target,
 <a href=#174 id=174 data-nosnippet>174</a>            expr_ty,
