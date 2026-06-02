@@ -63,9 +63,26 @@ impl Expand<'_> {
                             self.path().chain(<#model_ident as #field_schema_trait>::path_field(#field_offset))
                         };
 
-                        quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> <<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin> {
-                                <<<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
+                        if rel.via.is_some() {
+                            // A `via` step returns its terminal's path handle
+                            // (`ViaTarget::Path`): a model terminal yields a
+                            // chainable `ManyField`, so a scalar terminal can
+                            // follow a via intermediate (`a.b.field` where `b` is
+                            // a via); a scalar terminal yields a plain list path,
+                            // a leaf. Both stay includable / selectable
+                            // (`Into<stmt::Path>`). The element type comes from
+                            // `ViaManyField`, which works for scalar terminals too
+                            // (where there is no `RelationManyField::Model`).
+                            quote_spanned! { span=>
+                                #vis fn #field_ident(&self) -> #toasty::ViaPath<#ty, __Origin> {
+                                    <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(#path)
+                                }
+                            }
+                        } else {
+                            quote_spanned! { span=>
+                                #vis fn #field_ident(&self) -> <<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin> {
+                                    <<<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
+                                }
                             }
                         }
                     }
@@ -175,6 +192,25 @@ impl Expand<'_> {
                             &field_offset,
                         )
                     }
+                    HasMany(rel) if rel.via.is_some() => {
+                        // See the `via` branch in `expand_field_struct`: a via
+                        // step returns its terminal's `ViaTarget::Path` handle —
+                        // a chainable `ManyField` for a model terminal, a plain
+                        // list path for a scalar terminal — and its element type
+                        // comes from `ViaManyField` so scalar terminals work too.
+                        let ty = &rel.ty;
+                        let span = field_ident.span();
+                        let schema_trait = self.schema_trait();
+                        quote_spanned! { span=>
+                            #vis fn #field_ident(&self) -> #toasty::ViaPath<#ty, __Origin> {
+                                <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(
+                                    self.path().chain(
+                                        <#model_ident as #schema_trait>::path_field(#field_offset)
+                                    )
+                                )
+                            }
+                        }
+                    }
                     HasMany(rel) => {
                         let ty = &rel.ty;
                         self.expand_list_relation_field_method(
@@ -198,7 +234,8 @@ impl Expand<'_> {
             TokenStream::new()
         };
 
-        // any() / all() are only available on root models (requires Model trait bound)
+        // any() / all() are only available on root models (they require the
+        // `Model` trait bound).
         let any_method = if is_root {
             quote! {
                 /// Filter the parent model by a condition on the associated

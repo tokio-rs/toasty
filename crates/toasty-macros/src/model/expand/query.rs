@@ -318,6 +318,9 @@ impl Expand<'_> {
             .iter()
             .filter_map(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => Some(self.expand_belongs_to_method(field, rel)),
+                FieldTy::HasMany(rel) if rel.via.is_some() => {
+                    Some(self.expand_has_many_via_method(field, rel))
+                }
                 FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
                 FieldTy::HasOne(rel) => Some(self.expand_has_one_method(field, rel)),
                 FieldTy::Primitive(..) => None,
@@ -345,6 +348,34 @@ impl Expand<'_> {
                     #model_ident::fields().#field_ident().into(),
                 );
                 <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
+            }
+        }
+    }
+
+    /// Chained accessor for a `#[has_many(via = …)]` field. Builds an
+    /// association from the current query following the via field, then routes
+    /// through [`ViaTarget`] — keyed on the terminal type — so it works for a
+    /// model terminal (`QueryMany<M>`) and a scalar terminal
+    /// (`Query<List<scalar>>`) alike. Mirrors the instance accessor in
+    /// `relation.rs`; here the source query is `self.stmt` directly.
+    fn expand_has_many_via_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let ty = &rel.ty;
+        let model_ident = &self.model.ident;
+        let field_ident = &field.name.ident;
+
+        quote! {
+            #vis fn #field_ident(self) -> #toasty::ViaMany<#ty> {
+                // The accessor returns the terminal's `ViaTarget::Path` (a
+                // `ManyField` for a model terminal, a `Path` for a scalar);
+                // `.into()` collapses either into the `Path` the association
+                // needs.
+                let __assoc = #toasty::stmt::Association::from_source_and_path(
+                    self.stmt,
+                    #model_ident::fields().#field_ident().into(),
+                );
+                <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(__assoc)
             }
         }
     }

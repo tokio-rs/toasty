@@ -51,7 +51,7 @@ fn many_relation_field_ty<M: Model>(
     let cardinality = app::Cardinality::Many { singular };
 
     match via {
-        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path, None)),
         None => FieldTy::Has(app::Has {
             target,
             expr_ty,

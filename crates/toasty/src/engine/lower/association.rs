@@ -61,6 +61,41 @@ impl<'a> RewriteVia<'a> {
             && let stmt::Source::Model(model) = &mut select.source
             && let Some(via) = model.via.take()
         {
+            // Complete a scalar-terminal via used as a query source. For
+            // `#[has_many(via = todos.tags.name)]`, `user.tag_names()` selects
+            // the `name` column from `Tag` (the model the chain reaches), not
+            // whole `Tag` records:
+            //
+            //     SELECT DISTINCT tag.name      -- returning: project Tag.name
+            //     FROM tag                      -- source model: Tag (the via target)
+            //     WHERE <tag reachable from user>  -- the chain, unfolded below
+            //
+            // The navigation method can't build this: it runs in user code with
+            // no linked schema, so it can't name the target model and emits a
+            // placeholder source id with no projection. The resolved `Via` is
+            // available here, so set the source model (the FROM table) and the
+            // terminal projection (the RETURNING) before unfolding the chain
+            // into the WHERE filter.
+            //
+            // A model-terminal via has `terminal == None` — its source already
+            // selects whole target records — so this is a no-op there.
+            let scalar_terminal =
+                self.schema()
+                    .app
+                    .resolve_field_path(&via.path)
+                    .and_then(|field| match &field.ty {
+                        app::FieldTy::Via(v) => v.terminal.map(|terminal| (v.target, terminal)),
+                        _ => None,
+                    });
+
+            if let Some((target, _)) = scalar_terminal {
+                model.id = target;
+            }
+            if let Some((target, terminal)) = scalar_terminal {
+                select.returning =
+                    stmt::Returning::Project(stmt::Path::field(target, terminal).into_stmt());
+            }
+
             // Create a new scope to indicate we are operating in the
             // context of stmt.target
             let mut s = self.scope(&select.source);
@@ -147,9 +182,18 @@ impl<'a> RewriteVia<'a> {
 
         // If this step names a via relation, splice the via's resolved path
         // in place of the via field and continue. Handles via-of-via
-        // naturally because the recursion re-examines the spliced steps.
+        // naturally because the recursion re-examines the spliced steps. A
+        // scalar-terminal via contributes only its relation chain to the
+        // reachability filter — the terminal field is a projection, handled by
+        // the query's returning, not the filter.
         let via_path = match &field.ty {
-            app::FieldTy::Via(via) => Some(via.path.projection.as_slice()),
+            app::FieldTy::Via(via) => {
+                let projection = via.path.projection.as_slice();
+                Some(match via.terminal {
+                    Some(_) => &projection[..projection.len() - 1],
+                    None => projection,
+                })
+            }
             _ => None,
         };
         if let Some(via_steps) = via_path {

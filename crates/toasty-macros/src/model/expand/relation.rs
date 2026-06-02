@@ -106,28 +106,58 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
+
+        // A `via` relation reaches its terminal through a path of existing
+        // relations rather than a single foreign key. It routes through
+        // `ViaTarget` (keyed on the terminal element type) so the
+        // navigation method works whether the terminal is a model — keeping
+        // the rich `QueryMany<M>` builder — or a scalar field, where it yields
+        // a plain `Query<List<scalar>>` projecting that field.
+        if rel.via.is_some() {
+            // The association references the via field; its target and (for a
+            // scalar terminal) terminal projection are resolved during lowering
+            // from the schema, so nothing here needs the path's shape. The
+            // declared element type is validated against the path by the typed
+            // accessor and by the `schema()` expansion's terminal pin.
+            return quote! {
+                #vis fn #field_ident(&self) -> #toasty::ViaMany<#ty> {
+                    // Suppress the unused field warning
+                    if false {
+                        let _ = &self.#field_ident;
+                    }
+
+                    {
+                        use #toasty::IntoStatement;
+                        let __source = self.into_statement().into_query().unwrap().to_list();
+                        // The accessor returns the terminal's `ViaTarget::Path`
+                        // (a `ManyField` for a model terminal, a `Path` for a
+                        // scalar); `.into()` collapses either into the `Path` the
+                        // association needs.
+                        let __assoc = #toasty::stmt::Association::from_source_and_path(
+                            __source,
+                            Self::fields().#field_ident().into(),
+                        );
+                        <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::make_via_query(__assoc)
+                    }
+                }
+            };
+        }
+
         let target = quote!(<#ty as #toasty::RelationManyField>::Model);
 
-        // A `via` relation reaches its target through a path of existing
-        // relations; it has no paired `BelongsTo`, so skip the back-reference
-        // check that direct has-many relations emit.
-        let pair_check = if rel.via.is_some() {
-            quote! {}
-        } else {
-            let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
-                &self.model.name.ident.to_string(),
-                rel.span,
-            ));
-            self.expand_pair_belongs_to_check(PairBelongsToCheck {
-                pair_ident: &pair_ident,
-                field_ident,
-                ty,
-                field_trait: quote!(#toasty::RelationManyField),
-                rel_span: rel.span,
-                relation_kind: "HasMany",
-                label: "Has many associations require the target to include a back-reference",
-            })
-        };
+        let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
+            &self.model.name.ident.to_string(),
+            rel.span,
+        ));
+        let pair_check = self.expand_pair_belongs_to_check(PairBelongsToCheck {
+            pair_ident: &pair_ident,
+            field_ident,
+            ty,
+            field_trait: quote!(#toasty::RelationManyField),
+            rel_span: rel.span,
+            relation_kind: "HasMany",
+            label: "Has many associations require the target to include a back-reference",
+        });
 
         quote! {
             #vis fn #field_ident(&self) -> #toasty::QueryMany<#target> {
