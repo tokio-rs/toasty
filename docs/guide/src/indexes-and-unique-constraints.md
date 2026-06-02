@@ -366,6 +366,48 @@ keep generated names within a database's identifier-length limit.
 | Query matching | Database uses leftmost-prefix matching | All `partition` fields required; `local` fields optional left-to-right |
 | Column limits | No artificial limits | Up to 4 partition and 4 local attributes per index |
 
+## Multi-column unique constraints
+
+A struct-level `#[unique(...)]` defines a composite unique index. It takes the
+same field list as `#[index(...)]` — simple mode, named `partition`/`local`
+mode, and a `name = "..."` override — but the database enforces uniqueness
+across the combination of columns.
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[unique(coa_id, combination_hash)]
+struct AccountCombination {
+    #[key]
+    #[auto]
+    id: u64,
+    coa_id: i64,
+    combination_hash: String,
+}
+```
+
+On SQL databases this produces a unique index over both columns:
+
+```sql
+CREATE UNIQUE INDEX idx_account_combinations_coa_id_combination_hash
+    ON account_combinations (coa_id, combination_hash);
+```
+
+The constraint applies to the combination, not either column alone — two rows
+may share a `coa_id` or a `combination_hash`, but not both. Inserting a row that
+duplicates an existing `(coa_id, combination_hash)` pair returns an error.
+
+Toasty generates the same prefix query methods as a composite `#[index(...)]`:
+`filter_by_coa_id`, `filter_by_coa_id_and_combination_hash`, and the matching
+`get_by_*`, `update_by_*`, and `delete_by_*` methods.
+
+DynamoDB does not support composite unique constraints. Toasty backs each unique
+index with a dedicated index table guarded by an `attribute_not_exists`
+condition, and that mechanism enforces a single column. Declaring a multi-column
+`#[unique(...)]` returns an `unsupported_feature` error when the schema is
+created. A single-column `#[unique(field)]` works on DynamoDB and is equivalent
+to a field-level `#[unique]`.
+
 ## Indexing newtype fields
 
 Newtype embedded structs (single unnamed field, e.g., `struct Email(String)`)

@@ -3,6 +3,10 @@ pub(crate) struct KeyAttr {
     pub(crate) partition: Vec<syn::Ident>,
     pub(crate) local: Vec<syn::Ident>,
     pub(crate) name: Option<String>,
+
+    /// When `true`, the index enforces uniqueness. Set for `#[unique(...)]`
+    /// attributes; always `false` for `#[key(...)]` and `#[index(...)]`.
+    pub(crate) unique: bool,
 }
 
 impl KeyAttr {
@@ -137,6 +141,7 @@ impl KeyAttr {
             partition,
             local,
             name,
+            unique: false,
         })
     }
 }

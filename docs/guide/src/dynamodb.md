@@ -198,6 +198,11 @@ Two operational consequences worth knowing:
   transaction. The transaction's condition expression catches
   concurrent writers atomically.
 
+The index table is keyed on a single column, so composite unique
+constraints (`#[unique(a, b)]`) are not supported. Declaring one returns
+an `unsupported_feature` error when the schema is created. SQL backends
+support them via `CREATE UNIQUE INDEX`.
+
 See [Indexes and Unique Constraints](./indexes-and-unique-constraints.md)
 for the model-level syntax.
 

@@ -604,3 +604,97 @@ pub async fn composite_index_sort_key_range_filter(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Struct-level `#[unique(field_a, field_b)]` enforces uniqueness across the
+/// combination of columns rather than each column individually (SQL-only).
+///
+/// On SQL this lowers to `CREATE UNIQUE INDEX ... (field_a, field_b)`. DynamoDB
+/// does not support composite unique indices — see
+/// `composite_unique_index_unsupported_on_dynamodb`.
+#[driver_test(requires(sql))]
+pub async fn composite_unique_index_enforced(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[unique(coa_id, combination_hash)]
+    struct AccountCombination {
+        #[key]
+        #[auto]
+        id: u64,
+        coa_id: i64,
+        combination_hash: String,
+    }
+
+    let mut db = t.setup_db(models!(AccountCombination)).await;
+
+    // The one non-primary-key index must be unique and span both columns.
+    let index = db.schema().db.tables[0]
+        .indices
+        .iter()
+        .find(|i| !i.primary_key)
+        .expect("composite unique index");
+    assert!(index.unique);
+    assert_eq!(index.columns.len(), 2);
+
+    toasty::create!(AccountCombination {
+        coa_id: 1_i64,
+        combination_hash: "abc"
+    })
+    .exec(&mut db)
+    .await?;
+
+    // The same (coa_id, combination_hash) combination is rejected.
+    assert_err!(
+        toasty::create!(AccountCombination {
+            coa_id: 1_i64,
+            combination_hash: "abc"
+        })
+        .exec(&mut db)
+        .await
+    );
+
+    // The same combination_hash under a different coa_id is allowed —
+    // uniqueness is on the combination, not either column alone.
+    toasty::create!(AccountCombination {
+        coa_id: 2_i64,
+        combination_hash: "abc"
+    })
+    .exec(&mut db)
+    .await?;
+
+    // The same coa_id with a different combination_hash is also allowed.
+    toasty::create!(AccountCombination {
+        coa_id: 1_i64,
+        combination_hash: "xyz"
+    })
+    .exec(&mut db)
+    .await?;
+
+    // The generated full-key getter resolves a single record.
+    let row = AccountCombination::get_by_coa_id_and_combination_hash(&mut db, 2_i64, "abc").await?;
+    assert_eq!(row.coa_id, 2);
+
+    Ok(())
+}
+
+/// DynamoDB does not support composite (multi-column) unique indices: backing a
+/// composite unique constraint would require a composite-key index table plus
+/// matching write synchronization, which is not implemented. Schema setup must
+/// surface a clean `unsupported_feature` error rather than panicking (DDB-only).
+#[driver_test(requires(not(sql)))]
+pub async fn composite_unique_index_unsupported_on_dynamodb(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[unique(coa_id, combination_hash)]
+    struct AccountCombination {
+        #[key]
+        id: String,
+        coa_id: String,
+        combination_hash: String,
+    }
+
+    let err = assert_err!(t.try_setup_db(models!(AccountCombination)).await);
+    assert!(
+        err.is_unsupported_feature(),
+        "expected unsupported_feature error, got: {err}"
+    );
+
+    Ok(())
+}
