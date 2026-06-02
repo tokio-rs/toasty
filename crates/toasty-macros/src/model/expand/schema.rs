@@ -187,7 +187,8 @@ impl Expand<'_> {
                     } else {
                         let pair = expand_pair(toasty, quote!(#toasty::RelationManyField), ty, rel.pair.as_ref());
 
-                        nullable = quote!(<#ty as #toasty::RelationManyField>::NULLABLE);
+                        // A has-many collection is always present, never null.
+                        nullable = quote!(false);
                         deferred = quote!(<#ty as #toasty::RelationManyField>::DEFERRED);
                         field_ty = quote!(<#ty as #toasty::RelationManyField>::many_relation_field_ty(#singular_name, #pair, None));
                     }
