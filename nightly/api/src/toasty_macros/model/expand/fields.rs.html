@@ -72,7 +72,7 @@
 <a href=#72 id=72 data-nosnippet>72</a>                            // a leaf. Both stay includable / selectable
 <a href=#73 id=73 data-nosnippet>73</a>                            // (`Into&lt;stmt::Path&gt;`). The element type comes from
 <a href=#74 id=74 data-nosnippet>74</a>                            // `ViaManyField`, which works for scalar terminals too
-<a href=#75 id=75 data-nosnippet>75</a>                            // (where there is no `RelationManyField::Model`).
+<a href=#75 id=75 data-nosnippet>75</a>                            // (where there is no `RelationManyField::Target`).
 <a href=#76 id=76 data-nosnippet>76</a>                            </span><span class="macro">quote_spanned!</span> { span=&gt;
 <a href=#77 id=77 data-nosnippet>77</a>                                #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; #toasty::ViaPath&lt;#ty, __Origin&gt; {
 <a href=#78 id=78 data-nosnippet>78</a>                                    &lt;&lt;#ty <span class="kw">as </span>#toasty::ViaManyField&gt;::Target <span class="kw">as </span>#toasty::ViaTarget&gt;::new_path(#path)
@@ -80,8 +80,8 @@
 <a href=#80 id=80 data-nosnippet>80</a>                            }
 <a href=#81 id=81 data-nosnippet>81</a>                        } <span class="kw">else </span>{
 <a href=#82 id=82 data-nosnippet>82</a>                            <span class="macro">quote_spanned!</span> { span=&gt;
-<a href=#83 id=83 data-nosnippet>83</a>                                #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt; {
-<a href=#84 id=84 data-nosnippet>84</a>                                    &lt;&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt;&gt;::from_path(#path)
+<a href=#83 id=83 data-nosnippet>83</a>                                #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt; {
+<a href=#84 id=84 data-nosnippet>84</a>                                    &lt;&lt;&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt;&gt;::from_path(#path)
 <a href=#85 id=85 data-nosnippet>85</a>                                }
 <a href=#86 id=86 data-nosnippet>86</a>                            }
 <a href=#87 id=87 data-nosnippet>87</a>                        }
@@ -420,8 +420,8 @@
 <a href=#420 id=420 data-nosnippet>420</a>        <span class="kw">let </span>span = field_ident.span();
 <a href=#421 id=421 data-nosnippet>421</a>
 <a href=#422 id=422 data-nosnippet>422</a>        <span class="macro">quote_spanned!</span> { span=&gt;
-<a href=#423 id=423 data-nosnippet>423</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Model <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt; {
-<a href=#424 id=424 data-nosnippet>424</a>                &lt;&lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Model <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt;&gt;::from_path(
+<a href=#423 id=423 data-nosnippet>423</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt; {
+<a href=#424 id=424 data-nosnippet>424</a>                &lt;&lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::ManyField&lt;__Origin&gt;&gt;::from_path(
 <a href=#425 id=425 data-nosnippet>425</a>                    <span class="self">self</span>.path().chain(
 <a href=#426 id=426 data-nosnippet>426</a>                        &lt;#model_ident <span class="kw">as </span>#schema_trait&gt;::path_field(#field_offset)
 <a href=#427 id=427 data-nosnippet>427</a>                    )

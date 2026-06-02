@@ -393,8 +393,8 @@
 <a href=#393 id=393 data-nosnippet>393</a>        <span class="kw">let </span>span = field_ident.span();
 <a href=#394 id=394 data-nosnippet>394</a>
 <a href=#395 id=395 data-nosnippet>395</a>        <span class="macro">quote_spanned!</span> { span=&gt;
-<a href=#396 id=396 data-nosnippet>396</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Model <span class="kw">as </span>#toasty::Model&gt;::OneField&lt;__Origin&gt; {
-<a href=#397 id=397 data-nosnippet>397</a>                &lt;&lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Model <span class="kw">as </span>#toasty::Model&gt;::OneField&lt;__Origin&gt;&gt;::from_path(
+<a href=#396 id=396 data-nosnippet>396</a>            #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; &lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::OneField&lt;__Origin&gt; {
+<a href=#397 id=397 data-nosnippet>397</a>                &lt;&lt;&lt;#ty <span class="kw">as </span>#field_trait&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::OneField&lt;__Origin&gt;&gt;::from_path(
 <a href=#398 id=398 data-nosnippet>398</a>                    <span class="self">self</span>.path().chain(
 <a href=#399 id=399 data-nosnippet>399</a>                        &lt;#model_ident <span class="kw">as </span>#schema_trait&gt;::path_field(#field_offset)
 <a href=#400 id=400 data-nosnippet>400</a>                    )

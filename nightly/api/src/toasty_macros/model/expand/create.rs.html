@@ -163,7 +163,7 @@
 <a href=#163 id=163 data-nosnippet>163</a>                        } <span class="kw">else </span>{
 <a href=#164 id=164 data-nosnippet>164</a>                            <span class="kw">let </span>plural = name;
 <a href=#165 id=165 data-nosnippet>165</a>                            <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#166 id=166 data-nosnippet>166</a>                            <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model);
+<a href=#166 id=166 data-nosnippet>166</a>                            <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Target);
 <a href=#167 id=167 data-nosnippet>167</a>
 <a href=#168 id=168 data-nosnippet>168</a>                            <span class="macro">quote!</span> {
 <a href=#169 id=169 data-nosnippet>169</a>                                #vis <span class="kw">fn </span>#plural(<span class="kw-2">mut </span><span class="self">self</span>, #plural: <span class="kw">impl </span>#toasty::IntoExpr&lt;#toasty::List&lt;#target&gt;&gt;) -&gt; <span class="self">Self </span>{

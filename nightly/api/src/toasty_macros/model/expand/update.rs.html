@@ -75,7 +75,7 @@
 <a href=#75 id=75 data-nosnippet>75</a>                    </span>TokenStream::new()
 <a href=#76 id=76 data-nosnippet>76</a>                } <span class="kw">else </span>{
 <a href=#77 id=77 data-nosnippet>77</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#78 id=78 data-nosnippet>78</a>                    <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Model);
+<a href=#78 id=78 data-nosnippet>78</a>                    <span class="kw">let </span>target = <span class="macro">quote!</span>(&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Target);
 <a href=#79 id=79 data-nosnippet>79</a>
 <a href=#80 id=80 data-nosnippet>80</a>                    <span class="macro">quote!</span> {
 <a href=#81 id=81 data-nosnippet>81</a>                        #vis <span class="kw">fn </span>#field_ident(<span class="kw-2">mut </span><span class="self">self</span>, #field_ident: <span class="kw">impl </span>#toasty::Assign&lt;#toasty::List&lt;#target&gt;&gt;) -&gt; <span class="self">Self </span>{

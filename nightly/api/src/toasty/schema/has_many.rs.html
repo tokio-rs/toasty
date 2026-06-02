@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>toasty_core::stmt;
 <a href=#6 id=6 data-nosnippet>6</a>
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">impl</span>&lt;M: Model&gt; RelationManyField <span class="kw">for </span>Vec&lt;M&gt; {
-<a href=#8 id=8 data-nosnippet>8</a>    <span class="kw">type </span>Model = M;
+<a href=#8 id=8 data-nosnippet>8</a>    <span class="kw">type </span>Target = M;
 <a href=#9 id=9 data-nosnippet>9</a>
 <a href=#10 id=10 data-nosnippet>10</a>    <span class="kw">const </span>DEFERRED: bool = <span class="bool-val">false</span>;
 <a href=#11 id=11 data-nosnippet>11</a>
@@ -23,7 +23,7 @@
 <a href=#23 id=23 data-nosnippet>23</a>}
 <a href=#24 id=24 data-nosnippet>24</a>
 <a href=#25 id=25 data-nosnippet>25</a><span class="kw">impl</span>&lt;M: Model&gt; RelationManyField <span class="kw">for </span>Deferred&lt;Vec&lt;M&gt;&gt; {
-<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">type </span>Model = M;
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">type </span>Target = M;
 <a href=#27 id=27 data-nosnippet>27</a>
 <a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">const </span>DEFERRED: bool = <span class="bool-val">true</span>;
 <a href=#29 id=29 data-nosnippet>29</a>
