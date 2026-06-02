@@ -13,7 +13,7 @@ use toasty_core::stmt;
 /// the trait.
 pub trait RelationManyField: Load<Output = Self> {
     /// The target model that this field references.
-    type Model: Model;
+    type Target: Model;
 
     /// Whether the field stores its value in a deferred load slot.
     const DEFERRED: bool;

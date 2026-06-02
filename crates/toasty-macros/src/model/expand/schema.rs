@@ -146,7 +146,7 @@ impl Expand<'_> {
                                     index: #source,
                                 },
                                 target: {
-                                    type __RelationTarget = <#ty as #toasty::RelationOneField>::Model;
+                                    type __RelationTarget = <#ty as #toasty::RelationOneField>::Target;
                                     <__RelationTarget as #toasty::Model>::field_name_to_id(#target)
                                 },
                             }
@@ -202,7 +202,7 @@ impl Expand<'_> {
                         toasty,
                         model_ident,
                         rel.via.as_ref(),
-                        &quote!(<#ty as #toasty::RelationOneField>::Model),
+                        &quote!(<#ty as #toasty::RelationOneField>::Target),
                     );
 
                     nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
@@ -488,7 +488,7 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Model>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);
                     }
                 }
                 FieldTy::HasMany(rel) if rel.via.is_some() => {
@@ -501,13 +501,13 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::RelationManyField>::Model as #toasty::Model>::register(model_set);
+                        <<#ty as #toasty::RelationManyField>::Target as #toasty::Model>::register(model_set);
                     }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::RelationOneField>::Model as #toasty::Model>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);
                     }
                 }
             })
@@ -539,7 +539,7 @@ fn expand_pair(
             let name = ident.to_string();
             quote! {
                 Some({
-                    type __RelationTarget = <#target_ty as #field_trait>::Model;
+                    type __RelationTarget = <#target_ty as #field_trait>::Target;
                     <__RelationTarget as #toasty::Model>::field_name_to_id(#name)
                 })
             }

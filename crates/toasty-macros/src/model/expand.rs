@@ -393,8 +393,8 @@ impl Expand<'_> {
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin> {
-                <<<#ty as #field_trait>::Model as #toasty::Model>::OneField<__Origin>>::from_path(
+            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
+                <<<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin>>::from_path(
                     self.path().chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
                     )

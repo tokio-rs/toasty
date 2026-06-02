@@ -41,7 +41,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target_ty = quote!(<#ty as #toasty::RelationOneField>::Model);
+        let target_ty = quote!(<#ty as #toasty::RelationOneField>::Target);
 
         let operands = rel.foreign_key.iter().map(|fk_field| {
             let source = &self.model.fields[fk_field.source];
@@ -106,7 +106,6 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-
         // A `via` relation reaches its terminal through a path of existing
         // relations rather than a single foreign key. It routes through
         // `ViaTarget` (keyed on the terminal element type) so the
@@ -143,7 +142,7 @@ impl Expand<'_> {
             };
         }
 
-        let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+        let target = quote!(<#ty as #toasty::RelationManyField>::Target);
 
         let pair_ident = rel.pair.clone().unwrap_or(syn::Ident::new(
             &self.model.name.ident.to_string(),
@@ -186,7 +185,7 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let field_ident = &field.name.ident;
         let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationOneField>::Model);
+        let target = quote!(<#ty as #toasty::RelationOneField>::Target);
 
         // A `via` relation reaches its target through a path of existing
         // relations; it has no paired `BelongsTo`, so skip the back-reference
@@ -299,8 +298,8 @@ impl Expand<'_> {
                 fn verify<#verify_t: Verify<#verify_a>, #verify_a>(_: &#verify_t) {
                 }
 
-                let instance = load::<<#ty as #field_trait>::Model>();
-                verify::<_, <#ty as #field_trait>::Model>(instance.#verify_pair_belongs_to_exists_for_field());
+                let instance = load::<<#ty as #field_trait>::Target>();
+                verify::<_, <#ty as #field_trait>::Target>(instance.#verify_pair_belongs_to_exists_for_field());
             }
         }
     }

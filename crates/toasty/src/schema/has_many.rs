@@ -5,7 +5,7 @@ use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
 use toasty_core::stmt;
 
 impl<M: Model> RelationManyField for Vec<M> {
-    type Model = M;
+    type Target = M;
 
     const DEFERRED: bool = false;
 
@@ -23,7 +23,7 @@ impl<M: Model> RelationManyField for Vec<M> {
 }
 
 impl<M: Model> RelationManyField for Deferred<Vec<M>> {
-    type Model = M;
+    type Target = M;
 
     const DEFERRED: bool = true;
 
