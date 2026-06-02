@@ -433,6 +433,18 @@ fn ddb_expression(
             let inner = ddb_expression(cx, attrs, primary, &expr.expr);
             format!("size({inner})")
         }
+        stmt::Expr::Cast(expr_cast) if expr_cast.ty == stmt::Type::Bool => {
+            // Bool key/index fields bridge through I8 (db::Type::Integer(1) via
+            // bridge_type). The lowering wraps the I8 column ref in
+            // Cast(col_ref, Bool) when the field appears as a bare predicate
+            // (result of `field = true` simplification). In predicate position
+            // this means "is true"; the `field = false` case arrives as
+            // Not(Cast(col_ref, Bool)) and is handled by the Not arm above.
+            let col_alias = ddb_expression(cx, attrs, primary, &expr_cast.expr);
+            let true_val =
+                attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::N("1".to_string()));
+            format!("{col_alias} = {true_val}")
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
 }

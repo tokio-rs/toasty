@@ -371,6 +371,12 @@ impl Type {
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }
+            // Bool <-> I8: Bool key/index fields are stored as Integer(1) via
+            // bridge_type. The engine casts Bool -> I8 on write and I8 -> Bool
+            // on read. Only Type::cast supports this; TryFrom is intentionally
+            // kept strict so raw numeric conversions don't silently accept Bool.
+            (Value::Bool(v), Self::I8) => Value::I8(if v { 1 } else { 0 }),
+            (Value::I8(v), Self::Bool) => Value::Bool(v != 0),
             // Integer conversions - use TryFrom which provides error messages
             (value, Self::I8) => Value::I8(i8::try_from(value)?),
             (value, Self::I16) => Value::I16(i16::try_from(value)?),
