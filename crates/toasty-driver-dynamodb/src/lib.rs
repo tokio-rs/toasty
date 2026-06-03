@@ -356,12 +356,10 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Reference(expr_reference) => {
-            let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
-            let is_bool = column.ty.is_bool();
-            let col_alias = attrs.column(column).to_string();
+            let (column, col_alias) = column_alias(cx, attrs, expr_reference);
             // A bare boolean column reference used as a predicate (result of
             // `field = true` simplification) needs an explicit equality check.
-            if is_bool {
+            if column.ty.is_bool() {
                 let true_val = attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::Bool(true));
                 format!("{col_alias} = {true_val}")
             } else {
@@ -404,7 +402,16 @@ fn ddb_expression(
             format!("{expr} IN ({items})")
         }
         stmt::Expr::IsNull(expr_is_null) => {
-            let inner = ddb_expression(cx, attrs, primary, &expr_is_null.expr);
+            // `attribute_not_exists` takes a bare attribute name. Resolve the
+            // column alias directly rather than through `ddb_expression`, which
+            // would expand a bool column to `#col = :true` — a comparison valid
+            // only in predicate position, not as a function argument. (Without
+            // this, `.is_none()` on any `Option<bool>` — including an
+            // `Option<Embed>` presence column — produces invalid syntax.)
+            let inner = match &*expr_is_null.expr {
+                stmt::Expr::Reference(expr_reference) => column_alias(cx, attrs, expr_reference).1,
+                other => ddb_expression(cx, attrs, primary, other),
+            };
             format!("attribute_not_exists({inner})")
         }
         stmt::Expr::Not(expr_not) => {
@@ -447,6 +454,19 @@ fn ddb_expression(
         }
         _ => todo!("FILTER = {:#?}", expr),
     }
+}
+
+/// Resolves a column reference to its DynamoDB attribute alias (e.g. `#col_3`),
+/// registering the underlying attribute name in `attrs`. Returns the resolved
+/// column alongside the alias so callers can inspect its storage type.
+fn column_alias<'a>(
+    cx: &ExprContext<'a, db::Schema>,
+    attrs: &mut ExprAttrs,
+    expr_reference: &stmt::ExprReference,
+) -> (&'a Column, String) {
+    let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
+    let alias = attrs.column(column).to_string();
+    (column, alias)
 }
 
 #[derive(Default)]

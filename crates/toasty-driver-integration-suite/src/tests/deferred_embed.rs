@@ -39,11 +39,11 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// `Deferred<Option<EmbeddedType>>` is not covered here. `Option<Embed>`
-// itself isn't yet supported as a model field — the schema layer has no
-// representation for a nullable embedded type, so the column-type lowering
-// errors out with "type Model(...) is not supported by this database".
-// Tracking that gap is orthogonal to deferred fields.
+// `Option<Embed>` is now supported, and a deferred sub-field *inside* an
+// `Option<Embed>` is covered by `deferred_field_inside_option_embed` (and
+// `deferred_newtype_inside_option_embed`) below. `Deferred<Option<Embed>>` (a
+// deferred wrapping the whole option) is a separate, orthogonal case still to
+// be covered.
 
 // ---------- Deferred<T> inside an embed struct that's nested in an enum variant ----------
 //
@@ -446,6 +446,90 @@ pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Resu
         .await?;
     assert_eq!("Bob", reread.metadata.author);
     assert_eq!("new", reread.metadata.notes.get());
+
+    Ok(())
+}
+
+// A deferred sub-field inside an `Option<Embed>` must behave like one inside a
+// non-optional embed: loaded on create (the just-supplied value echoes back via
+// `INSERT … RETURNING`), unloaded on a default read. Regression test — the
+// presence `Match` that wraps a nullable embed's `default_returning` previously
+// hid the record from `process_embed`, leaving the deferred slot unloaded after
+// create.
+#[driver_test(
+    id(ID),
+    scenario(crate::scenarios::document_optional_metadata_deferred_notes)
+)]
+pub async fn deferred_field_inside_option_embed(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let created = toasty::create!(Document {
+        title: "Hello".to_string(),
+        metadata: Some(Metadata {
+            author: "Alice".to_string(),
+            notes: "Important".to_string().into(),
+        }),
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Created records carry the just-supplied deferred value loaded.
+    let md = created.metadata.as_ref().expect("Some");
+    assert_eq!("Alice", md.author);
+    assert_eq!("Important", md.notes.get());
+
+    // Default load: embed eager field is loaded, deferred sub-field is not.
+    let read = Document::filter_by_id(created.id).get(&mut db).await?;
+    let md = read.metadata.as_ref().expect("Some");
+    assert_eq!("Alice", md.author);
+    assert!(md.notes.is_unloaded());
+
+    // `None` round-trips as `None`.
+    let empty = toasty::create!(Document {
+        title: "Empty".to_string(),
+        metadata: None,
+    })
+    .exec(&mut db)
+    .await?;
+    assert!(empty.metadata.is_none());
+
+    Ok(())
+}
+
+// A deferred field is also the *single* leaf of a newtype embed
+// (`Option<Body>` over `struct Body(Deferred<String>)`), which reuses that one
+// leaf as its head column. The deferred sub-field must still behave like one in
+// a multi-field embed: loaded on create (echoed via `INSERT … RETURNING`),
+// unloaded on a default read. Guards the reuse path's presence `Match` wrapping
+// of the deferred record.
+#[driver_test(id(ID), scenario(crate::scenarios::document_optional_body_deferred))]
+pub async fn deferred_newtype_inside_option_embed(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let created = toasty::create!(Document {
+        title: "Hello".to_string(),
+        body: Some(Body("Important".to_string().into())),
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Created records carry the just-supplied deferred value loaded.
+    let body = created.body.as_ref().expect("Some");
+    assert_eq!("Important", body.0.get());
+
+    // Default load: the deferred newtype leaf is not loaded.
+    let read = Document::filter_by_id(created.id).get(&mut db).await?;
+    let body = read.body.as_ref().expect("Some");
+    assert!(body.0.is_unloaded());
+
+    // `None` round-trips as `None`.
+    let empty = toasty::create!(Document {
+        title: "Empty".to_string(),
+        body: None,
+    })
+    .exec(&mut db)
+    .await?;
+    assert!(empty.body.is_none());
 
     Ok(())
 }
