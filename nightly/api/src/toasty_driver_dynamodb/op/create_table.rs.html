@@ -57,112 +57,129 @@
 <a href=#57 id=57 data-nosnippet>57</a>        <span class="kw">let </span><span class="kw-2">mut </span>gsis = <span class="macro">vec!</span>[];
 <a href=#58 id=58 data-nosnippet>58</a>
 <a href=#59 id=59 data-nosnippet>59</a>        <span class="kw">for </span>index <span class="kw">in </span><span class="kw-2">&amp;</span>table.indices {
-<a href=#60 id=60 data-nosnippet>60</a>            <span class="kw">if </span>index.primary_key || index.unique {
+<a href=#60 id=60 data-nosnippet>60</a>            <span class="kw">if </span>index.primary_key {
 <a href=#61 id=61 data-nosnippet>61</a>                <span class="kw">continue</span>;
 <a href=#62 id=62 data-nosnippet>62</a>            }
 <a href=#63 id=63 data-nosnippet>63</a>
-<a href=#64 id=64 data-nosnippet>64</a>            <span class="kw">let </span>partition_cols: Vec&lt;<span class="kw-2">&amp;</span>db::Column&gt; = index
-<a href=#65 id=65 data-nosnippet>65</a>                .columns
-<a href=#66 id=66 data-nosnippet>66</a>                .iter()
-<a href=#67 id=67 data-nosnippet>67</a>                .filter(|ic| ic.scope.is_partition())
-<a href=#68 id=68 data-nosnippet>68</a>                .map(|ic| table.column(ic.column))
-<a href=#69 id=69 data-nosnippet>69</a>                .collect();
-<a href=#70 id=70 data-nosnippet>70</a>
-<a href=#71 id=71 data-nosnippet>71</a>            <span class="kw">let </span>range_cols: Vec&lt;<span class="kw-2">&amp;</span>db::Column&gt; = index
-<a href=#72 id=72 data-nosnippet>72</a>                .columns
-<a href=#73 id=73 data-nosnippet>73</a>                .iter()
-<a href=#74 id=74 data-nosnippet>74</a>                .filter(|ic| ic.scope.is_local())
-<a href=#75 id=75 data-nosnippet>75</a>                .map(|ic| table.column(ic.column))
-<a href=#76 id=76 data-nosnippet>76</a>                .collect();
-<a href=#77 id=77 data-nosnippet>77</a>
-<a href=#78 id=78 data-nosnippet>78</a>            <span class="kw">if </span>partition_cols.is_empty() || partition_cols.len() &gt; <span class="number">4 </span>{
-<a href=#79 id=79 data-nosnippet>79</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::invalid_schema(<span class="macro">format!</span>(
-<a href=#80 id=80 data-nosnippet>80</a>                    <span class="string">"GSI '{}' must have 1 to 4 partition (HASH) columns, got {}"</span>,
-<a href=#81 id=81 data-nosnippet>81</a>                    index.name,
-<a href=#82 id=82 data-nosnippet>82</a>                    partition_cols.len()
-<a href=#83 id=83 data-nosnippet>83</a>                )));
-<a href=#84 id=84 data-nosnippet>84</a>            }
-<a href=#85 id=85 data-nosnippet>85</a>
-<a href=#86 id=86 data-nosnippet>86</a>            <span class="kw">if </span>range_cols.len() &gt; <span class="number">4 </span>{
-<a href=#87 id=87 data-nosnippet>87</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::invalid_schema(<span class="macro">format!</span>(
-<a href=#88 id=88 data-nosnippet>88</a>                    <span class="string">"GSI '{}' must have at most 4 range (RANGE) columns, got {}"</span>,
-<a href=#89 id=89 data-nosnippet>89</a>                    index.name,
-<a href=#90 id=90 data-nosnippet>90</a>                    range_cols.len()
-<a href=#91 id=91 data-nosnippet>91</a>                )));
-<a href=#92 id=92 data-nosnippet>92</a>            }
-<a href=#93 id=93 data-nosnippet>93</a>
-<a href=#94 id=94 data-nosnippet>94</a>            <span class="kw">for </span>col <span class="kw">in </span><span class="kw-2">&amp;</span>partition_cols {
-<a href=#95 id=95 data-nosnippet>95</a>                defined_attributes.insert(col.id);
-<a href=#96 id=96 data-nosnippet>96</a>            }
-<a href=#97 id=97 data-nosnippet>97</a>
-<a href=#98 id=98 data-nosnippet>98</a>            <span class="kw">for </span>col <span class="kw">in </span><span class="kw-2">&amp;</span>range_cols {
-<a href=#99 id=99 data-nosnippet>99</a>                defined_attributes.insert(col.id);
-<a href=#100 id=100 data-nosnippet>100</a>            }
-<a href=#101 id=101 data-nosnippet>101</a>
-<a href=#102 id=102 data-nosnippet>102</a>            gsis.push(
-<a href=#103 id=103 data-nosnippet>103</a>                GlobalSecondaryIndex::builder()
-<a href=#104 id=104 data-nosnippet>104</a>                    .index_name(<span class="kw-2">&amp;</span>index.name)
-<a href=#105 id=105 data-nosnippet>105</a>                    .set_key_schema(<span class="prelude-val">Some</span>(ddb_key_schema(<span class="kw-2">&amp;</span>partition_cols, <span class="kw-2">&amp;</span>range_cols)))
-<a href=#106 id=106 data-nosnippet>106</a>                    .projection(
-<a href=#107 id=107 data-nosnippet>107</a>                        Projection::builder()
-<a href=#108 id=108 data-nosnippet>108</a>                            .projection_type(ProjectionType::All)
-<a href=#109 id=109 data-nosnippet>109</a>                            .build(),
-<a href=#110 id=110 data-nosnippet>110</a>                    )
-<a href=#111 id=111 data-nosnippet>111</a>                    .build()
-<a href=#112 id=112 data-nosnippet>112</a>                    .unwrap(),
-<a href=#113 id=113 data-nosnippet>113</a>            );
-<a href=#114 id=114 data-nosnippet>114</a>        }
-<a href=#115 id=115 data-nosnippet>115</a>
-<a href=#116 id=116 data-nosnippet>116</a>        <span class="kw">let </span>attribute_definitions = defined_attributes
-<a href=#117 id=117 data-nosnippet>117</a>            .iter()
-<a href=#118 id=118 data-nosnippet>118</a>            .map(|column_id| {
-<a href=#119 id=119 data-nosnippet>119</a>                <span class="kw">let </span>column = table.column(<span class="kw-2">*</span>column_id);
-<a href=#120 id=120 data-nosnippet>120</a>                <span class="kw">let </span>ty = column.ty.to_ddb_type();
-<a href=#121 id=121 data-nosnippet>121</a>
-<a href=#122 id=122 data-nosnippet>122</a>                AttributeDefinition::builder()
-<a href=#123 id=123 data-nosnippet>123</a>                    .attribute_name(<span class="kw-2">&amp;</span>column.name)
-<a href=#124 id=124 data-nosnippet>124</a>                    .attribute_type(ty)
-<a href=#125 id=125 data-nosnippet>125</a>                    .build()
-<a href=#126 id=126 data-nosnippet>126</a>                    .unwrap()
-<a href=#127 id=127 data-nosnippet>127</a>            })
-<a href=#128 id=128 data-nosnippet>128</a>            .collect();
-<a href=#129 id=129 data-nosnippet>129</a>
-<a href=#130 id=130 data-nosnippet>130</a>        <span class="self">self</span>.client
-<a href=#131 id=131 data-nosnippet>131</a>            .create_table()
-<a href=#132 id=132 data-nosnippet>132</a>            .table_name(<span class="kw-2">&amp;</span>table.name)
-<a href=#133 id=133 data-nosnippet>133</a>            .set_attribute_definitions(<span class="prelude-val">Some</span>(attribute_definitions))
-<a href=#134 id=134 data-nosnippet>134</a>            .set_key_schema(<span class="prelude-val">Some</span>(ddb_key_schema(pk_partition_cols, pk_range_cols)))
-<a href=#135 id=135 data-nosnippet>135</a>            .set_global_secondary_indexes(<span class="kw">if </span>gsis.is_empty() { <span class="prelude-val">None </span>} <span class="kw">else </span>{ <span class="prelude-val">Some</span>(gsis) })
-<a href=#136 id=136 data-nosnippet>136</a>            .billing_mode(BillingMode::PayPerRequest)
-<a href=#137 id=137 data-nosnippet>137</a>            .send()
-<a href=#138 id=138 data-nosnippet>138</a>            .<span class="kw">await
-<a href=#139 id=139 data-nosnippet>139</a>            </span>.map_err(toasty_core::Error::driver_operation_failed)<span class="question-mark">?</span>;
+<a href=#64 id=64 data-nosnippet>64</a>            <span class="kw">if </span>index.unique {
+<a href=#65 id=65 data-nosnippet>65</a>                <span class="comment">// Unique indices are materialized as separate tables below. Each
+<a href=#66 id=66 data-nosnippet>66</a>                // index table is keyed on a single column and enforced with an
+<a href=#67 id=67 data-nosnippet>67</a>                // `attribute_not_exists` condition, so composite (multi-column)
+<a href=#68 id=68 data-nosnippet>68</a>                // unique indices are not supported. Reject them here, before any
+<a href=#69 id=69 data-nosnippet>69</a>                // table is created, rather than partway through. SQL backends
+<a href=#70 id=70 data-nosnippet>70</a>                // support them via `CREATE UNIQUE INDEX`.
+<a href=#71 id=71 data-nosnippet>71</a>                </span><span class="kw">if </span>index.columns.len() != <span class="number">1 </span>{
+<a href=#72 id=72 data-nosnippet>72</a>                    <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::unsupported_feature(<span class="macro">format!</span>(
+<a href=#73 id=73 data-nosnippet>73</a>                        <span class="string">"DynamoDB does not support composite unique indices; \
+<a href=#74 id=74 data-nosnippet>74</a>                         index '{}' spans {} columns"</span>,
+<a href=#75 id=75 data-nosnippet>75</a>                        index.name,
+<a href=#76 id=76 data-nosnippet>76</a>                        index.columns.len()
+<a href=#77 id=77 data-nosnippet>77</a>                    )));
+<a href=#78 id=78 data-nosnippet>78</a>                }
+<a href=#79 id=79 data-nosnippet>79</a>
+<a href=#80 id=80 data-nosnippet>80</a>                <span class="kw">continue</span>;
+<a href=#81 id=81 data-nosnippet>81</a>            }
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a>            <span class="kw">let </span>partition_cols: Vec&lt;<span class="kw-2">&amp;</span>db::Column&gt; = index
+<a href=#84 id=84 data-nosnippet>84</a>                .columns
+<a href=#85 id=85 data-nosnippet>85</a>                .iter()
+<a href=#86 id=86 data-nosnippet>86</a>                .filter(|ic| ic.scope.is_partition())
+<a href=#87 id=87 data-nosnippet>87</a>                .map(|ic| table.column(ic.column))
+<a href=#88 id=88 data-nosnippet>88</a>                .collect();
+<a href=#89 id=89 data-nosnippet>89</a>
+<a href=#90 id=90 data-nosnippet>90</a>            <span class="kw">let </span>range_cols: Vec&lt;<span class="kw-2">&amp;</span>db::Column&gt; = index
+<a href=#91 id=91 data-nosnippet>91</a>                .columns
+<a href=#92 id=92 data-nosnippet>92</a>                .iter()
+<a href=#93 id=93 data-nosnippet>93</a>                .filter(|ic| ic.scope.is_local())
+<a href=#94 id=94 data-nosnippet>94</a>                .map(|ic| table.column(ic.column))
+<a href=#95 id=95 data-nosnippet>95</a>                .collect();
+<a href=#96 id=96 data-nosnippet>96</a>
+<a href=#97 id=97 data-nosnippet>97</a>            <span class="kw">if </span>partition_cols.is_empty() || partition_cols.len() &gt; <span class="number">4 </span>{
+<a href=#98 id=98 data-nosnippet>98</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::invalid_schema(<span class="macro">format!</span>(
+<a href=#99 id=99 data-nosnippet>99</a>                    <span class="string">"GSI '{}' must have 1 to 4 partition (HASH) columns, got {}"</span>,
+<a href=#100 id=100 data-nosnippet>100</a>                    index.name,
+<a href=#101 id=101 data-nosnippet>101</a>                    partition_cols.len()
+<a href=#102 id=102 data-nosnippet>102</a>                )));
+<a href=#103 id=103 data-nosnippet>103</a>            }
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a>            <span class="kw">if </span>range_cols.len() &gt; <span class="number">4 </span>{
+<a href=#106 id=106 data-nosnippet>106</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::invalid_schema(<span class="macro">format!</span>(
+<a href=#107 id=107 data-nosnippet>107</a>                    <span class="string">"GSI '{}' must have at most 4 range (RANGE) columns, got {}"</span>,
+<a href=#108 id=108 data-nosnippet>108</a>                    index.name,
+<a href=#109 id=109 data-nosnippet>109</a>                    range_cols.len()
+<a href=#110 id=110 data-nosnippet>110</a>                )));
+<a href=#111 id=111 data-nosnippet>111</a>            }
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>            <span class="kw">for </span>col <span class="kw">in </span><span class="kw-2">&amp;</span>partition_cols {
+<a href=#114 id=114 data-nosnippet>114</a>                defined_attributes.insert(col.id);
+<a href=#115 id=115 data-nosnippet>115</a>            }
+<a href=#116 id=116 data-nosnippet>116</a>
+<a href=#117 id=117 data-nosnippet>117</a>            <span class="kw">for </span>col <span class="kw">in </span><span class="kw-2">&amp;</span>range_cols {
+<a href=#118 id=118 data-nosnippet>118</a>                defined_attributes.insert(col.id);
+<a href=#119 id=119 data-nosnippet>119</a>            }
+<a href=#120 id=120 data-nosnippet>120</a>
+<a href=#121 id=121 data-nosnippet>121</a>            gsis.push(
+<a href=#122 id=122 data-nosnippet>122</a>                GlobalSecondaryIndex::builder()
+<a href=#123 id=123 data-nosnippet>123</a>                    .index_name(<span class="kw-2">&amp;</span>index.name)
+<a href=#124 id=124 data-nosnippet>124</a>                    .set_key_schema(<span class="prelude-val">Some</span>(ddb_key_schema(<span class="kw-2">&amp;</span>partition_cols, <span class="kw-2">&amp;</span>range_cols)))
+<a href=#125 id=125 data-nosnippet>125</a>                    .projection(
+<a href=#126 id=126 data-nosnippet>126</a>                        Projection::builder()
+<a href=#127 id=127 data-nosnippet>127</a>                            .projection_type(ProjectionType::All)
+<a href=#128 id=128 data-nosnippet>128</a>                            .build(),
+<a href=#129 id=129 data-nosnippet>129</a>                    )
+<a href=#130 id=130 data-nosnippet>130</a>                    .build()
+<a href=#131 id=131 data-nosnippet>131</a>                    .unwrap(),
+<a href=#132 id=132 data-nosnippet>132</a>            );
+<a href=#133 id=133 data-nosnippet>133</a>        }
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>        <span class="kw">let </span>attribute_definitions = defined_attributes
+<a href=#136 id=136 data-nosnippet>136</a>            .iter()
+<a href=#137 id=137 data-nosnippet>137</a>            .map(|column_id| {
+<a href=#138 id=138 data-nosnippet>138</a>                <span class="kw">let </span>column = table.column(<span class="kw-2">*</span>column_id);
+<a href=#139 id=139 data-nosnippet>139</a>                <span class="kw">let </span>ty = column.ty.to_ddb_type();
 <a href=#140 id=140 data-nosnippet>140</a>
-<a href=#141 id=141 data-nosnippet>141</a>        <span class="comment">// Now, create separate tables for each unique index
-<a href=#142 id=142 data-nosnippet>142</a>        </span><span class="kw">for </span>index <span class="kw">in </span>table.indices.iter().filter(|i| !i.primary_key &amp;&amp; i.unique) {
-<a href=#143 id=143 data-nosnippet>143</a>            <span class="comment">// TODO: handle more than one column
-<a href=#144 id=144 data-nosnippet>144</a>            </span><span class="macro">assert_eq!</span>(<span class="number">1</span>, index.columns.len());
-<a href=#145 id=145 data-nosnippet>145</a>
-<a href=#146 id=146 data-nosnippet>146</a>            <span class="kw">let </span>pk = schema.column(index.columns[<span class="number">0</span>].column);
-<a href=#147 id=147 data-nosnippet>147</a>
-<a href=#148 id=148 data-nosnippet>148</a>            <span class="self">self</span>.client
-<a href=#149 id=149 data-nosnippet>149</a>                .create_table()
-<a href=#150 id=150 data-nosnippet>150</a>                .table_name(<span class="kw-2">&amp;</span>index.name)
-<a href=#151 id=151 data-nosnippet>151</a>                .set_key_schema(<span class="prelude-val">Some</span>(ddb_key_schema(<span class="kw-2">&amp;</span>[pk], <span class="kw-2">&amp;</span>[])))
-<a href=#152 id=152 data-nosnippet>152</a>                .attribute_definitions(
-<a href=#153 id=153 data-nosnippet>153</a>                    AttributeDefinition::builder()
-<a href=#154 id=154 data-nosnippet>154</a>                        .attribute_name(<span class="kw-2">&amp;</span>pk.name)
-<a href=#155 id=155 data-nosnippet>155</a>                        .attribute_type(pk.ty.to_ddb_type())
-<a href=#156 id=156 data-nosnippet>156</a>                        .build()
-<a href=#157 id=157 data-nosnippet>157</a>                        .unwrap(),
-<a href=#158 id=158 data-nosnippet>158</a>                )
-<a href=#159 id=159 data-nosnippet>159</a>                .billing_mode(BillingMode::PayPerRequest)
-<a href=#160 id=160 data-nosnippet>160</a>                .send()
-<a href=#161 id=161 data-nosnippet>161</a>                .<span class="kw">await
-<a href=#162 id=162 data-nosnippet>162</a>                </span>.map_err(toasty_core::Error::driver_operation_failed)<span class="question-mark">?</span>;
-<a href=#163 id=163 data-nosnippet>163</a>        }
+<a href=#141 id=141 data-nosnippet>141</a>                AttributeDefinition::builder()
+<a href=#142 id=142 data-nosnippet>142</a>                    .attribute_name(<span class="kw-2">&amp;</span>column.name)
+<a href=#143 id=143 data-nosnippet>143</a>                    .attribute_type(ty)
+<a href=#144 id=144 data-nosnippet>144</a>                    .build()
+<a href=#145 id=145 data-nosnippet>145</a>                    .unwrap()
+<a href=#146 id=146 data-nosnippet>146</a>            })
+<a href=#147 id=147 data-nosnippet>147</a>            .collect();
+<a href=#148 id=148 data-nosnippet>148</a>
+<a href=#149 id=149 data-nosnippet>149</a>        <span class="self">self</span>.client
+<a href=#150 id=150 data-nosnippet>150</a>            .create_table()
+<a href=#151 id=151 data-nosnippet>151</a>            .table_name(<span class="kw-2">&amp;</span>table.name)
+<a href=#152 id=152 data-nosnippet>152</a>            .set_attribute_definitions(<span class="prelude-val">Some</span>(attribute_definitions))
+<a href=#153 id=153 data-nosnippet>153</a>            .set_key_schema(<span class="prelude-val">Some</span>(ddb_key_schema(pk_partition_cols, pk_range_cols)))
+<a href=#154 id=154 data-nosnippet>154</a>            .set_global_secondary_indexes(<span class="kw">if </span>gsis.is_empty() { <span class="prelude-val">None </span>} <span class="kw">else </span>{ <span class="prelude-val">Some</span>(gsis) })
+<a href=#155 id=155 data-nosnippet>155</a>            .billing_mode(BillingMode::PayPerRequest)
+<a href=#156 id=156 data-nosnippet>156</a>            .send()
+<a href=#157 id=157 data-nosnippet>157</a>            .<span class="kw">await
+<a href=#158 id=158 data-nosnippet>158</a>            </span>.map_err(toasty_core::Error::driver_operation_failed)<span class="question-mark">?</span>;
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a>        <span class="comment">// Now, create separate tables for each unique index. Composite unique
+<a href=#161 id=161 data-nosnippet>161</a>        // indices were already rejected above, so each index has one column.
+<a href=#162 id=162 data-nosnippet>162</a>        </span><span class="kw">for </span>index <span class="kw">in </span>table.indices.iter().filter(|i| !i.primary_key &amp;&amp; i.unique) {
+<a href=#163 id=163 data-nosnippet>163</a>            <span class="kw">let </span>pk = schema.column(index.columns[<span class="number">0</span>].column);
 <a href=#164 id=164 data-nosnippet>164</a>
-<a href=#165 id=165 data-nosnippet>165</a>        <span class="prelude-val">Ok</span>(())
-<a href=#166 id=166 data-nosnippet>166</a>    }
-<a href=#167 id=167 data-nosnippet>167</a>}
+<a href=#165 id=165 data-nosnippet>165</a>            <span class="self">self</span>.client
+<a href=#166 id=166 data-nosnippet>166</a>                .create_table()
+<a href=#167 id=167 data-nosnippet>167</a>                .table_name(<span class="kw-2">&amp;</span>index.name)
+<a href=#168 id=168 data-nosnippet>168</a>                .set_key_schema(<span class="prelude-val">Some</span>(ddb_key_schema(<span class="kw-2">&amp;</span>[pk], <span class="kw-2">&amp;</span>[])))
+<a href=#169 id=169 data-nosnippet>169</a>                .attribute_definitions(
+<a href=#170 id=170 data-nosnippet>170</a>                    AttributeDefinition::builder()
+<a href=#171 id=171 data-nosnippet>171</a>                        .attribute_name(<span class="kw-2">&amp;</span>pk.name)
+<a href=#172 id=172 data-nosnippet>172</a>                        .attribute_type(pk.ty.to_ddb_type())
+<a href=#173 id=173 data-nosnippet>173</a>                        .build()
+<a href=#174 id=174 data-nosnippet>174</a>                        .unwrap(),
+<a href=#175 id=175 data-nosnippet>175</a>                )
+<a href=#176 id=176 data-nosnippet>176</a>                .billing_mode(BillingMode::PayPerRequest)
+<a href=#177 id=177 data-nosnippet>177</a>                .send()
+<a href=#178 id=178 data-nosnippet>178</a>                .<span class="kw">await
+<a href=#179 id=179 data-nosnippet>179</a>                </span>.map_err(toasty_core::Error::driver_operation_failed)<span class="question-mark">?</span>;
+<a href=#180 id=180 data-nosnippet>180</a>        }
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a>        <span class="prelude-val">Ok</span>(())
+<a href=#183 id=183 data-nosnippet>183</a>    }
+<a href=#184 id=184 data-nosnippet>184</a>}
 </code></pre></div></section></main></body></html>

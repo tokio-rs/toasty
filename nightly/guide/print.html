@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-d588147a.js";
+            window.path_to_searchindex_js = "searchindex-93cab560.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -2502,6 +2502,40 @@ keep generated names within a database’s identifier-length limit.</p>
 </tbody>
 </table>
 </div>
+<h2 id="multi-column-unique-constraints"><a class="header" href="#multi-column-unique-constraints">Multi-column unique constraints</a></h2>
+<p>A struct-level <code>#[unique(...)]</code> defines a composite unique index. It takes the
+same field list as <code>#[index(...)]</code> — simple mode, named <code>partition</code>/<code>local</code>
+mode, and a <code>name = "..."</code> override — but the database enforces uniqueness
+across the combination of columns.</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Model)]
+#[unique(coa_id, combination_hash)]
+struct AccountCombination {
+    #[key]
+    #[auto]
+    id: u64,
+    coa_id: i64,
+    combination_hash: String,
+}
+<span class="boring">}</span></code></pre>
+<p>On SQL databases this produces a unique index over both columns:</p>
+<pre><code class="language-sql">CREATE UNIQUE INDEX idx_account_combinations_coa_id_combination_hash
+    ON account_combinations (coa_id, combination_hash);
+</code></pre>
+<p>The constraint applies to the combination, not either column alone — two rows
+may share a <code>coa_id</code> or a <code>combination_hash</code>, but not both. Inserting a row that
+duplicates an existing <code>(coa_id, combination_hash)</code> pair returns an error.</p>
+<p>Toasty generates the same prefix query methods as a composite <code>#[index(...)]</code>:
+<code>filter_by_coa_id</code>, <code>filter_by_coa_id_and_combination_hash</code>, and the matching
+<code>get_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code> methods.</p>
+<p>DynamoDB does not support composite unique constraints. Toasty backs each unique
+index with a dedicated index table guarded by an <code>attribute_not_exists</code>
+condition, and that mechanism enforces a single column. Declaring a multi-column
+<code>#[unique(...)]</code> returns an <code>unsupported_feature</code> error when the schema is
+created. A single-column <code>#[unique(field)]</code> works on DynamoDB and is equivalent
+to a field-level <code>#[unique]</code>.</p>
 <h2 id="indexing-newtype-fields"><a class="header" href="#indexing-newtype-fields">Indexing newtype fields</a></h2>
 <p>Newtype embedded structs (single unnamed field, e.g., <code>struct Email(String)</code>)
 support <code>#[unique]</code> and <code>#[index]</code> on the model field. The newtype maps to a
@@ -8668,6 +8702,10 @@ delete the old index entry and insert the new one inside a single
 transaction. The transaction’s condition expression catches
 concurrent writers atomically.</li>
 </ul>
+<p>The index table is keyed on a single column, so composite unique
+constraints (<code>#[unique(a, b)]</code>) are not supported. Declaring one returns
+an <code>unsupported_feature</code> error when the schema is created. SQL backends
+support them via <code>CREATE UNIQUE INDEX</code>.</p>
 <p>See <a href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a>
 for the model-level syntax.</p>
 <h3 id="billing-mode"><a class="header" href="#billing-mode">Billing mode</a></h3>
