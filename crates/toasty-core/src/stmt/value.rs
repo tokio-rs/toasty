@@ -418,17 +418,21 @@ impl Value {
     /// Panics if the path is invalid for the value's structure.
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
-        let mut ret = Entry::Value(self);
+        let mut value = self;
 
         for step in path.step_iter() {
-            ret = match ret {
-                Entry::Value(Self::Record(record)) => Entry::Value(&record[step]),
-                Entry::Value(Self::List(items)) => Entry::Value(&items[step]),
-                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
-            }
+            value = match value {
+                Self::Record(record) => &record[step],
+                Self::List(items) => &items[step],
+                // Projecting a field out of a `NULL` composite is `NULL` (e.g.
+                // an `Option<Embed>` whose value is `None`), and stays `NULL`
+                // for the rest of the path — return it directly.
+                Self::Null => return Entry::Value(value),
+                _ => todo!("base={self:#?}; step={step:#?}"),
+            };
         }
 
-        ret
+        Entry::Value(value)
     }
 
     /// Takes the value out, replacing it with [`Value::Null`].

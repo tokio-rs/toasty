@@ -404,7 +404,19 @@ fn ddb_expression(
             format!("{expr} IN ({items})")
         }
         stmt::Expr::IsNull(expr_is_null) => {
-            let inner = ddb_expression(cx, attrs, primary, &expr_is_null.expr);
+            // `attribute_not_exists` takes a bare attribute name. Resolve the
+            // column alias directly rather than through `ddb_expression`, which
+            // would expand a bool column to `#col = :true` — a comparison valid
+            // only in predicate position, not as a function argument. (Without
+            // this, `.is_none()` on any `Option<bool>` — including an
+            // `Option<Embed>` presence column — produces invalid syntax.)
+            let inner = match &*expr_is_null.expr {
+                stmt::Expr::Reference(expr_reference) => {
+                    let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
+                    attrs.column(column).to_string()
+                }
+                other => ddb_expression(cx, attrs, primary, other),
+            };
             format!("attribute_not_exists({inner})")
         }
         stmt::Expr::Not(expr_not) => {

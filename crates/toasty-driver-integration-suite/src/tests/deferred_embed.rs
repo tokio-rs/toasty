@@ -449,3 +449,49 @@ pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Resu
 
     Ok(())
 }
+
+// A deferred sub-field inside an `Option<Embed>` must behave like one inside a
+// non-optional embed: loaded on create (the just-supplied value echoes back via
+// `INSERT … RETURNING`), unloaded on a default read. Regression test — the
+// presence `Match` that wraps a nullable embed's `default_returning` previously
+// hid the record from `process_embed`, leaving the deferred slot unloaded after
+// create.
+#[driver_test(
+    id(ID),
+    scenario(crate::scenarios::document_optional_metadata_deferred_notes)
+)]
+pub async fn deferred_field_inside_option_embed(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let created = toasty::create!(Document {
+        title: "Hello".to_string(),
+        metadata: Some(Metadata {
+            author: "Alice".to_string(),
+            notes: "Important".to_string().into(),
+        }),
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Created records carry the just-supplied deferred value loaded.
+    let md = created.metadata.as_ref().expect("Some");
+    assert_eq!("Alice", md.author);
+    assert_eq!("Important", md.notes.get());
+
+    // Default load: embed eager field is loaded, deferred sub-field is not.
+    let read = Document::filter_by_id(created.id).get(&mut db).await?;
+    let md = read.metadata.as_ref().expect("Some");
+    assert_eq!("Alice", md.author);
+    assert!(md.notes.is_unloaded());
+
+    // `None` round-trips as `None`.
+    let empty = toasty::create!(Document {
+        title: "Empty".to_string(),
+        metadata: None,
+    })
+    .exec(&mut db)
+    .await?;
+    assert!(empty.metadata.is_none());
+
+    Ok(())
+}

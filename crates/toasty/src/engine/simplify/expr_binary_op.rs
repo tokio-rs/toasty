@@ -180,7 +180,7 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if term.is_false() || matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if is_dead_filter_term(&term) {
                 continue;
             }
 
@@ -212,11 +212,32 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if !term.is_false() && !matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if !is_dead_filter_term(&term) {
                 operands.push(term);
             }
         }
 
         Expr::or_from_vec(operands)
     }
+}
+
+/// A distributed-comparison term is dead — it can never be `true`, so it
+/// contributes nothing to the surrounding `OR` — when it is `false`, a bare
+/// `NULL`, or an `AND` with a `NULL` conjunct. The last case arises when an arm
+/// compares against a decode `Match`'s `null` else branch (e.g.
+/// `eq(option_embed, Some(..))` evaluated against a `None` row): `x AND NULL`
+/// never holds in three-valued filter logic, and DynamoDB rejects the bare
+/// value placeholder the `NULL` would otherwise serialize to.
+fn is_dead_filter_term(term: &Expr) -> bool {
+    if term.is_false() || matches!(term, Expr::Value(stmt::Value::Null)) {
+        return true;
+    }
+    matches!(
+        term,
+        Expr::And(and)
+            if and
+                .operands
+                .iter()
+                .any(|operand| matches!(operand, Expr::Value(stmt::Value::Null)))
+    )
 }

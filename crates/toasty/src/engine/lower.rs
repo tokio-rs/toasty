@@ -780,6 +780,60 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
                 }
             }
+            // A null-check on an `Option<Embed>` field reduces to a null-check on
+            // the embed's head column instead of distributing the check over
+            // every flattened column. The head column is `NULL` for `None`, so
+            // for `Account::fields().contact().is_none()` (an `Option<enum>`)
+            // this emits `contact IS NULL` rather than checking each variant
+            // column. `.is_some()` arrives as `Not(IsNull(..))`, so the
+            // surrounding `Not` yields `contact IS NOT NULL`. Scalar `Option`
+            // and non-nullable fields fall through to the normal reference
+            // lowering below.
+            //
+            // Only fires for WHERE-clause predicates (`Statement` context),
+            // where a field reference lowers to a column. The `model_to_table`
+            // encode wraps `is_not_null(field)` over the head column too; in the
+            // `InsertRow` encode context the field reference must resolve to the
+            // row value (and `is_null` then folds), so this rewrite must not
+            // intercept it. (The UPDATE encode substitutes the value before
+            // re-visiting, so the inner is no longer a field reference there.)
+            stmt::Expr::IsNull(e) => {
+                let head_column = match &*e.expr {
+                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index })
+                        if self.cx.is_statement() =>
+                    {
+                        // The head column whose null-ness is the option's
+                        // none-ness: a struct embed's presence column, or an
+                        // enum embed's (nullable) discriminant column. A
+                        // non-nullable embed's `is_null` is already folded to
+                        // `false` in simplify, so reaching here implies nullable.
+                        self.mapping_at_unwrap(*nesting)
+                            .fields
+                            .get(*index)
+                            .and_then(|f| match f {
+                                mapping::Field::Struct(fs) => {
+                                    fs.presence.as_ref().map(|p| p.column.index)
+                                }
+                                mapping::Field::Enum(fe) => Some(fe.discriminant.column.index),
+                                _ => None,
+                            })
+                            .map(|column| (*nesting, column))
+                    }
+                    _ => None,
+                };
+
+                if let Some((nesting, column)) = head_column {
+                    let mut col_ref = stmt::Expr::column(stmt::ExprColumn {
+                        nesting,
+                        table: 0,
+                        column,
+                    });
+                    self.visit_expr_mut(&mut col_ref);
+                    *expr = stmt::Expr::is_null(col_ref);
+                } else {
+                    stmt::visit_mut::visit_expr_mut(self, expr);
+                }
+            }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
                     // A reference to a relation field inside a Returning
@@ -1798,6 +1852,10 @@ impl LoweringContext<'_> {
 
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning(_))
+    }
+
+    fn is_statement(&self) -> bool {
+        matches!(self, LoweringContext::Statement)
     }
 }
 
