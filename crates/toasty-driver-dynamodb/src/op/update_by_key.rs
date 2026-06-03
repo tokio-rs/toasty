@@ -206,7 +206,14 @@ impl Connection {
             // to keep the row shape aligned with that projection. The
             // non-Set kinds push a placeholder then `refresh_after_update`
             // fills in the post-update value from `UPDATED_NEW`.
-            if !matches!(kind, AssignKind::Set) {
+            //
+            // The `#[version]` counter is also a non-Set (`Add`) assignment,
+            // but the engine injects it *outside* the returning projection (it
+            // is engine-managed, not user-requested, and a relative bump cannot
+            // be returned by the multi-row transact path). Skip the versionable
+            // column too, so its value never lands in the returned row and
+            // shifts a user column out of the slot the planner expects.
+            if !matches!(kind, AssignKind::Set) && !column_ref.versionable {
                 refresh_after_update.push((ret.len(), column_ref));
                 ret.push(value.clone());
             }

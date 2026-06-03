@@ -321,6 +321,48 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A query-based update that pairs a user-authored relative assignment
+/// (`counter += 1`) with the engine's injected version bump. The version column
+/// is declared *before* the counter, so it sorts first among the non-`Set`
+/// assignments.
+///
+/// Regression guard: the engine keeps the injected version increment out of the
+/// returning projection, but the driver must likewise keep it out of the
+/// returned row. Otherwise the version value occupies the slot the planner
+/// expects the counter in, and the counter read-back is wrong.
+#[driver_test(requires(not(sql)))]
+pub async fn query_update_relative_field_with_version(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+
+        #[version]
+        version: u64,
+
+        counter: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let item = toasty::create!(Item { counter: 10 }).exec(&mut db).await?;
+    assert_eq!(item.version, 1);
+    assert_eq!(item.counter, 10);
+
+    Item::filter_by_id(item.id)
+        .update()
+        .counter(toasty::stmt::increment())
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Item::filter_by_id(item.id).get(&mut db).await?;
+    assert_eq!(reloaded.counter, 11);
+    assert_eq!(reloaded.version, 2);
+
+    Ok(())
+}
+
 /// Deleting a record checks the version — a fresh handle succeeds.
 #[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
 pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
