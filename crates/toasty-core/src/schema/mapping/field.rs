@@ -238,18 +238,19 @@ pub struct FieldStruct {
     /// `Deferred<EmbedStruct>` field.
     pub default_returning: stmt::Expr,
 
-    /// Mapping for the presence column of a nullable embedded struct
-    /// (`Option<Embed>`).
+    /// The presence head column of a nullable embedded struct (`Option<Embed>`).
     ///
-    /// `None` for a non-nullable embed. `Some(..)` when the field is
-    /// `Option<Embed>`: a dedicated nullable `bool` column stores whether the
-    /// embed is present (`NULL` = `None`, `true` = `Some`), so `None` is `NULL`
-    /// in the head column like `Option<scalar>` and an embedded enum's
-    /// discriminant. The encode lowering forces every flattened leaf column
-    /// nullable and the decode wraps the struct record in a `Match` on this
-    /// column, so a `None` value round-trips without colliding with a `Some`
-    /// whose fields are all themselves `None`.
-    pub presence: Option<FieldPrimitive>,
+    /// `None` for a non-nullable embed. `Some(column)` when the field is
+    /// `Option<Embed>`: the head column whose null-ness is the option's
+    /// none-ness (`NULL` = `None`), like `Option<scalar>` and an embedded
+    /// enum's discriminant. Usually a dedicated nullable `bool` column
+    /// (`NULL` = `None`, `true` = `Some`); for a single-column (newtype) embed
+    /// it is the flattened leaf reused as the head. The encode lowering forces
+    /// every flattened leaf column nullable and the decode wraps the struct
+    /// record in a `Match` on this column, so a `None` value round-trips
+    /// without colliding with a `Some` whose fields are all themselves `None`.
+    /// The column's own encode lowering (if dedicated) is tracked in `columns`.
+    pub presence: Option<ColumnId>,
 }
 
 /// Maps an embedded enum field to its discriminant column and per-variant data columns.

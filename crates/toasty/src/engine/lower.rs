@@ -811,9 +811,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                             .fields
                             .get(*index)
                             .and_then(|f| match f {
-                                mapping::Field::Struct(fs) => {
-                                    fs.presence.as_ref().map(|p| p.column.index)
-                                }
+                                mapping::Field::Struct(fs) => fs.presence.map(|p| p.index),
                                 mapping::Field::Enum(fe) => Some(fe.discriminant.column.index),
                                 _ => None,
                             })

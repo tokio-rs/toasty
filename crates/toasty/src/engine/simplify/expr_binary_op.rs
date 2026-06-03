@@ -229,15 +229,11 @@ impl Simplify<'_> {
 /// never holds in three-valued filter logic, and DynamoDB rejects the bare
 /// value placeholder the `NULL` would otherwise serialize to.
 fn is_dead_filter_term(term: &Expr) -> bool {
-    if term.is_false() || matches!(term, Expr::Value(stmt::Value::Null)) {
+    if term.is_unsatisfiable() {
         return true;
     }
     matches!(
         term,
-        Expr::And(and)
-            if and
-                .operands
-                .iter()
-                .any(|operand| matches!(operand, Expr::Value(stmt::Value::Null)))
+        Expr::And(and) if and.operands.iter().any(Expr::is_value_null)
     )
 }

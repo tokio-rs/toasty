@@ -492,9 +492,9 @@ impl BuildMapping<'_> {
                 };
                 // A nullable embedded struct guards its record on the head
                 // column, matching `build_table_to_model_field_struct`.
-                let expr = match &s.presence {
+                let expr = match s.presence {
                     None => record,
-                    Some(presence) => self.wrap_presence_match(presence.column.index, record),
+                    Some(presence) => self.wrap_presence_match(presence.index, record),
                 };
                 s.default_returning = expr.clone();
                 Ok(expr)
@@ -743,9 +743,9 @@ impl BuildMapping<'_> {
 
         // A nullable embedded struct decodes through a `Match` on its head
         // column (see `wrap_presence_match`).
-        match &mapping.presence {
+        match mapping.presence {
             None => Ok(record),
-            Some(presence) => Ok(self.wrap_presence_match(presence.column.index, record)),
+            Some(presence) => Ok(self.wrap_presence_match(presence.index, record)),
         }
     }
 
@@ -1026,7 +1026,9 @@ impl<'a, 'b> MapField<'a, 'b> {
         };
 
         // The dedicated presence column is created *before* the leaves so it
-        // sorts first in the table.
+        // sorts first in the table. Only the `(column, lowering)` pair is
+        // needed: `lowering` records the column's encode expression in
+        // `columns`, and the column id becomes the struct's presence head.
         let dedicated_presence = if field.nullable && !reuse_leaf {
             let presence_primitive = app::FieldPrimitive {
                 ty: stmt::Type::Bool,
@@ -1041,16 +1043,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             let lowering = self
                 .build
                 .push_lowering(column, &stmt::Type::Bool, presence_expr);
-            let column_expr = self
-                .build
-                .map_table_column_to_model(column, &presence_primitive);
-            Some(mapping::FieldPrimitive {
-                column,
-                lowering,
-                field_mask: stmt::PathFieldSet::new(),
-                sub_projection: stmt::Projection::identity(),
-                column_expr,
-            })
+            Some((column, lowering))
         } else {
             None
         };
@@ -1077,16 +1070,17 @@ impl<'a, 'b> MapField<'a, 'b> {
         let mut columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
 
-        // The head column: the dedicated presence column (already counted in
-        // `columns`), or the reused single leaf for a single-column embed.
-        let presence = if let Some(dedicated) = dedicated_presence {
-            columns.insert(dedicated.column, dedicated.lowering);
-            Some(dedicated)
+        // The head column: the dedicated presence column (added to `columns`
+        // here so its encode lowering is tracked), or the reused single leaf
+        // for a single-column embed (already in `columns` as a real leaf).
+        let presence = if let Some((column, lowering)) = dedicated_presence {
+            columns.insert(column, lowering);
+            Some(column)
         } else if reuse_leaf {
             Some(
                 single_leaf_primitive(&nested_fields[0])
                     .expect("single-column embed flattens to one primitive leaf")
-                    .clone(),
+                    .column,
             )
         } else {
             None
@@ -1296,13 +1290,36 @@ impl<'a, 'b> MapField<'a, 'b> {
         }
     }
 
-    /// Creates a variant-specific child `MapField`.
+    /// Creates a child `MapField` for an embedded type whose columns are only
+    /// conditionally populated: an enum variant (only the active variant's
+    /// columns are written) or a nullable struct embed (every column is `NULL`
+    /// when the embed is `None`).
     ///
-    /// Sets `field_base` so that `field_expr` on the child projects from the
-    /// enum field, sets `force_nullable = true`, and installs a
-    /// `field_expr_base` of `match_expr(disc_proj, [arm(discriminant,
-    /// Expr::arg(0))], null())` so that every `field_expr` call is
-    /// automatically wrapped in the discriminant check.
+    /// Sets `field_base` so that `field_expr` on the child projects from
+    /// `field`, forces the flattened columns nullable, and installs `guard` as
+    /// the `field_expr_base` so that every `field_expr` call is automatically
+    /// wrapped in it. `guard` is a `Match` template with `Expr::arg(0)` as the
+    /// placeholder for the raw field expression — a discriminant check (see
+    /// [`Self::for_variant`]) or a presence guard (see
+    /// [`Self::for_nullable_struct`]) — whose `else` branch encodes the
+    /// inactive/`None` case to `null` instead of projecting into `Null`.
+    fn for_guarded_embed(
+        &mut self,
+        field: &app::Field,
+        field_index: usize,
+        guard: stmt::Expr,
+    ) -> MapField<'_, 'b> {
+        let field_base = self.extend_field_base(field, field_index);
+        let mut child = self.with_prefix(field.name.storage_name());
+        child.force_nullable = true;
+        child.field_base = Some(field_base);
+        child.field_expr_base.substitute(&[guard]);
+        child
+    }
+
+    /// Creates a variant-specific child `MapField`, guarding each `field_expr`
+    /// in the discriminant check `match_expr(disc_proj, [arm(discriminant,
+    /// Expr::arg(0))], null())`. See [`Self::for_guarded_embed`].
     fn for_variant(
         &mut self,
         field: &app::Field,
@@ -1310,9 +1327,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         disc_proj: stmt::Expr,
         discriminant: &stmt::Value,
     ) -> MapField<'_, 'b> {
-        let field_base = self.extend_field_base(field, field_index);
-
-        let field_expr_base = stmt::Expr::match_expr(
+        let guard = stmt::Expr::match_expr(
             disc_proj,
             vec![stmt::MatchArm {
                 pattern: discriminant.clone(),
@@ -1320,11 +1335,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             }],
             stmt::Expr::null(),
         );
-        let mut child = self.with_prefix(Some(field.name.storage_name_unwrap()));
-        child.force_nullable = true;
-        child.field_base = Some(field_base);
-        child.field_expr_base.substitute(&[field_expr_base]);
-        child
+        self.for_guarded_embed(field, field_index, guard)
     }
 
     /// Creates a child `MapField` for recursing into an embedded struct field.
@@ -1369,22 +1380,12 @@ impl<'a, 'b> MapField<'a, 'b> {
     }
 
     /// Creates a child `MapField` for recursing into a nullable embedded struct
-    /// (`Option<Embed>`).
-    ///
-    /// Like [`Self::for_struct`] but, mirroring [`Self::for_variant`], it forces
-    /// the flattened columns nullable and installs a [`Self::presence_guard`]
-    /// over `Expr::arg(0)` as the `field_expr_base`. Every `field_expr` call is
-    /// then wrapped in that presence guard, so a `None` value encodes each leaf
-    /// to `null` (the guard's `else` branch) instead of projecting into `Null`.
+    /// (`Option<Embed>`), guarding each `field_expr` in a [`Self::presence_guard`]
+    /// over `Expr::arg(0)` so a `None` value encodes each leaf to `null` (the
+    /// guard's `else` branch). See [`Self::for_guarded_embed`].
     fn for_nullable_struct(&mut self, field: &app::Field, field_index: usize) -> MapField<'_, 'b> {
-        let field_base = self.extend_field_base(field, field_index);
-        let field_expr_base = self.presence_guard(field, field_index, stmt::Expr::arg(0));
-
-        let mut child = self.with_prefix(field.name.storage_name());
-        child.force_nullable = true;
-        child.field_base = Some(field_base);
-        child.field_expr_base.substitute(&[field_expr_base]);
-        child
+        let guard = self.presence_guard(field, field_index, stmt::Expr::arg(0));
+        self.for_guarded_embed(field, field_index, guard)
     }
 }
 
