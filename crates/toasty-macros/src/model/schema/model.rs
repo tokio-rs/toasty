@@ -333,7 +333,7 @@ impl Model {
 
             indices.push(Index {
                 fields: index_fields,
-                unique: false,
+                unique: index_attr.unique,
                 primary_key: false,
                 name: index_attr.name.clone(),
             });

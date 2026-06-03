@@ -57,7 +57,26 @@ impl Connection {
         let mut gsis = vec![];
 
         for index in &table.indices {
-            if index.primary_key || index.unique {
+            if index.primary_key {
+                continue;
+            }
+
+            if index.unique {
+                // Unique indices are materialized as separate tables below. Each
+                // index table is keyed on a single column and enforced with an
+                // `attribute_not_exists` condition, so composite (multi-column)
+                // unique indices are not supported. Reject them here, before any
+                // table is created, rather than partway through. SQL backends
+                // support them via `CREATE UNIQUE INDEX`.
+                if index.columns.len() != 1 {
+                    return Err(toasty_core::Error::unsupported_feature(format!(
+                        "DynamoDB does not support composite unique indices; \
+                         index '{}' spans {} columns",
+                        index.name,
+                        index.columns.len()
+                    )));
+                }
+
                 continue;
             }
 
@@ -138,11 +157,9 @@ impl Connection {
             .await
             .map_err(toasty_core::Error::driver_operation_failed)?;
 
-        // Now, create separate tables for each unique index
+        // Now, create separate tables for each unique index. Composite unique
+        // indices were already rejected above, so each index has one column.
         for index in table.indices.iter().filter(|i| !i.primary_key && i.unique) {
-            // TODO: handle more than one column
-            assert_eq!(1, index.columns.len());
-
             let pk = schema.column(index.columns[0].column);
 
             self.client
