@@ -334,6 +334,31 @@ impl<'b> LowerStatement<'_, 'b> {
             }
         }
     }
+
+    /// The target projection and per-row delta for a versionable field's update
+    /// assignment, used to build an atomic `version = version + 1` via
+    /// [`Assignment::Add`](stmt::Assignment::Add).
+    ///
+    /// The projection walks past any embed-newtype layers (`Version(u64)`) to
+    /// the leaf primitive column — `[field, 0, …]` — and the delta is the bare
+    /// literal `1`. Arithmetic operators apply only to primitive columns, so
+    /// unlike the whole-record `Set` the instance path uses, the increment must
+    /// reach the leaf rather than sit on the embed field.
+    pub(super) fn version_increment_target(
+        &self,
+        field_id: app::FieldId,
+    ) -> (stmt::Projection, stmt::Expr) {
+        let target = self.auto_target(field_id);
+
+        // `[field_id.index]` then one `0` per embed layer, reaching the leaf.
+        let mut steps = vec![field_id.index];
+        steps.resize(1 + target.wrap_depth, 0);
+
+        (
+            stmt::Projection::from(steps.as_slice()),
+            stmt::Expr::Value(stmt::Value::U64(1)),
+        )
+    }
 }
 
 impl ApplyInsertScope<'_> {

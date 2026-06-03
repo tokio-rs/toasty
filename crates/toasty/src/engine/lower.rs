@@ -1092,6 +1092,36 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             returning_changed,
         );
 
+        // A versionable model bumps its OCC counter on every update. The
+        // instance path sets the counter explicitly in generated code,
+        // alongside the `version == <last read>` condition — only it knows the
+        // value the caller last loaded. A query-based update leaves the counter
+        // unset, so the engine injects the relative `version = version + 1`
+        // here. This is the single place that guarantees every update advances
+        // the counter, regardless of how the statement was built.
+        //
+        // Injecting after the `Changed` returning projection is built above
+        // keeps the engine-managed counter out of the returning clause. A
+        // relative `+1` is not constantizable; leaving it in the returning
+        // would force a per-row read-back that the multi-row DynamoDB transact
+        // path cannot serve. The counter still advances in the database — a
+        // query update just doesn't read it back (it discards its result).
+        if let Some(version_id) = lower.model().and_then(|m| m.version_field()).map(|f| f.id) {
+            // Skip when the version field is already being written: the
+            // instance path sets the whole field (and pairs it with the
+            // `version == <last read>` condition). Match any assignment rooted
+            // at the field — the instance `Set` sits at the field itself, while
+            // an injected increment lands on the leaf primitive (`[field, 0]`).
+            let already_assigned = stmt
+                .assignments
+                .keys()
+                .any(|p| p.as_slice().first() == Some(&version_id.index));
+            if !already_assigned {
+                let (projection, delta) = lower.version_increment_target(version_id);
+                stmt.assignments.add(projection, delta);
+            }
+        }
+
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);
 
