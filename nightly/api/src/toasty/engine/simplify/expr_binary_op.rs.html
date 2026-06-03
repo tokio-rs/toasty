@@ -180,7 +180,7 @@
 <a href=#180 id=180 data-nosnippet>180</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>term);
 <a href=#181 id=181 data-nosnippet>181</a>
 <a href=#182 id=182 data-nosnippet>182</a>            <span class="comment">// Prune dead branches
-<a href=#183 id=183 data-nosnippet>183</a>            </span><span class="kw">if </span>term.is_false() || <span class="macro">matches!</span>(<span class="kw-2">&amp;</span>term, Expr::Value(stmt::Value::Null)) {
+<a href=#183 id=183 data-nosnippet>183</a>            </span><span class="kw">if </span>is_dead_filter_term(<span class="kw-2">&amp;</span>term) {
 <a href=#184 id=184 data-nosnippet>184</a>                <span class="kw">continue</span>;
 <a href=#185 id=185 data-nosnippet>185</a>            }
 <a href=#186 id=186 data-nosnippet>186</a>
@@ -212,7 +212,7 @@
 <a href=#212 id=212 data-nosnippet>212</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>term);
 <a href=#213 id=213 data-nosnippet>213</a>
 <a href=#214 id=214 data-nosnippet>214</a>            <span class="comment">// Prune dead branches
-<a href=#215 id=215 data-nosnippet>215</a>            </span><span class="kw">if </span>!term.is_false() &amp;&amp; !<span class="macro">matches!</span>(<span class="kw-2">&amp;</span>term, Expr::Value(stmt::Value::Null)) {
+<a href=#215 id=215 data-nosnippet>215</a>            </span><span class="kw">if </span>!is_dead_filter_term(<span class="kw-2">&amp;</span>term) {
 <a href=#216 id=216 data-nosnippet>216</a>                operands.push(term);
 <a href=#217 id=217 data-nosnippet>217</a>            }
 <a href=#218 id=218 data-nosnippet>218</a>        }
@@ -220,4 +220,21 @@
 <a href=#220 id=220 data-nosnippet>220</a>        Expr::or_from_vec(operands)
 <a href=#221 id=221 data-nosnippet>221</a>    }
 <a href=#222 id=222 data-nosnippet>222</a>}
+<a href=#223 id=223 data-nosnippet>223</a>
+<a href=#224 id=224 data-nosnippet>224</a><span class="doccomment">/// A distributed-comparison term is dead — it can never be `true`, so it
+<a href=#225 id=225 data-nosnippet>225</a>/// contributes nothing to the surrounding `OR` — when it is `false`, a bare
+<a href=#226 id=226 data-nosnippet>226</a>/// `NULL`, or an `AND` with a `NULL` conjunct. The last case arises when an arm
+<a href=#227 id=227 data-nosnippet>227</a>/// compares against a decode `Match`'s `null` else branch (e.g.
+<a href=#228 id=228 data-nosnippet>228</a>/// `eq(option_embed, Some(..))` evaluated against a `None` row): `x AND NULL`
+<a href=#229 id=229 data-nosnippet>229</a>/// never holds in three-valued filter logic, and DynamoDB rejects the bare
+<a href=#230 id=230 data-nosnippet>230</a>/// value placeholder the `NULL` would otherwise serialize to.
+<a href=#231 id=231 data-nosnippet>231</a></span><span class="kw">fn </span>is_dead_filter_term(term: <span class="kw-2">&amp;</span>Expr) -&gt; bool {
+<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">if </span>term.is_unsatisfiable() {
+<a href=#233 id=233 data-nosnippet>233</a>        <span class="kw">return </span><span class="bool-val">true</span>;
+<a href=#234 id=234 data-nosnippet>234</a>    }
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="macro">matches!</span>(
+<a href=#236 id=236 data-nosnippet>236</a>        term,
+<a href=#237 id=237 data-nosnippet>237</a>        Expr::And(and) <span class="kw">if </span>and.operands.iter().any(Expr::is_value_null)
+<a href=#238 id=238 data-nosnippet>238</a>    )
+<a href=#239 id=239 data-nosnippet>239</a>}
 </code></pre></div></section></main></body></html>
