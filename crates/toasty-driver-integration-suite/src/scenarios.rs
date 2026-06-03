@@ -9,6 +9,8 @@ pub mod deferred_json_document;
 pub mod deferred_optional_document;
 pub mod document_deferred_metadata;
 pub mod document_metadata_deferred_notes;
+pub mod document_optional_body_deferred;
+pub mod document_optional_code;
 pub mod document_optional_metadata;
 pub mod document_optional_metadata_deferred_notes;
 pub mod fixed_item_name;

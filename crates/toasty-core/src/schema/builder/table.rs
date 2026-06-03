@@ -490,22 +490,11 @@ impl BuildMapping<'_> {
                         .collect::<Result<_>>()?;
                     stmt::Expr::record(exprs)
                 };
-                // A nullable embedded struct guards its record on the presence
+                // A nullable embedded struct guards its record on the head
                 // column, matching `build_table_to_model_field_struct`.
                 let expr = match &s.presence {
                     None => record,
-                    Some(presence) => stmt::Expr::match_expr(
-                        stmt::Expr::column(stmt::ExprColumn {
-                            nesting: 0,
-                            table: 0,
-                            column: presence.column.index,
-                        }),
-                        vec![stmt::MatchArm {
-                            pattern: stmt::Value::Bool(true),
-                            expr: record,
-                        }],
-                        stmt::Expr::null(),
-                    ),
+                    Some(presence) => self.wrap_presence_match(presence.column.index, record),
                 };
                 s.default_returning = expr.clone();
                 Ok(expr)
@@ -752,29 +741,40 @@ impl BuildMapping<'_> {
             .collect::<Result<_>>()?;
         let record = stmt::Expr::record(exprs);
 
-        // A nullable embedded struct decodes through a `Match` on the presence
-        // column: `true` reconstructs the record, anything else (here `NULL`)
-        // yields `null`, which `impl Load for Option<T>` reads back as `None`.
-        // The engine evaluates this `Match` against the returned row before
-        // `Load` runs.
+        // A nullable embedded struct decodes through a `Match` on its head
+        // column (see `wrap_presence_match`).
         match &mapping.presence {
             None => Ok(record),
-            Some(presence) => {
-                let presence_col_ref = stmt::Expr::column(stmt::ExprColumn {
-                    nesting: 0,
-                    table: 0,
-                    column: presence.column.index,
-                });
-                Ok(stmt::Expr::match_expr(
-                    presence_col_ref,
-                    vec![stmt::MatchArm {
-                        pattern: stmt::Value::Bool(true),
-                        expr: record,
-                    }],
-                    stmt::Expr::null(),
-                ))
-            }
+            Some(presence) => Ok(self.wrap_presence_match(presence.column.index, record)),
         }
+    }
+
+    /// Wraps `record` in the presence `Match` that decodes a nullable embedded
+    /// struct: when the head column is non-`NULL` the record is reconstructed,
+    /// otherwise the value is `null`, which `impl Load for Option<T>` reads
+    /// back as `None`. The engine evaluates this `Match` against the returned
+    /// row before `Load` runs.
+    ///
+    /// The head column is either a dedicated `bool` presence column (only ever
+    /// `true`/`NULL`) or, for a single-column embed, the embed's own flattened
+    /// leaf column — in both cases its null-ness is the option's none-ness, so
+    /// guarding on `is_null(head) == false` (present) is the uniform check. We
+    /// match `is_null(head)` against `false` rather than wrapping in `not(..)`
+    /// because the table→model evaluator handles `IsNull`/`Match`/`Project`
+    /// but not `Not`.
+    fn wrap_presence_match(&self, presence_column: usize, record: stmt::Expr) -> stmt::Expr {
+        stmt::Expr::match_expr(
+            stmt::Expr::is_null(stmt::Expr::column(stmt::ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: presence_column,
+            })),
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::Bool(false),
+                expr: record,
+            }],
+            stmt::Expr::null(),
+        )
     }
 
     fn build_table_to_model_field(
@@ -969,20 +969,65 @@ impl<'a, 'b> MapField<'a, 'b> {
     ) -> Result<mapping::Field> {
         let sub_projection = self.sub_projection(field_index);
 
-        // A nullable embedded struct (`Option<Embed>`) gets a dedicated nullable
-        // `bool` presence column: `NULL` = `None`, `true` = `Some`. This keeps
-        // `None` represented as `NULL` like `Option<scalar>` and an embedded
-        // enum's (nullable) discriminant — the head column's null-ness is the
-        // option's none-ness everywhere. The flattened leaf columns are forced
-        // nullable and guarded by the presence, so a `None` value writes
-        // `NULL` + all-NULL leaves rather than panicking when projecting `Null`.
+        // A nullable embedded struct (`Option<Embed>`) is decoded/encoded
+        // through a *head* column whose null-ness is the option's none-ness
+        // (`NULL` = `None`), keeping `None` represented as `NULL` like
+        // `Option<scalar>` and an embedded enum's (nullable) discriminant. The
+        // flattened leaf columns are forced nullable and presence-guarded, so a
+        // `None` value writes all-`NULL` rather than panicking when projecting
+        // `Null`. There are two ways to obtain the head column:
         //
-        // e.g. `address: Option<Address>` over `Address { street, city }` maps
-        // to columns `address` (bool, `NULL`/`true`), `address_street`,
-        // `address_city`. `None` → `(NULL, NULL, NULL)`; `Some(Address { .. })`
-        // → `(true, "..", "..")`. The presence column is what distinguishes
-        // `None` from a `Some` whose own fields are all `NULL`.
-        let presence = if field.nullable {
+        //  * Multi-column embed (`Option<Address>` over `Address { street, city
+        //    }`): a *dedicated* nullable `bool` presence column (`NULL`/`true`)
+        //    named after the field. `None` → `(NULL, NULL, NULL)`; `Some(..)` →
+        //    `(true, "..", "..")`. The presence column distinguishes `None`
+        //    from a `Some` whose own fields are all `NULL`.
+        //
+        //  * Newtype embed (`Option<Email(String)>` over `struct Email(String)`):
+        //    the one flattened leaf is unnamed and collapses to the field name,
+        //    so a dedicated presence column would *collide* with it. Reuse that
+        //    leaf as the head — a non-`Option` inner is non-`NULL` exactly when
+        //    the embed is present, so its null-ness already encodes none-ness,
+        //    like `Option<scalar>`. (A *named* single field flattens to
+        //    `{field}_{name}`, doesn't collide, and keeps the disambiguating
+        //    presence column above.)
+        //
+        //    A newtype wrapping an *optional* (`Option<MaybeBody>` over
+        //    `MaybeBody(Option<String>)`) is rejected: the single column can't
+        //    tell `None` from `Some(MaybeBody(None))`, and a dedicated presence
+        //    column would collide with the leaf, so there is no sound mapping.
+        let reuse_leaf = if field.nullable {
+            match self.newtype_leaf_nullable(embedded_struct) {
+                // Newtype over a non-optional scalar → reuse the leaf as head.
+                Some(false) => true,
+                // Newtype over an optional → no unambiguous single-column mapping.
+                Some(true) => {
+                    let parent = self
+                        .build
+                        .app
+                        .get_model(field.id.model)
+                        .map(|m| m.name().upper_camel_case())
+                        .unwrap_or_else(|| "?".to_string());
+                    let embed = embedded_struct.name.upper_camel_case();
+                    return Err(Error::invalid_schema(format!(
+                        "field `{parent}::{}` is `Option<{embed}>`, but `{embed}` is \
+                         a newtype wrapping an optional value; it can't be flattened \
+                         to a single column because that column can't distinguish \
+                         `None` from `Some({embed}(None))`. Use a named struct field \
+                         instead of a tuple newtype, or remove a layer of `Option`.",
+                        field.name,
+                    )));
+                }
+                // Not a newtype → dedicated presence column below.
+                None => false,
+            }
+        } else {
+            false
+        };
+
+        // The dedicated presence column is created *before* the leaves so it
+        // sorts first in the table.
+        let dedicated_presence = if field.nullable && !reuse_leaf {
             let presence_primitive = app::FieldPrimitive {
                 ty: stmt::Type::Bool,
                 storage_ty: None,
@@ -1031,9 +1076,22 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let mut columns: indexmap::IndexMap<ColumnId, usize> =
             nested_fields.iter().flat_map(|f| f.columns()).collect();
-        if let Some(presence) = &presence {
-            columns.insert(presence.column, presence.lowering);
-        }
+
+        // The head column: the dedicated presence column (already counted in
+        // `columns`), or the reused single leaf for a single-column embed.
+        let presence = if let Some(dedicated) = dedicated_presence {
+            columns.insert(dedicated.column, dedicated.lowering);
+            Some(dedicated)
+        } else if reuse_leaf {
+            Some(
+                single_leaf_primitive(&nested_fields[0])
+                    .expect("single-column embed flattens to one primitive leaf")
+                    .clone(),
+            )
+        } else {
+            None
+        };
+
         let field_mask = nested_fields
             .iter()
             .fold(stmt::PathFieldSet::new(), |acc, f| acc | f.field_mask());
@@ -1047,6 +1105,39 @@ impl<'a, 'b> MapField<'a, 'b> {
             default_returning: stmt::Expr::null(),
             presence,
         }))
+    }
+
+    /// If `embed` is a newtype chain — a single *unnamed* field (recursively,
+    /// through nested single-field newtype wrappers) bottoming out in a
+    /// primitive — returns `Some(leaf_nullable)`, the bottom field's own
+    /// nullability. Returns `None` when `embed` is not a newtype.
+    ///
+    /// A newtype flattens to one column that takes the parent field's own name,
+    /// so when the parent is nullable it reuses that single leaf as the head
+    /// column (a dedicated presence column would collide). That reuse is sound
+    /// only when the leaf is non-`NULL` whenever the embed is present —
+    /// `Some(false)`. A `Some(true)` leaf (the newtype wraps an `Option`) has no
+    /// unambiguous single-column mapping and is rejected by the caller. A
+    /// *named* single field (`Foo { value }`) flattens to `{field}_value`,
+    /// doesn't collide, so it returns `None` here and keeps a dedicated presence
+    /// column (preserving the `None`-vs-`Some(all-NULL)` disambiguation).
+    fn newtype_leaf_nullable(&self, embed: &app::EmbeddedStruct) -> Option<bool> {
+        let [field] = &embed.fields[..] else {
+            return None;
+        };
+        if field.name.storage_name().is_some() {
+            return None;
+        }
+        match &field.ty {
+            app::FieldTy::Primitive(_) => Some(field.nullable),
+            app::FieldTy::Embedded(embedded) => {
+                match lookup_embedded_model(self.build.app, embedded.target, field) {
+                    Ok(app::Model::EmbeddedStruct(inner)) => self.newtype_leaf_nullable(inner),
+                    _ => None,
+                }
+            }
+            _ => None,
+        }
     }
 
     /// Builds the final database column name for `field` at the current nesting level.
@@ -1294,6 +1385,18 @@ impl<'a, 'b> MapField<'a, 'b> {
         child.field_base = Some(field_base);
         child.field_expr_base.substitute(&[field_expr_base]);
         child
+    }
+}
+
+/// Returns the single primitive leaf of a newtype-chain embed, recursing
+/// through nested single-field newtype wrappers. Paired with
+/// [`MapField::newtype_leaf_nullable`]: when that returns `Some(_)`, the mapped
+/// field has exactly one nested field reachable here as a primitive.
+fn single_leaf_primitive(field: &mapping::Field) -> Option<&mapping::FieldPrimitive> {
+    match field {
+        mapping::Field::Primitive(primitive) => Some(primitive),
+        mapping::Field::Struct(s) if s.fields.len() == 1 => single_leaf_primitive(&s.fields[0]),
+        _ => None,
     }
 }
 
