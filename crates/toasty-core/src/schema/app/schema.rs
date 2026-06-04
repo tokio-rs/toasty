@@ -1,7 +1,8 @@
-use super::{EnumVariant, Field, FieldId, FieldTy, HasKind, Model, ModelId, VariantId};
+use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
+use std::collections::HashSet;
 
 /// The result of resolving a [`stmt::Projection`] through the application
 /// schema.
@@ -167,11 +168,11 @@ impl Schema {
                 FieldTy::BelongsTo(belongs_to) => {
                     current_field = belongs_to.target(self).as_root_unwrap().fields.get(*step)?;
                 }
-                FieldTy::HasMany(has_many) => {
-                    current_field = has_many.target(self).as_root_unwrap().fields.get(*step)?;
+                FieldTy::Has(has) => {
+                    current_field = has.target(self).as_root_unwrap().fields.get(*step)?;
                 }
-                FieldTy::HasOne(has_one) => {
-                    current_field = has_one.target(self).as_root_unwrap().fields.get(*step)?;
+                FieldTy::Via(via) => {
+                    current_field = via.target(self).as_root_unwrap().fields.get(*step)?;
                 }
             };
         }
@@ -224,8 +225,184 @@ impl Builder {
         // All models have been discovered and initialized at some level, now do
         // the relation linking.
         self.link_relations()?;
+        self.resolve_via_targets()?;
+        self.verify_no_eager_load_cycles()?;
 
         Ok(())
+    }
+
+    /// Resolve the `target` of every scalar-terminal `via` relation.
+    ///
+    /// A relation-terminal via knows its target at macro-expansion time (the
+    /// field's element type). A scalar-terminal via does not — the model that
+    /// owns the projected field is whatever the relation chain reaches — so the
+    /// derive leaves `target` unset and it is computed here by walking the
+    /// chain. Runs after [`link_relations`](Self::link_relations) so every
+    /// `Has`/`BelongsTo` target is final.
+    fn resolve_via_targets(&mut self) -> crate::Result<()> {
+        // Collect first; the walk borrows other models immutably.
+        let mut updates = Vec::new();
+
+        for curr in 0..self.models.len() {
+            if self.models[curr].is_embedded() {
+                continue;
+            }
+            let src = self.models[curr].id();
+            for index in 0..self.models[curr].as_root_unwrap().fields.len() {
+                let field = &self.models[curr].as_root_unwrap().fields[index];
+                let FieldTy::Via(via) = &field.ty else {
+                    continue;
+                };
+                let Some(terminal) = via.terminal else {
+                    continue;
+                };
+
+                // The relation chain is the path minus its terminal field.
+                let projection = via.path.projection.as_slice();
+                let relation_steps = &projection[..projection.len() - 1];
+                let field_name = field.name.app_unwrap().to_string();
+                let target = self.walk_via_relation_chain(src, relation_steps, &field_name)?;
+
+                // The terminal must be a stored scalar on the reached model.
+                let terminal_field = &self.models[&target].as_root_unwrap().fields[terminal];
+                if !matches!(terminal_field.ty, FieldTy::Primitive(_)) {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "the `via` terminal `{}::{}` is not a scalar field",
+                        self.models[&target].name().upper_camel_case(),
+                        terminal_field.name.app_unwrap(),
+                    )));
+                }
+
+                updates.push((curr, index, target));
+            }
+        }
+
+        for (curr, index, target) in updates {
+            if let FieldTy::Via(via) = &mut self.models[curr].as_root_mut_unwrap().fields[index].ty
+            {
+                via.target = target;
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Walk a via relation chain, splicing any nested via's own chain, and
+    /// return the model it reaches. Every step must be a relation.
+    fn walk_via_relation_chain(
+        &self,
+        declaring: ModelId,
+        steps: &[usize],
+        field_name: &str,
+    ) -> crate::Result<ModelId> {
+        let mut current = declaring;
+        let mut queue: Vec<usize> = steps.iter().rev().copied().collect();
+
+        while let Some(idx) = queue.pop() {
+            let field = &self.models[&current].as_root_unwrap().fields[idx];
+            match &field.ty {
+                FieldTy::Has(has) => current = has.target,
+                FieldTy::BelongsTo(belongs_to) => current = belongs_to.target,
+                // A nested via contributes its own relation chain (its terminal,
+                // if scalar, is not part of the path through it).
+                FieldTy::Via(inner) => {
+                    let inner_projection = inner.path.projection.as_slice();
+                    let inner_steps = match inner.terminal {
+                        Some(_) => &inner_projection[..inner_projection.len() - 1],
+                        None => inner_projection,
+                    };
+                    for step in inner_steps.iter().rev() {
+                        queue.push(*step);
+                    }
+                }
+                _ => {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "the `via` path for `{}::{}` traverses `{}`, which is not a relation",
+                        self.models[&declaring].name().upper_camel_case(),
+                        field_name,
+                        field.name.app_unwrap(),
+                    )));
+                }
+            }
+        }
+
+        Ok(current)
+    }
+
+    fn verify_no_eager_load_cycles(&self) -> crate::Result<()> {
+        let mut visited = HashSet::new();
+        let mut model_stack = Vec::new();
+        let mut field_stack = Vec::new();
+
+        for model in self.models.values() {
+            if model.is_embedded() {
+                continue;
+            }
+            self.visit_eager_load_graph(
+                model.id(),
+                &mut visited,
+                &mut model_stack,
+                &mut field_stack,
+            )?;
+        }
+
+        Ok(())
+    }
+
+    fn visit_eager_load_graph(
+        &self,
+        model_id: ModelId,
+        visited: &mut HashSet<ModelId>,
+        model_stack: &mut Vec<ModelId>,
+        field_stack: &mut Vec<FieldId>,
+    ) -> crate::Result<()> {
+        if model_stack.contains(&model_id) {
+            return Ok(());
+        }
+
+        if !visited.insert(model_id) {
+            return Ok(());
+        }
+
+        model_stack.push(model_id);
+
+        let model = self.models[&model_id].as_root_unwrap();
+        for field in &model.fields {
+            let Some(target) = eager_relation_target(field) else {
+                continue;
+            };
+
+            if let Some(pos) = model_stack.iter().position(|id| *id == target) {
+                let mut cycle = field_stack[pos..].to_vec();
+                cycle.push(field.id);
+                return Err(crate::Error::invalid_schema(format!(
+                    "eager relation cycle detected: {}",
+                    self.format_eager_load_cycle(&cycle, target)
+                )));
+            }
+
+            field_stack.push(field.id);
+            self.visit_eager_load_graph(target, visited, model_stack, field_stack)?;
+            field_stack.pop();
+        }
+
+        model_stack.pop();
+        Ok(())
+    }
+
+    fn format_eager_load_cycle(&self, fields: &[FieldId], target: ModelId) -> String {
+        let mut parts = Vec::new();
+        for field_id in fields {
+            let model = &self.models[&field_id.model];
+            let field = &model.as_root_unwrap().fields[field_id.index];
+            parts.push(format!(
+                "{}::{}",
+                model.name().upper_camel_case(),
+                field.name.app_unwrap()
+            ));
+        }
+        parts.push(self.models[&target].name().upper_camel_case());
+        parts.join(" -> ")
     }
 
     /// Go through all relations and link them to their pairs
@@ -234,8 +411,8 @@ impl Builder {
         // process, models cannot be iterated as that would hold a reference to
         // `self`. Instead, we use index based iteration.
 
-        // First, link all HasMany relations. HasManys are linked first because
-        // linking them may result in converting HasOne relations to BelongTo.
+        // First, link all has-many relations. Has-manys are linked first because
+        // linking them may result in converting has-one relations to BelongTo.
         // We need this conversion to happen before any of the other processing.
         for curr in 0..self.models.len() {
             if self.models[curr].is_embedded() {
@@ -246,28 +423,26 @@ impl Builder {
                 let src = model.id();
                 let field = &model.as_root_unwrap().fields[index];
 
-                if let FieldTy::HasMany(has_many) = &field.ty {
-                    // `via` relations have no pair to link.
-                    let HasKind::Direct(pair) = has_many.kind else {
-                        continue;
-                    };
-                    let target = has_many.target;
+                if let FieldTy::Has(has) = &field.ty
+                    && has.is_many()
+                {
+                    let target = has.target;
                     let field_name = field.name.app_unwrap().to_string();
-                    let pair = if pair.is_placeholder() {
+                    let pair = if has.pair_id.is_placeholder() {
                         self.find_has_many_pair(src, target, &field_name)?
                     } else {
-                        self.validate_pair(src, target, &field_name, pair)?;
-                        pair
+                        self.validate_pair(src, target, &field_name, has.pair_id)?;
+                        has.pair_id
                     };
                     self.models[curr].as_root_mut_unwrap().fields[index]
                         .ty
-                        .as_has_many_mut_unwrap()
-                        .kind = HasKind::Direct(pair);
+                        .as_has_mut_unwrap()
+                        .pair_id = pair;
                 }
             }
         }
 
-        // Link HasOne relations and compute BelongsTo foreign keys
+        // Link has-one relations and compute BelongsTo foreign keys
         for curr in 0..self.models.len() {
             if self.models[curr].is_embedded() {
                 continue;
@@ -278,14 +453,10 @@ impl Builder {
                 let field = &model.as_root_unwrap().fields[index];
 
                 match &field.ty {
-                    FieldTy::HasOne(has_one) => {
-                        // `via` relations have no pair to link.
-                        let HasKind::Direct(pair) = has_one.kind else {
-                            continue;
-                        };
-                        let target = has_one.target;
+                    FieldTy::Has(has) if has.is_one() => {
+                        let target = has.target;
                         let field_name = field.name.app_unwrap().to_string();
-                        let pair = if pair.is_placeholder() {
+                        let pair = if has.pair_id.is_placeholder() {
                             match self.find_belongs_to_pair(src, target, &field_name)? {
                                 Some(pair) => pair,
                                 None => {
@@ -297,14 +468,14 @@ impl Builder {
                                 }
                             }
                         } else {
-                            self.validate_pair(src, target, &field_name, pair)?;
-                            pair
+                            self.validate_pair(src, target, &field_name, has.pair_id)?;
+                            has.pair_id
                         };
 
                         self.models[curr].as_root_mut_unwrap().fields[index]
                             .ty
-                            .as_has_one_mut_unwrap()
-                            .kind = HasKind::Direct(pair);
+                            .as_has_mut_unwrap()
+                            .pair_id = pair;
                     }
                     FieldTy::BelongsTo(belongs_to) => {
                         assert!(!belongs_to.foreign_key.is_placeholder());
@@ -344,18 +515,7 @@ impl Builder {
                             pair = match &self.models[target].as_root_unwrap().fields[target_index]
                                 .ty
                             {
-                                FieldTy::HasMany(has_many)
-                                    if has_many.kind.pair_id() == Some(field_id) =>
-                                {
-                                    assert!(pair.is_none());
-                                    Some(
-                                        self.models[target].as_root_unwrap().fields[target_index]
-                                            .id,
-                                    )
-                                }
-                                FieldTy::HasOne(has_one)
-                                    if has_one.kind.pair_id() == Some(field_id) =>
-                                {
+                                FieldTy::Has(has) if has.pair_id == field_id => {
                                     assert!(pair.is_none());
                                     Some(
                                         self.models[target].as_root_unwrap().fields[target_index]
@@ -494,4 +654,12 @@ impl Builder {
             ))),
         }
     }
+}
+
+fn eager_relation_target(field: &Field) -> Option<ModelId> {
+    if field.deferred {
+        return None;
+    }
+
+    field.relation_target_id()
 }

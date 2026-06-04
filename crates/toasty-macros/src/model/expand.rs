@@ -35,10 +35,9 @@ impl Expand<'_> {
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
-        let relation_structs = self.expand_relation_structs();
-        let validate_create_impls = self.expand_validate_create_impls();
         let storage_compat_checks = self.expand_storage_compat_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
+        let version_compat_checks = self.expand_version_compat_checks();
 
         wrap_in_const(quote! {
             #model_impls
@@ -47,10 +46,9 @@ impl Expand<'_> {
             #query_struct
             #create_builder
             #update_builder
-            #relation_structs
-            #validate_create_impls
             #storage_compat_checks
             #auto_compat_checks
+            #version_compat_checks
         })
     }
 }
@@ -106,37 +104,20 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
 
         #storage_compat_checks
 
-        impl #toasty::Register for #model_ident {
+        impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
                 static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
                 *ID.get_or_init(|| #toasty::generate_unique_id())
             }
 
             #model_schema
-
-            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                if model_set.contains(Self::id()) {
-                    return;
-                }
-                model_set.add(Self::schema());
-                #( #field_register_calls )*
-            }
         }
-
-        #toasty::inventory::submit! {
-            #toasty::DiscoverItem::new(
-                env!("CARGO_PKG_NAME"),
-                |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
-            )
-        }
-
-        impl #toasty::Embed for #model_ident {}
 
         impl #toasty::Load for #model_ident {
             type Output = Self;
 
             fn ty() -> #toasty::core::stmt::Type {
-                #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
+                #toasty::core::stmt::Type::Model(<Self as #toasty::Embed>::id())
             }
 
             fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
@@ -159,7 +140,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
                 #field_struct_ident { path }
             }
 
-            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self::ExprTarget>>) -> Self::ListPath<__Origin> {
                 #field_list_struct_ident { path }
             }
 
@@ -175,7 +156,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
-                        target: <Self as #toasty::Register>::id(),
+                        target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
@@ -189,7 +170,11 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
 
             fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                <Self as #toasty::Register>::register(model_set);
+                if model_set.contains(<Self as #toasty::Embed>::id()) {
+                    return;
+                }
+                model_set.add(<Self as #toasty::Embed>::schema());
+                #( #field_register_calls )*
             }
         }
 
@@ -253,14 +238,14 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 
         #storage_compat_checks
 
-        impl #toasty::Register for #model_ident {
+        impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
                 static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
                 *ID.get_or_init(|| #toasty::generate_unique_id())
             }
 
             fn schema() -> #toasty::core::schema::app::Model {
-                let id = Self::id();
+                let id = <Self as #toasty::Embed>::id();
                 #toasty::core::schema::app::Model::EmbeddedEnum(
                     #toasty::core::schema::app::EmbeddedEnum {
                         id,
@@ -277,23 +262,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 )
             }
 
-            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                if model_set.contains(Self::id()) {
-                    return;
-                }
-                model_set.add(Self::schema());
-                #( #field_register_calls )*
-            }
         }
-
-        #toasty::inventory::submit! {
-            #toasty::DiscoverItem::new(
-                env!("CARGO_PKG_NAME"),
-                |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
-            )
-        }
-
-        impl #toasty::Embed for #model_ident {}
 
         #load_impl
 
@@ -308,7 +277,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 #field_struct_ident { path }
             }
 
-            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self>>) -> Self::ListPath<__Origin> {
+            fn new_list_path<__Origin>(path: #toasty::Path<__Origin, #toasty::List<Self::ExprTarget>>) -> Self::ListPath<__Origin> {
                 #field_list_struct_ident { path }
             }
 
@@ -323,7 +292,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
-                        target: <Self as #toasty::Register>::id(),
+                        target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
                     }
                 )
@@ -337,7 +306,11 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
 
             fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                <Self as #toasty::Register>::register(model_set);
+                if model_set.contains(<Self as #toasty::Embed>::id()) {
+                    return;
+                }
+                model_set.add(<Self as #toasty::Embed>::schema());
+                #( #field_register_calls )*
             }
         }
 
@@ -392,28 +365,38 @@ impl Expand<'_> {
         quote! {
             impl #toasty::newtype::NewtypeOf for #model_ident {
                 type Inner = #inner_ty;
+
+                fn into_inner(self) -> #inner_ty {
+                    self.0
+                }
+
+                fn from_inner(inner: #inner_ty) -> Self {
+                    Self(inner)
+                }
             }
         }
     }
 
     /// Generates a field accessor method for a `BelongsTo` or `HasOne`
-    /// relation using `Relation::OneField`.
+    /// relation using the target model's `Model::OneField`.
     fn expand_one_relation_field_method(
         &self,
         field_ident: &syn::Ident,
+        field_trait: TokenStream,
         ty: &syn::Type,
         field_offset: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::OneField<__Origin> {
-                <#ty as #toasty::Relation>::OneField::from_path(
+            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
+                <<<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin>>::from_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
             }
@@ -431,17 +414,18 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         // Construct the chained path with the field's `ExprTarget` as the
-        // tag, so `new_path` receives exactly the type it expects — no
-        // PhantomData retag at the boundary. For `Vec<scalar>` this is
+        // tag, so `new_path` receives exactly the type it expects. For
+        // `Vec<scalar>` this is
         // `List<T>`; for everything else it is the field's Rust type.
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, <#ty as #toasty::Field>::ExprTarget>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field::<<#ty as #toasty::Field>::ExprTarget>(#field_offset)
                     )
                 )
             }
@@ -453,6 +437,14 @@ fn wrap_in_const(code: TokenStream) -> TokenStream {
     quote! {
         const _: () = {
             use toasty as _toasty;
+            // Import the setter-bound names unqualified so the `impl Trait`
+            // parameter types on create/update setters render as
+            // `impl IntoExpr<FieldExprTarget<..>>` in compiler errors rather
+            // than the much longer `_toasty::codegen_support::..` paths. Not
+            // every model uses all three (a model with only relation setters
+            // never names `Assign` here), so silence the unused-import lint.
+            #[allow(unused_imports)]
+            use _toasty::codegen_support::{Assign, FieldExprTarget, IntoExpr};
             #code
         };
     }

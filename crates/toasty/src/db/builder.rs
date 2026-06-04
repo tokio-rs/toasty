@@ -222,6 +222,7 @@ impl Builder {
     /// #     id: i64,
     /// #     name: String,
     /// # }
+    /// # #[cfg(feature = "sqlite")]
     /// let db = toasty::Db::builder()
     ///     .models(toasty::models!(User))
     ///     .connect("sqlite://memory")

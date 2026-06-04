@@ -4,7 +4,7 @@ use crate::serializer::ToSql;
 pub(crate) struct ColumnAlias(pub(crate) usize);
 
 impl ToSql for ColumnAlias {
-    fn to_sql(self, cx: &super::ExprContext<'_>, f: &mut super::Formatter<'_>) {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
         // The per-flavor format matches each engine's auto-naming convention
         // for derived-table columns. MySQL's `VALUES ROW(...) AS t` exposes
         // columns as `column_0`, `column_1`, ...; PG and SQLite use
@@ -13,10 +13,10 @@ impl ToSql for ColumnAlias {
         // (e.g. `tbl_1_0.column_0`) must match what the engine sees.
         if f.serializer.is_mysql() {
             let i = self.0;
-            fmt!(cx, f, "column_" i);
+            fmt!(f, "column_" i);
         } else {
             let i = self.0 + 1;
-            fmt!(cx, f, "column" i);
+            fmt!(f, "column" i);
         }
     }
 }

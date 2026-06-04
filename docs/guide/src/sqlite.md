@@ -1,11 +1,17 @@
 # SQLite
 
-Toasty's SQLite driver uses [`rusqlite`] under the hood. It runs the
+Toasty's SQLite driver uses [`rusqlite`]. It runs the
 full Toasty query surface — `SELECT`, `INSERT`, `UPDATE`, `DELETE`,
 `RETURNING`, transactions, scalar arrays via JSON1 — against either a
 file-backed database or an ephemeral in-memory one.
 
 [`rusqlite`]: https://docs.rs/rusqlite
+
+> Toasty also ships an async-native [Turso](./turso.md) driver. It
+> speaks the same SQL dialect as SQLite and shares this chapter's
+> type mapping and feature set; the [Turso](./turso.md) chapter
+> covers the differences (in-memory pool sharing, MVCC concurrent
+> writes, experimental flags).
 
 ## Enabling the driver
 
@@ -135,13 +141,17 @@ mutations, [batch operations](./batch-operations.md),
 serializable [transactions](./transactions.md) all run natively. A few
 behaviors differ from the other SQL backends:
 
-**`LIKE` is case-insensitive for ASCII.** SQLite's default `LIKE`
-ignores case for ASCII characters. The
-[`.ilike()`](./filtering-with-expressions.md#ilike) filter lowers to
-the same `LIKE`, so case-insensitive matching works — but a
-`.like("Rust")` filter also matches `"rust"` and `"RUST"`. Use
-`GLOB` (which Toasty does not currently expose) or a `CHECK` against
-exact bytes if you need case-sensitive pattern matching.
+**`LIKE` is case-insensitive for ASCII.** SQLite's `LIKE` ignores case for ASCII
+characters but is case-sensitive for non-ASCII ones. A
+[`.like("Rust")`](./filtering-with-expressions.md#like) filter also matches
+`"rust"` and `"RUST"`, but `.like("café")` does not match `"CAFÉ"`. Use `GLOB`
+(which Toasty does not currently expose) or a `CHECK` against exact bytes if you
+need case-sensitive pattern matching.
+
+**No `ILIKE`.** SQLite has no `ILIKE` operator, so
+[`.ilike()`](./filtering-with-expressions.md#ilike) is rejected with an
+`unsupported_feature` error. Since SQLite's `LIKE` already folds ASCII case, use
+`.like()` for case-insensitive ASCII matching.
 
 **No native prefix-match operator.**
 [`.starts_with("abc")`](./filtering-with-expressions.md#starts_with)
@@ -176,7 +186,8 @@ other isolation level returns `Error::UnsupportedFeature`. The
 default (no explicit level) is accepted and runs as serializable.
 
 ```rust,ignore
-let users = User::filter(User::fields().email().ilike("%@example.com"))
+// SQLite's LIKE folds ASCII case, so this matches "%@Example.com" too.
+let users = User::filter(User::fields().email().like("%@example.com"))
     .exec(&mut db)
     .await?;
 ```

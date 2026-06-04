@@ -23,8 +23,12 @@ impl Connection {
                 .query()
                 .table_name(&index.name)
                 .key_condition_expression(key_expression)
-                .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                .set_expression_attribute_values(Some(expr_attrs.attr_values))
+                .set_expression_attribute_names(
+                    (!expr_attrs.attr_names.is_empty()).then_some(expr_attrs.attr_names),
+                )
+                .set_expression_attribute_values(
+                    (!expr_attrs.attr_values.is_empty()).then_some(expr_attrs.attr_values),
+                )
                 .send()
                 .await
                 .map_err(toasty_core::Error::driver_operation_failed)?
@@ -35,8 +39,12 @@ impl Connection {
                 .table_name(&table.name)
                 .index_name(&index.name)
                 .key_condition_expression(key_expression)
-                .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                .set_expression_attribute_values(Some(expr_attrs.attr_values))
+                .set_expression_attribute_names(
+                    (!expr_attrs.attr_names.is_empty()).then_some(expr_attrs.attr_names),
+                )
+                .set_expression_attribute_values(
+                    (!expr_attrs.attr_values.is_empty()).then_some(expr_attrs.attr_values),
+                )
                 .send()
                 .await
                 .map_err(toasty_core::Error::driver_operation_failed)?

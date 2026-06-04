@@ -37,7 +37,7 @@ its comments). Today those work via plain path chains; the same
 chains should accept filters at any level.
 
 A relation field like `User::todos` denotes a set — *the* todos
-belonging to a user. Today, `HasMany::Loaded(vec)` carries that whole
+belonging to a user. Today, the loaded relation value carries that whole
 set, and code reading `user.todos.get()` can rely on it. Once filtered
 includes exist, two `User` values with the same id can have `todos`
 "loaded" with different subsets depending on which query produced them,
@@ -306,10 +306,10 @@ unchanged — a bare path is an unfiltered include.
   #[derive(Model)]
   struct User {
       #[has_many]
-      todos: HasMany<Todo>,
+      todos: Deferred<Vec<Todo>>,
 
       #[has_many(filter = Todo::fields().active().eq(true))]
-      active_todos: HasMany<Todo>,
+      active_todos: Deferred<Vec<Todo>>,
   }
   ```
 

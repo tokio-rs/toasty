@@ -5,6 +5,7 @@ use crate::schema::mapping::TableToModel;
 use crate::schema::{Mapping, Schema, Table, TableId};
 use crate::{driver, stmt};
 use indexmap::IndexMap;
+use std::collections::HashSet;
 
 /// Constructs a [`Schema`] from an app-level schema and driver capabilities.
 ///
@@ -182,6 +183,28 @@ impl Default for Builder {
 impl BuildSchema<'_> {
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
         let model_name = model.name().to_string();
+
+        // Collect Bool fields used as key/index attributes on backends that
+        // don't support BOOL as a key attribute type (e.g. DynamoDB). These
+        // need db::Type::Integer(1) as their storage type.
+        let mut bool_key_fields: HashSet<app::FieldId> = HashSet::new();
+        if let app::Model::Root(root) = &*model
+            && !self.db.bool_key_type
+        {
+            let index_key_fields: HashSet<app::FieldId> = root
+                .indices
+                .iter()
+                .flat_map(|idx| idx.fields.iter().map(|f| f.field))
+                .collect();
+            for f in &root.fields {
+                if (f.primary_key || index_key_fields.contains(&f.id))
+                    && matches!(&f.ty, app::FieldTy::Primitive(p) if matches!(p.ty, stmt::Type::Bool))
+                {
+                    bool_key_fields.insert(f.id);
+                }
+            }
+        }
+
         let fields = match model {
             app::Model::Root(root) => &mut root.fields[..],
             app::Model::EmbeddedStruct(embedded) => &mut embedded.fields[..],
@@ -189,6 +212,14 @@ impl BuildSchema<'_> {
         };
         for field in fields.iter_mut() {
             if let app::FieldTy::Primitive(primitive) = &mut field.ty {
+                // On backends that don't support BOOL as a key attribute type,
+                // store Bool key/index fields as Integer(1). The engine's
+                // cast mechanism converts Bool ↔ I8 transparently; the driver
+                // never needs to special-case bools-as-numbers.
+                if bool_key_fields.contains(&field.id) {
+                    primitive.storage_ty = Some(db::Type::Integer(1));
+                }
+
                 if let stmt::Type::List(elem) = &primitive.ty {
                     let field_name = || {
                         field.name.app.as_deref().unwrap_or_else(|| {
@@ -341,7 +372,7 @@ fn resolve_document_ty(
             app::FieldTy::Embedded(embedded_field) => {
                 stmt::Type::Document(resolve_document_ty(models, embedded_field.target)?)
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::HasMany(_) | app::FieldTy::HasOne(_) => {
+            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
                 return Err(crate::Error::unsupported_feature(format!(
                     "embedded struct `{}` field `{name}` is a relation, which is \
                      not supported inside a #[document] field",

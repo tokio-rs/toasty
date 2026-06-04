@@ -15,17 +15,17 @@
 //! assert!(d.is_empty());
 //! ```
 
-mod columns;
-mod indices;
+mod column;
+mod index;
 mod schema;
-mod tables;
-mod types;
+mod table;
+mod ty;
 
-pub use columns::{Columns, ColumnsItem};
-pub use indices::{Indices, IndicesItem};
+pub use column::Column;
+pub use index::Index;
 pub use schema::Schema;
-pub use tables::{Tables, TablesItem};
-pub use types::{Types, TypesItem};
+pub use table::Table;
+pub use ty::Type;
 
 use hashbrown::HashMap;
 

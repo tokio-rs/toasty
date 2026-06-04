@@ -6,7 +6,7 @@
 use crate as toasty;
 use crate::engine::lower::expr_or::is_variant_tautology_or;
 use crate::engine::test_util::test_schema_with;
-use crate::schema::Register;
+use crate::schema::Embed;
 use toasty_core::schema::app::VariantId;
 use toasty_core::stmt::{Expr, ExprOr};
 

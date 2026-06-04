@@ -29,6 +29,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_date: false,
     native_time: false,
     native_datetime: false,
+    native_ilike: false,
     native_array: false,
     vec_scalar: true,
     document_collections: true,
@@ -57,4 +58,18 @@ async fn in_memory_caps_user_max_pool_size() {
         .unwrap();
 
     assert_eq!(db.pool().status().max_size, 1);
+}
+
+#[tokio::test]
+async fn auto_i64_key_uses_sqlite_integer_storage_type() {
+    let db = toasty::Db::builder()
+        .models(toasty::models!(PoolItem))
+        .build(toasty_driver_sqlite::Sqlite::in_memory())
+        .await
+        .unwrap();
+
+    let id = &db.schema().db.tables[0].columns[0];
+
+    assert_eq!(id.storage_ty, toasty::schema::db::Type::Integer(4));
+    assert!(id.auto_increment);
 }

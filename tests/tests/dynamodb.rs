@@ -74,6 +74,7 @@ toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     decimal_arbitrary_precision: false,
     native_decimal: false,
     native_varchar: false,
+    native_ilike: false,
     native_timestamp: false,
     native_date: false,
     native_time: false,
@@ -86,6 +87,7 @@ toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     vec_remove_at: false,
     backward_pagination: false,
     test_connection_pool: false,
+    transaction_lock_mode: false,
 );
 
 // ─────────────────────────────────────────────────────────────────────────────

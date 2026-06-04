@@ -30,8 +30,9 @@ mod value;
 use crate::stmt::Statement;
 
 use toasty_core::{
-    driver::operation::{IsolationLevel, Transaction},
+    driver::operation::{IsolationLevel, Transaction, TransactionMode},
     schema::db::{self, Index, Table},
+    stmt::IntoExprTarget,
 };
 
 /// Serialize a statement to a SQL string
@@ -43,11 +44,26 @@ pub struct Serializer<'a> {
     /// The database flavor handles the differences between SQL dialects and
     /// supported features.
     flavor: Flavor,
+
+    /// SQL emitted for [`TransactionMode::Default`] under the SQLite flavor.
+    /// Constructors that don't override this leave it at `"BEGIN"`, which is
+    /// SQLite's natural default (DEFERRED). A driver that wants `Default` to
+    /// mean something engine-specific — Turso under `concurrent_writes()`
+    /// uses `"BEGIN CONCURRENT"` — sets this through
+    /// [`Self::sqlite_with_default_begin`]. The non-`Default` variants
+    /// (`Deferred`, `Immediate`, `Exclusive`) always emit fixed SQL.
+    sqlite_default_begin: &'static str,
 }
 
 struct Formatter<'a> {
     /// Handle to the serializer
     serializer: &'a Serializer<'a>,
+
+    /// Expression-resolution context for the current scope. Re-scoped (via
+    /// [`Formatter::scope`]) each time serialization descends into a new
+    /// query level, so it travels with the formatter rather than as a
+    /// separate argument.
+    cx: ExprContext<'a>,
 
     /// Where to write the serialized SQL
     dst: &'a mut String,
@@ -66,8 +82,30 @@ struct Formatter<'a> {
 
     /// Collects `Expr::Arg(n)` positions in the order they appear in the SQL.
     /// Used by MySQL (which uses positional `?` without indices) to reorder
-    /// the params vec to match placeholder occurrence order.
-    arg_positions: Vec<usize>,
+    /// the params vec to match placeholder occurrence order. Borrowed so a
+    /// scoped child formatter writes through to the root's vec.
+    arg_positions: &'a mut Vec<usize>,
+}
+
+impl<'a> Formatter<'a> {
+    /// Descend into a new expression scope, returning a child formatter that
+    /// shares this one's output sink and arg collector (so writes flow back
+    /// to the root) but resolves references against `target`.
+    ///
+    /// The child borrows `self`, so the parent scope stays live on the stack
+    /// for the child's lifetime — that is what keeps the `ExprContext` parent
+    /// chain valid for nested-reference resolution.
+    fn scope<'c>(&'c mut self, target: impl IntoExprTarget<'c, db::Schema>) -> Formatter<'c> {
+        Formatter {
+            serializer: self.serializer,
+            cx: self.cx.scope(target),
+            dst: &mut *self.dst,
+            depth: self.depth,
+            alias: self.alias,
+            in_insert: self.in_insert,
+            arg_positions: &mut *self.arg_positions,
+        }
+    }
 }
 
 /// Expression context bound to a database-level schema.
@@ -94,21 +132,22 @@ impl<'a> Serializer<'a> {
     /// they can ignore the arg order.
     pub fn serialize_with_arg_order(&self, stmt: &Statement) -> (String, Vec<usize>) {
         let mut ret = String::new();
+        let mut arg_positions = Vec::new();
 
-        let mut fmt = Formatter {
-            serializer: self,
-            dst: &mut ret,
-            depth: 0,
-            alias: false,
-            in_insert: false,
-            arg_positions: Vec::new(),
-        };
+        {
+            let mut fmt = Formatter {
+                serializer: self,
+                cx: ExprContext::new(self.schema),
+                dst: &mut ret,
+                depth: 0,
+                alias: false,
+                in_insert: false,
+                arg_positions: &mut arg_positions,
+            };
 
-        let cx = ExprContext::new(self.schema);
+            stmt.to_sql(&mut fmt);
+        }
 
-        stmt.to_sql(&cx, &mut fmt);
-
-        let arg_positions = fmt.arg_positions;
         ret.push(';');
         (ret, arg_positions)
     }
@@ -119,39 +158,41 @@ impl<'a> Serializer<'a> {
     /// while other databases use `BEGIN`). Savepoints are named `sp_{id}`.
     pub fn serialize_transaction(&self, op: &Transaction) -> String {
         let mut ret = String::new();
+        let mut arg_positions = Vec::new();
 
-        let mut f = Formatter {
-            serializer: self,
-            dst: &mut ret,
-            depth: 0,
-            alias: false,
-            in_insert: false,
-            arg_positions: Vec::new(),
-        };
+        {
+            let mut f = Formatter {
+                serializer: self,
+                cx: ExprContext::new(self.schema),
+                dst: &mut ret,
+                depth: 0,
+                alias: false,
+                in_insert: false,
+                arg_positions: &mut arg_positions,
+            };
 
-        let cx = ExprContext::new(self.schema);
-
-        match op {
-            Transaction::Start {
-                isolation,
-                read_only,
-            } => fmt!(
-                &cx,
-                &mut f,
-                self.serialize_transaction_start(*isolation, *read_only)
-            ),
-            Transaction::Commit => fmt!(&cx, &mut f, "COMMIT"),
-            Transaction::Rollback => fmt!(&cx, &mut f, "ROLLBACK"),
-            Transaction::Savepoint(name) => {
-                fmt!(&cx, &mut f, "SAVEPOINT " Ident(name))
-            }
-            Transaction::ReleaseSavepoint(name) => {
-                fmt!(&cx, &mut f, "RELEASE SAVEPOINT " Ident(name))
-            }
-            Transaction::RollbackToSavepoint(name) => {
-                fmt!(&cx, &mut f, "ROLLBACK TO SAVEPOINT " Ident(name))
-            }
-        };
+            match op {
+                Transaction::Start {
+                    isolation,
+                    read_only,
+                    mode,
+                } => fmt!(
+                    &mut f,
+                    self.serialize_transaction_start(*isolation, *read_only, *mode)
+                ),
+                Transaction::Commit => fmt!(&mut f, "COMMIT"),
+                Transaction::Rollback => fmt!(&mut f, "ROLLBACK"),
+                Transaction::Savepoint(name) => {
+                    fmt!(&mut f, "SAVEPOINT " Ident(name))
+                }
+                Transaction::ReleaseSavepoint(name) => {
+                    fmt!(&mut f, "RELEASE SAVEPOINT " Ident(name))
+                }
+                Transaction::RollbackToSavepoint(name) => {
+                    fmt!(&mut f, "ROLLBACK TO SAVEPOINT " Ident(name))
+                }
+            };
+        }
 
         ret.push(';');
         ret
@@ -161,6 +202,7 @@ impl<'a> Serializer<'a> {
         &self,
         isolation: Option<IsolationLevel>,
         read_only: bool,
+        mode: TransactionMode,
     ) -> String {
         fn isolation_level_str(level: IsolationLevel) -> &'static str {
             match level {
@@ -172,6 +214,8 @@ impl<'a> Serializer<'a> {
         }
 
         match self.flavor {
+            // MySQL has no SQLite-style lock-mode keyword; drivers
+            // reject non-Default `mode` before reaching the serializer.
             Flavor::Mysql => {
                 let mut sql = String::new();
                 if let Some(level) = isolation {
@@ -185,6 +229,8 @@ impl<'a> Serializer<'a> {
                 }
                 sql
             }
+            // PostgreSQL has no SQLite-style lock-mode keyword; drivers
+            // reject non-Default `mode` before reaching the serializer.
             Flavor::Postgresql => {
                 let mut sql = String::from("BEGIN");
                 if let Some(level) = isolation {
@@ -196,10 +242,18 @@ impl<'a> Serializer<'a> {
                 }
                 sql
             }
-            Flavor::Sqlite => {
-                // SQLite doesn't support per-transaction isolation levels or read-only mode
-                "BEGIN".to_string()
-            }
+            // SQLite has no per-transaction isolation level or read-only
+            // keyword; the lock-acquisition mode is the only knob. `Default`
+            // emits whatever the serializer was configured with at
+            // construction (`BEGIN` by default, or e.g. `BEGIN CONCURRENT`
+            // for Turso under MVCC). `Deferred`/`Immediate`/`Exclusive` are
+            // explicit caller requests with fixed SQL.
+            Flavor::Sqlite => match mode {
+                TransactionMode::Default => self.sqlite_default_begin.to_string(),
+                TransactionMode::Deferred => "BEGIN".to_string(),
+                TransactionMode::Immediate => "BEGIN IMMEDIATE".to_string(),
+                TransactionMode::Exclusive => "BEGIN EXCLUSIVE".to_string(),
+            },
         }
     }
 

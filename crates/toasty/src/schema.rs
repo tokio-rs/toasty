@@ -1,15 +1,8 @@
 mod auto;
 pub use auto::Auto;
 
-mod belongs_to;
-pub use belongs_to::BelongsTo;
-
-/// Compile-time metadata and validation for `create!` macro field checking.
-pub mod create_meta;
-pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
-
 mod deferred;
-pub use deferred::{Defer, Deferred, build_deferred_load};
+pub use deferred::Deferred;
 
 mod document;
 pub use document::Document;
@@ -24,30 +17,34 @@ pub use field::{Field, Scalar};
 mod jiff;
 
 mod has_many;
-pub use has_many::HasMany;
 
-mod has_one;
-pub use has_one::HasOne;
+pub(crate) mod lazy_slot;
 
 mod load;
 pub use load::Load;
 
 mod model;
-pub use model::Model;
+pub use model::{Model, QueryMany, QueryOne, QueryOptionOne};
 
 mod option;
 
 mod register;
 pub use register::inventory;
-pub use register::{DiscoverItem, Register, generate_unique_id};
+pub use register::{DiscoverItem, generate_unique_id};
 
 mod num;
 
 mod relation;
-pub use relation::Relation;
+pub use relation::RelationManyField;
+
+mod relation_one;
+pub use relation_one::RelationOneField;
 
 mod scope;
 pub use scope::Scope;
+
+mod via;
+pub use via::{ViaMany, ViaManyField, ViaPath, ViaTarget};
 
 use crate::Result;
 

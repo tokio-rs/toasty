@@ -7,7 +7,7 @@ pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Resu
     // Create a user with some todos
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
+        .todos([Todo::create().title("Make pizza")])
         .exec(&mut db)
         .await?;
 
@@ -31,11 +31,9 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
     // Create a user with some todos
     let user = User::create()
         .name("Ann Chovey")
-        .todo(
-            Todo::create()
-                .title("Make pizza")
-                .category(Category::create().name("Eating")),
-        )
+        .todos([Todo::create()
+            .title("Make pizza")
+            .category(Category::create().name("Eating"))])
         .exec(&mut db)
         .await?;
     assert_eq!(user.name, "Ann Chovey");
@@ -56,16 +54,12 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
     // Create more than one todo per user
     let user = User::create()
         .name("John Doe")
-        .todo(
-            Todo::create()
-                .title("do something")
-                .category(Category::create().name("things")),
-        )
-        .todo(
-            Todo::create()
-                .title("do something else")
-                .category(Category::create().name("other things")),
-        )
+        .todos([Todo::create()
+            .title("do something")
+            .category(Category::create().name("things"))])
+        .todos([Todo::create()
+            .title("do something else")
+            .category(Category::create().name("other things"))])
         .exec(&mut db)
         .await?;
 
@@ -101,8 +95,8 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> R
 
     let user = User::create()
         .name("John Doe")
-        .todo(Todo::create().title("Pizza").category(&category))
-        .todo(Todo::create().title("Hamburger").category(&category))
+        .todos([Todo::create().title("Pizza").category(&category)])
+        .todos([Todo::create().title("Hamburger").category(&category)])
         .exec(&mut db)
         .await?;
 
@@ -151,7 +145,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
 
         // This optional field triggers the unimplemented code path!
         // Without it, the batch create works fine.
@@ -169,7 +163,7 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }
@@ -179,8 +173,8 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
     // This operation currently panics due to unimplemented code path
     let user = User::create()
         .name("Ann Chovey")
-        .todo(Todo::create().title("Make pizza"))
-        .todo(Todo::create().title("Sleep"))
+        .todos([Todo::create().title("Make pizza")])
+        .todos([Todo::create().title("Sleep")])
         .exec(&mut db)
         .await?;
 
@@ -211,7 +205,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
         email: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -224,7 +218,7 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
     }
@@ -235,8 +229,8 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
     let user = User::create()
         .name("Ann Chovey")
         .email("ann.chovey@example.com")
-        .todo(Todo::create().title("Make pizza"))
-        .todo(Todo::create().title("Sleep"))
+        .todos([Todo::create().title("Make pizza")])
+        .todos([Todo::create().title("Sleep")])
         .exec(&mut db)
         .await?;
 

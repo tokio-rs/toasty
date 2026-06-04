@@ -26,8 +26,8 @@ pub struct BelongsTo {
     /// perspective.
     pub expr_ty: stmt::Type,
 
-    /// The inverse [`HasMany`](super::HasMany) or [`HasOne`](super::HasOne)
-    /// field on the target model, if one exists.
+    /// The inverse [`Has`](super::Has) field on the target model, if one
+    /// exists.
     pub pair: Option<FieldId>,
 
     /// The foreign key mapping source fields to the target's primary key

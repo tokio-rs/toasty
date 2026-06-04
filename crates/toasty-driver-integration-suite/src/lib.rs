@@ -4,7 +4,7 @@ mod macros;
 mod util;
 
 mod helpers;
-pub use helpers::{column, columns, table_id};
+pub use helpers::{column, columns, pop_filter, pop_insert, pop_update, table_id};
 
 mod isolate;
 use isolate::Isolate;
@@ -35,13 +35,13 @@ toasty_driver_integration_suite_macros::generate_test_registry!("src/tests");
 
 mod prelude {
     pub(crate) use crate::{
-        Test, columns,
+        Test, columns, pop_filter, pop_insert, pop_update,
         stmt::{Any, ArgOr},
         table_id,
     };
     pub(crate) use toasty::Result;
     pub(crate) use toasty::models;
-    pub(crate) use toasty::schema::Register;
+    pub(crate) use toasty::schema::{Embed, Model};
     pub(crate) type BoxError = Box<dyn std::error::Error + 'static>;
 
     pub(crate) use crate::util::{NumUtil, SliceUtil};

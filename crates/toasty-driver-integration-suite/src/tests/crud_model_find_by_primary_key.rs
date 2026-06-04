@@ -3,24 +3,15 @@ use crate::prelude::*;
 use toasty::schema::Model;
 use toasty::stmt::IntoExpr;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn single_column_pk(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Widget {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(Widget)).await;
-
-    let widget = toasty::create!(Widget { name: "alpha" })
+    let user = toasty::create!(User { name: "alpha" })
         .exec(&mut db)
         .await?;
 
-    let found = Widget::find_by_primary_key(widget.id.into_expr())
+    let found = User::find_by_primary_key(user.id.into_expr())
         .get(&mut db)
         .await?;
     assert_eq!(found.name, "alpha");
@@ -79,7 +70,8 @@ pub async fn generic_by_primary_key(test: &mut Test) -> Result<()> {
     async fn fetch<M>(db: &mut toasty::Db, id: String) -> Result<Vec<M>>
     where
         M: toasty::schema::Model<PrimaryKey = String>,
-        M::Query: toasty::stmt::IntoStatement<Returning = toasty::stmt::List<M>>,
+        M::Query<toasty::stmt::List<M>>:
+            toasty::stmt::IntoStatement<Returning = toasty::stmt::List<M>>,
     {
         use toasty::stmt::IntoStatement;
         let stmt = M::find_by_primary_key(id.into_expr()).into_statement();

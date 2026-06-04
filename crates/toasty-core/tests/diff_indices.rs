@@ -3,7 +3,7 @@ use toasty_core::schema::{
         Column, ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, PrimaryKey, Schema,
         Table, TableId, Type,
     },
-    diff::{self, Indices, IndicesItem},
+    diff,
 };
 use toasty_core::stmt;
 
@@ -95,7 +95,7 @@ fn no_diff_same_indices() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert!(d.is_empty());
 }
 
@@ -117,10 +117,10 @@ fn create_index() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], IndicesItem::CreateIndex(_)));
-    if let IndicesItem::CreateIndex(idx) = d[0] {
+    assert!(matches!(d[0], diff::Index::Create(_)));
+    if let diff::Index::Create(idx) = d[0] {
         assert_eq!(idx.name, "idx_name");
     }
 }
@@ -143,10 +143,10 @@ fn drop_index() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], IndicesItem::DropIndex(_)));
-    if let IndicesItem::DropIndex(idx) = d[0] {
+    assert!(matches!(d[0], diff::Index::Drop(_)));
+    if let diff::Index::Drop(idx) = d[0] {
         assert_eq!(idx.name, "idx_name");
     }
 }
@@ -175,9 +175,9 @@ fn alter_index_unique() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], IndicesItem::AlterIndex { .. }));
+    assert!(matches!(d[0], diff::Index::Alter { .. }));
 }
 
 #[test]
@@ -211,9 +211,9 @@ fn alter_index_columns() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], IndicesItem::AlterIndex { .. }));
+    assert!(matches!(d[0], diff::Index::Alter { .. }));
 }
 
 #[test]
@@ -240,9 +240,9 @@ fn alter_index_op() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], IndicesItem::AlterIndex { .. }));
+    assert!(matches!(d[0], diff::Index::Alter { .. }));
 }
 
 #[test]
@@ -269,9 +269,9 @@ fn alter_index_scope() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], IndicesItem::AlterIndex { .. }));
+    assert!(matches!(d[0], diff::Index::Alter { .. }));
 }
 
 #[test]
@@ -309,10 +309,10 @@ fn rename_index_with_hint() {
     );
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], IndicesItem::AlterIndex { .. }));
-    if let IndicesItem::AlterIndex { previous, next } = d[0] {
+    assert!(matches!(d[0], diff::Index::Alter { .. }));
+    if let diff::Index::Alter { previous, next } = d[0] {
         assert_eq!(previous.name, "old_idx_name");
         assert_eq!(next.name, "new_idx_name");
     }
@@ -342,15 +342,11 @@ fn rename_index_without_hint_is_drop_and_create() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 2);
 
-    let has_drop = d
-        .iter()
-        .any(|item| matches!(item, IndicesItem::DropIndex(_)));
-    let has_create = d
-        .iter()
-        .any(|item| matches!(item, IndicesItem::CreateIndex(_)));
+    let has_drop = d.iter().any(|item| matches!(item, diff::Index::Drop(_)));
+    let has_create = d.iter().any(|item| matches!(item, diff::Index::Create(_)));
     assert!(has_drop);
     assert!(has_create);
 }
@@ -391,7 +387,7 @@ fn index_with_renamed_column() {
     );
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert!(d.is_empty());
 }
 
@@ -466,6 +462,6 @@ fn multiple_operations() {
     );
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Indices::from(&cx, &from_indices, &to_indices);
+    let d = diff::Index::diff(&cx, &from_indices, &to_indices);
     assert_eq!(d.len(), 4);
 }

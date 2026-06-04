@@ -1,13 +1,15 @@
 # HasMany
 
 A `HasMany` relationship connects a parent model to multiple child records. The
-parent declares a `HasMany<T>` field, and the child stores a foreign key
-pointing back to the parent via [BelongsTo](./belongs-to.md).
+parent declares a `Vec<T>` relation field, usually wrapped in `Deferred<_>` for
+lazy loading. The child stores a foreign key pointing back to the parent via
+[BelongsTo](./belongs-to.md).
 
 ## Defining a HasMany relationship
 
-Add a `#[has_many]` field of type `HasMany<T>` on the parent model. The child
-model must have a corresponding `#[belongs_to]` field.
+Add a `#[has_many]` field on the parent model. Use `Deferred<Vec<T>>` for lazy
+loading, or `Vec<T>` for eager loading. The child model must have a
+corresponding `#[belongs_to]` field.
 
 ```rust
 # use toasty::Model;
@@ -20,7 +22,7 @@ struct User {
     name: String,
 
     #[has_many]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::Deferred<Vec<Post>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -33,7 +35,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -41,6 +43,16 @@ struct Post {
 
 The `#[has_many]` attribute does not add any columns to the parent's table. The
 relationship is stored entirely in the child's foreign key column (`user_id`).
+
+With an eager field, Toasty loads the children whenever it loads the parent:
+
+```rust,ignore
+#[has_many]
+posts: Vec<Post>,
+```
+
+This behaves like an implicit `.include(User::fields().posts())` on every query
+that returns `User`.
 
 ## Querying children
 
@@ -56,7 +68,7 @@ children:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -66,7 +78,7 @@ children:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -103,7 +115,7 @@ automatically sets the foreign key:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -113,7 +125,7 @@ automatically sets the foreign key:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -143,7 +155,7 @@ relation name on the create builder:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -153,7 +165,7 @@ relation name on the create builder:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -280,9 +292,100 @@ let users = User::filter(
 .await?;
 ```
 
+## Multi-step relations (`via`)
+
+A `HasMany` can reach its target through a path of existing relations instead of
+a single foreign key. Declare it with `via` and a dotted chain of relation
+fields, read left to right from this model. This expresses a relationship that
+exists only *through* a third model — a user has many comments, each comment
+belongs to an article, so a user has many commented articles:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[has_many]
+    comments: toasty::Deferred<Vec<Comment>>,
+
+    // User → comments → article
+    #[has_many(via = comments.article)]
+    commented_articles: toasty::Deferred<Vec<Article>>,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Comment {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[index]
+    user_id: u64,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: toasty::Deferred<User>,
+
+    #[index]
+    article_id: u64,
+
+    #[belongs_to(key = article_id, references = id)]
+    article: toasty::Deferred<Article>,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Article {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+
+    #[has_many]
+    comments: toasty::Deferred<Vec<Comment>>,
+}
+```
+
+The target type is `Article` because the path `comments.article` ends there.
+A `via` relation owns no foreign key — it is derived from the relations it
+traverses — so it needs no `pair`. Each step may be any relation kind, and the
+kinds can be mixed along one path.
+
+Query a `via` relation like any other relation:
+
+```rust,ignore
+// Every article this user has commented on, each listed once.
+let articles = user.commented_articles().exec(&mut db).await?;
+
+// Filtered and ordered like any other relation query.
+let recent = user
+    .commented_articles()
+    .filter(Article::fields().title().eq("Rust"))
+    .exec(&mut db)
+    .await?;
+```
+
+A `via` relation yields **distinct targets**: a target reached through several
+intermediates appears once. A user who comments on the same article twice gets
+that article once.
+
+A `via` relation is **read-only**. You can query, filter, order, and preload it,
+but Toasty generates no `create`, `insert`, or `remove` methods — writing
+through a multi-step path would have to materialize intermediate records. Mutate
+the underlying relations directly instead.
+
+Preload a `via` relation with `.include()` to avoid the N+1 — see
+[Preloading Associations](./preloading-associations.md). Preloading or
+projecting a `via` relation is supported on SQL backends; both are not yet
+available on DynamoDB.
+
 ## What gets generated
 
-For a `User` model with `#[has_many] posts: HasMany<Post>`, Toasty generates:
+For a `User` model with `#[has_many] posts: Deferred<Vec<Post>>`, Toasty generates:
 
 **On the parent instance:**
 

@@ -295,6 +295,20 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
         .visit(&*i.query);
     }
 
+    fn visit_expr_like(&mut self, i: &stmt::ExprLike) {
+        // `.ilike()` is a pass-through to the database's own case-insensitive
+        // LIKE operator. Only PostgreSQL has one (`ILIKE`), so reject a
+        // case-insensitive match on any other backend rather than silently
+        // emitting plain `LIKE`, whose case behavior differs across engines.
+        if i.case_insensitive && !self.capability.native_ilike {
+            self.record(Error::unsupported_feature(
+                "ilike requires a native ILIKE operator, which only PostgreSQL provides; \
+                 use like instead",
+            ));
+        }
+        stmt::visit::visit_expr_like(self, i);
+    }
+
     fn visit_expr_is_superset(&mut self, i: &stmt::ExprIsSuperset) {
         if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
             self.record(Error::unsupported_feature(
@@ -413,6 +427,42 @@ mod tests {
     #[test]
     fn is_superset_non_literal_rhs_accepted_on_sqlite() {
         let expr = is_superset(Expr::arg(1));
+        assert!(verify_expr_with(&Capability::SQLITE, &expr).is_none());
+    }
+
+    #[test]
+    fn ilike_accepted_on_postgresql() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        assert!(verify_expr_with(&Capability::POSTGRESQL, &expr).is_none());
+    }
+
+    #[test]
+    fn ilike_rejected_on_sqlite() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        let err = verify_expr_with(&Capability::SQLITE, &expr)
+            .expect("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
+    }
+
+    #[test]
+    fn ilike_rejected_on_mysql() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        let err = verify_expr_with(&Capability::MYSQL, &expr)
+            .expect("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
+    }
+
+    #[test]
+    fn ilike_rejected_on_dynamodb() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        let err = verify_expr_with(&Capability::DYNAMODB, &expr)
+            .expect("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
+    }
+
+    #[test]
+    fn case_sensitive_like_accepted_on_sqlite() {
+        let expr = Expr::like(Expr::arg(0), Expr::arg(1));
         assert!(verify_expr_with(&Capability::SQLITE, &expr).is_none());
     }
 }

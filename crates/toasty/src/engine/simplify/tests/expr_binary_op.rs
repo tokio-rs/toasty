@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::simplify::Simplify;
-use crate::schema::Register;
+use crate::schema::Model;
 use toasty_core::{
     driver::Capability,
     schema::{Builder, app},

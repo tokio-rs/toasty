@@ -1,4 +1,3 @@
-use super::SnapshotFile;
 use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
@@ -7,7 +6,7 @@ use dialoguer::Select;
 use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
 use std::fs;
-use toasty::migration::{History, HistoryEntry};
+use toasty::migration::{self, History, HistoryEntry, Snapshot};
 use toasty::{
     Db,
     schema::{
@@ -50,9 +49,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
             .tables()
             .iter()
             .filter_map(|item| match item {
-                diff::TablesItem::DropTable(table) if !ignored_tables.contains(&table.id) => {
-                    Some(*table)
-                }
+                diff::Table::Drop(table) if !ignored_tables.contains(&table.id) => Some(*table),
                 _ => None,
             })
             .collect();
@@ -61,7 +58,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
             .tables()
             .iter()
             .filter_map(|item| match item {
-                diff::TablesItem::CreateTable(table) => Some(*table),
+                diff::Table::Create(table) => Some(*table),
                 _ => None,
             })
             .collect();
@@ -98,7 +95,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
 
         // Check for column and index renames within altered tables
         for item in diff.tables().iter() {
-            if let diff::TablesItem::AlterTable {
+            if let diff::Table::Alter {
                 previous,
                 next: _,
                 columns,
@@ -109,7 +106,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let dropped_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        diff::ColumnsItem::DropColumn(column)
+                        diff::Column::Drop(column)
                             if !ignored_columns
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&column.id)) =>
@@ -123,7 +120,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let added_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        diff::ColumnsItem::AddColumn(column) => Some(*column),
+                        diff::Column::Add(column) => Some(*column),
                         _ => None,
                     })
                     .collect();
@@ -167,7 +164,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let dropped_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        diff::IndicesItem::DropIndex(index)
+                        diff::Index::Drop(index)
                             if !ignored_indices
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&index.id)) =>
@@ -181,7 +178,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
                 let added_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        diff::IndicesItem::CreateIndex(index) => Some(*index),
+                        diff::Index::Create(index) => Some(*index),
                         _ => None,
                     })
                     .collect();
@@ -250,9 +247,7 @@ impl GenerateCommand {
         let previous_snapshot = history
             .entries()
             .last()
-            .map(|f| {
-                SnapshotFile::load(config.migration.get_snapshots_dir().join(&f.snapshot_name))
-            })
+            .map(|f| Snapshot::load(config.migration.get_snapshots_dir().join(&f.snapshot_name)))
             .transpose()?;
         let previous_schema = previous_snapshot
             .map(|snapshot| snapshot.schema)
@@ -261,9 +256,9 @@ impl GenerateCommand {
         let schema = toasty::schema::db::Schema::clone(&db.schema().db);
 
         let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
-        let diff = diff::Schema::from(&previous_schema, &schema, &rename_hints);
-
-        if diff.is_empty() {
+        let Some(generated) =
+            migration::generate(db.driver(), &previous_schema, &schema, &rename_hints)
+        else {
             println!(
                 "  {}",
                 style("The current schema matches the previous snapshot. No migration needed.")
@@ -272,9 +267,8 @@ impl GenerateCommand {
             );
             println!();
             return Ok(());
-        }
+        };
 
-        let snapshot = SnapshotFile::new(schema.clone());
         let migration_prefix = match config.migration.prefix_style {
             crate::MigrationPrefixStyle::Sequential => {
                 format!("{:04}", history.next_migration_number())
@@ -293,8 +287,6 @@ impl GenerateCommand {
         );
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
 
-        let migration = db.driver().generate_migration(&diff);
-
         history.add_entry(HistoryEntry {
             // Some databases only supported signed 64-bit integers.
             id: rand::rng().random_range(0..i64::MAX) as u64,
@@ -303,6 +295,7 @@ impl GenerateCommand {
             checksum: None,
         });
 
+        let migration = generated.migration;
         let Migration::Sql(sql) = migration;
         std::fs::write(&migration_path, format!("{sql}\n"))?;
         println!(
@@ -311,7 +304,7 @@ impl GenerateCommand {
             style(format!("Created migration file: {}", migration_name)).dim()
         );
 
-        snapshot.save(&snapshot_path)?;
+        generated.snapshot.save(&snapshot_path)?;
         println!(
             "  {} {}",
             style("✓").green().bold(),

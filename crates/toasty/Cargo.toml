@@ -1,6 +1,6 @@
 [package]
 name = "toasty"
-version = "0.6.1"
+version = "0.7.0"
 description = "An async ORM for Rust supporting SQL and NoSQL databases"
 authors.workspace = true
 edition.workspace = true
@@ -16,9 +16,11 @@ documentation = "https://docs.rs/toasty"
 [features]
 default = []
 dynamodb = ["dep:toasty-driver-dynamodb"]
+migration = ["dep:serde", "dep:toml", "dep:toml_edit", "toasty-core/serde"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
+turso = ["dep:toasty-driver-turso"]
 rust_decimal = [
 	"dep:rust_decimal",
 	"toasty-core/rust_decimal",
@@ -49,6 +51,7 @@ toasty-driver-dynamodb = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
+toasty-driver-turso = { workspace = true, optional = true }
 serde_core = { version = "1.0.228", optional = true }
 serde_json = { workspace = true, optional = true }
 
@@ -64,9 +67,10 @@ uuid.workspace = true
 indexmap.workspace = true
 index_vec.workspace = true
 inventory.workspace = true
-serde = { workspace = true }
+serde = { workspace = true, optional = true }
 tokio.workspace = true
-toml.workspace = true
+toml = { workspace = true, optional = true }
+toml_edit = { workspace = true, features = ["serde"], optional = true }
 tracing.workspace = true
 url.workspace = true
 

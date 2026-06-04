@@ -1,0 +1,8 @@
+error[E0277]: the trait bound `toasty::stmt::Path<User, toasty::stmt::List<i64>>: From<toasty::stmt::Path<User, toasty::stmt::List<std::string::String>>>` is not satisfied
+  --> tests/ui/has_many_via_scalar_terminal_type_mismatch.rs:16:39
+   |
+16 |     #[has_many(via = comments.article.title)]
+   |                                       ^^^^^ unsatisfied trait bound
+   |
+   = help: the trait `From<toasty::stmt::Path<User, toasty::stmt::List<std::string::String>>>` is not implemented for `toasty::stmt::Path<User, toasty::stmt::List<i64>>`
+   = note: required for `toasty::stmt::Path<User, toasty::stmt::List<std::string::String>>` to implement `Into<toasty::stmt::Path<User, toasty::stmt::List<i64>>>`

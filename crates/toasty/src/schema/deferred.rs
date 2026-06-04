@@ -1,6 +1,5 @@
-use super::{Field, Load};
-use crate::Statement;
-use crate::stmt::{self, Expr, IntoExpr, IntoStatement};
+use super::{Field, Load, lazy_slot};
+use crate::stmt::{self, Expr, IntoExpr};
 use toasty_core::schema::app::ModelSet;
 
 use std::fmt;
@@ -9,32 +8,29 @@ use std::fmt;
 ///
 /// `Deferred<T>` wraps a `T` whose underlying column is excluded from default
 /// queries. After a normal load the value is unloaded and accessing it via
-/// [`get`](Deferred::get) panics. Fetch the value with the per-field
-/// `.exec()` accessor on the record.
+/// [`get`](Deferred::get) panics. Use `.include()` on the query to load the
+/// value.
 ///
 /// `Deferred<Option<T>>` is supported when the column is nullable.
-pub struct Deferred<T> {
-    value: Option<T>,
-}
-
-/// Marker trait identifying a deferred-load field wrapper, exposing the wrapped
-/// value type via [`Inner`](Defer::Inner).
 ///
-/// Generated code references `<F as Defer>::Inner` to recover the user-facing
-/// value type for fields annotated with `#[deferred]`. The trait is implemented
-/// only for [`Deferred<T>`], so applying `#[deferred]` to a field whose type is
-/// not `Deferred<T>` (after type aliases are resolved) fails to compile.
-#[diagnostic::on_unimplemented(
-    message = "`#[deferred]` requires the field to be wrapped in `Deferred<T>`",
-    label = "expected `Deferred<T>`, found `{Self}`"
-)]
-pub trait Defer {
-    /// The wrapped value type.
-    type Inner;
-}
-
-impl<T> Defer for Deferred<T> {
-    type Inner = T;
+/// # Serde
+///
+/// With the `serde` feature a loaded `Deferred<T>` serializes transparently as
+/// its inner `T`, and any present value deserializes back to the loaded state.
+/// The unloaded state has no transparent encoding of its own — skip it on the
+/// way out and default it on the way in:
+///
+/// ```ignore
+/// #[serde(skip_serializing_if = "Deferred::is_unloaded", default)]
+/// notes: Deferred<Option<String>>,
+/// ```
+///
+/// Serializing an unloaded field without `skip_serializing_if` emits `null`,
+/// which does not round-trip (it reads back as loaded), so the annotation is
+/// expected on every deferred field.
+#[derive(Clone)]
+pub struct Deferred<T> {
+    value: Option<Box<T>>,
 }
 
 impl<T> Deferred<T> {
@@ -65,28 +61,8 @@ impl<T> Deferred<T> {
     /// Panics if the field has not been loaded.
     #[track_caller]
     pub fn into_inner(self) -> T {
-        self.value.expect("deferred field not loaded")
+        *self.value.expect("deferred field not loaded")
     }
-}
-
-/// Build a `Statement<T>` from a PK-filtered single-row query and the
-/// model-field index of the deferred field. Rewrites the statement's
-/// `RETURNING` clause to project just that column.
-///
-/// Used by generated code for the per-field accessor on `#[deferred]`
-/// primitives. The model record itself is never decoded, which keeps the
-/// loaded state of nullable fields (`Deferred<Option<T>>`) unambiguous
-/// regardless of whether the column value is `NULL`.
-#[doc(hidden)]
-pub fn build_deferred_load<T, S: IntoStatement>(stmt: S, field_index: usize) -> Statement<T> {
-    let mut untyped = stmt.into_statement().into_untyped();
-    *untyped.returning_mut_unwrap() = toasty_core::stmt::Returning::Project(
-        toasty_core::stmt::Expr::Reference(toasty_core::stmt::ExprReference::Field {
-            nesting: 0,
-            index: field_index,
-        }),
-    );
-    Statement::from_untyped_stmt(untyped)
 }
 
 impl<T> Default for Deferred<T> {
@@ -99,10 +75,12 @@ impl<T> From<T> for Deferred<T> {
     /// Constructs a loaded `Deferred<T>` from a value.
     ///
     /// Used in struct literals for `#[derive(Embed)]` types that contain
-    /// `#[deferred]` sub-fields, where the user supplies the inner value
+    /// deferred sub-fields, where the user supplies the inner value
     /// directly: `Metadata { author, notes: "...".into() }`.
     fn from(value: T) -> Self {
-        Self { value: Some(value) }
+        Self {
+            value: Some(Box::new(value)),
+        }
     }
 }
 
@@ -143,19 +121,13 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
     fn load(value: toasty_core::stmt::Value) -> crate::Result<Self> {
         // The lowering wraps a loaded deferred field in a 1-element record
         // and emits a bare Null when unloaded, so the two states are
-        // distinguishable even when the inner column value is NULL (i.e. the
+        // distinguishable even when the inner value is NULL (i.e. the
         // `Deferred<Option<T>>` case).
-        match value {
-            toasty_core::stmt::Value::Null => Ok(Self { value: None }),
-            toasty_core::stmt::Value::Record(record) if record.fields.len() == 1 => {
-                let mut iter = record.fields.into_iter();
-                Ok(Self {
-                    value: Some(T::load(iter.next().unwrap())?),
-                })
-            }
-            value => Err(toasty_core::Error::from_args(format_args!(
-                "deferred field decoder expected Null or single-field Record, got {value:?}"
-            ))),
+        match lazy_slot::decode(value, "deferred field", T::load)? {
+            lazy_slot::LazySlot::Unloaded => Ok(Self { value: None }),
+            lazy_slot::LazySlot::Loaded(value) => Ok(Self {
+                value: Some(Box::new(value)),
+            }),
         }
     }
 
@@ -167,30 +139,28 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
         // Updates send the assigned value back unwrapped, unlike the SELECT
         // lowering which wraps a loaded deferred field in a 1-element record
         // to distinguish it from the unloaded case.
-        target.value = Some(T::load(value)?);
+        target.value = Some(Box::new(T::load(value)?));
         Ok(())
     }
 }
 
-impl<T: Field<Output = T>> Field for Deferred<T> {
+impl<T: Field> Field for Deferred<T> {
     type ExprTarget = T::ExprTarget;
     type Path<Origin> = T::Path<Origin>;
     type ListPath<Origin> = T::ListPath<Origin>;
     type Update<'a> = T::Update<'a>;
     type Inner = T::Inner;
     const NULLABLE: bool = T::NULLABLE;
+    const DEFERRED: bool = true;
 
-    fn new_path<Origin>(_path: stmt::Path<Origin, T::ExprTarget>) -> Self::Path<Origin> {
-        // Deferred fields use a generated accessor that emits a path on the
-        // inner type T directly (see `expand_primitive_field_method`'s
-        // deferred arm). This impl is unreachable through normal codegen.
-        unreachable!("Deferred::new_path should not be called directly")
+    fn new_path<Origin>(path: stmt::Path<Origin, T::ExprTarget>) -> Self::Path<Origin> {
+        T::new_path(path)
     }
 
     fn new_list_path<Origin>(
-        _path: stmt::Path<Origin, stmt::List<Self>>,
+        path: stmt::Path<Origin, stmt::List<Self::ExprTarget>>,
     ) -> Self::ListPath<Origin> {
-        unreachable!("Deferred::new_list_path should not be called directly")
+        T::new_list_path(path)
     }
 
     fn new_update<'a>(
@@ -225,6 +195,12 @@ impl<T: fmt::Debug> fmt::Debug for Deferred<T> {
     }
 }
 
+/// Serializes transparently: a loaded `Deferred<T>` encodes exactly as the
+/// inner `T`, an unloaded one as `null`.
+///
+/// The unloaded `null` is not a distinct marker — a loaded `Deferred<Option<T>>`
+/// holding `None` also encodes as `null` — so unloaded fields are meant to be
+/// skipped rather than serialized. See the type-level docs.
 #[cfg(feature = "serde")]
 impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -232,5 +208,18 @@ impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
         S: serde_core::Serializer,
     {
         self.value.serialize(serializer)
+    }
+}
+
+/// Deserializes any present value — including `null` — as loaded, mirroring the
+/// transparent [`Serialize`](serde_core::Serialize) impl above. An absent field
+/// is left unloaded, but only via `#[serde(default)]`; see the type-level docs.
+#[cfg(feature = "serde")]
+impl<'de, T: serde_core::Deserialize<'de>> serde_core::Deserialize<'de> for Deferred<T> {
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde_core::Deserializer<'de>,
+    {
+        Ok(Self::from(T::deserialize(deserializer)?))
     }
 }

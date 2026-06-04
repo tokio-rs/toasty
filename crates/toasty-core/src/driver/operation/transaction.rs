@@ -25,6 +25,51 @@ pub enum IsolationLevel {
     Serializable,
 }
 
+/// How a transaction acquires write locks.
+///
+/// Orthogonal to [`IsolationLevel`]: an isolation level describes *what
+/// anomalies* a transaction can observe; a mode describes *when* the
+/// transaction acquires its locks.
+///
+/// Only SQLite (and SQLite-compatible engines) currently expose this
+/// dimension to clients:
+///
+/// * [`Default`](Self::Default) → whatever the driver picks. For SQLite
+///   that is `BEGIN` (DEFERRED) today; for a future driver it may not
+///   be — e.g. Turso under MVCC plans to default to `BEGIN CONCURRENT`.
+/// * [`Deferred`](Self::Deferred) → `BEGIN` (DEFERRED): explicit
+///   deferred locking. Identical to `Default` on plain SQLite; on a
+///   driver whose default is *not* deferred (Turso MVCC), this is how
+///   the caller opts out of that default.
+/// * [`Immediate`](Self::Immediate) → `BEGIN IMMEDIATE`: write lock
+///   acquired up front, so a later write inside the transaction cannot
+///   fail with `SQLITE_BUSY`.
+/// * [`Exclusive`](Self::Exclusive) → `BEGIN EXCLUSIVE`: exclusive lock
+///   held for the lifetime of the transaction; no other connection —
+///   reader or writer — can make progress against the database file.
+///
+/// Drivers that do not implement a given mode return
+/// [`Error::unsupported_feature`](crate::Error::unsupported_feature) when
+/// the transaction starts. Future drivers may extend this enum (e.g. a
+/// Turso `Concurrent` variant for `BEGIN CONCURRENT` under MVCC).
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub enum TransactionMode {
+    /// The driver's natural default. May differ from
+    /// [`Deferred`](Self::Deferred) on drivers that prefer a different
+    /// locking strategy (e.g. Turso MVCC → `BEGIN CONCURRENT`).
+    #[default]
+    Default,
+    /// Explicit deferred locking. SQLite → `BEGIN` (DEFERRED). Use this
+    /// to override a driver whose `Default` is not deferred.
+    Deferred,
+    /// Acquire a write lock when the transaction begins. SQLite →
+    /// `BEGIN IMMEDIATE`. Rejected by drivers without an equivalent.
+    Immediate,
+    /// Hold an exclusive lock for the entire transaction. SQLite →
+    /// `BEGIN EXCLUSIVE`. Rejected by drivers without an equivalent.
+    Exclusive,
+}
+
 /// A transaction lifecycle operation.
 ///
 /// Covers the full transaction lifecycle: begin, commit, rollback, and
@@ -46,13 +91,16 @@ pub enum IsolationLevel {
 pub enum Transaction {
     /// Start a transaction with optional configuration.
     ///
-    /// When `isolation` is `None` and `read_only` is `false`, the database's
-    /// default isolation level and read-write mode are used.
+    /// When `isolation` is `None`, `read_only` is `false`, and `mode` is
+    /// [`TransactionMode::Default`], the database's natural defaults are
+    /// used.
     Start {
         /// Optional isolation level. `None` uses the database default.
         isolation: Option<IsolationLevel>,
         /// When `true`, the transaction is read-only.
         read_only: bool,
+        /// Lock-acquisition mode. See [`TransactionMode`].
+        mode: TransactionMode,
     },
 
     /// Commit a transaction
@@ -77,6 +125,7 @@ impl Transaction {
         Self::Start {
             isolation: None,
             read_only: false,
+            mode: TransactionMode::Default,
         }
     }
 }

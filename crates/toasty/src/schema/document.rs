@@ -1,4 +1,4 @@
-use super::{Embed, Register};
+use super::{Embed, Field};
 use crate::stmt::List;
 use toasty_core::schema::app::ModelSet;
 
@@ -20,6 +20,12 @@ pub trait Document {
     /// Whether the field accepts `None` / `NULL`.
     const NULLABLE: bool = false;
 
+    /// Whether the field is lazily loaded. A `#[document]` collection is
+    /// always loaded eagerly, so this is never `true`; it exists to mirror
+    /// [`Field::DEFERRED`](super::Field::DEFERRED) so the derive macro can
+    /// resolve both traits through one code path.
+    const DEFERRED: bool = false;
+
     /// Returns the app-level field type for this document field.
     ///
     /// The element type is left as [`stmt::Type::Model`](toasty_core::stmt::Type::Model);
@@ -35,7 +41,7 @@ pub trait Document {
     fn register(model_set: &mut ModelSet);
 }
 
-impl<T: Embed> Document for Vec<T> {
+impl<T: Embed + Field> Document for Vec<T> {
     type ExprTarget = List<T>;
 
     fn field_ty(
@@ -43,7 +49,7 @@ impl<T: Embed> Document for Vec<T> {
     ) -> toasty_core::schema::app::FieldTy {
         toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
             ty: toasty_core::stmt::Type::List(Box::new(toasty_core::stmt::Type::Model(
-                <T as Register>::id(),
+                <T as Embed>::id(),
             ))),
             storage_ty,
             serialize: None,
@@ -51,6 +57,6 @@ impl<T: Embed> Document for Vec<T> {
     }
 
     fn register(model_set: &mut ModelSet) {
-        <T as Register>::register(model_set);
+        <T as Field>::register(model_set);
     }
 }

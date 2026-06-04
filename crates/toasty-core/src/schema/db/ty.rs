@@ -187,6 +187,26 @@ impl Type {
         }
     }
 
+    pub(crate) fn from_app_column(
+        ty: &stmt::Type,
+        hint: Option<&Type>,
+        db: &driver::Capability,
+        auto_increment: bool,
+    ) -> Result<Type> {
+        let mut storage_ty = Self::from_app(ty, hint, &db.storage_types)?;
+
+        if auto_increment && let Some(max) = db.max_auto_increment_integer_width {
+            match &mut storage_ty {
+                Type::Integer(size) | Type::UnsignedInteger(size) if *size > max => {
+                    *size = max;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(storage_ty)
+    }
+
     /// Determines the [`stmt::Type`] closest to this [`db::Type`] that should be used
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
@@ -198,6 +218,10 @@ impl Type {
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
+            // Bool key/index fields stored as 1-byte integer (e.g. DynamoDB N("1"/"0")).
+            // The engine casts Bool <-> I8 transparently via encode_column /
+            // map_table_column_to_model; the driver handles them as plain numbers.
+            (Self::Integer(1), stmt::Type::Bool) => stmt::Type::I8,
             _ => ty.clone(),
         }
     }

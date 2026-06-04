@@ -1,79 +1,27 @@
 use super::{Load, Model};
-use crate::stmt::{IntoExpr, IntoInsert, List, Path};
 
 use toasty_core::schema::Name;
-use toasty_core::schema::app::{FieldId, FieldTy, ForeignKey};
+use toasty_core::schema::app::{FieldId, FieldTy};
 use toasty_core::stmt;
 
-/// Describes how a model participates in associations.
+/// A Rust field type that represents a `#[has_many]` relation.
 ///
-/// This trait is implemented by `#[derive(Model)]` and provides the associated
-/// types that the generated `HasMany`, `HasOne`, and `BelongsTo` wrappers use
-/// to construct query builders, create builders, and field accessors for
-/// the relation target.
-///
-/// Users do not implement this trait manually.
-pub trait Relation: Load<Output = Self> {
-    /// The target model
-    type Model: Model;
+/// Implemented by [`Vec<M>`](Vec) (eager) and
+/// [`Deferred<Vec<M>>`](super::Deferred) (lazy) where `M: Model`. The set of
+/// impls is the source of truth for which Rust shapes are valid as a
+/// has-many field: anything outside those two combinations does not satisfy
+/// the trait.
+pub trait RelationManyField: Load<Output = Self> {
+    /// The target model that this field references.
+    type Target: Model;
 
-    /// The target expression (e.g. `Option<Model>`)
-    type Expr;
+    /// Whether the field stores its value in a deferred load slot.
+    const DEFERRED: bool;
 
-    /// The query builder type for querying this relation's target.
-    type Query;
+    /// Reloads this relation field from a returned value.
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
 
-    /// Create builder type for this relation's target model
-    type Create: Default + IntoInsert<Model = Self::Model> + IntoExpr<Self::Model>;
-
-    /// HasMany relation type
-    type Many;
-
-    /// The field accessor type used when this model appears as the "many" side
-    /// of a has-many relation, parameterized by the origin model.
-    type ManyField<Origin>;
-
-    /// The has-one relation wrapper type for this model.
-    type One;
-
-    /// The field accessor type used when this model appears as the "one" side
-    /// of a has-one relation, parameterized by the origin model.
-    type OneField<Origin>;
-
-    /// The optional has-one relation wrapper type. Used when the foreign key
-    /// is nullable, making the association optional.
-    type OptionOne;
-
-    /// Return a fresh, default-initialized create builder.
-    fn new_create() -> Self::Create {
-        Self::Create::default()
-    }
-
-    /// Construct a `ManyField` from a path targeting a list of the model.
-    fn new_many_field<Origin>(path: Path<Origin, List<Self::Model>>) -> Self::ManyField<Origin>;
-
-    /// Map a field name string to its [`FieldId`].
-    ///
-    /// Panics if `name` does not match any field on the model.
-    fn field_name_to_id(name: &str) -> FieldId;
-
-    /// Returns `true` if this relation target is nullable (i.e., wrapped in
-    /// `Option`). The default is `false`.
-    fn nullable() -> bool {
-        false
-    }
-
-    /// Build the [`FieldTy`] for a `BelongsTo` relation wrapper, given the
-    /// foreign key resolved from the field's `#[belongs_to(...)]` attribute.
-    ///
-    /// Only [`BelongsTo`](super::BelongsTo) overrides this; the default
-    /// panics so that misuse (e.g. applying `#[belongs_to]` to a field whose
-    /// type is not a `BelongsTo<T>`) fails loudly.
-    fn belongs_to_field_ty(_foreign_key: ForeignKey) -> FieldTy {
-        unimplemented!("not a BelongsTo relation wrapper")
-    }
-
-    /// Build the [`FieldTy`] for a `HasMany` relation wrapper, given the
+    /// Build the [`FieldTy`] for a `HasMany` relation field, given the
     /// singular name derived from the field identifier and an optional
     /// paired `BelongsTo` field on the target model resolved from
     /// `#[has_many(pair = <field>)]`. When `None`, the linker selects the
@@ -83,28 +31,9 @@ pub trait Relation: Load<Output = Self> {
     /// `via` carries the fully resolved [`stmt::Path`] of a
     /// `#[has_many(via = a.b)]` multi-step relation, rooted at the declaring
     /// model. A `via` relation has no pair.
-    ///
-    /// Only [`HasMany`](super::HasMany) overrides this.
-    fn has_many_field_ty(
-        _singular: Name,
-        _pair: Option<FieldId>,
-        _via: Option<stmt::Path>,
-    ) -> FieldTy {
-        unimplemented!("not a HasMany relation wrapper")
-    }
-
-    /// Build the [`FieldTy`] for a `HasOne` relation wrapper, given an
-    /// optional paired `BelongsTo` field on the target model resolved
-    /// from `#[has_one(pair = <field>)]`. When `None`, the linker selects
-    /// the pair by searching the target for a unique `BelongsTo` back to
-    /// the source.
-    ///
-    /// `via` carries the fully resolved [`stmt::Path`] of a
-    /// `#[has_one(via = a.b)]` multi-step relation, rooted at the declaring
-    /// model. A `via` relation has no pair.
-    ///
-    /// Only [`HasOne`](super::HasOne) overrides this.
-    fn has_one_field_ty(_pair: Option<FieldId>, _via: Option<stmt::Path>) -> FieldTy {
-        unimplemented!("not a HasOne relation wrapper")
-    }
+    fn many_relation_field_ty(
+        singular: Name,
+        pair: Option<FieldId>,
+        via: Option<stmt::Path>,
+    ) -> FieldTy;
 }

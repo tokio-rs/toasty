@@ -60,9 +60,18 @@ impl Expand<'_> {
             }
         };
 
+        // `id()` lives on `Model` for root models and on `Embed` for embedded
+        // structs; qualify the call so it resolves regardless of which trait
+        // impl this `schema()` body is emitted into.
+        let id_trait = match &self.model.kind {
+            ModelKind::Root(_) => quote!(#toasty::Model),
+            ModelKind::EmbeddedStruct(_) => quote!(#toasty::Embed),
+            ModelKind::EmbeddedEnum(_) => unreachable!(),
+        };
+
         quote! {
             fn schema() -> #toasty::core::schema::app::Model {
-                let id = #model_ident::id();
+                let id = <#model_ident as #id_trait>::id();
 
                 #model
             }
@@ -77,6 +86,7 @@ impl Expand<'_> {
             let index_tokenized = util::int(index);
             let field_ty;
             let nullable;
+            let deferred;
 
             let field_named = match &self.model.kind {
                 ModelKind::Root(_) => true,
@@ -120,9 +130,10 @@ impl Expand<'_> {
 
                     // `#[document]` fields resolve through `Document`;
                     // the rest go through `Field`. Both traits expose the
-                    // same `NULLABLE` / `field_ty` surface.
+                    // same `NULLABLE` / `DEFERRED` / `field_ty` surface.
                     let trait_ident = field.trait_ident();
                     nullable = quote!(<#ty as #toasty::#trait_ident>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::#trait_ident>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::#trait_ident>::field_ty(#storage_ty));
                 }
                 FieldTy::BelongsTo(rel) => {
@@ -138,13 +149,17 @@ impl Expand<'_> {
                                     model: #model_ident::id(),
                                     index: #source,
                                 },
-                                target: <#ty as #toasty::Relation>::field_name_to_id(#target),
+                                target: {
+                                    type __RelationTarget = <#ty as #toasty::RelationOneField>::Target;
+                                    <__RelationTarget as #toasty::Model>::field_name_to_id(#target)
+                                },
                             }
                         }
                     });
 
-                    nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::belongs_to_field_ty(
+                    nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::RelationOneField>::belongs_to_relation_field_ty(
                         #toasty::core::schema::app::ForeignKey {
                             fields: vec![ #( #fk_fields ),* ],
                         },
@@ -153,19 +168,51 @@ impl Expand<'_> {
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     let singular_name = expand_name(toasty, &rel.singular);
-                    let pair = expand_pair(toasty, ty, rel.pair.as_ref());
-                    let via = expand_via(toasty, model_ident, rel.via.as_ref());
 
-                    nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_many_field_ty(#singular_name, #pair, #via));
+                    if let Some(segments) = &rel.via {
+                        // A `via` field routes through `ViaTarget`, keyed on
+                        // the terminal element type, so it works whether the
+                        // terminal is a model or a scalar — without requiring
+                        // `RelationManyField` (which needs the element to be a
+                        // model).
+                        let terminal_ty =
+                            quote!(#toasty::List<<#ty as #toasty::ViaManyField>::Target>);
+                        let full_path =
+                            expand_via_path(toasty, model_ident, segments, &terminal_ty);
+
+                        // A has-many collection is always present, never null.
+                        nullable = quote!(false);
+                        deferred = quote!(<#ty as #toasty::ViaManyField>::DEFERRED);
+                        field_ty = quote!(
+                            <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::via_field_ty(
+                                #singular_name, #full_path,
+                            )
+                        );
+                    } else {
+                        let pair = expand_pair(toasty, quote!(#toasty::RelationManyField), ty, rel.pair.as_ref());
+
+                        // A has-many collection is always present, never null.
+                        nullable = quote!(false);
+                        deferred = quote!(<#ty as #toasty::RelationManyField>::DEFERRED);
+                        field_ty = quote!(<#ty as #toasty::RelationManyField>::many_relation_field_ty(#singular_name, #pair, None));
+                    }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
-                    let pair = expand_pair(toasty, ty, rel.pair.as_ref());
-                    let via = expand_via(toasty, model_ident, rel.via.as_ref());
+                    let pair = expand_pair(toasty, quote!(#toasty::RelationOneField), ty, rel.pair.as_ref());
+                    // A has-one via reaches a single model; pin the path's
+                    // terminal to that model so a mismatched declaration is a
+                    // compile error rather than a runtime load failure.
+                    let via = expand_via(
+                        toasty,
+                        model_ident,
+                        rel.via.as_ref(),
+                        &quote!(<#ty as #toasty::RelationOneField>::Target),
+                    );
 
-                    nullable = quote!(<#ty as #toasty::Relation>::nullable());
-                    field_ty = quote!(<#ty as #toasty::Relation>::has_one_field_ty(#pair, #via));
+                    nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::RelationOneField>::has_one_relation_field_ty(#pair, #via));
                 }
             }
 
@@ -191,7 +238,6 @@ impl Expand<'_> {
             };
 
             let versionable = field.attrs.versionable;
-            let deferred = field.attrs.deferred;
 
             quote! {
                 #toasty::core::schema::app::Field {
@@ -394,12 +440,42 @@ impl Expand<'_> {
         quote! { #( #checks )* }
     }
 
+    /// Emit a compile-time obligation that every `#[version]` field's Rust type
+    /// implements [`Version`].
+    ///
+    /// The bare `u64` type satisfies the bound directly; tuple-newtype embeds
+    /// satisfy it via the blanket in `codegen_support::version`. Any other type
+    /// produces a compiler error with the `#[diagnostic::on_unimplemented]`
+    /// message on [`Version`].
+    pub(super) fn expand_version_compat_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            if !field.attrs.versionable {
+                return None;
+            }
+
+            let FieldTy::Primitive(ty) = &field.ty else {
+                return None;
+            };
+
+            Some(quote_spanned! { ty.span()=>
+                const _: () = {
+                    fn _check<__T: #toasty::Version>() {}
+                    let _ = _check::<#ty>;
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
     /// Generate calls to register all models reachable from this model's fields.
     ///
     /// For primitive fields, no call is emitted (the default `Field::register`
     /// is a no-op). For embedded fields, `<Type as Field>::register` is called.
-    /// For relation fields (BelongsTo, HasMany, HasOne), `<TargetType as
-    /// Register>::register` is called directly.
+    /// For relation fields (BelongsTo, HasMany, HasOne), `<TargetModel as
+    /// Model>::register` is called directly.
     pub(super) fn expand_field_register_calls(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
 
@@ -418,19 +494,26 @@ impl Expand<'_> {
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);
                     }
+                }
+                FieldTy::HasMany(rel) if rel.via.is_some() => {
+                    // A via relation reaches its terminal through existing
+                    // relation fields, each of which registers the models it
+                    // traverses; the terminal of a scalar via is not a model at
+                    // all. So a via field registers nothing of its own.
+                    TokenStream::new()
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationManyField>::Target as #toasty::Model>::register(model_set);
                     }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;
                     quote! {
-                        <<#ty as #toasty::Relation>::Model as #toasty::Register>::register(model_set);
+                        <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);
                     }
                 }
             })
@@ -453,19 +536,25 @@ pub(super) fn expand_name(toasty: &TokenStream, name: &Name) -> TokenStream {
 
 fn expand_pair(
     toasty: &TokenStream,
+    field_trait: TokenStream,
     target_ty: &syn::Type,
     pair: Option<&syn::Ident>,
 ) -> TokenStream {
     match pair {
         Some(ident) => {
             let name = ident.to_string();
-            quote! { Some(<#target_ty as #toasty::Relation>::field_name_to_id(#name)) }
+            quote! {
+                Some({
+                    type __RelationTarget = <#target_ty as #field_trait>::Target;
+                    <__RelationTarget as #toasty::Model>::field_name_to_id(#name)
+                })
+            }
         }
         None => quote! { None },
     }
 }
 
-/// Emit the `via` argument for `has_many_field_ty` / `has_one_field_ty`: a
+/// Emit the `via` argument for `many_relation_field_ty` / `has_one_relation_field_ty`: a
 /// fully resolved [`stmt::Path`] built by chaining the named segments onto the
 /// model's `Fields` struct (e.g. `User::fields().comments().article()`).
 ///
@@ -479,21 +568,66 @@ fn expand_via(
     toasty: &TokenStream,
     model_ident: &syn::Ident,
     via: Option<&Vec<syn::Ident>>,
+    terminal_ty: &TokenStream,
 ) -> TokenStream {
     let Some(segments) = via else {
         return quote! { None };
     };
 
+    let path = expand_via_path(toasty, model_ident, segments, terminal_ty);
+    quote! { Some(#path) }
+}
+
+/// Emit the fully-resolved [`stmt::Path`] for a `via` relation: chain the named
+/// segments onto the model's `Fields` struct (e.g.
+/// `User::fields().comments().article()`) and convert to an `stmt::Path`.
+///
+/// Resolution happens at Rust-compile time — a misspelled segment surfaces as
+/// "no method named `foo` found", and an intermediate that is not navigable
+/// fails to chain, so only the terminal segment may be a scalar field.
+///
+/// `terminal_ty` is the type the path's terminal must reach, derived from the
+/// declared field (e.g. `List<i64>` for `Vec<i64>`). Pinning the typed path's
+/// second parameter to it — rather than leaving it inferred — is what rejects a
+/// field whose declared element type disagrees with the path
+/// (`#[has_many(via = a.b.title)] x: Vec<i64>` where `title` is a `String`), so
+/// the mismatch is a compile error here instead of a runtime load failure.
+pub(super) fn expand_via_path(
+    toasty: &TokenStream,
+    model_ident: &syn::Ident,
+    segments: &[syn::Ident],
+    terminal_ty: &TokenStream,
+) -> TokenStream {
     let mut chain = quote! { #model_ident::fields() };
     for segment in segments {
         chain = quote_spanned! { segment.span()=> #chain.#segment() };
     }
 
-    quote! {
-        Some({
-            let __via_typed: #toasty::Path<#model_ident, _> = (#chain).into();
+    // Pin the typed path's terminal to `terminal_ty`. When it disagrees with
+    // the path, the `.into()` has no matching conversion. Point that failure at
+    // the offending path step rather than the derive:
+    //
+    // - Bind the chain to a local first, so the conversion's receiver is that
+    //   local (emitted at the terminal span) rather than the chain expression,
+    //   whose root `Model::fields()` carries the derive call site.
+    // - Span the whole target annotation — including the interpolated
+    //   `terminal_ty`, which `quote_spanned!` would otherwise leave at the
+    //   derive — to the terminal segment via `respan`.
+    let span = segments
+        .last()
+        .map_or_else(proc_macro2::Span::call_site, syn::Ident::span);
+    let typed_path_ty = util::respan(quote!(#toasty::Path<#model_ident, #terminal_ty>), span);
+    quote_spanned! { span=>
+        {
+            let __via_chain = #chain;
+            // The chain terminal is a `FieldList`/`ManyField` for a relation or
+            // model via-of-via terminal (a real conversion to `Path`), but
+            // already a `Path` for a scalar terminal, where `.into()` is
+            // identity — allow that.
+            #[allow(clippy::useless_conversion)]
+            let __via_typed: #typed_path_ty = __via_chain.into();
             let __via_untyped: #toasty::core::stmt::Path = __via_typed.into();
             __via_untyped
-        })
+        }
     }
 }

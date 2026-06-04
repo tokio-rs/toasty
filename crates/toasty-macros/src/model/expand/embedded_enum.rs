@@ -39,7 +39,7 @@ impl Expand<'_> {
                     p.into_stmt()
                 };
                 let variant_id = #toasty::core::schema::app::VariantId {
-                    model: <#model_ident as #toasty::Register>::id(),
+                    model: <#model_ident as #toasty::Embed>::id(),
                     index: #variant_idx,
                 };
                 #toasty::stmt::Expr::from_untyped(
@@ -166,7 +166,7 @@ impl Expand<'_> {
 
                         fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
                             let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Register>::id(),
+                                model: <#model_ident as #toasty::Embed>::id(),
                                 index: #variant_idx,
                             };
                             self.parent_path().into_variant(variant_id)
@@ -181,7 +181,7 @@ impl Expand<'_> {
                                 p.into_stmt()
                             };
                             let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Register>::id(),
+                                model: <#model_ident as #toasty::Embed>::id(),
                                 index: #variant_idx,
                             };
                             let is_var = #toasty::stmt::Expr::from_untyped(
@@ -219,6 +219,18 @@ impl Expand<'_> {
             impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
                 fn into(self) -> #toasty::Path<__Origin, #model_ident> {
                     self.path
+                }
+            }
+
+            impl<__Origin> #toasty::IntoExpr<#model_ident> for #field_struct_ident<__Origin> {
+                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+                    use #toasty::IntoExpr;
+                    self.path.into_expr()
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                    use #toasty::IntoExpr;
+                    self.path.by_ref()
                 }
             }
 
@@ -304,7 +316,7 @@ impl Expand<'_> {
                         primary_key: false,
                         auto: None,
                         versionable: false,
-                        deferred: false,
+                        deferred: <#ty as #toasty::Field>::DEFERRED,
                         constraints: vec![],
                         variant: Some(#toasty::core::schema::app::VariantId {
                             model: id,
@@ -488,7 +500,7 @@ impl Expand<'_> {
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
                         let ty = primitive_ty_unwrap(field);
-                        quote!(#toasty::into_untyped_expr::<#ty, _>(#field_ident))
+                        quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#field_ident))
                     });
 
                     quote! {
@@ -510,7 +522,7 @@ impl Expand<'_> {
     pub(super) fn expand_enum_primitive_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         if self.expand_enum_has_data_variants() {
-            quote! { #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id()) }
+            quote! { #toasty::core::stmt::Type::Model(<Self as #toasty::Embed>::id()) }
         } else if self.uses_string_discriminants() {
             quote! { #toasty::core::stmt::Type::String }
         } else {

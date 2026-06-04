@@ -1,162 +1,125 @@
 //! Test filtering models by Option fields using is_some() and is_none().
-//!
-//! Gated on `requires(sql)` until [#854] is fixed — `IS NULL` / `IS NOT NULL`
-//! currently fail on DynamoDB scan with an empty `ExpressionAttributeValues`.
-//!
-//! [#854]: https://github.com/tokio-rs/toasty/issues/854
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
-pub async fn filter_option_is_none(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+#[driver_test(id(ID), scenario(crate::scenarios::in_list_item), requires(scan))]
+pub async fn filter_option_is_none(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
-        name: String,
-
-        bio: Option<String>,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
-
-    // Create users with and without bio
-    User::create()
+    // Create items with and without bio
+    Item::create()
         .name("Alice")
+        .n(0)
         .bio("Likes Rust")
         .exec(&mut db)
         .await?;
 
-    User::create().name("Bob").exec(&mut db).await?;
+    Item::create().name("Bob").n(0).exec(&mut db).await?;
 
-    User::create()
+    Item::create()
         .name("Charlie")
+        .n(0)
         .bio("Likes databases")
         .exec(&mut db)
         .await?;
 
-    // Filter for users with no bio (IS NULL)
-    let users = User::filter(User::fields().bio().is_none())
+    // Filter for items with no bio (IS NULL)
+    let items = Item::filter(Item::fields().bio().is_none())
         .exec(&mut db)
         .await?;
 
-    assert_eq!(1, users.len());
-    assert_eq!("Bob", users[0].name);
+    assert_eq!(1, items.len());
+    assert_eq!("Bob", items[0].name);
 
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
-pub async fn filter_option_is_some(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+#[driver_test(id(ID), scenario(crate::scenarios::in_list_item), requires(scan))]
+pub async fn filter_option_is_some(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
-        name: String,
-
-        bio: Option<String>,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
-
-    // Create users with and without bio
-    User::create()
+    // Create items with and without bio
+    Item::create()
         .name("Alice")
+        .n(0)
         .bio("Likes Rust")
         .exec(&mut db)
         .await?;
 
-    User::create().name("Bob").exec(&mut db).await?;
+    Item::create().name("Bob").n(0).exec(&mut db).await?;
 
-    User::create()
+    Item::create()
         .name("Charlie")
+        .n(0)
         .bio("Likes databases")
         .exec(&mut db)
         .await?;
 
-    // Filter for users with a bio (IS NOT NULL)
-    let users = User::filter(User::fields().bio().is_some())
+    // Filter for items with a bio (IS NOT NULL)
+    let items = Item::filter(Item::fields().bio().is_some())
         .exec(&mut db)
         .await?;
 
-    assert_eq!(2, users.len());
-    let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(2, items.len());
+    let mut names: Vec<_> = items.iter().map(|u| u.name.as_str()).collect();
     names.sort();
     assert_eq!(names, ["Alice", "Charlie"]);
 
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
-pub async fn filter_option_combined_with_other_filters(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+#[driver_test(id(ID), scenario(crate::scenarios::in_list_item), requires(scan))]
+pub async fn filter_option_combined_with_other_filters(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
-        name: String,
-
-        bio: Option<String>,
-
-        #[allow(dead_code)]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
-
-    User::create()
+    Item::create()
         .name("Alice")
         .bio("Likes Rust")
-        .age(25)
+        .n(25)
         .exec(&mut db)
         .await?;
 
-    User::create().name("Bob").age(30).exec(&mut db).await?;
+    Item::create().name("Bob").n(30).exec(&mut db).await?;
 
-    User::create()
+    Item::create()
         .name("Charlie")
         .bio("Likes databases")
-        .age(35)
+        .n(35)
         .exec(&mut db)
         .await?;
 
-    User::create().name("Diana").age(25).exec(&mut db).await?;
+    Item::create().name("Diana").n(25).exec(&mut db).await?;
 
-    // Combine is_some with an equality filter: has bio AND age > 30
-    let users = User::filter(
-        User::fields()
+    // Combine is_some with an equality filter: has bio AND n > 30
+    let items = Item::filter(
+        Item::fields()
             .bio()
             .is_some()
-            .and(User::fields().age().gt(30)),
+            .and(Item::fields().n().gt(30)),
     )
     .exec(&mut db)
     .await?;
 
-    assert_eq!(1, users.len());
-    assert_eq!("Charlie", users[0].name);
+    assert_eq!(1, items.len());
+    assert_eq!("Charlie", items[0].name);
 
-    // Combine is_none with an equality filter: no bio AND age = 25
-    let users = User::filter(
-        User::fields()
+    // Combine is_none with an equality filter: no bio AND n = 25
+    let items = Item::filter(
+        Item::fields()
             .bio()
             .is_none()
-            .and(User::fields().age().eq(25)),
+            .and(Item::fields().n().eq(25)),
     )
     .exec(&mut db)
     .await?;
 
-    assert_eq!(1, users.len());
-    assert_eq!("Diana", users[0].name);
+    assert_eq!(1, items.len());
+    assert_eq!("Diana", items[0].name);
 
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn filter_option_multiple_nullable_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Article {
@@ -325,7 +288,7 @@ pub async fn filter_option_with_partition_key(test: &mut Test) -> Result<()> {
 /// `is_none()` on an `Option<ID>` field panics because the lowering phase
 /// does not strip the `ExprCast` wrapper from the column expression inside
 /// `IsNull`. The cast leaks into the SQL serializer which does not handle it.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan))]
 pub async fn filter_option_id_is_none(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Player {

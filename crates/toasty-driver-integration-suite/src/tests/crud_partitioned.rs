@@ -89,7 +89,7 @@ pub async fn update_by_partition_key(test: &mut Test) {
             keys.len(): 2,
             assignments: #{ [2]: Assignment::Set(== "updated")},
             filter: None,
-            returning: false,
+            returning: None,
         }));
 
         assert_struct!(resp, {

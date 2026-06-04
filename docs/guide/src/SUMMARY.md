@@ -39,6 +39,7 @@
 - [Deferred Fields](./deferred-fields.md)
 - [Batch Operations](./batch-operations.md)
 - [Transactions](./transactions.md)
+- [Raw SQL](./raw-sql.md)
 - [Concurrency Control](./concurrency-control.md)
 - [Database Setup](./database-setup.md)
 - [Migrations and Schema Management](./schema-management.md)
@@ -49,4 +50,5 @@
 - [PostgreSQL](./postgresql.md)
 - [MySQL](./mysql.md)
 - [SQLite](./sqlite.md)
+- [Turso](./turso.md)
 - [DynamoDB](./dynamodb.md)

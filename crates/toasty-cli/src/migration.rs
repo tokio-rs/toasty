@@ -4,7 +4,6 @@ mod drop;
 mod generate;
 mod reset;
 mod snapshot;
-mod snapshot_file;
 
 pub use apply::ApplyCommand;
 pub use config::{MigrationConfig, MigrationPrefixStyle};
@@ -12,7 +11,6 @@ pub use drop::DropCommand;
 pub use generate::GenerateCommand;
 pub use reset::ResetCommand;
 pub use snapshot::SnapshotCommand;
-pub use snapshot_file::SnapshotFile;
 
 use crate::Config;
 use anyhow::Result;

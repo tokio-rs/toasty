@@ -1,6 +1,6 @@
 use toasty_core::schema::{
     db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type},
-    diff::{self, Tables, TablesItem},
+    diff,
 };
 use toasty_core::stmt;
 
@@ -51,7 +51,7 @@ fn no_diff_same_tables() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Tables::from(&cx, &from_tables, &to_tables);
+    let d = diff::Table::diff(&cx, &from_tables, &to_tables);
     assert_eq!(d.len(), 0);
 }
 
@@ -65,10 +65,10 @@ fn create_table() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Tables::from(&cx, &from_tables, &to_tables);
+    let d = diff::Table::diff(&cx, &from_tables, &to_tables);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], TablesItem::CreateTable(_)));
-    if let TablesItem::CreateTable(table) = d[0] {
+    assert!(matches!(d[0], diff::Table::Create(_)));
+    if let diff::Table::Create(table) = d[0] {
         assert_eq!(table.name, "posts");
     }
 }
@@ -83,10 +83,10 @@ fn drop_table() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Tables::from(&cx, &from_tables, &to_tables);
+    let d = diff::Table::diff(&cx, &from_tables, &to_tables);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], TablesItem::DropTable(_)));
-    if let TablesItem::DropTable(table) = d[0] {
+    assert!(matches!(d[0], diff::Table::Drop(_)));
+    if let diff::Table::Drop(table) = d[0] {
         assert_eq!(table.name, "posts");
     }
 }
@@ -103,10 +103,10 @@ fn rename_table_with_hint() {
     hints.add_table_hint(TableId(0), TableId(0));
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Tables::from(&cx, &from_tables, &to_tables);
+    let d = diff::Table::diff(&cx, &from_tables, &to_tables);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], TablesItem::AlterTable { .. }));
-    if let TablesItem::AlterTable { previous, next, .. } = &d[0] {
+    assert!(matches!(d[0], diff::Table::Alter { .. }));
+    if let diff::Table::Alter { previous, next, .. } = &d[0] {
         assert_eq!(previous.name, "old_users");
         assert_eq!(next.name, "new_users");
     }
@@ -122,15 +122,11 @@ fn rename_table_without_hint_is_drop_and_create() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Tables::from(&cx, &from_tables, &to_tables);
+    let d = diff::Table::diff(&cx, &from_tables, &to_tables);
     assert_eq!(d.len(), 2);
 
-    let has_drop = d
-        .iter()
-        .any(|item| matches!(item, TablesItem::DropTable(_)));
-    let has_create = d
-        .iter()
-        .any(|item| matches!(item, TablesItem::CreateTable(_)));
+    let has_drop = d.iter().any(|item| matches!(item, diff::Table::Drop(_)));
+    let has_create = d.iter().any(|item| matches!(item, diff::Table::Create(_)));
     assert!(has_drop);
     assert!(has_create);
 }
@@ -145,9 +141,9 @@ fn alter_table_column_change() {
     let hints = diff::RenameHints::new();
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Tables::from(&cx, &from_tables, &to_tables);
+    let d = diff::Table::diff(&cx, &from_tables, &to_tables);
     assert_eq!(d.len(), 1);
-    assert!(matches!(d[0], TablesItem::AlterTable { .. }));
+    assert!(matches!(d[0], diff::Table::Alter { .. }));
 }
 
 #[test]
@@ -170,6 +166,6 @@ fn multiple_operations() {
     hints.add_table_hint(TableId(1), TableId(1));
     let cx = diff::Context::new(&from_schema, &to_schema, &hints);
 
-    let d = Tables::from(&cx, &from_tables, &to_tables);
+    let d = diff::Table::diff(&cx, &from_tables, &to_tables);
     assert_eq!(d.len(), 4);
 }

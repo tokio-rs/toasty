@@ -145,6 +145,45 @@ impl Value {
         Self::Null
     }
 
+    /// Adds two numeric values of the same type, returning `None` on overflow
+    /// or for non-numeric / mismatched-type combinations. Integer arithmetic
+    /// uses checked semantics; floating-point arithmetic uses IEEE-754.
+    pub fn checked_add(&self, other: &Self) -> Option<Self> {
+        match (self, other) {
+            (Self::I8(a), Self::I8(b)) => a.checked_add(*b).map(Self::I8),
+            (Self::I16(a), Self::I16(b)) => a.checked_add(*b).map(Self::I16),
+            (Self::I32(a), Self::I32(b)) => a.checked_add(*b).map(Self::I32),
+            (Self::I64(a), Self::I64(b)) => a.checked_add(*b).map(Self::I64),
+            (Self::U8(a), Self::U8(b)) => a.checked_add(*b).map(Self::U8),
+            (Self::U16(a), Self::U16(b)) => a.checked_add(*b).map(Self::U16),
+            (Self::U32(a), Self::U32(b)) => a.checked_add(*b).map(Self::U32),
+            (Self::U64(a), Self::U64(b)) => a.checked_add(*b).map(Self::U64),
+            (Self::F32(a), Self::F32(b)) => Some(Self::F32(a + b)),
+            (Self::F64(a), Self::F64(b)) => Some(Self::F64(a + b)),
+            _ => None,
+        }
+    }
+
+    /// Subtracts two numeric values of the same type, returning `None` on
+    /// overflow or for non-numeric / mismatched-type combinations. Integer
+    /// arithmetic uses checked semantics; floating-point arithmetic uses
+    /// IEEE-754.
+    pub fn checked_sub(&self, other: &Self) -> Option<Self> {
+        match (self, other) {
+            (Self::I8(a), Self::I8(b)) => a.checked_sub(*b).map(Self::I8),
+            (Self::I16(a), Self::I16(b)) => a.checked_sub(*b).map(Self::I16),
+            (Self::I32(a), Self::I32(b)) => a.checked_sub(*b).map(Self::I32),
+            (Self::I64(a), Self::I64(b)) => a.checked_sub(*b).map(Self::I64),
+            (Self::U8(a), Self::U8(b)) => a.checked_sub(*b).map(Self::U8),
+            (Self::U16(a), Self::U16(b)) => a.checked_sub(*b).map(Self::U16),
+            (Self::U32(a), Self::U32(b)) => a.checked_sub(*b).map(Self::U32),
+            (Self::U64(a), Self::U64(b)) => a.checked_sub(*b).map(Self::U64),
+            (Self::F32(a), Self::F32(b)) => Some(Self::F32(a - b)),
+            (Self::F64(a), Self::F64(b)) => Some(Self::F64(a - b)),
+            _ => None,
+        }
+    }
+
     /// Returns `true` if this value is [`Value::Null`].
     ///
     /// # Examples
@@ -442,17 +481,21 @@ impl Value {
     /// Panics if the path is invalid for the value's structure.
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
-        let mut ret = Entry::Value(self);
+        let mut value = self;
 
         for step in path.step_iter() {
-            ret = match ret {
-                Entry::Value(Self::Record(record)) => Entry::Value(&record[step]),
-                Entry::Value(Self::List(items)) => Entry::Value(&items[step]),
-                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
-            }
+            value = match value {
+                Self::Record(record) => &record[step],
+                Self::List(items) => &items[step],
+                // Projecting a field out of a `NULL` composite is `NULL` (e.g.
+                // an `Option<Embed>` whose value is `None`), and stays `NULL`
+                // for the rest of the path — return it directly.
+                Self::Null => return Entry::Value(value),
+                _ => todo!("base={self:#?}; step={step:#?}"),
+            };
         }
 
-        ret
+        Entry::Value(value)
     }
 
     /// Convert this value into the canonical form `Load` consumes for the

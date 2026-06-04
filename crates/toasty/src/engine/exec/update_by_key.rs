@@ -4,7 +4,7 @@ use crate::{
 };
 use toasty_core::{
     driver::{ExecResponse, Rows, operation},
-    schema::db::TableId,
+    schema::db::{ColumnId, TableId},
     stmt::{self, ValueStream},
 };
 
@@ -28,9 +28,9 @@ pub(crate) struct UpdateByKey {
     /// Fail the update if the condition is not met
     pub condition: Option<stmt::Expr>,
 
-    /// When `true` return the record being updated *after* the update. When
-    /// `false`, just return the count of updated rows.
-    pub returning: bool,
+    /// The columns to return for each updated row *after* the update. When
+    /// `None`, just return the count of updated rows.
+    pub returning: Option<Vec<ColumnId>>,
 }
 
 impl Exec<'_> {
@@ -45,7 +45,7 @@ impl Exec<'_> {
             .into_list_unwrap();
 
         let res = if keys.is_empty() {
-            if action.returning {
+            if action.returning.is_some() {
                 Rows::value_stream(ValueStream::default())
             } else {
                 Rows::Count(0)
@@ -57,12 +57,12 @@ impl Exec<'_> {
                 assignments: action.assignments.clone(),
                 filter: action.filter.clone(),
                 condition: action.condition.clone(),
-                returning: action.returning,
+                returning: action.returning.clone(),
             };
 
             let res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
-            debug_assert_eq!(!res.values.is_count(), action.returning);
+            debug_assert_eq!(!res.values.is_count(), action.returning.is_some());
 
             res.values
         };

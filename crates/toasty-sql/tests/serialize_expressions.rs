@@ -7,8 +7,6 @@
 //! to `SELECT <expr>`-equivalent SQL without needing a full table schema.
 //! The serializer is exercised in isolation — no lowering pipeline involved.
 
-use std::panic;
-
 use expect_test::expect;
 use toasty_core::{
     schema::db::Schema,
@@ -119,36 +117,15 @@ fn like_with_escape_appends_escape_clause() {
     expect![[r#"VALUES ($1 LIKE $2 ESCAPE '\');"#]].assert_eq(&render_pg(expr));
 }
 
+// `ILIKE` is a pass-through to PostgreSQL's native operator. Only PostgreSQL
+// has one, so the query-verify pass rejects a case-insensitive `Expr::Like` on
+// every other backend (see `engine/verify.rs`); the serializer therefore only
+// ever renders `ILIKE`, and only on PostgreSQL. See
+// https://github.com/tokio-rs/toasty/issues/802.
 #[test]
 fn ilike_renders_on_postgresql() {
     let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
     expect!["VALUES ($1 ILIKE $2);"].assert_eq(&render_pg(expr));
-}
-
-// MySQL and SQLite do not have `ILIKE`. The serializer currently emits plain
-// `LIKE`, which happens to match case-insensitively for ASCII because of the
-// default collations on both engines — but SQLite's `LIKE` is case-sensitive
-// for non-ASCII characters, so `.ilike("café%")` silently fails to match
-// `CAFÉ`. See https://github.com/tokio-rs/toasty/issues/802.
-//
-// The tests below pin the expected behavior once the serializer is fixed —
-// likely by wrapping both sides in `LOWER(...)` (the most portable option)
-// or by adding a `COLLATE` clause. They assert the most-likely shape; if
-// the eventual fix lands a different mechanism the assertion should be
-// adjusted at that point.
-
-#[ignore = "ilike case-insensitivity for non-ASCII is broken on MySQL/SQLite — see #802"]
-#[test]
-fn ilike_handles_non_ascii_case_insensitivity_on_mysql() {
-    let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
-    expect![[r#""#]].assert_eq(&render_mysql(expr));
-}
-
-#[ignore = "ilike case-insensitivity for non-ASCII is broken on MySQL/SQLite — see #802"]
-#[test]
-fn ilike_handles_non_ascii_case_insensitivity_on_sqlite() {
-    let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
-    expect![[r#""#]].assert_eq(&render_sqlite(expr));
 }
 
 #[test]
@@ -158,22 +135,15 @@ fn starts_with_uses_postgresql_prefix_operator() {
 }
 
 #[test]
-fn starts_with_panics_on_non_postgresql_flavors() {
-    // The lowering pass rewrites `StartsWith` to `LIKE` for MySQL/SQLite;
-    // hitting the serializer directly with `StartsWith` is `unreachable!`.
-    for render in [
-        render_mysql as fn(Expr) -> String,
-        render_sqlite as fn(Expr) -> String,
-    ] {
-        let result = panic::catch_unwind(|| {
-            let expr = Expr::starts_with(Expr::arg(0), Expr::arg(1));
-            render(expr)
-        });
-        assert!(
-            result.is_err(),
-            "expected StartsWith to panic on non-PG flavor"
-        );
-    }
+fn starts_with_uses_sqlite_glob_operator() {
+    let expr = Expr::starts_with(Expr::arg(0), Expr::arg(1));
+    expect!["VALUES (?1 GLOB ?2);"].assert_eq(&render_sqlite(expr));
+}
+
+#[test]
+fn starts_with_uses_mysql_binary_like_operator() {
+    let expr = Expr::starts_with(Expr::arg(0), Expr::arg(1));
+    expect!["VALUES ROW(BINARY ? LIKE ? ESCAPE '!');"].assert_eq(&render_mysql(expr));
 }
 
 // ---------- COUNT ----------

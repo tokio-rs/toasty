@@ -15,9 +15,9 @@ checking for null — use `Model::filter()` with field expressions.
 | [`.in_list([...])`](#membership-with-in_list) | Value in list | `IN (...)` |
 | [`.is_none()`](#null-checks) | Null check (`Option` fields) | `IS NULL` |
 | [`.is_some()`](#null-checks) | Not-null check (`Option` fields) | `IS NOT NULL` |
-| [`.starts_with(prefix)`](#string-pattern-matching) | Prefix match | `begins_with(field, prefix)` / `LIKE 'prefix%'` |
-| [`.like(pattern)`](#string-pattern-matching) | SQL pattern match | `LIKE pattern` |
-| [`.ilike(pattern)`](#string-pattern-matching) | Case-insensitive SQL pattern match | `ILIKE pattern` |
+| [`.starts_with(prefix)`](#starts_with) | Prefix match | `begins_with(field, prefix)` / `LIKE 'prefix%'` |
+| [`.like(pattern)`](#like) | Pattern match, behavior per backend | `LIKE pattern` |
+| [`.ilike(pattern)`](#ilike) | Case-insensitive pattern match, PostgreSQL only | `ILIKE pattern` |
 | [`.and(expr)`](#combining-with-and) | Both conditions true | `AND` |
 | [`.or(expr)`](#combining-with-or) | Either condition true | `OR` |
 | [`.not()` / `!expr`](#negation-with-not) | Negate condition | `NOT` |
@@ -391,6 +391,12 @@ let users = User::filter(
 
 ## String pattern matching
 
+`.like()` and `.ilike()` map directly onto the database's own `LIKE` and `ILIKE`
+operators. Toasty passes them through and keeps each backend's behavior rather
+than normalizing it, so `.like()`'s case sensitivity varies by backend and
+`.ilike()` is only supported where the database has `ILIKE` — see the sections
+below.
+
 ### `starts_with`
 
 `.starts_with()` tests whether a string field starts with the given prefix. It
@@ -418,9 +424,20 @@ let users = User::filter(User::fields().name().starts_with("Al"))
 ### `like`
 
 `.like()` tests a string field against a SQL `LIKE` pattern. `%` matches any
-sequence of characters; `_` matches any single character. **This operator is
-only supported on SQL databases (SQLite, PostgreSQL, MySQL).** Calling it
-against DynamoDB will panic at runtime.
+sequence of characters; `_` matches any single character. **SQL only** —
+DynamoDB has no `LIKE` operator, so calling `.like()` against it panics in the
+driver. Use [`.starts_with()`](#starts_with) for prefix matching on DynamoDB.
+
+`.like()` is a pass-through to the database's own `LIKE`, whose case sensitivity
+differs between backends:
+
+| Backend | Case behavior of `.like()` |
+|---|---|
+| PostgreSQL | Case-sensitive. |
+| MySQL | Set by the column's collation — `_ci` collations match case-insensitively, `_bin` and binary collations case-sensitively. |
+| SQLite | Case-insensitive for ASCII; case-sensitive for non-ASCII characters. |
+
+For a case-insensitive match on PostgreSQL, use [`.ilike()`](#ilike).
 
 ```rust
 # use toasty::Model;
@@ -445,9 +462,17 @@ match — it works across all drivers.
 
 ### `ilike`
 
-`.ilike()` is the case-insensitive form of `.like()`. **SQL-only.** On
-PostgreSQL it lowers to `ILIKE`; on SQLite and MySQL, plain `LIKE` is
-already ASCII-case-insensitive, so the same query works.
+`.ilike()` is the case-insensitive form of `.like()` and maps to PostgreSQL's
+`ILIKE` operator. **PostgreSQL only.** Toasty does not emulate `ILIKE` on
+backends that lack it: on MySQL, SQLite, and DynamoDB the query is rejected with
+an `unsupported_feature` error.
+
+PostgreSQL's `LIKE` is case-sensitive, so PostgreSQL provides `ILIKE` for
+case-insensitive matching. The other backends have no operator with matching
+semantics for `.ilike()` to pass through to — SQLite's `LIKE` already folds ASCII
+case, and MySQL's case behavior is set by the column collation. For
+case-insensitive matching there, rely on SQLite's ASCII folding or pick a
+case-folding collation on MySQL (see [`.like()`](#like)).
 
 ```rust
 # use toasty::Model;
@@ -459,7 +484,7 @@ already ASCII-case-insensitive, so the same query works.
 #     name: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-// Matches "Alice", "ALICIA", "alfred", and so on.
+// On PostgreSQL, matches "Alice", "ALICIA", "alfred", and so on.
 let users = User::filter(User::fields().name().ilike("al%".to_string()))
     .exec(&mut db)
     .await?;
@@ -485,7 +510,7 @@ field. Same syntax works through `BelongsTo` and through chains of
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::Deferred<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -496,7 +521,7 @@ field. Same syntax works through `BelongsTo` and through chains of
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::Deferred<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 // Users whose profile has a score above 50
@@ -521,7 +546,7 @@ matches a condition. This generates a subquery:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -531,7 +556,7 @@ matches a condition. This generates a subquery:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 #     complete: bool,
 # }
@@ -566,7 +591,7 @@ it tests whether *every* related record matches the filter. **SQL-only.**
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -576,7 +601,7 @@ it tests whether *every* related record matches the filter. **SQL-only.**
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     complete: bool,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {

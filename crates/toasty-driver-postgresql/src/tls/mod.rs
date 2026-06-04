@@ -1,10 +1,9 @@
 mod config;
-mod connect;
 
 use config::{SslVerifyMode, build_client_config};
-pub(crate) use connect::MakeRustlsConnect;
 
 use tokio_postgres::Config;
+use tokio_postgres_rustls::MakeRustlsConnect;
 use url::Url;
 
 pub(crate) fn configure_tls(

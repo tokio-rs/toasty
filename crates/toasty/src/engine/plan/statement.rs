@@ -281,7 +281,42 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             is_returning_projection || matches!(returning, None | Some(stmt::Returning::Expr(..)))
         );
 
-        visit_mut::for_each_expr_mut(returning, |expr| {
+        match returning {
+            Some(stmt::Returning::Project(expr)) | Some(stmt::Returning::Expr(expr)) => {
+                self.rewrite_returning_inputs(
+                    expr,
+                    &mut inputs,
+                    load_data_node_id,
+                    is_returning_projection,
+                );
+            }
+            _ => {}
+        }
+
+        inputs
+    }
+
+    /// Rewrite the returning clause expression so statement-level
+    /// `Arg`/`Reference`/`Count`/`Project` nodes reference the MIR inputs that
+    /// supply their data, collecting those inputs into `inputs`.
+    ///
+    /// Walk scope-aware so that `Arg`/`Reference` nodes nested inside a
+    /// `Map`/`Let` body (e.g. the via-include projection that strips the
+    /// linking column with `Map(child, arg(1))`) are not mistaken for
+    /// statement-level args/columns. Statement-level constructs only appear at
+    /// the top scope (`scope_depth == 0`); a local arg inside a mapped body has
+    /// `nesting < scope_depth`.
+    fn rewrite_returning_inputs(
+        &self,
+        expr: &mut stmt::Expr,
+        inputs: &mut IndexSet<mir::NodeId>,
+        load_data_node_id: mir::NodeId,
+        is_returning_projection: bool,
+    ) {
+        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+            if scope_depth != 0 {
+                return true;
+            }
             match expr {
                 stmt::Expr::Arg(expr_arg) => {
                     match &self.stmt_info.args[expr_arg.position] {
@@ -338,6 +373,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             *expr = stmt::Expr::arg(index);
                         }
                     }
+                    false
                 }
                 stmt::Expr::Project(expr_project) if !is_returning_projection => {
                     // When returning an expression (not projection),
@@ -350,12 +386,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let column = self.load_data_expr_reference_position(expr_reference);
                         let (position, _) = inputs.insert_full(load_data_node_id);
                         *expr = stmt::Expr::arg_project(position, [*row, column]);
+                        false
+                    } else {
+                        true
                     }
                 }
                 stmt::Expr::Reference(expr_reference) if is_returning_projection => {
                     let column = self.load_data_expr_reference_position(expr_reference);
                     let (position, _) = inputs.insert_full(load_data_node_id);
                     *expr = stmt::Expr::arg_project(position, [column]);
+                    false
                 }
                 stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. }))
                     if is_returning_projection =>
@@ -368,12 +408,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         .get_index_of_count_star();
                     let (position, _) = inputs.insert_full(load_data_node_id);
                     *expr = stmt::Expr::arg_project(position, [index]);
+                    false
                 }
-                _ => {}
+                _ => true,
             }
         });
-
-        inputs
     }
 
     fn load_data_expr_reference_position(&self, expr_reference: &stmt::ExprReference) -> usize {
@@ -590,6 +629,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }],
             }),
             filter,
+            distinct: false,
         };
 
         stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
@@ -648,7 +688,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 | stmt::Assignment::Insert(expr)
                 | stmt::Assignment::Remove(expr)
                 | stmt::Assignment::Append(expr)
-                | stmt::Assignment::RemoveAt(expr) => expr,
+                | stmt::Assignment::RemoveAt(expr)
+                | stmt::Assignment::Add(expr)
+                | stmt::Assignment::Subtract(expr) => expr,
                 stmt::Assignment::Pop => continue,
                 stmt::Assignment::Batch(_) => {
                     todo!("batch assignments in arg dependency rewriting")
@@ -1058,6 +1100,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                                 },
                             ),
                         ])),
+                        distinct: false,
                     }),
                 )),
                 condition: Condition::default(),
@@ -1116,6 +1159,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ),
             filter: stmt::Filter::new(true),
             returning: stmt::Returning::Project(stmt::Expr::record_from_vec(columns)),
+            distinct: false,
         })
         .with(ctes)
         .build()
@@ -1538,6 +1582,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     assignments: update_stmt.assignments.clone(),
                     filter: index_plan.result_filter.take(),
                     condition: update_stmt.condition.expr.clone(),
+                    columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })
             }
@@ -1675,6 +1720,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         // First check for nested merge
         if let Some(node_id) = self.planner.plan_nested_merge(self.stmt_id) {
+            // `plan_nested_merge` builds its own MIR node directly on
+            // `self.planner.mir`, so the parent statement's remaining HIR
+            // deps (e.g. a sibling `Disassociate` DELETE in an
+            // `stmt::apply([insert, remove])` batch) are never consumed.
+            // Attach them to the NestedMerge so the dep statements stay
+            // reachable from `completion` and end up in the exec plan.
+            self.apply_dependencies_to_node(node_id);
             return node_id;
         }
 

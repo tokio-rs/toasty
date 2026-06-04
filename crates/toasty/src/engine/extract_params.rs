@@ -176,6 +176,8 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
     struct Extract<'a> {
         params: &'a mut Vec<Param>,
         bind_list_param: bool,
+        glob_starts_with: bool,
+        binary_like_starts_with: bool,
     }
 
     impl stmt::VisitMut for Extract<'_> {
@@ -228,6 +230,30 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
                     }
                     return;
                 }
+                // For SQLite/MySQL, transform the prefix into the final search
+                // pattern before binding it: GLOB needs `*`/`?`/`[` escaped and
+                // a `*` appended; BINARY LIKE needs `%`/`_`/`!` escaped and a
+                // `%` appended.  The column expression is visited normally.
+                stmt::Expr::StartsWith(e)
+                    if self.glob_starts_with || self.binary_like_starts_with =>
+                {
+                    self.visit_expr_mut(&mut e.expr);
+                    let stmt::Expr::Value(stmt::Value::String(prefix)) = e.prefix.as_ref() else {
+                        panic!("starts_with prefix must be a string literal");
+                    };
+                    let pattern = if self.glob_starts_with {
+                        glob_prefix_pattern(prefix)
+                    } else {
+                        binary_like_prefix_pattern(prefix)
+                    };
+                    let position = self.params.len();
+                    self.params.push(Param {
+                        value: stmt::Value::String(pattern),
+                        ty: Ty::Inferred(db::Type::Text),
+                    });
+                    *e.prefix = stmt::Expr::arg(position);
+                    return;
+                }
                 _ => {}
             }
 
@@ -269,6 +295,8 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
     Extract {
         params,
         bind_list_param: capability.bind_list_param,
+        glob_starts_with: capability.glob_starts_with,
+        binary_like_starts_with: capability.binary_like_starts_with,
     }
     .visit_mut(stmt);
 }
@@ -622,6 +650,12 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
                 // `Ty::Inferred(UnsignedInteger(8))` for a `usize`
                 // converted to `Value::U64`) is enough to bind the param.
                 stmt::Assignment::RemoveAt(_) | stmt::Assignment::Pop => {}
+                // `Add` / `Subtract` bind a scalar of the column's type
+                // (`col = col + $1`).
+                stmt::Assignment::Add(expr) | stmt::Assignment::Subtract(expr) => {
+                    let expected = ty_from_column(col.storage_ty.clone());
+                    check(expr, &expected, params);
+                }
                 stmt::Assignment::Insert(_) | stmt::Assignment::Batch(_) => continue,
             }
         }
@@ -632,11 +666,17 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
 }
 
 fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
+    // One scope per query — matching the `ExprColumn::nesting` model and the
+    // SQL serializer (which also scopes once per `Query`). `Query`'s target
+    // resolves through its body to the `Select` source, so this single scope
+    // is the source scope. Scoping the `Select` again would double-count a
+    // level, so a column inside a subquery that references an outer column
+    // (e.g. a JOIN-include's linking column lifted into an `EXISTS`) would
+    // resolve against the wrong source.
     let cx = cx.scope(query);
 
     match &query.body {
         stmt::ExprSet::Select(select) => {
-            let cx = cx.scope(&**select);
             refine_filter(&select.filter, &cx, params);
         }
         stmt::ExprSet::Values(values) => {
@@ -925,6 +965,49 @@ fn merge(a: &Ty, b: &Ty) -> Ty {
 // ============================================================================
 // Helpers
 // ============================================================================
+
+/// Build a SQLite GLOB pattern for a `starts_with(prefix)` expression.
+///
+/// GLOB metacharacters (`*`, `?`, `[`) are escaped by wrapping them in a
+/// bracket class: `*` → `[*]`, `?` → `[?]`, `[` → `[[]`. A trailing `*`
+/// wildcard is appended so the pattern matches any string starting with
+/// `prefix`. GLOB has no ESCAPE clause, so bracket-class escaping is the only
+/// available mechanism.
+fn glob_prefix_pattern(prefix: &str) -> String {
+    // Each metachar expands to 3 chars; over-allocate slightly rather than
+    // under-allocate and trigger a realloc on prefixes with wildcards.
+    let mut pattern = String::with_capacity(prefix.len() * 3 + 1);
+    for c in prefix.chars() {
+        match c {
+            '*' => pattern.push_str("[*]"),
+            '?' => pattern.push_str("[?]"),
+            '[' => pattern.push_str("[[]"),
+            c => pattern.push(c),
+        }
+    }
+    pattern.push('*');
+    pattern
+}
+
+/// Build a MySQL `BINARY col LIKE ? ESCAPE '!'` pattern for `starts_with(prefix)`.
+///
+/// `!` is the hardcoded escape character. In a single pass, `!`, `%`, and `_`
+/// are all prefixed with `!` (so `!` → `!!`, `%` → `!%`, `_` → `!_`). A
+/// trailing `%` wildcard is appended.
+fn binary_like_prefix_pattern(prefix: &str) -> String {
+    let mut pattern = String::with_capacity(prefix.len() + 1);
+    for c in prefix.chars() {
+        match c {
+            '!' | '%' | '_' => {
+                pattern.push('!');
+                pattern.push(c);
+            }
+            c => pattern.push(c),
+        }
+    }
+    pattern.push('%');
+    pattern
+}
 
 #[cfg(test)]
 mod tests;

@@ -18,8 +18,12 @@ pub use insert::Insert;
 
 mod assignment;
 pub use assignment::{
-    Assign, Assignment, apply, clear, extend, insert, patch, pop, push, remove, remove_at, set,
+    Assign, Assignment, add, apply, clear, decrement, extend, increment, insert, patch, pop, push,
+    remove, remove_at, set, subtract,
 };
+
+mod numeric;
+pub use numeric::Numeric;
 
 mod into_expr;
 pub use into_expr::IntoExpr;
@@ -59,7 +63,7 @@ pub use scope::IntoScope;
 mod update;
 pub use update::Update;
 
-pub use toasty_core::stmt::{OrderBy, Projection, Value};
+pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
 
 use toasty_core::stmt;
 

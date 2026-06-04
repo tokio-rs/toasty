@@ -6,9 +6,9 @@
 //! apply, drop, reset, snapshot). It uses [clap] for argument parsing and
 //! [dialoguer] for interactive prompts.
 //!
-//! The crate also exposes the underlying configuration and file types so that
-//! custom tooling can read and manipulate migration history and snapshots
-//! directly.
+//! The crate also exposes the underlying configuration used by the command
+//! runner. Reusable migration history, snapshot, and generation types live in
+//! [`toasty::migration`].
 //!
 //! # Main types
 //!
@@ -19,7 +19,8 @@
 //!   programmatically.
 //! - [`toasty::migration::History`] / [`toasty::migration::HistoryEntry`] —
 //!   read and write the TOML history that tracks which migrations exist.
-//! - [`SnapshotFile`] — read and write schema snapshot TOML files.
+//! - [`toasty::migration::Snapshot`] — read and write schema snapshot TOML
+//!   files.
 //!
 //! # Examples
 //!
@@ -39,7 +40,7 @@ mod utility;
 pub use config::Config;
 pub use migration::{
     ApplyCommand, DropCommand, GenerateCommand, MigrationCommand, MigrationConfig,
-    MigrationPrefixStyle, ResetCommand, SnapshotCommand, SnapshotFile,
+    MigrationPrefixStyle, ResetCommand, SnapshotCommand,
 };
 
 use anyhow::Result;

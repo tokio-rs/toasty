@@ -58,7 +58,11 @@ impl toasty_driver_integration_suite::Setup for PostgreSqlSetup {
 }
 
 // Generate all driver tests
-toasty_driver_integration_suite::generate_driver_tests!(PostgreSqlSetup::new(), bigdecimal_implemented: false);
+toasty_driver_integration_suite::generate_driver_tests!(
+    PostgreSqlSetup::new(),
+    bigdecimal_implemented: false,
+    transaction_lock_mode: false,
+);
 
 #[tokio::test]
 async fn url_encoding() {
@@ -136,4 +140,24 @@ async fn url_encoding() {
         .execute(&format!("DROP ROLE IF EXISTS \"{}\"", role), &[])
         .await
         .expect("failed to drop test role");
+}
+
+/// Connectivity smoke test for Unix-domain sockets (regression for #984).
+///
+/// The driver must accept libpq-style `?host=/path` URLs so the
+/// directory containing the PG socket can be specified — URL syntax
+/// cannot encode a filesystem path as the authority. Skipped when
+/// `TOASTY_TEST_POSTGRES_UDS_URL` is unset so the default test runs
+/// stay green on machines without a socket-accessible PG.
+#[tokio::test]
+async fn connect_via_unix_socket() {
+    let Ok(url) = std::env::var("TOASTY_TEST_POSTGRES_UDS_URL") else {
+        eprintln!("TOASTY_TEST_POSTGRES_UDS_URL unset; skipping UDS connectivity test");
+        return;
+    };
+
+    toasty::Db::builder()
+        .connect(&url)
+        .await
+        .expect("PostgreSQL connection over Unix-domain socket failed");
 }

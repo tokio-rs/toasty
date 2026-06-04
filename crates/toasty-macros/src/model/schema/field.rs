@@ -69,9 +69,6 @@ pub(crate) struct FieldAttr {
 
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
-
-    /// True if the field is annotated with `#[deferred]`
-    pub(crate) deferred: bool,
 }
 
 #[derive(Debug)]
@@ -103,7 +100,6 @@ impl FieldAttr {
             update_expr: None,
             document: None,
             versionable: false,
-            deferred: false,
         };
 
         for attr in attrs {
@@ -191,15 +187,6 @@ impl FieldAttr {
                     ));
                 } else {
                     field_attr.versionable = true;
-                }
-            } else if attr.path().is_ident("deferred") {
-                if field_attr.deferred {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[deferred] attribute",
-                    ));
-                } else {
-                    field_attr.deferred = true;
                 }
             } else if attr.path().is_ident("serialize") {
                 // The `#[serialize(json)]` attribute has been replaced by the
@@ -417,39 +404,6 @@ impl Field {
             ));
         }
 
-        if attrs.versionable {
-            let is_u64 = matches!(&field.ty, syn::Type::Path(p) if p.path.is_ident("u64"));
-            if !is_u64 {
-                errs.push(syn::Error::new_spanned(
-                    &field.ty,
-                    "#[version] can only be applied to a u64 field",
-                ));
-            }
-        }
-
-        if attrs.deferred {
-            if ty.is_some() {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[deferred] cannot be combined with relation attributes",
-                ));
-            }
-
-            if attrs.versionable {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[deferred] cannot be combined with #[version]",
-                ));
-            }
-
-            if attrs.key.is_some() {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[deferred] cannot be combined with #[key]",
-                ));
-            }
-        }
-
         if let Some(doc) = &attrs.document {
             // `#[document(text)]` is parsed but the text-encoding path is not
             // yet implemented.
@@ -478,13 +432,6 @@ impl Field {
                 errs.push(syn::Error::new_spanned(
                     field,
                     "#[document] cannot be combined with #[version]",
-                ));
-            }
-
-            if attrs.deferred {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[document] cannot be combined with #[deferred]",
                 ));
             }
 

@@ -4,7 +4,7 @@
 
 <div align="center">
   <h3>The cozy, easy ORM for Rust</h3>
-  <a href="https://tokio-rs.github.io/toasty/0.6.1/guide/">Guide</a> •
+  <a href="https://tokio-rs.github.io/toasty/0.7.0/guide/">Guide</a> •
   <a href="https://docs.rs/toasty">API Docs</a> •
   <a href="https://crates.io/crates/toasty">Crates.io</a> •
   <a href="https://discord.gg/tokio">Discord</a>
@@ -30,9 +30,9 @@
 [discord-badge]: https://img.shields.io/discord/500028886025895936.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/tokio
 
-Toasty supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB. It does
-not hide database capabilities — it exposes features based on the target
-database.
+Toasty supports SQL databases (SQLite/Turso, PostgreSQL, MySQL) and DynamoDB.
+It does not hide database capabilities — it exposes features based on the
+target database.
 
 ## Using Toasty
 
@@ -53,7 +53,7 @@ struct User {
     email: String,
 
     #[has_many]
-    todos: toasty::HasMany<Todo>,
+    todos: toasty::Deferred<Vec<Todo>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -66,7 +66,7 @@ struct Todo {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -100,9 +100,9 @@ for todo in &todos {
 ## SQL and NoSQL
 
 Toasty supports both SQL and NoSQL databases. Current drivers are SQLite,
-PostgreSQL, MySQL, and DynamoDB. However, it does not aim to abstract the
-database. Instead, Toasty leans into the target database's capabilities and
-aims to help the user avoid issuing inefficient queries for that database.
+Turso, PostgreSQL, MySQL, and DynamoDB. However, it does not aim to abstract
+the database. Instead, Toasty leans into the target database's capabilities
+and aims to help the user avoid issuing inefficient queries for that database.
 
 When targeting both SQL and NoSQL databases, Toasty generates query methods
 (e.g. `get_by_id` only for access patterns that are indexed). When targeting a

@@ -1,51 +1,136 @@
-error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
- --> tests/ui/relation_has_one_requires_attr.rs:7:5
-  |
-7 |     profile: toasty::HasOne<Option<Profile>>,
-  |     ^^^^^^^ the trait `toasty::schema::Field` is not implemented for `toasty::HasOne<Option<Profile>>`
-  |
-  = help: the following other types implement trait `toasty::schema::Field`:
-            Arc<T>
-            Box<T>
-            Deferred<T>
-            Option<T>
-            Rc<T>
-            Vec<T>
-            Vec<u8>
-            bigdecimal::BigDecimal
-          and $N others
+error[E0277]: `Profile` cannot be used as a field type
+  --> tests/ui/relation_has_one_requires_attr.rs:7:5
+   |
+ 7 |     profile: toasty::Deferred<Option<Profile>>,
+   |     ^^^^^^^ this field's type is not storable
+   |
+help: the trait `toasty::schema::Field` is not implemented for `Profile`
+  --> tests/ui/relation_has_one_requires_attr.rs:11:1
+   |
+11 | struct Profile {
+   | ^^^^^^^^^^^^^^
+   = note: If `Profile` is a Toasty model, this is a relation field and must be annotated with `#[belongs_to]`, `#[has_one]`, or `#[has_many]`.
+   = note: Otherwise `Profile` must be a supported primitive (string, integer, bool, uuid, …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`).
+   = help: the following other types implement trait `toasty::schema::Field`:
+             Arc<T>
+             Box<T>
+             Deferred<T>
+             Option<T>
+             Rc<T>
+             Vec<T>
+             Vec<u8>
+             bigdecimal::BigDecimal
+           and $N others
+   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: 1 redundant requirement hidden
+   = note: required for `Deferred<Option<Profile>>` to implement `toasty::schema::Field`
 
-error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
+error[E0277]: `Profile` cannot be used as a field type
+  --> tests/ui/relation_has_one_requires_attr.rs:1:10
+   |
+ 1 | #[derive(toasty::Model)]
+   |          ^^^^^^^^^^^^^ this field's type is not storable
+   |
+help: the trait `toasty::schema::Field` is not implemented for `Profile`
+  --> tests/ui/relation_has_one_requires_attr.rs:11:1
+   |
+11 | struct Profile {
+   | ^^^^^^^^^^^^^^
+   = note: If `Profile` is a Toasty model, this is a relation field and must be annotated with `#[belongs_to]`, `#[has_one]`, or `#[has_many]`.
+   = note: Otherwise `Profile` must be a supported primitive (string, integer, bool, uuid, …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`).
+   = help: the following other types implement trait `toasty::schema::Field`:
+             Arc<T>
+             Box<T>
+             Deferred<T>
+             Option<T>
+             Rc<T>
+             Vec<T>
+             Vec<u8>
+             bigdecimal::BigDecimal
+           and $N others
+   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
 1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `toasty::schema::Field` is not implemented for `toasty::HasOne<Option<Profile>>`
+  |          ^^^^^^^^^^^^^ the trait `IntoExpr<Option<Profile>>` is not implemented for `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   |
-  = help: the following other types implement trait `toasty::schema::Field`:
-            Arc<T>
-            Box<T>
-            Deferred<T>
-            Option<T>
-            Rc<T>
-            Vec<T>
-            Vec<u8>
-            bigdecimal::BigDecimal
-          and $N others
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `toasty::HasOne<Option<Profile>>: toasty::schema::Field` is not satisfied
- --> tests/ui/relation_has_one_requires_attr.rs:7:14
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
+ --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
-7 |     profile: toasty::HasOne<Option<Profile>>,
-  |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ the trait `toasty::schema::Field` is not implemented for `toasty::HasOne<Option<Profile>>`
+1 | #[derive(toasty::Model)]
+  |          ^^^^^^^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   |
-  = help: the following other types implement trait `toasty::schema::Field`:
-            Arc<T>
-            Box<T>
-            Deferred<T>
-            Option<T>
-            Rc<T>
-            Vec<T>
-            Vec<u8>
-            bigdecimal::BigDecimal
-          and $N others
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0277]: `Profile` cannot be used as a field type
+  --> tests/ui/relation_has_one_requires_attr.rs:7:14
+   |
+ 7 |     profile: toasty::Deferred<Option<Profile>>,
+   |              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ this field's type is not storable
+   |
+help: the trait `toasty::schema::Field` is not implemented for `Profile`
+  --> tests/ui/relation_has_one_requires_attr.rs:11:1
+   |
+11 | struct Profile {
+   | ^^^^^^^^^^^^^^
+   = note: If `Profile` is a Toasty model, this is a relation field and must be annotated with `#[belongs_to]`, `#[has_one]`, or `#[has_many]`.
+   = note: Otherwise `Profile` must be a supported primitive (string, integer, bool, uuid, …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`).
+   = help: the following other types implement trait `toasty::schema::Field`:
+             Arc<T>
+             Box<T>
+             Deferred<T>
+             Option<T>
+             Rc<T>
+             Vec<T>
+             Vec<u8>
+             bigdecimal::BigDecimal
+           and $N others
+   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+   = note: 1 redundant requirement hidden
+   = note: required for `Deferred<Option<Profile>>` to implement `toasty::schema::Field`
+
+error[E0277]: `Profile` cannot be used as a field type
+  --> tests/ui/relation_has_one_requires_attr.rs:7:5
+   |
+ 7 |     profile: toasty::Deferred<Option<Profile>>,
+   |     ^^^^^^^ this field's type is not storable
+   |
+help: the trait `toasty::schema::Field` is not implemented for `Profile`
+  --> tests/ui/relation_has_one_requires_attr.rs:11:1
+   |
+11 | struct Profile {
+   | ^^^^^^^^^^^^^^
+   = note: If `Profile` is a Toasty model, this is a relation field and must be annotated with `#[belongs_to]`, `#[has_one]`, or `#[has_many]`.
+   = note: Otherwise `Profile` must be a supported primitive (string, integer, bool, uuid, …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`).
+   = help: the following other types implement trait `toasty::schema::Field`:
+             Arc<T>
+             Box<T>
+             Deferred<T>
+             Option<T>
+             Rc<T>
+             Vec<T>
+             Vec<u8>
+             bigdecimal::BigDecimal
+           and $N others
+   = note: required for `Option<Profile>` to implement `toasty::schema::Field`
+
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
+ --> tests/ui/relation_has_one_requires_attr.rs:7:5
+  |
+7 |     profile: toasty::Deferred<Option<Profile>>,
+  |     ^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
+  |
+note: required by a bound in `UserUpdate::<__toasty_T>::set_profile`
+ --> tests/ui/relation_has_one_requires_attr.rs:1:10
+  |
+1 | #[derive(toasty::Model)]
+  |          ^^^^^^^^^^^^^ required by this bound in `UserUpdate::<__toasty_T>::set_profile`
+...
+7 |     profile: toasty::Deferred<Option<Profile>>,
+  |     ------- required by a bound in this associated function
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

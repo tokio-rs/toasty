@@ -10,7 +10,7 @@ use indexmap::IndexMap;
 /// - Primitive fields map to a single column
 /// - Struct fields flatten an embedded struct to multiple columns
 /// - Enum fields map to a discriminant column plus per-variant data columns
-/// - Relation fields (`BelongsTo`, `HasMany`, `HasOne`) don't have direct column storage
+/// - Relation fields (`BelongsTo`, `Has`) don't have direct column storage
 ///
 /// # Examples
 ///
@@ -185,7 +185,7 @@ pub struct FieldPrimitive {
     /// from the primitive's expression type.
     ///
     /// Cached so that lowering can splice the loaded form `Record([..])` for
-    /// a `#[deferred]` primitive without re-deriving the column expression
+    /// a deferred primitive without re-deriving the column expression
     /// from the column id and schema.
     pub column_expr: stmt::Expr,
 }
@@ -237,6 +237,20 @@ pub struct FieldStruct {
     /// in by `process_includes` when a parent `.include()` activates a
     /// `Deferred<EmbedStruct>` field.
     pub default_returning: stmt::Expr,
+
+    /// The presence head column of a nullable embedded struct (`Option<Embed>`).
+    ///
+    /// `None` for a non-nullable embed. `Some(column)` when the field is
+    /// `Option<Embed>`: the head column whose null-ness is the option's
+    /// none-ness (`NULL` = `None`), like `Option<scalar>` and an embedded
+    /// enum's discriminant. Usually a dedicated nullable `bool` column
+    /// (`NULL` = `None`, `true` = `Some`); for a single-column (newtype) embed
+    /// it is the flattened leaf reused as the head. The encode lowering forces
+    /// every flattened leaf column nullable and the decode wraps the struct
+    /// record in a `Match` on this column, so a `None` value round-trips
+    /// without colliding with a `Some` whose fields are all themselves `None`.
+    /// The column's own encode lowering (if dedicated) is tracked in `columns`.
+    pub presence: Option<ColumnId>,
 }
 
 /// Maps an embedded enum field to its discriminant column and per-variant data columns.
@@ -273,9 +287,7 @@ pub struct FieldEnum {
     /// For unit-only enums this is the discriminant column reference. For
     /// data-carrying enums it is the full `Match { disc, arms[], else }`
     /// expression with per-arm records (currently identical to the raw
-    /// `table_to_model` shape — `#[deferred]` on a variant field is
-    /// rejected at the macro layer; if it is ever lifted, the per-arm
-    /// records would mask their deferred fields here).
+    /// `table_to_model` shape with deferred fields masked in each arm.
     pub default_returning: stmt::Expr,
 }
 
@@ -300,7 +312,7 @@ pub struct EnumVariant {
     pub fields: Vec<Field>,
 }
 
-/// Maps a relation field (`BelongsTo`, `HasMany`, `HasOne`).
+/// Maps a relation field (`BelongsTo`, `Has`).
 ///
 /// Relations don't map to columns in this table -- they are resolved through
 /// joins or foreign keys in other tables. A unique bit is assigned in the

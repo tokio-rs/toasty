@@ -9,7 +9,7 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many(pair = owner)]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -19,7 +19,7 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[belongs_to(key = owner_id, references = id)]
-        owner: toasty::BelongsTo<User>,
+        owner: toasty::Deferred<User>,
 
         #[index]
         owner_id: ID,
@@ -62,7 +62,7 @@ pub async fn has_one_different_field_name(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_one(pair = owner)]
-        other: toasty::HasOne<Child>,
+        other: toasty::Deferred<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -72,7 +72,7 @@ pub async fn has_one_different_field_name(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[belongs_to(key = owner_id, references = id)]
-        owner: toasty::BelongsTo<Parent>,
+        owner: toasty::Deferred<Parent>,
 
         #[unique]
         owner_id: ID,

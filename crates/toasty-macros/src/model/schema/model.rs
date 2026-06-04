@@ -333,7 +333,7 @@ impl Model {
 
             indices.push(Index {
                 fields: index_fields,
-                unique: false,
+                unique: index_attr.unique,
                 primary_key: false,
                 name: index_attr.name.clone(),
             });
@@ -429,12 +429,6 @@ impl Model {
             for (index, ast_field) in ast_fields.iter().enumerate() {
                 let mut field =
                     Field::from_ast(ast_field, &model_ident, global_field_index, index, &names)?;
-                if field.attrs.deferred {
-                    errs.push(syn::Error::new_spanned(
-                        ast_field,
-                        "#[deferred] is not yet supported on embedded enum variant fields",
-                    ));
-                }
                 field.variant = Some(variant_index);
                 all_fields.push(field);
                 global_field_index += 1;

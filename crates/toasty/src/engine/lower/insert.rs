@@ -150,11 +150,14 @@ impl LowerStatement<'_, '_> {
         }
 
         // Initialize version fields to 1 if not already set by the user.
+        // For embedded newtypes (e.g. `Version(u64)`), wrap in one Record per
+        // embed layer so the value round-trips through the embed's `Load` impl.
         for field in &model.fields {
             if field.is_versionable() {
                 let mut field_expr = expr.entry_mut(field.id.index);
                 if field_expr.is_default() || field_expr.is_value_null() {
-                    field_expr.insert(stmt::Value::U64(1).into());
+                    let target = self.auto_target(field.id);
+                    field_expr.insert(target.wrap(stmt::Value::U64(1)).into());
                 }
             }
         }
@@ -227,7 +230,8 @@ impl LowerStatement<'_, '_> {
                 expr_arg: &stmt::ExprArg,
                 projection: &stmt::Projection,
             ) -> Option<stmt::Expr> {
-                todo!("self={self:#?}; expr_arg={expr_arg:#?}; projection={projection:#?}");
+                let _ = (expr_arg, projection);
+                None
             }
 
             fn resolve_ref(
@@ -329,6 +333,31 @@ impl<'b> LowerStatement<'_, 'b> {
                 _ => panic!("#[auto] not allowed on non-primitive fields"),
             }
         }
+    }
+
+    /// The target projection and per-row delta for a versionable field's update
+    /// assignment, used to build an atomic `version = version + 1` via
+    /// [`Assignment::Add`](stmt::Assignment::Add).
+    ///
+    /// The projection walks past any embed-newtype layers (`Version(u64)`) to
+    /// the leaf primitive column — `[field, 0, …]` — and the delta is the bare
+    /// literal `1`. Arithmetic operators apply only to primitive columns, so
+    /// unlike the whole-record `Set` the instance path uses, the increment must
+    /// reach the leaf rather than sit on the embed field.
+    pub(super) fn version_increment_target(
+        &self,
+        field_id: app::FieldId,
+    ) -> (stmt::Projection, stmt::Expr) {
+        let target = self.auto_target(field_id);
+
+        // `[field_id.index]` then one `0` per embed layer, reaching the leaf.
+        let mut steps = vec![field_id.index];
+        steps.resize(1 + target.wrap_depth, 0);
+
+        (
+            stmt::Projection::from(steps.as_slice()),
+            stmt::Expr::Value(stmt::Value::U64(1)),
+        )
     }
 }
 

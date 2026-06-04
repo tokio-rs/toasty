@@ -82,13 +82,14 @@ impl Simplify<'_> {
             //   → OR(subj == p1 AND e1 <op> rhs, subj == p2 AND e2 <op> rhs)
             //
             // Each arm is fully simplified inline. Arms that fold to false/null
-            // are pruned.
-            (Expr::Match(m), _) if m.subject.is_stable() => {
+            // are pruned. Comparison ops only — distributing arithmetic this
+            // way would produce a malformed boolean from a non-boolean term.
+            (Expr::Match(m), _) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let match_expr = lhs.take();
                 let other = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, true))
             }
-            (_, Expr::Match(m)) if m.subject.is_stable() => {
+            (_, Expr::Match(m)) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let other = lhs.take();
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
@@ -179,7 +180,7 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if term.is_false() || matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if is_dead_filter_term(&term) {
                 continue;
             }
 
@@ -211,11 +212,28 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if !term.is_false() && !matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if !is_dead_filter_term(&term) {
                 operands.push(term);
             }
         }
 
         Expr::or_from_vec(operands)
     }
+}
+
+/// A distributed-comparison term is dead — it can never be `true`, so it
+/// contributes nothing to the surrounding `OR` — when it is `false`, a bare
+/// `NULL`, or an `AND` with a `NULL` conjunct. The last case arises when an arm
+/// compares against a decode `Match`'s `null` else branch (e.g.
+/// `eq(option_embed, Some(..))` evaluated against a `None` row): `x AND NULL`
+/// never holds in three-valued filter logic, and DynamoDB rejects the bare
+/// value placeholder the `NULL` would otherwise serialize to.
+fn is_dead_filter_term(term: &Expr) -> bool {
+    if term.is_unsatisfiable() {
+        return true;
+    }
+    matches!(
+        term,
+        Expr::And(and) if and.operands.iter().any(Expr::is_value_null)
+    )
 }

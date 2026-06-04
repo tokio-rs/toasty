@@ -11,7 +11,7 @@ use toasty_core::{
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
 
 /// Returns `true` if the only difference between two columns is the variant
-/// list of a named enum type. These changes are handled by `diff::Types`
+/// list of a named enum type. These changes are handled by `diff::Type`
 /// (`ALTER TYPE ... ADD VALUE`) and should not produce column-level DDL.
 fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
     if previous.name != next.name
@@ -62,13 +62,13 @@ impl<'a> MigrationStatement<'a> {
             let types_diff = schema_diff.types();
             for item in types_diff.iter() {
                 match item {
-                    diff::TypesItem::CreateType(ty) => {
+                    diff::Type::Create(ty) => {
                         result.push(Self::new(
                             Statement::create_enum_type(ty),
                             Cow::Borrowed(schema_diff.next()),
                         ));
                     }
-                    diff::TypesItem::AddVariants { ty, added } => {
+                    diff::Type::AddVariants { ty, added } => {
                         let type_name = ty.name.as_deref().expect("named enum type");
                         for variant in added {
                             result.push(Self::new(
@@ -83,7 +83,7 @@ impl<'a> MigrationStatement<'a> {
 
         for table in schema_diff.tables().iter() {
             match table {
-                diff::TablesItem::CreateTable(table) => {
+                diff::Table::Create(table) => {
                     result.push(Self::new(
                         Statement::create_table(table, capability),
                         Cow::Borrowed(schema_diff.next()),
@@ -98,11 +98,11 @@ impl<'a> MigrationStatement<'a> {
                         ));
                     }
                 }
-                diff::TablesItem::DropTable(table) => result.push(Self::new(
+                diff::Table::Drop(table) => result.push(Self::new(
                     Statement::drop_table(table),
                     Cow::Borrowed(schema_diff.previous()),
                 )),
-                diff::TablesItem::AlterTable {
+                diff::Table::Alter {
                     previous,
                     next,
                     columns,
@@ -124,7 +124,7 @@ impl<'a> MigrationStatement<'a> {
                         && columns.iter().any(|item| {
                             matches!(
                                 item,
-                                diff::ColumnsItem::AlterColumn {
+                                diff::Column::Alter {
                                     previous: prev_col,
                                     next: next_col
                                 } if AlterColumnChanges::from_diff(prev_col, next_col).has_type_change()
@@ -149,19 +149,19 @@ impl<'a> MigrationStatement<'a> {
                     // Indices diff
                     for item in indices.iter() {
                         match item {
-                            diff::IndicesItem::CreateIndex(index) => {
+                            diff::Index::Create(index) => {
                                 result.push(Self::new(
                                     Statement::create_index(index),
                                     Cow::Borrowed(schema_diff.next()),
                                 ));
                             }
-                            diff::IndicesItem::DropIndex(index) => {
+                            diff::Index::Drop(index) => {
                                 result.push(Self::new(
                                     Statement::drop_index(index),
                                     Cow::Borrowed(schema_diff.previous()),
                                 ));
                             }
-                            diff::IndicesItem::AlterIndex { previous, next } => {
+                            diff::Index::Alter { previous, next } => {
                                 result.push(Self::new(
                                     Statement::drop_index(previous),
                                     Cow::Borrowed(schema_diff.previous()),
@@ -184,7 +184,7 @@ impl<'a> MigrationStatement<'a> {
         schema: Cow<'a, Schema>,
         previous: &Table,
         next: &Table,
-        columns: &diff::Columns<'_>,
+        columns: &[diff::Column<'_>],
         capability: &Capability,
     ) {
         let current_name = schema.table(previous.id).name.clone();
@@ -218,7 +218,7 @@ impl<'a> MigrationStatement<'a> {
                 // Skip added columns (no source data)
                 !columns
                     .iter()
-                    .any(|item| matches!(item, diff::ColumnsItem::AddColumn(c) if c.id == col.id))
+                    .any(|item| matches!(item, diff::Column::Add(c) if c.id == col.id))
             })
             .map(|col| {
                 let target_name = Name::from(&col.name[..]);
@@ -226,7 +226,7 @@ impl<'a> MigrationStatement<'a> {
                 let source_name = columns
                     .iter()
                     .find_map(|item| match item {
-                        diff::ColumnsItem::AlterColumn {
+                        diff::Column::Alter {
                             previous: prev_col,
                             next: next_col,
                         } if next_col.id == col.id && prev_col.name != next_col.name => {
@@ -278,26 +278,26 @@ impl<'a> MigrationStatement<'a> {
     fn emit_column_changes(
         result: &mut Vec<Self>,
         schema: Cow<'a, Schema>,
-        columns: &diff::Columns<'_>,
+        columns: &[diff::Column<'_>],
         capability: &Capability,
     ) {
         for item in columns.iter() {
             match item {
-                diff::ColumnsItem::AddColumn(column) => {
+                diff::Column::Add(column) => {
                     result.push(Self::new(
                         Statement::add_column(column, capability),
                         schema.clone(),
                     ));
                 }
-                diff::ColumnsItem::DropColumn(column) => {
+                diff::Column::Drop(column) => {
                     result.push(Self::new(Statement::drop_column(column), schema.clone()));
                 }
-                diff::ColumnsItem::AlterColumn {
+                diff::Column::Alter {
                     previous,
                     next: col_next,
                 } => {
                     // Skip column-level DDL for named enum variant changes — those
-                    // are handled by diff::Types (ALTER TYPE ... ADD VALUE).
+                    // are handled by diff::Type (ALTER TYPE ... ADD VALUE).
                     if capability.named_enum_types
                         && is_named_enum_variant_only_change(previous, col_next)
                     {

@@ -30,7 +30,7 @@ macro_rules! impl_jiff_field {
         impl Field for $ty {
             type ExprTarget = Self;
             type Path<Origin> = Path<Origin, Self>;
-            type ListPath<Origin> = Path<Origin, List<Self>>;
+            type ListPath<Origin> = Path<Origin, List<Self::ExprTarget>>;
             type Update<'a> = ();
             type Inner = Self;
 
@@ -38,7 +38,9 @@ macro_rules! impl_jiff_field {
                 path
             }
 
-            fn new_list_path<Origin>(path: Path<Origin, List<Self>>) -> Self::ListPath<Origin> {
+            fn new_list_path<Origin>(
+                path: Path<Origin, List<Self::ExprTarget>>,
+            ) -> Self::ListPath<Origin> {
                 path
             }
 

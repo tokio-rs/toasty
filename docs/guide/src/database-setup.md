@@ -35,8 +35,9 @@ one crate.
 You don't need to list every model. Registering a model also registers any
 models reachable through its fields — `BelongsTo`, `HasMany`, `HasOne`, and
 embedded types are all discovered by traversing the model's fields. For
-example, if `User` has a `HasMany<Post>` field and `Post` has a `BelongsTo<User>`
-field, `toasty::models!(User)` registers both `User` and `Post`.
+example, if `User` has a `Vec<Post>` or `Deferred<Vec<Post>>` field and `Post`
+has a `User` or `Deferred<User>` field, `toasty::models!(User)` registers both
+`User` and `Post`.
 
 ## Connection URLs
 
@@ -46,6 +47,7 @@ requires its corresponding feature flag in `Cargo.toml`.
 | Scheme | Database | Feature flag |
 |---|---|---|
 | `sqlite` | SQLite | `sqlite` |
+| `turso` | Turso (SQLite-compatible, async-native) | `turso` |
 | `postgresql` or `postgres` | PostgreSQL | `postgresql` |
 | `mysql` | MySQL | `mysql` |
 | `dynamodb` | DynamoDB | `dynamodb` |

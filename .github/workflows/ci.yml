@@ -1,90 +1,137 @@
 name: Cargo Build & Test
 
 on:
-    push:
-        branches:
-        - main
-    pull_request:
+  push:
+    branches:
+      - main
+  pull_request:
 
 env:
-    CARGO_TERM_COLOR: always
-    RUSTFLAGS: -D warnings
-    RUST_BACKTRACE: 1
-    # Pinned so a new Rust release cannot break CI on its own. Bumped
-    # automatically by Renovate; see .github/renovate.json5.
-    RUST_STABLE_VERSION: "1.95.0"
-    AWS_REGION: "us-east-1"
-    AWS_ENDPOINT_URL_DYNAMODB: http://localhost:8000
-    AWS_ACCESS_KEY_ID: test
-    AWS_SECRET_ACCESS_KEY: test
-    # NOTE: `TOASTY_TEST_POSTGRES_URL` / `TOASTY_TEST_MYSQL_URL` are set per-job
-    # below — only on workers that actually run the matching service. Setting
-    # them globally caused the `test-all-os` worker to inherit a non-functional
-    # URL, so live-PG tests panicked with "connection refused" instead of
-    # short-circuiting on a missing env var.
+  CARGO_TERM_COLOR: always
+  RUSTFLAGS: -D warnings
+  RUST_BACKTRACE: 1
+  # Pinned so a new Rust release cannot break CI on its own. Bumped
+  # automatically by Renovate; see .github/renovate.json5.
+  RUST_STABLE_VERSION: "1.95.0"
+  # The MySQL service container eats into the 16 GB runner budget, and
+  # the integration test crate currently expands a lot of generated
+  # code per inline test model. With 4 parallel rustc instances the
+  # build OOMs. Raise this once the per-model codegen is trimmed down.
+  CARGO_BUILD_JOBS: 1
+  AWS_REGION: "us-east-1"
+  AWS_ENDPOINT_URL_DYNAMODB: http://localhost:8000
+  AWS_ACCESS_KEY_ID: test
+  AWS_SECRET_ACCESS_KEY: test
+  # NOTE: `TOASTY_TEST_POSTGRES_URL` / `TOASTY_TEST_MYSQL_URL` are set per-job
+  # below — only on workers that actually run the matching service. Setting
+  # them globally caused the `test-all-os` worker to inherit a non-functional
+  # URL, so live-PG tests panicked with "connection refused" instead of
+  # short-circuiting on a missing env var.
 
 jobs:
-    check:
-        name: cargo check
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-            components: rustfmt
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: cargo check
-          run: cargo check --workspace --all-features
-        - name: cargo fmt
-          run: cargo fmt --all --check
+  check:
+    name: cargo check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+          components: rustfmt
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo check
+        run: cargo check --workspace --all-features
+      - name: cargo fmt
+        run: cargo fmt --all --check
 
-    clippy:
-        name: cargo clippy
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-            components: clippy
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: cargo clippy
-          run: cargo clippy --workspace --all-features
+  clippy:
+    name: cargo clippy
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+          components: clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo clippy
+        run: cargo clippy --workspace --all-features
 
-    msrv:
-        needs: check
-        name: Check MSRV
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v6
-        - name: Read MSRV from Cargo.toml
-          id: msrv
-          run: |
-            version=$(awk -F'"' '/^rust-version/ {print $2; exit}' Cargo.toml)
-            echo "version=$version" >> "$GITHUB_OUTPUT"
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ steps.msrv.outputs.version }}
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        # `RUSTUP_TOOLCHAIN` overrides `rust-toolchain.toml`, which otherwise
-        # pins this job back to the latest stable and defeats the MSRV check.
-        - name: cargo check
-          env:
-            RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
-          run: cargo check --workspace --all-features
+  feature-combinations:
+    needs: check
+    name: Check feature combinations (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          # Top-level crates have enough independent features that a full
+          # powerset would be noisy in CI. Pairwise coverage catches missing
+          # feature wiring without running hundreds of checks per package.
+          - package: toasty
+            extra_args: --depth 2
+          - package: toasty-core
+            extra_args: ""
+          - package: toasty-sql
+            extra_args: ""
+          - package: toasty-driver-mysql
+            extra_args: ""
+          - package: toasty-driver-postgresql
+            extra_args: ""
+          - package: example-composite-key
+            extra_args: ""
+          - package: example-hello-toasty
+            extra_args: ""
+          - package: example-todo-with-cli
+            extra_args: ""
+          - package: example-user-has-one-profile
+            extra_args: ""
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install cargo-hack
+        run: cargo install cargo-hack --locked
+      - name: cargo hack check --feature-powerset
+        run: cargo hack check --package "${{ matrix.package }}" --feature-powerset ${{ matrix.extra_args }}
 
-    test-sqlite:
-      needs: check
-      name: Run tests for Sqlite
-      runs-on: ubuntu-latest
-      steps:
+  msrv:
+    needs: check
+    name: Check MSRV
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Read MSRV from Cargo.toml
+        id: msrv
+        run: |
+          version=$(awk -F'"' '/^rust-version/ {print $2; exit}' Cargo.toml)
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ steps.msrv.outputs.version }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # `RUSTUP_TOOLCHAIN` overrides `rust-toolchain.toml`, which otherwise
+      # pins this job back to the latest stable and defeats the MSRV check.
+      - name: cargo check
+        env:
+          RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
+        run: cargo check --workspace --all-features
+
+  test-sqlite:
+    needs: check
+    name: Run tests for Sqlite
+    runs-on: ubuntu-latest
+    steps:
       - uses: actions/checkout@v6
       - uses: dtolnay/rust-toolchain@master
         with:
@@ -102,135 +149,146 @@ jobs:
       - name: doc-tests
         run: cargo test -p tests --doc
 
-    test-mysql:
-        needs: check
-        name: Run tests for MySQL
-        runs-on: ubuntu-latest
-        services:
-          mysql:
-            image: mysql:9
-            env:
-              MYSQL_ROOT_PASSWORD: toasty
-              MYSQL_USER: toasty
-              MYSQL_PASSWORD: toasty
-              MYSQL_DATABASE: toasty
-            ports:
-              - 3306:3306
-            options: --health-cmd "mysqladmin ping -h localhost" --health-interval 10s --health-timeout 5s --health-retries 5
+  test-mysql:
+    needs: check
+    name: Run tests for MySQL
+    runs-on: ubuntu-latest
+    services:
+      mysql:
+        image: mysql:9
         env:
-            TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
-            TOASTY_TEST_MYSQL_URL: mysql://toasty:toasty@localhost/toasty
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: cargo test
-          run: cargo test --no-default-features --features mysql
-        - name: cargo test -p toasty-driver-mysql
-          run: cargo test -p toasty-driver-mysql
-        - name: cargo run --bin example-hello-toasty
-          run: cargo run --bin example-hello-toasty --features mysql
+          MYSQL_ROOT_PASSWORD: toasty
+          MYSQL_USER: toasty
+          MYSQL_PASSWORD: toasty
+          MYSQL_DATABASE: toasty
+        ports:
+          - 3306:3306
+        options: --health-cmd "mysqladmin ping -h localhost" --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
+      TOASTY_TEST_MYSQL_URL: mysql://toasty:toasty@localhost/toasty
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo test
+        run: cargo test --no-default-features --features mysql
+      - name: cargo test -p toasty-driver-mysql
+        run: cargo test -p toasty-driver-mysql
+      - name: cargo run --bin example-hello-toasty
+        run: cargo run --bin example-hello-toasty --features mysql
 
-    test-postgresql:
-        needs: check
-        name: Run tests for PostgreSQL
-        runs-on: ubuntu-latest
-        services:
-          postgresql:
-            image: postgres:18
-            env:
-              POSTGRES_USER: toasty
-              POSTGRES_PASSWORD: toasty
-              POSTGRES_DB: toasty
-            ports:
-              - 5432:5432
-            options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+  test-postgresql:
+    needs: check
+    name: Run tests for PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgresql:
+        image: postgres:18
         env:
-            TOASTY_CONNECTION_URL: postgresql://toasty:toasty@localhost/toasty
-            TOASTY_TEST_POSTGRES_URL: postgresql://toasty:toasty@localhost/toasty
-            TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: Generate TLS certificates
-          run: mkdir -p tests/tls/certs && tests/tls/generate-certs.sh
-        - name: Start TLS PostgreSQL
-          run: docker compose up -d postgresql-tls
-        - name: Wait for TLS PostgreSQL
-          run: |
-            for i in $(seq 1 30); do
-              docker compose exec postgresql-tls pg_isready -U toasty && break
-              sleep 1
-            done
-        - name: cargo test
-          run: cargo test --no-default-features --features postgresql
-        - name: cargo test -p toasty-driver-postgresql
-          run: cargo test -p toasty-driver-postgresql
-        - name: cargo run --bin example-hello-toasty
-          run: cargo run --bin example-hello-toasty --features postgresql
+          POSTGRES_USER: toasty
+          POSTGRES_PASSWORD: toasty
+          POSTGRES_DB: toasty
+        ports:
+          - 5432:5432
+        options: --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
+    env:
+      TOASTY_CONNECTION_URL: postgresql://toasty:toasty@localhost/toasty
+      TOASTY_TEST_POSTGRES_URL: postgresql://toasty:toasty@localhost/toasty
+      TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Generate TLS certificates
+        run: mkdir -p tests/tls/certs && tests/tls/generate-certs.sh
+      - name: Start TLS PostgreSQL
+        run: docker compose up -d postgresql-tls
+      - name: Wait for TLS PostgreSQL
+        run: |
+          for i in $(seq 1 30); do
+            docker compose exec postgresql-tls pg_isready -U toasty && break
+            sleep 1
+          done
+      - name: cargo test
+        run: cargo test --no-default-features --features postgresql
+      - name: cargo test -p toasty-driver-postgresql
+        run: cargo test -p toasty-driver-postgresql
+      - name: cargo run --bin example-hello-toasty
+        run: cargo run --bin example-hello-toasty --features postgresql
 
-    test-dynamodb:
-        needs: check
-        name: Run tests for DynamoDB
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: Start dynamodb-local
-          run: sudo docker run --name dynamodb -d -p 8000:8000 amazon/dynamodb-local:latest -jar DynamoDBLocal.jar -port 8000
-        - name: cargo test
-          run: cargo test --no-default-features --features dynamodb -- --test-threads 1
-        - name: cargo test -p toasty-driver-dynamodb
-          run: cargo test -p toasty-driver-dynamodb -- --test-threads 1
+  test-postgresql-uds:
+    needs: check
+    name: PostgreSQL Unix-socket connectivity smoke test
+    runs-on: ubuntu-latest
+    # Uses the runner's preinstalled PostgreSQL rather than the service
+    # container, since service containers do not expose their UNIX
+    # socket to the host. Peer auth maps the runner OS user to a
+    # matching superuser role.
+    env:
+      TOASTY_TEST_POSTGRES_UDS_URL: postgresql:///runner?host=/var/run/postgresql&user=runner
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Start PostgreSQL and provision runner role
+        run: |
+          sudo systemctl start postgresql
+          sudo -u postgres createuser --superuser "$USER"
+          sudo -u postgres createdb "$USER"
+      - name: cargo test connect_via_unix_socket
+        run: cargo test --no-default-features --features postgresql --test postgresql connect_via_unix_socket -- --exact
 
-    test-all-os:
-        needs: check
-        name: Run tests on all operating systems
-        runs-on: ${{ matrix.os }}
-        strategy:
-          matrix:
-            os:
-              - windows-latest
-              - ubuntu-latest
-              - macos-latest
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - name: cargo test
-          run: cargo test --workspace
-        - name: Run examples
-          run: scripts/gen-examples run
+  test-dynamodb:
+    needs: check
+    name: Run tests for DynamoDB
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Start dynamodb-local
+        run: sudo docker run --name dynamodb -d -p 8000:8000 amazon/dynamodb-local:latest -jar DynamoDBLocal.jar -port 8000
+      - name: cargo test
+        run: cargo test --no-default-features --features dynamodb -- --test-threads 1
+      - name: cargo test -p toasty-driver-dynamodb
+        run: cargo test -p toasty-driver-dynamodb -- --test-threads 1
 
-    examples:
-        needs: check
-        name: Build the `hello-toasty` example with each feature
-        runs-on: ubuntu-latest
-        steps:
-        - uses: actions/checkout@v6
-        - uses: dtolnay/rust-toolchain@master
-          with:
-            toolchain: ${{ env.RUST_STABLE_VERSION }}
-        - uses: Swatinem/rust-cache@v2
-          with:
-            save-if: ${{ github.ref == 'refs/heads/main' }}
-        - run: cargo install cargo-hack
-        - run: cd examples/hello-toasty && cargo hack build --each-feature
+  test-all-os:
+    needs: check
+    name: Run tests on all operating systems
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os:
+          - windows-latest
+          - ubuntu-latest
+          - macos-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: cargo test
+        run: cargo test --workspace
+      - name: Run examples
+        run: scripts/gen-examples run
