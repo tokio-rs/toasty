@@ -1582,6 +1582,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     assignments: update_stmt.assignments.clone(),
                     filter: index_plan.result_filter.take(),
                     condition: update_stmt.condition.expr.clone(),
+                    columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })
             }

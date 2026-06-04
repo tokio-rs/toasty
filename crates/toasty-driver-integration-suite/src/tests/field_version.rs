@@ -32,6 +32,36 @@ pub async fn update_increments_version(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A relative update (`increment`) on a versioned model. The post-increment
+/// value can't be computed client-side, so the driver returns it; the
+/// client-side `#[version]` bump rides along as a constant in the same
+/// returning projection. The two must not collide: the engine asks the driver
+/// for exactly the relative column, so the version value never lands in the
+/// returned row and shifts `value` out of its slot.
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_counter))]
+pub async fn relative_update_increments_value_and_version(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut counter = toasty::create!(Counter { value: 10 }).exec(&mut db).await?;
+    assert_struct!(counter, _ { value: 10, version: 1, .. });
+
+    counter
+        .update()
+        .value(toasty::stmt::increment())
+        .exec(&mut db)
+        .await?;
+
+    // The handle is reloaded from the update's returning row: `value` is read
+    // back from the driver, `version` is bumped to 2.
+    assert_struct!(counter, _ { value: 11, version: 2, .. });
+
+    // And it is durable.
+    let reloaded = Counter::filter_by_id(counter.id).get(&mut db).await?;
+    assert_struct!(reloaded, _ { value: 11, version: 2, .. });
+
+    Ok(())
+}
+
 /// Two updates from the same stale snapshot — the second should fail with a
 /// condition-check error because the DB version has already moved to 2.
 #[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
@@ -321,44 +351,29 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// A query-based update that pairs a user-authored relative assignment
-/// (`counter += 1`) with the engine's injected version bump. The version column
-/// is declared *before* the counter, so it sorts first among the non-`Set`
-/// assignments.
+/// The query-based counterpart to `relative_update_increments_value_and_version`:
+/// a relative assignment (`value += 1`) on a versioned model through a
+/// query-rooted update.
 ///
-/// Regression guard: the engine keeps the injected version increment out of the
-/// returning projection, but the driver must likewise keep it out of the
-/// returned row. Otherwise the version value occupies the slot the planner
-/// expects the counter in, and the counter read-back is wrong.
-#[driver_test(requires(not(sql)))]
-pub async fn query_update_relative_field_with_version(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
+/// The user's relative column needs a driver round-trip, so it's in the
+/// returning column list; the engine-injected version bump is kept *out* of
+/// that list. The driver returns exactly the requested columns, so the version
+/// value never lands in the returned row and shifts `value` out of its slot.
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_counter))]
+pub async fn query_relative_update_increments_value_and_version(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
 
-        #[version]
-        version: u64,
+    let counter = toasty::create!(Counter { value: 10 }).exec(&mut db).await?;
+    assert_struct!(counter, _ { value: 10, version: 1, .. });
 
-        counter: i64,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
-
-    let item = toasty::create!(Item { counter: 10 }).exec(&mut db).await?;
-    assert_eq!(item.version, 1);
-    assert_eq!(item.counter, 10);
-
-    Item::filter_by_id(item.id)
+    Counter::filter_by_id(counter.id)
         .update()
-        .counter(toasty::stmt::increment())
+        .value(toasty::stmt::increment())
         .exec(&mut db)
         .await?;
 
-    let reloaded = Item::filter_by_id(item.id).get(&mut db).await?;
-    assert_eq!(reloaded.counter, 11);
-    assert_eq!(reloaded.version, 2);
+    let reloaded = Counter::filter_by_id(counter.id).get(&mut db).await?;
+    assert_struct!(reloaded, _ { value: 11, version: 2, .. });
 
     Ok(())
 }
