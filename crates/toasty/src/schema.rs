@@ -4,6 +4,9 @@ pub use auto::Auto;
 mod deferred;
 pub use deferred::Deferred;
 
+mod document;
+pub use document::Document;
+
 mod embed;
 pub use embed::Embed;
 

@@ -37,6 +37,12 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
+                    Primitive(_) if field.attrs.document.is_some() => {
+                        // `#[document]` fields don't yet expose a path API into
+                        // the document; whole-value access goes through the
+                        // create / update builders.
+                        TokenStream::new()
+                    }
                     Primitive(ty) => {
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
@@ -170,6 +176,7 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
+                    Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),
                     Primitive(ty) => {
                         self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
                     }

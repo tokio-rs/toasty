@@ -74,6 +74,11 @@ impl VarStore {
                 response.values
             }
             Rows::Value(value) => {
+                // Collapse driver-side `Value::Object` (the structural,
+                // named form drivers produce for document columns) into the
+                // positional `Value::Record` Load consumes. After this the
+                // engine sees one shape per type all the way through.
+                let value = value.normalize_for_load(&self.tys[var.0]);
                 assert!(
                     value.is_a(&self.tys[var.0]),
                     "type mismatch: {value:?} is not a {:?}",

@@ -136,6 +136,14 @@ impl ToSql for &db::Type {
                 Flavor::Mysql => fmt!(f, "JSON"),
                 Flavor::Sqlite => fmt!(f, "TEXT"),
             },
+            db::Type::Document { binary } => match f.serializer.flavor {
+                // `binary` selects `jsonb` over `json` on PostgreSQL; the text
+                // encoding (`#[document(text)]`) is not yet wired up.
+                Flavor::Postgresql if *binary => fmt!(f, "JSONB"),
+                Flavor::Postgresql => fmt!(f, "JSON"),
+                Flavor::Mysql => fmt!(f, "JSON"),
+                Flavor::Sqlite => fmt!(f, "TEXT"),
+            },
             db::Type::Custom(custom) => fmt!(f, custom.as_str()),
         }
     }

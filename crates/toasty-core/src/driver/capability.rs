@@ -271,6 +271,12 @@ pub struct Capability {
     /// accepting `stmt::Type::List(_)` fields.
     pub vec_scalar: bool,
 
+    /// Whether the driver can store a `#[document]` collection field — a
+    /// `Vec<T>` of an embedded struct — as a single document column
+    /// (`jsonb` / `JSON` on the SQL backends). Used by the schema builder as
+    /// the gate for accepting `stmt::Type::List(Document(_))` fields.
+    pub document_collections: bool,
+
     /// Whether the driver natively renders `IsSuperset` / `Intersects` array
     /// predicates over an arbitrary right-hand-side expression.
     ///
@@ -600,6 +606,7 @@ impl Capability {
         // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
         vec_scalar: true,
+        document_collections: true,
 
         // SQLite renders `IsSuperset` / `Intersects` as `json_each`
         // subqueries that accept any rhs expression.
@@ -661,6 +668,7 @@ impl Capability {
         // representation for `Vec<scalar>` model fields.
         native_array: true,
         vec_scalar: true,
+        document_collections: true,
 
         // PostgreSQL: all three collection removals are atomic via native
         // array operators / slicing.
@@ -711,6 +719,7 @@ impl Capability {
         // not regress the IN-list rendering).
         bind_list_param: true,
         vec_scalar: true,
+        document_collections: false,
 
         // MySQL uses BINARY col LIKE ? ESCAPE '!' for case-sensitive starts_with.
         glob_starts_with: false,
@@ -800,6 +809,7 @@ impl Capability {
         // `AttributeValue` encoding.
         native_array: false,
         vec_scalar: true,
+        document_collections: false,
 
         // DynamoDB emulates `IsSuperset` / `Intersects` by expanding the rhs
         // into one `contains(path, vN)` clause per element. The expansion
