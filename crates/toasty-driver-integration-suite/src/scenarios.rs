@@ -50,6 +50,7 @@ pub mod user_with_age;
 pub mod user_with_email;
 pub mod user_with_status;
 pub mod user_with_zip_address;
+pub mod versioned_counter;
 pub mod versioned_item;
 pub mod versioned_user_unique_email;
 pub mod widget_mixed_types;

@@ -102,7 +102,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             filter: None,
             keys: _,
             assignments: #{ [2]: Assignment::Set(== 2i64)},
-            returning: false,
+            returning: None,
         }));
     }
 

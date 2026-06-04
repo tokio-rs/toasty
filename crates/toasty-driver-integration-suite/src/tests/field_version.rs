@@ -32,6 +32,36 @@ pub async fn update_increments_version(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A relative update (`increment`) on a versioned model. The post-increment
+/// value can't be computed client-side, so the driver returns it; the
+/// client-side `#[version]` bump rides along as a constant in the same
+/// returning projection. The two must not collide: the engine asks the driver
+/// for exactly the relative column, so the version value never lands in the
+/// returned row and shifts `value` out of its slot.
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_counter))]
+pub async fn relative_update_increments_value_and_version(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut counter = toasty::create!(Counter { value: 10 }).exec(&mut db).await?;
+    assert_struct!(counter, _ { value: 10, version: 1, .. });
+
+    counter
+        .update()
+        .value(toasty::stmt::increment())
+        .exec(&mut db)
+        .await?;
+
+    // The handle is reloaded from the update's returning row: `value` is read
+    // back from the driver, `version` is bumped to 2.
+    assert_struct!(counter, _ { value: 11, version: 2, .. });
+
+    // And it is durable.
+    let reloaded = Counter::filter_by_id(counter.id).get(&mut db).await?;
+    assert_struct!(reloaded, _ { value: 11, version: 2, .. });
+
+    Ok(())
+}
+
 /// Two updates from the same stale snapshot — the second should fail with a
 /// condition-check error because the DB version has already moved to 2.
 #[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
