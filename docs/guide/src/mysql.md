@@ -165,6 +165,11 @@ transaction.
 [`.paginate(per_page).prev(&db)`](./sorting-limits-and-pagination.md#navigating-pages)
 walks backwards from a page cursor.
 
+**Case-sensitive prefix match.** The
+[`.starts_with()`](./filtering-with-expressions.md#starts_with) filter lowers to
+`BINARY col LIKE 'prefix%'`. Casting the column to `BINARY` forces a byte
+comparison, so the match is case-sensitive regardless of the column's collation.
+
 A few things that exist on PostgreSQL are absent here:
 
 **No `ILIKE`.** MySQL has no `ILIKE` operator, so
