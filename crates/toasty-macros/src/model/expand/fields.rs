@@ -37,11 +37,20 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(_) if field.attrs.document.is_some() => {
-                        // `#[document]` fields don't yet expose a path API into
-                        // the document; whole-value access goes through the
-                        // create / update builders.
-                        TokenStream::new()
+                    Primitive(ty) if field.attrs.document.is_some() => {
+                        // A bare `#[document]` struct embed exposes the same
+                        // path API as a column-expanded embed
+                        // (`profile().name()`); only storage differs, and the
+                        // query engine routes the path into a JSON extraction.
+                        // A `#[document]` collection (`Vec<Embed>`) has no path
+                        // API in this increment, so it gets no accessor.
+                        let is_collection = matches!(ty, syn::Type::Path(p)
+                            if p.path.segments.last().is_some_and(|s| s.ident == "Vec"));
+                        if is_collection {
+                            TokenStream::new()
+                        } else {
+                            self.expand_primitive_field_method(field_ident, ty, &field_offset)
+                        }
                     }
                     Primitive(ty) => {
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)

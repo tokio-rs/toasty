@@ -274,6 +274,103 @@ pub async fn struct_embed_update_replace(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// Filtering on scalar fields inside a bare `#[document]` embed. Each path
+/// access lowers to a JSON extraction in the WHERE clause: equality on a
+/// string leaf, range on a numeric leaf, and `is_none` on an optional leaf
+/// (an absent JSON key).
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn struct_embed_filter(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        age: i64,
+        nickname: Option<String>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    toasty::create!(Account::[
+        { profile: Profile { name: "Alice".into(), age: 30, nickname: Some("ace".into()) } },
+        { profile: Profile { name: "Bob".into(), age: 25, nickname: None } },
+        { profile: Profile { name: "Carol".into(), age: 40, nickname: Some("cee".into()) } },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let alice = Account::filter(Account::fields().profile().name().eq("Alice"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(alice.len(), 1);
+    assert_eq!(alice[0].profile.name, "Alice");
+
+    let over_28 = Account::filter(Account::fields().profile().age().gt(28))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(over_28.len(), 2);
+
+    let no_nickname = Account::filter(Account::fields().profile().nickname().is_none())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(no_nickname.len(), 1);
+    assert_eq!(no_nickname[0].profile.name, "Bob");
+
+    Ok(())
+}
+
+/// Filtering on a field inside a nested `#[document]` embed: the JSON path
+/// descends two levels (`profile.address.city`).
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn struct_embed_filter_nested(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Address {
+        city: String,
+        zip: String,
+    }
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        address: Address,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    toasty::create!(Account::[
+        { profile: Profile { name: "Alice".into(), address: Address { city: "Seattle".into(), zip: "98101".into() } } },
+        { profile: Profile { name: "Bob".into(), address: Address { city: "Portland".into(), zip: "97201".into() } } },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let seattle = Account::filter(Account::fields().profile().address().city().eq("Seattle"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(seattle.len(), 1);
+    assert_eq!(seattle[0].profile.name, "Alice");
+
+    Ok(())
+}
+
 /// On a backend without document-collection support, a `#[document]`
 /// collection field is rejected at schema build with a clear error message.
 #[driver_test(id(ID), requires(not(document_collections)))]

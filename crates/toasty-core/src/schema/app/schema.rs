@@ -140,6 +140,21 @@ impl Schema {
         let mut steps = rest.iter();
         while let Some(step) = steps.next() {
             match &current_field.ty {
+                // A `#[document]` embed stores as one column whose sub-fields
+                // live in the document type rather than as `app::Field`s. The
+                // remaining steps index into the document; validate them and
+                // resolve to the document field itself (the leaf has no
+                // `app::Field`). The path was already type-checked by the
+                // generated accessors.
+                FieldTy::Primitive(primitive)
+                    if matches!(primitive.ty, stmt::Type::Document(_)) =>
+                {
+                    let stmt::Type::Document(doc) = &primitive.ty else {
+                        unreachable!()
+                    };
+                    return resolve_document_steps(doc, *step, &mut steps)
+                        .then_some(Resolved::Field(current_field));
+                }
                 FieldTy::Primitive(..) => {
                     // Cannot project through primitive fields
                     return None;
@@ -662,4 +677,28 @@ fn eager_relation_target(field: &Field) -> Option<ModelId> {
     }
 
     field.relation_target_id()
+}
+
+/// Validates that a projection descends a `#[document]` type's fields: `first`
+/// indexes into `doc`, then each remaining step descends into the nested
+/// document at that field (if any). Returns `false` if a step is out of range
+/// or descends past a scalar leaf.
+fn resolve_document_steps(
+    doc: &stmt::TypeDocument,
+    first: usize,
+    rest: &mut std::slice::Iter<'_, usize>,
+) -> bool {
+    let Some(field) = doc.fields.get(first) else {
+        return false;
+    };
+
+    match &field.ty {
+        stmt::Type::Document(nested) => match rest.next() {
+            Some(&next) => resolve_document_steps(nested, next, rest),
+            // Path stops at a sub-document (the whole sub-embed) — valid.
+            None => true,
+        },
+        // A scalar leaf: the path must end here.
+        _ => rest.next().is_none(),
+    }
 }

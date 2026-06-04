@@ -33,6 +33,9 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::Func(stmt::ExprFunc::LastInsertId(_)) => {
                 fmt!(f, "LAST_INSERT_ID()")
             }
+            stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
+                serialize_json_extract(f, func);
+            }
             stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
                 // The rhs Value::List is bound as one JSON string. MySQL's
@@ -203,6 +206,68 @@ impl ToSql for &stmt::Expr {
             _ => todo!("expr={:#?}", self),
         }
     }
+}
+
+/// Serializes a document path extraction per dialect: `json_extract(col,
+/// '$.a.b')` on SQLite / MySQL, and `(col->'a'->>'b')::cast` on PostgreSQL,
+/// where the final key uses `->>` (text) and the cast matches the leaf type.
+fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
+    match f.serializer.flavor {
+        Flavor::Sqlite | Flavor::Mysql => {
+            let open = if f.serializer.is_mysql() {
+                "JSON_EXTRACT("
+            } else {
+                "json_extract("
+            };
+            f.dst.push_str(open);
+            func.base.as_ref().to_sql(f);
+            f.dst.push_str(", '");
+            f.dst.push_str(&json_path(&func.path));
+            f.dst.push_str("')");
+        }
+        Flavor::Postgresql => {
+            f.dst.push('(');
+            func.base.as_ref().to_sql(f);
+            let last = func.path.len().saturating_sub(1);
+            for (i, key) in func.path.iter().enumerate() {
+                // The final step uses `->>` to return text; intermediate steps
+                // use `->` to keep descending through JSON objects.
+                f.dst.push_str(if i == last { "->>'" } else { "->'" });
+                f.dst.push_str(key);
+                f.dst.push('\'');
+            }
+            f.dst.push(')');
+            if let Some(cast) = pg_json_cast(&func.ty) {
+                f.dst.push_str("::");
+                f.dst.push_str(cast);
+            }
+        }
+    }
+}
+
+/// Builds a JSON path string (`$.a.b`) from a key path.
+fn json_path(path: &[String]) -> String {
+    let mut s = String::from("$");
+    for key in path {
+        s.push('.');
+        s.push_str(key);
+    }
+    s
+}
+
+/// The PostgreSQL cast applied to a `->>'` text extraction so it compares
+/// against a bound parameter of the leaf type. `String` (and any unmapped
+/// type) needs no cast — `->>` already yields text.
+fn pg_json_cast(ty: &stmt::Type) -> Option<&'static str> {
+    use crate::stmt::Type;
+    Some(match ty {
+        Type::Bool => "boolean",
+        Type::I8 | Type::I16 | Type::I32 | Type::I64 => "bigint",
+        Type::U8 | Type::U16 | Type::U32 | Type::U64 => "bigint",
+        Type::F32 | Type::F64 => "double precision",
+        Type::Uuid => "uuid",
+        _ => return None,
+    })
 }
 
 impl ToSql for &stmt::BinaryOp {

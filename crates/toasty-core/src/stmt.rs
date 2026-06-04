@@ -168,6 +168,9 @@ pub use sorted_index::SortedIndex;
 mod func_count;
 pub use func_count::FuncCount;
 
+mod func_json_extract;
+pub use func_json_extract::FuncJsonExtract;
+
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 

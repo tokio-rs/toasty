@@ -52,6 +52,44 @@ impl Simplify<'_> {
             return Some(expr.base.take());
         }
 
+        // A projection into a document-stored embed becomes a JSON path
+        // extraction (`col->'a'->>'b'` / `json_extract(col, '$.a.b')`). After
+        // lowering, the `#[document]` field reference is a column of
+        // `Type::Document`; the projection indexes the embed's fields.
+        if matches!(&*expr.base, stmt::Expr::Reference(_))
+            && let stmt::Type::Document(doc) = self.cx.infer_expr_ty(expr.base.as_ref(), &[])
+            && let Some((path, ty)) = build_json_path(&doc, expr.projection.as_slice())
+        {
+            return Some(stmt::Expr::from(stmt::FuncJsonExtract {
+                base: Box::new(expr.base.take()),
+                path,
+                ty,
+            }));
+        }
+
         None
     }
+}
+
+/// Walks a projection through (possibly nested) document types, collecting the
+/// key path and the leaf field's type. Returns `None` if any step is out of
+/// range.
+fn build_json_path(
+    doc: &stmt::TypeDocument,
+    projection: &[usize],
+) -> Option<(Vec<String>, stmt::Type)> {
+    let mut current = doc;
+    let mut path = Vec::with_capacity(projection.len());
+    let mut leaf_ty = None;
+
+    for &index in projection {
+        let field = current.fields.get(index)?;
+        path.push(field.name.clone());
+        if let stmt::Type::Document(nested) = &field.ty {
+            current = nested;
+        }
+        leaf_ty = Some(field.ty.clone());
+    }
+
+    Some((path, leaf_ty?))
 }
