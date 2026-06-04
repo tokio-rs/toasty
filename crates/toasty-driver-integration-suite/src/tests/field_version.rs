@@ -150,12 +150,78 @@ pub async fn batch_insert_checks_version(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A query-based update increments the version, just like an instance update.
+/// This is the single-key path (filter by primary key).
+///
+/// Unlike an instance update there is no per-row OCC guard — a query-based
+/// update is atomic at the database level — but the version still advances so
+/// concurrent stale writers are detected.
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+pub async fn query_update_increments_version(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(item.version, 1);
+
+    Item::filter_by_id(item.id)
+        .update()
+        .name("world")
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Item::filter_by_id(item.id).get(&mut db).await?;
+    assert_eq!(reloaded.name, "world");
+    assert_eq!(reloaded.version, 2);
+
+    Ok(())
+}
+
+/// A query-based update bumps the version, so a concurrent instance update from
+/// a snapshot taken *before* the query update fails its OCC check rather than
+/// silently clobbering the query update's write.
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+pub async fn query_update_invalidates_stale_instance(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(item.version, 1);
+
+    // Snapshot the record at version 1 before any update lands.
+    let mut stale = Item::filter_by_id(item.id).get(&mut db).await?;
+    assert_eq!(stale.version, 1);
+
+    // A query-based update advances the DB version 1 → 2.
+    Item::filter_by_id(item.id)
+        .update()
+        .name("query-updated")
+        .exec(&mut db)
+        .await?;
+
+    // The stale instance (still version 1) must fail rather than overwrite.
+    let result: Result<()> = stale.update().name("clobber").exec(&mut db).await;
+    assert!(
+        result.is_err(),
+        "expected stale instance update to fail after a concurrent query update"
+    );
+
+    // The query update's write is intact.
+    let reloaded = Item::filter_by_id(item.id).get(&mut db).await?;
+    assert_eq!(reloaded.name, "query-updated");
+    assert_eq!(reloaded.version, 2);
+
+    Ok(())
+}
+
 /// Query-based update on a versioned model: exercises update_by_key path 2
 /// (no unique index, N keys via transact_write_items on DDB).
 ///
-/// Query-based updates don't carry a per-item version condition, so the version
-/// column is not incremented. The test verifies that the multi-key transact
-/// path executes without error and applies all assignments.
+/// The increment is applied atomically to every matched row, so each row's
+/// version advances independently. Verifies the multi-key transact path applies
+/// all assignments and bumps each version.
 #[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
 pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -167,6 +233,7 @@ pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
     ])
     .exec(&mut db)
     .await?;
+    assert!(items.iter().all(|i| i.version == 1));
 
     // Update all items with tag == "batch" in one query-based operation.
     Item::filter_by_tag("batch")
@@ -178,7 +245,39 @@ pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
     let a2 = Item::filter_by_id(items[0].id).get(&mut db).await?;
     let b2 = Item::filter_by_id(items[1].id).get(&mut db).await?;
     assert_eq!(a2.name, "updated");
+    assert_eq!(a2.version, 2);
     assert_eq!(b2.name, "updated");
+    assert_eq!(b2.version, 2);
+
+    Ok(())
+}
+
+/// Query-based update through the unique-index path (path 3) increments the
+/// version. The version is a non-unique column, so it rides along in the main
+/// update expression alongside the unique-index surgery.
+#[driver_test(
+    requires(not(sql)),
+    scenario(crate::scenarios::versioned_user_unique_email)
+)]
+pub async fn query_update_unique_index_increments_version(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = toasty::create!(User {
+        email: "carol@example.com"
+    })
+    .exec(&mut db)
+    .await?;
+    assert_eq!(user.version, 1);
+
+    User::filter_by_id(user.id)
+        .update()
+        .email("carol2@example.com")
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = User::filter_by_id(user.id).get(&mut db).await?;
+    assert_eq!(reloaded.email, "carol2@example.com");
+    assert_eq!(reloaded.version, 2);
 
     Ok(())
 }
@@ -248,6 +347,33 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
         result.is_err(),
         "expected stale unique-index update to fail"
     );
+
+    Ok(())
+}
+
+/// The query-based counterpart to `relative_update_increments_value_and_version`:
+/// a relative assignment (`value += 1`) on a versioned model through a
+/// query-rooted update.
+///
+/// The user's relative column needs a driver round-trip, so it's in the
+/// returning column list; the engine-injected version bump is kept *out* of
+/// that list. The driver returns exactly the requested columns, so the version
+/// value never lands in the returned row and shifts `value` out of its slot.
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_counter))]
+pub async fn query_relative_update_increments_value_and_version(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let counter = toasty::create!(Counter { value: 10 }).exec(&mut db).await?;
+    assert_struct!(counter, _ { value: 10, version: 1, .. });
+
+    Counter::filter_by_id(counter.id)
+        .update()
+        .value(toasty::stmt::increment())
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Counter::filter_by_id(counter.id).get(&mut db).await?;
+    assert_struct!(reloaded, _ { value: 11, version: 2, .. });
 
     Ok(())
 }

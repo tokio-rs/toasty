@@ -67,6 +67,42 @@ pub async fn newtype_version_update_increments(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A query-based update increments the newtype version counter, exercising the
+/// engine's embed-wrapped increment delta (`Version(version + 1)`).
+#[driver_test(requires(not(sql)))]
+pub async fn newtype_version_query_update_increments(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+
+        name: String,
+
+        #[version]
+        version: Version,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(item.version, Version(1));
+
+    Item::filter_by_id(item.id)
+        .update()
+        .name("world")
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Item::filter_by_id(item.id).get(&mut db).await?;
+    assert_eq!(reloaded.name, "world");
+    assert_eq!(reloaded.version, Version(2));
+
+    Ok(())
+}
+
 /// A stale update (wrong version) must be rejected even when the version field
 /// is a newtype.
 #[driver_test(requires(not(sql)))]
