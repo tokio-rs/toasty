@@ -238,9 +238,9 @@ impl Model {
         // Build ModelKind based on whether this is embedded or root
         let kind = if is_embedded {
             ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
-                field_struct_ident: struct_ident("Fields", ast),
-                field_list_struct_ident: struct_list_ident("ListFields", ast),
-                update_struct_ident: struct_ident("Update", ast),
+                field_struct_ident: suffixed_ident(&ast.ident, "Fields"),
+                field_list_struct_ident: suffixed_ident(&ast.ident, "ListFields"),
+                update_struct_ident: suffixed_ident(&ast.ident, "Update"),
                 fields_named: matches!(ast.fields, syn::Fields::Named(_)),
             })
         } else {
@@ -282,11 +282,11 @@ impl Model {
             ModelKind::Root(ModelRoot {
                 primary_key: PrimaryKey { fields: pk_fields },
                 version_field,
-                field_struct_ident: struct_ident("Fields", ast),
-                field_list_struct_ident: struct_list_ident("ListFields", ast),
-                query_struct_ident: struct_ident("Query", ast),
-                create_struct_ident: struct_ident("Create", ast),
-                update_struct_ident: struct_ident("Update", ast),
+                field_struct_ident: suffixed_ident(&ast.ident, "Fields"),
+                field_list_struct_ident: suffixed_ident(&ast.ident, "ListFields"),
+                query_struct_ident: suffixed_ident(&ast.ident, "Query"),
+                create_struct_ident: suffixed_ident(&ast.ident, "Create"),
+                update_struct_ident: suffixed_ident(&ast.ident, "Update"),
             })
         };
 
@@ -533,8 +533,8 @@ impl Model {
             ident: model_ident,
             fields: all_fields,
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
-                field_struct_ident: enum_ident("Fields", ast),
-                field_list_struct_ident: enum_list_ident("ListFields", ast),
+                field_struct_ident: suffixed_ident(&ast.ident, "Fields"),
+                field_list_struct_ident: suffixed_ident(&ast.ident, "ListFields"),
                 variants,
                 storage_strategy,
             }),
@@ -577,19 +577,9 @@ fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
     }
 }
 
-fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
-}
-
-/// Generates an ident like `UserListFields` — injects the suffix after the model name.
-fn struct_list_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
-}
-
-fn enum_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
-}
-
-fn enum_list_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+/// Append `suffix` to a model name to derive a builder ident — e.g.
+/// `(User, "ListFields") -> UserListFields` — carrying the base ident's span so
+/// diagnostics point back at the model declaration.
+fn suffixed_ident(base: &syn::Ident, suffix: &str) -> syn::Ident {
+    syn::Ident::new(&format!("{base}{suffix}"), base.span())
 }

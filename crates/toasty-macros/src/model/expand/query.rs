@@ -2,7 +2,7 @@ use super::{Expand, util};
 use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{format_ident, quote};
 
 impl Expand<'_> {
     pub(super) fn expand_query_struct(&self) -> TokenStream {
@@ -328,21 +328,33 @@ impl Expand<'_> {
             .collect()
     }
 
-    fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
+    /// Shared body for the per-relation accessor methods on `Query<List<M>>`.
+    /// The three direct relation kinds emit the same `QueryMany<Target>`
+    /// accessor and differ only along two axes: which projection trait names
+    /// the target model (`RelationOneField` for the singular `belongs_to` /
+    /// `has_one`, `RelationManyField` for `has_many`) and which
+    /// `chain_or_build_*` helper threads the association. `has_many(via = …)`
+    /// takes a different shape and is handled by
+    /// [`Self::expand_has_many_via_method`].
+    fn expand_relation_query_method(
+        &self,
+        field: &Field,
+        ty: &syn::Type,
+        target_field: &str,
+        chain_builder: &str,
+    ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
-        let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationOneField>::Target);
+        let target_field = format_ident!("{}", target_field);
+        let chain_builder = format_ident!("{}", chain_builder);
+        let target = quote!(<#ty as #toasty::#target_field>::Target);
         let model_ident = &self.model.ident;
         let field_ident = &field.name.ident;
         let field_offset = util::int(field.id);
 
-        // Belongs-to via the source side is always singular and may be
-        // nullable; both cases collapse to `QueryMany<Target>` here because we
-        // are starting from a list of source rows.
         quote! {
             #vis fn #field_ident(self) -> #toasty::QueryMany<#target> {
-                let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
+                let assoc = #toasty::#chain_builder::<#model_ident, #target>(
                     self.stmt,
                     #field_offset,
                     #model_ident::fields().#field_ident().into(),
@@ -350,6 +362,18 @@ impl Expand<'_> {
                 <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
             }
         }
+    }
+
+    fn expand_belongs_to_method(&self, field: &Field, rel: &BelongsTo) -> TokenStream {
+        // Belongs-to via the source side is always singular and may be
+        // nullable; both cases collapse to `QueryMany<Target>` here because we
+        // are starting from a list of source rows.
+        self.expand_relation_query_method(
+            field,
+            &rel.ty,
+            "RelationOneField",
+            "chain_or_build_many_via_one",
+        )
     }
 
     /// Chained accessor for a `#[has_many(via = …)]` field. Builds an
@@ -381,45 +405,21 @@ impl Expand<'_> {
     }
 
     fn expand_has_many_method(&self, field: &Field, rel: &HasMany) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationManyField>::Target);
-        let model_ident = &self.model.ident;
-        let field_ident = &field.name.ident;
-        let field_offset = util::int(field.id);
-
-        quote! {
-            #vis fn #field_ident(self) -> #toasty::QueryMany<#target> {
-                let assoc = #toasty::chain_or_build_many::<#model_ident, #target>(
-                    self.stmt,
-                    #field_offset,
-                    #model_ident::fields().#field_ident().into(),
-                );
-                <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
-            }
-        }
+        self.expand_relation_query_method(
+            field,
+            &rel.ty,
+            "RelationManyField",
+            "chain_or_build_many",
+        )
     }
 
     fn expand_has_one_method(&self, field: &Field, rel: &HasOne) -> TokenStream {
-        let toasty = &self.toasty;
-        let vis = &self.model.vis;
-        let ty = &rel.ty;
-        let target = quote!(<#ty as #toasty::RelationOneField>::Target);
-        let model_ident = &self.model.ident;
-        let field_ident = &field.name.ident;
-        let field_offset = util::int(field.id);
-
-        quote! {
-            #vis fn #field_ident(self) -> #toasty::QueryMany<#target> {
-                let assoc = #toasty::chain_or_build_many_via_one::<#model_ident, #target>(
-                    self.stmt,
-                    #field_offset,
-                    #model_ident::fields().#field_ident().into(),
-                );
-                <#toasty::QueryMany<#target>>::from_assoc_many(assoc)
-            }
-        }
+        self.expand_relation_query_method(
+            field,
+            &rel.ty,
+            "RelationOneField",
+            "chain_or_build_many_via_one",
+        )
     }
 
     fn expand_include_method(&self, include_ty: &syn::Ident) -> Option<TokenStream> {
