@@ -348,6 +348,12 @@ impl BuildTableFromModels<'_> {
         loop {
             match mapping {
                 mapping::Field::Primitive(p) => return p.column,
+                mapping::Field::Enum(p) => {
+                    if p.sub_projection.is_identity() {
+                        return p.discriminant.column;
+                    }
+                    panic!("only unit enum column can be indexed")
+                }
                 mapping::Field::Struct(s) => {
                     let embedded_struct = self.app.model(s.id).as_embedded_struct_unwrap();
                     assert!(
