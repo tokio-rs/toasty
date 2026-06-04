@@ -15,7 +15,7 @@ checking for null — use `Model::filter()` with field expressions.
 | [`.in_list([...])`](#membership-with-in_list) | Value in list | `IN (...)` |
 | [`.is_none()`](#null-checks) | Null check (`Option` fields) | `IS NULL` |
 | [`.is_some()`](#null-checks) | Not-null check (`Option` fields) | `IS NOT NULL` |
-| [`.starts_with(prefix)`](#starts_with) | Prefix match | `begins_with(field, prefix)` / `LIKE 'prefix%'` |
+| [`.starts_with(prefix)`](#starts_with) | Case-sensitive prefix match | `begins_with(field, prefix)` / `^@`, `GLOB`, `BINARY ... LIKE` |
 | [`.like(pattern)`](#like) | Pattern match, behavior per backend | `LIKE pattern` |
 | [`.ilike(pattern)`](#ilike) | Case-insensitive pattern match, PostgreSQL only | `ILIKE pattern` |
 | [`.and(expr)`](#combining-with-and) | Both conditions true | `AND` |
@@ -400,8 +400,17 @@ below.
 ### `starts_with`
 
 `.starts_with()` tests whether a string field starts with the given prefix. It
-works on all supported databases — SQL drivers translate it to `LIKE 'prefix%'`,
-and DynamoDB uses its native `begins_with` condition expression:
+works on all supported databases and is case-sensitive on every backend.
+DynamoDB uses its native `begins_with` condition expression; each SQL backend
+lowers to an operator that preserves case:
+
+| Backend | Operator |
+|---|---|
+| PostgreSQL | `col ^@ 'prefix'` |
+| SQLite | `col GLOB 'prefix*'` |
+| MySQL | `BINARY col LIKE 'prefix%'` |
+
+The match is exact: `.starts_with("Al")` matches `"Alice"` but not `"alice"`.
 
 ```rust
 # use toasty::Model;
