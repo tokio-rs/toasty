@@ -238,9 +238,9 @@
 <a href=#238 id=238 data-nosnippet>238</a>        <span class="comment">// Build ModelKind based on whether this is embedded or root
 <a href=#239 id=239 data-nosnippet>239</a>        </span><span class="kw">let </span>kind = <span class="kw">if </span>is_embedded {
 <a href=#240 id=240 data-nosnippet>240</a>            ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
-<a href=#241 id=241 data-nosnippet>241</a>                field_struct_ident: struct_ident(<span class="string">"Fields"</span>, ast),
-<a href=#242 id=242 data-nosnippet>242</a>                field_list_struct_ident: struct_list_ident(<span class="string">"ListFields"</span>, ast),
-<a href=#243 id=243 data-nosnippet>243</a>                update_struct_ident: struct_ident(<span class="string">"Update"</span>, ast),
+<a href=#241 id=241 data-nosnippet>241</a>                field_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"Fields"</span>),
+<a href=#242 id=242 data-nosnippet>242</a>                field_list_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"ListFields"</span>),
+<a href=#243 id=243 data-nosnippet>243</a>                update_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"Update"</span>),
 <a href=#244 id=244 data-nosnippet>244</a>                fields_named: <span class="macro">matches!</span>(ast.fields, syn::Fields::Named(<span class="kw">_</span>)),
 <a href=#245 id=245 data-nosnippet>245</a>            })
 <a href=#246 id=246 data-nosnippet>246</a>        } <span class="kw">else </span>{
@@ -282,11 +282,11 @@
 <a href=#282 id=282 data-nosnippet>282</a>            ModelKind::Root(ModelRoot {
 <a href=#283 id=283 data-nosnippet>283</a>                primary_key: PrimaryKey { fields: pk_fields },
 <a href=#284 id=284 data-nosnippet>284</a>                version_field,
-<a href=#285 id=285 data-nosnippet>285</a>                field_struct_ident: struct_ident(<span class="string">"Fields"</span>, ast),
-<a href=#286 id=286 data-nosnippet>286</a>                field_list_struct_ident: struct_list_ident(<span class="string">"ListFields"</span>, ast),
-<a href=#287 id=287 data-nosnippet>287</a>                query_struct_ident: struct_ident(<span class="string">"Query"</span>, ast),
-<a href=#288 id=288 data-nosnippet>288</a>                create_struct_ident: struct_ident(<span class="string">"Create"</span>, ast),
-<a href=#289 id=289 data-nosnippet>289</a>                update_struct_ident: struct_ident(<span class="string">"Update"</span>, ast),
+<a href=#285 id=285 data-nosnippet>285</a>                field_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"Fields"</span>),
+<a href=#286 id=286 data-nosnippet>286</a>                field_list_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"ListFields"</span>),
+<a href=#287 id=287 data-nosnippet>287</a>                query_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"Query"</span>),
+<a href=#288 id=288 data-nosnippet>288</a>                create_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"Create"</span>),
+<a href=#289 id=289 data-nosnippet>289</a>                update_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"Update"</span>),
 <a href=#290 id=290 data-nosnippet>290</a>            })
 <a href=#291 id=291 data-nosnippet>291</a>        };
 <a href=#292 id=292 data-nosnippet>292</a>
@@ -533,8 +533,8 @@
 <a href=#533 id=533 data-nosnippet>533</a>            ident: model_ident,
 <a href=#534 id=534 data-nosnippet>534</a>            fields: all_fields,
 <a href=#535 id=535 data-nosnippet>535</a>            kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
-<a href=#536 id=536 data-nosnippet>536</a>                field_struct_ident: enum_ident(<span class="string">"Fields"</span>, ast),
-<a href=#537 id=537 data-nosnippet>537</a>                field_list_struct_ident: enum_list_ident(<span class="string">"ListFields"</span>, ast),
+<a href=#536 id=536 data-nosnippet>536</a>                field_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"Fields"</span>),
+<a href=#537 id=537 data-nosnippet>537</a>                field_list_struct_ident: suffixed_ident(<span class="kw-2">&amp;</span>ast.ident, <span class="string">"ListFields"</span>),
 <a href=#538 id=538 data-nosnippet>538</a>                variants,
 <a href=#539 id=539 data-nosnippet>539</a>                storage_strategy,
 <a href=#540 id=540 data-nosnippet>540</a>            }),
@@ -577,20 +577,10 @@
 <a href=#577 id=577 data-nosnippet>577</a>    }
 <a href=#578 id=578 data-nosnippet>578</a>}
 <a href=#579 id=579 data-nosnippet>579</a>
-<a href=#580 id=580 data-nosnippet>580</a><span class="kw">fn </span>struct_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemStruct) -&gt; syn::Ident {
-<a href=#581 id=581 data-nosnippet>581</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#582 id=582 data-nosnippet>582</a>}
-<a href=#583 id=583 data-nosnippet>583</a>
-<a href=#584 id=584 data-nosnippet>584</a><span class="doccomment">/// Generates an ident like `UserListFields` — injects the suffix after the model name.
-<a href=#585 id=585 data-nosnippet>585</a></span><span class="kw">fn </span>struct_list_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemStruct) -&gt; syn::Ident {
-<a href=#586 id=586 data-nosnippet>586</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#587 id=587 data-nosnippet>587</a>}
-<a href=#588 id=588 data-nosnippet>588</a>
-<a href=#589 id=589 data-nosnippet>589</a><span class="kw">fn </span>enum_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemEnum) -&gt; syn::Ident {
-<a href=#590 id=590 data-nosnippet>590</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#591 id=591 data-nosnippet>591</a>}
-<a href=#592 id=592 data-nosnippet>592</a>
-<a href=#593 id=593 data-nosnippet>593</a><span class="kw">fn </span>enum_list_ident(suffix: <span class="kw-2">&amp;</span>str, model: <span class="kw-2">&amp;</span>syn::ItemEnum) -&gt; syn::Ident {
-<a href=#594 id=594 data-nosnippet>594</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{}{}"</span>, model.ident, suffix), model.ident.span())
-<a href=#595 id=595 data-nosnippet>595</a>}
+<a href=#580 id=580 data-nosnippet>580</a><span class="doccomment">/// Append `suffix` to a model name to derive a builder ident — e.g.
+<a href=#581 id=581 data-nosnippet>581</a>/// `(User, "ListFields") -&gt; UserListFields` — carrying the base ident's span so
+<a href=#582 id=582 data-nosnippet>582</a>/// diagnostics point back at the model declaration.
+<a href=#583 id=583 data-nosnippet>583</a></span><span class="kw">fn </span>suffixed_ident(base: <span class="kw-2">&amp;</span>syn::Ident, suffix: <span class="kw-2">&amp;</span>str) -&gt; syn::Ident {
+<a href=#584 id=584 data-nosnippet>584</a>    syn::Ident::new(<span class="kw-2">&amp;</span><span class="macro">format!</span>(<span class="string">"{base}{suffix}"</span>), base.span())
+<a href=#585 id=585 data-nosnippet>585</a>}
 </code></pre></div></section></main></body></html>
