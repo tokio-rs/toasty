@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b0c4a1fd.js";
+            window.path_to_searchindex_js = "searchindex-6ffaaa7c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -193,7 +193,7 @@ checking for null — use <code>Model::filter()</code> with field expressions.</
 <tr><td><a href="#membership-with-in_list"><code>.in_list([...])</code></a></td><td>Value in list</td><td><code>IN (...)</code></td></tr>
 <tr><td><a href="#null-checks"><code>.is_none()</code></a></td><td>Null check (<code>Option</code> fields)</td><td><code>IS NULL</code></td></tr>
 <tr><td><a href="#null-checks"><code>.is_some()</code></a></td><td>Not-null check (<code>Option</code> fields)</td><td><code>IS NOT NULL</code></td></tr>
-<tr><td><a href="#starts_with"><code>.starts_with(prefix)</code></a></td><td>Prefix match</td><td><code>begins_with(field, prefix)</code> / <code>LIKE 'prefix%'</code></td></tr>
+<tr><td><a href="#starts_with"><code>.starts_with(prefix)</code></a></td><td>Case-sensitive prefix match</td><td><code>begins_with(field, prefix)</code> / <code>^@</code>, <code>GLOB</code>, <code>BINARY ... LIKE</code></td></tr>
 <tr><td><a href="#like"><code>.like(pattern)</code></a></td><td>Pattern match, behavior per backend</td><td><code>LIKE pattern</code></td></tr>
 <tr><td><a href="#ilike"><code>.ilike(pattern)</code></a></td><td>Case-insensitive pattern match, PostgreSQL only</td><td><code>ILIKE pattern</code></td></tr>
 <tr><td><a href="#combining-with-and"><code>.and(expr)</code></a></td><td>Both conditions true</td><td><code>AND</code></td></tr>
@@ -560,8 +560,22 @@ than normalizing it, so <code>.like()</code>’s case sensitivity varies by back
 below.</p>
 <h3 id="starts_with"><a class="header" href="#starts_with"><code>starts_with</code></a></h3>
 <p><code>.starts_with()</code> tests whether a string field starts with the given prefix. It
-works on all supported databases — SQL drivers translate it to <code>LIKE 'prefix%'</code>,
-and DynamoDB uses its native <code>begins_with</code> condition expression:</p>
+works on all supported databases and is case-sensitive on every backend.
+DynamoDB uses its native <code>begins_with</code> condition expression; each SQL backend
+lowers to an operator that preserves case:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Backend</th><th>Operator</th></tr>
+</thead>
+<tbody>
+<tr><td>PostgreSQL</td><td><code>col ^@ 'prefix'</code></td></tr>
+<tr><td>SQLite</td><td><code>col GLOB 'prefix*'</code></td></tr>
+<tr><td>MySQL</td><td><code>BINARY col LIKE 'prefix%'</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>The match is exact: <code>.starts_with("Al")</code> matches <code>"Alice"</code> but not <code>"alice"</code>.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;

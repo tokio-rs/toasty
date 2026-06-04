@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-b0c4a1fd.js";
+            window.path_to_searchindex_js = "searchindex-6ffaaa7c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -299,17 +299,19 @@ behaviors differ from the other SQL backends:</p>
 <p><strong><code>LIKE</code> is case-insensitive for ASCII.</strong> SQLite’s <code>LIKE</code> ignores case for ASCII
 characters but is case-sensitive for non-ASCII ones. A
 <a href="./filtering-with-expressions.html#like"><code>.like("Rust")</code></a> filter also matches
-<code>"rust"</code> and <code>"RUST"</code>, but <code>.like("café")</code> does not match <code>"CAFÉ"</code>. Use <code>GLOB</code>
-(which Toasty does not currently expose) or a <code>CHECK</code> against exact bytes if you
-need case-sensitive pattern matching.</p>
+<code>"rust"</code> and <code>"RUST"</code>, but <code>.like("café")</code> does not match <code>"CAFÉ"</code>. For a
+case-sensitive prefix match, use
+<a href="./filtering-with-expressions.html#starts_with"><code>.starts_with()</code></a>, which lowers to
+<code>GLOB</code>. Toasty exposes no operator for case-sensitive matching of an arbitrary
+pattern; use a <code>CHECK</code> against exact bytes if you need one.</p>
 <p><strong>No <code>ILIKE</code>.</strong> SQLite has no <code>ILIKE</code> operator, so
 <a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a> is rejected with an
 <code>unsupported_feature</code> error. Since SQLite’s <code>LIKE</code> already folds ASCII case, use
 <code>.like()</code> for case-insensitive ASCII matching.</p>
-<p><strong>No native prefix-match operator.</strong>
+<p><strong>Prefix match via <code>GLOB</code>.</strong>
 <a href="./filtering-with-expressions.html#starts_with"><code>.starts_with("abc")</code></a>
-lowers to <code>LIKE 'abc%'</code>. The optimizer can use a regular index for the
-common-prefix lookup.</p>
+lowers to <code>col GLOB 'abc*'</code>, a case-sensitive prefix match. The optimizer can
+use a regular index for the common-prefix lookup.</p>
 <p><strong>Scalar arrays use JSON1.</strong> A
 <a href="./field-options.html#scalar-arrays"><code>Vec&lt;T&gt;</code> field</a> lives in a <code>TEXT</code>
 column holding a JSON array. The array predicates lower to JSON1
