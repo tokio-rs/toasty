@@ -375,18 +375,24 @@ impl BuildTableFromModels<'_> {
                 continue;
             }
 
-            index.name = format!("index_{}_by", self.table.name);
+            let mut name = format!("index_{}_by", self.table.name);
 
             for (i, index_column) in index.columns.iter().enumerate() {
                 let column = &self.table.columns[index_column.column.index];
 
                 if i > 0 {
-                    index.name.push_str("_and");
+                    name.push_str("_and");
                 }
 
-                index.name.push('_');
-                index.name.push_str(&column.name);
+                name.push('_');
+                name.push_str(&column.name);
             }
+
+            index.name = if let Some(limit) = self.db.max_identifier_length {
+                truncate_identifier(name, limit)
+            } else {
+                name
+            };
         }
     }
 }
@@ -1399,6 +1405,39 @@ fn single_leaf_primitive(field: &mapping::Field) -> Option<&mapping::FieldPrimit
         mapping::Field::Struct(s) if s.fields.len() == 1 => single_leaf_primitive(&s.fields[0]),
         _ => None,
     }
+}
+
+/// Truncate `name` to `limit` bytes, appending a 5-character stable hash
+/// suffix (`_XXXX`) so the result is unique and deterministic across builds.
+///
+/// The hash is FNV-1a over the *full* pre-truncation name so two names that
+/// share a long prefix produce different suffixes. `DefaultHasher` is
+/// intentionally avoided — it is unstable across Rust versions and would
+/// churn migration snapshots.
+fn truncate_identifier(name: String, limit: usize) -> String {
+    if name.len() <= limit {
+        return name;
+    }
+
+    // FNV-1a 32-bit hash of the full name for a stable 4-hex-digit suffix.
+    const FNV_OFFSET: u32 = 2_166_136_261;
+    const FNV_PRIME: u32 = 16_777_619;
+    let hash = name
+        .bytes()
+        .fold(FNV_OFFSET, |acc, b| acc.wrapping_mul(FNV_PRIME) ^ b as u32);
+    let suffix = format!("_{:04x}", hash & 0xFFFF);
+
+    // Truncate at a char boundary so we never split a multi-byte character.
+    // The condition uses the char's END position so we never exceed `budget`.
+    let budget = limit.saturating_sub(suffix.len());
+    let truncated = &name[..name
+        .char_indices()
+        .take_while(|(i, c)| i + c.len_utf8() <= budget)
+        .last()
+        .map(|(i, c)| i + c.len_utf8())
+        .unwrap_or(0)];
+
+    format!("{truncated}{suffix}")
 }
 
 /// Look up an embedded model by ID, returning a descriptive error if not found.

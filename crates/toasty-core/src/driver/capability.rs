@@ -67,6 +67,19 @@ pub struct Capability {
     /// `Integer(4)`.
     pub max_auto_increment_integer_width: Option<u8>,
 
+    /// Maximum byte length for a database identifier (table name, index name,
+    /// column name, etc.).
+    ///
+    /// When `Some(n)`, auto-generated index names that exceed `n` bytes are
+    /// truncated and a short stable hash suffix is appended so names remain
+    /// unique and deterministic across builds. User-supplied `#[index(name =
+    /// "...")]` names are left untouched.
+    ///
+    /// - MySQL: `Some(64)` — hard error on longer names
+    /// - PostgreSQL: `Some(63)` — silently truncates, risking collisions
+    /// - SQLite / DynamoDB: `None` — no enforced limit
+    pub max_identifier_length: Option<usize>,
+
     /// Whether the database supports `VARCHAR(n)` column types natively.
     ///
     /// Must be consistent with [`StorageTypes::varchar`]: when `true`,
@@ -529,6 +542,7 @@ impl Capability {
         max_auto_increment_integer_width: Some(4),
         bigdecimal_implemented: false,
         bool_key_type: true,
+        max_identifier_length: None,
 
         native_varchar: true,
 
@@ -609,6 +623,7 @@ impl Capability {
         auto_increment: true,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
+        max_identifier_length: Some(63),
 
         // PostgreSQL has the `^@` prefix-match operator.
         native_starts_with: true,
@@ -667,6 +682,7 @@ impl Capability {
         auto_increment: true,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: true,
+        max_identifier_length: Some(64),
 
         // MySQL has inline ENUM('a', 'b') column types
         native_enum: true,
@@ -736,6 +752,7 @@ impl Capability {
         auto_increment: false,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
+        max_identifier_length: None,
         // DynamoDB key attributes (primary key and GSI keys) only support
         // S, N, or B — BOOL is not a valid key attribute type.
         bool_key_type: false,
