@@ -1,14 +1,14 @@
-//! Tests for `#[document]` collection fields — a `Vec<T>` of an
-//! `#[derive(Embed)]` struct, stored as one document column (`jsonb` on
-//! PostgreSQL, JSON1 text on SQLite). Each element is encoded as a JSON
-//! object keyed by the embed's field names.
+//! Tests for `#[document]` storage of embedded types: a bare `#[derive(Embed)]`
+//! struct stored as one document column, and a `Vec<T>` of such structs stored
+//! as a JSON array of objects (`jsonb` on PostgreSQL, JSON1 text on SQLite).
+//! Each struct is encoded as a JSON object keyed by the embed's field names.
 //!
-//! This increment covers storage, encoding, and whole-value CRUD. Element
-//! predicates (`.any()` / `.all()`), `partial!` containment, and per-element
-//! mutation are not yet implemented. Backends without document-collection
-//! support are gated out via `requires(document_collections)`; the negative
-//! schema-build path has a dedicated `requires(not(document_collections))`
-//! test.
+//! This increment covers storage, encoding, whole-value CRUD, and nested-path
+//! filtering on bare struct embeds. `#[document]` on a `Vec` element predicate
+//! (`.any()` / `.all()`), `partial!` containment, and per-element mutation are
+//! not yet implemented. Backends without document support are gated out via
+//! `requires(document_collections)`; the negative schema-build path has a
+//! dedicated `requires(not(document_collections))` test.
 
 use crate::prelude::*;
 
@@ -184,6 +184,92 @@ pub async fn vec_struct_update_replace(t: &mut Test) -> Result<(), BoxError> {
 
     let reloaded = Order::get_by_id(&mut db, &order.id).await?;
     assert_eq!(reloaded.items, replacement);
+
+    Ok(())
+}
+
+/// A bare `#[document]` struct embed round-trips through INSERT and a fresh
+/// fetch: the engine encodes the embed as one JSON object on the way in and
+/// decodes it back to the struct on the way out.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        age: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    let profile = Profile {
+        name: "Alice".into(),
+        age: 30,
+    };
+    let account = toasty::create!(Account {
+        profile: profile.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Account::get_by_id(&mut db, &account.id).await?;
+    assert_eq!(reloaded.profile, profile);
+
+    Ok(())
+}
+
+/// Whole-value replacement of a bare `#[document]` embed via the update
+/// builder.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn struct_embed_update_replace(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        age: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    let mut account = toasty::create!(Account {
+        profile: Profile {
+            name: "old".into(),
+            age: 1,
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let replacement = Profile {
+        name: "new".into(),
+        age: 99,
+    };
+    account
+        .update()
+        .profile(replacement.clone())
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Account::get_by_id(&mut db, &account.id).await?;
+    assert_eq!(reloaded.profile, replacement);
 
     Ok(())
 }

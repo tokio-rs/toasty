@@ -188,6 +188,29 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
+        // A struct embed can be stored as a single document via `#[document]`.
+        // The embed type is emitted as `Type::Model(id)`; the schema builder
+        // resolves it to `Type::Document` once every embed is registered.
+        impl #toasty::Document for #model_ident {
+            type ExprTarget = Self;
+
+            fn field_ty(
+                storage_ty: Option<#toasty::core::schema::db::Type>,
+            ) -> #toasty::core::schema::app::FieldTy {
+                #toasty::core::schema::app::FieldTy::Primitive(
+                    #toasty::core::schema::app::FieldPrimitive {
+                        ty: #toasty::core::stmt::Type::Model(<Self as #toasty::Embed>::id()),
+                        storage_ty,
+                        serialize: None,
+                    }
+                )
+            }
+
+            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                <Self as #toasty::Field>::register(model_set);
+            }
+        }
+
         impl #toasty::Assign<#model_ident> for #model_ident {
             fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
                 #toasty::stmt::set(

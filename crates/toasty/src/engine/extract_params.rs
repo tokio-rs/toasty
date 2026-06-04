@@ -38,6 +38,12 @@ pub(crate) fn extract_params(
     schema: &Schema,
     capability: &Capability,
 ) -> Vec<TypedValue> {
+    // Phase 0: rewrite bare `#[document]` embed values into the named
+    // `Value::Object` form *before* generic extraction. The generic path
+    // expands a `Value::Record` into a SQL row-value tuple `(?, ?)`; a document
+    // column needs the whole embed bound as one document param instead.
+    mark_document_values(stmt, &schema.db);
+
     // Phase 1: Mechanical extraction — replace values with Arg(n)
     let mut params: Vec<Param> = Vec::new();
     extract_values(stmt, &mut params, capability);
@@ -281,6 +287,18 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
                     let position = self.params.len();
                     let value = std::mem::replace(value, stmt::Value::Null);
                     self.params.push(Param { value, ty });
+                    *expr = stmt::Expr::arg(position);
+                }
+                // A bare `#[document]` embed value (already rewritten to a
+                // named object by `mark_document_values`) binds as one param;
+                // `refine` pins its type to the document column.
+                stmt::Expr::Value(value @ stmt::Value::Object(_)) => {
+                    let owned = std::mem::replace(value, stmt::Value::Null);
+                    let position = self.params.len();
+                    self.params.push(Param {
+                        value: owned,
+                        ty: Ty::Unknown,
+                    });
                     *expr = stmt::Expr::arg(position);
                 }
                 stmt::Expr::Value(value @ (stmt::Value::Record(_) | stmt::Value::List(_))) => {
@@ -533,6 +551,9 @@ fn refine_insert(
 /// `List(Document(..))` — return the inner [`stmt::TypeDocument`].
 fn document_elem_ty(ty: &stmt::Type) -> Option<&stmt::TypeDocument> {
     match ty {
+        // A bare `#[document]` embed column.
+        stmt::Type::Document(doc) => Some(doc),
+        // A `#[document]` collection column — `List(Document(..))`.
         stmt::Type::List(elem) => match &**elem {
             stmt::Type::Document(doc) => Some(doc),
             _ => None,
@@ -559,7 +580,13 @@ fn refine_document_param(
     let param = &mut params[arg.position];
     param.ty = Ty::Column(storage_ty);
     let value = std::mem::replace(&mut param.value, stmt::Value::Null);
-    param.value = document_list_value(value, doc);
+    // A collection column holds a `Value::List` of records; a bare embed
+    // column holds a single `Value::Record`. Convert whichever shape arrives
+    // into the named `Value::Object` form the driver serializes.
+    param.value = match value {
+        stmt::Value::List(_) => document_list_value(value, doc),
+        _ => document_record_value(value, doc),
+    };
 }
 
 /// Convert a `Value::List` of positional `Value::Record`s into a `Value::List`
@@ -600,6 +627,107 @@ fn document_record_value(value: stmt::Value, doc: &stmt::TypeDocument) -> stmt::
             })
             .collect(),
     ))
+}
+
+/// Fold a constant value expression into a [`stmt::Value`]. Returns `None` if
+/// any sub-expression is non-constant (e.g. a column reference or `Default`),
+/// in which case the caller leaves the expression on the generic path.
+fn const_value_of(expr: &stmt::Expr) -> Option<stmt::Value> {
+    match expr {
+        stmt::Expr::Value(value) => Some(value.clone()),
+        stmt::Expr::Record(record) => Some(stmt::Value::Record(stmt::ValueRecord::from_vec(
+            record
+                .fields
+                .iter()
+                .map(const_value_of)
+                .collect::<Option<Vec<_>>>()?,
+        ))),
+        stmt::Expr::List(list) => Some(stmt::Value::List(
+            list.items
+                .iter()
+                .map(const_value_of)
+                .collect::<Option<Vec<_>>>()?,
+        )),
+        _ => None,
+    }
+}
+
+/// Rewrite bare `#[document]` embed column values into the named
+/// `Value::Object` form, in place, before generic param extraction. A
+/// collection column (`List(Document)`) is left for the existing list path; a
+/// non-constant document value is left untouched.
+fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
+    // Convert a constant document value *expression* into the named object form.
+    fn mark_expr(field_expr: &mut stmt::Expr, doc: &stmt::TypeDocument) {
+        if let Some(value) = const_value_of(field_expr) {
+            *field_expr = stmt::Expr::Value(document_record_value(value, doc));
+        }
+    }
+
+    match stmt {
+        stmt::Statement::Insert(insert) => {
+            let stmt::InsertTarget::Table(table) = &insert.target else {
+                return;
+            };
+            let db_table = &db_schema.tables[table.table.0];
+            // Per-column document type, `None` for non-document columns.
+            let docs: Vec<Option<&stmt::TypeDocument>> = table
+                .columns
+                .iter()
+                .map(|c| match &db_table.columns[c.index].ty {
+                    stmt::Type::Document(doc) => Some(doc),
+                    _ => None,
+                })
+                .collect();
+            let stmt::ExprSet::Values(values) = &mut insert.source.body else {
+                return;
+            };
+            for row in &mut values.rows {
+                match row {
+                    // A row of per-column value expressions.
+                    stmt::Expr::Record(record) => {
+                        for (doc, field) in docs.iter().zip(&mut record.fields) {
+                            if let Some(doc) = doc {
+                                mark_expr(field, doc);
+                            }
+                        }
+                    }
+                    // A fully-constant row folded to a single record value.
+                    stmt::Expr::Value(stmt::Value::Record(record)) => {
+                        for (doc, field) in docs.iter().zip(&mut record.fields) {
+                            if let Some(doc) = doc {
+                                let v = std::mem::replace(field, stmt::Value::Null);
+                                *field = document_record_value(v, doc);
+                            }
+                        }
+                    }
+                    _ => {}
+                }
+            }
+        }
+        stmt::Statement::Update(update) => {
+            let stmt::UpdateTarget::Table(table_id) = &update.target else {
+                return;
+            };
+            let db_table = &db_schema.tables[table_id.0];
+            for (projection, assignment) in update.assignments.iter_mut() {
+                let steps = projection.as_slice();
+                if steps.len() != 1 {
+                    continue;
+                }
+                let Some(col) = db_table.columns.get(steps[0]) else {
+                    continue;
+                };
+                let stmt::Type::Document(doc) = &col.ty else {
+                    continue;
+                };
+                if let stmt::Assignment::Set(expr) = assignment {
+                    mark_expr(expr, doc);
+                }
+            }
+        }
+        _ => {}
+    }
 }
 
 fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, params: &mut [Param]) {

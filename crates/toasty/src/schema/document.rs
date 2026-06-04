@@ -9,8 +9,9 @@ use toasty_core::schema::app::ModelSet;
 /// `#[document]` field's type shape through this trait, mirroring how the
 /// column-expanded case resolves through [`Field`](super::Field).
 ///
-/// For this increment the only implementor is `Vec<T>` where `T:` [`Embed`] —
-/// a collection of embedded structs stored as a JSON array of objects.
+/// Implemented by `Vec<T>` where `T:` [`Embed`] — a collection of embedded
+/// structs stored as a JSON array of objects — and, via the derive macro, by
+/// each embed struct itself, stored as a single JSON object.
 pub trait Document {
     /// The expression-level type the generated create / update setters bind
     /// through. For `Vec<T>` this is [`List<T>`], so the setters accept any

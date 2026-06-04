@@ -220,33 +220,37 @@ impl BuildSchema<'_> {
                     primitive.storage_ty = Some(db::Type::Integer(1));
                 }
 
-                if let stmt::Type::List(elem) = &primitive.ty {
-                    let field_name = || {
-                        field.name.app.as_deref().unwrap_or_else(|| {
-                            panic!(
-                                "model `{model_name}` field has no app-level name; \
-                                 expected every primitive field to carry one"
-                            )
-                        })
-                    };
+                // `#[document]` storage covers a bare embedded struct
+                // (`Type::Document`) and a collection of embedded structs
+                // (`Type::List(Document)`); both are gated by the same
+                // capability. A plain `Vec<scalar>` has its own gate.
+                let field_name = || {
+                    field.name.app.as_deref().unwrap_or_else(|| {
+                        panic!(
+                            "model `{model_name}` field has no app-level name; \
+                             expected every primitive field to carry one"
+                        )
+                    })
+                };
 
-                    if matches!(**elem, stmt::Type::Document(_)) {
-                        // A `#[document]` collection of embedded structs.
-                        if !self.db.document_collections {
-                            return Err(crate::Error::unsupported_feature(format!(
-                                "model `{model_name}` field `{}` is a `#[document]` \
-                                 collection, but this backend does not yet support \
-                                 `#[document]` collection fields.",
-                                field_name()
-                            )));
-                        }
-                    } else if !self.db.vec_scalar {
+                let is_document = matches!(&primitive.ty, stmt::Type::Document(_))
+                    || matches!(&primitive.ty,
+                        stmt::Type::List(elem) if matches!(**elem, stmt::Type::Document(_)));
+
+                if is_document {
+                    if !self.db.document_collections {
                         return Err(crate::Error::unsupported_feature(format!(
-                            "model `{model_name}` field `{}` is a `Vec<T>` collection, \
-                             but this backend does not yet support `Vec<scalar>` model fields.",
+                            "model `{model_name}` field `{}` uses `#[document]` storage, \
+                             but this backend does not yet support `#[document]` fields.",
                             field_name()
                         )));
                     }
+                } else if matches!(&primitive.ty, stmt::Type::List(_)) && !self.db.vec_scalar {
+                    return Err(crate::Error::unsupported_feature(format!(
+                        "model `{model_name}` field `{}` is a `Vec<T>` collection, \
+                         but this backend does not yet support `Vec<scalar>` model fields.",
+                        field_name()
+                    )));
                 }
 
                 let storage_ty = db::Type::from_app(
@@ -290,19 +294,25 @@ fn resolve_document_types(app: &mut app::Schema) -> Result<()> {
             let app::FieldTy::Primitive(primitive) = &field.ty else {
                 continue;
             };
-            let stmt::Type::List(elem) = &primitive.ty else {
-                continue;
-            };
-            let stmt::Type::Model(embed_id) = &**elem else {
-                continue;
+
+            // The macro emits the element/embed type as `Type::Model(id)`
+            // (it cannot name the embed's fields). Resolve it now that every
+            // embed is registered: a bare embed becomes a `Document`, a
+            // collection of embeds becomes a `List(Document)`.
+            let resolved = match &primitive.ty {
+                stmt::Type::Model(embed_id) => {
+                    stmt::Type::Document(resolve_document_ty(&app.models, *embed_id)?)
+                }
+                stmt::Type::List(elem) => match &**elem {
+                    stmt::Type::Model(embed_id) => stmt::Type::List(Box::new(
+                        stmt::Type::Document(resolve_document_ty(&app.models, *embed_id)?),
+                    )),
+                    _ => continue,
+                },
+                _ => continue,
             };
 
-            let document = resolve_document_ty(&app.models, *embed_id)?;
-            patches.push((
-                model.id(),
-                index,
-                stmt::Type::List(Box::new(stmt::Type::Document(document))),
-            ));
+            patches.push((model.id(), index, resolved));
         }
     }
 
