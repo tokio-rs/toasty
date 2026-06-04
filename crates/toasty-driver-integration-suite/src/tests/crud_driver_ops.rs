@@ -154,7 +154,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             filter: None,
             keys: _,
             assignments: #{ [2]: Assignment::Set(== 31i32)},
-            returning: false,
+            returning: None,
         }));
     }
 
