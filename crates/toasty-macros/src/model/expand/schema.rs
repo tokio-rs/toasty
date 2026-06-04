@@ -381,17 +381,10 @@ impl Expand<'_> {
             let col_ty = field.attrs.column.as_ref().and_then(|c| c.ty.as_ref())?;
             let marker = col_ty.compat_marker(toasty)?;
 
-            // Pin the diagnostic at the field type's span so the error lands
-            // on the user's declaration, not the derive call site.
-            Some(quote_spanned! { ty.span()=>
-                const _: () = {
-                    fn _check<__T>()
-                    where
-                        __T: #toasty::storage::CompatibleWith<#marker>,
-                    {}
-                    let _ = _check::<#ty>;
-                };
-            })
+            Some(compat_check(
+                ty,
+                quote! { #toasty::storage::CompatibleWith<#marker> },
+            ))
         });
 
         quote! { #( #checks )* }
@@ -420,17 +413,10 @@ impl Expand<'_> {
                 AutoStrategy::Increment => quote! { #toasty::auto::tag::Increment },
             };
 
-            // Pin the diagnostic at the field type's span so the error lands
-            // on the user's declaration, not the derive call site.
-            Some(quote_spanned! { ty.span()=>
-                const _: () = {
-                    fn _check<__T>()
-                    where
-                        __T: #toasty::auto::AutoCompatible<#tag>,
-                    {}
-                    let _ = _check::<#ty>;
-                };
-            })
+            Some(compat_check(
+                ty,
+                quote! { #toasty::auto::AutoCompatible<#tag> },
+            ))
         });
 
         quote! { #( #checks )* }
@@ -455,12 +441,7 @@ impl Expand<'_> {
                 return None;
             };
 
-            Some(quote_spanned! { ty.span()=>
-                const _: () = {
-                    fn _check<__T: #toasty::Version>() {}
-                    let _ = _check::<#ty>;
-                };
-            })
+            Some(compat_check(ty, quote! { #toasty::Version }))
         });
 
         quote! { #( #checks )* }
@@ -513,6 +494,26 @@ impl Expand<'_> {
                 }
             })
             .collect()
+    }
+}
+
+/// Emit a span-pinned compile-time obligation that `ty` satisfies `bound`.
+///
+/// The check leans on the type checker rather than inspecting `ty`: the
+/// zero-cost `_check::<#ty>` reference forces the bound to hold. `quote_spanned`
+/// pins any resulting diagnostic at the field type's span so the error lands on
+/// the user's declaration, not the derive call site. Shared by the
+/// storage/auto/version `expand_*_compat_checks` expansions, which differ only
+/// in the `bound` they require.
+fn compat_check(ty: &syn::Type, bound: TokenStream) -> TokenStream {
+    quote_spanned! { ty.span()=>
+        const _: () = {
+            fn _check<__T>()
+            where
+                __T: #bound,
+            {}
+            let _ = _check::<#ty>;
+        };
     }
 }
 
