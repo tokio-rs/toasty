@@ -21,7 +21,7 @@
 use toasty_core::{
     driver::{Capability, operation::TypedValue},
     schema::{Schema, db},
-    stmt::{self, VisitMut},
+    stmt::{self, IntoExprTarget, VisitMut},
 };
 
 /// Expression context bound to the database schema.
@@ -38,7 +38,16 @@ pub(crate) fn extract_params(
     schema: &Schema,
     capability: &Capability,
 ) -> Vec<TypedValue> {
-    // Phase 0: rewrite bare `#[document]` embed values into the named
+    // Phase 0a: lower document-path reads. A filter or returning expression
+    // that projects into a `#[document]` column travels through the engine as a
+    // plain `ExprProject` — identical to a column-expanded embed — so the
+    // in-memory interpreter can evaluate it. Here, at the single choke point
+    // every SQL statement passes through on its way to a driver, rewrite it to
+    // the `FuncJsonExtract` the serializer renders. The driver only ever sees
+    // the JSON node, never the projection.
+    lower_document_paths(stmt, schema);
+
+    // Phase 0b: rewrite bare `#[document]` embed values into the named
     // `Value::Object` form *before* generic extraction. The generic path
     // expands a `Value::Record` into a SQL row-value tuple `(?, ?)`; a document
     // column needs the whole embed bound as one document param instead.
@@ -63,6 +72,129 @@ pub(crate) fn extract_params(
             }
         })
         .collect()
+}
+
+// ============================================================================
+// Phase 0a: lower document-path reads to JSON extraction (the SQL edge)
+// ============================================================================
+
+/// Rewrite every projection into a `#[document]` column into the
+/// [`FuncJsonExtract`](stmt::FuncJsonExtract) node the SQL serializer renders.
+///
+/// A path into a document-stored embed (`preferences().theme()`) is a plain
+/// positional `ExprProject` everywhere in the engine — byte-for-byte the same
+/// shape a column-expanded embed uses — so the in-memory interpreter can
+/// evaluate it against the loaded `Value::Record` with no JSON involved.
+/// Turning it into a JSON function is purely a SQL-driver concern, so it
+/// happens here, the last engine-side step before a driver serializes the
+/// statement, rather than in the shared simplifier (which runs for every
+/// backend) or in the serializer (which is the driver's job). The driver
+/// receives only the `FuncJsonExtract` and renders it per dialect.
+fn lower_document_paths(stmt: &mut stmt::Statement, schema: &Schema) {
+    LowerDocumentPaths {
+        cx: stmt::ExprContext::new(schema),
+    }
+    .visit_mut(stmt);
+}
+
+/// Scoped traversal backing [`lower_document_paths`]. Mirrors the simplifier's
+/// scope handling — holding a query's source in scope while mutating its
+/// sibling clauses — so a document column reference inside a filter resolves to
+/// its `Type::Document`.
+struct LowerDocumentPaths<'a> {
+    cx: stmt::ExprContext<'a>,
+}
+
+impl LowerDocumentPaths<'_> {
+    fn scope<'s>(&'s self, target: impl IntoExprTarget<'s>) -> LowerDocumentPaths<'s> {
+        LowerDocumentPaths {
+            cx: self.cx.scope(target),
+        }
+    }
+}
+
+impl VisitMut for LowerDocumentPaths<'_> {
+    fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        stmt::visit_mut::visit_expr_mut(self, expr);
+
+        let stmt::Expr::Project(project) = expr else {
+            return;
+        };
+        // Only a projection rooted at a column reference can be a document
+        // path; anything else is left for later phases.
+        if !matches!(project.base.as_ref(), stmt::Expr::Reference(_)) {
+            return;
+        }
+        let stmt::Type::Document(doc) = self.cx.infer_expr_ty(project.base.as_ref(), &[]) else {
+            return;
+        };
+        let Some((path, ty)) = build_json_path(&doc, project.projection.as_slice()) else {
+            return;
+        };
+        let base = Box::new(project.base.take());
+        *expr = stmt::Expr::from(stmt::FuncJsonExtract { base, path, ty });
+    }
+
+    fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
+        self.visit_source_mut(&mut stmt.source);
+        let mut s = self.scope(&stmt.source);
+        s.visit_filter_mut(&mut stmt.filter);
+        s.visit_returning_mut(&mut stmt.returning);
+    }
+
+    fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
+        self.visit_source_mut(&mut stmt.from);
+        let mut s = self.scope(&stmt.from);
+        s.visit_filter_mut(&mut stmt.filter);
+        if let Some(returning) = &mut stmt.returning {
+            s.visit_returning_mut(returning);
+        }
+    }
+
+    fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
+        self.visit_update_target_mut(&mut stmt.target);
+        let mut s = self.scope(&stmt.target);
+        s.visit_assignments_mut(&mut stmt.assignments);
+        s.visit_filter_mut(&mut stmt.filter);
+        if let Some(expr) = &mut stmt.condition.expr {
+            s.visit_expr_mut(expr);
+        }
+        if let Some(returning) = &mut stmt.returning {
+            s.visit_returning_mut(returning);
+        }
+    }
+
+    fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
+        self.visit_insert_target_mut(&mut stmt.target);
+        let mut s = self.scope(&stmt.target);
+        s.visit_stmt_query_mut(&mut stmt.source);
+        if let Some(returning) = &mut stmt.returning {
+            s.visit_returning_mut(returning);
+        }
+    }
+}
+
+/// Walks a projection through (possibly nested) document types, collecting the
+/// key path and the leaf field's type. Returns `None` if any step is out of
+/// range.
+fn build_json_path(
+    doc: &stmt::TypeDocument,
+    projection: &[usize],
+) -> Option<(Vec<String>, stmt::Type)> {
+    let mut current = doc;
+    let mut path = Vec::with_capacity(projection.len());
+    let mut leaf_ty = None;
+
+    for &index in projection {
+        let field = current.fields.get(index)?;
+        path.push(field.name.clone());
+        if let stmt::Type::Document(nested) = &field.ty {
+            current = nested;
+        }
+        leaf_ty = Some(field.ty.clone());
+    }
+
+    Some((path, leaf_ty?))
 }
 
 /// A bind parameter being inferred. Once inference completes, the `Ty` is

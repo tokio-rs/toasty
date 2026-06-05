@@ -502,6 +502,15 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                         Type::Record(mut fields) => {
                             std::mem::replace(&mut fields[*step], Type::Null)
                         }
+                        // A path into a `#[document]` value: descend by field
+                        // index, the same as a record, but through the named
+                        // `TypeDocument`. Keeping document projections type-able
+                        // in the engine is what lets them survive as plain
+                        // `ExprProject` nodes (rather than being rewritten to a
+                        // JSON function) until the SQL edge.
+                        Type::Document(mut doc) => {
+                            std::mem::replace(&mut doc.fields[*step].ty, Type::Null)
+                        }
                         Type::List(items) => *items,
                         expr => todo!(
                             "returning_expr={returning_expr:#?}; expr={expr:#?}; project={e:#?}"
