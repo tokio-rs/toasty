@@ -1,4 +1,4 @@
-use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
+use super::{EnumVariant, Field, FieldId, FieldPrimitive, FieldTy, Model, ModelId, VariantId};
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
@@ -146,12 +146,10 @@ impl Schema {
                 // resolve to the document field itself (the leaf has no
                 // `app::Field`). The path was already type-checked by the
                 // generated accessors.
-                FieldTy::Primitive(primitive)
-                    if matches!(primitive.ty, stmt::Type::Document(_)) =>
-                {
-                    let stmt::Type::Document(doc) = &primitive.ty else {
-                        unreachable!()
-                    };
+                FieldTy::Primitive(FieldPrimitive {
+                    ty: stmt::Type::Document(doc),
+                    ..
+                }) => {
                     return resolve_document_steps(doc, *step, &mut steps)
                         .then_some(Resolved::Field(current_field));
                 }
