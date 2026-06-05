@@ -376,6 +376,14 @@ fn resolve_document_ty(
                         models, *nested,
                     )?)))
                 }
+                // A bare `#[document]` embed nested inside the embed. The macro
+                // emits it as `Type::Model(id)` just like the top-level field,
+                // so resolve it to a nested document — leaving it as `Model`
+                // would desync the outer document schema, and the value would
+                // reach the JSON codec as an unencodable positional `Record`.
+                stmt::Type::Model(nested) => {
+                    stmt::Type::Document(resolve_document_ty(models, *nested)?)
+                }
                 other => other.clone(),
             },
             // A nested column-expanded embed becomes a nested document.

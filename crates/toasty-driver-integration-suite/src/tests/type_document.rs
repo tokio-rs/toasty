@@ -371,6 +371,65 @@ pub async fn struct_embed_filter_nested(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// A nested embed field that itself carries `#[document]`. Unlike
+/// `struct_embed_filter_nested` (where the nested embed is column-expanded and
+/// arrives as `FieldTy::Embedded`), the macro emits this field as a bare
+/// `Type::Model`, just like a top-level `#[document]` field. The schema builder
+/// must still resolve it to a nested document so the value encodes as a JSON
+/// object rather than reaching the codec as an unencodable positional record.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn struct_embed_nested_document_field(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Address {
+        city: String,
+        zip: String,
+    }
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        #[document]
+        address: Address,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    let profile = Profile {
+        name: "Alice".into(),
+        address: Address {
+            city: "Seattle".into(),
+            zip: "98101".into(),
+        },
+    };
+    let account = toasty::create!(Account {
+        profile: profile.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Account::get_by_id(&mut db, &account.id).await?;
+    assert_eq!(reloaded.profile, profile);
+
+    // The JSON path still descends through the nested document.
+    let seattle = Account::filter(Account::fields().profile().address().city().eq("Seattle"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(seattle.len(), 1);
+    assert_eq!(seattle[0].profile.name, "Alice");
+
+    Ok(())
+}
+
 /// On a backend without document-collection support, a `#[document]`
 /// collection field is rejected at schema build with a clear error message.
 #[driver_test(id(ID), requires(not(document_collections)))]
