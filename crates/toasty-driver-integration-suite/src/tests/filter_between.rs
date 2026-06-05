@@ -134,7 +134,7 @@ pub async fn filter_between_string(test: &mut Test) -> Result<()> {
 #[driver_test(requires(not(sql)))]
 pub async fn filter_between_sort_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
-    #[key(partition = pk, local = sk)]
+    #[key(pk, sk)]
     struct Item {
         pk: i64,
         sk: i64,
