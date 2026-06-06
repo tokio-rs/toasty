@@ -188,34 +188,6 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
-        // A struct embed can be stored as a single document via `#[document]`.
-        // The embed type is emitted as `Type::Model(id)`; the schema builder
-        // resolves it to `Type::Document` once every embed is registered.
-        impl #toasty::Document for #model_ident {
-            type ExprTarget = Self;
-            type Path<__Origin> = #field_struct_ident<__Origin>;
-
-            fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
-                #field_struct_ident { path }
-            }
-
-            fn field_ty(
-                storage_ty: Option<#toasty::core::schema::db::Type>,
-            ) -> #toasty::core::schema::app::FieldTy {
-                #toasty::core::schema::app::FieldTy::Primitive(
-                    #toasty::core::schema::app::FieldPrimitive {
-                        ty: #toasty::core::stmt::Type::Model(<Self as #toasty::Embed>::id()),
-                        storage_ty,
-                        serialize: None,
-                    }
-                )
-            }
-
-            fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                <Self as #toasty::Field>::register(model_set);
-            }
-        }
-
         impl #toasty::Assign<#model_ident> for #model_ident {
             fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
                 #toasty::stmt::set(
@@ -432,20 +404,16 @@ impl Expand<'_> {
     }
 
     /// Generates a field accessor method for a primitive field, resolving the
-    /// path shape through `trait_ident`'s `Path` / `new_path` / `ExprTarget`.
-    ///
-    /// `trait_ident` is the field's [`Field::trait_ident`] — `Field` for a
-    /// column-expanded field, `Document` for a `#[document]` field. Both
-    /// traits expose the same `Path` / `new_path` / `ExprTarget` surface, so
-    /// the type itself decides its path shape (a struct embed's Fields handle,
-    /// a `Vec<scalar>` / `Vec<Embed>` list leaf) without the macro inspecting
-    /// the Rust type.
+    /// path shape through the field type's [`Field`] impl — its `Path` /
+    /// `new_path` / `ExprTarget`. The type itself decides its path shape (a
+    /// struct embed's Fields handle, a `Vec<scalar>` / `Vec<Embed>` list leaf)
+    /// without the macro inspecting the Rust type. A `#[document]` field uses
+    /// the same `Field` impl as its column-expanded form.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
         ty: &syn::Type,
         field_offset: &TokenStream,
-        trait_ident: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -455,13 +423,13 @@ impl Expand<'_> {
 
         // Construct the chained path with the field's `ExprTarget` as the
         // tag, so `new_path` receives exactly the type it expects. For
-        // `Vec<scalar>` this is
-        // `List<T>`; for everything else it is the field's Rust type.
+        // `Vec<_>` this is `List<T>`; for everything else it is the field's
+        // Rust type.
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <#ty as #toasty::#trait_ident>::Path<__Origin> {
-                <#ty as #toasty::#trait_ident>::new_path(
+            #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
+                <#ty as #toasty::Field>::new_path(
                     self.path().chain(
-                        <#model_ident as #schema_trait>::path_field::<<#ty as #toasty::#trait_ident>::ExprTarget>(#field_offset)
+                        <#model_ident as #schema_trait>::path_field::<<#ty as #toasty::Field>::ExprTarget>(#field_offset)
                     )
                 )
             }

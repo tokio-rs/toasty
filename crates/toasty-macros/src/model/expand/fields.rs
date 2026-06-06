@@ -38,20 +38,13 @@ impl Expand<'_> {
 
                 match &field.ty {
                     Primitive(ty) => {
-                        // The accessor resolves its path through the field's
-                        // schema trait — `Document` for `#[document]` fields,
-                        // `Field` otherwise. Both expose `Path` / `new_path`,
-                        // so the type decides its own path shape: a struct
-                        // embed (column-expanded or `#[document]`) yields a
-                        // chainable Fields handle (`profile().name()`), a
-                        // `Vec<_>` collection yields a list leaf.
-                        let trait_ident = field.trait_ident();
-                        self.expand_primitive_field_method(
-                            field_ident,
-                            ty,
-                            &field_offset,
-                            &trait_ident,
-                        )
+                        // The accessor resolves its path through the field
+                        // type's `Field` impl, so the type decides its own path
+                        // shape: a struct embed (column-expanded or
+                        // `#[document]`) yields a chainable Fields handle
+                        // (`profile().name()`), a `Vec<_>` collection yields a
+                        // list leaf.
+                        self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
                     BelongsTo(rel) => {
                         self.expand_one_relation_field_method(

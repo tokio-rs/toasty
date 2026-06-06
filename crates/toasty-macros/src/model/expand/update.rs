@@ -115,19 +115,18 @@ impl Expand<'_> {
                 }
             }
             FieldTy::Primitive(ty) => {
-                // Bind through `<Ty as Trait>::ExprTarget` so each field's
+                // Bind through `<Ty as Field>::ExprTarget` so each field's
                 // setter accepts whatever its expression-level type permits —
-                // `Self` for scalars, `List<T>` for `Vec<T: Scalar>`, and so
-                // on. `#[document]` fields resolve through `Document` instead
-                // of `Field` — same shape, different trait.
-                let trait_ident = field.trait_ident();
+                // `Self` for scalars, `List<T>` for `Vec<T>` collections, and
+                // so on. A `#[document]` field uses the same `Field` impl as
+                // its column-expanded form; only the schema `field_ty` differs.
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::#trait_ident>::ExprTarget>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::#trait_ident>::ExprTarget>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Field>::ExprTarget>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
