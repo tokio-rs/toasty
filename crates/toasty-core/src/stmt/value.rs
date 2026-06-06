@@ -510,7 +510,7 @@ impl Value {
     /// into lists and records so a document nested inside a row is
     /// converted as well. Other shapes pass through unchanged; the
     /// conversion is idempotent.
-    pub fn normalize_for_load(self, ty: &Type) -> Self {
+    pub(crate) fn normalize_for_load(self, ty: &Type) -> Self {
         match (self, ty) {
             (Self::List(items), Type::List(elem)) => Self::List(
                 items
