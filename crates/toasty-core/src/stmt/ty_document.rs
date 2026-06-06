@@ -41,4 +41,13 @@ impl TypeDocument {
     pub fn is_empty(&self) -> bool {
         self.fields.is_empty()
     }
+
+    /// Iterates the field types in declaration order, dropping the names.
+    ///
+    /// This is the positional view of a document — the same shape a
+    /// [`Type::Record`](super::Type::Record) carries — which lets callers
+    /// treat record and document targets uniformly.
+    pub(crate) fn field_tys(&self) -> impl Iterator<Item = &Type> {
+        self.fields.iter().map(|field| &field.ty)
+    }
 }

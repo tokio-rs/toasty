@@ -357,21 +357,17 @@ impl Value {
                 _ => false,
             },
             Self::Record(value) => match ty {
-                Type::Record(fields) if value.len() == fields.len() => value
-                    .fields
-                    .iter()
-                    .zip(fields.iter())
-                    .all(|(value, ty)| value.is_a(ty)),
-                // `Value::Record` is the engine's canonical load form for
-                // a document value — positional, names dropped. Drivers
-                // produce `Value::Object` (structural, named); the engine
-                // collapses to `Value::Record` at the receive boundary via
+                Type::Record(field_tys) if value.len() == field_tys.len() => {
+                    Self::fields_match(&value.fields, field_tys.iter())
+                }
+                // `Value::Record` is the engine's canonical load form for a
+                // document value — positional, names dropped. Drivers produce
+                // `Value::Object` (structural, named); the engine collapses to
+                // `Value::Record` at the receive boundary via
                 // `Value::normalize_for_load`.
-                Type::Document(doc) if value.len() == doc.fields.len() => value
-                    .fields
-                    .iter()
-                    .zip(doc.fields.iter())
-                    .all(|(value, field)| value.is_a(&field.ty)),
+                Type::Document(doc) if value.len() == doc.len() => {
+                    Self::fields_match(&value.fields, doc.field_tys())
+                }
                 _ => false,
             },
             Self::Object(value) => match ty {
@@ -404,6 +400,12 @@ impl Value {
             #[cfg(feature = "jiff")]
             Value::DateTime(_) => *ty == Type::DateTime,
         }
+    }
+
+    /// Whether each value `is_a` the type at the same position. Callers guard
+    /// the lengths first — `zip` would otherwise accept a short prefix.
+    fn fields_match<'a>(values: &[Value], tys: impl Iterator<Item = &'a Type>) -> bool {
+        values.iter().zip(tys).all(|(value, ty)| value.is_a(ty))
     }
 
     /// Infers and returns the [`Type`] of this value.
@@ -521,52 +523,48 @@ impl Value {
             (Self::Record(record), Type::Record(field_tys))
                 if record.fields.len() == field_tys.len() =>
             {
-                Self::record_from_vec(
-                    record
-                        .fields
-                        .into_iter()
-                        .zip(field_tys.iter())
-                        .map(|(v, t)| v.normalize_for_load(t))
-                        .collect(),
-                )
+                Self::normalize_record(record.fields, field_tys.iter())
             }
             (Self::Object(object), Type::Document(doc)) => {
-                // Drop the names, keep the positional order. Look up by
-                // name rather than zipping — the driver builds entries in
-                // `doc.fields` order today, but that's a codec invariant
-                // we shouldn't depend on here.
+                // Reorder the named entries into `doc.fields` order, then
+                // normalize. Look up by name rather than trusting the codec's
+                // entry order — that's an invariant we shouldn't depend on here.
                 let mut entries = object.entries;
-                Self::record_from_vec(
-                    doc.fields
-                        .iter()
-                        .map(|field| {
-                            let value = entries
-                                .iter()
-                                .position(|(k, _)| k == &field.name)
-                                .map(|i| entries.swap_remove(i).1)
-                                .unwrap_or(Self::Null);
-                            value.normalize_for_load(&field.ty)
-                        })
-                        .collect(),
-                )
+                let values = doc
+                    .fields
+                    .iter()
+                    .map(|field| {
+                        entries
+                            .iter()
+                            .position(|(k, _)| k == &field.name)
+                            .map(|i| entries.swap_remove(i).1)
+                            .unwrap_or(Self::Null)
+                    })
+                    .collect::<Vec<_>>();
+                Self::normalize_record(values, doc.field_tys())
             }
             // A positional record matched against a document type: already
             // in load shape, but recurse so nested documents inside it get
             // normalized.
-            (Self::Record(record), Type::Document(doc))
-                if record.fields.len() == doc.fields.len() =>
-            {
-                Self::record_from_vec(
-                    record
-                        .fields
-                        .into_iter()
-                        .zip(doc.fields.iter())
-                        .map(|(v, field)| v.normalize_for_load(&field.ty))
-                        .collect(),
-                )
+            (Self::Record(record), Type::Document(doc)) if record.fields.len() == doc.len() => {
+                Self::normalize_record(record.fields, doc.field_tys())
             }
             (value, _) => value,
         }
+    }
+
+    /// Recursively normalize each value against the type at the same position,
+    /// collecting into a positional [`Value::Record`] — the load shape shared
+    /// by record and document targets (a document supplies its types via
+    /// [`TypeDocument::field_tys`]).
+    fn normalize_record<'a>(values: Vec<Value>, tys: impl Iterator<Item = &'a Type>) -> Self {
+        Self::record_from_vec(
+            values
+                .into_iter()
+                .zip(tys)
+                .map(|(value, ty)| value.normalize_for_load(ty))
+                .collect(),
+        )
     }
 
     /// Takes the value out, replacing it with [`Value::Null`].
