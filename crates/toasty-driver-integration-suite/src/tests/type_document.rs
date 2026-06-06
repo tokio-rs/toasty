@@ -57,6 +57,54 @@ pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// A `Vec<embed>` is a document collection *without* the `#[document]`
+/// attribute. An embedded collection has no column-expanded form — the element
+/// type alone determines document storage — so the attribute is redundant here;
+/// it is only needed to force document storage on a *struct* embed (which
+/// otherwise column-expands) or to select an encoding via `#[document(text)]`.
+/// This round-trips identically to the annotated `vec_struct_create_get` above.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn vec_struct_without_attr(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct LineItem {
+        sku: String,
+        qty: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Order {
+        #[key]
+        #[auto]
+        id: ID,
+        // No `#[document]`: a `Vec<embed>` is a document collection on its own.
+        items: Vec<LineItem>,
+    }
+
+    let mut db = t.setup_db(models!(Order)).await;
+
+    let items = vec![
+        LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        },
+        LineItem {
+            sku: "SKU-2".into(),
+            qty: 1,
+        },
+    ];
+    let order = toasty::create!(Order {
+        items: items.clone()
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
+    assert_eq!(reloaded.items, items);
+
+    Ok(())
+}
+
 /// An `Option` field inside a document element round-trips both `Some` and
 /// `None`. `None` is omitted from the JSON object entirely and decodes back
 /// from the missing key.
