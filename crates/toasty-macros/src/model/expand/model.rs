@@ -105,14 +105,14 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
-                type Query<__T> = #query_struct_ident<__T>;
+                type Query<T> = #query_struct_ident<T>;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
-                type Path<__Origin> = #field_struct_ident<__Origin>;
+                type Path<Origin> = #field_struct_ident<Origin>;
                 type PrimaryKey = #primary_key_ty;
-                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type OneField<__Origin> = #field_struct_ident<__Origin>;
+                type ManyField<Origin> = #field_list_struct_ident<Origin>;
+                type OneField<Origin> = #field_struct_ident<Origin>;
 
                 fn id() -> #toasty::core::schema::app::ModelId {
                     static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
@@ -129,13 +129,13 @@ impl Expand<'_> {
                     #( #field_register_calls )*
                 }
 
-                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
+                fn new_path<Origin>(path: #toasty::Path<Origin, Self>) -> Self::Path<Origin> {
                     #field_struct_ident::from_path(path)
                 }
 
-                fn new_many_field<__Origin>(
-                    path: #toasty::Path<__Origin, #toasty::List<Self>>,
-                ) -> #field_list_struct_ident<__Origin> {
+                fn new_many_field<Origin>(
+                    path: #toasty::Path<Origin, #toasty::List<Self>>,
+                ) -> #field_list_struct_ident<Origin> {
                     #field_list_struct_ident::from_path(path)
                 }
 
@@ -145,9 +145,9 @@ impl Expand<'_> {
                     #find_by_primary_key_body
                 }
 
-                fn wrap_query<__T>(
-                    stmt: #toasty::stmt::Query<__T>,
-                ) -> Self::Query<__T> {
+                fn wrap_query<T>(
+                    stmt: #toasty::stmt::Query<T>,
+                ) -> Self::Query<T> {
                     #query_struct_ident::from_stmt(stmt)
                 }
 
@@ -171,11 +171,11 @@ impl Expand<'_> {
             // through the per-primitive `ViaTarget` impls instead.
             impl #toasty::ViaTarget for #model_ident {
                 type Query = #query_struct_ident<#toasty::List<#model_ident>>;
-                type Path<__Origin> = <#model_ident as #toasty::Model>::ManyField<__Origin>;
+                type Path<Origin> = <#model_ident as #toasty::Model>::ManyField<Origin>;
 
-                fn new_path<__Origin>(
-                    path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
-                ) -> Self::Path<__Origin> {
+                fn new_path<Origin>(
+                    path: #toasty::Path<Origin, #toasty::List<#model_ident>>,
+                ) -> Self::Path<Origin> {
                     // A model terminal keeps navigating, so hand back its
                     // chainable `ManyField`.
                     <#model_ident as #toasty::Model>::new_many_field(path)

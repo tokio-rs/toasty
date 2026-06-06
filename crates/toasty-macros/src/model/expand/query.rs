@@ -21,11 +21,11 @@ impl Expand<'_> {
         let include = self.expand_include_method(&include_ty);
 
         quote! {
-            #vis struct #query_struct_ident<__T = #toasty::List<#model_ident>> {
-                stmt: #toasty::stmt::Query<__T>,
+            #vis struct #query_struct_ident<T = #toasty::List<#model_ident>> {
+                stmt: #toasty::stmt::Query<T>,
             }
 
-            impl<__T> #toasty::Clone for #query_struct_ident<__T> {
+            impl<T> #toasty::Clone for #query_struct_ident<T> {
                 fn clone(&self) -> Self {
                     Self {
                         stmt: self.stmt.clone(),
@@ -34,16 +34,16 @@ impl Expand<'_> {
             }
 
             // ----- Shared methods (all `T`) -----
-            impl<__T> #query_struct_ident<__T> {
-                #vis const fn from_stmt(stmt: #toasty::stmt::Query<__T>) -> Self {
+            impl<T> #query_struct_ident<T> {
+                #vis const fn from_stmt(stmt: #toasty::stmt::Query<T>) -> Self {
                     Self { stmt }
                 }
 
                 #include
 
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<__T::Output>
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<T::Output>
                 where
-                    __T: #toasty::Load,
+                    T: #toasty::Load,
                 {
                     use #toasty::IntoStatement;
                     executor.exec(self.stmt.into_statement()).await
@@ -51,9 +51,9 @@ impl Expand<'_> {
             }
 
             // ----- Shared `create` (any `T` whose query can scope an insert) -----
-            impl<__T> #query_struct_ident<__T>
+            impl<T> #query_struct_ident<T>
             where
-                #toasty::stmt::Query<__T>: #toasty::stmt::IntoScope<#model_ident>,
+                #toasty::stmt::Query<T>: #toasty::stmt::IntoScope<#model_ident>,
             {
                 #vis fn create(self) -> #create_builder_ident {
                     let mut builder = #create_builder_ident::default();
@@ -100,13 +100,13 @@ impl Expand<'_> {
                     self.stmt.count()
                 }
 
-                #vis fn select<__E, __U>(
+                #vis fn select<E, T>(
                     self,
-                    projection: __E,
-                ) -> #toasty::stmt::Query<#toasty::List<__U>>
+                    projection: E,
+                ) -> #toasty::stmt::Query<#toasty::List<T>>
                 where
-                    __E: #toasty::IntoExpr<__U>,
-                    __U: #toasty::Load,
+                    E: #toasty::IntoExpr<T>,
+                    T: #toasty::Load,
                 {
                     self.stmt.select(projection)
                 }
@@ -180,19 +180,19 @@ impl Expand<'_> {
             }
 
             // ----- IntoStatement / IntoScope -----
-            impl<__T> #toasty::IntoStatement for #query_struct_ident<__T> {
-                type Returning = __T;
+            impl<T> #toasty::IntoStatement for #query_struct_ident<T> {
+                type Returning = T;
 
-                fn into_statement(self) -> #toasty::Statement<__T> {
+                fn into_statement(self) -> #toasty::Statement<T> {
                     use #toasty::IntoStatement;
                     self.stmt.into_statement()
                 }
             }
 
-            impl<__T> #toasty::IntoStatement for &#query_struct_ident<__T> {
-                type Returning = __T;
+            impl<T> #toasty::IntoStatement for &#query_struct_ident<T> {
+                type Returning = T;
 
-                fn into_statement(self) -> #toasty::Statement<__T> {
+                fn into_statement(self) -> #toasty::Statement<T> {
                     use #toasty::IntoStatement;
                     self.stmt.clone().into_statement()
                 }
@@ -238,10 +238,10 @@ impl Expand<'_> {
             #[diagnostic::do_not_recommend]
             impl #toasty::Scope for #query_struct_ident<#toasty::List<#model_ident>> {
                 type Item = #toasty::List<#model_ident>;
-                type Path<__Origin> = #field_list_struct_ident<__Origin>;
+                type Path<Origin> = #field_list_struct_ident<Origin>;
                 type Create = #create_builder_ident;
 
-                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                fn new_path<Origin>(path: #toasty::Path<Origin, Self::Item>) -> Self::Path<Origin> {
                     #field_list_struct_ident::from_path(path)
                 }
 
@@ -261,10 +261,10 @@ impl Expand<'_> {
             #[diagnostic::do_not_recommend]
             impl #toasty::Scope for #query_struct_ident<#model_ident> {
                 type Item = #model_ident;
-                type Path<__Origin> = #field_struct_ident<__Origin>;
+                type Path<Origin> = #field_struct_ident<Origin>;
                 type Create = #create_builder_ident;
 
-                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                fn new_path<Origin>(path: #toasty::Path<Origin, Self::Item>) -> Self::Path<Origin> {
                     #field_struct_ident::from_path(path)
                 }
 
@@ -284,10 +284,10 @@ impl Expand<'_> {
             #[diagnostic::do_not_recommend]
             impl #toasty::Scope for #query_struct_ident<#toasty::Option<#model_ident>> {
                 type Item = #model_ident;
-                type Path<__Origin> = #field_struct_ident<__Origin>;
+                type Path<Origin> = #field_struct_ident<Origin>;
                 type Create = #create_builder_ident;
 
-                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
+                fn new_path<Origin>(path: #toasty::Path<Origin, Self::Item>) -> Self::Path<Origin> {
                     #field_struct_ident::from_path(path)
                 }
 
