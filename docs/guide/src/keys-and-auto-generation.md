@@ -300,8 +300,10 @@ struct Enrollment {
 }
 ```
 
-`#[key(student_id, course_id)]` on the struct is equivalent to putting `#[key]`
-on both `student_id` and `course_id`. It generates the same lookup methods:
+`#[key(student_id, course_id)]` is shorthand for
+`#[key(partition = student_id, local = course_id)]`: the first field is the
+partition (hash) key, and any remaining fields are local (sort) keys. It
+generates the same lookup methods as `#[key]` on each field:
 
 ```rust
 # use toasty::Model;
@@ -405,5 +407,5 @@ For a model with `#[key]`, Toasty generates these methods:
 |---|---|
 | `#[key]` on single field | `get_by_<field>()`, `filter_by_<field>()`, `delete_by_<field>()` |
 | `#[key]` on multiple fields | `get_by_<a>_and_<b>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
-| `#[key(a, b)]` on struct | Same as `#[key]` on multiple fields |
+| `#[key(a, b)]` on struct | Same generated methods as `#[key]` on multiple fields; `a` is the partition key, `b` is the local (sort) key |
 | `#[key(partition = a, local = b)]` | `get_by_<a>_and_<b>()`, `filter_by_<a>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |

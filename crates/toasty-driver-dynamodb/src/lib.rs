@@ -330,6 +330,12 @@ fn ddb_expression(
     expr: &stmt::Expr,
 ) -> String {
     match expr {
+        stmt::Expr::Between(expr_between) => {
+            let field = ddb_expression(cx, attrs, primary, &expr_between.expr);
+            let low = ddb_expression(cx, attrs, primary, &expr_between.low);
+            let high = ddb_expression(cx, attrs, primary, &expr_between.high);
+            format!("{field} BETWEEN {low} AND {high}")
+        }
         stmt::Expr::BinaryOp(expr_binary_op) => {
             let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
             let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
