@@ -247,11 +247,6 @@ impl Type {
         matches!(self, Self::Record(..))
     }
 
-    /// Returns `true` if this is [`Type::Document`].
-    pub fn is_document(&self) -> bool {
-        matches!(self, Self::Document(..))
-    }
-
     /// Returns `true` if this is [`Type::Bytes`].
     pub fn is_bytes(&self) -> bool {
         matches!(self, Self::Bytes)

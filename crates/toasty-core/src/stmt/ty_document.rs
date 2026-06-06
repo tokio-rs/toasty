@@ -33,13 +33,8 @@ impl TypeDocument {
     }
 
     /// Returns the number of fields in the document.
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.fields.len()
-    }
-
-    /// Returns `true` if the document has no fields.
-    pub fn is_empty(&self) -> bool {
-        self.fields.is_empty()
     }
 
     /// Iterates the field types in declaration order, dropping the names.

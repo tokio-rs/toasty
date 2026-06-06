@@ -26,40 +26,12 @@ impl ValueObject {
     }
 
     /// Returns the number of entries in the object.
-    pub fn len(&self) -> usize {
+    pub(crate) fn len(&self) -> usize {
         self.entries.len()
-    }
-
-    /// Returns `true` if the object has no entries.
-    pub fn is_empty(&self) -> bool {
-        self.entries.is_empty()
-    }
-
-    /// Returns a reference to the value associated with `key`, or `None`.
-    pub fn get(&self, key: &str) -> Option<&Value> {
-        self.entries.iter().find(|(k, _)| k == key).map(|(_, v)| v)
     }
 
     /// Iterates over the `(key, value)` entries in insertion order.
     pub fn iter(&self) -> std::slice::Iter<'_, (String, Value)> {
-        self.entries.iter()
-    }
-}
-
-impl IntoIterator for ValueObject {
-    type Item = (String, Value);
-    type IntoIter = std::vec::IntoIter<(String, Value)>;
-
-    fn into_iter(self) -> Self::IntoIter {
-        self.entries.into_iter()
-    }
-}
-
-impl<'a> IntoIterator for &'a ValueObject {
-    type Item = &'a (String, Value);
-    type IntoIter = std::slice::Iter<'a, (String, Value)>;
-
-    fn into_iter(self) -> Self::IntoIter {
         self.entries.iter()
     }
 }

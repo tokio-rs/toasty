@@ -202,33 +202,6 @@ impl Value {
         matches!(self, Self::Record(_))
     }
 
-    /// Returns `true` if this value is a [`Value::Object`].
-    pub const fn is_object(&self) -> bool {
-        matches!(self, Self::Object(_))
-    }
-
-    /// Returns a reference to the contained [`ValueObject`] if this is a
-    /// [`Value::Object`], or `None` otherwise.
-    pub fn as_object(&self) -> Option<&ValueObject> {
-        match self {
-            Self::Object(object) => Some(object),
-            _ => None,
-        }
-    }
-
-    /// Consumes this value and returns the contained [`ValueObject`],
-    /// panicking if this is not a [`Value::Object`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the value is not an `Object` variant.
-    pub fn into_object(self) -> ValueObject {
-        match self {
-            Self::Object(object) => object,
-            _ => panic!("expected Value::Object; actual={self:#?}"),
-        }
-    }
-
     /// Creates a [`Value::Record`] from a vector of field values.
     ///
     /// # Examples
