@@ -150,7 +150,14 @@ impl Expand<'_> {
                         let field_ident = &field.name.ident;
                         let field_ty = primitive_ty_unwrap(field);
                         let field_offset = util::int(field_index);
-                        self.expand_primitive_field_method(field_ident, field_ty, &field_offset)
+                        // Enum-variant fields are never `#[document]`, so they
+                        // resolve their path through `Field`.
+                        self.expand_primitive_field_method(
+                            field_ident,
+                            field_ty,
+                            &field_offset,
+                            &quote!(Field),
+                        )
                     })
                     .collect();
 

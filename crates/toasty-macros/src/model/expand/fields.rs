@@ -37,23 +37,21 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(ty) if field.attrs.document.is_some() => {
-                        // A bare `#[document]` struct embed exposes the same
-                        // path API as a column-expanded embed
-                        // (`profile().name()`); only storage differs, and the
-                        // query engine routes the path into a JSON extraction.
-                        // A `#[document]` collection (`Vec<Embed>`) has no path
-                        // API in this increment, so it gets no accessor.
-                        let is_collection = matches!(ty, syn::Type::Path(p)
-                            if p.path.segments.last().is_some_and(|s| s.ident == "Vec"));
-                        if is_collection {
-                            TokenStream::new()
-                        } else {
-                            self.expand_primitive_field_method(field_ident, ty, &field_offset)
-                        }
-                    }
                     Primitive(ty) => {
-                        self.expand_primitive_field_method(field_ident, ty, &field_offset)
+                        // The accessor resolves its path through the field's
+                        // schema trait — `Document` for `#[document]` fields,
+                        // `Field` otherwise. Both expose `Path` / `new_path`,
+                        // so the type decides its own path shape: a struct
+                        // embed (column-expanded or `#[document]`) yields a
+                        // chainable Fields handle (`profile().name()`), a
+                        // `Vec<_>` collection yields a list leaf.
+                        let trait_ident = field.trait_ident();
+                        self.expand_primitive_field_method(
+                            field_ident,
+                            ty,
+                            &field_offset,
+                            &trait_ident,
+                        )
                     }
                     BelongsTo(rel) => {
                         self.expand_one_relation_field_method(

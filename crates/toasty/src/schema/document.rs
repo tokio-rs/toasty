@@ -1,5 +1,5 @@
 use super::{Embed, Field};
-use crate::stmt::List;
+use crate::stmt::{self, List};
 use toasty_core::schema::app::ModelSet;
 
 /// Schema and runtime information for a `#[document]` field.
@@ -17,6 +17,15 @@ pub trait Document {
     /// through. For `Vec<T>` this is [`List<T>`], so the setters accept any
     /// `impl IntoExpr<List<T>>` (a `Vec<T>`, a slice, an array literal).
     type ExprTarget;
+
+    /// The type returned when accessing this document field from a Fields
+    /// struct. Mirrors [`Field::Path`](super::Field::Path): a struct embed
+    /// wraps the path in its `{Type}Fields` handle so nested fields chain off
+    /// it (`profile().name()`), while a `Vec<T>` collection returns a plain
+    /// [`stmt::Path`] leaf. The accessor macro resolves a `#[document]`
+    /// field's path through this associated type instead of inspecting the
+    /// Rust type, so the path shape is decided here per `Document` impl.
+    type Path<Origin>;
 
     /// Whether the field accepts `None` / `NULL`.
     const NULLABLE: bool = false;
@@ -37,6 +46,14 @@ pub trait Document {
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy;
 
+    /// Build a field path from a raw path of this field's
+    /// [`Self::ExprTarget`]. Mirrors
+    /// [`Field::new_path`](super::Field::new_path): a struct embed wraps the
+    /// path in its Fields handle, a collection returns it as-is.
+    fn new_path<Origin>(path: stmt::Path<Origin, Self::ExprTarget>) -> Self::Path<Origin>
+    where
+        Self: Sized;
+
     /// Register the embedded element type (and anything reachable from it)
     /// into the given [`ModelSet`].
     fn register(model_set: &mut ModelSet);
@@ -44,6 +61,16 @@ pub trait Document {
 
 impl<T: Embed + Field> Document for Vec<T> {
     type ExprTarget = List<T>;
+
+    // A collection has no nested-path API in this increment, so its accessor
+    // returns a plain `List<T>` leaf — selectable and includable, but not yet
+    // chainable into element fields. Enriching that is a change to this impl
+    // alone; the accessor macro never inspects the type.
+    type Path<Origin> = stmt::Path<Origin, List<T>>;
+
+    fn new_path<Origin>(path: stmt::Path<Origin, List<T>>) -> Self::Path<Origin> {
+        path
+    }
 
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
