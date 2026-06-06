@@ -648,13 +648,19 @@ fn refine_insert(
     };
     let db_table = &db_schema.tables[table.table.0];
 
-    // Build expected type from column list (authoritative)
-    let field_types: Vec<Ty> = table
-        .columns
-        .iter()
-        .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
-        .collect();
-    let expected = Ty::Record(field_types);
+    // Build expected type from column list (authoritative). Borrow the
+    // per-column types back out so the per-row loop below can reuse them
+    // instead of re-deriving each column's `Ty` once per VALUES row.
+    let expected = Ty::Record(
+        table
+            .columns
+            .iter()
+            .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
+            .collect(),
+    );
+    let Ty::Record(field_types) = &expected else {
+        unreachable!()
+    };
 
     // Push column types down into each VALUES row
     if let stmt::ExprSet::Values(values) = &insert.source.body {
@@ -664,12 +670,14 @@ fn refine_insert(
             // shape the column type merges with. Handle those columns
             // explicitly, field by field, and let `check` cover the rest.
             if let stmt::Expr::Record(record) = row {
-                for (col_id, field_expr) in table.columns.iter().zip(&record.fields) {
+                for ((col_id, field_expr), field_ty) in
+                    table.columns.iter().zip(&record.fields).zip(field_types)
+                {
                     let col = &db_table.columns[col_id.index];
                     if let Some(doc) = document_elem_ty(&col.ty) {
                         refine_document_param(field_expr, doc, col.storage_ty.clone(), params);
                     } else {
-                        check(field_expr, &ty_from_column(col.storage_ty.clone()), params);
+                        check(field_expr, field_ty, params);
                     }
                 }
             } else {
