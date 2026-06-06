@@ -380,6 +380,17 @@ impl Type {
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }
+            // Document decode: collapse a driver-produced `Value::Object` (named)
+            // into the positional `Value::Record` the engine consumes, by field
+            // name. The planner injects these casts after each data-loading node
+            // so the conversion is an explicit, planned instruction rather than a
+            // runtime walk driven by type tracking. An already-positional
+            // `Value::Record` recurses idempotently for nested documents.
+            (value @ (Value::Object(_) | Value::Record(_)), Self::Document(_)) => {
+                value.normalize_for_load(self)
+            }
+            // A list of documents (`#[document] Vec<Struct>`): recurse per item.
+            (value @ Value::List(_), Self::List(_)) => value.normalize_for_load(self),
             // Bool <-> I8: Bool key/index fields are stored as Integer(1) via
             // bridge_type. The engine casts Bool -> I8 on write and I8 -> Bool
             // on read. Only Type::cast supports this; TryFrom is intentionally

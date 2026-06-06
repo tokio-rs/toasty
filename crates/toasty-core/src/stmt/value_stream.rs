@@ -177,11 +177,6 @@ impl ValueStream {
         if let Some(stream) = &mut self.stream {
             while let Some(res) = stream.next().await {
                 let value = res?;
-                let value = if let Some((ty, _)) = &self.ty {
-                    value.normalize_for_load(ty)
-                } else {
-                    value
-                };
 
                 if let Some((ty, location)) = &self.ty {
                     assert!(
@@ -247,12 +242,12 @@ impl ValueStream {
         match &self.ty {
             Some((prev, _)) => assert_eq!(*prev, ty),
             None => {
-                // Normalize already-buffered values against the new type so
-                // any `Value::Object` carried over from the driver collapses
-                // to `Value::Record` here — single conversion site.
+                // Validate already-buffered values against the new type.
+                // Document columns are decoded from `Value::Object` to
+                // `Value::Record` upstream by a planner-injected projection
+                // (`plan_document_decode`), so no conversion is needed here.
                 let mut tmp = mem::take(&mut self.buffer);
                 while let Some(value) = tmp.next() {
-                    let value = value.normalize_for_load(&ty);
                     assert!(
                         value.is_a(&ty),
                         "expected `{ty:?}`; was={value:#?}; origin={location}"
@@ -277,11 +272,6 @@ impl Stream for ValueStream {
         } else if let Some(stream) = self.stream.as_mut() {
             match Pin::new(stream).poll_next(cx) {
                 Poll::Ready(Some(Ok(value))) => {
-                    let value = if let Some((ty, _)) = &self.ty {
-                        value.normalize_for_load(ty)
-                    } else {
-                        value
-                    };
                     if let Some((ty, location)) = &self.ty {
                         assert!(
                             value.is_a(ty),
@@ -290,6 +280,7 @@ impl Stream for ValueStream {
                     }
                     Poll::Ready(Some(Ok(value)))
                 }
+
                 other => other,
             }
         } else {
