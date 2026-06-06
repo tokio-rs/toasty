@@ -118,31 +118,35 @@
 <a href=#118 id=118 data-nosnippet>118</a>        })<span class="question-mark">?</span>;
 <a href=#119 id=119 data-nosnippet>119</a>
 <a href=#120 id=120 data-nosnippet>120</a>        <span class="kw">if </span>!simple_fields.is_empty() {
-<a href=#121 id=121 data-nosnippet>121</a>            <span class="comment">// Simple mode: all fields become partition keys
-<a href=#122 id=122 data-nosnippet>122</a>            </span>partition = simple_fields;
-<a href=#123 id=123 data-nosnippet>123</a>        } <span class="kw">else </span>{
-<a href=#124 id=124 data-nosnippet>124</a>            <span class="comment">// Named mode: require both partition and local
-<a href=#125 id=125 data-nosnippet>125</a>            </span><span class="kw">if </span>partition.is_empty() {
-<a href=#126 id=126 data-nosnippet>126</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
-<a href=#127 id=127 data-nosnippet>127</a>                    attr,
-<a href=#128 id=128 data-nosnippet>128</a>                    <span class="string">"expected at least one `partition` field"</span>,
-<a href=#129 id=129 data-nosnippet>129</a>                ));
-<a href=#130 id=130 data-nosnippet>130</a>            }
-<a href=#131 id=131 data-nosnippet>131</a>
-<a href=#132 id=132 data-nosnippet>132</a>            <span class="kw">if </span>local.is_empty() {
-<a href=#133 id=133 data-nosnippet>133</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
-<a href=#134 id=134 data-nosnippet>134</a>                    attr,
-<a href=#135 id=135 data-nosnippet>135</a>                    <span class="string">"expected at least one `local` field"</span>,
-<a href=#136 id=136 data-nosnippet>136</a>                ));
-<a href=#137 id=137 data-nosnippet>137</a>            }
-<a href=#138 id=138 data-nosnippet>138</a>        }
-<a href=#139 id=139 data-nosnippet>139</a>
-<a href=#140 id=140 data-nosnippet>140</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
-<a href=#141 id=141 data-nosnippet>141</a>            partition,
-<a href=#142 id=142 data-nosnippet>142</a>            local,
-<a href=#143 id=143 data-nosnippet>143</a>            name,
-<a href=#144 id=144 data-nosnippet>144</a>            unique: <span class="bool-val">false</span>,
-<a href=#145 id=145 data-nosnippet>145</a>        })
-<a href=#146 id=146 data-nosnippet>146</a>    }
-<a href=#147 id=147 data-nosnippet>147</a>}
+<a href=#121 id=121 data-nosnippet>121</a>            <span class="comment">// Simple mode (e.g. `#[key(a, b, c)]`): first field is the partition
+<a href=#122 id=122 data-nosnippet>122</a>            // (hash) key, rest are local (sort) keys. Matches `#[index(a, b, c)]`
+<a href=#123 id=123 data-nosnippet>123</a>            // so the simple form is equivalent to `#[key(partition = a, local = [b, c])]`.
+<a href=#124 id=124 data-nosnippet>124</a>            </span><span class="kw">let </span><span class="kw-2">mut </span>iter = simple_fields.into_iter();
+<a href=#125 id=125 data-nosnippet>125</a>            partition = iter.next().into_iter().collect();
+<a href=#126 id=126 data-nosnippet>126</a>            local = iter.collect();
+<a href=#127 id=127 data-nosnippet>127</a>        } <span class="kw">else </span>{
+<a href=#128 id=128 data-nosnippet>128</a>            <span class="comment">// Named mode: require both partition and local
+<a href=#129 id=129 data-nosnippet>129</a>            </span><span class="kw">if </span>partition.is_empty() {
+<a href=#130 id=130 data-nosnippet>130</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
+<a href=#131 id=131 data-nosnippet>131</a>                    attr,
+<a href=#132 id=132 data-nosnippet>132</a>                    <span class="string">"expected at least one `partition` field"</span>,
+<a href=#133 id=133 data-nosnippet>133</a>                ));
+<a href=#134 id=134 data-nosnippet>134</a>            }
+<a href=#135 id=135 data-nosnippet>135</a>
+<a href=#136 id=136 data-nosnippet>136</a>            <span class="kw">if </span>local.is_empty() {
+<a href=#137 id=137 data-nosnippet>137</a>                <span class="kw">return </span><span class="prelude-val">Err</span>(syn::Error::new_spanned(
+<a href=#138 id=138 data-nosnippet>138</a>                    attr,
+<a href=#139 id=139 data-nosnippet>139</a>                    <span class="string">"expected at least one `local` field"</span>,
+<a href=#140 id=140 data-nosnippet>140</a>                ));
+<a href=#141 id=141 data-nosnippet>141</a>            }
+<a href=#142 id=142 data-nosnippet>142</a>        }
+<a href=#143 id=143 data-nosnippet>143</a>
+<a href=#144 id=144 data-nosnippet>144</a>        <span class="prelude-val">Ok</span>(<span class="self">Self </span>{
+<a href=#145 id=145 data-nosnippet>145</a>            partition,
+<a href=#146 id=146 data-nosnippet>146</a>            local,
+<a href=#147 id=147 data-nosnippet>147</a>            name,
+<a href=#148 id=148 data-nosnippet>148</a>            unique: <span class="bool-val">false</span>,
+<a href=#149 id=149 data-nosnippet>149</a>        })
+<a href=#150 id=150 data-nosnippet>150</a>    }
+<a href=#151 id=151 data-nosnippet>151</a>}
 </code></pre></div></section></main></body></html>

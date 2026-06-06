@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6ffaaa7c.js";
+            window.path_to_searchindex_js = "searchindex-c9382024.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -446,8 +446,10 @@ struct Enrollment {
     grade: Option&lt;String&gt;,
 }
 <span class="boring">}</span></code></pre>
-<p><code>#[key(student_id, course_id)]</code> on the struct is equivalent to putting <code>#[key]</code>
-on both <code>student_id</code> and <code>course_id</code>. It generates the same lookup methods:</p>
+<p><code>#[key(student_id, course_id)]</code> is shorthand for
+<code>#[key(partition = student_id, local = course_id)]</code>: the first field is the
+partition (hash) key, and any remaining fields are local (sort) keys. It
+generates the same lookup methods as <code>#[key]</code> on each field:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -541,7 +543,7 @@ let todos = Todo::filter_by_user_id(&amp;1)
 <tbody>
 <tr><td><code>#[key]</code> on single field</td><td><code>get_by_&lt;field&gt;()</code>, <code>filter_by_&lt;field&gt;()</code>, <code>delete_by_&lt;field&gt;()</code></td></tr>
 <tr><td><code>#[key]</code> on multiple fields</td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
-<tr><td><code>#[key(a, b)]</code> on struct</td><td>Same as <code>#[key]</code> on multiple fields</td></tr>
+<tr><td><code>#[key(a, b)]</code> on struct</td><td>Same generated methods as <code>#[key]</code> on multiple fields; <code>a</code> is the partition key, <code>b</code> is the local (sort) key</td></tr>
 <tr><td><code>#[key(partition = a, local = b)]</code></td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
 </tbody>
 </table>
