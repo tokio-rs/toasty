@@ -238,10 +238,10 @@ impl Expand<'_> {
             #[diagnostic::do_not_recommend]
             impl #toasty::Scope for #query_struct_ident<#toasty::List<#model_ident>> {
                 type Item = #toasty::List<#model_ident>;
-                type Path<Origin> = #field_list_struct_ident<Origin>;
+                type Path<__Origin> = #field_list_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
 
-                fn new_path<Origin>(path: #toasty::Path<Origin, Self::Item>) -> Self::Path<Origin> {
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
                     #field_list_struct_ident::from_path(path)
                 }
 
@@ -261,10 +261,10 @@ impl Expand<'_> {
             #[diagnostic::do_not_recommend]
             impl #toasty::Scope for #query_struct_ident<#model_ident> {
                 type Item = #model_ident;
-                type Path<Origin> = #field_struct_ident<Origin>;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
 
-                fn new_path<Origin>(path: #toasty::Path<Origin, Self::Item>) -> Self::Path<Origin> {
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)
                 }
 
@@ -284,10 +284,10 @@ impl Expand<'_> {
             #[diagnostic::do_not_recommend]
             impl #toasty::Scope for #query_struct_ident<#toasty::Option<#model_ident>> {
                 type Item = #model_ident;
-                type Path<Origin> = #field_struct_ident<Origin>;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
                 type Create = #create_builder_ident;
 
-                fn new_path<Origin>(path: #toasty::Path<Origin, Self::Item>) -> Self::Path<Origin> {
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)
                 }
 

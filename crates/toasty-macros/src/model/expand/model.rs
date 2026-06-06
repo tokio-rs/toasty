@@ -109,10 +109,10 @@ impl Expand<'_> {
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
-                type Path<Origin> = #field_struct_ident<Origin>;
+                type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
-                type ManyField<Origin> = #field_list_struct_ident<Origin>;
-                type OneField<Origin> = #field_struct_ident<Origin>;
+                type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
+                type OneField<__Origin> = #field_struct_ident<__Origin>;
 
                 fn id() -> #toasty::core::schema::app::ModelId {
                     static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
@@ -129,13 +129,13 @@ impl Expand<'_> {
                     #( #field_register_calls )*
                 }
 
-                fn new_path<Origin>(path: #toasty::Path<Origin, Self>) -> Self::Path<Origin> {
+                fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)
                 }
 
-                fn new_many_field<Origin>(
-                    path: #toasty::Path<Origin, #toasty::List<Self>>,
-                ) -> #field_list_struct_ident<Origin> {
+                fn new_many_field<__Origin>(
+                    path: #toasty::Path<__Origin, #toasty::List<Self>>,
+                ) -> #field_list_struct_ident<__Origin> {
                     #field_list_struct_ident::from_path(path)
                 }
 
@@ -171,11 +171,11 @@ impl Expand<'_> {
             // through the per-primitive `ViaTarget` impls instead.
             impl #toasty::ViaTarget for #model_ident {
                 type Query = #query_struct_ident<#toasty::List<#model_ident>>;
-                type Path<Origin> = <#model_ident as #toasty::Model>::ManyField<Origin>;
+                type Path<__Origin> = <#model_ident as #toasty::Model>::ManyField<__Origin>;
 
-                fn new_path<Origin>(
-                    path: #toasty::Path<Origin, #toasty::List<#model_ident>>,
-                ) -> Self::Path<Origin> {
+                fn new_path<__Origin>(
+                    path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
+                ) -> Self::Path<__Origin> {
                     // A model terminal keeps navigating, so hand back its
                     // chainable `ManyField`.
                     <#model_ident as #toasty::Model>::new_many_field(path)
