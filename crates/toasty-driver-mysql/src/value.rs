@@ -435,9 +435,8 @@ impl ToValue for Value {
                 // Bound to a MySQL `JSON` column — serialize the list to a
                 // JSON document and send it as text. MySQL accepts JSON as
                 // string or bytes; bytes avoids any utf8 round-trip.
-                let json = toasty_sql::value_json::value_list_to_json(&self.0);
                 mysql_async::Value::Bytes(
-                    serde_json::to_vec(&json).expect("serialize Vec<scalar> to JSON"),
+                    toasty_sql::json::to_vec(&self.0).expect("serialize Vec<scalar> to JSON"),
                 )
             }
             value => todo!("{:#?}", value),
@@ -446,7 +445,6 @@ impl ToValue for Value {
 }
 
 fn json_bytes_to_value_list(bytes: &[u8], elem_ty: &stmt::Type) -> CoreValue {
-    let json: serde_json::Value =
-        serde_json::from_slice(bytes).expect("MySQL returned non-JSON for a JSON column");
-    toasty_sql::value_json::value_list_from_json(json, elem_ty)
+    toasty_sql::json::list_from_slice(bytes, elem_ty)
+        .expect("MySQL returned non-JSON for a JSON column")
 }

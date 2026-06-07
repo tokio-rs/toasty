@@ -182,9 +182,8 @@ impl Value {
             } else {
                 raw
             };
-            let json: serde_json::Value =
-                serde_json::from_slice(json_bytes).expect("invalid JSON in document column");
-            toasty_sql::value_json::value_from_json(json, expected_ty)
+            toasty_sql::json::from_slice(json_bytes, expected_ty)
+                .expect("invalid JSON in document column")
         } else if let Kind::Array(_) = column.type_().kind() {
             // Native array column (e.g. `text[]`, `int8[]`) — decoded
             // directly into `Vec<stmt::Value>` via `array_from_sql`. The
@@ -577,19 +576,17 @@ fn value_to_sql(
         // has already converted positional records to named objects, so this
         // is a plain structural encode.
         (value, &Type::JSONB) => {
-            let json = toasty_sql::value_json::value_to_json(value);
-            let text = serde_json::to_string(&json)
+            let bytes = toasty_sql::json::to_vec(value)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)?;
             // `jsonb` wire format: a 1-byte version header, then UTF-8 text.
             out.extend_from_slice(&[1]);
-            out.extend_from_slice(text.as_bytes());
+            out.extend_from_slice(&bytes);
             Ok(IsNull::No)
         }
         (value, &Type::JSON) => {
-            let json = toasty_sql::value_json::value_to_json(value);
-            let text = serde_json::to_string(&json)
+            let bytes = toasty_sql::json::to_vec(value)
                 .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)?;
-            out.extend_from_slice(text.as_bytes());
+            out.extend_from_slice(&bytes);
             Ok(IsNull::No)
         }
         // List → bind as a PostgreSQL array via the streaming `array_to_sql`

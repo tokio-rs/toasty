@@ -18,7 +18,6 @@ async-trait.workspace = true
 toasty-core.workspace = true
 toasty-sql.workspace = true
 serde.workspace = true
-serde_json.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 turso.workspace = true

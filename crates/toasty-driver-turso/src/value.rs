@@ -82,12 +82,10 @@ pub(crate) fn from_turso_infer(value: TursoValue) -> CoreValue {
 }
 
 fn value_list_to_json_text(value: &CoreValue) -> String {
-    let json = toasty_sql::value_json::value_list_to_json(value);
-    serde_json::to_string(&json).expect("serialize Vec<scalar> to JSON")
+    toasty_sql::json::to_string(value).expect("serialize Vec<scalar> to JSON")
 }
 
 fn json_text_to_value_list(text: &str, elem_ty: &stmt::Type) -> CoreValue {
-    let json: serde_json::Value =
-        serde_json::from_str(text).expect("Turso returned non-JSON for a Vec<scalar> column");
-    toasty_sql::value_json::value_list_from_json(json, elem_ty)
+    toasty_sql::json::list_from_str(text, elem_ty)
+        .expect("Turso returned non-JSON for a Vec<scalar> column")
 }

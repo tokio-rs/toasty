@@ -106,18 +106,14 @@ impl ToSql for Value {
 }
 
 fn value_to_json_text(value: &CoreValue) -> String {
-    let json = toasty_sql::value_json::value_to_json(value);
-    serde_json::to_string(&json).expect("serialize document value to JSON")
+    toasty_sql::json::to_string(value).expect("serialize document value to JSON")
 }
 
 fn json_text_to_value_list(text: &str, elem_ty: &stmt::Type) -> CoreValue {
-    let json: serde_json::Value =
-        serde_json::from_str(text).expect("SQLite returned non-JSON for a collection column");
-    toasty_sql::value_json::value_list_from_json(json, elem_ty)
+    toasty_sql::json::list_from_str(text, elem_ty)
+        .expect("SQLite returned non-JSON for a collection column")
 }
 
 fn json_text_to_value(text: &str, ty: &stmt::Type) -> CoreValue {
-    let json: serde_json::Value =
-        serde_json::from_str(text).expect("SQLite returned non-JSON for a document column");
-    toasty_sql::value_json::value_from_json(json, ty)
+    toasty_sql::json::from_str(text, ty).expect("SQLite returned non-JSON for a document column")
 }
