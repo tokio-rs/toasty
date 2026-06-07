@@ -5,6 +5,7 @@
 #![doc(hidden)]
 
 pub mod auto;
+pub mod index;
 pub mod newtype;
 pub mod storage;
 pub mod version;

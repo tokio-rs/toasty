@@ -38,6 +38,7 @@ impl Expand<'_> {
         let storage_compat_checks = self.expand_storage_compat_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
         let version_compat_checks = self.expand_version_compat_checks();
+        let indexable_checks = self.expand_indexable_checks();
 
         wrap_in_const(quote! {
             #model_impls
@@ -49,6 +50,7 @@ impl Expand<'_> {
             #storage_compat_checks
             #auto_compat_checks
             #version_compat_checks
+            #indexable_checks
         })
     }
 }
@@ -89,11 +91,14 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let storage_compat_checks = expand.expand_storage_compat_checks();
+    let indexable_checks = expand.expand_indexable_checks();
     let newtype_marker = expand.expand_embedded_newtype_marker();
+    let newtype_indexable_impl = expand.expand_embedded_indexable_impl();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
         #newtype_marker
+        #newtype_indexable_impl
 
         #embedded_field_struct
         #embedded_field_list_struct
@@ -103,6 +108,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #embedded_model_impls
 
         #storage_compat_checks
+        #indexable_checks
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -231,12 +237,24 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
+    let indexable_checks = e.expand_indexable_checks();
+
+    // A unit (data-less) enum maps to a single discriminant column, so it can
+    // serve as an index column. Data-carrying enums span multiple columns and
+    // therefore do not implement `IndexableField`.
+    let indexable_impl = if model.fields.is_empty() {
+        quote! { impl #toasty::index::IndexableField for #model_ident {} }
+    } else {
+        quote! {}
+    };
 
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
 
         #storage_compat_checks
+        #indexable_checks
+        #indexable_impl
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -374,6 +392,37 @@ impl Expand<'_> {
                     Self(inner)
                 }
             }
+        }
+    }
+
+    /// For tuple-newtype `#[derive(Embed)]` structs, emit an `IndexableField`
+    /// impl that forwards to the inner type, so a newtype wrapping an indexable
+    /// scalar can itself serve as an index column. Multi-field and named
+    /// single-field structs are opaque wrappers and stay non-indexable.
+    ///
+    /// This is a per-type impl rather than a `NewtypeOf` blanket: a blanket
+    /// would conflict with the `Box<T>` forwarding impl in
+    /// `codegen_support::index`, because `Box` is `#[fundamental]`.
+    fn expand_embedded_indexable_impl(&self) -> TokenStream {
+        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
+            return quote! {};
+        };
+        if embedded.fields_named || self.model.fields.len() != 1 {
+            return quote! {};
+        }
+
+        let FieldTy::Primitive(inner_ty) = &self.model.fields[0].ty else {
+            return quote! {};
+        };
+
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            impl #toasty::index::IndexableField for #model_ident
+            where
+                #inner_ty: #toasty::index::IndexableField,
+            {}
         }
     }
 
