@@ -214,45 +214,36 @@ impl ToSql for &stmt::Expr {
 fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
     match f.serializer.flavor {
         Flavor::Sqlite | Flavor::Mysql => {
-            let open = if f.serializer.is_mysql() {
-                "JSON_EXTRACT("
+            // SQLite spells it `json_extract`, MySQL `JSON_EXTRACT`; both take a
+            // single-quoted JSONPath argument like `$.a.b`.
+            let name = if f.serializer.is_mysql() {
+                "JSON_EXTRACT"
             } else {
-                "json_extract("
+                "json_extract"
             };
-            f.dst.push_str(open);
-            func.base.as_ref().to_sql(f);
-            f.dst.push_str(", '");
-            f.dst.push_str(&json_path(&func.path));
-            f.dst.push_str("')");
+            fmt!(
+                f,
+                name "(" func.base.as_ref() ", '$"
+                Delimited(func.path.iter().map(|key| (".", key.as_str())), "")
+                "')"
+            );
         }
         Flavor::Postgresql => {
-            f.dst.push('(');
-            func.base.as_ref().to_sql(f);
-            let last = func.path.len().saturating_sub(1);
-            for (i, key) in func.path.iter().enumerate() {
-                // The final step uses `->>` to return text; intermediate steps
-                // use `->` to keep descending through JSON objects.
-                f.dst.push_str(if i == last { "->>'" } else { "->'" });
-                f.dst.push_str(key);
-                f.dst.push('\'');
-            }
-            f.dst.push(')');
-            if let Some(cast) = pg_json_cast(&func.ty) {
-                f.dst.push_str("::");
-                f.dst.push_str(cast);
-            }
+            // Descend with `->`, take the leaf as text with `->>`, then cast the
+            // text to the leaf type so it compares against a bound parameter.
+            let (leaf, parents) = func
+                .path
+                .split_last()
+                .expect("json extract path has at least one key");
+            fmt!(
+                f,
+                "(" func.base.as_ref()
+                Delimited(parents.iter().map(|key| ("->'", key.as_str(), "'")), "")
+                "->>'" leaf.as_str() "')"
+                pg_json_cast(&func.ty).map(|cast| ("::", cast))
+            );
         }
     }
-}
-
-/// Builds a JSON path string (`$.a.b`) from a key path.
-fn json_path(path: &[String]) -> String {
-    let mut s = String::from("$");
-    for key in path {
-        s.push('.');
-        s.push_str(key);
-    }
-    s
 }
 
 /// The PostgreSQL cast applied to a `->>'` text extraction so it compares
