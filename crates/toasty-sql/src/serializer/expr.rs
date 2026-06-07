@@ -247,8 +247,17 @@ fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExt
 }
 
 /// The PostgreSQL cast applied to a `->>'` text extraction so it compares
-/// against a bound parameter of the leaf type. `String` (and any unmapped
-/// type) needs no cast — `->>` already yields text.
+/// against a bound parameter of the leaf type. `String` (and any non-scalar
+/// leaf) needs no cast — `->>` already yields text.
+///
+/// Every scalar a `#[document]` leaf can hold must appear here: an unlisted
+/// scalar falls through to `None` and renders as an *uncast* text extraction,
+/// which PostgreSQL then refuses to compare against a typed parameter
+/// (`operator does not exist: text = ...`). The temporal casts pair with the
+/// microsecond-truncated text the JSON codec writes (see `toasty_sql::json`),
+/// so the extracted value parses cleanly into the SQL temporal type. `Zoned` is
+/// intentionally absent: it is rejected at schema-build because jiff renders it
+/// with an RFC 9557 `[IANA]` annotation that no PostgreSQL cast can parse.
 fn pg_json_cast(ty: &stmt::Type) -> Option<&'static str> {
     use crate::stmt::Type;
     Some(match ty {
@@ -257,6 +266,18 @@ fn pg_json_cast(ty: &stmt::Type) -> Option<&'static str> {
         Type::U8 | Type::U16 | Type::U32 | Type::U64 => "bigint",
         Type::F32 | Type::F64 => "double precision",
         Type::Uuid => "uuid",
+        #[cfg(feature = "rust_decimal")]
+        Type::Decimal => "numeric",
+        #[cfg(feature = "bigdecimal")]
+        Type::BigDecimal => "numeric",
+        #[cfg(feature = "jiff")]
+        Type::Timestamp => "timestamptz",
+        #[cfg(feature = "jiff")]
+        Type::Date => "date",
+        #[cfg(feature = "jiff")]
+        Type::Time => "time",
+        #[cfg(feature = "jiff")]
+        Type::DateTime => "timestamp",
         _ => return None,
     })
 }

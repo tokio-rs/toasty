@@ -245,6 +245,21 @@ impl BuildSchema<'_> {
                             field_name()
                         )));
                     }
+
+                    // A document is JSON-encoded, so every leaf needs a faithful
+                    // JSON text form that round-trips *and* that the SQL filter
+                    // path can cast back. `Zoned` has neither: jiff renders it
+                    // with an RFC 9557 `[IANA]` time-zone annotation that no SQL
+                    // backend can parse, and dropping the annotation would
+                    // discard the zone identity the type exists to carry. Reject
+                    // it rather than silently storing an unfilterable value.
+                    if let Some(bad) = document_unsupported_leaf(&primitive.ty) {
+                        return Err(crate::Error::unsupported_feature(format!(
+                            "model `{model_name}` field `{}` stores `{bad}` inside a \
+                             `#[document]`, which JSON document storage cannot represent.",
+                            field_name()
+                        )));
+                    }
                 } else if matches!(&primitive.ty, stmt::Type::List(_)) && !self.db.vec_scalar {
                     return Err(crate::Error::unsupported_feature(format!(
                         "model `{model_name}` field `{}` is a `Vec<T>` collection, \
@@ -268,6 +283,24 @@ impl BuildSchema<'_> {
         }
 
         Ok(())
+    }
+}
+
+/// The name of the first leaf type inside a (possibly nested) document that
+/// JSON document storage cannot represent, or `None` if every leaf is
+/// supported. Recurses through nested documents and document collections.
+/// Currently only `Zoned` is rejected — see the `#[document]` leaf check in
+/// [`BuildSchema::build_model_constraints`].
+fn document_unsupported_leaf(ty: &stmt::Type) -> Option<&'static str> {
+    match ty {
+        #[cfg(feature = "jiff")]
+        stmt::Type::Zoned => Some("Zoned"),
+        stmt::Type::Document(doc) => doc
+            .fields
+            .iter()
+            .find_map(|f| document_unsupported_leaf(&f.ty)),
+        stmt::Type::List(elem) => document_unsupported_leaf(elem),
+        _ => None,
     }
 }
 

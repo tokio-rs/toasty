@@ -82,19 +82,68 @@ impl Serialize for Encode<'_> {
             Value::Decimal(v) => s.collect_str(v),
             #[cfg(feature = "bigdecimal")]
             Value::BigDecimal(v) => s.collect_str(v),
+            // jiff temporal scalars store their ISO 8601 / RFC 3339 text form.
+            // `Timestamp`, `Time`, and `DateTime` are truncated to microseconds
+            // first: a `#[document]` leaf is read back through a SQL cast
+            // (`(col->>'k')::timestamptz`, …) and the SQL temporal types only
+            // hold microseconds, while jiff keeps nanoseconds. Truncating here —
+            // matching the *truncating* native parameter binding the drivers use
+            // — keeps the stored value and a bound comparison operand reducing to
+            // the same instant, so an equality filter on a document leaf is exact
+            // rather than off by a rounding step. `Date` has no sub-second part;
+            // `Zoned` is rejected at schema-build (its RFC 9557 annotation has no
+            // SQL cast), so it never reaches a document column.
             #[cfg(feature = "jiff")]
-            Value::Timestamp(v) => s.collect_str(v),
+            Value::Timestamp(v) => s.collect_str(&trunc_timestamp_us(*v)),
             #[cfg(feature = "jiff")]
             Value::Zoned(v) => s.collect_str(v),
             #[cfg(feature = "jiff")]
             Value::Date(v) => s.collect_str(v),
             #[cfg(feature = "jiff")]
-            Value::Time(v) => s.collect_str(v),
+            Value::Time(v) => s.collect_str(&trunc_time_us(*v)),
             #[cfg(feature = "jiff")]
-            Value::DateTime(v) => s.collect_str(v),
+            Value::DateTime(v) => s.collect_str(&trunc_datetime_us(*v)),
             other => Err(S::Error::custom(format!("cannot encode {other:?} as JSON"))),
         }
     }
+}
+
+/// Truncate a timestamp to microsecond precision, toward zero, dropping any
+/// sub-microsecond nanoseconds. Rounding can only fail at the extreme ends of
+/// the representable range; fall back to the original value there rather than
+/// failing the whole encode.
+#[cfg(feature = "jiff")]
+fn trunc_timestamp_us(v: jiff::Timestamp) -> jiff::Timestamp {
+    v.round(
+        jiff::TimestampRound::new()
+            .smallest(jiff::Unit::Microsecond)
+            .mode(jiff::RoundMode::Trunc),
+    )
+    .unwrap_or(v)
+}
+
+/// Truncate a civil time to microsecond precision, toward zero. See
+/// [`trunc_timestamp_us`].
+#[cfg(feature = "jiff")]
+fn trunc_time_us(v: jiff::civil::Time) -> jiff::civil::Time {
+    v.round(
+        jiff::civil::TimeRound::new()
+            .smallest(jiff::Unit::Microsecond)
+            .mode(jiff::RoundMode::Trunc),
+    )
+    .unwrap_or(v)
+}
+
+/// Truncate a civil datetime to microsecond precision, toward zero. See
+/// [`trunc_timestamp_us`].
+#[cfg(feature = "jiff")]
+fn trunc_datetime_us(v: jiff::civil::DateTime) -> jiff::civil::DateTime {
+    v.round(
+        jiff::civil::DateTimeRound::new()
+            .smallest(jiff::Unit::Microsecond)
+            .mode(jiff::RoundMode::Trunc),
+    )
+    .unwrap_or(v)
 }
 
 /// Encode a `stmt::Value` as a JSON string.

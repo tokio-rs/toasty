@@ -667,3 +667,182 @@ pub async fn vec_struct_unsupported_backend(t: &mut Test) -> Result<(), BoxError
 
     Ok(())
 }
+
+/// Filtering on jiff temporal leaves inside a `#[document]` embed. Each path
+/// lowers to a JSON extraction that is cast back to the native temporal type on
+/// the SQL side (`(col->>'k')::timestamptz`, `::date`, …); before that cast was
+/// emitted the comparison rendered `text = timestamptz`, which PostgreSQL
+/// rejects. Gated to backends with both document storage and native temporal
+/// types — the only place the typed-cast extraction applies.
+#[driver_test(id(ID), requires(and(document_collections, native_timestamp)))]
+pub async fn struct_embed_filter_temporal(t: &mut Test) -> Result<(), BoxError> {
+    use jiff::Timestamp;
+    use jiff::civil::{DateTime, date, time};
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Event {
+        name: String,
+        starts_at: Timestamp,
+        on_date: jiff::civil::Date,
+        at_time: jiff::civil::Time,
+        scheduled: DateTime,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        event: Event,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    let t2000 = Timestamp::from_second(946_684_800)?; // 2000-01-01T00:00:00Z
+    let t2020 = Timestamp::from_second(1_577_836_800)?; // 2020-01-01T00:00:00Z
+
+    toasty::create!(Account::[
+        { event: Event {
+            name: "alpha".into(),
+            starts_at: t2000,
+            on_date: date(2000, 1, 1),
+            at_time: time(9, 30, 0, 0),
+            scheduled: date(2000, 1, 1).at(9, 30, 0, 0),
+        } },
+        { event: Event {
+            name: "beta".into(),
+            starts_at: t2020,
+            on_date: date(2020, 6, 15),
+            at_time: time(14, 0, 0, 0),
+            scheduled: date(2020, 6, 15).at(14, 0, 0, 0),
+        } },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Equality on a Timestamp leaf.
+    let by_ts = Account::filter(Account::fields().event().starts_at().eq(t2000))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(by_ts.len(), 1);
+    assert_eq!(by_ts[0].event.name, "alpha");
+
+    // Range on a Timestamp leaf (text extraction would compare lexicographically).
+    let after = Account::filter(Account::fields().event().starts_at().gt(t2000))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(after.len(), 1);
+    assert_eq!(after[0].event.name, "beta");
+
+    // Equality on Date, Time, and DateTime leaves.
+    let by_date = Account::filter(Account::fields().event().on_date().eq(date(2020, 6, 15)))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(by_date.len(), 1);
+    assert_eq!(by_date[0].event.name, "beta");
+
+    let by_time = Account::filter(Account::fields().event().at_time().eq(time(9, 30, 0, 0)))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(by_time.len(), 1);
+    assert_eq!(by_time[0].event.name, "alpha");
+
+    let by_dt = Account::filter(
+        Account::fields()
+            .event()
+            .scheduled()
+            .eq(date(2020, 6, 15).at(14, 0, 0, 0)),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(by_dt.len(), 1);
+    assert_eq!(by_dt[0].event.name, "beta");
+
+    Ok(())
+}
+
+/// A `Timestamp` leaf in a `#[document]` is truncated to microseconds: the SQL
+/// temporal types only hold microseconds, and the codec truncates on write to
+/// match the drivers' truncating parameter binding so an equality filter on the
+/// original nanosecond value still matches the stored row.
+#[driver_test(id(ID), requires(and(document_collections, native_timestamp)))]
+pub async fn struct_embed_timestamp_truncates_to_micros(t: &mut Test) -> Result<(), BoxError> {
+    use jiff::Timestamp;
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Event {
+        at: Timestamp,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        event: Event,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    // Nanosecond precision beyond what SQL temporal types (microseconds) hold.
+    let nanos = Timestamp::from_second(946_684_800)?
+        .checked_add(jiff::Span::new().nanoseconds(123_456_789))?;
+    let micros = Timestamp::from_second(946_684_800)?
+        .checked_add(jiff::Span::new().nanoseconds(123_456_000))?;
+
+    toasty::create!(Account {
+        event: Event { at: nanos }
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Filtering on the original nanosecond value still matches: both the stored
+    // value and the bound parameter reduce to the same microsecond instant.
+    let found = Account::filter(Account::fields().event().at().eq(nanos))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+    // The read-back value is the microsecond truncation — the documented loss.
+    assert_eq!(found[0].event.at, micros);
+
+    Ok(())
+}
+
+/// A `Zoned` leaf in a `#[document]` is rejected at schema-build: jiff renders
+/// it with an RFC 9557 `[IANA]` annotation that no SQL backend can parse back,
+/// and dropping the annotation would lose the zone identity the type carries.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn struct_embed_zoned_document_rejected(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Event {
+        name: String,
+        when: jiff::Zoned,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        event: Event,
+    }
+
+    match t.try_setup_db(models!(Account)).await {
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("Zoned") && msg.contains("#[document]"),
+                "expected schema-build rejection naming the unsupported `Zoned` leaf, got: {msg}"
+            );
+        }
+        Ok(_) => panic!("expected schema build to reject a `Zoned` leaf in a `#[document]`"),
+    }
+
+    Ok(())
+}
