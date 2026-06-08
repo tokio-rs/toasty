@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["embedded_enum_index_schema","embedded_enum_unique_index_enforced"]};
+window.SIDEBAR_ITEMS = {"fn":["embedded_enum_index_schema","embedded_enum_unique_index_enforced","unit_enum_composite_unique_enforced","unit_enum_field_index_filter","unit_enum_field_index_schema"]};
