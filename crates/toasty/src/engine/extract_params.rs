@@ -101,7 +101,7 @@ fn lower_document_paths(stmt: &mut stmt::Statement, schema: &Schema) {
 /// Scoped traversal backing [`lower_document_paths`]. Mirrors the simplifier's
 /// scope handling — holding a query's source in scope while mutating its
 /// sibling clauses — so a document column reference inside a filter resolves to
-/// its `Type::Document`.
+/// its embedded-model type (`Type::Model`).
 struct LowerDocumentPaths<'a> {
     cx: stmt::ExprContext<'a>,
 }
@@ -348,12 +348,12 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
                     return;
                 }
                 // `IN (...)` always renders as N separate placeholders on
-                // backends without `predicate_match_any` (the ones that
-                // could rewrite it to ANY have already done so during
-                // lowering). Force per-element expansion of the rhs list,
-                // regardless of `bind_list_param`, so `id IN (1, 2, 3)`
-                // doesn't degrade to `id IN ?` after we enable `bind_list_param`
-                // for backends that bind `Vec<scalar>` columns as one param.
+                // backends without `predicate_match_any` (the ones that support
+                // ANY were rewritten to it during lowering). Force per-element
+                // expansion of the rhs list regardless of `bind_list_param`, so
+                // `id IN (1, 2, 3)` stays N placeholders rather than collapsing
+                // to `id IN ?` on backends that bind a `Vec<scalar>` column as
+                // one param.
                 stmt::Expr::InList(e) => {
                     self.visit_expr_mut(&mut e.expr);
                     if let stmt::Expr::Value(stmt::Value::List(_)) = e.list.as_ref() {
@@ -425,9 +425,10 @@ fn extract_values(stmt: &mut stmt::Statement, params: &mut Vec<Param>, capabilit
                     self.params.push(Param { value, ty });
                     *expr = stmt::Expr::arg(position);
                 }
-                // A bare `#[document]` embed value (already rewritten to a
-                // named object by `mark_document_values`) binds as one param;
-                // `refine` pins its type to the document column.
+                // A bare `#[document]` embed value (named by
+                // `mark_document_values`) binds as one param with an unknown
+                // type; the synthesize/check pass resolves it to the document
+                // column type.
                 stmt::Expr::Value(value @ stmt::Value::Object(_)) => {
                     let owned = std::mem::replace(value, stmt::Value::Null);
                     let position = self.params.len();
@@ -542,9 +543,9 @@ fn value_to_extracted_expr(
             if bind_list_param
                 && values.iter().all(|v| {
                     // A `Vec<scalar>` collection, or a `#[document]` collection
-                    // of embedded structs (already named `Value::Object`s by
-                    // `mark_document_values`). Either way the whole list binds
-                    // as one parameter; `refine` pins the storage type.
+                    // of embedded structs (named `Value::Object`s by
+                    // `mark_document_values`). Either way the whole list binds as
+                    // one parameter; the synthesize/check pass resolves its type.
                     is_extractable_scalar(v) || matches!(v, stmt::Value::Object(_))
                 }) =>
         {
@@ -655,9 +656,9 @@ fn refine_insert(
     let db_table = &db_schema.tables[table.table.0];
 
     // Expected type from the column list (authoritative). `check` pushes it
-    // down into each VALUES row, field by field. A `#[document]` column's
-    // `Value::List`/`Value::Object` param collapses to its scalar `Document`
-    // storage type via `merge`, so no document-specific handling is needed here.
+    // down into each VALUES row, field by field, typing every `Arg` param —
+    // including a `#[document]` column, whose list/object value resolves to its
+    // scalar `Document` storage type in `merge`.
     let expected = Ty::Record(
         table
             .columns
@@ -727,12 +728,12 @@ fn const_value_of(expr: &stmt::Expr) -> Option<stmt::Value> {
     }
 }
 
-/// Rewrite every `#[document]` column value — a bare embed (`Document`) or a
-/// collection (`List(Document)`) — into the named `Value::Object` form, in
-/// place, before generic param extraction. This is the *single* place document
-/// values are named; later phases only pin the param's type. A non-constant
-/// document value is left untouched (document writes are constant literals via
-/// `create!` / `IntoExpr`, so this only matters defensively).
+/// Rewrite every `#[document]` column value — a bare embed (`Type::Model`) or a
+/// collection (`List(Model)`) — into the named `Value::Object` form, in place,
+/// before generic param extraction. This is the *single* place document values
+/// are named; later phases only type the param, never reshape the value. A
+/// non-constant document value is left untouched (document writes are constant
+/// literals via `create!` / `IntoExpr`, so this only matters defensively).
 fn mark_document_values(stmt: &mut stmt::Statement, schema: &Schema) {
     // Convert a constant document value *expression* into the named object
     // form, directed by the column type (`Type::Model` or `List(Model)`).
@@ -748,7 +749,7 @@ fn mark_document_values(stmt: &mut stmt::Statement, schema: &Schema) {
                 return;
             };
             let db_table = &schema.db.tables[table.table.0];
-            // Per-column document type (`Document` or `List(Document)`), `None`
+            // Per-column document type (`Type::Model` or `List(Model)`), `None`
             // for non-document columns.
             let docs: Vec<Option<&stmt::Type>> = table
                 .columns
@@ -832,8 +833,6 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
             };
 
             match assignment {
-                // The expression takes the column's full type (column for
-                // `Set`, list-shaped for `Append`).
                 stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) => {
                     // The expression takes the column's full type (the whole
                     // column for `Set`, the elements for `Append`). A
@@ -1168,11 +1167,10 @@ fn merge(a: &Ty, b: &Ty) -> Ty {
         (Ty::List(a_elem), Ty::List(b_elem)) => Ty::List(Box::new(merge(a_elem, b_elem))),
 
         // A `#[document]` collection binds as a `Value::List` (the JSON array's
-        // internal shape), but its column storage type is the opaque scalar
-        // `Document`. The schema type is authoritative, so the list collapses to
+        // internal shape) while its column storage type is the opaque scalar
+        // `Document`. The schema type is authoritative, so the list resolves to
         // the document column type — the value keeps its list shape, only its
-        // type resolves. This is what lets the generic `check` path type a
-        // document column with no document-specific branch in the caller.
+        // type resolves. This lets `check` type a document column like any other.
         (Ty::List(_), col @ Ty::Column(db::Type::Document { .. }))
         | (col @ Ty::Column(db::Type::Document { .. }), Ty::List(_)) => col.clone(),
 
