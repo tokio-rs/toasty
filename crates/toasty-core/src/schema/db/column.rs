@@ -61,6 +61,18 @@ pub struct Column {
     pub versionable: bool,
 }
 
+impl Column {
+    /// Whether this column stores a `#[document]` embed: a bare embed
+    /// (`stmt::Type::Model`) or a collection of embeds (`List(Model)`).
+    pub fn is_document(&self) -> bool {
+        match &self.ty {
+            stmt::Type::Model(_) => true,
+            stmt::Type::List(elem) => matches!(**elem, stmt::Type::Model(_)),
+            _ => false,
+        }
+    }
+}
+
 #[cfg(feature = "serde")]
 fn is_false(b: &bool) -> bool {
     !*b

@@ -681,7 +681,7 @@ fn refine_insert(
                     table.columns.iter().zip(&record.fields).zip(field_types)
                 {
                     let col = &db_table.columns[col_id.index];
-                    if is_document_column(&col.ty) {
+                    if col.is_document() {
                         pin_document_param(field_expr, col.storage_ty.clone(), params);
                     } else {
                         check(field_expr, field_ty, params);
@@ -691,16 +691,6 @@ fn refine_insert(
                 check(row, &expected, params);
             }
         }
-    }
-}
-
-/// Whether `ty` is a `#[document]` column type: a bare embed (`Type::Model`) or
-/// a collection of embeds (`List(Model)`).
-fn is_document_column(ty: &stmt::Type) -> bool {
-    match ty {
-        stmt::Type::Model(_) => true,
-        stmt::Type::List(elem) => matches!(**elem, stmt::Type::Model(_)),
-        _ => false,
     }
 }
 
@@ -798,8 +788,8 @@ fn mark_document_values(stmt: &mut stmt::Statement, schema: &Schema) {
                 .columns
                 .iter()
                 .map(|c| {
-                    let ty = &db_table.columns[c.index].ty;
-                    is_document_column(ty).then_some(ty)
+                    let col = &db_table.columns[c.index];
+                    col.is_document().then_some(&col.ty)
                 })
                 .collect();
             let stmt::ExprSet::Values(values) = &mut insert.source.body else {
@@ -841,7 +831,7 @@ fn mark_document_values(stmt: &mut stmt::Statement, schema: &Schema) {
                 let Some(col) = db_table.columns.get(steps[0]) else {
                     continue;
                 };
-                if !is_document_column(&col.ty) {
+                if !col.is_document() {
                     continue;
                 }
                 // `Set` carries the whole column value; `Append` carries the
@@ -879,7 +869,7 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
                 // The expression takes the column's full type (column for
                 // `Set`, list-shaped for `Append`).
                 stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) => {
-                    if is_document_column(&col.ty) {
+                    if col.is_document() {
                         // A write to a `#[document]` column: the value is
                         // already named (`mark_document_values`); just pin the
                         // param to the document storage type.
