@@ -654,9 +654,10 @@ fn refine_insert(
     };
     let db_table = &db_schema.tables[table.table.0];
 
-    // Build expected type from column list (authoritative). Borrow the
-    // per-column types back out so the per-row loop below can reuse them
-    // instead of re-deriving each column's `Ty` once per VALUES row.
+    // Expected type from the column list (authoritative). `check` pushes it
+    // down into each VALUES row, field by field. A `#[document]` column's
+    // `Value::List`/`Value::Object` param collapses to its scalar `Document`
+    // storage type via `merge`, so no document-specific handling is needed here.
     let expected = Ty::Record(
         table
             .columns
@@ -664,46 +665,11 @@ fn refine_insert(
             .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
             .collect(),
     );
-    let Ty::Record(field_types) = &expected else {
-        unreachable!()
-    };
 
-    // Push column types down into each VALUES row
     if let stmt::ExprSet::Values(values) = &insert.source.body {
         for row in &values.rows {
-            // A `#[document]` column's param is one opaque blob (a named
-            // `Value::Object`, or a `Value::List` of them) with no shape the
-            // generic numeric/list `check` can merge against. Pin those columns
-            // to their storage type explicitly, field by field, and let `check`
-            // cover the rest.
-            if let stmt::Expr::Record(record) = row {
-                for ((col_id, field_expr), field_ty) in
-                    table.columns.iter().zip(&record.fields).zip(field_types)
-                {
-                    let col = &db_table.columns[col_id.index];
-                    if col.is_document() {
-                        pin_document_param(field_expr, col.storage_ty.clone(), params);
-                    } else {
-                        check(field_expr, field_ty, params);
-                    }
-                }
-            } else {
-                check(row, &expected, params);
-            }
+            check(row, &expected, params);
         }
-    }
-}
-
-/// Pin a `#[document]` param's `db::Type` to the document storage type. The
-/// value is already in the named `Value::Object` form — `mark_document_values`
-/// names every document value before extraction — so refine only fixes the
-/// type, never the value.
-///
-/// A `None` for an `Option<..>` field stays an `Expr::Value(Null)`, is never
-/// extracted as a param, and so has nothing to pin.
-fn pin_document_param(expr: &stmt::Expr, storage_ty: db::Type, params: &mut [Param]) {
-    if let stmt::Expr::Arg(arg) = expr {
-        params[arg.position].ty = Ty::Column(storage_ty);
     }
 }
 
@@ -869,15 +835,12 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
                 // The expression takes the column's full type (column for
                 // `Set`, list-shaped for `Append`).
                 stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) => {
-                    if col.is_document() {
-                        // A write to a `#[document]` column: the value is
-                        // already named (`mark_document_values`); just pin the
-                        // param to the document storage type.
-                        pin_document_param(expr, col.storage_ty.clone(), params);
-                    } else {
-                        let expected = ty_from_column(col.storage_ty.clone());
-                        check(expr, &expected, params);
-                    }
+                    // The expression takes the column's full type (the whole
+                    // column for `Set`, the elements for `Append`). A
+                    // `#[document]` column's `Value::List`/`Value::Object` param
+                    // collapses to its scalar `Document` storage type via `merge`.
+                    let expected = ty_from_column(col.storage_ty.clone());
+                    check(expr, &expected, params);
                 }
                 // `Remove` is `array_remove(col, $1)`-shaped: the rhs binds
                 // as the column's element type, not the list type. Pull the
@@ -1203,6 +1166,15 @@ fn merge(a: &Ty, b: &Ty) -> Ty {
 
         // Lists — merge element types
         (Ty::List(a_elem), Ty::List(b_elem)) => Ty::List(Box::new(merge(a_elem, b_elem))),
+
+        // A `#[document]` collection binds as a `Value::List` (the JSON array's
+        // internal shape), but its column storage type is the opaque scalar
+        // `Document`. The schema type is authoritative, so the list collapses to
+        // the document column type — the value keeps its list shape, only its
+        // type resolves. This is what lets the generic `check` path type a
+        // document column with no document-specific branch in the caller.
+        (Ty::List(_), col @ Ty::Column(db::Type::Document { .. }))
+        | (col @ Ty::Column(db::Type::Document { .. }), Ty::List(_)) => col.clone(),
 
         _ => panic!("cannot merge incompatible types: {a:?} and {b:?}"),
     }
