@@ -112,6 +112,30 @@ impl Schema {
         self.models.get(&id.into()).expect("invalid model ID")
     }
 
+    /// The document field layout of the embedded struct `id`, resolved on
+    /// demand: each field's name and `stmt::Type`, in declaration order.
+    ///
+    /// This is the on-demand replacement for the former `TypeDocument` — the
+    /// embedded model is the single source of truth for a document column's
+    /// shape. A field typed `Type::Model(nested)` (or `List(Model(nested))`)
+    /// signals a nested document the caller recurses into.
+    ///
+    /// Panics if `id` is not an embedded struct, or a field is unnamed; both
+    /// are rejected at schema build, so neither occurs at runtime.
+    pub fn document_fields(&self, id: ModelId) -> impl Iterator<Item = (&str, &stmt::Type)> {
+        let Model::EmbeddedStruct(embedded) = self.model(id) else {
+            panic!("document type {id:?} is not an embedded struct");
+        };
+        embedded.fields.iter().map(|field| {
+            let name = field
+                .name
+                .app
+                .as_deref()
+                .expect("document field must have an app name");
+            (name, field.expr_ty())
+        })
+    }
+
     /// Resolve a projection through the schema, returning either a field or
     /// an enum variant.
     ///
