@@ -431,3 +431,50 @@ impl Connection {
         Ok(())
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::Sqlite;
+    use std::path::PathBuf;
+
+    /// The file path `Sqlite::new` resolves out of a `sqlite:` URL.
+    fn file_path(url: &str) -> PathBuf {
+        match Sqlite::new(url).unwrap() {
+            Sqlite::File(path) => path,
+            Sqlite::InMemory => panic!("expected a file-backed database for {url}"),
+        }
+    }
+
+    #[test]
+    fn new_decodes_percent_encoded_path() {
+        // `url::Url` stores the path percent-encoded: a space becomes `%20` and
+        // non-ASCII bytes become `%XX` sequences. The driver must decode it back
+        // before opening the file, otherwise it opens one whose name literally
+        // contains `%20`.
+        assert_eq!(
+            file_path("sqlite:/tmp/my db.sqlite"),
+            PathBuf::from("/tmp/my db.sqlite")
+        );
+        assert_eq!(
+            file_path("sqlite:///tmp/my%20db.sqlite"),
+            PathBuf::from("/tmp/my db.sqlite")
+        );
+        assert_eq!(
+            file_path("sqlite:/tmp/d%C3%A9j%C3%A0.db"),
+            PathBuf::from("/tmp/déjà.db")
+        );
+        // Percent-decoding, not form-decoding: a literal `+` must stay a `+`.
+        assert_eq!(
+            file_path("sqlite:/tmp/a+b.db"),
+            PathBuf::from("/tmp/a+b.db")
+        );
+    }
+
+    #[test]
+    fn new_memory_url_stays_in_memory() {
+        assert!(matches!(
+            Sqlite::new("sqlite::memory:").unwrap(),
+            Sqlite::InMemory
+        ));
+    }
+}
