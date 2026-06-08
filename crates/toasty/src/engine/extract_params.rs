@@ -47,10 +47,11 @@ pub(crate) fn extract_params(
     // the JSON node, never the projection.
     lower_document_paths(stmt, schema);
 
-    // Phase 0b: rewrite bare `#[document]` embed values into the named
-    // `Value::Object` form *before* generic extraction. The generic path
-    // expands a `Value::Record` into a SQL row-value tuple `(?, ?)`; a document
-    // column needs the whole embed bound as one document param instead.
+    // Phase 0b: rewrite every `#[document]` column value — bare embed or
+    // collection — into the named `Value::Object` form *before* generic
+    // extraction, so this is the single place documents are named. The generic
+    // path would expand a `Value::Record` into a SQL row-value tuple `(?, ?)`; a
+    // document column needs the whole embed bound as one document param instead.
     mark_document_values(stmt, &schema.db);
 
     // Phase 1: Mechanical extraction — replace values with Arg(n)
@@ -537,12 +538,11 @@ fn value_to_extracted_expr(
         stmt::Value::List(values)
             if bind_list_param
                 && values.iter().all(|v| {
-                    // A `Vec<scalar>` collection, or a `#[document]`
-                    // collection of embedded structs (`Value::Record`
-                    // elements). Either way the whole list binds as one
-                    // parameter; `refine` resolves which storage applies and
-                    // — for documents — rewrites the records into objects.
-                    is_extractable_scalar(v) || matches!(v, stmt::Value::Record(_))
+                    // A `Vec<scalar>` collection, or a `#[document]` collection
+                    // of embedded structs (already named `Value::Object`s by
+                    // `mark_document_values`). Either way the whole list binds
+                    // as one parameter; `refine` pins the storage type.
+                    is_extractable_scalar(v) || matches!(v, stmt::Value::Object(_))
                 }) =>
         {
             let value = stmt::Value::List(values);
@@ -568,9 +568,12 @@ fn value_to_extracted_expr(
 }
 
 fn is_extractable_scalar(value: &stmt::Value) -> bool {
+    // A `Value::Object` is a named document blob, not a scalar: it binds as one
+    // param via the dedicated `Expr::Value(Object)` arm / `value_to_extracted_expr`,
+    // never through scalar extraction.
     !matches!(
         value,
-        stmt::Value::Null | stmt::Value::Record(_) | stmt::Value::List(_)
+        stmt::Value::Null | stmt::Value::Record(_) | stmt::Value::List(_) | stmt::Value::Object(_)
     )
 }
 
@@ -665,17 +668,18 @@ fn refine_insert(
     // Push column types down into each VALUES row
     if let stmt::ExprSet::Values(values) = &insert.source.body {
         for row in &values.rows {
-            // A row of `#[document]` columns can't go through the generic
-            // numeric/list `check` — its `Value::List(Record)` param has no
-            // shape the column type merges with. Handle those columns
-            // explicitly, field by field, and let `check` cover the rest.
+            // A `#[document]` column's param is one opaque blob (a named
+            // `Value::Object`, or a `Value::List` of them) with no shape the
+            // generic numeric/list `check` can merge against. Pin those columns
+            // to their storage type explicitly, field by field, and let `check`
+            // cover the rest.
             if let stmt::Expr::Record(record) = row {
                 for ((col_id, field_expr), field_ty) in
                     table.columns.iter().zip(&record.fields).zip(field_types)
                 {
                     let col = &db_table.columns[col_id.index];
-                    if let Some(doc) = document_elem_ty(&col.ty) {
-                        refine_document_param(field_expr, doc, col.storage_ty.clone(), params);
+                    if is_document_column(&col.ty) {
+                        pin_document_param(field_expr, col.storage_ty.clone(), params);
                     } else {
                         check(field_expr, field_ty, params);
                     }
@@ -687,86 +691,56 @@ fn refine_insert(
     }
 }
 
-/// If `ty` is the engine type of a `#[document]` collection column —
-/// `List(Document(..))` — return the inner [`stmt::TypeDocument`].
-fn document_elem_ty(ty: &stmt::Type) -> Option<&stmt::TypeDocument> {
+/// Whether `ty` is a `#[document]` column type: a bare embed (`Document`) or a
+/// collection of embeds (`List(Document)`).
+fn is_document_column(ty: &stmt::Type) -> bool {
     match ty {
-        // A bare `#[document]` embed column.
-        stmt::Type::Document(doc) => Some(doc),
-        // A `#[document]` collection column — `List(Document(..))`.
-        stmt::Type::List(elem) => match &**elem {
-            stmt::Type::Document(doc) => Some(doc),
-            _ => None,
-        },
-        _ => None,
+        stmt::Type::Document(_) => true,
+        stmt::Type::List(elem) => matches!(**elem, stmt::Type::Document(_)),
+        _ => false,
     }
 }
 
-/// Refine a `#[document]` collection param: pin its `db::Type` to the document
-/// storage type and rewrite the value from the positional `Value::List(Record)`
-/// shape into the named `Value::List(Object)` shape the driver serializes.
-/// `doc` supplies the field names.
-fn refine_document_param(
-    expr: &stmt::Expr,
-    doc: &stmt::TypeDocument,
-    storage_ty: db::Type,
-    params: &mut [Param],
-) {
-    // `None` for an `Option<Vec<..>>` field stays an `Expr::Value(Null)` —
-    // it is never extracted as a param, so there's nothing to refine.
-    let stmt::Expr::Arg(arg) = expr else {
-        return;
-    };
-    let param = &mut params[arg.position];
-    param.ty = Ty::Column(storage_ty);
-    let value = std::mem::replace(&mut param.value, stmt::Value::Null);
-    // A collection column holds a `Value::List` of records; a bare embed
-    // column holds a single `Value::Record`. Convert whichever shape arrives
-    // into the named `Value::Object` form the driver serializes.
-    param.value = match value {
-        stmt::Value::List(_) => document_list_value(value, doc),
-        _ => document_record_value(value, doc),
-    };
-}
-
-/// Convert a `Value::List` of positional `Value::Record`s into a `Value::List`
-/// of named `Value::Object`s using the document's field names. A non-list
-/// value (`Null`) passes through unchanged.
-fn document_list_value(value: stmt::Value, doc: &stmt::TypeDocument) -> stmt::Value {
-    match value {
-        stmt::Value::List(items) => stmt::Value::List(
-            items
-                .into_iter()
-                .map(|item| document_record_value(item, doc))
-                .collect(),
-        ),
-        other => other,
+/// Pin a `#[document]` param's `db::Type` to the document storage type. The
+/// value is already in the named `Value::Object` form — `mark_document_values`
+/// names every document value before extraction — so refine only fixes the
+/// type, never the value.
+///
+/// A `None` for an `Option<..>` field stays an `Expr::Value(Null)`, is never
+/// extracted as a param, and so has nothing to pin.
+fn pin_document_param(expr: &stmt::Expr, storage_ty: db::Type, params: &mut [Param]) {
+    if let stmt::Expr::Arg(arg) = expr {
+        params[arg.position].ty = Ty::Column(storage_ty);
     }
 }
 
-/// Convert one positional `Value::Record` into a named `Value::Object`,
-/// recursing through nested document fields.
-fn document_record_value(value: stmt::Value, doc: &stmt::TypeDocument) -> stmt::Value {
-    let stmt::Value::Record(record) = value else {
-        return value;
-    };
-    stmt::Value::Object(stmt::ValueObject::from_vec(
-        doc.fields
-            .iter()
-            .zip(record)
-            .map(|(field, v)| {
-                let v = match &field.ty {
-                    stmt::Type::Document(nested) => document_record_value(v, nested),
-                    stmt::Type::List(elem) => match &**elem {
-                        stmt::Type::Document(nested) => document_list_value(v, nested),
-                        _ => v,
-                    },
-                    _ => v,
-                };
-                (field.name.clone(), v)
-            })
-            .collect(),
-    ))
+/// Rewrite a positional document value into the named `Value::Object` form the
+/// driver serializes, directed by the column's document `ty`. The value's shape
+/// always matches `ty`: a `Document` column carries a `Value::Record`, a
+/// `List(Document)` column carries a `Value::List` (a whole-collection `Set`, or
+/// an `Append`, which `push`/`extend` always wrap in a list).
+///
+/// - `Document` turns the `Value::Record` into a `Value::Object`, recursing into
+///   each field's type.
+/// - `List(Document)` maps each element through the element type.
+/// - anything else — a non-document field, or an already-`Object`/`Null` value —
+///   passes through unchanged, so the conversion is idempotent.
+fn to_named(value: stmt::Value, ty: &stmt::Type) -> stmt::Value {
+    match (ty, value) {
+        (stmt::Type::Document(doc), stmt::Value::Record(record)) => {
+            stmt::Value::Object(stmt::ValueObject::from_vec(
+                doc.fields
+                    .iter()
+                    .zip(record)
+                    .map(|(field, v)| (field.name.clone(), to_named(v, &field.ty)))
+                    .collect(),
+            ))
+        }
+        (stmt::Type::List(elem), stmt::Value::List(items)) => {
+            stmt::Value::List(items.into_iter().map(|item| to_named(item, elem)).collect())
+        }
+        (_, value) => value,
+    }
 }
 
 /// Fold a constant value expression into a [`stmt::Value`]. Returns `None` if
@@ -792,15 +766,18 @@ fn const_value_of(expr: &stmt::Expr) -> Option<stmt::Value> {
     }
 }
 
-/// Rewrite bare `#[document]` embed column values into the named
-/// `Value::Object` form, in place, before generic param extraction. A
-/// collection column (`List(Document)`) is left for the existing list path; a
-/// non-constant document value is left untouched.
+/// Rewrite every `#[document]` column value — a bare embed (`Document`) or a
+/// collection (`List(Document)`) — into the named `Value::Object` form, in
+/// place, before generic param extraction. This is the *single* place document
+/// values are named; later phases only pin the param's type. A non-constant
+/// document value is left untouched (document writes are constant literals via
+/// `create!` / `IntoExpr`, so this only matters defensively).
 fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
-    // Convert a constant document value *expression* into the named object form.
-    fn mark_expr(field_expr: &mut stmt::Expr, doc: &stmt::TypeDocument) {
+    // Convert a constant document value *expression* into the named object
+    // form, directed by the column type (`Document` or `List(Document)`).
+    fn mark_expr(field_expr: &mut stmt::Expr, ty: &stmt::Type) {
         if let Some(value) = const_value_of(field_expr) {
-            *field_expr = stmt::Expr::Value(document_record_value(value, doc));
+            *field_expr = stmt::Expr::Value(to_named(value, ty));
         }
     }
 
@@ -810,13 +787,14 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
                 return;
             };
             let db_table = &db_schema.tables[table.table.0];
-            // Per-column document type, `None` for non-document columns.
-            let docs: Vec<Option<&stmt::TypeDocument>> = table
+            // Per-column document type (`Document` or `List(Document)`), `None`
+            // for non-document columns.
+            let docs: Vec<Option<&stmt::Type>> = table
                 .columns
                 .iter()
-                .map(|c| match &db_table.columns[c.index].ty {
-                    stmt::Type::Document(doc) => Some(doc),
-                    _ => None,
+                .map(|c| {
+                    let ty = &db_table.columns[c.index].ty;
+                    is_document_column(ty).then_some(ty)
                 })
                 .collect();
             let stmt::ExprSet::Values(values) = &mut insert.source.body else {
@@ -826,18 +804,18 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
                 match row {
                     // A row of per-column value expressions.
                     stmt::Expr::Record(record) => {
-                        for (doc, field) in docs.iter().zip(&mut record.fields) {
-                            if let Some(doc) = doc {
-                                mark_expr(field, doc);
+                        for (ty, field) in docs.iter().zip(&mut record.fields) {
+                            if let Some(ty) = ty {
+                                mark_expr(field, ty);
                             }
                         }
                     }
                     // A fully-constant row folded to a single record value.
                     stmt::Expr::Value(stmt::Value::Record(record)) => {
-                        for (doc, field) in docs.iter().zip(&mut record.fields) {
-                            if let Some(doc) = doc {
+                        for (ty, field) in docs.iter().zip(&mut record.fields) {
+                            if let Some(ty) = ty {
                                 let v = std::mem::replace(field, stmt::Value::Null);
-                                *field = document_record_value(v, doc);
+                                *field = to_named(v, ty);
                             }
                         }
                     }
@@ -858,11 +836,16 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
                 let Some(col) = db_table.columns.get(steps[0]) else {
                     continue;
                 };
-                let stmt::Type::Document(doc) = &col.ty else {
+                if !is_document_column(&col.ty) {
                     continue;
-                };
-                if let stmt::Assignment::Set(expr) = assignment {
-                    mark_expr(expr, doc);
+                }
+                // `Set` carries the whole column value; `Append` carries the
+                // elements to add, which `push`/`extend` always wrap in a list.
+                // So for a collection column both are `List`-shaped, and a bare
+                // embed only ever takes `Set` — the value always matches
+                // `col.ty`, which is what `to_named` is directed by.
+                if let stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) = assignment {
+                    mark_expr(expr, &col.ty);
                 }
             }
         }
@@ -891,11 +874,11 @@ fn refine_update(update: &stmt::Update, cx: &Cx<'_>, db_schema: &db::Schema, par
                 // The expression takes the column's full type (column for
                 // `Set`, list-shaped for `Append`).
                 stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) => {
-                    if let Some(doc) = document_elem_ty(&col.ty) {
-                        // A whole-value write to a `#[document]` collection
-                        // column: bypass the generic numeric/list inference
-                        // and rewrite the param into the document shape.
-                        refine_document_param(expr, doc, col.storage_ty.clone(), params);
+                    if is_document_column(&col.ty) {
+                        // A write to a `#[document]` column: the value is
+                        // already named (`mark_document_values`); just pin the
+                        // param to the document storage type.
+                        pin_document_param(expr, col.storage_ty.clone(), params);
                     } else {
                         let expected = ty_from_column(col.storage_ty.clone());
                         check(expr, &expected, params);
