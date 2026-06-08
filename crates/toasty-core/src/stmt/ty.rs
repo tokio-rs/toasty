@@ -1,4 +1,4 @@
-use super::{PathFieldSet, TypeDocument, TypeUnion, Value};
+use super::{PathFieldSet, TypeUnion, Value};
 use crate::{
     Result,
     schema::app::{FieldId, ModelId},
@@ -122,10 +122,6 @@ pub enum Type {
 
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
-
-    /// A document: a named, ordered set of fields, stored as a single value
-    /// (JSON, BSON, ...). The named counterpart to [`Type::Record`].
-    Document(TypeDocument),
 
     /// A byte array, more efficient than `List(U8)`.
     Bytes,
@@ -375,13 +371,12 @@ impl Type {
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }
-            // Document decode: collapse a driver-produced `Value::Object` (named)
-            // into the positional `Value::Record` the engine consumes, by field
-            // name. The planner injects these casts after each data-loading node
-            // so the conversion is an explicit, planned instruction rather than a
-            // runtime walk driven by type tracking. An already-positional
-            // `Value::Record` recurses idempotently for nested documents.
-            (value @ (Value::Object(_) | Value::Record(_)), Self::Document(_)) => {
+            // Document decode normalization. The JSON codec now decodes a
+            // document column straight to a positional `Value::Record`, so this
+            // planner-injected cast is just a structural pass for any nested
+            // records; an embedded-model (`Type::Model`) target recurses
+            // idempotently.
+            (value @ (Value::Object(_) | Value::Record(_)), Self::Model(_)) => {
                 value.normalize_for_load(self)
             }
             // A list of documents (`#[document] Vec<Struct>`): recurse per item.
@@ -495,25 +490,11 @@ impl Type {
                 a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_subtype_of(b))
             }
 
-            // Document types: same field names (in order) and recursively
-            // assignable field types.
-            (Type::Document(a), Type::Document(b)) => {
-                a.fields.len() == b.fields.len()
-                    && a.fields
-                        .iter()
-                        .zip(b.fields.iter())
-                        .all(|(a, b)| a.name == b.name && a.ty.is_subtype_of(&b.ty))
-            }
-
-            // `Value::Record` is the engine's canonical load form for a
-            // document value — positional, names dropped. See
-            // `Value::normalize_for_load`.
-            (Type::Record(a), Type::Document(b)) => {
-                a.len() == b.fields.len()
-                    && a.iter()
-                        .zip(b.fields.iter())
-                        .all(|(a, b)| a.is_subtype_of(&b.ty))
-            }
+            // A positional `Value::Record` is the engine's load form for a
+            // document value (names dropped). The precise per-field check needs
+            // the embedded model's schema, which `is_subtype_of` doesn't carry,
+            // so accept any record against a document (`Type::Model`) target.
+            (Type::Record(_), Type::Model(_)) => true,
 
             // Sparse records must have the same field set
             (Type::SparseRecord(a), Type::SparseRecord(b)) => a == b,

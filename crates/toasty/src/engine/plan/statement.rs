@@ -1847,10 +1847,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         })
     }
 
-    /// Whether `ty` is, or contains (through lists), a `#[document]` column type.
+    /// Whether `ty` is, or contains (through lists), a `#[document]` column type
+    /// (an embedded model). The decode it gates is a structural no-op now that
+    /// the codec yields a positional `Value::Record` directly, so an
+    /// over-approximation here is harmless.
     fn ty_contains_document(ty: &stmt::Type) -> bool {
         match ty {
-            stmt::Type::Document(_) => true,
+            stmt::Type::Model(_) => true,
             stmt::Type::List(inner) => Self::ty_contains_document(inner),
             _ => false,
         }

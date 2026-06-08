@@ -20,7 +20,7 @@
 
 use toasty_core::{
     driver::{Capability, operation::TypedValue},
-    schema::{Schema, db},
+    schema::{Schema, app, db},
     stmt::{self, IntoExprTarget, VisitMut},
 };
 
@@ -52,7 +52,7 @@ pub(crate) fn extract_params(
     // extraction, so this is the single place documents are named. The generic
     // path would expand a `Value::Record` into a SQL row-value tuple `(?, ?)`; a
     // document column needs the whole embed bound as one document param instead.
-    mark_document_values(stmt, &schema.db);
+    mark_document_values(stmt, schema);
 
     // Phase 1: Mechanical extraction — replace values with Arg(n)
     let mut params: Vec<Param> = Vec::new();
@@ -126,10 +126,12 @@ impl VisitMut for LowerDocumentPaths<'_> {
         if !matches!(project.base.as_ref(), stmt::Expr::Reference(_)) {
             return;
         }
-        let stmt::Type::Document(doc) = self.cx.infer_expr_ty(project.base.as_ref(), &[]) else {
+        let stmt::Type::Model(embed_id) = self.cx.infer_expr_ty(project.base.as_ref(), &[]) else {
             return;
         };
-        let Some((path, ty)) = build_json_path(&doc, project.projection.as_slice()) else {
+        let Some((path, ty)) =
+            build_json_path(self.cx.schema(), embed_id, project.projection.as_slice())
+        else {
             return;
         };
         let base = Box::new(project.base.take());
@@ -179,20 +181,21 @@ impl VisitMut for LowerDocumentPaths<'_> {
 /// key path and the leaf field's type. Returns `None` if any step is out of
 /// range.
 fn build_json_path(
-    doc: &stmt::TypeDocument,
+    schema: &Schema,
+    embed_id: app::ModelId,
     projection: &[usize],
 ) -> Option<(Vec<String>, stmt::Type)> {
-    let mut current = doc;
+    let mut current = embed_id;
     let mut path = Vec::with_capacity(projection.len());
     let mut leaf_ty = None;
 
     for &index in projection {
-        let field = current.fields.get(index)?;
-        path.push(field.name.clone());
-        if let stmt::Type::Document(nested) = &field.ty {
-            current = nested;
+        let (name, ty) = schema.app.document_fields(current).nth(index)?;
+        path.push(name.to_owned());
+        if let stmt::Type::Model(nested) = ty {
+            current = *nested;
         }
-        leaf_ty = Some(field.ty.clone());
+        leaf_ty = Some(ty.clone());
     }
 
     Some((path, leaf_ty?))
@@ -691,12 +694,12 @@ fn refine_insert(
     }
 }
 
-/// Whether `ty` is a `#[document]` column type: a bare embed (`Document`) or a
-/// collection of embeds (`List(Document)`).
+/// Whether `ty` is a `#[document]` column type: a bare embed (`Type::Model`) or
+/// a collection of embeds (`List(Model)`).
 fn is_document_column(ty: &stmt::Type) -> bool {
     match ty {
-        stmt::Type::Document(_) => true,
-        stmt::Type::List(elem) => matches!(**elem, stmt::Type::Document(_)),
+        stmt::Type::Model(_) => true,
+        stmt::Type::List(elem) => matches!(**elem, stmt::Type::Model(_)),
         _ => false,
     }
 }
@@ -716,29 +719,31 @@ fn pin_document_param(expr: &stmt::Expr, storage_ty: db::Type, params: &mut [Par
 
 /// Rewrite a positional document value into the named `Value::Object` form the
 /// driver serializes, directed by the column's document `ty`. The value's shape
-/// always matches `ty`: a `Document` column carries a `Value::Record`, a
-/// `List(Document)` column carries a `Value::List` (a whole-collection `Set`, or
-/// an `Append`, which `push`/`extend` always wrap in a list).
+/// always matches `ty`: a `Type::Model` embed carries a `Value::Record`, a
+/// `List(Model)` collection carries a `Value::List` (a whole-collection `Set`,
+/// or an `Append`, which `push`/`extend` always wrap in a list).
 ///
-/// - `Document` turns the `Value::Record` into a `Value::Object`, recursing into
-///   each field's type.
-/// - `List(Document)` maps each element through the element type.
+/// - a `Type::Model` embed turns the `Value::Record` into a `Value::Object`,
+///   resolving the embed's field names from the schema and recursing.
+/// - `List(Model)` maps each element through the element type.
 /// - anything else — a non-document field, or an already-`Object`/`Null` value —
 ///   passes through unchanged, so the conversion is idempotent.
-fn to_named(value: stmt::Value, ty: &stmt::Type) -> stmt::Value {
+fn to_named(value: stmt::Value, ty: &stmt::Type, app: &app::Schema) -> stmt::Value {
     match (ty, value) {
-        (stmt::Type::Document(doc), stmt::Value::Record(record)) => {
+        (stmt::Type::Model(embed_id), stmt::Value::Record(record)) => {
             stmt::Value::Object(stmt::ValueObject::from_vec(
-                doc.fields
-                    .iter()
+                app.document_fields(*embed_id)
                     .zip(record)
-                    .map(|(field, v)| (field.name.clone(), to_named(v, &field.ty)))
+                    .map(|((name, field_ty), v)| (name.to_owned(), to_named(v, field_ty, app)))
                     .collect(),
             ))
         }
-        (stmt::Type::List(elem), stmt::Value::List(items)) => {
-            stmt::Value::List(items.into_iter().map(|item| to_named(item, elem)).collect())
-        }
+        (stmt::Type::List(elem), stmt::Value::List(items)) => stmt::Value::List(
+            items
+                .into_iter()
+                .map(|item| to_named(item, elem, app))
+                .collect(),
+        ),
         (_, value) => value,
     }
 }
@@ -772,12 +777,12 @@ fn const_value_of(expr: &stmt::Expr) -> Option<stmt::Value> {
 /// values are named; later phases only pin the param's type. A non-constant
 /// document value is left untouched (document writes are constant literals via
 /// `create!` / `IntoExpr`, so this only matters defensively).
-fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
+fn mark_document_values(stmt: &mut stmt::Statement, schema: &Schema) {
     // Convert a constant document value *expression* into the named object
-    // form, directed by the column type (`Document` or `List(Document)`).
-    fn mark_expr(field_expr: &mut stmt::Expr, ty: &stmt::Type) {
+    // form, directed by the column type (`Type::Model` or `List(Model)`).
+    fn mark_expr(field_expr: &mut stmt::Expr, ty: &stmt::Type, app: &app::Schema) {
         if let Some(value) = const_value_of(field_expr) {
-            *field_expr = stmt::Expr::Value(to_named(value, ty));
+            *field_expr = stmt::Expr::Value(to_named(value, ty, app));
         }
     }
 
@@ -786,7 +791,7 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
             let stmt::InsertTarget::Table(table) = &insert.target else {
                 return;
             };
-            let db_table = &db_schema.tables[table.table.0];
+            let db_table = &schema.db.tables[table.table.0];
             // Per-column document type (`Document` or `List(Document)`), `None`
             // for non-document columns.
             let docs: Vec<Option<&stmt::Type>> = table
@@ -806,7 +811,7 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
                     stmt::Expr::Record(record) => {
                         for (ty, field) in docs.iter().zip(&mut record.fields) {
                             if let Some(ty) = ty {
-                                mark_expr(field, ty);
+                                mark_expr(field, ty, &schema.app);
                             }
                         }
                     }
@@ -815,7 +820,7 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
                         for (ty, field) in docs.iter().zip(&mut record.fields) {
                             if let Some(ty) = ty {
                                 let v = std::mem::replace(field, stmt::Value::Null);
-                                *field = to_named(v, ty);
+                                *field = to_named(v, ty, &schema.app);
                             }
                         }
                     }
@@ -827,7 +832,7 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
             let stmt::UpdateTarget::Table(table_id) = &update.target else {
                 return;
             };
-            let db_table = &db_schema.tables[table_id.0];
+            let db_table = &schema.db.tables[table_id.0];
             for (projection, assignment) in update.assignments.iter_mut() {
                 let steps = projection.as_slice();
                 if steps.len() != 1 {
@@ -845,7 +850,7 @@ fn mark_document_values(stmt: &mut stmt::Statement, db_schema: &db::Schema) {
                 // embed only ever takes `Set` — the value always matches
                 // `col.ty`, which is what `to_named` is directed by.
                 if let stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) = assignment {
-                    mark_expr(expr, &col.ty);
+                    mark_expr(expr, &col.ty, &schema.app);
                 }
             }
         }

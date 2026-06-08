@@ -434,6 +434,7 @@ impl fmt::Debug for Connection {
 impl Connection {
     async fn exec_sql(
         &mut self,
+        schema: &Schema,
         sql_str: &str,
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
@@ -480,7 +481,7 @@ impl Connection {
                             for (index, ret_ty) in ret_tys.iter().enumerate() {
                                 let turso_val =
                                     row.get_value(index).map_err(classify_turso_error)?;
-                                items.push(value::from_turso(turso_val, ret_ty));
+                                items.push(value::from_turso(turso_val, ret_ty, &schema.app));
                             }
                             items
                         }
@@ -518,7 +519,7 @@ impl toasty_core::driver::Connection for Connection {
                     RawSqlRet::Infer => SqlReturn::Infer,
                     RawSqlRet::Types(types) => SqlReturn::Types(types),
                 };
-                return self.exec_sql(&op.sql, op.params, ret).await;
+                return self.exec_sql(schema, &op.sql, op.params, ret).await;
             }
             Operation::Transaction(op) => {
                 if let Transaction::Start { isolation, .. } = &op
@@ -551,7 +552,7 @@ impl toasty_core::driver::Connection for Connection {
         };
 
         let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
-        self.exec_sql(&sql_str, typed_params, ret).await
+        self.exec_sql(schema, &sql_str, typed_params, ret).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

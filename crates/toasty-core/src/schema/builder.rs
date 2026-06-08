@@ -114,12 +114,12 @@ impl Builder {
             },
         };
 
-        // Resolve `#[document]` collection fields — `Type::List(Model(id))` as
-        // emitted by the `Document` derive trait — into the self-describing
-        // `Type::List(Document(..))` shape, now that every embed is registered
-        // and its field names are known. Must run before `from_app`, which has
-        // no mapping for a bare `Type::Model` element.
-        resolve_document_types(&mut app)?;
+        // Validate `#[document]` embeds now that every embed is registered. A
+        // document column tracks its shape as `Type::Model(embed_id)` (or
+        // `List(Model)`) and resolves the embed's fields on demand, so there is
+        // nothing to rewrite — only to check (named fields, no `#[column]`
+        // rename, no relations, no unrepresentable leaf).
+        verify_document_types(&app)?;
 
         for model in app.models.values_mut() {
             // Initial verification pass to ensure all models are valid based on the
@@ -221,9 +221,9 @@ impl BuildSchema<'_> {
                 }
 
                 // `#[document]` storage covers a bare embedded struct
-                // (`Type::Document`) and a collection of embedded structs
-                // (`Type::List(Document)`); both are gated by the same
-                // capability. A plain `Vec<scalar>` has its own gate.
+                // (`Type::Model`) and a collection of embedded structs
+                // (`Type::List(Model)`); both are gated by the same capability.
+                // A plain `Vec<scalar>` has its own gate.
                 let field_name = || {
                     field.name.app.as_deref().unwrap_or_else(|| {
                         panic!(
@@ -233,9 +233,7 @@ impl BuildSchema<'_> {
                     })
                 };
 
-                let is_document = matches!(&primitive.ty, stmt::Type::Document(_))
-                    || matches!(&primitive.ty,
-                        stmt::Type::List(elem) if matches!(**elem, stmt::Type::Document(_)));
+                let is_document = document_embed_id(&primitive.ty).is_some();
 
                 if is_document {
                     if !self.db.document_collections {
@@ -245,21 +243,9 @@ impl BuildSchema<'_> {
                             field_name()
                         )));
                     }
-
-                    // A document is JSON-encoded, so every leaf needs a faithful
-                    // JSON text form that round-trips *and* that the SQL filter
-                    // path can cast back. `Zoned` has neither: jiff renders it
-                    // with an RFC 9557 `[IANA]` time-zone annotation that no SQL
-                    // backend can parse, and dropping the annotation would
-                    // discard the zone identity the type exists to carry. Reject
-                    // it rather than silently storing an unfilterable value.
-                    if let Some(bad) = document_unsupported_leaf(&primitive.ty) {
-                        return Err(crate::Error::unsupported_feature(format!(
-                            "model `{model_name}` field `{}` stores `{bad}` inside a \
-                             `#[document]`, which JSON document storage cannot represent.",
-                            field_name()
-                        )));
-                    }
+                    // The embed's structure and leaf types are validated up front
+                    // by `verify_document_types` (it can recurse into nested
+                    // embeds via the schema, which this per-field pass cannot).
                 } else if matches!(&primitive.ty, stmt::Type::List(_)) && !self.db.vec_scalar {
                     return Err(crate::Error::unsupported_feature(format!(
                         "model `{model_name}` field `{}` is a `Vec<T>` collection, \
@@ -286,36 +272,38 @@ impl BuildSchema<'_> {
     }
 }
 
-/// The name of the first leaf type inside a (possibly nested) document that
-/// JSON document storage cannot represent, or `None` if every leaf is
-/// supported. Recurses through nested documents and document collections.
-/// Currently only `Zoned` is rejected — see the `#[document]` leaf check in
-/// [`BuildSchema::build_model_constraints`].
+/// The name of a `#[document]` leaf scalar type that JSON document storage
+/// cannot represent, or `None` if it is supported. Recurses through list
+/// element types; embeds are walked separately by [`verify_document_embed`].
+/// Currently only `Zoned` is rejected.
 fn document_unsupported_leaf(ty: &stmt::Type) -> Option<&'static str> {
     match ty {
         #[cfg(feature = "jiff")]
         stmt::Type::Zoned => Some("Zoned"),
-        stmt::Type::Document(doc) => doc
-            .fields
-            .iter()
-            .find_map(|f| document_unsupported_leaf(&f.ty)),
         stmt::Type::List(elem) => document_unsupported_leaf(elem),
         _ => None,
     }
 }
 
-/// Rewrite `#[document]` collection fields from the macro-emitted
-/// `Type::List(Model(id))` shape into the self-describing
-/// `Type::List(Document(..))` shape.
-///
-/// The macro cannot name the embed's fields — it only knows the element type
-/// — so it emits `Type::Model(id)` for the element. By schema-build time every
-/// embed is registered, so the builder can walk the embed's fields and produce
-/// a [`stmt::TypeDocument`] carrying the field names the JSON codec needs.
-fn resolve_document_types(app: &mut app::Schema) -> Result<()> {
-    // Read-only pass: collect `(model_id, field_index, resolved_ty)` patches.
-    let mut patches = Vec::new();
+/// The embedded-struct id a `#[document]` column stores, if any: `Type::Model`
+/// for a bare embed, `List(Model)` for a collection. `None` for a scalar or
+/// `Vec<scalar>` column.
+fn document_embed_id(ty: &stmt::Type) -> Option<app::ModelId> {
+    match ty {
+        stmt::Type::Model(id) => Some(*id),
+        stmt::Type::List(elem) => match &**elem {
+            stmt::Type::Model(id) => Some(*id),
+            _ => None,
+        },
+        _ => None,
+    }
+}
 
+/// Validate every `#[document]` column's embedded struct. A document column
+/// tracks its shape as `Type::Model(embed_id)` and resolves the embed's fields
+/// on demand from the embedded model, so there is nothing to rewrite — only to
+/// check that the embed is JSON-encodable.
+fn verify_document_types(app: &app::Schema) -> Result<()> {
     for model in app.models.values() {
         let fields = match model {
             app::Model::Root(root) => &root.fields,
@@ -323,72 +311,39 @@ fn resolve_document_types(app: &mut app::Schema) -> Result<()> {
             app::Model::EmbeddedEnum(_) => continue,
         };
 
-        for (index, field) in fields.iter().enumerate() {
-            let app::FieldTy::Primitive(primitive) = &field.ty else {
-                continue;
-            };
-
-            // The macro emits the element/embed type as `Type::Model(id)`
-            // (it cannot name the embed's fields). Resolve it now that every
-            // embed is registered: a bare embed becomes a `Document`, a
-            // collection of embeds becomes a `List(Document)`.
-            let resolved = match &primitive.ty {
-                stmt::Type::Model(embed_id) => {
-                    stmt::Type::Document(resolve_document_ty(&app.models, *embed_id)?)
-                }
-                stmt::Type::List(elem) => match &**elem {
-                    stmt::Type::Model(embed_id) => stmt::Type::List(Box::new(
-                        stmt::Type::Document(resolve_document_ty(&app.models, *embed_id)?),
-                    )),
-                    _ => continue,
-                },
-                _ => continue,
-            };
-
-            patches.push((model.id(), index, resolved));
-        }
-    }
-
-    // Mutable pass: apply the patches.
-    for (model_id, index, ty) in patches {
-        let model = app.models.get_mut(&model_id).expect("model id from map");
-        let fields = match model {
-            app::Model::Root(root) => &mut root.fields,
-            app::Model::EmbeddedStruct(embedded) => &mut embedded.fields,
-            app::Model::EmbeddedEnum(_) => unreachable!(),
-        };
-        if let app::FieldTy::Primitive(primitive) = &mut fields[index].ty {
-            primitive.ty = ty;
+        for field in fields {
+            if let app::FieldTy::Primitive(primitive) = &field.ty
+                && let Some(embed_id) = document_embed_id(&primitive.ty)
+            {
+                verify_document_embed(app, embed_id)?;
+            }
         }
     }
 
     Ok(())
 }
 
-/// Build a [`stmt::TypeDocument`] for the embedded struct `model_id` by walking
-/// its fields. Recurses through nested embedded structs.
-fn resolve_document_ty(
-    models: &IndexMap<app::ModelId, app::Model>,
-    model_id: app::ModelId,
-) -> Result<stmt::TypeDocument> {
-    let app::Model::EmbeddedStruct(embedded) = &models[&model_id] else {
+/// Recursively validate an embedded struct used inside a `#[document]`: every
+/// field must be named, free of a `#[column]` rename, not a relation, and have
+/// a JSON-encodable leaf type. Nested embeds (bare, collection, or
+/// column-expanded) are validated as nested documents.
+fn verify_document_embed(app: &app::Schema, embed_id: app::ModelId) -> Result<()> {
+    let app::Model::EmbeddedStruct(embedded) = app.model(embed_id) else {
         return Err(crate::Error::unsupported_feature(
-            "#[document] collection elements must be `#[derive(Embed)]` structs",
+            "#[document] elements must be `#[derive(Embed)]` structs",
         ));
     };
 
-    let mut doc_fields = Vec::with_capacity(embedded.fields.len());
-
     for field in &embedded.fields {
-        let name = field.name.app.clone().ok_or_else(|| {
-            crate::Error::unsupported_feature(format!(
+        let Some(name) = field.name.app.as_deref() else {
+            return Err(crate::Error::unsupported_feature(format!(
                 "embedded struct `{}` has an unnamed field; #[document] storage \
                  requires named fields",
                 embedded.name
-            ))
-        })?;
+            )));
+        };
 
-        // A `#[column(\"...\")]` rename has no meaning under document storage —
+        // A `#[column("...")]` rename has no meaning under document storage —
         // document keys come from the Rust field name.
         if field.name.storage.is_some() {
             return Err(crate::Error::unsupported_feature(format!(
@@ -398,30 +353,23 @@ fn resolve_document_ty(
             )));
         }
 
-        let ty = match &field.ty {
-            app::FieldTy::Primitive(primitive) => match &primitive.ty {
-                // A `#[document]` collection nested inside the embed.
-                stmt::Type::List(elem) if matches!(**elem, stmt::Type::Model(_)) => {
-                    let stmt::Type::Model(nested) = &**elem else {
-                        unreachable!()
-                    };
-                    stmt::Type::List(Box::new(stmt::Type::Document(resolve_document_ty(
-                        models, *nested,
-                    )?)))
+        match &field.ty {
+            app::FieldTy::Primitive(primitive) => {
+                // A nested embed (bare or collection) is itself a nested
+                // document; recurse. Otherwise check the scalar leaf.
+                if let Some(nested) = document_embed_id(&primitive.ty) {
+                    verify_document_embed(app, nested)?;
+                } else if let Some(bad) = document_unsupported_leaf(&primitive.ty) {
+                    return Err(crate::Error::unsupported_feature(format!(
+                        "embedded struct `{}` field `{name}` stores `{bad}` inside a \
+                         `#[document]`, which JSON document storage cannot represent.",
+                        embedded.name
+                    )));
                 }
-                // A bare `#[document]` embed nested inside the embed. The macro
-                // emits it as `Type::Model(id)` just like the top-level field,
-                // so resolve it to a nested document — leaving it as `Model`
-                // would desync the outer document schema, and the value would
-                // reach the JSON codec as an unencodable positional `Record`.
-                stmt::Type::Model(nested) => {
-                    stmt::Type::Document(resolve_document_ty(models, *nested)?)
-                }
-                other => other.clone(),
-            },
+            }
             // A nested column-expanded embed becomes a nested document.
             app::FieldTy::Embedded(embedded_field) => {
-                stmt::Type::Document(resolve_document_ty(models, embedded_field.target)?)
+                verify_document_embed(app, embedded_field.target)?;
             }
             app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
                 return Err(crate::Error::unsupported_feature(format!(
@@ -430,10 +378,8 @@ fn resolve_document_ty(
                     embedded.name
                 )));
             }
-        };
-
-        doc_fields.push(stmt::DocumentField { name, ty });
+        }
     }
 
-    Ok(stmt::TypeDocument::new(doc_fields))
+    Ok(())
 }

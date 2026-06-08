@@ -209,6 +209,7 @@ impl Connection {
 
     async fn exec_sql(
         &mut self,
+        schema: &Schema,
         sql_as_str: &str,
         args: Vec<mysql_async::Value>,
         ret: SqlReturn,
@@ -277,7 +278,9 @@ impl Connection {
                 SqlReturn::Infer => {
                     for i in 0..row.len() {
                         let column = row.columns()[i].clone();
-                        results.push(Value::from_sql_infer(i, &mut row, &column).into_inner());
+                        results.push(
+                            Value::from_sql_infer(i, &mut row, &column, &schema.app).into_inner(),
+                        );
                     }
                 }
                 SqlReturn::Types(returning) => {
@@ -290,7 +293,8 @@ impl Connection {
                     for i in 0..row.len() {
                         let column = row.columns()[i].clone();
                         results.push(
-                            Value::from_sql(i, &mut row, &column, &returning[i]).into_inner(),
+                            Value::from_sql(i, &mut row, &column, &returning[i], &schema.app)
+                                .into_inner(),
                         );
                     }
                 }
@@ -299,8 +303,12 @@ impl Connection {
             Ok(ValueRecord::from_vec(results))
         });
 
+        // Collect eagerly so the per-row decode (which borrows `schema`) runs
+        // within this method rather than escaping into the lazy stream.
+        let results = results.collect::<Vec<_>>();
+
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-            results,
+            results.into_iter(),
         )))
     }
 
@@ -364,7 +372,7 @@ impl toasty_core::driver::Connection for Connection {
                     RawSqlRet::Infer => SqlReturn::Infer,
                     RawSqlRet::Types(types) => SqlReturn::Types(types),
                 };
-                return self.exec_sql(&op.sql, args, ret).await;
+                return self.exec_sql(schema, &op.sql, args, ret).await;
             }
             Operation::Transaction(op) => {
                 // MySQL has no `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE`
@@ -411,7 +419,7 @@ impl toasty_core::driver::Connection for Connection {
             },
         };
 
-        self.exec_sql(&sql_as_str, args, ret).await
+        self.exec_sql(schema, &sql_as_str, args, ret).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

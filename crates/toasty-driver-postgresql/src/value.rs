@@ -1,5 +1,6 @@
 use fallible_iterator::FallibleIterator;
 use postgres_protocol::types::{ArrayDimension, array_from_sql, array_to_sql};
+use toasty_core::schema::app;
 use toasty_core::stmt::{self, Value as CoreValue};
 use tokio_postgres::{
     Column, Row,
@@ -69,6 +70,7 @@ impl Value {
         row: &Row,
         column: &Column,
         expected_ty: &stmt::Type,
+        schema: &app::Schema,
     ) -> Self {
         // Gets the value from the row as Option<T> and return stmt::Value::Null if the Option is
         // None.
@@ -168,9 +170,9 @@ impl Value {
                 None => return Self(stmt::Value::Null),
             }
         } else if column.type_() == &Type::JSONB || column.type_() == &Type::JSON {
-            // `#[document]` columns. Decode the raw wire bytes structurally
-            // into a `Value::List` of `Value::Object`s; the engine converts
-            // the objects back to positional records using `expected_ty`.
+            // `#[document]` columns. Decode the raw JSON wire bytes straight to
+            // the positional `Value::Record` the engine loads, resolving the
+            // embed's fields from `expected_ty` + `schema`.
             let raw = match row.get::<usize, Option<RawBytes<'_>>>(index) {
                 Some(RawBytes(raw)) => raw,
                 None => return Self(stmt::Value::Null),
@@ -182,7 +184,7 @@ impl Value {
             } else {
                 raw
             };
-            toasty_sql::json::from_slice(json_bytes, expected_ty)
+            toasty_sql::json::from_slice(json_bytes, expected_ty, schema)
                 .expect("invalid JSON in document column")
         } else if let Kind::Array(_) = column.type_().kind() {
             // Native array column (e.g. `text[]`, `int8[]`) — decoded

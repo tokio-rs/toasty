@@ -1,6 +1,5 @@
 use super::{
-    DocumentField, Entry, EntryPath, Type, TypeDocument, TypeUnion, ValueObject, ValueRecord,
-    sparse_record::SparseRecord,
+    Entry, EntryPath, Type, TypeUnion, ValueObject, ValueRecord, sparse_record::SparseRecord,
 };
 use std::cmp::Ordering;
 
@@ -333,24 +332,17 @@ impl Value {
                 Type::Record(field_tys) if value.len() == field_tys.len() => {
                     Self::fields_match(&value.fields, field_tys.iter())
                 }
-                // `Value::Record` is the engine's canonical load form for a
-                // document value — positional, names dropped. Drivers produce
-                // `Value::Object` (structural, named); the engine collapses to
-                // `Value::Record` at the receive boundary via
-                // `Value::normalize_for_load`.
-                Type::Document(doc) if value.len() == doc.len() => {
-                    Self::fields_match(&value.fields, doc.field_tys())
-                }
+                // A positional `Value::Record` is the engine's load form for a
+                // document value (an embedded model, names dropped). The precise
+                // per-field check needs the embedded model's schema, which
+                // `is_a` does not carry.
+                Type::Model(_) => true,
                 _ => false,
             },
-            Self::Object(value) => match ty {
-                Type::Document(doc) if value.len() == doc.fields.len() => value
-                    .entries
-                    .iter()
-                    .zip(doc.fields.iter())
-                    .all(|((name, value), field)| *name == field.name && value.is_a(&field.ty)),
-                _ => false,
-            },
+            // A named `Value::Object` is the transient write-path form of an
+            // embedded model document, produced just before it is bound as a
+            // param; accept it against the embedded model type.
+            Self::Object(_) => matches!(ty, Type::Model(_)),
             Self::SparseRecord(value) => match ty {
                 Type::SparseRecord(fields) => value.fields == *fields,
                 _ => false,
@@ -401,16 +393,14 @@ impl Value {
             Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
-            Value::Object(v) => Type::Document(TypeDocument {
-                fields: v
-                    .entries
+            // An object's inferred type, names dropped, is a positional record;
+            // the named document type is only known from the schema.
+            Value::Object(v) => Type::Record(
+                v.entries
                     .iter()
-                    .map(|(name, value)| DocumentField {
-                        name: name.clone(),
-                        ty: value.infer_ty(),
-                    })
+                    .map(|(_, value)| value.infer_ty())
                     .collect(),
-            }),
+            ),
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => {
@@ -478,13 +468,10 @@ impl Value {
     /// the rest of the pipeline — eval, projection, load — sees a single
     /// shape per type.
     ///
-    /// Drivers produce `Value::Object` for document columns (structural,
-    /// no schema needed to encode or decode). The engine collapses each
-    /// `Object` to the positional `Value::Record` using the
-    /// [`TypeDocument`] field order, dropping the names. Recursion walks
-    /// into lists and records so a document nested inside a row is
-    /// converted as well. Other shapes pass through unchanged; the
-    /// conversion is idempotent.
+    /// The JSON codec now decodes a document column straight to the positional
+    /// `Value::Record` the pipeline expects, so this is just a structural walk
+    /// (lists and records recurse, everything else passes through). It is kept
+    /// for the nested-record recursion and remains idempotent.
     pub(crate) fn normalize_for_load(self, ty: &Type) -> Self {
         match (self, ty) {
             (Self::List(items), Type::List(elem)) => Self::List(
@@ -498,38 +485,12 @@ impl Value {
             {
                 Self::normalize_record(record.fields, field_tys.iter())
             }
-            (Self::Object(object), Type::Document(doc)) => {
-                // Reorder the named entries into `doc.fields` order, then
-                // normalize. Look up by name rather than trusting the codec's
-                // entry order — that's an invariant we shouldn't depend on here.
-                let mut entries = object.entries;
-                let values = doc
-                    .fields
-                    .iter()
-                    .map(|field| {
-                        entries
-                            .iter()
-                            .position(|(k, _)| k == &field.name)
-                            .map(|i| entries.swap_remove(i).1)
-                            .unwrap_or(Self::Null)
-                    })
-                    .collect::<Vec<_>>();
-                Self::normalize_record(values, doc.field_tys())
-            }
-            // A positional record matched against a document type: already
-            // in load shape, but recurse so nested documents inside it get
-            // normalized.
-            (Self::Record(record), Type::Document(doc)) if record.fields.len() == doc.len() => {
-                Self::normalize_record(record.fields, doc.field_tys())
-            }
             (value, _) => value,
         }
     }
 
     /// Recursively normalize each value against the type at the same position,
-    /// collecting into a positional [`Value::Record`] — the load shape shared
-    /// by record and document targets (a document supplies its types via
-    /// [`TypeDocument::field_tys`]).
+    /// collecting into a positional [`Value::Record`].
     fn normalize_record<'a>(values: Vec<Value>, tys: impl Iterator<Item = &'a Type>) -> Self {
         Self::record_from_vec(
             values

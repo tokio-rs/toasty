@@ -5,7 +5,7 @@ use super::Value;
 /// `ValueObject` is the named counterpart to [`ValueRecord`](super::ValueRecord):
 /// where a record is positional, an object carries a key for each field. The
 /// query engine builds a `ValueObject` from a positional record (using the
-/// field names from [`TypeDocument`](super::TypeDocument)) just before handing
+/// field names from the embedded model schema) just before handing
 /// a document-stored value to a driver, and converts back the other way when
 /// decoding driver results. Drivers serialize a `ValueObject` structurally —
 /// to a JSON object, a BSON sub-document, a DynamoDB map — without needing the
@@ -23,11 +23,6 @@ impl ValueObject {
     /// Creates a `ValueObject` from a vector of `(key, value)` pairs.
     pub fn from_vec(entries: Vec<(String, Value)>) -> Self {
         Self { entries }
-    }
-
-    /// Returns the number of entries in the object.
-    pub(crate) fn len(&self) -> usize {
-        self.entries.len()
     }
 
     /// Iterates over the `(key, value)` entries in insertion order.

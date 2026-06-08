@@ -185,12 +185,12 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
-                // A document is stored as a single document column (`jsonb` on
-                // PG, `JSON` elsewhere) — never a native array. `Type::list`
-                // collapses a list-of-documents back to one document, so a
-                // `#[document]` collection (`List(Document)`) lands here as a
-                // plain `Document`.
-                stmt::Type::Document(_) => Ok(Type::Document { binary: true }),
+                // An embedded model column is stored as a single document
+                // (`jsonb` on PG, `JSON` elsewhere) — never a native array.
+                // `Type::list` collapses a list-of-documents back to one
+                // document, so a `#[document]` collection (`List(Model)`) lands
+                // here as a plain `Document`.
+                stmt::Type::Model(_) => Ok(Type::Document { binary: true }),
                 stmt::Type::List(elem) => Ok(Type::list(Self::from_app(elem, None, db)?)),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",

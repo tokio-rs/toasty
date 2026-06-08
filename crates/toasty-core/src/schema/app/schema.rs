@@ -171,10 +171,10 @@ impl Schema {
                 // `app::Field`). The path was already type-checked by the
                 // generated accessors.
                 FieldTy::Primitive(FieldPrimitive {
-                    ty: stmt::Type::Document(doc),
+                    ty: stmt::Type::Model(embed_id),
                     ..
                 }) => {
-                    return resolve_document_steps(doc, *step, &mut steps)
+                    return resolve_document_steps(self, *embed_id, *step, &mut steps)
                         .then_some(Resolved::Field(current_field));
                 }
                 FieldTy::Primitive(..) => {
@@ -701,26 +701,30 @@ fn eager_relation_target(field: &Field) -> Option<ModelId> {
     field.relation_target_id()
 }
 
-/// Validates that a projection descends a `#[document]` type's fields: `first`
-/// indexes into `doc`, then each remaining step descends into the nested
-/// document at that field (if any). Returns `false` if a step is out of range
-/// or descends past a scalar leaf.
+/// Validates that a projection descends a `#[document]` embed's fields: `first`
+/// indexes into the embedded struct `embed_id`, then each remaining step
+/// descends into the nested embed at that field (if any). Returns `false` if a
+/// step is out of range or descends past a scalar leaf.
 fn resolve_document_steps(
-    doc: &stmt::TypeDocument,
+    schema: &Schema,
+    embed_id: ModelId,
     first: usize,
     rest: &mut std::slice::Iter<'_, usize>,
 ) -> bool {
-    let Some(field) = doc.fields.get(first) else {
+    let Model::EmbeddedStruct(embedded) = schema.model(embed_id) else {
+        return false;
+    };
+    let Some(field) = embedded.fields.get(first) else {
         return false;
     };
 
-    match &field.ty {
-        stmt::Type::Document(nested) => match rest.next() {
-            Some(&next) => resolve_document_steps(nested, next, rest),
+    match field.expr_ty() {
+        stmt::Type::Model(nested) => match rest.next() {
+            Some(&next) => resolve_document_steps(schema, *nested, next, rest),
             // Path stops at a sub-document (the whole sub-embed) — valid.
             None => true,
         },
-        // A scalar leaf: the path must end here.
+        // A scalar leaf (or a collection): the path must end here.
         _ => rest.next().is_none(),
     }
 }

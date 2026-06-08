@@ -24,7 +24,8 @@ use serde::de::{
 };
 use serde::ser::{Error as _, Serialize, SerializeMap, SerializeSeq, Serializer};
 use std::fmt;
-use toasty_core::stmt::{self, Value, ValueObject};
+use toasty_core::schema::app;
+use toasty_core::stmt::{self, Value};
 
 // ============================================================================
 // Encoding: stmt::Value -> JSON text (no serde_json::Value intermediate)
@@ -165,25 +166,36 @@ pub fn to_vec(value: &Value) -> Result<Vec<u8>, serde_json::Error> {
 /// intermediate. The type is required because the wire form is ambiguous
 /// (`Uuid`/`String` are both strings; the integer widths are all numbers; a
 /// `Document`'s field names and types come from the schema).
-pub struct Seed<'a>(pub &'a stmt::Type);
+pub struct Seed<'a> {
+    /// The expected type of the value being decoded.
+    pub ty: &'a stmt::Type,
+    /// Schema used to resolve a `Type::Model` document column's fields.
+    pub schema: &'a app::Schema,
+}
 
 impl<'de> DeserializeSeed<'de> for Seed<'_> {
     type Value = Value;
 
     fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<Value, D::Error> {
         // JSON is self-describing, so `deserialize_any` lets the parser drive
-        // the visit method by token; each method coerces using `self.0`.
-        de.deserialize_any(ValueVisitor(self.0))
+        // the visit method by token; each method coerces using `self.ty`.
+        de.deserialize_any(ValueVisitor {
+            ty: self.ty,
+            schema: self.schema,
+        })
     }
 }
 
-struct ValueVisitor<'a>(&'a stmt::Type);
+struct ValueVisitor<'a> {
+    ty: &'a stmt::Type,
+    schema: &'a app::Schema,
+}
 
 impl<'de> Visitor<'de> for ValueVisitor<'_> {
     type Value = Value;
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "a JSON value decodable as {:?}", self.0)
+        write!(f, "a JSON value decodable as {:?}", self.ty)
     }
 
     fn visit_unit<E: serde::de::Error>(self) -> Result<Value, E> {
@@ -193,7 +205,7 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
     }
 
     fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Value, E> {
-        match self.0 {
+        match self.ty {
             stmt::Type::Bool => Ok(Value::Bool(v)),
             other => Err(E::custom(format!(
                 "unexpected JSON bool for type {other:?}"
@@ -202,15 +214,15 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
     }
 
     fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Value, E> {
-        int_to_value(self.0, v as i128)
+        int_to_value(self.ty, v as i128)
     }
 
     fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Value, E> {
-        int_to_value(self.0, v as i128)
+        int_to_value(self.ty, v as i128)
     }
 
     fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Value, E> {
-        match self.0 {
+        match self.ty {
             stmt::Type::F32 => Ok(Value::F32(v as f32)),
             stmt::Type::F64 => Ok(Value::F64(v)),
             other => Err(E::custom(format!(
@@ -220,7 +232,7 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
     }
 
     fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Value, E> {
-        match self.0 {
+        match self.ty {
             stmt::Type::String => Ok(Value::String(v.to_owned())),
             stmt::Type::Uuid => Ok(Value::Uuid(v.parse().map_err(E::custom)?)),
             #[cfg(feature = "rust_decimal")]
@@ -244,8 +256,8 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Value, A::Error> {
-        match self.0 {
-            stmt::Type::List(elem) => read_seq(seq, elem),
+        match self.ty {
+            stmt::Type::List(elem) => read_seq(seq, elem, self.schema),
             other => Err(A::Error::custom(format!(
                 "unexpected JSON array for type {other:?}"
             ))),
@@ -253,8 +265,11 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
-        let doc = match self.0 {
-            stmt::Type::Document(doc) => doc,
+        // A `#[document]` embed's field layout — name + type, in declaration
+        // order — resolved on demand from the embedded model. `Type::Model` is
+        // the shape carried at the `stmt::Type` level.
+        let fields: Vec<(&str, &stmt::Type)> = match self.ty {
+            stmt::Type::Model(embed_id) => self.schema.document_fields(*embed_id).collect(),
             other => {
                 return Err(A::Error::custom(format!(
                     "unexpected JSON object for type {other:?}"
@@ -264,23 +279,29 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
 
         // Fill slots positionally as keys arrive (JSON key order is arbitrary);
         // unknown keys are ignored, absent keys stay `None` -> `Value::Null`.
-        let mut slots: Vec<Option<Value>> = (0..doc.fields.len()).map(|_| None).collect();
+        let mut slots: Vec<Option<Value>> = (0..fields.len()).map(|_| None).collect();
         while let Some(key) = map.next_key::<String>()? {
-            match doc.fields.iter().position(|f| f.name == key) {
-                Some(idx) => slots[idx] = Some(map.next_value_seed(Seed(&doc.fields[idx].ty))?),
+            match fields.iter().position(|(name, _)| *name == key) {
+                Some(idx) => {
+                    slots[idx] = Some(map.next_value_seed(Seed {
+                        ty: fields[idx].1,
+                        schema: self.schema,
+                    })?);
+                }
                 None => {
                     map.next_value::<IgnoredAny>()?;
                 }
             }
         }
 
-        let entries = doc
-            .fields
-            .iter()
-            .zip(slots)
-            .map(|(field, slot)| (field.name.clone(), slot.unwrap_or(Value::Null)))
+        // Decode straight to the positional `Value::Record` the engine loads —
+        // no `Value::Object` intermediate, since the field order comes from the
+        // schema, not the JSON key order.
+        let values = slots
+            .into_iter()
+            .map(|slot| slot.unwrap_or(Value::Null))
             .collect();
-        Ok(Value::Object(ValueObject::from_vec(entries)))
+        Ok(Value::Record(stmt::ValueRecord::from_vec(values)))
     }
 }
 
@@ -309,9 +330,16 @@ fn int_to_value<E: serde::de::Error>(ty: &stmt::Type, v: i128) -> Result<Value, 
 
 /// Decode a JSON array into a `Value::List`, seeding each element with
 /// `elem_ty`. Shared by [`ValueVisitor::visit_seq`] and the list helpers.
-fn read_seq<'de, A: SeqAccess<'de>>(mut seq: A, elem_ty: &stmt::Type) -> Result<Value, A::Error> {
+fn read_seq<'de, A: SeqAccess<'de>>(
+    mut seq: A,
+    elem_ty: &stmt::Type,
+    schema: &app::Schema,
+) -> Result<Value, A::Error> {
     let mut items = Vec::with_capacity(seq.size_hint().unwrap_or(0));
-    while let Some(value) = seq.next_element_seed(Seed(elem_ty))? {
+    while let Some(value) = seq.next_element_seed(Seed {
+        ty: elem_ty,
+        schema,
+    })? {
         items.push(value);
     }
     Ok(Value::List(items))
@@ -320,50 +348,69 @@ fn read_seq<'de, A: SeqAccess<'de>>(mut seq: A, elem_ty: &stmt::Type) -> Result<
 /// A [`Visitor`] that accepts only a JSON array and decodes it into a
 /// `Value::List` of `elem_ty` elements. Used by the list helpers, whose caller
 /// holds the element type rather than a `Type::List`.
-struct ListVisitor<'a>(&'a stmt::Type);
+struct ListVisitor<'a> {
+    elem_ty: &'a stmt::Type,
+    schema: &'a app::Schema,
+}
 
 impl<'de> Visitor<'de> for ListVisitor<'_> {
     type Value = Value;
 
     fn expecting(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "a JSON array of {:?}", self.0)
+        write!(f, "a JSON array of {:?}", self.elem_ty)
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, seq: A) -> Result<Value, A::Error> {
-        read_seq(seq, self.0)
+        read_seq(seq, self.elem_ty, self.schema)
     }
 }
 
 /// Decode a JSON document (string) into a `stmt::Value` of type `ty`.
-pub fn from_str(text: &str, ty: &stmt::Type) -> Result<Value, serde_json::Error> {
+pub fn from_str(
+    text: &str,
+    ty: &stmt::Type,
+    schema: &app::Schema,
+) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_str(text);
-    let value = Seed(ty).deserialize(&mut de)?;
+    let value = Seed { ty, schema }.deserialize(&mut de)?;
     de.end()?;
     Ok(value)
 }
 
 /// Decode a JSON document (UTF-8 bytes) into a `stmt::Value` of type `ty`.
-pub fn from_slice(bytes: &[u8], ty: &stmt::Type) -> Result<Value, serde_json::Error> {
+pub fn from_slice(
+    bytes: &[u8],
+    ty: &stmt::Type,
+    schema: &app::Schema,
+) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_slice(bytes);
-    let value = Seed(ty).deserialize(&mut de)?;
+    let value = Seed { ty, schema }.deserialize(&mut de)?;
     de.end()?;
     Ok(value)
 }
 
 /// Decode a JSON array (string) into a `Value::List`, using `elem_ty` as the
 /// per-element type.
-pub fn list_from_str(text: &str, elem_ty: &stmt::Type) -> Result<Value, serde_json::Error> {
+pub fn list_from_str(
+    text: &str,
+    elem_ty: &stmt::Type,
+    schema: &app::Schema,
+) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_str(text);
-    let value = de.deserialize_seq(ListVisitor(elem_ty))?;
+    let value = de.deserialize_seq(ListVisitor { elem_ty, schema })?;
     de.end()?;
     Ok(value)
 }
 
 /// Decode a JSON array (UTF-8 bytes) into a `Value::List`, using `elem_ty` as
 /// the per-element type.
-pub fn list_from_slice(bytes: &[u8], elem_ty: &stmt::Type) -> Result<Value, serde_json::Error> {
+pub fn list_from_slice(
+    bytes: &[u8],
+    elem_ty: &stmt::Type,
+    schema: &app::Schema,
+) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_slice(bytes);
-    let value = de.deserialize_seq(ListVisitor(elem_ty))?;
+    let value = de.deserialize_seq(ListVisitor { elem_ty, schema })?;
     de.end()?;
     Ok(value)
 }
