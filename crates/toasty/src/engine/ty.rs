@@ -5,8 +5,13 @@ impl Engine {
     /// Extract typed bind parameters from a statement, replacing scalar values
     /// with `Expr::Arg(n)` placeholders. The returned `Vec<TypedValue>` is
     /// indexed by the `n` in each placeholder.
+    ///
+    /// Runs the two engine-side, pre-driver passes over the statement: lower
+    /// `#[document]` columns into their serializable shape, then bind the
+    /// inline values into typed parameters.
     pub(crate) fn extract_params(&self, stmt: &mut stmt::Statement) -> Vec<TypedValue> {
-        super::extract_params::extract_params(stmt, &self.schema, self.capability())
+        super::document::lower(stmt, &self.schema);
+        super::bind::run(stmt, &self.schema.db, self.capability())
     }
 
     pub(crate) fn infer_ty(&self, stmt: &stmt::Statement, args: &[stmt::Type]) -> stmt::Type {

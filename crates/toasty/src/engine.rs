@@ -1,7 +1,8 @@
 pub(crate) mod eval;
 pub(crate) mod exec;
 
-mod extract_params;
+mod bind;
+mod document;
 #[cfg(test)]
 pub(crate) mod test_util;
 

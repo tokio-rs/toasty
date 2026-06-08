@@ -6,7 +6,8 @@ use toasty_core::{
     stmt::{self, Expr, Value},
 };
 
-use super::{Param, Ty, binary_like_prefix_pattern, extract_params, glob_prefix_pattern};
+use super::extract::{binary_like_prefix_pattern, glob_prefix_pattern};
+use super::{Param, Ty, run};
 
 // ============================================================================
 // Basic extraction
@@ -32,7 +33,11 @@ fn extract_scalar_from_simple_insert() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
 
     assert_eq!(params.len(), 2);
     assert_eq!(params[0].value, Value::from("abc"));
@@ -70,7 +75,11 @@ fn null_values_not_extracted() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
 
     // Only 'abc' should be extracted; NULL stays as literal
     assert_eq!(params.len(), 1);
@@ -98,8 +107,12 @@ fn extract_from_where_clause() {
     });
 
     // Can't easily build a full SELECT with filter without a schema,
-    // but we can test that extract_params handles an empty query
-    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
+    // but we can test that bind handles an empty query
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
     assert_eq!(params.len(), 0);
 }
 
@@ -132,7 +145,11 @@ fn enum_insert_refines_type_to_enum() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
 
     assert_eq!(params.len(), 2);
 
@@ -163,7 +180,11 @@ fn non_enum_insert_keeps_default_types() {
         returning: None,
     });
 
-    let params = extract_params(&mut stmt, &schema, &toasty_core::driver::Capability::SQLITE);
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
 
     assert_eq!(params.len(), 2);
     assert!(matches!(&params[0].ty, db::Type::Text));
@@ -182,7 +203,7 @@ fn synthesize_multi_step_projection() {
     // Given: Record([Text, Record([Integer(4), Boolean])])
     // Project [1, 0] should yield Integer(4)
 
-    use super::synthesize;
+    use super::infer::synthesize;
 
     let schema = test_schema();
 
@@ -234,7 +255,7 @@ fn synthesize_multi_step_projection() {
 #[test]
 #[should_panic(expected = "index out of bounds")]
 fn synthesize_arg_out_of_range_panics() {
-    use super::synthesize;
+    use super::infer::synthesize;
 
     let schema = test_schema();
     let cx = stmt::ExprContext::new(&schema.db);
@@ -247,7 +268,7 @@ fn synthesize_arg_out_of_range_panics() {
 #[test]
 #[should_panic(expected = "out of range")]
 fn synthesize_project_step_out_of_bounds_panics() {
-    use super::synthesize;
+    use super::infer::synthesize;
 
     let schema = test_schema();
     let cx = stmt::ExprContext::new(&schema.db);
@@ -268,7 +289,7 @@ fn synthesize_project_step_out_of_bounds_panics() {
 #[test]
 #[should_panic(expected = "non-record")]
 fn synthesize_project_from_scalar_panics() {
-    use super::synthesize;
+    use super::infer::synthesize;
 
     let schema = test_schema();
     let cx = stmt::ExprContext::new(&schema.db);
@@ -289,7 +310,7 @@ fn synthesize_project_from_scalar_panics() {
 #[test]
 #[should_panic(expected = "incompatible")]
 fn merge_incompatible_structures_panics() {
-    use super::{Ty, merge};
+    use super::infer::merge;
 
     // Record vs Inferred scalar
     let a = Ty::Record(vec![Ty::Inferred(db::Type::Text)]);
@@ -301,7 +322,7 @@ fn merge_incompatible_structures_panics() {
 #[test]
 #[should_panic(expected = "incompatible")]
 fn merge_records_different_lengths_panics() {
-    use super::{Ty, merge};
+    use super::infer::merge;
 
     let a = Ty::Record(vec![Ty::Inferred(db::Type::Text)]);
     let b = Ty::Record(vec![
@@ -314,7 +335,7 @@ fn merge_records_different_lengths_panics() {
 
 #[test]
 fn merge_column_wins_over_inferred() {
-    use super::{Ty, merge};
+    use super::infer::merge;
 
     let col = Ty::Column(db::Type::Enum(db::TypeEnum {
         name: Some("status".to_string()),
