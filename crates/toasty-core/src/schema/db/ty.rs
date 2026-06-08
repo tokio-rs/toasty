@@ -130,6 +130,20 @@ pub enum Type {
 }
 
 impl Type {
+    /// Construct a list storage type, collapsing a list of documents into a
+    /// single document.
+    ///
+    /// A `#[document]` collection (`Vec<embed>`) is stored as one JSON blob,
+    /// never a native array, so `db::Type` must never nest a [`Type::Document`]
+    /// inside a [`Type::List`]. Routing list construction through here makes
+    /// that invariant hold by construction: the list *is* the document.
+    pub fn list(elem: Type) -> Type {
+        match elem {
+            Type::Document { binary } => Type::Document { binary },
+            elem => Type::List(Box::new(elem)),
+        }
+    }
+
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,
@@ -171,14 +185,13 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
-                // A document, or a list of documents, is stored as a single
-                // document column (`jsonb` on PG, `JSON` elsewhere) — never a
-                // native array.
+                // A document is stored as a single document column (`jsonb` on
+                // PG, `JSON` elsewhere) — never a native array. `Type::list`
+                // collapses a list-of-documents back to one document, so a
+                // `#[document]` collection (`List(Document)`) lands here as a
+                // plain `Document`.
                 stmt::Type::Document(_) => Ok(Type::Document { binary: true }),
-                stmt::Type::List(elem) if matches!(**elem, stmt::Type::Document(_)) => {
-                    Ok(Type::Document { binary: true })
-                }
-                stmt::Type::List(elem) => Ok(Type::List(Box::new(Self::from_app(elem, None, db)?))),
+                stmt::Type::List(elem) => Ok(Type::list(Self::from_app(elem, None, db)?)),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty

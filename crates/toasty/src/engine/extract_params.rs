@@ -211,7 +211,7 @@ struct Param {
 fn finalize_ty(value: &stmt::Value, ty: Ty) -> db::Type {
     match ty {
         Ty::Column(t) | Ty::Inferred(t) => t,
-        Ty::List(elem) => db::Type::List(Box::new(finalize_ty(value, *elem))),
+        Ty::List(elem) => db::Type::list(finalize_ty(value, *elem)),
         Ty::Unknown => panic!("extract_params left {value:?} with unresolved type"),
         Ty::Record(_) => panic!(
             "extract_params left {value:?} typed as a record; only scalars and lists are extracted as params"
