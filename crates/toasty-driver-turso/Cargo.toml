@@ -24,6 +24,7 @@ tracing.workspace = true
 turso.workspace = true
 url.workspace = true
 uuid.workspace = true
+percent-encoding.workspace = true
 
 [lints]
 workspace = true
