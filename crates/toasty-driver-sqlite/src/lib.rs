@@ -81,7 +81,12 @@ impl Sqlite {
         if url.path() == ":memory:" {
             Ok(Self::InMemory)
         } else {
-            Ok(Self::File(PathBuf::from(url.path())))
+            Ok(Self::File(PathBuf::from(
+                percent_encoding::percent_decode(url.path().as_bytes())
+                    .decode_utf8_lossy()
+                    .to_string()
+                    .as_str(),
+            )))
         }
     }
 

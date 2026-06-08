@@ -205,7 +205,12 @@ impl Turso {
         let path = if url.path() == ":memory:" {
             TursoPath::InMemory
         } else {
-            TursoPath::File(PathBuf::from(url.path()))
+            TursoPath::File(PathBuf::from(
+                percent_encoding::percent_decode(url.path().as_bytes())
+                    .decode_utf8_lossy()
+                    .to_string()
+                    .as_str(),
+            ))
         };
         Ok(Self::with_path(path))
     }
