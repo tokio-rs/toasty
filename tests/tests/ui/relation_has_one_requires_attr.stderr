@@ -51,22 +51,20 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
    = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `impl _toasty::codegen_support::IntoExpr<<toasty::Deferred<Option<Profile>> as _toasty::codegen_support::Field>::ExprTarget>: IntoExpr<Option<Profile>>` is not satisfied
+error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
 1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ unsatisfied trait bound
+  |          ^^^^^^^^^^^^^ the trait `IntoExpr<Option<Profile>>` is not implemented for `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   |
-  = help: the trait `IntoExpr<Option<Profile>>` is not implemented for `impl _toasty::codegen_support::IntoExpr<<toasty::Deferred<Option<Profile>> as _toasty::codegen_support::Field>::ExprTarget>`
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `impl _toasty::codegen_support::Assign<<toasty::Deferred<Option<Profile>> as _toasty::codegen_support::Field>::ExprTarget>: Assign<Option<Profile>>` is not satisfied
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
 1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ unsatisfied trait bound
+  |          ^^^^^^^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   |
-  = help: the trait `Assign<Option<Profile>>` is not implemented for `impl _toasty::codegen_support::Assign<<toasty::Deferred<Option<Profile>> as _toasty::codegen_support::Field>::ExprTarget>`
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
 error[E0277]: `Profile` cannot be used as a field type
@@ -121,13 +119,12 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
 
-error[E0277]: the trait bound `impl _toasty::codegen_support::Assign<<toasty::Deferred<Option<Profile>> as _toasty::codegen_support::Field>::ExprTarget>: Assign<Option<Profile>>` is not satisfied
+error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:7:5
   |
 7 |     profile: toasty::Deferred<Option<Profile>>,
-  |     ^^^^^^^ unsatisfied trait bound
+  |     ^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
   |
-  = help: the trait `Assign<Option<Profile>>` is not implemented for `impl _toasty::codegen_support::Assign<<toasty::Deferred<Option<Profile>> as _toasty::codegen_support::Field>::ExprTarget>`
 note: required by a bound in `UserUpdate::<__toasty_T>::set_profile`
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
