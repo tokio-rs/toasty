@@ -105,7 +105,7 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
-                type Query<__T> = #query_struct_ident<__T>;
+                type Query<T> = #query_struct_ident<T>;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
@@ -145,9 +145,9 @@ impl Expand<'_> {
                     #find_by_primary_key_body
                 }
 
-                fn wrap_query<__T>(
-                    stmt: #toasty::stmt::Query<__T>,
-                ) -> Self::Query<__T> {
+                fn wrap_query<T>(
+                    stmt: #toasty::stmt::Query<T>,
+                ) -> Self::Query<T> {
                     #query_struct_ident::from_stmt(stmt)
                 }
 

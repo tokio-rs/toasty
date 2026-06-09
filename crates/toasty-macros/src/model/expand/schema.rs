@@ -556,9 +556,9 @@ impl Expand<'_> {
 fn compat_check(ty: &syn::Type, bound: TokenStream) -> TokenStream {
     quote_spanned! { ty.span()=>
         const _: () = {
-            fn _check<__T>()
+            fn _check<T>()
             where
-                __T: #bound,
+                T: #bound,
             {}
             let _ = _check::<#ty>;
         };
