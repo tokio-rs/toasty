@@ -367,9 +367,9 @@ impl<'de> Visitor<'de> for ListVisitor<'_> {
 
 /// Decode a JSON document (string) into a `stmt::Value` of type `ty`.
 pub fn from_str(
+    schema: &app::Schema,
     text: &str,
     ty: &stmt::Type,
-    schema: &app::Schema,
 ) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_str(text);
     let value = Seed { ty, schema }.deserialize(&mut de)?;
@@ -379,9 +379,9 @@ pub fn from_str(
 
 /// Decode a JSON document (UTF-8 bytes) into a `stmt::Value` of type `ty`.
 pub fn from_slice(
+    schema: &app::Schema,
     bytes: &[u8],
     ty: &stmt::Type,
-    schema: &app::Schema,
 ) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_slice(bytes);
     let value = Seed { ty, schema }.deserialize(&mut de)?;
@@ -392,9 +392,9 @@ pub fn from_slice(
 /// Decode a JSON array (string) into a `Value::List`, using `elem_ty` as the
 /// per-element type.
 pub fn list_from_str(
+    schema: &app::Schema,
     text: &str,
     elem_ty: &stmt::Type,
-    schema: &app::Schema,
 ) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_str(text);
     let value = de.deserialize_seq(ListVisitor { elem_ty, schema })?;
@@ -405,9 +405,9 @@ pub fn list_from_str(
 /// Decode a JSON array (UTF-8 bytes) into a `Value::List`, using `elem_ty` as
 /// the per-element type.
 pub fn list_from_slice(
+    schema: &app::Schema,
     bytes: &[u8],
     elem_ty: &stmt::Type,
-    schema: &app::Schema,
 ) -> Result<Value, serde_json::Error> {
     let mut de = serde_json::Deserializer::from_slice(bytes);
     let value = de.deserialize_seq(ListVisitor { elem_ty, schema })?;

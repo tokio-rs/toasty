@@ -238,12 +238,12 @@ fn typed_mysql_value_to_core(
         CT::MYSQL_TYPE_JSON => match ty {
             stmt::Type::String => convert_or_null(value, stmt::Value::String),
             stmt::Type::List(elem) => convert_or_null(value, |bytes: Vec<u8>| {
-                json_bytes_to_value_list(&bytes, elem, schema)
+                json_bytes_to_value_list(schema, &bytes, elem)
             }),
             // A `#[document]` bare embed (`Type::Model`): decode the JSON object
             // back to the positional record the engine loads.
             stmt::Type::Model(_) => convert_or_null(value, |bytes: Vec<u8>| {
-                json_bytes_to_value(&bytes, ty, schema)
+                json_bytes_to_value(schema, &bytes, ty)
             }),
             _ => todo!("MySQL JSON column with stmt::Type {ty:#?}"),
         },
@@ -471,14 +471,14 @@ impl ToValue for Value {
     }
 }
 
-fn json_bytes_to_value_list(bytes: &[u8], elem_ty: &stmt::Type, schema: &app::Schema) -> CoreValue {
-    toasty_sql::json::list_from_slice(bytes, elem_ty, schema)
+fn json_bytes_to_value_list(schema: &app::Schema, bytes: &[u8], elem_ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::list_from_slice(schema, bytes, elem_ty)
         .expect("MySQL returned non-JSON for a JSON column")
 }
 
 /// Decode the JSON bytes of a `#[document]` bare embed column (`Type::Model`)
 /// into the positional record the engine loads.
-fn json_bytes_to_value(bytes: &[u8], ty: &stmt::Type, schema: &app::Schema) -> CoreValue {
-    toasty_sql::json::from_slice(bytes, ty, schema)
+fn json_bytes_to_value(schema: &app::Schema, bytes: &[u8], ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::from_slice(schema, bytes, ty)
         .expect("MySQL returned non-JSON for a JSON document column")
 }

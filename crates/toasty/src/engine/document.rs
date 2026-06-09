@@ -19,9 +19,9 @@ use toasty_core::{
 /// Lower every `#[document]` column in `stmt` into its driver-serializable
 /// shape: path reads become `FuncJsonExtract`, write values become
 /// `Value::Object`.
-pub(crate) fn lower(stmt: &mut stmt::Statement, schema: &Schema) {
-    lower_paths(stmt, schema);
-    name_values(stmt, schema);
+pub(crate) fn lower(schema: &Schema, stmt: &mut stmt::Statement) {
+    lower_paths(schema, stmt);
+    name_values(schema, stmt);
 }
 
 // ============================================================================
@@ -40,7 +40,7 @@ pub(crate) fn lower(stmt: &mut stmt::Statement, schema: &Schema) {
 /// statement, rather than in the shared simplifier (which runs for every
 /// backend) or in the serializer (which is the driver's job). The driver
 /// receives only the `FuncJsonExtract` and renders it per dialect.
-fn lower_paths(stmt: &mut stmt::Statement, schema: &Schema) {
+fn lower_paths(schema: &Schema, stmt: &mut stmt::Statement) {
     LowerDocumentPaths {
         cx: stmt::ExprContext::new(schema),
     }
@@ -160,12 +160,12 @@ fn build_json_path(
 /// the param, never reshape the value. A non-constant document value is left
 /// untouched (document writes are constant literals via `create!` / `IntoExpr`,
 /// so this only matters defensively).
-fn name_values(stmt: &mut stmt::Statement, schema: &Schema) {
+fn name_values(schema: &Schema, stmt: &mut stmt::Statement) {
     // Convert a constant document value *expression* into the named object
     // form, directed by the column type (`Type::Model` or `List(Model)`).
-    fn mark_expr(field_expr: &mut stmt::Expr, ty: &stmt::Type, app: &app::Schema) {
+    fn mark_expr(app: &app::Schema, field_expr: &mut stmt::Expr, ty: &stmt::Type) {
         if let Some(value) = const_value_of(field_expr) {
-            *field_expr = stmt::Expr::Value(to_named(value, ty, app));
+            *field_expr = stmt::Expr::Value(to_named(app, value, ty));
         }
     }
 
@@ -194,7 +194,7 @@ fn name_values(stmt: &mut stmt::Statement, schema: &Schema) {
                     stmt::Expr::Record(record) => {
                         for (ty, field) in docs.iter().zip(&mut record.fields) {
                             if let Some(ty) = ty {
-                                mark_expr(field, ty, &schema.app);
+                                mark_expr(&schema.app, field, ty);
                             }
                         }
                     }
@@ -203,7 +203,7 @@ fn name_values(stmt: &mut stmt::Statement, schema: &Schema) {
                         for (ty, field) in docs.iter().zip(&mut record.fields) {
                             if let Some(ty) = ty {
                                 let v = std::mem::replace(field, stmt::Value::Null);
-                                *field = to_named(v, ty, &schema.app);
+                                *field = to_named(&schema.app, v, ty);
                             }
                         }
                     }
@@ -233,7 +233,7 @@ fn name_values(stmt: &mut stmt::Statement, schema: &Schema) {
                 // embed only ever takes `Set` — the value always matches
                 // `col.ty`, which is what `to_named` is directed by.
                 if let stmt::Assignment::Set(expr) | stmt::Assignment::Append(expr) = assignment {
-                    mark_expr(expr, &col.ty, &schema.app);
+                    mark_expr(&schema.app, expr, &col.ty);
                 }
             }
         }
@@ -252,20 +252,20 @@ fn name_values(stmt: &mut stmt::Statement, schema: &Schema) {
 /// - `List(Model)` maps each element through the element type.
 /// - anything else — a non-document field, or an already-`Object`/`Null` value —
 ///   passes through unchanged, so the conversion is idempotent.
-fn to_named(value: stmt::Value, ty: &stmt::Type, app: &app::Schema) -> stmt::Value {
+fn to_named(app: &app::Schema, value: stmt::Value, ty: &stmt::Type) -> stmt::Value {
     match (ty, value) {
         (stmt::Type::Model(embed_id), stmt::Value::Record(record)) => {
             stmt::Value::Object(stmt::ValueObject::from_vec(
                 app.document_fields(*embed_id)
                     .zip(record)
-                    .map(|((name, field_ty), v)| (name.to_owned(), to_named(v, field_ty, app)))
+                    .map(|((name, field_ty), v)| (name.to_owned(), to_named(app, v, field_ty)))
                     .collect(),
             ))
         }
         (stmt::Type::List(elem), stmt::Value::List(items)) => stmt::Value::List(
             items
                 .into_iter()
-                .map(|item| to_named(item, elem, app))
+                .map(|item| to_named(app, item, elem))
                 .collect(),
         ),
         (_, value) => value,

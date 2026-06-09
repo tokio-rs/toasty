@@ -184,7 +184,7 @@ impl Value {
             } else {
                 raw
             };
-            toasty_sql::json::from_slice(json_bytes, expected_ty, schema)
+            toasty_sql::json::from_slice(schema, json_bytes, expected_ty)
                 .expect("invalid JSON in document column")
         } else if let Kind::Array(_) = column.type_().kind() {
             // Native array column (e.g. `text[]`, `int8[]`) — decoded
