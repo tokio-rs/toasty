@@ -1,3 +1,4 @@
+use crate::schema::Schema;
 use crate::stmt::Type;
 
 use super::Value;
@@ -7,6 +8,7 @@ use std::{
     fmt, mem,
     panic::Location,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 use tokio_stream::{Stream, StreamExt};
@@ -36,8 +38,9 @@ pub struct ValueStream {
     buffer: Buffer,
     stream: Option<DynStream>,
 
-    /// If set, check values to ensure they are the correct type.
-    ty: Option<(Type, &'static Location<'static>)>,
+    /// If set, check values to ensure they are the correct type. The schema
+    /// resolves `Type::Model` (`#[document]`) field layouts for the check.
+    ty: Option<(Arc<Schema>, Type, &'static Location<'static>)>,
 }
 
 #[derive(Debug)]
@@ -178,9 +181,9 @@ impl ValueStream {
             while let Some(res) = stream.next().await {
                 let value = res?;
 
-                if let Some((ty, location)) = &self.ty {
+                if let Some((schema, ty, location)) = &self.ty {
                     assert!(
-                        value.is_a(ty),
+                        value.is_a(&schema.app, ty),
                         "expected `{ty:?}`; was={value:#?}; origin={location}"
                     );
                 }
@@ -236,11 +239,11 @@ impl ValueStream {
     /// Panics if an already-buffered value is not compatible with `ty`,
     /// or if a previously set type differs from `ty`.
     #[track_caller]
-    pub fn typed(mut self, ty: Type) -> ValueStream {
+    pub fn typed(mut self, schema: Arc<Schema>, ty: Type) -> ValueStream {
         let location = Location::caller();
 
         match &self.ty {
-            Some((prev, _)) => assert_eq!(*prev, ty),
+            Some((_, prev, _)) => assert_eq!(*prev, ty),
             None => {
                 // Validate already-buffered values against the new type.
                 // Document columns are decoded from `Value::Object` to
@@ -249,13 +252,13 @@ impl ValueStream {
                 let mut tmp = mem::take(&mut self.buffer);
                 while let Some(value) = tmp.next() {
                     assert!(
-                        value.is_a(&ty),
+                        value.is_a(&schema.app, &ty),
                         "expected `{ty:?}`; was={value:#?}; origin={location}"
                     );
                     self.buffer.push(value);
                 }
 
-                self.ty = Some((ty, location));
+                self.ty = Some((schema, ty, location));
             }
         }
 
@@ -272,9 +275,9 @@ impl Stream for ValueStream {
         } else if let Some(stream) = self.stream.as_mut() {
             match Pin::new(stream).poll_next(cx) {
                 Poll::Ready(Some(Ok(value))) => {
-                    if let Some((ty, location)) = &self.ty {
+                    if let Some((schema, ty, location)) = &self.ty {
                         assert!(
-                            value.is_a(ty),
+                            value.is_a(&schema.app, ty),
                             "expected `{ty:?}`; was={value:#?}; origin={location}"
                         );
                     }

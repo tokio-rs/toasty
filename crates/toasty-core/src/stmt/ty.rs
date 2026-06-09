@@ -312,6 +312,35 @@ impl Type {
         )
     }
 
+    /// Structural normalization for the planner-injected document-decode cast
+    /// (see [`cast`](Self::cast)). The JSON codec decodes a document column
+    /// straight to a positional `Value::Record`, so this only recurses through
+    /// nested records and lists to normalize their elements; everything else
+    /// passes through. Idempotent.
+    fn normalize_document(&self, value: Value) -> Value {
+        match (value, self) {
+            (Value::List(items), Self::List(elem)) => Value::List(
+                items
+                    .into_iter()
+                    .map(|v| elem.normalize_document(v))
+                    .collect(),
+            ),
+            (Value::Record(record), Self::Record(field_tys))
+                if record.fields.len() == field_tys.len() =>
+            {
+                Value::record_from_vec(
+                    record
+                        .fields
+                        .into_iter()
+                        .zip(field_tys)
+                        .map(|(value, ty)| ty.normalize_document(value))
+                        .collect(),
+                )
+            }
+            (value, _) => value,
+        }
+    }
+
     /// Casts `value` to this type, returning the converted value.
     ///
     /// Null values pass through unchanged. Supported conversions include
@@ -371,16 +400,11 @@ impl Type {
             (Value::Record(record), Self::SparseRecord(fields)) => {
                 Value::sparse_record(fields.clone(), record)
             }
-            // Document decode normalization. The JSON codec now decodes a
-            // document column straight to a positional `Value::Record`, so this
-            // planner-injected cast is just a structural pass for any nested
-            // records; an embedded-model (`Type::Model`) target recurses
-            // idempotently.
-            (value @ (Value::Object(_) | Value::Record(_)), Self::Model(_)) => {
-                value.normalize_for_load(self)
-            }
-            // A list of documents (`#[document] Vec<Struct>`): recurse per item.
-            (value @ Value::List(_), Self::List(_)) => value.normalize_for_load(self),
+            // A planner-injected document-decode cast: an embedded-model
+            // (`Type::Model`) target, or a list of documents (`#[document]
+            // Vec<Struct>`). Both structurally recurse through nested records.
+            (value @ (Value::Object(_) | Value::Record(_)), Self::Model(_))
+            | (value @ Value::List(_), Self::List(_)) => self.normalize_document(value),
             // Bool <-> I8: Bool key/index fields are stored as Integer(1) via
             // bridge_type. The engine casts Bool -> I8 on write and I8 -> Bool
             // on read. Only Type::cast supports this; TryFrom is intentionally

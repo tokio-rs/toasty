@@ -198,8 +198,8 @@ impl Field for Vec<u8> {
 /// A `Vec<T>` of embedded structs (`T: Embed`) is a `#[document]` collection —
 /// stored as a single JSON array of objects. There is no override for
 /// `field_ty`: the default returns `Primitive(<Self as Load>::ty())`, which is
-/// `List(Model(T::id()))`, and the schema builder resolves the element `Model`
-/// to a `Document` once every embed is registered.
+/// `List(Model(T::id()))`, which the schema builder stores as a single JSON
+/// document column.
 ///
 /// This is the only *blanket* `Field for Vec<_>` impl. A blanket
 /// `impl<T: Scalar> Field for Vec<T>` cannot coexist with it: the compiler

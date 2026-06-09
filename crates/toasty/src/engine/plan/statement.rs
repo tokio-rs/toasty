@@ -1848,9 +1848,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     /// Whether `ty` is, or contains (through lists), a `#[document]` column type
-    /// (an embedded model). The decode it gates is a structural no-op now that
-    /// the codec yields a positional `Value::Record` directly, so an
-    /// over-approximation here is harmless.
+    /// (an embedded model). The decode it gates is a structural no-op (the codec
+    /// yields a positional `Value::Record` directly), so an over-approximation
+    /// here is harmless.
     fn ty_contains_document(ty: &stmt::Type) -> bool {
         match ty {
             stmt::Type::Model(_) => true,
@@ -1869,7 +1869,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             "const types must be of type `stmt::Type::List`"
         );
         debug_assert!(
-            value.is_a(&ty),
+            value.is_a(&self.planner.engine.schema.app, &ty),
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 

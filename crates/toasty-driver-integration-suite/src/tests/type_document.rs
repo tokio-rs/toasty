@@ -633,9 +633,10 @@ pub async fn document_field_through_include(t: &mut Test) -> Result<(), BoxError
 
 /// A `#[document]` field nested inside a *column-expanded* embed (the outer
 /// embed is not `#[document]`, so it flattens to columns). Column expansion
-/// lifts the document field to its own top-level `profile_settings` column of
-/// `Type::Document`, so it decodes like any other top-level document column —
-/// there is no intermediate record in the data-load row to descend through.
+/// lifts the document field to its own top-level `profile_settings` document
+/// column (`Type::Model`), so it decodes like any other top-level document
+/// column — there is no intermediate record in the data-load row to descend
+/// through.
 /// This is the "document at a nested embed position" case.
 #[driver_test(id(ID), requires(document_collections))]
 pub async fn document_in_column_expanded_embed(t: &mut Test) -> Result<(), BoxError> {

@@ -1,6 +1,7 @@
 use super::{
     Entry, EntryPath, Type, TypeUnion, ValueObject, ValueRecord, sparse_record::SparseRecord,
 };
+use crate::schema::app;
 use std::cmp::Ordering;
 
 /// A dynamically typed value used throughout Toasty's query engine.
@@ -300,10 +301,12 @@ impl Value {
     /// Returns `true` if this value is compatible with the given [`Type`].
     ///
     /// Null values are compatible with any type. For union types, the value
-    /// must be compatible with at least one member type.
-    pub fn is_a(&self, ty: &Type) -> bool {
+    /// must be compatible with at least one member type. A `Type::Model`
+    /// (a `#[document]` embed) is checked field-by-field against the embedded
+    /// model's layout, resolved from `schema`.
+    pub fn is_a(&self, schema: &app::Schema, ty: &Type) -> bool {
         if let Type::Union(types) = ty {
-            return types.iter().any(|t| self.is_a(t));
+            return types.iter().any(|t| self.is_a(schema, t));
         }
         match self {
             Self::Null => true,
@@ -323,26 +326,39 @@ impl Value {
                     if value.is_empty() {
                         true
                     } else {
-                        value[0].is_a(ty)
+                        value[0].is_a(schema, ty)
                     }
                 }
                 _ => false,
             },
             Self::Record(value) => match ty {
                 Type::Record(field_tys) if value.len() == field_tys.len() => {
-                    Self::fields_match(&value.fields, field_tys.iter())
+                    Self::fields_match(schema, &value.fields, field_tys.iter())
                 }
                 // A positional `Value::Record` is the engine's load form for a
-                // document value (an embedded model, names dropped). The precise
-                // per-field check needs the embedded model's schema, which
-                // `is_a` does not carry.
-                Type::Model(_) => true,
+                // document value (an embedded model, field names dropped).
+                // Resolve the embed's field types from the schema and check each
+                // positionally.
+                Type::Model(id) => {
+                    let field_tys: Vec<&Type> =
+                        schema.document_fields(*id).map(|(_, ty)| ty).collect();
+                    value.len() == field_tys.len()
+                        && Self::fields_match(schema, &value.fields, field_tys.into_iter())
+                }
                 _ => false,
             },
-            // A named `Value::Object` is the transient write-path form of an
-            // embedded model document, produced just before it is bound as a
-            // param; accept it against the embedded model type.
-            Self::Object(_) => matches!(ty, Type::Model(_)),
+            // A named `Value::Object` is the write-path form of a document
+            // value: check each embed field against the entry of the same name
+            // (an absent key is `None`, compatible with any field type).
+            Self::Object(object) => match ty {
+                Type::Model(id) => schema.document_fields(*id).all(|(name, field_ty)| {
+                    object
+                        .iter()
+                        .find(|(key, _)| key == name)
+                        .is_none_or(|(_, v)| v.is_a(schema, field_ty))
+                }),
+                _ => false,
+            },
             Self::SparseRecord(value) => match ty {
                 Type::SparseRecord(fields) => value.fields == *fields,
                 _ => false,
@@ -369,8 +385,15 @@ impl Value {
 
     /// Whether each value `is_a` the type at the same position. Callers guard
     /// the lengths first — `zip` would otherwise accept a short prefix.
-    fn fields_match<'a>(values: &[Value], tys: impl Iterator<Item = &'a Type>) -> bool {
-        values.iter().zip(tys).all(|(value, ty)| value.is_a(ty))
+    fn fields_match<'a>(
+        schema: &app::Schema,
+        values: &[Value],
+        tys: impl Iterator<Item = &'a Type>,
+    ) -> bool {
+        values
+            .iter()
+            .zip(tys)
+            .all(|(value, ty)| value.is_a(schema, ty))
     }
 
     /// Infers and returns the [`Type`] of this value.
@@ -461,44 +484,6 @@ impl Value {
         }
 
         Entry::Value(value)
-    }
-
-    /// Convert this value into the canonical form `Load` consumes for the
-    /// given type. The engine calls this at the driver-receive boundary so
-    /// the rest of the pipeline — eval, projection, load — sees a single
-    /// shape per type.
-    ///
-    /// The JSON codec now decodes a document column straight to the positional
-    /// `Value::Record` the pipeline expects, so this is just a structural walk
-    /// (lists and records recurse, everything else passes through). It is kept
-    /// for the nested-record recursion and remains idempotent.
-    pub(crate) fn normalize_for_load(self, ty: &Type) -> Self {
-        match (self, ty) {
-            (Self::List(items), Type::List(elem)) => Self::List(
-                items
-                    .into_iter()
-                    .map(|v| v.normalize_for_load(elem))
-                    .collect(),
-            ),
-            (Self::Record(record), Type::Record(field_tys))
-                if record.fields.len() == field_tys.len() =>
-            {
-                Self::normalize_record(record.fields, field_tys.iter())
-            }
-            (value, _) => value,
-        }
-    }
-
-    /// Recursively normalize each value against the type at the same position,
-    /// collecting into a positional [`Value::Record`].
-    fn normalize_record<'a>(values: Vec<Value>, tys: impl Iterator<Item = &'a Type>) -> Self {
-        Self::record_from_vec(
-            values
-                .into_iter()
-                .zip(tys)
-                .map(|(value, ty)| value.normalize_for_load(ty))
-                .collect(),
-        )
     }
 
     /// Takes the value out, replacing it with [`Value::Null`].

@@ -1284,7 +1284,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             (nesting, *pk_field_id)
         };
 
-        let pk = self.expr_cx.schema().app.field(pk_field_id);
+        let schema = self.expr_cx.schema();
+        let pk = schema.app.field(pk_field_id);
 
         // Sanity-check the RHS shape against the PK type.
         match &mut *expr.list {
@@ -1292,7 +1293,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 for item in &mut expr_list.items {
                     match item {
                         stmt::Expr::Value(value) => {
-                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                            assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                         }
                         _ => todo!("{item:#?}"),
                     }
@@ -1300,7 +1301,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             stmt::Expr::Value(stmt::Value::List(values)) => {
                 for value in values {
-                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                    assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                 }
             }
             _ => todo!("expr={expr:#?}"),

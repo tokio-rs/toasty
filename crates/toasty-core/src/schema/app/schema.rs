@@ -115,8 +115,7 @@ impl Schema {
     /// The document field layout of the embedded struct `id`, resolved on
     /// demand: each field's name and `stmt::Type`, in declaration order.
     ///
-    /// This is the on-demand replacement for the former `TypeDocument` — the
-    /// embedded model is the single source of truth for a document column's
+    /// The embedded model is the single source of truth for a document column's
     /// shape. A field typed `Type::Model(nested)` (or `List(Model(nested))`)
     /// signals a nested document the caller recurses into.
     ///
