@@ -209,25 +209,24 @@ impl ToSql for &stmt::Expr {
 }
 
 /// Serializes a document path extraction per dialect: `json_extract(col,
-/// '$.a.b')` on SQLite / MySQL, and `(col->'a'->>'b')::cast` on PostgreSQL,
-/// where the final key uses `->>` (text) and the cast matches the leaf type.
+/// '$.a.b')` on SQLite, `CAST(JSON_UNQUOTE(JSON_EXTRACT(col, '$.a.b')) AS ...)`
+/// on MySQL, and `(col->'a'->>'b')::cast` on PostgreSQL — the latter two unwrap
+/// the leaf to text and cast it to match the bound parameter's type.
 fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
     match f.serializer.flavor {
-        Flavor::Sqlite | Flavor::Mysql => {
-            // SQLite spells it `json_extract`, MySQL `JSON_EXTRACT`; both take a
-            // single-quoted JSONPath argument like `$.a.b`.
-            let name = if f.serializer.is_mysql() {
-                "JSON_EXTRACT"
-            } else {
-                "json_extract"
-            };
+        Flavor::Sqlite => {
+            // SQLite's `json_extract` returns SQL-native scalars (unquoted text,
+            // integers, reals), so a path read compares directly against a bound
+            // parameter with no cast. The path is a single-quoted JSONPath like
+            // `$.a.b`.
             fmt!(
                 f,
-                name "(" func.base.as_ref() ", '$"
+                "json_extract(" func.base.as_ref() ", '$"
                 Delimited(func.path.iter().map(|key| (".", key.as_str())), "")
                 "')"
             );
         }
+        Flavor::Mysql => serialize_mysql_json_extract(f, func),
         Flavor::Postgresql => {
             // Descend with `->`, take the leaf as text with `->>`, then cast the
             // text to the leaf type so it compares against a bound parameter.
@@ -244,6 +243,83 @@ fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExt
             );
         }
     }
+}
+
+/// Serializes a MySQL document path read. `JSON_EXTRACT` yields a *JSON-typed*
+/// value, which compares against a bound SQL parameter only by luck — a JSON
+/// string (e.g. an ISO timestamp) never equals a native `DATETIME`, and JSON
+/// string comparison is `utf8mb4_bin` (case-sensitive), unlike a `VARCHAR`
+/// column. So unwrap the leaf to text with `JSON_UNQUOTE` and `CAST` it to the
+/// leaf's SQL type (`CHAR` for strings, to recover a `VARCHAR`-matching
+/// collation — see [`mysql_json_cast`]), mirroring the `->>`-plus-cast
+/// PostgreSQL path. Booleans are the exception: the unquoted text
+/// `'true'`/`'false'` casts to `0`, so cast the *bare* JSON boolean to
+/// `UNSIGNED` instead (`true` -> 1, `false` -> 0), matching a bound bool param.
+fn serialize_mysql_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
+    if matches!(func.ty, stmt::Type::Bool) {
+        fmt!(f, "CAST(");
+        mysql_json_extract(f, func);
+        fmt!(f, " AS UNSIGNED)");
+    } else if let Some(cast) = mysql_json_cast(&func.ty) {
+        fmt!(f, "CAST(JSON_UNQUOTE(");
+        mysql_json_extract(f, func);
+        fmt!(f, ") AS " cast ")");
+    } else {
+        fmt!(f, "JSON_UNQUOTE(");
+        mysql_json_extract(f, func);
+        fmt!(f, ")");
+    }
+}
+
+/// Emits the bare `JSON_EXTRACT(col, '$.a.b')` every MySQL path read is built
+/// on, with the path as a single-quoted JSONPath argument.
+fn mysql_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
+    fmt!(
+        f,
+        "JSON_EXTRACT(" func.base.as_ref() ", '$"
+        Delimited(func.path.iter().map(|key| (".", key.as_str())), "")
+        "')"
+    );
+}
+
+/// The MySQL `CAST(... AS <type>)` target wrapped around a
+/// `JSON_UNQUOTE(JSON_EXTRACT(...))` text extraction so it compares against a
+/// bound parameter of the leaf type. Mirrors [`pg_json_cast`]; `None` leaves the
+/// extraction as bare unquoted text (only floats, which compare via numeric
+/// coercion). `Bool` is absent because it is cast separately — see
+/// [`serialize_mysql_json_extract`].
+///
+/// `String`/`Uuid` cast to `CHAR` not for the type but for the *collation*:
+/// `JSON_UNQUOTE` yields `utf8mb4_bin` (case-sensitive), while `CAST(... AS
+/// CHAR)` adopts the connection's default collation — the same one a bound
+/// literal and a `VARCHAR` column use — so a string filter on a document leaf
+/// matches the case sensitivity of a plain column. `AS CHAR` (no length) does
+/// not truncate, and inheriting the server default keeps it portable across
+/// server collation configs rather than hardcoding a collation name.
+///
+/// The temporal targets carry `(6)` precision: a bare `CAST(... AS DATETIME)`
+/// truncates to whole seconds, which would drop the microseconds the JSON codec
+/// writes and break an equality filter on a sub-second value.
+fn mysql_json_cast(ty: &stmt::Type) -> Option<&'static str> {
+    use crate::stmt::Type;
+    Some(match ty {
+        Type::String | Type::Uuid => "CHAR",
+        Type::I8 | Type::I16 | Type::I32 | Type::I64 => "SIGNED",
+        Type::U8 | Type::U16 | Type::U32 | Type::U64 => "UNSIGNED",
+        #[cfg(feature = "rust_decimal")]
+        Type::Decimal => "DECIMAL(65, 30)",
+        #[cfg(feature = "bigdecimal")]
+        Type::BigDecimal => "DECIMAL(65, 30)",
+        #[cfg(feature = "jiff")]
+        Type::Timestamp => "DATETIME(6)",
+        #[cfg(feature = "jiff")]
+        Type::Date => "DATE",
+        #[cfg(feature = "jiff")]
+        Type::Time => "TIME(6)",
+        #[cfg(feature = "jiff")]
+        Type::DateTime => "DATETIME(6)",
+        _ => return None,
+    })
 }
 
 /// The PostgreSQL cast applied to a `->>'` text extraction so it compares

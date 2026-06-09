@@ -719,7 +719,7 @@ impl Capability {
         // not regress the IN-list rendering).
         bind_list_param: true,
         vec_scalar: true,
-        document_collections: false,
+        document_collections: true,
 
         // MySQL uses BINARY col LIKE ? ESCAPE '!' for case-sensitive starts_with.
         glob_starts_with: false,

@@ -375,6 +375,66 @@ pub async fn struct_embed_filter(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// A `#[document]` string-leaf filter matches the *same* case sensitivity as a
+/// plain column on the same backend (case-insensitive under MySQL's default
+/// collation, case-sensitive on SQLite/PostgreSQL). Rather than hardcode a
+/// per-backend expectation, assert the document-leaf filter and an equivalent
+/// plain-column filter agree on a wrong-case query — the leaf inherits the
+/// column's collation.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn struct_embed_filter_matches_column_case_sensitivity(
+    t: &mut Test,
+) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        name: String,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    toasty::create!(Account {
+        name: "Alice",
+        profile: Profile {
+            name: "Alice".into(),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Exact case matches both the plain column and the document leaf everywhere.
+    let col_exact = Account::filter(Account::fields().name().eq("Alice"))
+        .exec(&mut db)
+        .await?;
+    let doc_exact = Account::filter(Account::fields().profile().name().eq("Alice"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(col_exact.len(), 1);
+    assert_eq!(doc_exact.len(), 1);
+
+    // A wrong-case query matches the document leaf exactly when it matches the
+    // plain column: 0 on a case-sensitive backend, 1 on a case-insensitive one.
+    let col_wrong = Account::filter(Account::fields().name().eq("alice"))
+        .exec(&mut db)
+        .await?;
+    let doc_wrong = Account::filter(Account::fields().profile().name().eq("alice"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(col_wrong.len(), doc_wrong.len());
+
+    Ok(())
+}
+
 /// Filtering on a field inside a nested `#[document]` embed: the JSON path
 /// descends two levels (`profile.address.city`).
 #[driver_test(id(ID), requires(document_collections))]
