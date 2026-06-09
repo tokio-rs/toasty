@@ -1535,11 +1535,14 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         // own `sk = "<Model>#<uuid>"` predicate is strictly more selective and
         // adding `begins_with(sk, "<Model>#")` produces two predicates on the
         // same key — DynamoDB rejects that with `KeyConditionExpressions must
-        // only contain one condition per key`. The simplifier
-        // (`engine/simplify/expr_and.rs::prune_starts_with_subsumed_by_eq`)
-        // catches the analogous case where another lowering pass (e.g.
-        // `lower::association`'s parent→child read shape) emits its own
-        // `StartsWith` alongside the user's `sk = <full>` predicate.
+        // only contain one condition per key`. Two simplifier passes catch
+        // the cases this fast-path can't see locally:
+        //   * `prune_starts_with_subsumed_by_eq` — when another lowering pass
+        //     emits `StartsWith` against a user-supplied `sk = <full>`.
+        //   * `prune_starts_with_subsumed_by_starts_with` — when
+        //     `lower::association`'s parent→child read shape emits a longer
+        //     `StartsWith(sk, "<Child>#<chain>#")` alongside this pass's
+        //     `StartsWith(sk, "<Child>#")`.
         if filter
             .expr
             .as_ref()

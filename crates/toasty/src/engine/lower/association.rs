@@ -284,10 +284,24 @@ impl<'a> RewriteVia<'a> {
             ])
             .into()
         } else {
-            // Read path. Extract the parent's partition and sort literals
+            // Read path. Extract the parent's partition + sort key shape
             // from the source filter so we can emit a precise
             // `partition = <literal> AND sort STARTS_WITH <derived prefix>`
             // shape that honours the hierarchical sort-key encoding.
+            //
+            // Two parent shapes are supported:
+            //
+            // 1. Literal handle (`Tenant::filter_by_account_and_sk(...).users()`):
+            //    source carries `account = <lit> AND sk = <lit>`.
+            // 2. Cascade-synthesized source (`acme.delete()` recurses through
+            //    User to Todo): source carries `account = <lit> AND sk
+            //    STARTS_WITH <lit>` — the post-rewrite shape of an outer
+            //    HasItems delete acting as the inner cascade's parent.
+            //
+            // Filtered cascades (e.g. `acme.users().filter(name = ...).delete()`)
+            // are explicitly rejected: the syntactic prefix-swap below would
+            // silently drop the `name = ...` constraint and over-delete.
+            // See plan follow-up "Filtered cascades through IC chains".
             let select = association.source.body.as_select_unwrap();
             let filter_expr = select.filter.expr.as_ref().unwrap_or_else(|| {
                 panic!(
@@ -305,34 +319,30 @@ impl<'a> RewriteVia<'a> {
                      non-literal parent handles are not yet supported"
                 )
             });
-            let parent_sort_value =
+
+            let parent_sort_str = if let Some(stmt::Value::String(s)) =
                 super::insert::find_eq_value_for_field(filter_expr, parent_sort_field_id.index)
-                    .unwrap_or_else(|| {
-                        panic!(
-                            "could not extract parent sort literal from HasItems source; \
-                             non-literal parent handles are not yet supported"
-                        )
-                    });
-
-            let parent_sort_str = match parent_sort_value {
-                stmt::Value::String(s) => s,
-                other => {
-                    panic!("parent sort literal must be a String for IC HasItems; found {other:#?}")
-                }
-            };
-
-            // Derive the child's STARTS_WITH prefix from the parent's sk:
-            //   parent `Tenant#`        → child prefix `User#`
-            //   parent `User#<u-uuid>`  → child prefix `Todo#<u-uuid>#`
-            let split = parent_sort_str.find('#').unwrap_or_else(|| {
-                panic!("parent sk `{parent_sort_str}` must carry a `<Prefix>#…` shape")
-            });
-            let parent_chain = &parent_sort_str[split + 1..];
-            let derived_prefix = if parent_chain.is_empty() {
-                format!("{child_name}#")
+            {
+                ParentSortShape::Eq(s)
+            } else if let Some(s) = super::insert::find_starts_with_prefix_for_field(
+                filter_expr,
+                parent_sort_field_id.index,
+            ) {
+                ParentSortShape::StartsWith(s)
             } else {
-                format!("{child_name}#{parent_chain}#")
+                panic!(
+                    "could not extract parent sort literal from HasItems source; \
+                     non-literal parent handles are not yet supported"
+                )
             };
+
+            assert_no_extra_conjuncts(
+                filter_expr,
+                parent_partition_field_id.index,
+                parent_sort_field_id.index,
+            );
+
+            let derived_prefix = derive_child_prefix(&child_name, &parent_sort_str);
 
             stmt::Expr::and(
                 stmt::Expr::eq(
@@ -456,6 +466,115 @@ impl<'a> RewriteVia<'a> {
         source.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
 
         stmt::Expr::in_subquery(target, source).into()
+    }
+}
+
+/// Shape of the parent's sort-key constraint extracted from a HasItems
+/// read-scope source filter. See [`RewriteVia::rewrite_association_has_items_as_filter`].
+enum ParentSortShape {
+    /// Parent is pinned to a fully qualified sk: `Tenant::filter_by_account_and_sk(...)`.
+    /// Value is the full literal, e.g. `"User#alice"`.
+    Eq(String),
+    /// Parent is bounded by a sk prefix: cascade synthesis lands here.
+    /// Value is the prefix literal, e.g. `"User#"` or `"Tenant#"`.
+    StartsWith(String),
+}
+
+/// Derive the child's STARTS_WITH prefix from the parent's sk shape.
+///
+/// `Eq("Tenant#")`         → `"User#"`
+/// `Eq("User#<u-uuid>")`   → `"Todo#<u-uuid>#"`
+/// `StartsWith("User#")`   → `"Todo#"`
+///
+/// `StartsWith` with a non-empty parent_chain (e.g. `"User#<u-uuid>#"`) is
+/// rejected: a syntactic prefix-swap would emit `"Todo#<u-uuid>##"` (double
+/// `#`). Real cascades do not produce that shape today (3-tier max), so panic
+/// rather than silently miscompose.
+fn derive_child_prefix(child_name: &str, shape: &ParentSortShape) -> String {
+    let parent_str = match shape {
+        ParentSortShape::Eq(s) | ParentSortShape::StartsWith(s) => s.as_str(),
+    };
+    let split = parent_str
+        .find('#')
+        .unwrap_or_else(|| panic!("parent sk `{parent_str}` must carry a `<Prefix>#…` shape"));
+    let parent_chain = &parent_str[split + 1..];
+    match shape {
+        ParentSortShape::Eq(_) if parent_chain.is_empty() => format!("{child_name}#"),
+        ParentSortShape::Eq(_) => format!("{child_name}#{parent_chain}#"),
+        ParentSortShape::StartsWith(_) if parent_chain.is_empty() => format!("{child_name}#"),
+        ParentSortShape::StartsWith(_) => panic!(
+            "non-empty parent_chain on a STARTS_WITH parent source is not yet supported \
+             (would produce a malformed double-`#` prefix); parent shape `{parent_str}`"
+        ),
+    }
+}
+
+/// Reject parent source filters that carry conjuncts beyond the IC bounds
+/// the rewriter understands. The accepted shape is a flat AND of:
+///
+///   * `account = <literal>`           (parent partition; required)
+///   * `sk = <literal>` *or* `sk STARTS_WITH <literal>`   (parent sort; required)
+///
+/// plus optionally a duplicate `sk STARTS_WITH "<Parent>#"` discriminator that
+/// the simplifier may not have collapsed (defensive — should be deduped
+/// upstream by `prune_starts_with_subsumed_by_eq` /
+/// `prune_starts_with_subsumed_by_starts_with`).
+///
+/// Anything else (e.g. `name = "Alice"`) is a filtered cascade. Panic with
+/// a clear message; see the plan follow-up "Filtered cascades through IC
+/// chains" for the design discussion.
+fn assert_no_extra_conjuncts(
+    filter_expr: &stmt::Expr,
+    parent_partition_index: usize,
+    parent_sort_index: usize,
+) {
+    let operands: &[stmt::Expr] = match filter_expr {
+        stmt::Expr::And(and) => &and.operands,
+        single => std::slice::from_ref(single),
+    };
+    for operand in operands {
+        if is_recognized_ic_conjunct(operand, parent_partition_index, parent_sort_index) {
+            continue;
+        }
+        panic!(
+            "HasItems read source carries an unrecognized conjunct: {operand:#?} — \
+             filtered cascades through IC chains are not yet supported. \
+             See plan follow-up 'Filtered cascades through IC chains'."
+        );
+    }
+}
+
+fn is_recognized_ic_conjunct(
+    expr: &stmt::Expr,
+    parent_partition_index: usize,
+    parent_sort_index: usize,
+) -> bool {
+    match expr {
+        // `account = <literal>` or `sk = <literal>` (commuted forms allowed).
+        stmt::Expr::BinaryOp(e) if e.op.is_eq() => {
+            let (field_idx, value_side_ok) = match (&*e.lhs, &*e.rhs) {
+                (
+                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }),
+                    stmt::Expr::Value(_),
+                )
+                | (
+                    stmt::Expr::Value(_),
+                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }),
+                ) => (*index, true),
+                _ => return false,
+            };
+            value_side_ok && (field_idx == parent_partition_index || field_idx == parent_sort_index)
+        }
+        // `sk STARTS_WITH <literal>` — both the rewritten sort filter and the
+        // discriminator land here.
+        stmt::Expr::StartsWith(sw) => matches!(
+            (&*sw.expr, &*sw.prefix),
+            (
+                stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }),
+                stmt::Expr::Value(stmt::Value::String(_)),
+            ) if *index == parent_sort_index
+        ),
+        _ => false,
     }
 }
 

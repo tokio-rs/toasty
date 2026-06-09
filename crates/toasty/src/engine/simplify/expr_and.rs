@@ -61,6 +61,17 @@ impl Simplify<'_> {
         // qualified `sort_col = "<Model>#<id>"`.
         prune_starts_with_subsumed_by_eq(expr);
 
+        // Redundant prefix subsumed by a longer prefix:
+        //   `starts_with(a, "<long>") AND starts_with(a, "<short>")`
+        //     → `starts_with(a, "<long>")` when `<long>` begins with `<short>`.
+        // Same DDB collision concern as the eq case above. Hits the IC
+        // parent→child read shape, where `lower::association` emits a
+        // hierarchical `StartsWith(sk, "<Child>#<chain>#")` and
+        // `apply_lowering_filter_constraint` independently emits the model
+        // discriminator `StartsWith(sk, "<Child>#")`. Both are correct; the
+        // shorter is implied by the longer.
+        prune_starts_with_subsumed_by_starts_with(expr);
+
         // Contradicting equality: `a == 1 AND a == 2` → false,
         // `a == 1 AND a != 1` → false
         if has_self_contradiction(&expr.operands) {
@@ -325,6 +336,48 @@ fn prune_starts_with_subsumed_by_eq(expr: &mut stmt::ExprAnd) {
         !eq_literals
             .iter()
             .any(|(eq_lhs, eq_val)| eq_lhs.is_equivalent_to(&sw.expr) && eq_val.starts_with(prefix))
+    });
+}
+
+/// Drops `starts_with(col, short)` operands when another `starts_with(col, long)`
+/// targets the same column with a longer prefix that already begins with
+/// `short`. The longer prefix is strictly stronger.
+fn prune_starts_with_subsumed_by_starts_with(expr: &mut stmt::ExprAnd) {
+    // Collect (lhs_expr, prefix) for every `starts_with(col, "<literal>")` operand.
+    let prefixes: Vec<(Expr, String)> = expr
+        .operands
+        .iter()
+        .filter_map(|op| {
+            let Expr::StartsWith(sw) = op else {
+                return None;
+            };
+            let Expr::Value(stmt::Value::String(s)) = sw.prefix.as_ref() else {
+                return None;
+            };
+            Some(((*sw.expr).clone(), s.clone()))
+        })
+        .collect();
+
+    if prefixes.len() < 2 {
+        return;
+    }
+
+    expr.operands.retain(|op| {
+        let Expr::StartsWith(sw) = op else {
+            return true;
+        };
+        let Expr::Value(stmt::Value::String(prefix)) = sw.prefix.as_ref() else {
+            return true;
+        };
+        // Keep this operand unless some sibling `starts_with(col, "<longer>")`
+        // pins the same column with a strictly-longer prefix that begins with
+        // this one. Equal-length prefixes are handled by the AND's idempotency
+        // pass; we only drop when there's a more-specific predicate to defer to.
+        !prefixes.iter().any(|(other_lhs, other_val)| {
+            other_lhs.is_equivalent_to(&sw.expr)
+                && other_val.len() > prefix.len()
+                && other_val.starts_with(prefix.as_str())
+        })
     });
 }
 

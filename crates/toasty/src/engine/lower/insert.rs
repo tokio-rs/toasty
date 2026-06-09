@@ -468,6 +468,32 @@ pub(super) fn find_eq_value_for_field(
     }
 }
 
+/// Walks `expr` looking for a top-level
+/// `starts_with(Field { nesting: 0, index }, "<literal>")` conjunct in an AND
+/// tree, returning the matched prefix string.
+///
+/// Used by IC HasItems read-scope rewriting to detect the cascade-delete
+/// shape, where the parent's source carries `sk STARTS_WITH "<Parent>#"`
+/// instead of the `sk = "<Parent>#<id>"` shape produced by literal handles.
+pub(super) fn find_starts_with_prefix_for_field(
+    expr: &stmt::Expr,
+    target_index: usize,
+) -> Option<String> {
+    match expr {
+        stmt::Expr::And(operands) => operands
+            .iter()
+            .find_map(|e| find_starts_with_prefix_for_field(e, target_index)),
+        stmt::Expr::StartsWith(sw) => match (&*sw.expr, &*sw.prefix) {
+            (
+                stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }),
+                stmt::Expr::Value(stmt::Value::String(s)),
+            ) if *index == target_index => Some(s.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 impl ApplyInsertScope<'_> {
     fn apply_expr(&mut self, stmt: &stmt::Expr) {
         match stmt {
