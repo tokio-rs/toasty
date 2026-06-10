@@ -219,6 +219,46 @@ impl BuildTableFromModels<'_> {
                     .item_collection
                     .participates = true;
             }
+
+            // Reinterpret the PK index scope for IC roots that used the simple
+            // `#[key(<partition>, <sort>)]` form. The macro lands every bare
+            // ident in `partition`, but for an item-collection root the second
+            // column is the sort key. The app-schema validator
+            // (`pk_partition_and_sort_fields`) accepts both shapes; the DB
+            // index must reflect the actual hash/range split or else
+            // sort-column predicates (e.g. `StartsWith(sk, "Todo#")`) get
+            // rejected by `match_expr_binary_op_column` (partition + non-eq is
+            // not a valid index match). DynamoDB also requires the table's
+            // KeySchema to mark exactly one column as `RANGE`.
+            let pk_index = self
+                .table
+                .indices
+                .iter_mut()
+                .find(|i| i.primary_key)
+                .expect("primary key index must exist");
+            let partition_count = pk_index
+                .columns
+                .iter()
+                .filter(|c| c.scope.is_partition())
+                .count();
+            let local_count = pk_index
+                .columns
+                .iter()
+                .filter(|c| c.scope.is_local())
+                .count();
+            if partition_count == 2 && local_count == 0 {
+                // Demote the trailing column from `Partition` to `Local`. The
+                // first partition column is the hash key; subsequent columns
+                // become sort-key components in declaration order.
+                if let Some(last) = pk_index
+                    .columns
+                    .iter_mut()
+                    .rev()
+                    .find(|c| c.scope.is_partition())
+                {
+                    last.scope = IndexScope::Local;
+                }
+            }
         }
 
         Ok(())

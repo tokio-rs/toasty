@@ -216,8 +216,17 @@ impl LowerStatement<'_, '_> {
             FieldTy::BelongsTo(_) => {
                 self.plan_mut_belongs_to(field, op, source);
             }
-            FieldTy::HasItems(_) | FieldTy::ItemParent(_) => {
-                todo!("cascade for IC relations")
+            FieldTy::HasItems(_) => {
+                self.relation_step(field, |lower| lower.plan_mut_has_items(field, op, source));
+            }
+            FieldTy::ItemParent(_) => {
+                // Item-collection child→parent has no foreign-key column on
+                // the parent, so deletion of a child does not require any
+                // parent-side update. Inserts and updates of the child route
+                // the parent's partition and sk through the scope walker
+                // (see `association::rewrite_association_has_items_as_filter`
+                // and `insert::ApplyInsertScope`), so no cascade work is
+                // needed here either.
             }
             _ => (),
         }
@@ -237,6 +246,73 @@ impl LowerStatement<'_, '_> {
         let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
+    }
+
+    /// Cascade walker for a parent's `HasItems` field.
+    ///
+    /// `HasItems` pairs with [`ItemParent`](app::ItemParent) (R2.9 in the
+    /// symmetric-key item-collection design): the child does not carry a
+    /// foreign-key column referencing the parent — its membership is
+    /// expressed by sharing the parent's partition and carrying a sort-key
+    /// prefix derived from the parent's sk. Disassociating an
+    /// item-collection child therefore cannot null out a column the way
+    /// `Has`/`BelongsTo` does; the only way to break the relationship is
+    /// to delete the child row.
+    ///
+    /// The cascade is expressed by synthesizing a `Delete` whose `from`
+    /// is `Source::Model { id: child, via: Some(association) }`, where
+    /// `association.source` is the parent's selection. The canonical
+    /// pipeline's [`RewriteVia`](super::association::RewriteVia) pass
+    /// then converts the via into the IC partition-equality + sort-prefix
+    /// filter via `rewrite_association_has_items_as_filter` — the same
+    /// path that powers `parent.<children>().exec()`.
+    ///
+    /// `Mutation::Associate` and `Mutation::Disassociate` on `HasItems`
+    /// are not exercised by current tests: v3 IC inserts route through
+    /// `parent.<children>().create()` (handled at the create-builder
+    /// surface, not here) and there is no "associate an existing child
+    /// row with a different parent" surface because the partition+sk
+    /// encoding of an IC child is fixed at insert. Leave them as
+    /// `todo!()` so any future surface that exercises them surfaces
+    /// here for explicit design rather than silently no-op'ing.
+    fn plan_mut_has_items(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
+        let has_items = field.ty.as_has_items_unwrap();
+        let target = has_items.target;
+        let parent_model_id = field.id.model;
+        let field_index = field.id.index;
+
+        match op {
+            Mutation::DisassociateAll { .. } => {
+                let association = stmt::Association {
+                    source: Box::new(source.selection(1)),
+                    path: stmt::Path::field(parent_model_id, field_index),
+                };
+
+                let delete = stmt::Delete {
+                    from: stmt::Source::Model(stmt::SourceModel {
+                        id: target,
+                        via: Some(association),
+                    }),
+                    filter: stmt::Filter::default(),
+                    returning: None,
+                    condition: stmt::Condition::default(),
+                };
+
+                self.new_dependency(delete);
+            }
+            Mutation::Associate { .. } => {
+                todo!(
+                    "HasItems Associate is not yet supported; v3 IC inserts \
+                     route through parent.<children>().create()"
+                )
+            }
+            Mutation::Disassociate { .. } => {
+                todo!(
+                    "HasItems Disassociate is not yet supported; the IC \
+                     partition + sk encoding fixes membership at insert"
+                )
+            }
+        }
     }
 
     fn plan_mut_has_n(

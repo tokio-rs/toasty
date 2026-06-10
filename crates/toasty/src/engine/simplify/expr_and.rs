@@ -51,6 +51,16 @@ impl Simplify<'_> {
         // Range to equality: `a >= c and a <= c` → `a = c`
         self.try_range_to_equality(expr);
 
+        // Redundant prefix subsumed by equality:
+        //   `a = "<prefix><...>" AND starts_with(a, "<prefix>")` → `a = "<prefix><...>"`
+        // The equality is strictly more selective. Two predicates targeting
+        // the same column collide on DynamoDB's KeyConditionExpression
+        // (one condition per key), and even on SQL backends the begins_with
+        // is dead weight. Used by the IC discriminator pipeline to elide
+        // the `StartsWith(sort_col, "<Model>#")` marker against a fully
+        // qualified `sort_col = "<Model>#<id>"`.
+        prune_starts_with_subsumed_by_eq(expr);
+
         // Contradicting equality: `a == 1 AND a == 2` → false,
         // `a == 1 AND a != 1` → false
         if has_self_contradiction(&expr.operands) {
@@ -275,6 +285,47 @@ fn is_contradicting_eq_constraints(a: &[Expr], b: &[Expr]) -> bool {
     }
 
     false
+}
+
+/// Drops `starts_with(col, prefix)` operands when another operand pins the
+/// same column to a literal string that already starts with `prefix`. The
+/// equality is strictly stronger; the begins_with is dead weight.
+fn prune_starts_with_subsumed_by_eq(expr: &mut stmt::ExprAnd) {
+    // Collect (lhs_expr, prefix_value) for every `col = "<literal>"` operand.
+    let eq_literals: Vec<(Expr, String)> = expr
+        .operands
+        .iter()
+        .filter_map(|op| {
+            let Expr::BinaryOp(binop) = op else {
+                return None;
+            };
+            if !matches!(binop.op, BinaryOp::Eq) {
+                return None;
+            }
+            let Expr::Value(stmt::Value::String(s)) = binop.rhs.as_ref() else {
+                return None;
+            };
+            Some(((*binop.lhs).clone(), s.clone()))
+        })
+        .collect();
+
+    if eq_literals.is_empty() {
+        return;
+    }
+
+    expr.operands.retain(|op| {
+        let Expr::StartsWith(sw) = op else {
+            return true;
+        };
+        let Expr::Value(stmt::Value::String(prefix)) = sw.prefix.as_ref() else {
+            return true;
+        };
+        // Drop only if some sibling `col = "..."` pins the same column AND
+        // its literal value already begins with this prefix.
+        !eq_literals
+            .iter()
+            .any(|(eq_lhs, eq_val)| eq_lhs.is_equivalent_to(&sw.expr) && eq_val.starts_with(prefix))
+    });
 }
 
 /// Extracts `(lhs, op, rhs_value)` from an `Expr::BinaryOp` if it is an
