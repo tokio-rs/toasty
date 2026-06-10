@@ -68,7 +68,10 @@ impl<'stmt> IndexMatch<'stmt> {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
                     self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)
                 }
-                _ => todo!("expr={:#?}", expr),
+                // Not a bare column reference (e.g. a projection into a
+                // `#[document]` column). Not an index match — return false
+                // rather than failing.
+                _ => false,
             },
             And(and_exprs) => {
                 let matched = self.match_all_restrictions(cx, and_exprs);

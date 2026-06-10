@@ -809,7 +809,11 @@ impl Capability {
         // `AttributeValue` encoding.
         native_array: false,
         vec_scalar: true,
-        document_collections: false,
+        // `#[document]` embeds store as a native Map `M` attribute (a
+        // `Vec<embed>` collection as a List `L` of Maps). DynamoDB caps
+        // attribute nesting at 32 levels; documents deeper than that are not
+        // rejected up front — the write surfaces DynamoDB's own error.
+        document_collections: true,
 
         // DynamoDB emulates `IsSuperset` / `Intersects` by expanding the rhs
         // into one `contains(path, vN)` clause per element. The expansion

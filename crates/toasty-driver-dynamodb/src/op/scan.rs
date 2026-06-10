@@ -16,7 +16,7 @@ impl Connection {
         op: operation::Scan,
     ) -> Result<ExecResponse> {
         let table = schema.db.table(op.table);
-        let cx = ExprContext::new_with_target(&schema.db, table);
+        let cx = ExprContext::new_with_target(schema.as_ref(), table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -61,7 +61,7 @@ impl Connection {
                     .transpose()
                     .map_err(toasty_core::Error::driver_operation_failed)?
                 {
-                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&schema.app, &item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -88,7 +88,7 @@ impl Connection {
 
                 let mut rows: Vec<stmt::Value> = Vec::new();
                 for item in res.items.into_iter().flatten() {
-                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&schema.app, &item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -127,7 +127,10 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                            rows.push(
+                                item_to_record(&schema.app, &item, cols())
+                                    .map(stmt::Value::from)?,
+                            );
                         }
                         None => break,
                     }
