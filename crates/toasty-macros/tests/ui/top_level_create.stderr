@@ -1,0 +1,17 @@
+error[E0599]: no function or associated item named `create` found for struct `User` in the current scope
+  --> tests/ui/top_level_create.rs:27:19
+   |
+13 | struct User {
+   | ----------- function or associated item `create` not found for this struct
+...
+27 |     let _ = User::create();
+   |                   ^^^^^^ function or associated item not found in `User`
+   |
+   = help: items from traits can only be used if the trait is implemented and in scope
+   = note: the following traits define an item `create`, perhaps you need to implement one of them:
+           candidate #1: `deadpool::managed::manager::Manager`
+           candidate #2: `regex_syntax::hir::interval::Interval`
+help: there is an associated function `new_create` with a similar name
+   |
+27 |     let _ = User::new_create();
+   |                   ++++

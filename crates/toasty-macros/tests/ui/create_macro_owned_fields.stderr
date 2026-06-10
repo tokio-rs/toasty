@@ -1,0 +1,25 @@
+error[E0599]: no method named `sk` found for struct `UserCreate` in the current scope
+  --> tests/ui/create_macro_owned_fields.rs:30:9
+   |
+15 |   struct User {
+   |          ---- method `sk` not found for this struct
+...
+29 |       toasty::create!(in tenant.users() {
+   |  ________________________-
+30 | |         sk: "manual".to_string(),
+   | |        -^^ method not found in `UserCreate`
+   | |________|
+   |
+
+error[E0599]: no method named `account` found for struct `UserCreate` in the current scope
+  --> tests/ui/create_macro_owned_fields.rs:39:9
+   |
+15 |   struct User {
+   |          ---- method `account` not found for this struct
+...
+38 |       toasty::create!(in tenant.users() {
+   |  ________________________-
+39 | |         account: "acme".to_string(),
+   | |        -^^^^^^^ method not found in `UserCreate`
+   | |________|
+   |
