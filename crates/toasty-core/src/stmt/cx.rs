@@ -693,6 +693,20 @@ impl Resolve for Schema {
     }
 }
 
+impl Resolve for crate::schema::app::Schema {
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        self.get_model(id)
+    }
+
+    fn table(&self, _id: TableId) -> Option<&Table> {
+        None
+    }
+
+    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
+        None
+    }
+}
+
 impl Resolve for db::Schema {
     fn model(&self, _id: ModelId) -> Option<&Model> {
         None

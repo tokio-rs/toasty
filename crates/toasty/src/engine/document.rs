@@ -12,6 +12,7 @@
 //! SQL serializer wants the JSON form.
 
 use toasty_core::{
+    driver::Capability,
     schema::{Schema, app},
     stmt::{self, IntoExprTarget, VisitMut},
 };
@@ -19,8 +20,8 @@ use toasty_core::{
 /// Lower every `#[document]` column in `stmt` into its driver-serializable
 /// shape: path reads become `FuncJsonExtract`, write values become
 /// `Value::Object`.
-pub(crate) fn lower(schema: &Schema, stmt: &mut stmt::Statement) {
-    lower_paths(schema, stmt);
+pub(crate) fn lower(schema: &Schema, capability: &Capability, stmt: &mut stmt::Statement) {
+    lower_paths(schema, capability, stmt);
     name_values(schema, stmt);
 }
 
@@ -40,9 +41,10 @@ pub(crate) fn lower(schema: &Schema, stmt: &mut stmt::Statement) {
 /// statement, rather than in the shared simplifier (which runs for every
 /// backend) or in the serializer (which is the driver's job). The driver
 /// receives only the `FuncJsonExtract` and renders it per dialect.
-fn lower_paths(schema: &Schema, stmt: &mut stmt::Statement) {
+fn lower_paths(schema: &Schema, capability: &Capability, stmt: &mut stmt::Statement) {
     LowerDocumentPaths {
         cx: stmt::ExprContext::new(schema),
+        capability,
     }
     .visit_mut(stmt);
 }
@@ -53,20 +55,20 @@ fn lower_paths(schema: &Schema, stmt: &mut stmt::Statement) {
 /// embedded-model type (`Type::Model`).
 struct LowerDocumentPaths<'a> {
     cx: stmt::ExprContext<'a>,
+    capability: &'a Capability,
 }
 
 impl LowerDocumentPaths<'_> {
     fn scope<'s>(&'s self, target: impl IntoExprTarget<'s>) -> LowerDocumentPaths<'s> {
         LowerDocumentPaths {
             cx: self.cx.scope(target),
+            capability: self.capability,
         }
     }
-}
 
-impl VisitMut for LowerDocumentPaths<'_> {
-    fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
-        stmt::visit_mut::visit_expr_mut(self, expr);
-
+    /// Rewrite a projection rooted at a `#[document]` column into the
+    /// [`FuncJsonExtract`](stmt::FuncJsonExtract) the SQL serializer renders.
+    fn lower_project(&self, expr: &mut stmt::Expr) {
         let stmt::Expr::Project(project) = expr else {
             return;
         };
@@ -85,6 +87,96 @@ impl VisitMut for LowerDocumentPaths<'_> {
         };
         let base = Box::new(project.base.take());
         *expr = stmt::Expr::from(stmt::FuncJsonExtract { base, path, ty });
+    }
+
+    /// Whether a document leaf of type `ty` compares as plain text on this
+    /// backend. PostgreSQL and MySQL cast the JSON extraction back to the
+    /// leaf's native SQL type, but a backend without that native type (SQLite
+    /// has no temporal or decimal column types) compares the extracted text
+    /// directly — so the bound operand must be the exact text the JSON codec
+    /// stores.
+    fn leaf_compares_as_text(&self, ty: &stmt::Type) -> bool {
+        match ty {
+            #[cfg(feature = "jiff")]
+            stmt::Type::Timestamp => !self.capability.native_timestamp,
+            #[cfg(feature = "jiff")]
+            stmt::Type::Date => !self.capability.native_date,
+            #[cfg(feature = "jiff")]
+            stmt::Type::Time => !self.capability.native_time,
+            #[cfg(feature = "jiff")]
+            stmt::Type::DateTime => !self.capability.native_datetime,
+            #[cfg(feature = "rust_decimal")]
+            stmt::Type::Decimal => !self.capability.native_decimal,
+            #[cfg(feature = "bigdecimal")]
+            stmt::Type::BigDecimal => !self.capability.native_decimal,
+            _ => false,
+        }
+    }
+
+    /// If `extract_side` is a JSON extraction whose leaf compares as text on
+    /// this backend, rewrite the constant `operand` to the leaf's document
+    /// text form (the exact text the JSON codec stores — see
+    /// [`document_text`]) and retype the extraction as a text read.
+    fn textify_comparison(&self, extract_side: &mut stmt::Expr, operand: &mut stmt::Expr) {
+        let stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) = extract_side else {
+            return;
+        };
+        if !self.leaf_compares_as_text(&func.ty) {
+            return;
+        }
+        let stmt::Expr::Value(value) = operand else {
+            return;
+        };
+        let Some(text) = document_text(value) else {
+            return;
+        };
+        *value = stmt::Value::String(text);
+        func.ty = stmt::Type::String;
+    }
+}
+
+impl VisitMut for LowerDocumentPaths<'_> {
+    fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        stmt::visit_mut::visit_expr_mut(self, expr);
+
+        // Children are visited first, so by the time a comparison node is
+        // reached its document-path side is already a `FuncJsonExtract`.
+        match expr {
+            stmt::Expr::Project(_) => self.lower_project(expr),
+            stmt::Expr::BinaryOp(binary) => {
+                self.textify_comparison(&mut binary.lhs, &mut binary.rhs);
+                self.textify_comparison(&mut binary.rhs, &mut binary.lhs);
+            }
+            stmt::Expr::InList(in_list) => {
+                let stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) = &mut *in_list.expr else {
+                    return;
+                };
+                if !self.leaf_compares_as_text(&func.ty) {
+                    return;
+                }
+                match &mut *in_list.list {
+                    stmt::Expr::List(list) => {
+                        for item in &mut list.items {
+                            if let stmt::Expr::Value(value) = item
+                                && let Some(text) = document_text(value)
+                            {
+                                *value = stmt::Value::String(text);
+                            }
+                        }
+                    }
+                    stmt::Expr::Value(stmt::Value::List(items)) => {
+                        for value in items.iter_mut() {
+                            if let Some(text) = document_text(value) {
+                                *value = stmt::Value::String(text);
+                            }
+                        }
+                    }
+                    _ => return,
+                }
+                func.ty = stmt::Type::String;
+            }
+            _ => {}
+        }
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
@@ -126,28 +218,19 @@ impl VisitMut for LowerDocumentPaths<'_> {
     }
 }
 
-/// Walks a projection through (possibly nested) document types, collecting the
-/// key path and the leaf field's type. Returns `None` if any step is out of
-/// range.
+/// Resolves a projection through (possibly nested) document types via the
+/// schema's shared [`document_path_steps`](app::Schema::document_path_steps)
+/// walk, collecting the key path and the leaf field's type. Returns `None` if
+/// the projection does not resolve to a document path.
 fn build_json_path(
     schema: &Schema,
     embed_id: app::ModelId,
     projection: &[usize],
 ) -> Option<(Vec<String>, stmt::Type)> {
-    let mut current = embed_id;
-    let mut path = Vec::with_capacity(projection.len());
-    let mut leaf_ty = None;
-
-    for &index in projection {
-        let (name, ty) = schema.app.document_fields(current).nth(index)?;
-        path.push(name.to_owned());
-        if let stmt::Type::Model(nested) = ty {
-            current = *nested;
-        }
-        leaf_ty = Some(ty.clone());
-    }
-
-    Some((path, leaf_ty?))
+    let steps = schema.app.document_path_steps(embed_id, projection)?;
+    let path = steps.iter().map(|(name, _)| (*name).to_owned()).collect();
+    let (_, leaf_ty) = steps.last().expect("document path is never empty");
+    Some((path, (*leaf_ty).clone()))
 }
 
 // ============================================================================
@@ -269,6 +352,26 @@ fn to_named(app: &app::Schema, value: stmt::Value, ty: &stmt::Type) -> stmt::Val
                 .collect(),
         ),
         (_, value) => value,
+    }
+}
+
+/// The text form `value` takes inside a stored JSON document, for comparison
+/// operands bound against a plain-text extraction. Temporal values go through
+/// the shared [`stmt::DocumentTemporalText`] form; decimals use their
+/// `Display` form — exactly what the codec's `collect_str` writes. `None` for
+/// values with no document text form (including `Null`, which comparisons
+/// reach via `IsNull` instead).
+fn document_text(value: &stmt::Value) -> Option<String> {
+    #[cfg(feature = "jiff")]
+    if let Some(text) = stmt::DocumentTemporalText::of(value) {
+        return Some(text.to_string());
+    }
+    match value {
+        #[cfg(feature = "rust_decimal")]
+        stmt::Value::Decimal(v) => Some(v.to_string()),
+        #[cfg(feature = "bigdecimal")]
+        stmt::Value::BigDecimal(v) => Some(v.to_string()),
+        _ => None,
     }
 }
 

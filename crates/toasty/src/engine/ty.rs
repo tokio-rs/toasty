@@ -10,7 +10,7 @@ impl Engine {
     /// `#[document]` columns into their serializable shape, then bind the
     /// inline values into typed parameters.
     pub(crate) fn extract_params(&self, stmt: &mut stmt::Statement) -> Vec<TypedValue> {
-        super::document::lower(&self.schema, stmt);
+        super::document::lower(&self.schema, self.capability(), stmt);
         super::bind::run(stmt, &self.schema.db, self.capability())
     }
 

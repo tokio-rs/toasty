@@ -135,6 +135,45 @@ impl Schema {
         })
     }
 
+    /// Resolves a projection through a `#[document]` embed's nested fields:
+    /// each positional step indexes the current embed's fields, descending
+    /// into the nested embed when the field is itself a document
+    /// (`Type::Model`). Returns every step's field name and type in order —
+    /// the last entry is the leaf — or `None` if the projection is empty, a
+    /// step is out of range, or it tries to descend past a non-document
+    /// field.
+    ///
+    /// This is the single definition of document path semantics; the engine's
+    /// JSON-path lowering, the DynamoDB driver's document-path rendering, and
+    /// projection validation all resolve through it.
+    pub fn document_path_steps(
+        &self,
+        embed_id: ModelId,
+        projection: &[usize],
+    ) -> Option<Vec<(&str, &stmt::Type)>> {
+        let mut current = embed_id;
+        let mut steps = Vec::with_capacity(projection.len());
+
+        for (i, &index) in projection.iter().enumerate() {
+            let Model::EmbeddedStruct(embedded) = self.get_model(current)? else {
+                return None;
+            };
+            let field = embedded.fields.get(index)?;
+            let name = field.name.app.as_deref()?;
+            let ty = field.expr_ty();
+            steps.push((name, ty));
+
+            match ty {
+                stmt::Type::Model(nested) => current = *nested,
+                // A non-document field is a leaf: the path must end here.
+                _ if i + 1 < projection.len() => return None,
+                _ => {}
+            }
+        }
+
+        if steps.is_empty() { None } else { Some(steps) }
+    }
+
     /// Resolve a projection through the schema, returning either a field or
     /// an enum variant.
     ///
@@ -173,7 +212,11 @@ impl Schema {
                     ty: stmt::Type::Model(embed_id),
                     ..
                 }) => {
-                    return resolve_document_steps(self, *embed_id, *step, &mut steps)
+                    let mut path = vec![*step];
+                    path.extend_from_slice(steps.as_slice());
+                    return self
+                        .document_path_steps(*embed_id, &path)
+                        .is_some()
                         .then_some(Resolved::Field(current_field));
                 }
                 FieldTy::Primitive(..) => {
@@ -698,32 +741,4 @@ fn eager_relation_target(field: &Field) -> Option<ModelId> {
     }
 
     field.relation_target_id()
-}
-
-/// Validates that a projection descends a `#[document]` embed's fields: `first`
-/// indexes into the embedded struct `embed_id`, then each remaining step
-/// descends into the nested embed at that field (if any). Returns `false` if a
-/// step is out of range or descends past a scalar leaf.
-fn resolve_document_steps(
-    schema: &Schema,
-    embed_id: ModelId,
-    first: usize,
-    rest: &mut std::slice::Iter<'_, usize>,
-) -> bool {
-    let Model::EmbeddedStruct(embedded) = schema.model(embed_id) else {
-        return false;
-    };
-    let Some(field) = embedded.fields.get(first) else {
-        return false;
-    };
-
-    match field.expr_ty() {
-        stmt::Type::Model(nested) => match rest.next() {
-            Some(&next) => resolve_document_steps(schema, *nested, next, rest),
-            // Path stops at a sub-document (the whole sub-embed) — valid.
-            None => true,
-        },
-        // A scalar leaf (or a collection): the path must end here.
-        _ => rest.next().is_none(),
-    }
 }

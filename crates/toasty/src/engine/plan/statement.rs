@@ -233,14 +233,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let load_data_node_id = self.plan_data_loading(stmt, &mut returning)?;
 
-        // Decode any `#[document]` columns from the driver's named `Value::Object`
-        // form into the positional `Value::Record` the engine consumes. Injected
-        // here as an explicit projection so the conversion is a planned
-        // instruction rather than a runtime walk driven by type tracking.
-        // Reassigned before anything reads the node, so back-ref projections, the
-        // returning clause, and nested merges all consume decoded records.
-        let load_data_node_id = self.plan_document_decode(load_data_node_id);
-
         // Track the exec statement operation node.
         self.stmt_info
             .load_data_statement
@@ -1805,59 +1797,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     // ===== MIR/utility helpers =====
-
-    /// If a data-loading node returns rows containing `#[document]` columns,
-    /// inject a projection that decodes each such column from the driver's named
-    /// `Value::Object` form into the positional `Value::Record` the engine
-    /// consumes. The decode is expressed as a per-column `Expr::Cast` to the
-    /// document type, which the interpreter reshapes by field name (see
-    /// `Type::cast`). Non-document columns pass through. Returns `node_id`
-    /// unchanged when the rows carry no documents (or the node has no row type,
-    /// e.g. a mutation with no returning).
-    fn plan_document_decode(&mut self, node_id: mir::NodeId) -> mir::NodeId {
-        let stmt::Type::List(item) = self.planner.mir[node_id].ty() else {
-            return node_id;
-        };
-        let stmt::Type::Record(col_tys) = &**item else {
-            return node_id;
-        };
-        if !col_tys.iter().any(Self::ty_contains_document) {
-            return node_id;
-        }
-        let col_tys = col_tys.clone();
-
-        let record = stmt::Expr::record(col_tys.iter().enumerate().map(|(i, ty)| {
-            let field = stmt::Expr::arg_project(0, [i]);
-            if Self::ty_contains_document(ty) {
-                stmt::Expr::cast(field, ty.clone())
-            } else {
-                field
-            }
-        }));
-        let projection = eval::Func::from_stmt(record, vec![stmt::Type::Record(col_tys.clone())]);
-        let ty = stmt::Type::list(stmt::Type::Record(col_tys));
-
-        // Plain insert: `From<Project>` records the dependency on the input
-        // node, and `remaining_deps` belong on the final output node, not on
-        // this mid-graph reshape — so don't route through `insert_mir_with_deps`.
-        self.planner.mir.insert(mir::Project {
-            input: node_id,
-            projection,
-            ty,
-        })
-    }
-
-    /// Whether `ty` is, or contains (through lists), a `#[document]` column type
-    /// (an embedded model). The decode it gates is a structural no-op (the codec
-    /// yields a positional `Value::Record` directly), so an over-approximation
-    /// here is harmless.
-    fn ty_contains_document(ty: &stmt::Type) -> bool {
-        match ty {
-            stmt::Type::Model(_) => true,
-            stmt::Type::List(inner) => Self::ty_contains_document(inner),
-            _ => false,
-        }
-    }
 
     #[track_caller]
     fn insert_const(&mut self, value: impl Into<stmt::Value>, ty: stmt::Type) -> mir::NodeId {

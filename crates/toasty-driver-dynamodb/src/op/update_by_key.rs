@@ -749,9 +749,9 @@ impl Connection {
 #[cfg(test)]
 mod tests {
     use super::filter_failed;
-    use toasty_core::schema::db;
     use aws_sdk_dynamodb::types::AttributeValue;
     use std::collections::HashMap;
+    use toasty_core::schema::db;
     use toasty_core::{
         schema::app,
         schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},

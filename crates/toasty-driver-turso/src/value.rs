@@ -31,7 +31,9 @@ pub(crate) fn to_turso(value: &CoreValue) -> TursoValue {
         CoreValue::String(v) => TursoValue::Text(v.clone()),
         CoreValue::Bytes(v) => TursoValue::Blob(v.clone()),
         CoreValue::Null => TursoValue::Null,
-        CoreValue::List(_) => TursoValue::Text(value_list_to_json_text(value)),
+        // A `Vec<scalar>` / document collection (`List`) or a bare
+        // `#[document]` embed (`Object`) is stored as JSON text.
+        CoreValue::List(_) | CoreValue::Object(_) => TursoValue::Text(value_to_json_text(value)),
         _ => todo!("to_turso: value = {value:#?}"),
     }
 }
@@ -85,8 +87,8 @@ pub(crate) fn from_turso_infer(value: TursoValue) -> CoreValue {
     }
 }
 
-fn value_list_to_json_text(value: &CoreValue) -> String {
-    toasty_sql::json::to_string(value).expect("serialize Vec<scalar> to JSON")
+fn value_to_json_text(value: &CoreValue) -> String {
+    toasty_sql::json::to_string(value).expect("serialize document value to JSON")
 }
 
 fn json_text_to_value_list(schema: &app::Schema, text: &str, elem_ty: &stmt::Type) -> CoreValue {

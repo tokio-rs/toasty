@@ -275,11 +275,13 @@ impl BuildSchema<'_> {
 /// The name of a `#[document]` leaf scalar type that JSON document storage
 /// cannot represent, or `None` if it is supported. Recurses through list
 /// element types; embeds are walked separately by [`verify_document_embed`].
-/// Currently only `Zoned` is rejected.
+/// `Zoned` is rejected because no backend can round-trip its `[IANA]`
+/// annotation; `Bytes` because JSON has no binary representation.
 fn document_unsupported_leaf(ty: &stmt::Type) -> Option<&'static str> {
     match ty {
         #[cfg(feature = "jiff")]
         stmt::Type::Zoned => Some("Zoned"),
+        stmt::Type::Bytes => Some("Vec<u8>"),
         stmt::Type::List(elem) => document_unsupported_leaf(elem),
         _ => None,
     }

@@ -79,9 +79,9 @@ impl VarStore {
                 response.values
             }
             Rows::Value(value) => {
-                // Document columns are decoded from the driver's `Value::Object`
-                // to `Value::Record` by a planner-injected projection upstream
-                // (see `plan_document_decode`), so no conversion happens here.
+                // Drivers decode document columns straight to the positional
+                // `Value::Record` form (see `toasty_sql::json` and the
+                // DynamoDB value conversion), so no conversion happens here.
                 // This assertion is a diagnostic shape check only.
                 assert!(
                     value.is_a(&self.schema.app, &self.tys[var.0]),

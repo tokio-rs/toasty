@@ -49,6 +49,11 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
+#[cfg(feature = "jiff")]
+mod document_temporal_text;
+#[cfg(feature = "jiff")]
+pub use document_temporal_text::DocumentTemporalText;
+
 mod entry;
 pub use entry::Entry;
 

@@ -132,18 +132,21 @@ impl Expand<'_> {
                     deferred = quote!(<#ty as #toasty::Field>::DEFERRED);
 
                     // A `#[document]` field is stored as a single JSON column.
-                    // Its app type is `Primitive(<Ty as Load>::ty())` —
+                    // Its app type resolves through the `Document` trait —
                     // `Model(id)` for a struct embed, `List(Model(id))` for a
                     // `Vec<embed>` collection — which the schema builder later
                     // resolves to a `Document` once every embed is registered.
-                    // A non-document field uses `Field::field_ty`, which
-                    // column-expands a struct embed (`Embedded`) and leaves
-                    // scalars / `Vec<scalar>` as a `Primitive`.
+                    // The trait bound also rejects `#[document]` on any type
+                    // that cannot use document storage (a scalar, an enum
+                    // embed, a `Vec<scalar>`) at compile time. A non-document
+                    // field uses `Field::field_ty`, which column-expands a
+                    // struct embed (`Embedded`) and leaves scalars /
+                    // `Vec<scalar>` as a `Primitive`.
                     field_ty = if field.attrs.document.is_some() {
                         quote! {
                             #toasty::core::schema::app::FieldTy::Primitive(
                                 #toasty::core::schema::app::FieldPrimitive {
-                                    ty: <#ty as #toasty::Load>::ty(),
+                                    ty: <#ty as #toasty::Document>::document_ty(),
                                     storage_ty: #storage_ty,
                                     serialize: None,
                                 }

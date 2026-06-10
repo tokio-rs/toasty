@@ -178,6 +178,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
+        // A struct embed can be stored as a `#[document]` column (an enum
+        // embed cannot, yet — its document encoding is undefined). The
+        // `#[document]` attribute resolves the field's type through this
+        // trait, so the bound is what rejects the attribute on
+        // non-document-capable types at compile time.
+        impl #toasty::Document for #model_ident {}
+
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
             fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
                 #into_expr_body_val

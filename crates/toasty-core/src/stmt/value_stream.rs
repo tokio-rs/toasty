@@ -246,9 +246,8 @@ impl ValueStream {
             Some((_, prev, _)) => assert_eq!(*prev, ty),
             None => {
                 // Validate already-buffered values against the new type.
-                // Document columns are decoded from `Value::Object` to
-                // `Value::Record` upstream by a planner-injected projection
-                // (`plan_document_decode`), so no conversion is needed here.
+                // Drivers decode document columns straight to the positional
+                // `Value::Record` form, so no conversion is needed here.
                 let mut tmp = mem::take(&mut self.buffer);
                 while let Some(value) = tmp.next() {
                     assert!(

@@ -489,10 +489,10 @@ fn column_alias<'a>(
 
 /// Resolves a projection into a `#[document]` column to a DynamoDB document
 /// path (`#col_0.#doc_1.#doc_2`), registering each path segment as an
-/// expression attribute name. Walks the projection's positional steps through
-/// the embed's (possibly nested) schema fields — the same walk the engine's
-/// JSON-path lowering does for SQL drivers. Returns the rendered path and the
-/// leaf field's type.
+/// expression attribute name. The projection resolves through the schema's
+/// shared [`document_path_steps`](toasty_core::schema::app::Schema::document_path_steps)
+/// walk — the same one the engine's JSON-path lowering uses for SQL drivers.
+/// Returns the rendered path and the leaf field's type.
 fn document_path<'a>(
     cx: &ExprContext<'a, Schema>,
     attrs: &mut ExprAttrs,
@@ -502,30 +502,23 @@ fn document_path<'a>(
         todo!("projection base must be a column reference; expr={expr_project:#?}")
     };
     let (column, mut path) = column_alias(cx, attrs, expr_reference);
-    let stmt::Type::Model(mut embed_id) = column.ty else {
+    let stmt::Type::Model(embed_id) = column.ty else {
         todo!("projection into a non-document column; column={column:#?}")
     };
 
-    let app = &cx.schema().app;
-    let mut leaf_ty = None;
+    let steps = cx
+        .schema()
+        .app
+        .document_path_steps(embed_id, expr_project.projection.as_slice())
+        .expect("invalid projection into a document column");
 
-    for &index in expr_project.projection.as_slice() {
-        let (name, ty) = app
-            .document_fields(embed_id)
-            .nth(index)
-            .expect("projection step out of range for the embedded struct");
+    for (name, _) in &steps {
         path.push('.');
         path.push_str(attrs.document_segment(name));
-        if let stmt::Type::Model(nested) = ty {
-            embed_id = *nested;
-        }
-        leaf_ty = Some(ty);
     }
 
-    (
-        path,
-        leaf_ty.expect("empty projection into a document column"),
-    )
+    let (_, leaf_ty) = steps.last().expect("document path is never empty");
+    (path, leaf_ty)
 }
 
 #[derive(Default)]

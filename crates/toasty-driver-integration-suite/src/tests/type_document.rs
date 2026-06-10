@@ -729,13 +729,15 @@ pub async fn vec_struct_unsupported_backend(t: &mut Test) -> Result<(), BoxError
     Ok(())
 }
 
-/// Filtering on jiff temporal leaves inside a `#[document]` embed. Each path
-/// lowers to a JSON extraction that is cast back to the native temporal type on
-/// the SQL side (`(col->>'k')::timestamptz`, `::date`, …); before that cast was
-/// emitted the comparison rendered `text = timestamptz`, which PostgreSQL
-/// rejects. Gated to backends with both document storage and native temporal
-/// types — the only place the typed-cast extraction applies.
-#[driver_test(id(ID), requires(and(document_collections, native_timestamp)))]
+/// Filtering on jiff temporal leaves inside a `#[document]` embed. On backends
+/// with native temporal types the path lowers to a JSON extraction cast back
+/// to that type (`(col->>'k')::timestamptz`, `::date`, …); before that cast
+/// was emitted the comparison rendered `text = timestamptz`, which PostgreSQL
+/// rejects. On backends without native temporal types (SQLite) the extraction
+/// compares as text, so the engine rewrites the operand to the codec's
+/// fixed-precision document text form — which also keeps range comparisons
+/// chronological (see the sub-second assertions below).
+#[driver_test(id(ID), requires(document_collections))]
 pub async fn struct_embed_filter_temporal(t: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
     use jiff::civil::{DateTime, date, time};
@@ -821,14 +823,48 @@ pub async fn struct_embed_filter_temporal(t: &mut Test) -> Result<(), BoxError> 
     assert_eq!(by_dt.len(), 1);
     assert_eq!(by_dt[0].event.name, "beta");
 
+    // Sub-second range comparison. A whole-second instant must sort *before*
+    // one 500µs later — on text-comparing backends this only holds when the
+    // stored form has fixed subsecond precision (`...00.000000Z` <
+    // `...00.000500Z`); a trimmed form (`...00Z`) would sort after it.
+    let t2000_500us = Timestamp::from_microsecond(946_684_800_000_500)?;
+    toasty::create!(Account {
+        event: Event {
+            name: "gamma".into(),
+            starts_at: t2000_500us,
+            on_date: date(2000, 1, 1),
+            at_time: time(9, 30, 0, 0),
+            scheduled: date(2000, 1, 1).at(9, 30, 0, 0),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut after_t2000 = Account::filter(Account::fields().event().starts_at().gt(t2000))
+        .exec(&mut db)
+        .await?
+        .into_iter()
+        .map(|a| a.event.name)
+        .collect::<Vec<_>>();
+    after_t2000.sort();
+    assert_eq!(after_t2000, ["beta", "gamma"]);
+
+    let before_gamma = Account::filter(Account::fields().event().starts_at().lt(t2000_500us))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(before_gamma.len(), 1);
+    assert_eq!(before_gamma[0].event.name, "alpha");
+
     Ok(())
 }
 
-/// A `Timestamp` leaf in a `#[document]` is truncated to microseconds: the SQL
-/// temporal types only hold microseconds, and the codec truncates on write to
-/// match the drivers' truncating parameter binding so an equality filter on the
-/// original nanosecond value still matches the stored row.
-#[driver_test(id(ID), requires(and(document_collections, native_timestamp)))]
+/// A `Timestamp` leaf in a `#[document]` is truncated to microseconds on SQL
+/// backends: the SQL temporal types only hold microseconds, and the JSON
+/// codec truncates on write to match the drivers' truncating parameter
+/// binding so an equality filter on the original nanosecond value still
+/// matches the stored row. DynamoDB stores documents as native Maps and
+/// keeps full nanosecond precision, so this is gated to SQL.
+#[driver_test(id(ID), requires(and(document_collections, sql)))]
 pub async fn struct_embed_timestamp_truncates_to_micros(t: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -873,6 +909,144 @@ pub async fn struct_embed_timestamp_truncates_to_micros(t: &mut Test) -> Result<
     Ok(())
 }
 
+/// Comparing a `#[document]` field to a whole embed value is not yet
+/// supported (document value equality is planned — see the design doc). It
+/// must fail with a clear `unsupported_feature` error rather than panicking
+/// inside the engine's type inference.
+#[driver_test(requires(document_collections))]
+pub async fn struct_embed_whole_value_filter_rejected(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        age: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    let path: toasty::stmt::Path<Account, Profile> = Account::fields().profile().into();
+    let err = assert_err!(
+        Account::filter(path.eq(Profile {
+            name: "Alice".into(),
+            age: 30,
+        }))
+        .exec(&mut db)
+        .await
+    );
+    let msg = err.to_string();
+    assert!(
+        msg.contains("#[document]") && msg.contains("not yet supported"),
+        "expected a graceful unsupported_feature error, got: {msg}"
+    );
+
+    Ok(())
+}
+
+/// Filtering on a decimal leaf inside a `#[document]` embed. Backends with a
+/// native decimal type cast the JSON extraction back to it (`::numeric` on
+/// PostgreSQL, `DECIMAL(65, 30)` on MySQL); SQLite has none, so the engine
+/// binds the operand as the codec's `Display` text and the comparison happens
+/// as text.
+#[driver_test(id(ID), requires(and(document_collections, sql)))]
+pub async fn struct_embed_filter_decimal(t: &mut Test) -> Result<(), BoxError> {
+    use rust_decimal::Decimal;
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Pricing {
+        name: String,
+        price: Decimal,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Product {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        pricing: Pricing,
+    }
+
+    let mut db = t.setup_db(models!(Product)).await;
+
+    toasty::create!(Product::[
+        { pricing: Pricing { name: "basic".into(), price: Decimal::new(1999, 2) } },
+        { pricing: Pricing { name: "pro".into(), price: Decimal::new(4999, 2) } },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let found = Product::filter(
+        Product::fields()
+            .pricing()
+            .price()
+            .eq(Decimal::new(1999, 2)),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].pricing.name, "basic");
+
+    Ok(())
+}
+
+/// Temporal leaves inside a `#[document]` round-trip through INSERT and a
+/// fresh fetch on every backend with document storage — including backends
+/// without native temporal column types. Regression test: the SQLite driver
+/// built `toasty-sql` without its `jiff` feature, so the JSON codec had no
+/// temporal arms and encoding a temporal document leaf panicked at insert.
+#[driver_test(requires(document_collections))]
+pub async fn struct_embed_temporal_create_get(t: &mut Test) -> Result<(), BoxError> {
+    use jiff::Timestamp;
+    use jiff::civil::{DateTime, date, time};
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Event {
+        starts_at: Timestamp,
+        on_date: jiff::civil::Date,
+        at_time: jiff::civil::Time,
+        scheduled: DateTime,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[document]
+        event: Event,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    let event = Event {
+        starts_at: Timestamp::from_second(946_684_800)?, // 2000-01-01T00:00:00Z
+        on_date: date(2000, 1, 1),
+        at_time: time(9, 30, 0, 0),
+        scheduled: date(2000, 1, 1).at(9, 30, 0, 0),
+    };
+    let account = toasty::create!(Account {
+        event: event.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Account::get_by_id(&mut db, &account.id).await?;
+    assert_eq!(reloaded.event, event);
+
+    Ok(())
+}
+
 /// A `Zoned` leaf in a `#[document]` is rejected at schema-build: jiff renders
 /// it with an RFC 9557 `[IANA]` annotation that no SQL backend can parse back,
 /// and dropping the annotation would lose the zone identity the type carries.
@@ -903,6 +1077,41 @@ pub async fn struct_embed_zoned_document_rejected(t: &mut Test) -> Result<(), Bo
             );
         }
         Ok(_) => panic!("expected schema build to reject a `Zoned` leaf in a `#[document]`"),
+    }
+
+    Ok(())
+}
+
+/// A `Vec<u8>` leaf in a `#[document]` is rejected at schema-build: JSON has
+/// no binary representation, so the value could never round-trip through the
+/// document encoding.
+#[driver_test(requires(document_collections))]
+pub async fn struct_embed_bytes_document_rejected(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Attachment {
+        name: String,
+        data: Vec<u8>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[document]
+        attachment: Attachment,
+    }
+
+    match t.try_setup_db(models!(Account)).await {
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("Vec<u8>") && msg.contains("#[document]"),
+                "expected schema-build rejection naming the unsupported `Vec<u8>` leaf, got: {msg}"
+            );
+        }
+        Ok(_) => panic!("expected schema build to reject a `Vec<u8>` leaf in a `#[document]`"),
     }
 
     Ok(())

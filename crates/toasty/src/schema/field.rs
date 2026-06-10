@@ -250,6 +250,33 @@ where
 /// get re-routed through the collection-field path.
 pub trait Scalar {}
 
+/// Marks types that `#[document]` storage accepts: a `#[derive(Embed)]`
+/// struct, or a `Vec` of them.
+///
+/// The `#[document]` attribute resolves the field's app-level type through
+/// this trait, so applying it to anything else — a scalar, an enum embed, a
+/// `Vec<scalar>` — is a compile error rather than a silently ignored
+/// attribute. The schema builder re-validates the resolved shape at build
+/// time, but only a trait bound can catch the mistake at compile time.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot use `#[document]` storage",
+    label = "`#[document]` requires a `#[derive(Embed)]` struct or a `Vec` of them",
+    note = "enum embeds and scalar collections do not yet support document storage; \
+            remove the `#[document]` attribute"
+)]
+pub trait Document: Field {
+    /// The app-level type of the document column: `Model(id)` for a bare
+    /// embed, `List(Model(id))` for a collection.
+    fn document_ty() -> toasty_core::stmt::Type {
+        <Self as Load>::ty()
+    }
+}
+
+/// A `Vec` of document-capable embeds is itself document-capable — the
+/// collection is stored as one JSON array of objects. Mirrors the blanket
+/// `Field for Vec<T>` impl above.
+impl<T> Document for Vec<T> where T: Document + Embed + Field {}
+
 /// Registers a scalar collection element type. For each `$t` this generates
 /// both `impl Scalar for $t` (opting it into the collection-path operators)
 /// and a concrete `impl Field for Vec<$t>` (the collection field impl). The
