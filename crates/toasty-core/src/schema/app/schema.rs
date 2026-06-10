@@ -325,6 +325,38 @@ impl Builder {
         // BelongsTo pairing).
         self.promote_has_items_from_item_parent_pairs();
 
+        // After IC promotion, no field should still carry
+        // `AutoStrategy::String`. The macro emits this strategy when it sees
+        // `#[auto] field: String`; `validate_item_collections` promotes it to
+        // `ItemCollectionRoot/ChildSortKey` for IC sort keys. Anything that
+        // survives to here is a `#[auto] String` outside an item collection,
+        // which has no defined runtime behaviour — `String` is not generally
+        // `Auto`-able workspace-wide.
+        self.reject_unpromoted_auto_string()?;
+
+        Ok(())
+    }
+
+    /// Reject `AutoStrategy::String` left on any field after IC promotion.
+    /// See [`Self::process_models`] for why this is a hard error.
+    fn reject_unpromoted_auto_string(&self) -> Result<()> {
+        for model in self.models.values() {
+            let Some(root) = model.as_root() else {
+                continue;
+            };
+            for field in &root.fields {
+                if matches!(field.auto, Some(AutoStrategy::String)) {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "field `{}` on `{}` is `#[auto] String`, but `String` is `Auto`-able only \
+                         on the sort key of an item-collection participant. Either declare the \
+                         model as an item-collection root/child (with `#[item_parent]` and a \
+                         matching `#[has_many]` link) or change the field's type / drop `#[auto]`.",
+                        field.name.app_unwrap(),
+                        root.name.upper_camel_case(),
+                    )));
+                }
+            }
+        }
         Ok(())
     }
 

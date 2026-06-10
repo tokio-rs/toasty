@@ -618,3 +618,34 @@ fn simple_form_root_passes_validation() {
 
     Schema::from_macro(vec![tenant, user]).expect("simple-form item-collection chain should build");
 }
+
+/// `AutoStrategy::String` is permitted only on the sort key of an
+/// item-collection participant (see
+/// `process_models::reject_unpromoted_auto_string`). A standalone root with
+/// `#[auto] sk: String` and no IC chain must fail to build.
+#[test]
+fn auto_string_outside_item_collection_rejected() {
+    let id = ModelId(0);
+
+    let mut sk = make_primitive_field(id, 1, "sk", stmt::Type::String, true);
+    sk.auto = Some(AutoStrategy::String);
+
+    let standalone = make_root_with_compound_key(
+        id,
+        "Standalone",
+        vec![
+            make_primitive_field(id, 0, "account", stmt::Type::String, true),
+            sk,
+        ],
+        None,
+    );
+
+    let err = Schema::from_macro(vec![standalone]).unwrap_err();
+    let msg = err.to_string();
+    assert!(
+        msg.contains("`#[auto] String`")
+            && msg.contains("item-collection")
+            && msg.contains("Standalone"),
+        "unexpected error: {msg}",
+    );
+}

@@ -6,8 +6,7 @@
 //!
 //! These tests exercise the read/write/cascade paths across two
 //! `HasItems` hops (Tenant.users -> User.todos), the deep-chain partition
-//! + sort-prefix planning, and parent-deletion cascade through both
-//! tiers.
+//! + sort-prefix planning, and parent-deletion cascade through both tiers.
 
 use crate::prelude::*;
 

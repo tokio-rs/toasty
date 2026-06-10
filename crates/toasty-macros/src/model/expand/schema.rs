@@ -232,7 +232,20 @@ impl Expand<'_> {
                         AutoStrategy::Unspecified => {
                             assert!(primary_key, "TODO: better error handling");
 
-                            quote! { Some(<#ty as #toasty::Auto>::STRATEGY) }
+                            // `String` is not `Auto` (the trait is intentionally
+                            // not implemented for `String` workspace-wide).
+                            // Emit `AutoStrategy::String` directly when the
+                            // field's syntactic type is `String`; schema-build
+                            // either promotes this to
+                            // `ItemCollectionRoot/ChildSortKey` for IC sort
+                            // keys, or rejects it. Other types continue to go
+                            // through `<#ty as Auto>::STRATEGY` and surface a
+                            // compile-time error if `Auto` is not impl'd.
+                            if ty_is_plain_string(ty) {
+                                quote! { Some(#toasty::core::schema::app::AutoStrategy::String) }
+                            } else {
+                                quote! { Some(<#ty as #toasty::Auto>::STRATEGY) }
+                            }
                          }
                         AutoStrategy::Uuid(UuidVersion::V4) => quote! { Some(#toasty::core::schema::app::AutoStrategy::Uuid(#toasty::core::schema::app::UuidVersion::V4)) },
                         AutoStrategy::Uuid(UuidVersion::V7) => quote! { Some(#toasty::core::schema::app::AutoStrategy::Uuid(#toasty::core::schema::app::UuidVersion::V7)) },
@@ -705,4 +718,37 @@ pub(super) fn expand_via_path(
             __via_untyped
         }
     }
+}
+
+/// Returns `true` when `ty` syntactically refers to `String` —
+/// either the bare `String` or the fully-qualified `std::string::String` /
+/// `alloc::string::String`. Conservative on aliases and generics; a type alias
+/// for `String` is not detected and falls through to the trait-lookup path,
+/// where it will fail because `Auto` is not implemented for `String`.
+fn ty_is_plain_string(ty: &syn::Type) -> bool {
+    let syn::Type::Path(tp) = ty else {
+        return false;
+    };
+    if tp.qself.is_some() {
+        return false;
+    }
+    let Some(last) = tp.path.segments.last() else {
+        return false;
+    };
+    if last.ident != "String" || !last.arguments.is_empty() {
+        return false;
+    }
+    let segs: Vec<_> = tp
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect();
+    matches!(
+        segs.as_slice(),
+        [s] if s == "String"
+    ) || matches!(
+        segs.as_slice(),
+        [a, b, c] if (a == "std" || a == "alloc") && b == "string" && c == "String"
+    )
 }

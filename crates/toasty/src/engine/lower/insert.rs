@@ -211,9 +211,15 @@ impl LowerStatement<'_, '_> {
                             }
                         }
                         app::AutoStrategy::String => {
-                            let id = uuid::Uuid::now_v7();
-                            let primitive = stmt::Value::String(id.to_string());
-                            field_expr.insert(target.wrap(primitive).into());
+                            // `AutoStrategy::String` is rejected at schema
+                            // build outside item collections (see
+                            // `process_models::reject_unpromoted_auto_string`)
+                            // and promoted to `ItemCollectionRoot/ChildSortKey`
+                            // inside them. It cannot reach insert lowering.
+                            unreachable!(
+                                "AutoStrategy::String should have been promoted or rejected at \
+                                 schema build"
+                            );
                         }
                         app::AutoStrategy::ItemCollectionRootSortKey => {
                             // Root sort key: `<ModelName>#`. The partition
