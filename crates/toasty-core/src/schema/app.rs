@@ -57,7 +57,7 @@ mod pk;
 pub use pk::PrimaryKey;
 
 mod relation;
-pub use relation::{BelongsTo, Cardinality, Has, Via};
+pub use relation::{BelongsTo, Cardinality, Has, HasItems, ItemParent, Via};
 
 mod schema;
 pub use schema::{Resolved, Schema};

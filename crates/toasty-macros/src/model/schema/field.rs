@@ -1,6 +1,6 @@
 use super::AutoStrategy;
 
-use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, ItemParentAttr, Name};
+use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, ItemParent, ItemParentAttr, Name};
 
 use syn::spanned::Spanned;
 
@@ -67,6 +67,12 @@ pub(crate) enum FieldTy {
     BelongsTo(BelongsTo),
     HasMany(HasMany),
     HasOne(HasOne),
+    /// Synthesised by the model post-pass when a field carries
+    /// `#[item_parent]`. Distinct from `BelongsTo` because navigation
+    /// lowers to a partition-scoped query rather than a value-equality
+    /// join (design R2.9). B4.7 introduced this variant; B4.8/B4.9 wire
+    /// the relation method and HasMany pairing.
+    ItemParent(ItemParent),
 }
 
 impl FieldAttr {
@@ -386,6 +392,13 @@ impl Field {
             FieldTy::Primitive(ty) => {
                 rewrite_self(ty, model_ident);
             }
+            // `Field::from_ast` only produces `Primitive`/`BelongsTo`/`HasMany`/
+            // `HasOne` — `ItemParent` is synthesised by the model post-pass in
+            // `Model::from_ast` after this method runs, so it cannot appear here.
+            FieldTy::ItemParent(_) => unreachable!(
+                "ItemParent is synthesised after Field::from_ast; \
+                 see Model::from_ast post-pass"
+            ),
         }
 
         Ok(Self {

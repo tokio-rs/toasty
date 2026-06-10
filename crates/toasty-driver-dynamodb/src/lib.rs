@@ -541,11 +541,24 @@ impl Visit for BuildKeyExpression<'_> {
     }
 
     fn visit_expr_is_model(&mut self, model: &stmt::ExprIsModel) {
+        // After removal of the `__model` discriminator column, the model's own
+        // sort field carries `<ModelName>#<uuid>`. Find that column via the
+        // model's PK index so we can render the prefix segment as the leading
+        // sort-key component.
+        let app_model = self.schema.app.model(model.model).as_root_unwrap();
+        let pk_index = &app_model.indices[app_model.primary_key.index.index];
+        let sort_field_id = pk_index
+            .local_fields()
+            .iter()
+            .next()
+            .map(|ic| ic.field)
+            .or_else(|| pk_index.partition_fields().get(1).map(|ic| ic.field))
+            .expect("IsModel emitted for model without sort field");
         let mapping = self.schema.mapping_for(model.model);
-        let disc_col_id = mapping
-            .item_collection
-            .model_column
-            .expect("IsModel emitted for model without discriminator");
+        let disc_col_id = mapping.fields[sort_field_id.index]
+            .as_primitive()
+            .expect("sort field maps to a primitive column")
+            .column;
         self.sk_components
             .insert(disc_col_id, SkComponent::Model(model.model));
     }
@@ -650,16 +663,28 @@ fn ddb_expression(
             format!("attribute_not_exists({inner})")
         }
         stmt::Expr::IsModel(e) => {
-            // On DynamoDB the discriminator column is not stored as a top-level
-            // attribute on rows; it's encoded as the leading segment of the
-            // synthesized __sk. Filter by the SK prefix so scans and other
-            // filter-expression contexts find the right rows.
-            let model_name = schema.app.model(e.model).name().upper_camel_case();
+            // The model's sort field carries `<ModelName>#<uuid>`; emit a
+            // `begins_with` against that column so scans and other
+            // filter-expression contexts find rows of this model only.
+            let app_model = schema.app.model(e.model).as_root_unwrap();
+            let pk_index = &app_model.indices[app_model.primary_key.index.index];
+            let sort_field_id = pk_index
+                .local_fields()
+                .iter()
+                .next()
+                .map(|ic| ic.field)
+                .or_else(|| pk_index.partition_fields().get(1).map(|ic| ic.field))
+                .expect("IsModel emitted for model without sort field");
+            let mapping = schema.mapping_for(e.model);
+            let sort_col_id = mapping.fields[sort_field_id.index]
+                .as_primitive()
+                .expect("sort field maps to a primitive column")
+                .column;
+            let sort_col = schema.db.column(sort_col_id);
+            let model_name = app_model.name.upper_camel_case();
             let prefix_attr = attrs.value(&stmt::Value::String(format!("{model_name}#")));
-            attrs
-                .attr_names
-                .insert("#__sk".to_string(), "__sk".to_string());
-            format!("begins_with(#__sk, {prefix_attr})")
+            let col_alias = attrs.column(sort_col).to_string();
+            format!("begins_with({col_alias}, {prefix_attr})")
         }
         stmt::Expr::Not(expr_not) => {
             let inner = ddb_expression(schema, cx, attrs, primary, &expr_not.expr);

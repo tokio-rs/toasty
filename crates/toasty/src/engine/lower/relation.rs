@@ -216,6 +216,9 @@ impl LowerStatement<'_, '_> {
             FieldTy::BelongsTo(_) => {
                 self.plan_mut_belongs_to(field, op, source);
             }
+            FieldTy::HasItems(_) | FieldTy::ItemParent(_) => {
+                todo!("cascade for IC relations")
+            }
             _ => (),
         }
     }

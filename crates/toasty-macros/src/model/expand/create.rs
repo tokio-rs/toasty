@@ -157,6 +157,12 @@ impl Expand<'_> {
                             }
                         }
                     }
+                    // The create-builder setter for an ItemParent field would
+                    // distribute the parent's PK into the child's PK fields,
+                    // but item-collection children inherit those fields by
+                    // schema convention (R2.4) — the create surface is
+                    // resliced in B4.8/B7. For B4.7 we omit the setter.
+                    FieldTy::ItemParent(_) => TokenStream::new(),
                     FieldTy::HasMany(rel) => {
                         if rel.via.is_some() {
                             TokenStream::new()

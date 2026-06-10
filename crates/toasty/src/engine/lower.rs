@@ -1253,12 +1253,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
                     match &field.ty {
                         app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
-                        app::FieldTy::Has(_) | app::FieldTy::Via(_) => todo!(),
+                        app::FieldTy::Has(_) | app::FieldTy::HasItems(_) | app::FieldTy::Via(_) => {
+                            todo!()
+                        }
                         app::FieldTy::BelongsTo(rel) => {
                             *operand = key_field_refs(
                                 nesting,
                                 rel.foreign_key.fields.iter().map(|fk| fk.source),
                             );
+                        }
+                        app::FieldTy::ItemParent(_) => {
+                            todo!("ItemParent lowering: B4.8/B4.9")
                         }
                     }
                 }
@@ -1499,11 +1504,39 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let Some(model) = self.model() else { return };
         let mapping = self.state.engine.schema.mapping_for(model);
 
-        let Some(_) = mapping.item_collection.model_column else {
+        if !mapping.item_collection.participates {
             return;
-        };
+        }
 
-        filter.add_filter(stmt::Expr::is_model(model.id));
+        // The model's sort column carries `<ModelName>#<uuid>` since B4; emit
+        // a `StartsWith(<sort_col>, "<ModelName>#")` predicate so the row's
+        // model identity is tested against the sort value's leading segment.
+        // Both SQL and DynamoDB drivers already serialize StartsWith natively;
+        // the engine retains an `IsModel` representation for index-matching
+        // (`engine/index/index_match.rs`) and DynamoDB's BuildKeyExpression
+        // path, but for downstream serialization the StartsWith form is
+        // exhaustive.
+        let pk_index = &model.indices[model.primary_key.index.index];
+        let sort_field_id = pk_index
+            .local_fields()
+            .iter()
+            .next()
+            .map(|ic| ic.field)
+            .or_else(|| pk_index.partition_fields().get(1).map(|ic| ic.field))
+            .expect("item-collection model has a sort field (validated at schema build)");
+        let sort_col_id = mapping.fields[sort_field_id.index]
+            .as_primitive()
+            .expect("sort field maps to a primitive column")
+            .column;
+        let prefix = format!("{}#", model.name.upper_camel_case());
+        filter.add_filter(stmt::Expr::starts_with(
+            stmt::Expr::column(stmt::ExprReference::Column(stmt::ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: sort_col_id.index,
+            })),
+            stmt::Value::String(prefix),
+        ));
     }
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {

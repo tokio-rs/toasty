@@ -58,6 +58,12 @@ pub trait RelationOneField: Load<Output = Self> {
     /// Build the [`FieldTy`] for a `BelongsTo` relation field, given the
     /// foreign key resolved from the field's `#[belongs_to(...)]` attribute.
     fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy;
+
+    /// Build the [`FieldTy`] for an `ItemParent` relation field synthesised
+    /// from a `#[item_parent]` attribute. Unlike `BelongsTo`, item-parent
+    /// navigation is partition-scoped (no foreign-key columns); see design
+    /// R2.9.
+    fn item_parent_relation_field_ty() -> FieldTy;
 }
 
 impl<M: Model> RelationOneField for M {
@@ -83,6 +89,10 @@ impl<M: Model> RelationOneField for M {
     fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
         belongs_to_relation_field_ty::<M>(foreign_key)
     }
+
+    fn item_parent_relation_field_ty() -> FieldTy {
+        item_parent_relation_field_ty::<M>()
+    }
 }
 
 impl<M: Model> RelationOneField for Option<M> {
@@ -107,6 +117,10 @@ impl<M: Model> RelationOneField for Option<M> {
 
     fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
         belongs_to_relation_field_ty::<M>(foreign_key)
+    }
+
+    fn item_parent_relation_field_ty() -> FieldTy {
+        item_parent_relation_field_ty::<M>()
     }
 }
 
@@ -134,6 +148,10 @@ impl<M: Model> RelationOneField for Deferred<M> {
     fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
         belongs_to_relation_field_ty::<M>(foreign_key)
     }
+
+    fn item_parent_relation_field_ty() -> FieldTy {
+        item_parent_relation_field_ty::<M>()
+    }
 }
 
 impl<M: Model> RelationOneField for Deferred<Option<M>> {
@@ -159,6 +177,10 @@ impl<M: Model> RelationOneField for Deferred<Option<M>> {
 
     fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
         belongs_to_relation_field_ty::<M>(foreign_key)
+    }
+
+    fn item_parent_relation_field_ty() -> FieldTy {
+        item_parent_relation_field_ty::<M>()
     }
 }
 
@@ -190,5 +212,14 @@ fn belongs_to_relation_field_ty<M: Model>(foreign_key: ForeignKey) -> FieldTy {
         // The pair is populated at runtime.
         pair: None,
         foreign_key,
+    })
+}
+
+fn item_parent_relation_field_ty<M: Model>() -> FieldTy {
+    let target = <M as Model>::id();
+
+    FieldTy::ItemParent(app::ItemParent {
+        target,
+        expr_ty: stmt::Type::Model(target),
     })
 }

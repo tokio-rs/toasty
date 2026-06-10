@@ -212,6 +212,12 @@ impl Expand<'_> {
                     deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::RelationOneField>::has_one_relation_field_ty(#pair, #via));
                 }
+                FieldTy::ItemParent(rel) => {
+                    let ty = &rel.ty;
+                    nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::RelationOneField>::item_parent_relation_field_ty());
+                }
             }
 
             let primary_key = self.model.primary_key_fields()
@@ -374,7 +380,7 @@ impl Expand<'_> {
                 .item_parent_target
                 .as_ref()
                 .expect("item_parent_field implies item_parent_target");
-            return quote! { Some(<#parent_ty as #toasty::Register>::id()) };
+            return quote! { Some(<#parent_ty as #toasty::Model>::id()) };
         }
 
         quote! { None }
@@ -554,6 +560,12 @@ impl Expand<'_> {
                     }
                 }
                 FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    quote! {
+                        <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);
+                    }
+                }
+                FieldTy::ItemParent(rel) => {
                     let ty = &rel.ty;
                     quote! {
                         <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);

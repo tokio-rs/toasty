@@ -234,6 +234,12 @@ impl Edge {
                 (schema.app.field(pair).ty.as_belongs_to_unwrap(), true)
             }
             app::FieldTy::BelongsTo(belongs_to) => (belongs_to, false),
+            // Item-collection relations (HasItems / ItemParent) lower to
+            // partition-scoped queries with sort-key prefix filters, not to
+            // foreign-key joins; they can't participate in a via path.
+            app::FieldTy::HasItems(_) | app::FieldTy::ItemParent(_) => {
+                unreachable!("HasItems / ItemParent is not a via step")
+            }
             _ => unreachable!("via step is not a relation field"),
         };
 

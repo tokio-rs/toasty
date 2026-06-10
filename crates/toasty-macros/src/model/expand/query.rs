@@ -323,6 +323,11 @@ impl Expand<'_> {
                 }
                 FieldTy::HasMany(rel) => Some(self.expand_has_many_method(field, rel)),
                 FieldTy::HasOne(rel) => Some(self.expand_has_one_method(field, rel)),
+                // The Query-side relation method for ItemParent (which would
+                // emit `tenant.users()` to navigate child→parent or vice versa)
+                // is wired in B4.8/B4.9 alongside the lowering for symmetric
+                // partition-scoped queries.
+                FieldTy::ItemParent(_) => None,
                 FieldTy::Primitive(..) => None,
             })
             .collect()

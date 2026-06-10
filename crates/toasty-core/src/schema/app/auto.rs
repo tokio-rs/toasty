@@ -21,6 +21,19 @@ pub enum AutoStrategy {
     Uuid(UuidVersion),
     /// Use an auto-incrementing integer sequence (database-assigned).
     Increment,
+    /// Bare UUID v7, written verbatim into a String column.
+    /// Reachable from `impl Auto for String`.
+    String,
+    /// IC root sort key. Emits `<ModelName>#` (literal trailing `#`,
+    /// no own-id segment). Set at schema-build for IC root models.
+    /// The partition column already identifies the row, so no uuid
+    /// is appended. DDB still requires a non-null sort value.
+    ItemCollectionRootSortKey,
+    /// IC descendant sort key. Reads the parent's full sk slot
+    /// (distributed by the HasItems insert-scope walker), swaps the
+    /// model-name prefix with this child's name, and appends
+    /// `#<own-uuid>`. Carries the parent's full local-id chain inline.
+    ItemCollectionChildSortKey,
 }
 
 /// UUID version to use for auto-generated UUID fields.

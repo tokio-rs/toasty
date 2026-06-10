@@ -167,7 +167,17 @@ impl LowerStatement<'_, '_> {
         for field in &model.fields {
             let mut field_expr = expr.entry_mut(field.id.index);
 
-            if field_expr.is_default() {
+            // `ItemCollectionChildSortKey` is unconditionally minted from the
+            // parent's distributed sk — the strategy is the source of truth,
+            // so we overwrite whatever the scope walker put there. All other
+            // auto strategies only fire when the user left the slot at
+            // `Expr::Default`.
+            let force_auto = matches!(
+                &field.auto,
+                Some(app::AutoStrategy::ItemCollectionChildSortKey)
+            );
+
+            if field_expr.is_default() || force_auto {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
@@ -199,6 +209,51 @@ impl LowerStatement<'_, '_> {
                             if target.wrap_depth > 0 {
                                 field_expr.insert(target.wrap_expr(stmt::Expr::Default));
                             }
+                        }
+                        app::AutoStrategy::String => {
+                            let id = uuid::Uuid::now_v7();
+                            let primitive = stmt::Value::String(id.to_string());
+                            field_expr.insert(target.wrap(primitive).into());
+                        }
+                        app::AutoStrategy::ItemCollectionRootSortKey => {
+                            // Root sort key: `<ModelName>#`. The partition
+                            // already identifies the row; DDB still needs a
+                            // non-null sort value, so we emit the literal
+                            // prefix without an own-id segment.
+                            let prefix = model.name.upper_camel_case();
+                            let primitive = stmt::Value::String(format!("{prefix}#"));
+                            field_expr.insert(target.wrap(primitive).into());
+                        }
+                        app::AutoStrategy::ItemCollectionChildSortKey => {
+                            // Child sort key: read the parent's sk (already
+                            // distributed into this slot by the HasItems
+                            // insert-scope walker), strip its model-name
+                            // prefix, and re-emit with this child's name and
+                            // an own-uuid suffix.
+                            //
+                            // Parent `Tenant#`        → child `User#<uuid>`.
+                            // Parent `User#<u-uuid>`  → child `Todo#<u-uuid>#<own-uuid>`.
+                            // Parent `Todo#<u>#<t>`   → child `<C>#<u>#<t>#<own-uuid>`.
+                            let parent_sk = read_string_value(
+                                field_expr.as_expr_unwrap(),
+                                target.wrap_depth,
+                            )
+                            .expect(
+                                "parent sk must be distributed into the child sk slot before \
+                                 ItemCollectionChildSortKey runs",
+                            );
+                            let split = parent_sk.find('#').unwrap_or_else(|| {
+                                panic!("parent sk `{parent_sk}` must carry a `<Prefix>#…` shape")
+                            });
+                            let parent_chain = &parent_sk[split + 1..];
+                            let id = uuid::Uuid::now_v7();
+                            let child_name = model.name.upper_camel_case();
+                            let sk = if parent_chain.is_empty() {
+                                format!("{child_name}#{id}")
+                            } else {
+                                format!("{child_name}#{parent_chain}#{id}")
+                            };
+                            field_expr.insert(target.wrap(stmt::Value::String(sk)).into());
                         }
                     }
                 }
@@ -361,6 +416,58 @@ impl<'b> LowerStatement<'_, 'b> {
     }
 }
 
+/// Peel `wrap_depth` newtype-record layers off `expr` and return the inner
+/// `String` value, if any. Returns `None` if the expression is not a value
+/// (e.g. left at `Expr::Default`) or is not a `String`.
+///
+/// For bare `String` IC sort fields `wrap_depth` is 0 and this is a direct
+/// match on `Expr::Value(Value::String)`. For an `Embed`-wrapped sort field
+/// it would unwrap the matching number of `Value::Record` layers.
+fn read_string_value(expr: &stmt::Expr, wrap_depth: usize) -> Option<String> {
+    let stmt::Expr::Value(value) = expr else {
+        return None;
+    };
+    let mut value: &stmt::Value = value;
+    for _ in 0..wrap_depth {
+        let stmt::Value::Record(record) = value else {
+            return None;
+        };
+        let [inner] = record.fields.as_slice() else {
+            return None;
+        };
+        value = inner;
+    }
+    match value {
+        stmt::Value::String(s) => Some(s.clone()),
+        _ => None,
+    }
+}
+
+/// Walks `expr` looking for a top-level `Field { nesting: 0, index } = Value`
+/// (or commuted) conjunct in an AND tree, returning the matched value.
+pub(super) fn find_eq_value_for_field(
+    expr: &stmt::Expr,
+    target_index: usize,
+) -> Option<stmt::Value> {
+    match expr {
+        stmt::Expr::And(operands) => operands
+            .iter()
+            .find_map(|e| find_eq_value_for_field(e, target_index)),
+        stmt::Expr::BinaryOp(e) if e.op.is_eq() => match (&*e.lhs, &*e.rhs) {
+            (
+                stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }),
+                stmt::Expr::Value(v),
+            )
+            | (
+                stmt::Expr::Value(v),
+                stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }),
+            ) if *index == target_index => Some(v.clone()),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
 impl ApplyInsertScope<'_> {
     fn apply_expr(&mut self, stmt: &stmt::Expr) {
         match stmt {
@@ -404,6 +511,52 @@ impl ApplyInsertScope<'_> {
             },
             // Constants are ignored
             stmt::Expr::Value(_) => {}
+            // Item-collection partition: `child.<partition> IN (SELECT
+            // parent.<partition> FROM <parent filter>)`. R2.4 guarantees the
+            // child's and parent's partition fields share a name and storage
+            // column; the source query's filter pins the parent down by that
+            // partition value (e.g. `parent.account = "acme"`). Extract that
+            // value from the subquery filter and apply it as the child's
+            // partition value, mirroring what `lift_belongs_to_in_subquery`
+            // does for BelongsTo.
+            stmt::Expr::InSubquery(in_subquery) => {
+                let stmt::Expr::Reference(child_ref @ stmt::ExprReference::Field { .. }) =
+                    &*in_subquery.expr
+                else {
+                    todo!("EXPR = {:#?}", stmt);
+                };
+                let select = in_subquery.query.body.as_select_unwrap();
+                let stmt::Returning::Project(project) = &select.returning else {
+                    todo!("EXPR = {:#?}", stmt);
+                };
+                let stmt::Expr::Reference(stmt::ExprReference::Field {
+                    nesting: 0,
+                    index: parent_index,
+                }) = project
+                else {
+                    todo!("EXPR = {:#?}", stmt);
+                };
+                let parent_value = select
+                    .filter
+                    .expr
+                    .as_ref()
+                    .and_then(|f| find_eq_value_for_field(f, *parent_index))
+                    .unwrap_or_else(|| {
+                        todo!(
+                            "could not extract parent partition value from subquery filter; \
+                             EXPR = {:#?}",
+                            stmt
+                        )
+                    });
+                self.apply_eq_constraint(child_ref, &stmt::Expr::Value(parent_value));
+            }
+            // `child.<sort> STARTS_WITH "<Child>#"` is intrinsic to item-
+            // collection membership (R2.9). The sort key is minted by
+            // `AutoStrategy::ItemCollectionChildSortKey` in
+            // `apply_app_level_insertion_defaults`, which overwrites whatever
+            // the walker put into the child sk slot, so this is a no-op at
+            // insert-scope.
+            stmt::Expr::StartsWith(_) => {}
             _ => todo!("EXPR = {:#?}", stmt),
         }
     }

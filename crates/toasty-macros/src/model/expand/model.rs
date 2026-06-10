@@ -3,6 +3,7 @@ use crate::model::schema::{FieldTy, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::quote;
+use std::collections::HashSet;
 
 impl Expand<'_> {
     pub(super) fn expand_model_impls(&self) -> TokenStream {
@@ -522,6 +523,10 @@ impl Expand<'_> {
                     let ty = &rel.ty;
                     quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
+                FieldTy::ItemParent(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
+                }
             }
         });
 
@@ -600,6 +605,10 @@ impl Expand<'_> {
                         let ty = &rel.ty;
                         quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
                     }
+                    FieldTy::ItemParent(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
+                    }
                 }
             })
             .collect();
@@ -628,6 +637,111 @@ impl Expand<'_> {
                     *target = <Self as #toasty::Load>::load(value)?;
                     Ok(())
                 }
+            }
+        }
+    }
+
+    /// Collect the fields that participate in `CREATE_META`.
+    ///
+    /// Returns `(field_ident_name_str, field_rust_type)` pairs for primitive
+    /// fields that are not auto, default, update, FK source, or
+    /// item-collection partition fields (R2.7 — supplied by the parent
+    /// handle, never by the user's `create!` invocation).
+    fn create_meta_field_entries(&self) -> Vec<(String, &syn::Type)> {
+        let fk_sources: HashSet<usize> = self
+            .model
+            .fields
+            .iter()
+            .filter_map(|f| match &f.ty {
+                FieldTy::BelongsTo(rel) => Some(rel.foreign_key.iter().map(|fk| fk.source)),
+                _ => None,
+            })
+            .flatten()
+            .collect();
+
+        // Item-collection PK fields (partition + sort) are supplied by the
+        // parent's relation handle (e.g. `tenant.users().create()`), never
+        // by the user's create invocation. The model carries
+        // `#[item_parent]` exactly when its rows belong to a parent's
+        // collection; in that case suppress all PK components from
+        // CREATE_META.
+        let ic_pk_field_ids: HashSet<usize> = match (&self.model.kind, self.model.item_parent_field)
+        {
+            (ModelKind::Root(root), Some(_)) => root.primary_key.fields.iter().copied().collect(),
+            _ => HashSet::new(),
+        };
+
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let ty = match &field.ty {
+                    FieldTy::Primitive(ty) => ty,
+                    _ => return None,
+                };
+
+                if field.attrs.auto.is_some()
+                    || field.attrs.default_expr.is_some()
+                    || field.attrs.update_expr.is_some()
+                    || field.attrs.versionable
+                {
+                    return None;
+                }
+
+                if fk_sources.contains(&field.id) {
+                    return None;
+                }
+
+                if ic_pk_field_ids.contains(&field.id) {
+                    return None;
+                }
+
+                Some((field.name.ident.to_string(), ty))
+            })
+            .collect()
+    }
+
+    /// Generate the `CreateField` entries for `CREATE_META`.
+    fn expand_create_meta_fields(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let entries = self.create_meta_field_entries();
+
+        let fields = entries.iter().map(|(name, ty)| {
+            quote! {
+                #toasty::CreateField {
+                    name: #name,
+                    required: !<#ty as #toasty::Field>::NULLABLE,
+                },
+            }
+        });
+
+        quote! { #( #fields )* }
+    }
+
+    /// Generate a `pub const fn __check_create_fields(provided: &[&str])` that
+    /// panics with a field-specific literal message for each missing required field.
+    ///
+    /// Each `panic!` uses a pre-formatted string literal so it works in const
+    /// context (where formatted panics are unavailable on stable Rust).
+    fn expand_check_required_fn(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_name = self.model.ident.to_string();
+        let entries = self.create_meta_field_entries();
+
+        let checks = entries.iter().map(|(name, ty)| {
+            let msg = format!("missing required field `{name}` in create! for `{model_name}`");
+            quote! {
+                if !<#ty as #toasty::Field>::NULLABLE
+                    && !#toasty::const_contains(__provided, #name)
+                {
+                    panic!(#msg);
+                }
+            }
+        });
+
+        quote! {
+            pub const fn __check_create_fields(__provided: &[&str]) {
+                #( #checks )*
             }
         }
     }

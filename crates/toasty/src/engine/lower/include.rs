@@ -340,6 +340,65 @@ impl LowerStatement<'_, '_> {
                 }
                 (query, rel.target)
             }
+            // `HasItems` (parent-side IC relation, paired with `ItemParent`)
+            // lowers to a partition-equality + sort-prefix filter rather than
+            // a foreign-key value-equality join (R2.9). The sort-key prefix
+            // narrows the partition to the child collection's slice. We use
+            // `starts_with` (not `=`) on the sort key because every child row
+            // mints its own UUID v7 sort component at insert time
+            // (`AutoStrategy::ItemCollectionRootSortKey` for roots,
+            // `AutoStrategy::ItemCollectionChildSortKey` for descendants).
+            //
+            // NOTE: this `<Child>#` prefix matches every descendant of the
+            // child type in the partition, even those with a different
+            // ancestor. For deep IC chains this over-fetches at the
+            // `.include()` call site. The fix would require deriving the
+            // prefix from the parent row's sk at runtime; deferred until
+            // `.include()` paths are exercised in tests.
+            app::FieldTy::HasItems(rel) => {
+                let target_root = self.schema().app.model(rel.target).as_root_unwrap();
+                let pk = &target_root.primary_key.fields;
+                assert!(
+                    pk.len() >= 2,
+                    "item-collection child must have a (partition, sort) primary key"
+                );
+                let child_partition = pk[0];
+                let child_sort = pk[1];
+
+                // The parent-side partition field is the same name (R2.4) on
+                // the parent model. Resolve it on the source (parent) by
+                // looking up the child's partition field name on the parent.
+                let parent_root = self.model_unwrap();
+                let partition_name = self.schema().app.field(child_partition).name.app_unwrap();
+                let parent_partition = parent_root
+                    .fields
+                    .iter()
+                    .find(|f| f.name.app.as_deref() == Some(partition_name))
+                    .map(|f| f.id)
+                    .expect(
+                        "item-collection parent must declare a same-name partition field (R2.4)",
+                    );
+
+                let prefix = format!("{}#", target_root.name.upper_camel_case());
+
+                let mut query = stmt::Query::new_select(
+                    rel.target,
+                    stmt::Expr::and(
+                        stmt::Expr::eq(
+                            stmt::Expr::ref_self_field(child_partition),
+                            stmt::Expr::ref_parent_field(parent_partition),
+                        ),
+                        stmt::Expr::starts_with(
+                            stmt::Expr::ref_self_field(child_sort),
+                            stmt::Value::String(prefix),
+                        ),
+                    ),
+                );
+                if rel.is_one() {
+                    query.single = true;
+                }
+                (query, rel.target)
+            }
             // To handle single relations, we need a new query modifier that
             // returns a single record and not a list. This matters for the
             // type system.

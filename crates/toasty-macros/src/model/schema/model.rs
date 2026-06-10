@@ -1,6 +1,6 @@
 use super::{
-    BelongsTo, Column, ColumnType, ErrorSet, Field, FieldTy, ForeignKeyField, Index, IndexField,
-    IndexScope, ModelAttr, Name, PrimaryKey, Variant, VariantValue,
+    Column, ColumnType, ErrorSet, Field, FieldTy, Index, IndexField, IndexScope, ItemParent,
+    ModelAttr, Name, PrimaryKey, Variant, VariantValue,
 };
 use heck::ToSnakeCase;
 
@@ -261,22 +261,20 @@ impl Model {
             ));
         }
 
-        // Synthesise a `BelongsTo` relation for the `#[item_parent]` field, if
-        // any. The foreign-key pairs are derived from THIS model's primary-key
-        // fields; spec R2.4 (validated at schema build by
-        // `validate_item_collections`) guarantees the child has fields whose
-        // names match the root's `#[key(...)]`, so source and target idents
-        // share a name. The downstream relation-method generator
-        // (`expand_model_relation_belongs_to_method`) reads this `BelongsTo`
-        // to emit `user.tenant().exec(db).await` parent navigation.
+        // Synthesise an `ItemParent` relation for the `#[item_parent]` field,
+        // if any. Unlike `BelongsTo`, item-parent navigation carries no
+        // foreign-key columns: an item-collection child encodes its parent in
+        // its own partition + sort keys (R2.9), so navigation lowers to a
+        // partition-scoped query rather than a value-equality join. Embedded
+        // models cannot declare `#[item_parent]` (R2.9, last paragraph).
         if let Some(item_parent_idx) = item_parent_field
             && !is_embedded
         {
             // The field's declared type — `Deferred<Tenant>` — is what the
-            // downstream relation expansion expects in `BelongsTo::ty`; the
-            // `RelationOneField` blanket impl on `Deferred<M>` projects to
-            // the inner `Model` and supplies the `One` future. The original
-            // field type is currently held as `FieldTy::Primitive(...)` from
+            // downstream relation expansion needs to drive `RelationOneField`
+            // trait dispatch; the `Deferred<M>` blanket impl projects to the
+            // inner `Model` and supplies the `One` future. The original field
+            // type is currently held as `FieldTy::Primitive(...)` from
             // `Field::from_ast`.
             let field_ty = match &fields[item_parent_idx].ty {
                 FieldTy::Primitive(ty) => ty.clone(),
@@ -286,21 +284,7 @@ impl Model {
                 ),
             };
 
-            let foreign_key: Vec<ForeignKeyField> = pk_index_fields
-                .iter()
-                .map(|idx_field| {
-                    let target_ident = fields[idx_field.field].name.ident.clone();
-                    ForeignKeyField {
-                        source: idx_field.field,
-                        target: target_ident,
-                    }
-                })
-                .collect();
-
-            fields[item_parent_idx].ty = FieldTy::BelongsTo(BelongsTo {
-                ty: field_ty,
-                foreign_key,
-            });
+            fields[item_parent_idx].ty = FieldTy::ItemParent(ItemParent { ty: field_ty });
         }
 
         // Build ModelKind based on whether this is embedded or root

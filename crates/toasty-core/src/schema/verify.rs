@@ -308,6 +308,17 @@ impl Verify<'_> {
                     field_ty
                 );
             }
+            AutoStrategy::String
+            | AutoStrategy::ItemCollectionRootSortKey
+            | AutoStrategy::ItemCollectionChildSortKey => {
+                assert!(
+                    matches!(field_ty, crate::stmt::Type::String),
+                    "field `{}` has Auto::{:?} but type is not String: {:?}",
+                    field.name,
+                    auto,
+                    field_ty
+                );
+            }
         }
     }
 }

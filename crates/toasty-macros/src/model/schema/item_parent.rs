@@ -24,6 +24,21 @@ impl ItemParentAttr {
     }
 }
 
+/// Synthesised relation kind for `#[item_parent]` fields.
+///
+/// Created by the model post-pass in [`super::Model::from_ast`] when a field
+/// carries `#[item_parent]`. Mirrors [`super::BelongsTo`] but carries no
+/// foreign-key columns: an item-collection child encodes its parent in its
+/// own partition + sort keys (R2.9), so navigation does not lower to a
+/// value-equality join. The macro layer only retains the field's declared
+/// `Deferred<T>` type; the target [`ModelId`](toasty_core::schema::app::ModelId)
+/// is resolved at runtime through `<T as Register>::id()`.
+#[derive(Debug)]
+pub(crate) struct ItemParent {
+    /// The field's declared type — `Deferred<Parent>` from the user.
+    pub(crate) ty: syn::Type,
+}
+
 /// Extract `T` from a `Deferred<T>` type. Returns `Err` if the type is
 /// not `Deferred<T>` shaped.
 pub(crate) fn extract_deferred_inner(

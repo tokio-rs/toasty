@@ -65,6 +65,10 @@ impl Expand<'_> {
                     }
                 }
             }
+            // Item-parent fields are immutable post-create (the parent is
+            // encoded in the child's PK and re-keying is not supported), so
+            // the update builder does not expose a setter.
+            FieldTy::ItemParent(_) => TokenStream::new(),
             FieldTy::HasMany(rel) => {
                 if rel.via.is_some() {
                     // Relation setters mutate membership through `Assign`
@@ -364,6 +368,10 @@ impl Expand<'_> {
                     }
                 }
                 FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
+                }
+                FieldTy::ItemParent(rel) => {
                     let ty = &rel.ty;
                     quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
                 }

@@ -198,14 +198,6 @@ impl BuildTableFromModels<'_> {
         // (child rows don't carry root-specific non-PK values).
         self.map_model_fields_with_nullability(model, !children.is_empty())?;
 
-        // Add a `__model` discriminator column when there are item-collection children.
-        let model_column = if !children.is_empty() {
-            let col = self.add_model_discriminator_column(model, children);
-            Some(col)
-        } else {
-            None
-        };
-
         // Map each child model onto the same table.
         for child in children {
             self.map_item_collection_child(child, model)?;
@@ -213,80 +205,23 @@ impl BuildTableFromModels<'_> {
 
         self.update_index_names();
 
-        // Wire up model_column in the mapping for root + children.
-        if let Some(col_id) = model_column {
-            self.add_model_column_to_mapping(model.id(), col_id);
+        // Flag every model that participates in this item collection so the
+        // engine can inject an `IsModel` predicate (rendered as a sort-key
+        // prefix on DynamoDB) when reading rows from the shared table.
+        if !children.is_empty() {
+            self.mapping
+                .model_mut(model.id())
+                .item_collection
+                .participates = true;
             for child in children {
-                self.add_model_column_to_mapping(child.id(), col_id);
+                self.mapping
+                    .model_mut(child.id())
+                    .item_collection
+                    .participates = true;
             }
         }
 
         Ok(())
-    }
-
-    /// Adds a `__model` VARCHAR discriminator column and appends it to the
-    /// primary-key index as a Local-scoped (sort-key component) column.
-    ///
-    /// Returns the new column's `ColumnId`.
-    fn add_model_discriminator_column(&mut self, root: &Model, children: &[&Model]) -> ColumnId {
-        let max_len = std::iter::once(root.name().upper_camel_case().len())
-            .chain(children.iter().map(|m| m.name().upper_camel_case().len()))
-            .max()
-            .unwrap_or(1);
-
-        let col_id = ColumnId {
-            table: self.table.id,
-            index: self.table.columns.len(),
-        };
-
-        let storage_ty = db::Type::VarChar(max_len as u64);
-        self.table.columns.push(db::Column {
-            id: col_id,
-            name: "__model".to_string(),
-            ty: storage_ty.bridge_type(&stmt::Type::String),
-            storage_ty,
-            nullable: false,
-            primary_key: false,
-            auto_increment: false,
-            versionable: false,
-        });
-
-        // Append to PK table record and index.
-        self.table.primary_key.columns.push(col_id);
-
-        let pk_index = self
-            .table
-            .indices
-            .iter_mut()
-            .find(|i| i.primary_key)
-            .expect("primary key index must exist");
-        pk_index.columns.push(db::IndexColumn {
-            column: col_id,
-            op: db::IndexOp::Eq,
-            scope: IndexScope::Local,
-        });
-
-        col_id
-    }
-
-    /// Wires the model_column discriminator into the mapping for a single model.
-    ///
-    /// Appends the column to the model's `columns` list and adds a literal
-    /// `Value::String(model_name)` to `model_to_table` so inserts/updates emit
-    /// the correct discriminator value automatically.
-    fn add_model_column_to_mapping(&mut self, model_id: impl Into<app::ModelId>, col_id: ColumnId) {
-        let model_id = model_id.into();
-        let model_name = self
-            .app
-            .model(model_id)
-            .name()
-            .upper_camel_case()
-            .to_string();
-        let m = self.mapping.model_mut(model_id);
-        m.item_collection.model_column = Some(col_id);
-        m.columns.push(col_id);
-        m.model_to_table
-            .push(stmt::Value::String(model_name).into());
     }
 
     /// Builds columns + mapping for an item-collection child model.
@@ -333,6 +268,8 @@ impl BuildTableFromModels<'_> {
                 app::FieldTy::Embedded(_)
                 | app::FieldTy::BelongsTo(_)
                 | app::FieldTy::Has(_)
+                | app::FieldTy::HasItems(_)
+                | app::FieldTy::ItemParent(_)
                 | app::FieldTy::Via(_) => {}
             }
         }
@@ -781,9 +718,11 @@ impl BuildMapping<'_> {
                 Ok(self.map_table_column_to_model(column_id, primitive))
             }
             app::FieldTy::Embedded(_) => self.populate_embed_default_returning(field, mapping),
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
-                Ok(stmt::Value::Null.into())
-            }
+            app::FieldTy::BelongsTo(_)
+            | app::FieldTy::Has(_)
+            | app::FieldTy::HasItems(_)
+            | app::FieldTy::ItemParent(_)
+            | app::FieldTy::Via(_) => Ok(stmt::Value::Null.into()),
         }
     }
 
@@ -1127,9 +1066,11 @@ impl BuildMapping<'_> {
                     _ => unreachable!("invalid schema"),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
-                Ok(stmt::Value::Null.into())
-            }
+            app::FieldTy::BelongsTo(_)
+            | app::FieldTy::Has(_)
+            | app::FieldTy::HasItems(_)
+            | app::FieldTy::ItemParent(_)
+            | app::FieldTy::Via(_) => Ok(stmt::Value::Null.into()),
         }
     }
 }
@@ -1172,7 +1113,11 @@ impl<'a, 'b> MapField<'a, 'b> {
                     _ => unreachable!(),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
+            app::FieldTy::BelongsTo(_)
+            | app::FieldTy::Has(_)
+            | app::FieldTy::HasItems(_)
+            | app::FieldTy::ItemParent(_)
+            | app::FieldTy::Via(_) => {
                 assert!(!self.force_nullable);
                 let bit = self.build.next_bit();
                 Ok(mapping::Field::Relation(mapping::FieldRelation {

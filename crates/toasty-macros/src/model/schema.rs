@@ -23,7 +23,7 @@ mod index;
 pub(crate) use index::{Index, IndexField, IndexScope};
 
 mod item_parent;
-pub(crate) use item_parent::ItemParentAttr;
+pub(crate) use item_parent::{ItemParent, ItemParentAttr};
 
 mod key_attr;
 pub(crate) use key_attr::KeyAttr;

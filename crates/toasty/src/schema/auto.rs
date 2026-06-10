@@ -19,6 +19,7 @@ use toasty_core::schema::app::AutoStrategy;
 /// |---|---|
 /// | Integer types (`i8`..`i64`, `u8`..`u64`, `isize`, `usize`) | Auto-increment |
 /// | `uuid::Uuid` | UUID v7 |
+/// | `String` | UUID v7 (canonical string) |
 pub trait Auto: Field {
     /// The strategy the runtime uses to generate values for this type.
     const STRATEGY: AutoStrategy;
@@ -66,4 +67,8 @@ impl Auto for usize {
 
 impl Auto for uuid::Uuid {
     const STRATEGY: AutoStrategy = AutoStrategy::Uuid(toasty_core::schema::app::UuidVersion::V7);
+}
+
+impl Auto for String {
+    const STRATEGY: AutoStrategy = AutoStrategy::String;
 }

@@ -205,20 +205,49 @@ impl BuildSchema<'_> {
             let table = self.resolve_item_collection_table(app, child_id);
             self.mapping.model_mut(child_id).table = table;
 
-            // Build FK-source → parent-PK field mapping.
+            // Build child-PK → parent-PK field mapping. Two relation kinds
+            // contribute pairs:
+            //
+            // - `BelongsTo` — classic FK: each `(source, target)` foreign-key
+            //   pair where the source is part of the child's PK.
+            // - `ItemParent` — symmetric IC: no FK columns exist, but R2.4
+            //   guarantees the child redeclares the parent's PK fields by
+            //   name, so we derive `(child_field, parent_field)` pairs by
+            //   matching field names on the parent (the relation's target).
             let child_root = app.model(child_id).as_root_unwrap();
-            let field_mapping: indexmap::IndexMap<_, _> = child_root
-                .fields
-                .iter()
-                .filter_map(|f| f.ty.as_belongs_to())
-                .flat_map(|bt| {
-                    bt.foreign_key
-                        .fields
-                        .iter()
-                        .map(|fkf| (fkf.source, fkf.target))
-                })
-                .filter(|(src, _)| child_root.fields[src.index].primary_key)
-                .collect();
+            let mut field_mapping: indexmap::IndexMap<app::FieldId, app::FieldId> =
+                indexmap::IndexMap::new();
+
+            for f in &child_root.fields {
+                if let Some(bt) = f.ty.as_belongs_to() {
+                    for fkf in &bt.foreign_key.fields {
+                        if child_root.fields[fkf.source.index].primary_key {
+                            field_mapping.insert(fkf.source, fkf.target);
+                        }
+                    }
+                } else if let Some(ip) = f.ty.as_item_parent() {
+                    let parent_root = app.model(ip.target).as_root_unwrap();
+                    for child_field in &child_root.fields {
+                        if !child_field.primary_key {
+                            continue;
+                        }
+                        let Some(child_name) = child_field.name.app.as_deref() else {
+                            continue;
+                        };
+                        let Some(parent_field) = parent_root
+                            .fields
+                            .iter()
+                            .find(|pf| pf.name.app.as_deref() == Some(child_name))
+                        else {
+                            continue;
+                        };
+                        // R2.4 guarantees PK fields share both name and
+                        // type across the chain. The `validate_item_collections`
+                        // pass enforces this before we reach here.
+                        field_mapping.insert(child_field.id, parent_field.id);
+                    }
+                }
+            }
 
             self.mapping
                 .model_mut(child_id)

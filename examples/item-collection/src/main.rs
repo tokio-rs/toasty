@@ -5,11 +5,6 @@
 //! with `#[key(account, sk)]`. Toasty owns `sk`'s contents and mints a
 //! UUID v7 for each row's local-id segment.
 //!
-//! NOTE: end-to-end `cargo run` requires Task B4 (root sk auto-mint at
-//! create time). Until B4 lands, this example compiles but the create
-//! call will require `sk` to be supplied explicitly. Use B4 to remove
-//! the workaround.
-//!
 //! Run against local DDB:
 //! ```bash
 //!  AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 \
@@ -25,6 +20,7 @@ use toasty::{Db, Deferred, Result};
 #[key(account, sk)]
 struct Tenant {
     account: String,
+    #[auto]
     sk: String,
     name: String,
     #[has_many]
@@ -35,6 +31,7 @@ struct Tenant {
 #[key(account, sk)]
 struct User {
     account: String,
+    #[auto]
     sk: String,
     name: String,
     #[item_parent]
@@ -47,6 +44,7 @@ struct User {
 #[key(account, sk)]
 struct Todo {
     account: String,
+    #[auto]
     sk: String,
     title: String,
     #[item_parent]
@@ -66,10 +64,8 @@ async fn main() -> Result<()> {
 
     db.push_schema().await?;
 
-    // TODO(B4): remove `sk` after root-sk auto-mint lands.
     let acme = toasty::create!(Tenant {
         account: "acme",
-        sk: "Tenant#",
         name: "Acme"
     })
     .exec(&mut db)
