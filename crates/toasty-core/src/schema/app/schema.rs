@@ -1,5 +1,6 @@
 use super::{
-    AutoStrategy, EnumVariant, Field, FieldId, FieldTy, Model, ModelId, ModelRoot, VariantId,
+    AutoStrategy, EnumVariant, Field, FieldId, FieldPrimitive, FieldTy, Model, ModelId, ModelRoot,
+    VariantId,
 };
 
 use crate::{Result, stmt};
@@ -45,34 +46,25 @@ fn pk_partition_and_sort_fields(root: &ModelRoot) -> Result<(FieldId, FieldId)> 
 /// Render a primitive field's application-level type as a short, user-facing
 /// string suitable for inclusion in schema-validation error messages.
 ///
-/// Non-primitive fields (relations, embedded types) are not expected as item
-/// collection key components, so they render as `<non-primitive>` — a marker
-/// that's clearly wrong if it ever surfaces.
+/// Defers to `Display` on `stmt::Type` for primitives. Non-primitive fields
+/// (relations, embedded types) are not expected as item-collection key
+/// components, so they render as `<non-primitive>` — a marker that's clearly
+/// wrong if it ever surfaces.
 fn field_ty_repr(field: &Field) -> String {
     match &field.ty {
-        FieldTy::Primitive(p) => match &p.ty {
-            stmt::Type::Bool => "bool".to_string(),
-            stmt::Type::String => "String".to_string(),
-            stmt::Type::I8 => "i8".to_string(),
-            stmt::Type::I16 => "i16".to_string(),
-            stmt::Type::I32 => "i32".to_string(),
-            stmt::Type::I64 => "i64".to_string(),
-            stmt::Type::U8 => "u8".to_string(),
-            stmt::Type::U16 => "u16".to_string(),
-            stmt::Type::U32 => "u32".to_string(),
-            stmt::Type::U64 => "u64".to_string(),
-            stmt::Type::F32 => "f32".to_string(),
-            stmt::Type::F64 => "f64".to_string(),
-            stmt::Type::Uuid => "Uuid".to_string(),
-            stmt::Type::Bytes => "Bytes".to_string(),
-            other => format!("{other:?}"),
-        },
+        FieldTy::Primitive(p) => p.ty.to_string(),
         _ => "<non-primitive>".to_string(),
     }
 }
 
 fn field_ty_is_string(field: &Field) -> bool {
-    field_ty_repr(field) == "String"
+    matches!(
+        &field.ty,
+        FieldTy::Primitive(FieldPrimitive {
+            ty: stmt::Type::String,
+            ..
+        })
+    )
 }
 
 /// The result of resolving a [`stmt::Projection`] through the application
