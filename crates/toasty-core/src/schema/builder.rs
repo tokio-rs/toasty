@@ -136,7 +136,7 @@ impl Builder {
 
             // Item-collection children share the parent's table; assign a
             // placeholder now and fix it up after all root tables exist.
-            let table = if model.item_collection.is_some() {
+            let table = if model.parent.is_some() {
                 TableId::placeholder()
             } else {
                 builder.build_table_stub_for_model(model)
@@ -188,7 +188,7 @@ impl BuildSchema<'_> {
     /// Resolve table IDs and FK→PK field mappings for item-collection children.
     ///
     /// Walks the ancestry chain of each child until it reaches a root (a model
-    /// with no `item_collection` pointer), then assigns that root's table to
+    /// with no `parent` pointer), then assigns that root's table to
     /// every model in the chain.
     fn fixup_item_collection_mappings(&mut self, app: &app::Schema) -> Result<()> {
         // Collect child model IDs first to avoid borrow issues.
@@ -196,7 +196,7 @@ impl BuildSchema<'_> {
             .models()
             .filter_map(|m| {
                 let r = m.as_root()?;
-                r.item_collection.map(|_| r.id)
+                r.parent.map(|_| r.id)
             })
             .collect();
 
@@ -235,7 +235,7 @@ impl BuildSchema<'_> {
         model_id: app::ModelId,
     ) -> crate::schema::TableId {
         let root = app.model(model_id).as_root_unwrap();
-        match root.item_collection {
+        match root.parent {
             None => self.mapping.model(model_id).table,
             Some(parent_id) => self.resolve_item_collection_table(app, parent_id),
         }

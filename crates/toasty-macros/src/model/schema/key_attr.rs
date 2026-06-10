@@ -43,7 +43,14 @@ impl KeyAttr {
                 return Ok(());
             }
 
-            if meta.path.is_ident("partition") || meta.path.is_ident("local") {
+            // Named form: `partition = <ident>` / `partition = [a, b]` and
+            // `local = <ident>` / `local = [a, b]`. Both forms (named and
+            // simple bare-ident) are supported on item-collection roots; the
+            // schema-build validator reinterprets the simple form when the
+            // root participates in an item collection.
+            if (meta.path.is_ident("partition") || meta.path.is_ident("local"))
+                && meta.input.peek(syn::Token![=])
+            {
                 if !simple_fields.is_empty() {
                     return Err(syn::Error::new_spanned(
                         &meta.path,
@@ -91,41 +98,43 @@ impl KeyAttr {
                 }
 
                 *target = idents;
-            } else {
-                if has_named {
-                    return Err(syn::Error::new_spanned(
-                        &meta.path,
-                        "cannot mix field names with `partition`/`local` syntax",
-                    ));
-                }
-
-                let ident = meta
-                    .path
-                    .get_ident()
-                    .ok_or_else(|| syn::Error::new_spanned(&meta.path, "expected a field name"))?;
-
-                if !names.contains(ident) {
-                    return Err(syn::Error::new_spanned(
-                        ident,
-                        format!("unknown field `{ident}`"),
-                    ));
-                }
-
-                simple_fields.push(ident.clone());
+                return Ok(());
             }
+
+            if has_named {
+                return Err(syn::Error::new_spanned(
+                    &meta.path,
+                    "cannot mix field names with `partition`/`local` syntax",
+                ));
+            }
+
+            let ident = meta
+                .path
+                .get_ident()
+                .ok_or_else(|| syn::Error::new_spanned(&meta.path, "expected a field name"))?;
+
+            if !names.contains(ident) {
+                return Err(syn::Error::new_spanned(
+                    ident,
+                    format!("unknown field `{ident}`"),
+                ));
+            }
+
+            simple_fields.push(ident.clone());
 
             Ok(())
         })?;
 
         if !simple_fields.is_empty() {
             // Simple mode (e.g. `#[key(a, b, c)]`): first field is the partition
-            // (hash) key, rest are local (sort) keys. Matches `#[index(a, b, c)]`
-            // so the simple form is equivalent to `#[key(partition = a, local = [b, c])]`.
+            // (hash) key, rest are local (sort) keys. Equivalent to
+            // `#[key(partition = a, local = [b, c])]`. Item-collection roots
+            // exercise the two-arg case `#[key(account, sk)]`.
             let mut iter = simple_fields.into_iter();
             partition = iter.next().into_iter().collect();
             local = iter.collect();
         } else {
-            // Named mode: require both partition and local
+            // Named mode: require both `partition` and `local`.
             if partition.is_empty() {
                 return Err(syn::Error::new_spanned(
                     attr,

@@ -1,80 +1,61 @@
-//! Three-level item collection: Tenant -> User -> Todo.
+//! Three-tier item collection: Tenant → User → Todo.
 //!
-//! All three models share a single DynamoDB table. The partition key is
-//! `tenant_id`; the sort key is composed by the driver from `__model` plus
-//! each model's own local PK fields:
+//! Every model in the collection declares the same two key fields the
+//! root names — `account` (partition) and `sk` (sort) — and tags them
+//! with `#[key(account, sk)]`. Toasty owns `sk`'s contents and mints a
+//! UUID v7 for each row's local-id segment.
 //!
-//!   Tenant row: __sk = "Tenant#"
-//!   User row:   __sk = "User#<user_id>#"
-//!   Todo row:   __sk = "Todo#<user_id>#<todo_id>#"
+//! NOTE: end-to-end `cargo run` requires Task B4 (root sk auto-mint at
+//! create time). Until B4 lands, this example compiles but the create
+//! call will require `sk` to be supplied explicitly. Use B4 to remove
+//! the workaround.
 //!
-//! Querying `tenant.users()` becomes `begins_with(__sk, "User#")` and
-//! `user.todos()` becomes `begins_with(__sk, "Todo#<user_id>#")` — both
-//! single-partition queries with no scan.
-//! Assuming local DDB is running on port 8080:
+//! Run against local DDB:
 //! ```bash
 //!  AWS_ENDPOINT_URL_DYNAMODB=http://localhost:8000 \
-//!   AWS_ACCESS_KEY_ID=test \
-//!   AWS_SECRET_ACCESS_KEY=test \
+//!   AWS_ACCESS_KEY_ID=test AWS_SECRET_ACCESS_KEY=test \
 //!   AWS_REGION=us-east-1 \
 //!   TOASTY_CONNECTION_URL="dynamodb://us-east-1" \
 //!   cargo run -p example-item-collection
 //! ```
 
-use toasty::Db;
-use toasty::Result;
-use uuid::Uuid;
+use toasty::{Db, Deferred, Result};
 
 #[derive(Debug, toasty::Model)]
+#[key(account, sk)]
 struct Tenant {
-    #[key]
-    #[auto]
-    id: uuid::Uuid,
-
+    account: String,
+    sk: String,
     name: String,
-
     #[has_many]
-    users: toasty::Deferred<Vec<User>>,
+    users: Deferred<Vec<User>>,
 }
 
 #[derive(Debug, toasty::Model)]
-#[item_collection(Tenant)]
-#[key(partition = tenant_id, local = id)]
+#[key(account, sk)]
 struct User {
-    id: String,
-
-    tenant_id: uuid::Uuid,
-
-    #[belongs_to(key = tenant_id, references = id)]
-    tenant: toasty::Deferred<Tenant>,
-
+    account: String,
+    sk: String,
     name: String,
-
+    #[item_parent]
+    tenant: Deferred<Tenant>,
     #[has_many]
-    todos: toasty::Deferred<Vec<Todo>>,
+    todos: Deferred<Vec<Todo>>,
 }
 
 #[derive(Debug, toasty::Model)]
-#[item_collection(User)]
-#[key(partition = tenant_id, local = [user_id, id])]
-#[index(tenant_id, user_id)]
+#[key(account, sk)]
 struct Todo {
-    id: uuid::Uuid,
-
-    tenant_id: uuid::Uuid,
-    user_id: String,
-
-    #[belongs_to(key = [tenant_id, user_id], references = [tenant_id, id])]
-    user: toasty::Deferred<User>,
-
+    account: String,
+    sk: String,
     title: String,
+    #[item_parent]
+    user: Deferred<User>,
 }
 
 #[tokio::main]
-async fn main() -> toasty::Result<()> {
-    let mut db = toasty::Db::builder()
-        // Order matters: each child model's table mapping is resolved against
-        // its parent's, so parents must be registered first.
+async fn main() -> Result<()> {
+    let mut db = Db::builder()
         .models(toasty::models!(Tenant, User, Todo))
         .connect(
             std::env::var("TOASTY_CONNECTION_URL")
@@ -85,76 +66,43 @@ async fn main() -> toasty::Result<()> {
 
     db.push_schema().await?;
 
-    let acme = toasty::create!(Tenant { name: "Acme" })
-        .exec(&mut db)
-        .await?;
+    // TODO(B4): remove `sk` after root-sk auto-mint lands.
+    let acme = toasty::create!(Tenant {
+        account: "acme",
+        sk: "Tenant#",
+        name: "Acme"
+    })
+    .exec(&mut db)
+    .await?;
+    println!("created tenant; account={}", acme.account);
 
-    println!("created tenant; name={:?}", acme.name);
-
-    let alice =
-        toasty::create!(in acme.users() { name: "Alice", id: format!("{}", Uuid::new_v4()),})
-            .exec(&mut db)
-            .await?;
-    let bob = toasty::create!(in acme.users() { name: "Bob", id: format!("{}", Uuid::new_v4()) })
-        .exec(&mut db)
-        .await?;
-
-    // tier 2 create_many
-    let _users = populate_users(&mut db, &acme).await?;
-
-    println!("created users; alice={:?}, bob={:?}", alice.name, bob.name);
-
-    // Scoped query: every user under Acme.
-    // For DynamoDB this is a single Query with `begins_with(__sk, "User#")`.
-    println!("====================");
-    println!("--- ACME USERS ---");
-    println!("====================");
-
-    let users = acme.users().exec(&mut db).await?;
-    for user in users {
-        println!("USER name={:?}, id={}", user.name, user.id);
-    }
+    let alice = acme.users().create().name("Alice").exec(&mut db).await?;
+    let bob = acme.users().create().name("Bob").exec(&mut db).await?;
+    println!("created users alice.sk={} bob.sk={}", alice.sk, bob.sk);
 
     populate_todos(&mut db, &alice).await?;
     populate_todos(&mut db, &bob).await?;
 
-    println!("================");
-    println!("--- Alice's todos -----");
-    println!("================");
-    // The schema build, table layout, and __sk encoding for Todo are all
-    // already in place — see the table inspection below.
-    // -------------------------------------------------------------------
-
-    let mut users = User::filter_by_tenant_id(acme.id)
-        .filter_by_id(&alice.id)
-        .include(User::fields().todos())
-        .exec(&mut db)
-        .await?;
-    let from_db = users.pop().expect("Should have found a user");
-    assert_eq!(10, from_db.todos.get().len());
-    for t in from_db.todos.get() {
-        println!("Todo ID={:?}, TITLE: {}", t.id, t.title);
+    println!("--- Acme's users ---");
+    for user in acme.users().exec(&mut db).await? {
+        println!("user name={} sk={}", user.name, user.sk);
     }
+
+    println!("--- Alice's todos ---");
+    for todo in alice.todos().exec(&mut db).await? {
+        println!("todo title={} sk={}", todo.title, todo.sk);
+    }
+
     Ok(())
 }
 
-async fn populate_users(db: &mut Db, tenant: &Tenant) -> Result<Vec<User>> {
-    let mut builder = User::create_many();
-    for name in ["Carol", "Eric", "Frank"] {
-        builder = builder.item(toasty::create!(in tenant.users() {
-            id: format!("{}", Uuid::new_v4()),
-            name: name,
+async fn populate_todos(db: &mut Db, user: &User) -> Result<()> {
+    let mut builder = Todo::create_many();
+    for i in 0..5 {
+        builder = builder.item(toasty::create!(in user.todos() {
+            title: format!("Todo {} for {}", i, user.name),
         }));
     }
-    builder.exec(db).await
-}
-async fn populate_todos(db: &mut Db, user: &User) -> Result<Vec<Todo>> {
-    let mut many = Todo::create_many();
-    for i in 0..10 {
-        many = many.item(toasty::create!(in user.todos() {
-            id:  Uuid::new_v4(),
-            title: format!("Todo {} for {}", i, user.name)
-        }))
-    }
-    many.exec(db).await
+    builder.exec(db).await?;
+    Ok(())
 }

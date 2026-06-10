@@ -29,7 +29,7 @@ impl Expand<'_> {
                     }
                     None => quote! { None },
                 };
-                let item_collection = self.expand_item_collection();
+                let parent = self.expand_parent();
                 quote! {
                     #toasty::core::schema::app::Model::Root(
                         #toasty::core::schema::app::ModelRoot {
@@ -38,7 +38,7 @@ impl Expand<'_> {
                             fields: #fields,
                             primary_key: #primary_key,
                             table_name: #table_name,
-                            item_collection: #item_collection,
+                            parent: #parent,
                             indices: #indices,
                             version_field: #version_field,
                         }
@@ -363,13 +363,21 @@ impl Expand<'_> {
         }
     }
 
-    fn expand_item_collection(&self) -> TokenStream {
+    fn expand_parent(&self) -> TokenStream {
         let toasty = &self.toasty;
-        if let Some(ty) = &self.model.item_collection {
-            quote! { Some(<#ty as #toasty::Model>::id()) }
-        } else {
-            quote! { None }
+
+        // The parent type comes from the field-level `#[item_parent]`
+        // declaration. The parent type was extracted from the field's
+        // `Deferred<T>` in A2 and stored as `Field::item_parent_target`.
+        if let Some(field_idx) = self.model.item_parent_field {
+            let parent_ty = self.model.fields[field_idx]
+                .item_parent_target
+                .as_ref()
+                .expect("item_parent_field implies item_parent_target");
+            return quote! { Some(<#parent_ty as #toasty::Register>::id()) };
         }
+
+        quote! { None }
     }
 }
 

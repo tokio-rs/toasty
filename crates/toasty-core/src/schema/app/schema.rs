@@ -4,6 +4,39 @@ use crate::{Result, stmt};
 use indexmap::IndexMap;
 use std::collections::HashSet;
 
+/// Render a primitive field's application-level type as a short, user-facing
+/// string suitable for inclusion in schema-validation error messages.
+///
+/// Non-primitive fields (relations, embedded types) are not expected as item
+/// collection key components, so they render as `<non-primitive>` — a marker
+/// that's clearly wrong if it ever surfaces.
+fn field_ty_repr(field: &Field) -> String {
+    match &field.ty {
+        FieldTy::Primitive(p) => match &p.ty {
+            stmt::Type::Bool => "bool".to_string(),
+            stmt::Type::String => "String".to_string(),
+            stmt::Type::I8 => "i8".to_string(),
+            stmt::Type::I16 => "i16".to_string(),
+            stmt::Type::I32 => "i32".to_string(),
+            stmt::Type::I64 => "i64".to_string(),
+            stmt::Type::U8 => "u8".to_string(),
+            stmt::Type::U16 => "u16".to_string(),
+            stmt::Type::U32 => "u32".to_string(),
+            stmt::Type::U64 => "u64".to_string(),
+            stmt::Type::F32 => "f32".to_string(),
+            stmt::Type::F64 => "f64".to_string(),
+            stmt::Type::Uuid => "Uuid".to_string(),
+            stmt::Type::Bytes => "Bytes".to_string(),
+            other => format!("{other:?}"),
+        },
+        _ => "<non-primitive>".to_string(),
+    }
+}
+
+fn field_ty_is_string(field: &Field) -> bool {
+    field_ty_repr(field) == "String"
+}
+
 /// The result of resolving a [`stmt::Projection`] through the application
 /// schema.
 ///
@@ -330,51 +363,158 @@ impl Builder {
         Ok(current)
     }
 
+    /// Validate item-collection key inheritance at schema-build time.
+    ///
+    /// For each child (a model with `parent.is_some()`):
+    ///
+    /// 1. Walk the `parent` chain to locate the root, with cycle detection.
+    /// 2. Confirm the root has exactly one partition-key and one local
+    ///    (sort-key) field — item-collection roots use a single
+    ///    `#[key(partition, sort)]` pair.
+    /// 3. Confirm the root's sort field is `String` (R7.1).
+    /// 4. For every model in the chain except the root itself, confirm it has
+    ///    fields whose names AND types match the root's partition + sort
+    ///    fields.
+    ///
+    /// Cross-model invariants like (4) cannot be checked at macro-expansion
+    /// time — each `#[derive(Model)]` invocation sees only its own struct.
     fn validate_item_collections(&self) -> Result<()> {
-        for model in self.models.values() {
-            let root = match model {
+        for (id, model) in &self.models {
+            let child_root = match model {
                 Model::Root(r) => r,
                 _ => continue,
             };
 
-            let Some(_parent_id) = root.item_collection else {
+            // Skip non-children (models that aren't part of any item collection).
+            if child_root.parent.is_none() {
                 continue;
-            };
+            }
 
-            // The primary key index is always the first index in `indices`.
+            // Walk the parent chain to find the root, with cycle detection.
+            let mut visited: HashSet<ModelId> = HashSet::new();
+            visited.insert(*id);
+            let mut cursor = *id;
+            loop {
+                let m = self.models.get(&cursor).ok_or_else(|| {
+                    crate::Error::invalid_schema(format!(
+                        "item-collection chain starting at `{}` references an unregistered \
+                         parent model; ensure all ancestors appear in `Db::builder().models(...)`",
+                        child_root.name.upper_camel_case(),
+                    ))
+                })?;
+                let r = m.as_root_unwrap();
+                match r.parent {
+                    None => break,
+                    Some(parent_id) => {
+                        if !visited.insert(parent_id) {
+                            return Err(crate::Error::invalid_schema(format!(
+                                "item-collection cycle detected starting at `{}`",
+                                child_root.name.upper_camel_case(),
+                            )));
+                        }
+                        cursor = parent_id;
+                    }
+                }
+            }
+            let root = self
+                .models
+                .get(&cursor)
+                .expect("walked to a registered model")
+                .as_root_unwrap();
+
+            // Read the root's primary key. Item-collection roots accept two
+            // syntactic forms:
+            //
+            //   - simple `#[key(a, b)]` — every bare ident lands in
+            //     `partition`; here we reinterpret the two-arg case as
+            //     `(partition=a, sort=b)`.
+            //   - named `#[key(partition = a, local = b)]` — already split
+            //     into one partition field and one local field.
+            //
+            // Both forms produce the same downstream PK shape; the user picks
+            // whichever they prefer per model.
             let pk_index = &root.indices[root.primary_key.index.index];
+            let partition_fields_count = pk_index.partition_fields().len();
+            let local_fields_count = pk_index.local_fields().len();
 
-            // Must have at least one Local-scoped field (compound key).
-            if pk_index.local_fields().is_empty() {
+            let (partition_field_id, sort_field_id) =
+                if local_fields_count == 0 && partition_fields_count == 2 {
+                    // Simple form: `#[key(a, b)]` — first ident is partition,
+                    // second is sort.
+                    (
+                        pk_index.partition_fields()[0].field,
+                        pk_index.partition_fields()[1].field,
+                    )
+                } else if partition_fields_count == 1 && local_fields_count == 1 {
+                    // Named form: `#[key(partition = a, local = b)]` — already
+                    // split.
+                    (
+                        pk_index.partition_fields()[0].field,
+                        pk_index.local_fields()[0].field,
+                    )
+                } else {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "root model `{}` must declare a `(partition, sort)` key — \
+                     either `#[key(<partition>, <sort>)]` or \
+                     `#[key(partition = <p>, local = <s>)]`. Found {} partition \
+                     field(s) and {} local field(s).",
+                        root.name.upper_camel_case(),
+                        partition_fields_count,
+                        local_fields_count,
+                    )));
+                };
+
+            let partition_root = &root.fields[partition_field_id.index];
+            let sort_root = &root.fields[sort_field_id.index];
+
+            // R7.1: the sort field on the root must be `String`.
+            if !field_ty_is_string(sort_root) {
                 return Err(crate::Error::invalid_schema(format!(
-                    "model `{}` has `#[item_collection]` but no local (sort-key) component in its \
-                     primary key; add `#[key(partition = <fk_field>, local = <own_field>)]`",
-                    root.name.upper_camel_case(),
+                    "sort field `{}` must be `String`; found `{}`",
+                    sort_root.name.app_unwrap(),
+                    field_ty_repr(sort_root),
                 )));
             }
 
-            // Collect the FieldIds of all FK source fields from BelongsTo relations.
-            let fk_sources: std::collections::HashSet<FieldId> = root
-                .fields
-                .iter()
-                .filter_map(|f| f.ty.as_belongs_to())
-                .flat_map(|bt| bt.foreign_key.fields.iter().map(|fkf| fkf.source))
-                .collect();
+            // For every model in the chain except the root itself, confirm it
+            // declares fields whose names AND types match the root's
+            // partition + sort fields.
+            for child_id in &visited {
+                if *child_id == cursor {
+                    continue;
+                }
+                let child = self
+                    .models
+                    .get(child_id)
+                    .expect("visited model is registered")
+                    .as_root_unwrap();
 
-            // Every partition-scoped PK field must be a FK source.
-            for partition_field in pk_index.partition_fields() {
-                if !fk_sources.contains(&partition_field.field) {
-                    let field_name = root.fields[partition_field.field.index]
-                        .name
-                        .app_unwrap()
-                        .to_string();
-                    return Err(crate::Error::invalid_schema(format!(
-                        "model `{}` has `#[item_collection]` but the partition key field `{}` is \
-                         not sourced from a `BelongsTo` relation; the partition key must reuse the \
-                         parent model's primary key via a foreign key field",
-                        root.name.upper_camel_case(),
-                        field_name,
-                    )));
+                for (role, expected) in [("partition", partition_root), ("sort", sort_root)] {
+                    let expected_name = expected.name.app_unwrap();
+                    let actual = child
+                        .fields
+                        .iter()
+                        .find(|f| f.name.app.as_deref() == Some(expected_name));
+                    let actual = actual.ok_or_else(|| {
+                        crate::Error::invalid_schema(format!(
+                            "expected field `{}: {}` matching root `{}`'s {} key, found none on `{}`",
+                            expected_name,
+                            field_ty_repr(expected),
+                            root.name.upper_camel_case(),
+                            role,
+                            child.name.upper_camel_case(),
+                        ))
+                    })?;
+                    if field_ty_repr(actual) != field_ty_repr(expected) {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "field `{}` on `{}` has type `{}`; root `{}` declares `{}`",
+                            expected_name,
+                            child.name.upper_camel_case(),
+                            field_ty_repr(actual),
+                            root.name.upper_camel_case(),
+                            field_ty_repr(expected),
+                        )));
+                    }
                 }
             }
         }

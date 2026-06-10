@@ -148,7 +148,7 @@ impl BuildSchema<'_> {
 
             let (roots, children): (Vec<_>, Vec<_>) = all_models
                 .iter()
-                .partition(|m| m.as_root_unwrap().item_collection.is_none());
+                .partition(|m| m.as_root_unwrap().parent.is_none());
 
             assert!(
                 roots.len() == 1,

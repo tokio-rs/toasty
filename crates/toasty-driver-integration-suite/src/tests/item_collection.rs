@@ -327,11 +327,11 @@ pub async fn schema_item_collection_field_set(test: &mut Test) {
 
     let _db = setup(test).await;
 
-    let todo_ic = <Todo as Model>::schema().as_root_unwrap().item_collection;
+    let todo_ic = <Todo as Model>::schema().as_root_unwrap().parent;
 
     assert_eq!(todo_ic, Some(<User as Model>::id()));
 
-    let user_ic = <User as Model>::schema().as_root_unwrap().item_collection;
+    let user_ic = <User as Model>::schema().as_root_unwrap().parent;
 
     assert_eq!(user_ic, None);
 }

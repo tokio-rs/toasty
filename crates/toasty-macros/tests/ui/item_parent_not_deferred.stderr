@@ -1,0 +1,5 @@
+error: `#[item_parent]` field `tenant` must be `Deferred<T>`; found `Tenant`. Toasty does not support eager parent loading.
+  --> tests/ui/item_parent_not_deferred.rs:15:13
+   |
+15 |     tenant: Tenant, // ERROR: must be Deferred<Tenant>
+   |             ^^^^^^

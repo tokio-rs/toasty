@@ -30,6 +30,7 @@ syn.workspace = true
 toasty = { path = "../toasty", features = ["jiff", "serde", "sqlite"] }
 uuid.workspace = true
 jiff.workspace = true
+trybuild.workspace = true
 
 [lints]
 workspace = true

@@ -726,7 +726,8 @@ use proc_macro::TokenStream;
         serialize,
         version,
         deferred,
-        item_collection
+        item_collection,
+        item_parent
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {

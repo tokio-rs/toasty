@@ -1,6 +1,6 @@
 use super::AutoStrategy;
 
-use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
+use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, ItemParentAttr, Name};
 
 use syn::spanned::Spanned;
 
@@ -24,6 +24,14 @@ pub(crate) struct Field {
     /// If this field belongs to an enum variant, the variant's index within
     /// the enum. `None` for fields on root models and embedded structs.
     pub(crate) variant: Option<usize>,
+
+    /// `#[item_parent]` marker, if present. The parent type will be
+    /// extracted from the field's `Deferred<T>` type in a later step.
+    pub(crate) item_parent: Option<ItemParentAttr>,
+
+    /// Parent type extracted from the field's `Deferred<T>` type when
+    /// `#[item_parent]` is set. `None` otherwise.
+    pub(crate) item_parent_target: Option<syn::Type>,
 }
 
 #[derive(Debug)]
@@ -216,6 +224,7 @@ impl Field {
 
         let mut errs = ErrorSet::new();
         let mut ty = None;
+        let mut item_parent: Option<ItemParentAttr> = None;
 
         for attr in &field.attrs {
             if attr.path().is_ident("belongs_to") {
@@ -255,6 +264,18 @@ impl Field {
                         &field.ty,
                         field.span(),
                     )?));
+                }
+            } else if attr.path().is_ident("item_parent") {
+                if item_parent.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[item_parent] attribute on field",
+                    ));
+                } else {
+                    match ItemParentAttr::from_ast(attr) {
+                        Ok(parsed) => item_parent = Some(parsed),
+                        Err(e) => errs.push(e),
+                    }
                 }
             }
         }
@@ -326,6 +347,26 @@ impl Field {
             ));
         }
 
+        // Validate `#[item_parent]` field type and extract `T` from `Deferred<T>`.
+        let mut item_parent_target: Option<syn::Type> = None;
+        if let Some(parent_attr) = &item_parent {
+            // Reject `#[item_parent]` combined with a relation attribute
+            // (`#[belongs_to]`, `#[has_many]`, `#[has_one]`); they're mutually
+            // exclusive — `#[item_parent]` is the only relation-like marker
+            // allowed for item-collection children.
+            if ty.is_some() {
+                errs.push(syn::Error::new(
+                    parent_attr.span,
+                    "field has both `#[item_parent]` and a relation attribute (`#[belongs_to]`, `#[has_many]`, or `#[has_one]`); use only `#[item_parent]` for item-collection children",
+                ));
+            }
+
+            match super::item_parent::extract_deferred_inner(&name.ident, &field.ty) {
+                Ok(parent_ty) => item_parent_target = Some(parent_ty),
+                Err(e) => errs.push(e),
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
@@ -354,6 +395,8 @@ impl Field {
             ty,
             set_ident,
             variant: None,
+            item_parent,
+            item_parent_target,
         })
     }
 }

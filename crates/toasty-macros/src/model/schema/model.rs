@@ -1,6 +1,6 @@
 use super::{
-    Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant, VariantValue,
+    BelongsTo, Column, ColumnType, ErrorSet, Field, FieldTy, ForeignKeyField, Index, IndexField,
+    IndexScope, ModelAttr, Name, PrimaryKey, Variant, VariantValue,
 };
 use heck::ToSnakeCase;
 
@@ -146,9 +146,9 @@ pub(crate) struct Model {
     /// Optional table to map the model to
     pub(crate) table: Option<syn::LitStr>,
 
-    /// Parent model type for item collection (single-table design).
-    /// Comes from `#[item_collection(ParentType)]` on the struct.
-    pub(crate) item_collection: Option<syn::Type>,
+    /// Index of the field annotated with `#[item_parent]`, if any. At most
+    /// one field per model may carry this attribute.
+    pub(crate) item_parent_field: Option<usize>,
 }
 
 impl Model {
@@ -200,6 +200,28 @@ impl Model {
             }
         }
 
+        // At most one `#[item_parent]` per model. Compute the index now so
+        // downstream phases can use it; reject duplicates with one error.
+        let item_parent_indices: Vec<usize> = fields
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, f)| f.item_parent.as_ref().map(|_| idx))
+            .collect();
+        let item_parent_field = match item_parent_indices.as_slice() {
+            [] => None,
+            [idx] => Some(*idx),
+            _ => {
+                errs.push(syn::Error::new(
+                    proc_macro2::Span::call_site(),
+                    format!(
+                        "model `{}` declares multiple `#[item_parent]` fields; exactly one is required",
+                        ast.ident
+                    ),
+                ));
+                None
+            }
+        };
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
@@ -237,6 +259,48 @@ impl Model {
                 ast,
                 "model must either have a struct-level `#[key]` attribute or at least one field-level `#[key]` attribute",
             ));
+        }
+
+        // Synthesise a `BelongsTo` relation for the `#[item_parent]` field, if
+        // any. The foreign-key pairs are derived from THIS model's primary-key
+        // fields; spec R2.4 (validated at schema build by
+        // `validate_item_collections`) guarantees the child has fields whose
+        // names match the root's `#[key(...)]`, so source and target idents
+        // share a name. The downstream relation-method generator
+        // (`expand_model_relation_belongs_to_method`) reads this `BelongsTo`
+        // to emit `user.tenant().exec(db).await` parent navigation.
+        if let Some(item_parent_idx) = item_parent_field
+            && !is_embedded
+        {
+            // The field's declared type — `Deferred<Tenant>` — is what the
+            // downstream relation expansion expects in `BelongsTo::ty`; the
+            // `RelationOneField` blanket impl on `Deferred<M>` projects to
+            // the inner `Model` and supplies the `One` future. The original
+            // field type is currently held as `FieldTy::Primitive(...)` from
+            // `Field::from_ast`.
+            let field_ty = match &fields[item_parent_idx].ty {
+                FieldTy::Primitive(ty) => ty.clone(),
+                _ => unreachable!(
+                    "item_parent fields are typed as Primitive in Field::from_ast; \
+                     a relation attribute combined with #[item_parent] is rejected earlier"
+                ),
+            };
+
+            let foreign_key: Vec<ForeignKeyField> = pk_index_fields
+                .iter()
+                .map(|idx_field| {
+                    let target_ident = fields[idx_field.field].name.ident.clone();
+                    ForeignKeyField {
+                        source: idx_field.field,
+                        target: target_ident,
+                    }
+                })
+                .collect();
+
+            fields[item_parent_idx].ty = FieldTy::BelongsTo(BelongsTo {
+                ty: field_ty,
+                foreign_key,
+            });
         }
 
         // Build ModelKind based on whether this is embedded or root
@@ -354,7 +418,7 @@ impl Model {
             kind,
             indices,
             table: model_attr.table,
-            item_collection: model_attr.item_collection,
+            item_parent_field,
         })
     }
 
@@ -545,7 +609,7 @@ impl Model {
             }),
             indices,
             table: None,
-            item_collection: None,
+            item_parent_field: None,
         })
     }
 }
