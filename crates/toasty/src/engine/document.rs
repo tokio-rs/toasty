@@ -219,18 +219,27 @@ impl VisitMut for LowerDocumentPaths<'_> {
 }
 
 /// Resolves a projection through (possibly nested) document types via the
-/// schema's shared [`document_path_steps`](app::Schema::document_path_steps)
-/// walk, collecting the key path and the leaf field's type. Returns `None` if
+/// schema's shared [`project_fields`](app::Schema::project_fields) walk,
+/// collecting the JSON key path and the leaf field's type. Returns `None` if
 /// the projection does not resolve to a document path.
 fn build_json_path(
     schema: &Schema,
     embed_id: app::ModelId,
     projection: &[usize],
 ) -> Option<(Vec<String>, stmt::Type)> {
-    let steps = schema.app.document_path_steps(embed_id, projection)?;
-    let path = steps.iter().map(|(name, _)| (*name).to_owned()).collect();
-    let (_, leaf_ty) = steps.last().expect("document path is never empty");
-    Some((path, (*leaf_ty).clone()))
+    let mut path = Vec::with_capacity(projection.len());
+    let mut leaf_ty = None;
+
+    for field in schema.app.project_fields(embed_id, projection) {
+        path.push(field.name.app.as_deref()?.to_owned());
+        leaf_ty = Some(field.expr_ty().clone());
+    }
+
+    // `project_fields` yields fewer fields than asked when the projection does
+    // not resolve to a document path (an out-of-range step, or a descent past
+    // a non-document leaf).
+    (!path.is_empty() && path.len() == projection.len())
+        .then(|| (path, leaf_ty.expect("a non-empty path has a leaf type")))
 }
 
 // ============================================================================

@@ -72,12 +72,10 @@ impl Schema {
     ///
     /// Panics if the model or field index is invalid.
     pub fn field(&self, id: FieldId) -> &Field {
-        let fields = match self.model(id.model) {
-            Model::Root(root) => &root.fields,
-            Model::EmbeddedStruct(embedded) => &embedded.fields,
-            Model::EmbeddedEnum(e) => &e.fields,
-        };
-        fields.get(id.index).expect("invalid field ID")
+        self.model(id.model)
+            .fields()
+            .get(id.index)
+            .expect("invalid field ID")
     }
 
     /// Returns a reference to the [`EnumVariant`] identified by `id`.
@@ -135,43 +133,39 @@ impl Schema {
         })
     }
 
-    /// Resolves a projection through a `#[document]` embed's nested fields:
-    /// each positional step indexes the current embed's fields, descending
-    /// into the nested embed when the field is itself a document
-    /// (`Type::Model`). Returns every step's field name and type in order —
-    /// the last entry is the leaf — or `None` if the projection is empty, a
-    /// step is out of range, or it tries to descend past a non-document
-    /// field.
+    /// Walks a positional `projection` through `model`'s fields, descending
+    /// into the nested model whenever a step lands on a model-typed field
+    /// (`Type::Model`). Yields the [`Field`] at each step, in order — the last
+    /// one is the projection's leaf. The caller takes whatever it needs from
+    /// each field (its name, its type).
     ///
-    /// This is the single definition of document path semantics; the engine's
-    /// JSON-path lowering, the DynamoDB driver's document-path rendering, and
-    /// projection validation all resolve through it.
-    pub fn document_path_steps(
-        &self,
-        embed_id: ModelId,
+    /// Iteration stops short of `projection.len()` when a step cannot be
+    /// taken: its index is out of range, or it descends past a field that is
+    /// not model-typed. A projection therefore resolves fully iff the iterator
+    /// yields exactly `projection.len()` fields. Callers that read the leaf
+    /// (the engine's JSON-path lowering, the DynamoDB driver's document-path
+    /// rendering) work from projections already validated by
+    /// [`resolve`](Self::resolve).
+    ///
+    /// Nothing constrains `model` to a `#[document]` embed — the walk follows
+    /// any model-typed field — though document paths are its only use today.
+    pub fn project_fields<'s>(
+        &'s self,
+        model: ModelId,
         projection: &[usize],
-    ) -> Option<Vec<(&str, &stmt::Type)>> {
-        let mut current = embed_id;
-        let mut steps = Vec::with_capacity(projection.len());
+    ) -> impl Iterator<Item = &'s Field> {
+        let mut current = Some(model);
+        let mut steps = projection.iter();
 
-        for (i, &index) in projection.iter().enumerate() {
-            let Model::EmbeddedStruct(embedded) = self.get_model(current)? else {
-                return None;
+        std::iter::from_fn(move || {
+            let &index = steps.next()?;
+            let field = self.get_model(current?)?.fields().get(index)?;
+            current = match field.expr_ty() {
+                stmt::Type::Model(nested) => Some(*nested),
+                _ => None,
             };
-            let field = embedded.fields.get(index)?;
-            let name = field.name.app.as_deref()?;
-            let ty = field.expr_ty();
-            steps.push((name, ty));
-
-            match ty {
-                stmt::Type::Model(nested) => current = *nested,
-                // A non-document field is a leaf: the path must end here.
-                _ if i + 1 < projection.len() => return None,
-                _ => {}
-            }
-        }
-
-        if steps.is_empty() { None } else { Some(steps) }
+            Some(field)
+        })
     }
 
     /// Resolve a projection through the schema, returning either a field or
@@ -212,11 +206,13 @@ impl Schema {
                     ty: stmt::Type::Model(embed_id),
                     ..
                 }) => {
-                    let mut path = vec![*step];
-                    path.extend_from_slice(steps.as_slice());
-                    return self
-                        .document_path_steps(*embed_id, &path)
-                        .is_some()
+                    // `step` and the remaining `steps` are a contiguous tail
+                    // of `rest`; the steps consumed so far (including `step`)
+                    // place `step` at index `consumed - 1`. The document path
+                    // is that tail, valid iff every step resolves to a field.
+                    let consumed = rest.len() - steps.as_slice().len();
+                    let doc_path = &rest[consumed - 1..];
+                    return (self.project_fields(*embed_id, doc_path).count() == doc_path.len())
                         .then_some(Resolved::Field(current_field));
                 }
                 FieldTy::Primitive(..) => {

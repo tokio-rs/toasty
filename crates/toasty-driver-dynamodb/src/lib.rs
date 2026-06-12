@@ -490,7 +490,7 @@ fn column_alias<'a>(
 /// Resolves a projection into a `#[document]` column to a DynamoDB document
 /// path (`#col_0.#doc_1.#doc_2`), registering each path segment as an
 /// expression attribute name. The projection resolves through the schema's
-/// shared [`document_path_steps`](toasty_core::schema::app::Schema::document_path_steps)
+/// shared [`project_fields`](toasty_core::schema::app::Schema::project_fields)
 /// walk — the same one the engine's JSON-path lowering uses for SQL drivers.
 /// Returns the rendered path and the leaf field's type.
 fn document_path<'a>(
@@ -506,19 +506,26 @@ fn document_path<'a>(
         todo!("projection into a non-document column; column={column:#?}")
     };
 
-    let steps = cx
+    let mut leaf_ty = None;
+    for field in cx
         .schema()
         .app
-        .document_path_steps(embed_id, expr_project.projection.as_slice())
-        .expect("invalid projection into a document column");
-
-    for (name, _) in &steps {
+        .project_fields(embed_id, expr_project.projection.as_slice())
+    {
+        let name = field
+            .name
+            .app
+            .as_deref()
+            .expect("document field has an app name");
         path.push('.');
         path.push_str(attrs.document_segment(name));
+        leaf_ty = Some(field.expr_ty());
     }
 
-    let (_, leaf_ty) = steps.last().expect("document path is never empty");
-    (path, leaf_ty)
+    (
+        path,
+        leaf_ty.expect("projection into a document column is non-empty"),
+    )
 }
 
 #[derive(Default)]
