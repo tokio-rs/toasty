@@ -348,9 +348,15 @@ fn to_named(app: &app::Schema, value: stmt::Value, ty: &stmt::Type) -> stmt::Val
     match (ty, value) {
         (stmt::Type::Model(embed_id), stmt::Value::Record(record)) => {
             stmt::Value::Object(stmt::ValueObject::from_vec(
-                app.document_fields(*embed_id)
+                app.fields(*embed_id)
+                    .iter()
                     .zip(record)
-                    .map(|((name, field_ty), v)| (name.to_owned(), to_named(app, v, field_ty)))
+                    .map(|(field, v)| {
+                        (
+                            field.name().app_unwrap().to_owned(),
+                            to_named(app, v, field.expr_ty()),
+                        )
+                    })
                     .collect(),
             ))
         }

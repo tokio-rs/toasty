@@ -110,27 +110,18 @@ impl Schema {
         self.models.get(&id.into()).expect("invalid model ID")
     }
 
-    /// The document field layout of the embedded struct `id`, resolved on
-    /// demand: each field's name and `stmt::Type`, in declaration order.
+    /// The fields of the model `id`, in declaration order.
     ///
-    /// The embedded model is the single source of truth for a document column's
-    /// shape. A field typed `Type::Model(nested)` (or `List(Model(nested))`)
-    /// signals a nested document the caller recurses into.
+    /// An embedded struct backs a `#[document]` column, so this doubles as a
+    /// document column's field layout — the embed is the single source of
+    /// truth for its shape. Callers map each [`Field`] to what they need (its
+    /// [`name`](Field::name), its [`expr_ty`](Field::expr_ty)); a field typed
+    /// `Type::Model` (or `List(Model)`) signals a nested document to recurse
+    /// into.
     ///
-    /// Panics if `id` is not an embedded struct, or a field is unnamed; both
-    /// are rejected at schema build, so neither occurs at runtime.
-    pub fn document_fields(&self, id: ModelId) -> impl Iterator<Item = (&str, &stmt::Type)> {
-        let Model::EmbeddedStruct(embedded) = self.model(id) else {
-            panic!("document type {id:?} is not an embedded struct");
-        };
-        embedded.fields.iter().map(|field| {
-            let name = field
-                .name
-                .app
-                .as_deref()
-                .expect("document field must have an app name");
-            (name, field.expr_ty())
-        })
+    /// Panics if no model has the given ID.
+    pub fn fields(&self, id: impl Into<ModelId>) -> &[Field] {
+        self.model(id).fields()
     }
 
     /// Walks a positional `projection` through `model`'s fields, descending

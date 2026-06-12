@@ -224,11 +224,11 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
-        // A `#[document]` embed's field layout — name + type, in declaration
-        // order — resolved on demand from the embedded model. `Type::Model` is
-        // the shape carried at the `stmt::Type` level.
-        let fields: Vec<(&str, &stmt::Type)> = match self.ty {
-            stmt::Type::Model(embed_id) => self.schema.document_fields(*embed_id).collect(),
+        // A `#[document]` embed's field layout, in declaration order, resolved
+        // on demand from the embedded model. `Type::Model` is the shape carried
+        // at the `stmt::Type` level.
+        let fields = match self.ty {
+            stmt::Type::Model(embed_id) => self.schema.fields(*embed_id),
             other => {
                 return Err(A::Error::custom(format!(
                     "unexpected JSON object for type {other:?}"
@@ -240,10 +240,10 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
         // unknown keys are ignored, absent keys stay `None` -> `Value::Null`.
         let mut slots: Vec<Option<Value>> = (0..fields.len()).map(|_| None).collect();
         while let Some(key) = map.next_key::<String>()? {
-            match fields.iter().position(|(name, _)| *name == key) {
+            match fields.iter().position(|f| f.name().app_unwrap() == key) {
                 Some(idx) => {
                     slots[idx] = Some(map.next_value_seed(Seed {
-                        ty: fields[idx].1,
+                        ty: fields[idx].expr_ty(),
                         schema: self.schema,
                     })?);
                 }

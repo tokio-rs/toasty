@@ -60,9 +60,10 @@ impl Value {
             // to `Null`.
             (Type::Model(embed_id), AV::M(map)) => {
                 stmt::Value::Record(stmt::ValueRecord::from_vec(
-                    app.document_fields(*embed_id)
-                        .map(|(name, field_ty)| match map.get(name) {
-                            Some(attr) => Value::from_ddb(app, field_ty, attr).into_inner(),
+                    app.fields(*embed_id)
+                        .iter()
+                        .map(|field| match map.get(field.name().app_unwrap()) {
+                            Some(attr) => Value::from_ddb(app, field.expr_ty(), attr).into_inner(),
                             None => stmt::Value::Null,
                         })
                         .collect(),
@@ -99,9 +100,12 @@ impl Value {
             // JSON encoding; they decode back from the missing key.
             (Type::Model(embed_id), stmt::Value::Record(record)) => {
                 let mut map = HashMap::new();
-                for ((name, field_ty), field) in app.document_fields(*embed_id).zip(record.iter()) {
+                for (embed_field, field) in app.fields(*embed_id).iter().zip(record.iter()) {
                     if !field.is_null() {
-                        map.insert(name.to_owned(), Self::to_ddb_typed(app, field_ty, field));
+                        map.insert(
+                            embed_field.name().app_unwrap().to_owned(),
+                            Self::to_ddb_typed(app, embed_field.expr_ty(), field),
+                        );
                     }
                 }
                 AV::M(map)

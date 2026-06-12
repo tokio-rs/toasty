@@ -340,10 +340,13 @@ impl Value {
                 // Resolve the embed's field types from the schema and check each
                 // positionally.
                 Type::Model(id) => {
-                    let field_tys: Vec<&Type> =
-                        schema.document_fields(*id).map(|(_, ty)| ty).collect();
-                    value.len() == field_tys.len()
-                        && Self::fields_match(schema, &value.fields, field_tys.into_iter())
+                    let fields = schema.fields(*id);
+                    value.len() == fields.len()
+                        && Self::fields_match(
+                            schema,
+                            &value.fields,
+                            fields.iter().map(|field| field.expr_ty()),
+                        )
                 }
                 _ => false,
             },
@@ -351,11 +354,12 @@ impl Value {
             // value: check each embed field against the entry of the same name
             // (an absent key is `None`, compatible with any field type).
             Self::Object(object) => match ty {
-                Type::Model(id) => schema.document_fields(*id).all(|(name, field_ty)| {
+                Type::Model(id) => schema.fields(*id).iter().all(|field| {
+                    let name = field.name().app_unwrap();
                     object
                         .iter()
                         .find(|(key, _)| key == name)
-                        .is_none_or(|(_, v)| v.is_a(schema, field_ty))
+                        .is_none_or(|(_, v)| v.is_a(schema, field.expr_ty()))
                 }),
                 _ => false,
             },
