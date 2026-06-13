@@ -311,6 +311,7 @@ impl Expand<'_> {
                             app: Some(#app_name.to_string()),
                             storage: None,
                         },
+                        comment: None,
                         ty: <#ty as #toasty::Field>::field_ty(None),
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,

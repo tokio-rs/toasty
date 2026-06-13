@@ -135,6 +135,26 @@ struct User {
 
 This maps to a table named `people` instead of the default `users`.
 
+## Table comments
+
+Use `#[comment("...")]` on a model to add a database-native table comment where
+the database supports it:
+
+```rust
+#[derive(Debug, toasty::Model)]
+#[comment("registered users")]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+}
+```
+
+PostgreSQL and MySQL store the comment in the database schema. SQLite and Turso
+keep the comment in Toasty's schema metadata but do not emit comment DDL.
+
 ## What gets generated
 
 For a model with basic fields (no relationships or indexes), `#[derive(Model)]`

@@ -1,7 +1,7 @@
 use std::borrow::Cow;
 
 use toasty_core::{
-    driver::Capability,
+    driver::{Capability, SqlPlaceholder},
     schema::{
         db::{Column, Schema, Table, Type, TypeEnum},
         diff,
@@ -16,6 +16,7 @@ use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, N
 fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
     if previous.name != next.name
         || previous.nullable != next.nullable
+        || previous.comment != next.comment
         || previous.primary_key != next.primary_key
         || previous.auto_increment != next.auto_increment
     {
@@ -29,6 +30,47 @@ fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
             Type::Enum(TypeEnum { name: Some(b), .. }),
         ) if a == b
     )
+}
+
+fn uses_postgresql_comments(capability: &Capability) -> bool {
+    matches!(
+        capability.sql_placeholder,
+        Some(SqlPlaceholder::DollarNumber)
+    )
+}
+
+fn uses_mysql_comments(capability: &Capability) -> bool {
+    matches!(
+        capability.sql_placeholder,
+        Some(SqlPlaceholder::QuestionMark)
+    )
+}
+
+fn emit_postgresql_comments<'a>(
+    result: &mut Vec<MigrationStatement<'a>>,
+    table: &Table,
+    schema: Cow<'a, Schema>,
+    capability: &Capability,
+) {
+    if !uses_postgresql_comments(capability) {
+        return;
+    }
+
+    if table.comment.is_some() {
+        result.push(MigrationStatement::new(
+            Statement::comment_on_table(table),
+            schema.clone(),
+        ));
+    }
+
+    for column in &table.columns {
+        if column.comment.is_some() {
+            result.push(MigrationStatement::new(
+                Statement::comment_on_column(table, column),
+                schema.clone(),
+            ));
+        }
+    }
 }
 
 /// A migration step pairing a DDL [`Statement`] with the [`Schema`] it applies against.
@@ -88,6 +130,12 @@ impl<'a> MigrationStatement<'a> {
                         Statement::create_table(table, capability),
                         Cow::Borrowed(schema_diff.next()),
                     ));
+                    emit_postgresql_comments(
+                        &mut result,
+                        table,
+                        Cow::Borrowed(schema_diff.next()),
+                        capability,
+                    );
                     for index in &table.indices {
                         if index.primary_key {
                             continue; // PK indices are created as part of CREATE TABLE
@@ -116,6 +164,20 @@ impl<'a> MigrationStatement<'a> {
                             schema.clone(),
                         ));
                         schema.to_mut().table_mut(previous.id).name = next.name.clone();
+                    }
+
+                    if previous.comment != next.comment {
+                        if uses_postgresql_comments(capability) {
+                            result.push(Self::new(
+                                Statement::comment_on_table(next),
+                                Cow::Borrowed(schema_diff.next()),
+                            ));
+                        } else if uses_mysql_comments(capability) {
+                            result.push(Self::new(
+                                Statement::alter_table_comment(next),
+                                Cow::Borrowed(schema_diff.next()),
+                            ));
+                        }
                     }
 
                     // Check if any column alteration requires table recreation
@@ -288,6 +350,13 @@ impl<'a> MigrationStatement<'a> {
                         Statement::add_column(column, capability),
                         schema.clone(),
                     ));
+                    if column.comment.is_some() && uses_postgresql_comments(capability) {
+                        let table = schema.table(column.id.table);
+                        result.push(Self::new(
+                            Statement::comment_on_column(table, column),
+                            schema.clone(),
+                        ));
+                    }
                 }
                 diff::Column::Drop(column) => {
                     result.push(Self::new(Statement::drop_column(column), schema.clone()));
@@ -304,7 +373,19 @@ impl<'a> MigrationStatement<'a> {
                         continue;
                     }
 
-                    let changes = AlterColumnChanges::from_diff(previous, col_next);
+                    if previous.comment != col_next.comment && uses_postgresql_comments(capability)
+                    {
+                        let table = schema.table(col_next.id.table);
+                        result.push(Self::new(
+                            Statement::comment_on_column(table, col_next),
+                            schema.clone(),
+                        ));
+                    }
+
+                    let mut changes = AlterColumnChanges::from_diff(previous, col_next);
+                    if !uses_mysql_comments(capability) {
+                        changes.new_comment = None;
+                    }
                     let changes = if capability.schema_mutations.alter_column_properties_atomic {
                         vec![changes]
                     } else {
@@ -312,6 +393,9 @@ impl<'a> MigrationStatement<'a> {
                     };
 
                     for changes in changes {
+                        if changes.is_empty() {
+                            continue;
+                        }
                         result.push(Self::new(
                             Statement::alter_column(previous, changes, capability),
                             schema.clone(),

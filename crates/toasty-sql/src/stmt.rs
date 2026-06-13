@@ -16,6 +16,9 @@ pub use check::CheckConstraint;
 mod column_def;
 pub use column_def::ColumnDef;
 
+mod comment;
+pub use comment::{CommentOn, CommentTarget};
+
 mod copy_table;
 pub use copy_table::CopyTable;
 
@@ -62,6 +65,8 @@ pub enum Statement {
     AlterTable(AlterTable),
     /// Alter a type (e.g. `ALTER TYPE ... ADD VALUE '...'`).
     AlterType(AlterType),
+    /// Add or clear a database-native table or column comment.
+    CommentOn(CommentOn),
     /// Copy rows from one table to another.
     CopyTable(CopyTable),
     /// Create an index.

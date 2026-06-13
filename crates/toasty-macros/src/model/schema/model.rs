@@ -145,6 +145,9 @@ pub(crate) struct Model {
 
     /// Optional table to map the model to
     pub(crate) table: Option<syn::LitStr>,
+
+    /// Optional database-native table comment.
+    pub(crate) comment: Option<syn::LitStr>,
 }
 
 impl Model {
@@ -350,6 +353,7 @@ impl Model {
             kind,
             indices,
             table: model_attr.table,
+            comment: model_attr.comment,
         })
     }
 
@@ -540,6 +544,7 @@ impl Model {
             }),
             indices,
             table: None,
+            comment: None,
         })
     }
 }

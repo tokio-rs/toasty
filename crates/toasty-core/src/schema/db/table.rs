@@ -23,6 +23,13 @@ pub struct Table {
     /// Name of the table as it appears in the database.
     pub name: String,
 
+    /// Optional database-native table comment.
+    #[cfg_attr(
+        feature = "serde",
+        serde(default, skip_serializing_if = "Option::is_none")
+    )]
+    pub comment: Option<String>,
+
     /// The table's columns, in order.
     pub columns: Vec<Column>,
 
@@ -96,6 +103,7 @@ impl Table {
         Self {
             id,
             name,
+            comment: None,
             columns: vec![],
             primary_key: PrimaryKey {
                 columns: vec![],

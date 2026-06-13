@@ -28,6 +28,13 @@ impl ToSql for &stmt::ColumnDef {
             fmt!(f, " ");
             check.to_sql(f);
         }
+
+        if let Some(comment) = &self.comment
+            && matches!(f.serializer.flavor, Flavor::Mysql)
+        {
+            let comment = stmt::Value::String(comment.clone());
+            fmt!(f, (" COMMENT ", &comment));
+        }
     }
 }
 

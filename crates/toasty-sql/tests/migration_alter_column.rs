@@ -15,6 +15,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
             index,
         },
         name: name.to_string(),
+        comment: None,
         ty: core_stmt::Type::String,
         storage_ty,
         nullable: false,
@@ -34,6 +35,7 @@ fn make_table(id: usize, name: &str, columns: Vec<Column>) -> Table {
     Table {
         id: TableId(id),
         name: name.to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: pk_columns,
@@ -806,6 +808,60 @@ fn alter_column_rename_and_change_type_sqlite() {
             "DROP TABLE \"users\";",
             "ALTER TABLE \"_toasty_new_users\" RENAME TO \"users\";",
             "PRAGMA foreign_keys = ON;",
+        ]
+    );
+}
+
+#[test]
+fn alter_column_comment_postgresql() {
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "name", Type::Text),
+            ],
+        )],
+    };
+    let mut to = from.clone();
+    to.tables[0].columns[1].comment = Some("display name".to_string());
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    assert_eq!(
+        sql,
+        vec!["COMMENT ON COLUMN \"users\".\"name\" IS 'display name';"]
+    );
+}
+
+#[test]
+fn alter_column_comment_mysql() {
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "name", Type::Text),
+            ],
+        )],
+    };
+    let mut to = from.clone();
+    to.tables[0].columns[1].comment = Some("display name".to_string());
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
+    let sql = serialize_migration(&stmts, "mysql");
+
+    assert_eq!(
+        sql,
+        vec![
+            "ALTER TABLE `users` CHANGE COLUMN `name` `name` TEXT NOT NULL COMMENT 'display name';"
         ]
     );
 }

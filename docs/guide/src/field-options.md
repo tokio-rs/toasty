@@ -32,6 +32,27 @@ CREATE TABLE users (
 );
 ```
 
+## Column comments
+
+Use `#[comment("...")]` on a field to add a database-native column comment where
+the database supports it:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[comment("public display name")]
+    name: String,
+}
+```
+
+PostgreSQL and MySQL store the comment in the database schema. SQLite and Turso
+keep the comment in Toasty's schema metadata but do not emit comment DDL.
+
 ## Explicit column types
 
 Toasty infers the column type from the Rust field type. Use

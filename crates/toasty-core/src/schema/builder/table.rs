@@ -112,7 +112,15 @@ impl BuildSchema<'_> {
 
             if !self.table_lookup.contains_key(&table_name) {
                 let id = self.register_table(&table_name);
-                self.tables.push(Table::new(id, table_name.clone()));
+                let mut table = Table::new(id, table_name.clone());
+                table.comment = model.comment.clone();
+                self.tables.push(table);
+            } else if let Some(comment) = &model.comment {
+                let id = *self.table_lookup.get(&table_name).unwrap();
+                let table = &mut self.tables[id.0];
+                if table.comment.is_none() {
+                    table.comment = Some(comment.clone());
+                }
             }
 
             *self.table_lookup.get(&table_name).unwrap()
@@ -120,7 +128,9 @@ impl BuildSchema<'_> {
             let name = self.table_name_from_model(&model.name);
             let id = self.register_table(&name);
 
-            self.tables.push(Table::new(id, name));
+            let mut table = Table::new(id, name);
+            table.comment = model.comment.clone();
+            self.tables.push(table);
             id
         }
     }
@@ -1221,6 +1231,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         self.build.table.columns.push(db::Column {
             id,
             name: self.column_name(field),
+            comment: field.comment.clone(),
             ty: storage_ty.bridge_type(&primitive.ty),
             storage_ty,
             nullable,

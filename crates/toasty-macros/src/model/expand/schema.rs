@@ -13,6 +13,7 @@ impl Expand<'_> {
         let fields = self.expand_model_fields();
         let indices = self.expand_model_indices();
         let table_name = self.expand_table_name();
+        let comment = self.expand_comment(self.model.comment.as_ref());
 
         let model = match &self.model.kind {
             ModelKind::Root(root) => {
@@ -37,6 +38,7 @@ impl Expand<'_> {
                             fields: #fields,
                             primary_key: #primary_key,
                             table_name: #table_name,
+                            comment: #comment,
                             indices: #indices,
                             version_field: #version_field,
                         }
@@ -96,6 +98,8 @@ impl Expand<'_> {
                     model_embedded_enum.variants[variant].fields_named
                 }
             };
+
+            let comment = self.expand_comment(field.attrs.comment.as_ref());
 
             let name = {
                 let app_name = if field_named {
@@ -242,6 +246,7 @@ impl Expand<'_> {
                         index: #index_tokenized,
                     },
                     name: #name,
+                    comment: #comment,
                     ty: #field_ty,
                     nullable: #nullable,
                     primary_key: #primary_key,
@@ -349,6 +354,13 @@ impl Expand<'_> {
 
         quote! {
             vec![ #( #indices ),* ]
+        }
+    }
+
+    fn expand_comment(&self, comment: Option<&syn::LitStr>) -> TokenStream {
+        match comment {
+            Some(comment) => quote! { Some(#comment.to_string()) },
+            None => quote! { None },
         }
     }
 

@@ -1,6 +1,6 @@
 use super::AutoStrategy;
 
-use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
+use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name, parse_comment_attr};
 
 use syn::spanned::Spanned;
 
@@ -43,6 +43,9 @@ pub(crate) struct FieldAttr {
     /// Optional database column name and / or type
     pub(crate) column: Option<Column>,
 
+    /// Optional database-native column comment.
+    pub(crate) comment: Option<syn::LitStr>,
+
     /// Expression to use as default value on create: `#[default(<expr>)]`
     pub(crate) default_expr: Option<syn::Expr>,
 
@@ -78,6 +81,7 @@ impl FieldAttr {
             auto: None,
             index: false,
             column: None,
+            comment: None,
             default_expr: None,
             update_expr: None,
             versionable: false,
@@ -133,6 +137,18 @@ impl FieldAttr {
                 } else {
                     match Column::from_ast(attr) {
                         Ok(col) => field_attr.column = Some(col),
+                        Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("comment") {
+                if field_attr.comment.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[comment] attribute",
+                    ));
+                } else {
+                    match parse_comment_attr(attr) {
+                        Ok(comment) => field_attr.comment = Some(comment),
                         Err(e) => errs.push(e),
                     }
                 }

@@ -34,6 +34,9 @@ pub struct AlterColumnChanges {
 
     /// New auto increment behavior.
     pub new_auto_increment: Option<bool>,
+
+    /// New database-native column comment.
+    pub new_comment: Option<Option<String>>,
 }
 
 impl AlterColumnChanges {
@@ -48,6 +51,7 @@ impl AlterColumnChanges {
             new_not_null: (previous.nullable != next.nullable).then_some(!next.nullable),
             new_auto_increment: (previous.auto_increment != next.auto_increment)
                 .then_some(next.auto_increment),
+            new_comment: (previous.comment != next.comment).then(|| next.comment.clone()),
         }
     }
 
@@ -62,12 +66,14 @@ impl AlterColumnChanges {
             new_ty,
             new_not_null,
             new_auto_increment,
+            new_comment,
         } = self;
         let default = AlterColumnChanges {
             new_name: None,
             new_ty: None,
             new_not_null: None,
             new_auto_increment: None,
+            new_comment: None,
         };
         let mut result = vec![];
         if new_ty.is_some() {
@@ -88,6 +94,12 @@ impl AlterColumnChanges {
                 ..default.clone()
             });
         }
+        if new_comment.is_some() {
+            result.push(Self {
+                new_comment,
+                ..default.clone()
+            });
+        }
         if new_name.is_some() {
             result.push(Self {
                 new_name,
@@ -95,6 +107,15 @@ impl AlterColumnChanges {
             });
         }
         result
+    }
+
+    /// Returns `true` when no column property changed.
+    pub fn is_empty(&self) -> bool {
+        self.new_name.is_none()
+            && self.new_ty.is_none()
+            && self.new_not_null.is_none()
+            && self.new_auto_increment.is_none()
+            && self.new_comment.is_none()
     }
 
     /// Returns `true` if any type-level property changed (type, nullability, or auto-increment).
