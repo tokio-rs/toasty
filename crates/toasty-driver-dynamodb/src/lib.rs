@@ -25,11 +25,8 @@ use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
     driver::{Capability, Driver, ExecResponse, operation::Operation},
-    schema::{
-        app::ModelId,
-        db::{self, Column, ColumnId, IndexScope, Migration, Table},
-    },
-    stmt::{self, Expr, ExprContext, Visit},
+    schema::db::{Column, ColumnId, IndexScope, Migration, Table},
+    stmt::{self, ExprContext},
 };
 
 use aws_sdk_dynamodb::{
@@ -44,7 +41,8 @@ use aws_sdk_dynamodb::{
     },
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
-use toasty_core::schema::diff;
+use toasty_core::schema::{db, diff};
+use toasty_core::stmt::Expr;
 
 /// A DynamoDB [`Driver`] backed by the AWS SDK.
 ///
@@ -232,36 +230,11 @@ fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> 
         }
     }
 
-    if sk_values.len() > 1 {
-        // Stop at the first Null — root-model rows (e.g. User) leave child-only
-        // sort-key components absent, so the composite key is a prefix only.
-        let parts: Vec<String> = sk_values
-            .iter()
-            .take_while(|(_, v)| !v.is_null())
-            .map(|(_, v)| value_to_sk_part(v))
-            .collect();
-        assert!(
-            !parts.is_empty(),
-            "at least one sort-key component must be non-null"
-        );
-        let mut sk = parts.join("#");
-        sk.push('#');
-        ret.insert("__sk".to_string(), AttributeValue::S(sk));
-    } else if let Some((name, val)) = sk_values.into_iter().next() {
+    if let Some((name, val)) = sk_values.into_iter().next() {
         ret.insert(name.to_string(), Value::from(val).to_ddb());
     }
 
     ret
-}
-
-fn value_to_sk_part(val: &stmt::Value) -> String {
-    match val {
-        stmt::Value::String(s) => s.clone(),
-        stmt::Value::Uuid(u) => u.to_string(),
-        stmt::Value::I64(n) => n.to_string(),
-        stmt::Value::U64(n) => n.to_string(),
-        _ => panic!("unsupported sort-key value type: {val:?}"),
-    }
 }
 
 /// Convert a DynamoDB AttributeValue to stmt::Value (type-inferred).
@@ -343,50 +316,15 @@ fn ddb_key_schema(partition: &[&str], range: &[&str]) -> Vec<KeySchemaElement> {
     ks
 }
 
-fn sort_key_columns(table: &Table) -> Vec<ColumnId> {
-    table.indices[table.primary_key.index.index]
-        .columns
-        .iter()
-        .filter(|c| matches!(c.scope, IndexScope::Local))
-        .map(|c| table.column(c.column).id)
-        .collect()
-}
-
 fn item_to_record<'a>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a Column>,
-    sk_cols: &[ColumnId],
 ) -> Result<stmt::ValueRecord> {
-    // Parse __sk back into individual column values when the table uses a
-    // composite sort key.
-    let mut sk_vals: HashMap<ColumnId, stmt::Value> = HashMap::new();
-    if sk_cols.len() > 1
-        && let Some(AttributeValue::S(sk)) = item.get("__sk")
-    {
-        let mut parts: Vec<&str> = sk.split('#').collect();
-        // We write a trailing delimiter so pop the empty tail.
-        if parts.last() == Some(&"") {
-            parts.pop();
-        }
-        for (i, part) in parts.iter().enumerate() {
-            if let Some(&col_id) = sk_cols.get(i) {
-                sk_vals.insert(col_id, stmt::Value::String((*part).to_string()));
-            }
-        }
-    }
-
     Ok(stmt::ValueRecord::from_vec(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {
                     Value::from_ddb(&column.ty, value).into_inner()
-                } else if let Some(value) = sk_vals.get(&column.id) {
-                    // Re-parse the raw string into the column's proper type.
-                    let attr = AttributeValue::S(match value {
-                        stmt::Value::String(s) => s.clone(),
-                        _ => unreachable!(),
-                    });
-                    Value::from_ddb(&column.ty, &attr).into_inner()
                 } else {
                     stmt::Value::Null
                 }
@@ -395,177 +333,7 @@ fn item_to_record<'a>(
     ))
 }
 
-/// Builds the DynamoDB key condition expression for a primary-key query.
-///
-/// For simple tables (single sort key or no sort key) this delegates to
-/// `ddb_expression` unchanged.  For item-collection tables where the sort key
-/// is synthesized as `__sk = "val1#val2#…"` this decomposes the filter into a
-/// hash-key equality condition plus a `begins_with(__sk, prefix)` expression.
-/// One sort-key segment as resolved during `BuildKeyExpression::visit_expr`.
-///
-/// Each variant captures *what the segment contributes to the SK prefix*,
-/// already in the form the consumer needs — no more re-parsing AST shapes.
-#[derive(Debug)]
-enum SkComponent {
-    /// The column is bound to a literal value; render the value as the segment.
-    Literal(stmt::Value),
-    /// The column is the item-collection discriminator; render the model
-    /// name (in upper-camel case) as the segment.
-    Model(ModelId),
-    /// The column is absent for this model type (matched via `IS NULL`); skip.
-    Skip,
-}
-
-struct BuildKeyExpression<'a> {
-    table: &'a Table,
-    attrs: &'a mut ExprAttrs,
-    /// Column IDs of the Local-scoped PK columns (sort-key components).
-    sk_cols: &'a [ColumnId],
-    /// Resolved sort-key segments keyed by column ID.
-    sk_components: HashMap<ColumnId, SkComponent>,
-    /// The partition-key equality sub-expression.
-    pk_component: Option<stmt::Expr>,
-    schema: Arc<Schema>,
-}
-
-impl<'a> BuildKeyExpression<'a> {
-    fn build(mut self, cx: &ExprContext<'_, db::Schema>, expr: &stmt::Expr) -> String {
-        if self.sk_cols.len() <= 1 {
-            // No composite sort key — pass through unchanged.
-            return ddb_expression(&self.schema, cx, self.attrs, true, expr);
-        }
-
-        // Collect sub-expressions per column.
-        self.visit_expr(expr);
-
-        let pk_expr = self
-            .pk_component
-            .as_ref()
-            .expect("key expression must include a hash-key condition");
-        let mut key_expr = ddb_expression(&self.schema, cx, self.attrs, true, pk_expr);
-
-        // Build the sort-key prefix from the collected components.
-        let mut missing = false;
-        let mut sk_prefix = String::new();
-        for &sk_col_id in self.sk_cols {
-            let Some(sk_sub) = self.sk_components.get(&sk_col_id) else {
-                missing = true;
-                continue;
-            };
-
-            assert!(!missing, "gap in sort-key component conditions");
-
-            match sk_sub {
-                SkComponent::Skip => {}
-                SkComponent::Literal(val) => {
-                    sk_prefix.push_str(&value_to_sk_part(val));
-                    sk_prefix.push('#');
-                }
-                SkComponent::Model(model) => {
-                    let model_name = self.schema.app.model(*model).name().upper_camel_case();
-                    sk_prefix.push_str(&model_name);
-                    sk_prefix.push('#');
-                }
-            }
-        }
-
-        let sk_prefix_attr = self.attrs.literal(sk_prefix);
-        self.attrs
-            .attr_names
-            .insert("#__sk".to_string(), "__sk".to_string());
-        key_expr.push_str(&format!(" AND begins_with(#__sk, {sk_prefix_attr})"));
-        key_expr
-    }
-}
-
-impl Visit for BuildKeyExpression<'_> {
-    fn visit_expr(&mut self, i: &Expr) {
-        match i {
-            Expr::And(and) => self.visit_expr_and(and),
-            Expr::BinaryOp(binop) => self.visit_expr_binary_op(binop),
-            Expr::IsNull(isnull) => self.visit_expr_is_null(isnull),
-            Expr::IsModel(model) => self.visit_expr_is_model(model),
-            _ => todo!("BuildKeyExpression::visit_expr: {i:#?}"),
-        }
-    }
-
-    fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
-        assert!(
-            matches!(i.op, stmt::BinaryOp::Eq),
-            "key condition must be equality; got {i:#?}"
-        );
-        let Expr::Reference(refer) = i.lhs.as_ref() else {
-            todo!("key lhs is not a reference: {i:#?}");
-        };
-
-        // To avoid needing a &ExprContext here we pattern-match on the column
-        // index directly — the reference's column index into the table.
-        let col_idx = match refer {
-            stmt::ExprReference::Column(ec) => ec.column,
-            _ => todo!("key reference is not a column: {refer:#?}"),
-        };
-
-        let col_id = ColumnId {
-            table: self.table.id,
-            index: col_idx,
-        };
-
-        if self.sk_cols.contains(&col_id) {
-            // Sort-key component: extract the bound literal so the consumer
-            // doesn't have to re-pattern-match the AST.
-            let stmt::Expr::Value(val) = i.rhs.as_ref() else {
-                todo!("sort-key equality must bind a literal value; got {i:#?}");
-            };
-            self.sk_components
-                .insert(col_id, SkComponent::Literal(val.clone()));
-        } else {
-            self.pk_component = Some(Expr::BinaryOp(i.clone()));
-        }
-    }
-
-    fn visit_expr_is_null(&mut self, i: &stmt::ExprIsNull) {
-        let Expr::Reference(refer) = i.expr.as_ref() else {
-            return;
-        };
-        let col_idx = match refer {
-            stmt::ExprReference::Column(ec) => ec.column,
-            _ => return,
-        };
-        let col_id = ColumnId {
-            table: self.table.id,
-            index: col_idx,
-        };
-        if self.sk_cols.contains(&col_id) {
-            self.sk_components.insert(col_id, SkComponent::Skip);
-        }
-    }
-
-    fn visit_expr_is_model(&mut self, model: &stmt::ExprIsModel) {
-        // After removal of the `__model` discriminator column, the model's own
-        // sort field carries `<ModelName>#<uuid>`. Find that column via the
-        // model's PK index so we can render the prefix segment as the leading
-        // sort-key component.
-        let app_model = self.schema.app.model(model.model).as_root_unwrap();
-        let pk_index = &app_model.indices[app_model.primary_key.index.index];
-        let sort_field_id = pk_index
-            .local_fields()
-            .iter()
-            .next()
-            .map(|ic| ic.field)
-            .or_else(|| pk_index.partition_fields().get(1).map(|ic| ic.field))
-            .expect("IsModel emitted for model without sort field");
-        let mapping = self.schema.mapping_for(model.model);
-        let disc_col_id = mapping.fields[sort_field_id.index]
-            .as_primitive()
-            .expect("sort field maps to a primitive column")
-            .column;
-        self.sk_components
-            .insert(disc_col_id, SkComponent::Model(model.model));
-    }
-}
-
 fn ddb_expression(
-    schema: &Schema,
     cx: &ExprContext<'_, db::Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
@@ -573,14 +341,14 @@ fn ddb_expression(
 ) -> String {
     match expr {
         stmt::Expr::Between(expr_between) => {
-            let field = ddb_expression(schema, cx, attrs, primary, &expr_between.expr);
-            let low = ddb_expression(schema, cx, attrs, primary, &expr_between.low);
-            let high = ddb_expression(schema, cx, attrs, primary, &expr_between.high);
+            let field = ddb_expression(cx, attrs, primary, &expr_between.expr);
+            let low = ddb_expression(cx, attrs, primary, &expr_between.low);
+            let high = ddb_expression(cx, attrs, primary, &expr_between.high);
             format!("{field} BETWEEN {low} AND {high}")
         }
         stmt::Expr::BinaryOp(expr_binary_op) => {
-            let lhs = ddb_expression(schema, cx, attrs, primary, &expr_binary_op.lhs);
-            let rhs = ddb_expression(schema, cx, attrs, primary, &expr_binary_op.rhs);
+            let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
+            let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
 
             match expr_binary_op.op {
                 stmt::BinaryOp::Eq => format!("{lhs} = {rhs}"),
@@ -619,7 +387,7 @@ fn ddb_expression(
             let operands = expr_and
                 .operands
                 .iter()
-                .map(|operand| ddb_expression(schema, cx, attrs, primary, operand))
+                .map(|operand| ddb_expression(cx, attrs, primary, operand))
                 .collect::<Vec<_>>();
             operands.join(" AND ")
         }
@@ -627,12 +395,12 @@ fn ddb_expression(
             let operands = expr_or
                 .operands
                 .iter()
-                .map(|operand| ddb_expression(schema, cx, attrs, primary, operand))
+                .map(|operand| ddb_expression(cx, attrs, primary, operand))
                 .collect::<Vec<_>>();
             format!("({})", operands.join(" OR "))
         }
         stmt::Expr::InList(in_list) => {
-            let expr = ddb_expression(schema, cx, attrs, primary, &in_list.expr);
+            let expr = ddb_expression(cx, attrs, primary, &in_list.expr);
 
             // Extract the list items and create individual attribute values
             let items = match &*in_list.list {
@@ -643,7 +411,7 @@ fn ddb_expression(
                     .join(", "),
                 _ => {
                     // If it's not a literal list, treat it as a single expression
-                    ddb_expression(schema, cx, attrs, primary, &in_list.list)
+                    ddb_expression(cx, attrs, primary, &in_list.list)
                 }
             };
 
@@ -658,41 +426,17 @@ fn ddb_expression(
             // `Option<Embed>` presence column — produces invalid syntax.)
             let inner = match &*expr_is_null.expr {
                 stmt::Expr::Reference(expr_reference) => column_alias(cx, attrs, expr_reference).1,
-                other => ddb_expression(schema, cx, attrs, primary, other),
+                other => ddb_expression(cx, attrs, primary, other),
             };
             format!("attribute_not_exists({inner})")
         }
-        stmt::Expr::IsModel(e) => {
-            // The model's sort field carries `<ModelName>#<uuid>`; emit a
-            // `begins_with` against that column so scans and other
-            // filter-expression contexts find rows of this model only.
-            let app_model = schema.app.model(e.model).as_root_unwrap();
-            let pk_index = &app_model.indices[app_model.primary_key.index.index];
-            let sort_field_id = pk_index
-                .local_fields()
-                .iter()
-                .next()
-                .map(|ic| ic.field)
-                .or_else(|| pk_index.partition_fields().get(1).map(|ic| ic.field))
-                .expect("IsModel emitted for model without sort field");
-            let mapping = schema.mapping_for(e.model);
-            let sort_col_id = mapping.fields[sort_field_id.index]
-                .as_primitive()
-                .expect("sort field maps to a primitive column")
-                .column;
-            let sort_col = schema.db.column(sort_col_id);
-            let model_name = app_model.name.upper_camel_case();
-            let prefix_attr = attrs.value(&stmt::Value::String(format!("{model_name}#")));
-            let col_alias = attrs.column(sort_col).to_string();
-            format!("begins_with({col_alias}, {prefix_attr})")
-        }
         stmt::Expr::Not(expr_not) => {
-            let inner = ddb_expression(schema, cx, attrs, primary, &expr_not.expr);
+            let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);
             format!("(NOT {inner})")
         }
         stmt::Expr::StartsWith(expr_starts_with) => {
-            let expr = ddb_expression(schema, cx, attrs, primary, &expr_starts_with.expr);
-            let prefix = ddb_expression(schema, cx, attrs, primary, &expr_starts_with.prefix);
+            let expr = ddb_expression(cx, attrs, primary, &expr_starts_with.expr);
+            let prefix = ddb_expression(cx, attrs, primary, &expr_starts_with.prefix);
             format!("begins_with({expr}, {prefix})")
         }
         stmt::Expr::Like(_) => {
@@ -704,12 +448,12 @@ fn ddb_expression(
             // `Path::contains(value)` lowers to `value = ANY(col)`. On
             // DynamoDB that's `contains(path, value)` — the standard List
             // membership filter.
-            let value = ddb_expression(schema, cx, attrs, primary, &any.lhs);
-            let path = ddb_expression(schema, cx, attrs, primary, &any.rhs);
+            let value = ddb_expression(cx, attrs, primary, &any.lhs);
+            let path = ddb_expression(cx, attrs, primary, &any.rhs);
             format!("contains({path}, {value})")
         }
         stmt::Expr::Length(expr) => {
-            let inner = ddb_expression(schema, cx, attrs, primary, &expr.expr);
+            let inner = ddb_expression(cx, attrs, primary, &expr.expr);
             format!("size({inner})")
         }
         stmt::Expr::Cast(expr_cast) if expr_cast.ty == stmt::Type::Bool => {
@@ -719,7 +463,7 @@ fn ddb_expression(
             // (result of `field = true` simplification). In predicate position
             // this means "is true"; the `field = false` case arrives as
             // Not(Cast(col_ref, Bool)) and is handled by the Not arm above.
-            let col_alias = ddb_expression(schema, cx, attrs, primary, &expr_cast.expr);
+            let col_alias = ddb_expression(cx, attrs, primary, &expr_cast.expr);
             let true_val =
                 attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::N("1".to_string()));
             format!("{col_alias} = {true_val}")
@@ -762,10 +506,6 @@ impl ExprAttrs {
         }
     }
 
-    fn literal(&mut self, s: impl Into<String>) -> String {
-        self.ddb_value(AttributeValue::S(s.into()))
-    }
-
     fn value(&mut self, val: &stmt::Value) -> String {
         self.ddb_value(Value::from(val.clone()).to_ddb())
     }
@@ -775,5 +515,45 @@ impl ExprAttrs {
         let name = format!(":v_{i}");
         self.attr_values.insert(name.clone(), val);
         name
+    }
+}
+
+/// An [`stmt::Input`] that resolves column references into a record produced
+/// by `item_to_record`. After lowering, filter/condition expressions reference
+/// columns via `ExprReference::Column { column: i }` where `i` is the column's
+/// position in `table.columns`. `item_to_record` builds the record in that same
+/// order, so indexing by `col.column` gives the right field.
+struct RecordInput<'a>(&'a stmt::ValueRecord);
+
+impl stmt::Input for RecordInput<'_> {
+    fn resolve_ref(
+        &mut self,
+        expr_reference: &stmt::ExprReference,
+        projection: &stmt::Projection,
+    ) -> Option<stmt::Expr> {
+        match expr_reference {
+            stmt::ExprReference::Column(col) => {
+                Some(self.0.fields[col.column].entry(projection).to_expr())
+            }
+            _ => None,
+        }
+    }
+}
+
+pub(crate) fn combine_filter_and_condition(
+    cx: &ExprContext<db::Schema>,
+    expr_attrs: &mut ExprAttrs,
+    filter: &Option<Expr>,
+    condition: &Option<Expr>,
+) -> Option<String> {
+    match (filter, condition) {
+        (Some(filter), None) => Some(ddb_expression(cx, expr_attrs, false, filter)),
+        (None, Some(condition)) => Some(ddb_expression(cx, expr_attrs, false, condition)),
+        (Some(filter), Some(condition)) => {
+            let f = ddb_expression(cx, expr_attrs, false, filter);
+            let c = ddb_expression(cx, expr_attrs, false, condition);
+            Some(format!("({f}) AND ({c})"))
+        }
+        _ => None,
     }
 }

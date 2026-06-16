@@ -1,35 +1,12 @@
-use crate::sort_key_columns;
-
 use super::{
     Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, Schema,
     SdkError, TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db,
-    ddb_expression, ddb_key, item_to_record, operation, stmt,
+    ddb_key, item_to_record, operation, stmt,
 };
+use crate::RecordInput;
 use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write, sync::Arc};
-use toasty_core::{driver::ExecResponse, schema::db::ColumnId, stmt::ExprContext};
-
-/// An [`stmt::Input`] that resolves column references into a record produced
-/// by `item_to_record`. After lowering, filter/condition expressions reference
-/// columns via `ExprReference::Column { column: i }` where `i` is the column's
-/// position in `table.columns`. `item_to_record` builds the record in that same
-/// order, so indexing by `col.column` gives the right field.
-struct RecordInput<'a>(&'a stmt::ValueRecord);
-
-impl stmt::Input for RecordInput<'_> {
-    fn resolve_ref(
-        &mut self,
-        expr_reference: &stmt::ExprReference,
-        projection: &stmt::Projection,
-    ) -> Option<stmt::Expr> {
-        match expr_reference {
-            stmt::ExprReference::Column(col) => {
-                Some(self.0.fields[col.column].entry(projection).to_expr())
-            }
-            _ => None,
-        }
-    }
-}
+use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 /// Returns `true` when the DynamoDB `ConditionalCheckFailedException` was
 /// caused by the *filter* expression failing (→ return count 0), or `false`
@@ -48,7 +25,6 @@ impl stmt::Input for RecordInput<'_> {
 fn filter_failed(
     old_item: Option<&HashMap<String, AttributeValue>>,
     table: &db::Table,
-    sk_cols: &[ColumnId],
     filter: Option<&stmt::Expr>,
 ) -> bool {
     let Some(filter) = filter else {
@@ -59,7 +35,7 @@ fn filter_failed(
         return true;
     };
 
-    let record = item_to_record(item, table.columns.iter(), sk_cols).unwrap();
+    let record = item_to_record(item, table.columns.iter()).unwrap();
     !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
 }
 
@@ -70,11 +46,10 @@ fn on_update_item_condition_failed(
     item: Option<&HashMap<String, AttributeValue>>,
     message: Option<&str>,
     table: &db::Table,
-    sk_cols: &[ColumnId],
     filter: Option<&stmt::Expr>,
     returning: bool,
 ) -> Result<ExecResponse> {
-    if filter_failed(item, table, sk_cols, filter) {
+    if filter_failed(item, table, filter) {
         if returning {
             Ok(ExecResponse::empty_value_stream())
         } else {
@@ -97,14 +72,13 @@ fn on_transaction_cancelled(
     reasons: &[CancellationReason],
     message: Option<&str>,
     table: &db::Table,
-    sk_cols: &[ColumnId],
     filter: Option<&stmt::Expr>,
     returning: bool,
 ) -> Result<ExecResponse> {
     let any_condition_failed = reasons
         .iter()
         .filter(|r| r.code() == Some("ConditionalCheckFailed"))
-        .any(|r| !filter_failed(r.item(), table, sk_cols, filter));
+        .any(|r| !filter_failed(r.item(), table, filter));
 
     if any_condition_failed {
         Err(toasty_core::Error::condition_failed(
@@ -127,7 +101,6 @@ impl Connection {
     ) -> Result<ExecResponse> {
         let db_schema = &schema.db;
         let table = db_schema.table(op.table);
-        let sk_cols = sort_key_columns(table);
         let cx = ExprContext::new_with_target(db_schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -149,24 +122,8 @@ impl Connection {
             })
             .collect::<Vec<_>>();
 
-        let filter_expression = match (&op.filter, &op.condition) {
-            (Some(filter), None) => {
-                Some(ddb_expression(schema, &cx, &mut expr_attrs, false, filter))
-            }
-            (None, Some(condition)) => Some(ddb_expression(
-                schema,
-                &cx,
-                &mut expr_attrs,
-                false,
-                condition,
-            )),
-            (Some(filter), Some(condition)) => {
-                let f = ddb_expression(schema, &cx, &mut expr_attrs, false, filter);
-                let c = ddb_expression(schema, &cx, &mut expr_attrs, false, condition);
-                Some(format!("({f}) AND ({c})"))
-            }
-            _ => None,
-        };
+        let filter_expression =
+            crate::combine_filter_and_condition(&cx, &mut expr_attrs, &op.filter, &op.condition);
 
         let mut update_expression_set = String::new();
         let mut update_expression_remove = String::new();
@@ -346,7 +303,6 @@ impl Connection {
                                     cce.item(),
                                     cce.message.as_deref(),
                                     table,
-                                    &sk_cols,
                                     op.filter.as_ref(),
                                     op.returning.is_some(),
                                 );
@@ -413,7 +369,6 @@ impl Connection {
                                 tce.cancellation_reasons(),
                                 tce.message(),
                                 table,
-                                &sk_cols,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
                             );
@@ -591,7 +546,6 @@ impl Connection {
                                 cce.item(),
                                 cce.message.as_deref(),
                                 table,
-                                &sk_cols,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
                             );
@@ -722,7 +676,6 @@ impl Connection {
                                 tce.cancellation_reasons(),
                                 tce.message(),
                                 table,
-                                &sk_cols,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
                             );
@@ -807,7 +760,7 @@ mod tests {
     #[test]
     fn no_filter_returns_false() {
         let table = make_table();
-        assert!(!filter_failed(None, &table, &[], None));
+        assert!(!filter_failed(None, &table, None));
     }
 
     // Filter present but item is missing (record was deleted between read and check):
@@ -816,7 +769,7 @@ mod tests {
     fn missing_item_with_filter_returns_true() {
         let table = make_table();
         let filter = status_eq_active();
-        assert!(filter_failed(None, &table, &[], Some(&filter)));
+        assert!(filter_failed(None, &table, Some(&filter)));
     }
 
     // Item present and filter matches: the filter was NOT the failing part, so the
@@ -826,7 +779,7 @@ mod tests {
         let table = make_table();
         let filter = status_eq_active();
         let item = item_with_status("active");
-        assert!(!filter_failed(Some(&item), &table, &[], Some(&filter)));
+        assert!(!filter_failed(Some(&item), &table, Some(&filter)));
     }
 
     // Item present but filter does not match: the filter failed → count 0.
@@ -835,6 +788,6 @@ mod tests {
         let table = make_table();
         let filter = status_eq_active();
         let item = item_with_status("inactive");
-        assert!(filter_failed(Some(&item), &table, &[], Some(&filter)));
+        assert!(filter_failed(Some(&item), &table, Some(&filter)));
     }
 }

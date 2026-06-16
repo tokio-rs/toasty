@@ -1,5 +1,3 @@
-use crate::sort_key_columns;
-
 use super::{
     Connection, KeysAndAttributes, Result, Schema, ddb_key, item_to_record, operation, stmt,
 };
@@ -13,7 +11,6 @@ impl Connection {
         op: operation::GetByKey,
     ) -> Result<ExecResponse> {
         let table = schema.db.table(op.table);
-        let sk_cols = sort_key_columns(table);
 
         if op.keys.len() == 1 {
             // TODO: set attributes to get
@@ -28,11 +25,7 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
 
             if let Some(item) = res.item() {
-                let row = item_to_record(
-                    item,
-                    op.select.iter().map(|id| schema.db.column(*id)),
-                    &sk_cols,
-                )?;
+                let row = item_to_record(item, op.select.iter().map(|id| schema.db.column(*id)))?;
                 Ok(ExecResponse::value_stream(stmt::ValueStream::from_value(
                     row,
                 )))
@@ -85,7 +78,6 @@ impl Connection {
                         op.select
                             .iter()
                             .map(|column_id| schema.db.column(*column_id)),
-                        &sk_cols,
                     )
                 }),
             )))

@@ -1,10 +1,8 @@
-use crate::{BuildKeyExpression, sort_key_columns};
-
 use super::{
     Connection, ExprAttrs, Result, Schema, ddb_expression, deserialize_ddb_cursor, item_to_record,
     operation, serialize_ddb_cursor, stmt,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::sync::Arc;
 use toasty_core::{
     driver::{ExecResponse, operation::Pagination},
     stmt::ExprContext,
@@ -20,29 +18,15 @@ impl Connection {
         let cx = ExprContext::new_with_target(&schema.db, table);
 
         let mut expr_attrs = ExprAttrs::default();
-        let sk_cols = sort_key_columns(table);
 
         // When querying an index, use index filter logic (not primary key logic).
-        // For item-collection tables with a composite sort key, build a
-        // begins_with(__sk, prefix) expression instead of per-column equality.
-        let key_expression = if op.index.is_none() {
-            BuildKeyExpression {
-                table,
-                attrs: &mut expr_attrs,
-                sk_cols: &sk_cols,
-                sk_components: HashMap::new(),
-                pk_component: None,
-                schema: schema.clone(),
-            }
-            .build(&cx, &op.pk_filter)
-        } else {
-            ddb_expression(schema, &cx, &mut expr_attrs, false, &op.pk_filter)
-        };
+        let key_expression =
+            ddb_expression(&cx, &mut expr_attrs, op.index.is_none(), &op.pk_filter);
 
         let filter_expression = op
             .filter
             .as_ref()
-            .map(|expr| ddb_expression(schema, &cx, &mut expr_attrs, false, expr));
+            .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
         // Build base query
         let mut query = self
@@ -86,7 +70,7 @@ impl Connection {
                     .transpose()
                     .map_err(toasty_core::Error::driver_operation_failed)?
                 {
-                    rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -112,7 +96,7 @@ impl Connection {
 
                 let mut rows: Vec<stmt::Value> = Vec::new();
                 for item in res.items.into_iter().flatten() {
-                    rows.push(item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -151,9 +135,7 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            rows.push(
-                                item_to_record(&item, cols(), &sk_cols).map(stmt::Value::from)?,
-                            );
+                            rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                         }
                         None => break,
                     }

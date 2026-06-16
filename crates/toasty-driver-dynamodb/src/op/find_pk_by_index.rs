@@ -1,5 +1,3 @@
-use crate::sort_key_columns;
-
 use super::{
     Connection, ExprAttrs, Result, Schema, ddb_expression, item_to_record, operation, stmt,
 };
@@ -17,7 +15,7 @@ impl Connection {
         let cx = ExprContext::new_with_target(&schema.db, table);
 
         let mut expr_attrs = ExprAttrs::default();
-        let key_expression = ddb_expression(schema, &cx, &mut expr_attrs, false, &op.filter);
+        let key_expression = ddb_expression(&cx, &mut expr_attrs, false, &op.filter);
 
         let res = if index.unique {
             tracing::trace!(index_name = %index.name, "querying unique index as table");
@@ -52,13 +50,12 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?
         };
 
-        let sk_cols = sort_key_columns(table);
         let schema = schema.clone();
 
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {
                 let table = schema.db.table(op.table);
-                item_to_record(&item, table.primary_key_columns(), &sk_cols)
+                item_to_record(&item, table.primary_key_columns())
             }),
         )))
     }
