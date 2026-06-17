@@ -100,6 +100,7 @@ the entry lands here.
 
 ## Transactions
 
+- Atomic batches per driver — multi-write `toasty::batch()` and cascades commit or fail together on every shipped driver, via `Operation::TransactWrite` on DynamoDB ([design](design/atomic-batches.md))
 - Cross-database atomic batch API — type-safe, all-or-nothing across SQL and NoSQL
 - Manual SQL transactions — `BEGIN` / `COMMIT` / `ROLLBACK`, savepoints, isolation levels
 - Row-level locking — `SELECT ... FOR UPDATE` / `SKIP LOCKED` ([#424])
