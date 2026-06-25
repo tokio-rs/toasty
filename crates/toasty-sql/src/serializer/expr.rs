@@ -119,7 +119,12 @@ impl ToSql for &stmt::Expr {
                     };
                 fmt!(f, expr.expr op expr.pattern);
                 if let Some(escape) = expr.escape {
-                    let escape = &stmt::Value::String(escape.to_string());
+                    let escape = if f.serializer.is_mysql() && escape == '\\' {
+                        stmt::Value::String("\\\\".to_string())
+                    } else {
+                        stmt::Value::String(escape.to_string())
+                    };
+                    let escape = &escape;
                     fmt!(f, " ESCAPE " escape);
                 }
             }
