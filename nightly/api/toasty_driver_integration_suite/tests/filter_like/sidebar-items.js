@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["like_basic","like_no_match","like_optional_field"]};
+window.SIDEBAR_ITEMS = {"fn":["like_basic","like_escape_keeps_wildcards","like_escape_percent","like_escape_underscore","like_no_match","like_optional_field"]};

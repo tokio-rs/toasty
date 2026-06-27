@@ -656,39 +656,145 @@
 <a href=#656 id=656 data-nosnippet>656</a>            _p: PhantomData,
 <a href=#657 id=657 data-nosnippet>657</a>        }
 <a href=#658 id=658 data-nosnippet>658</a>    }
-<a href=#659 id=659 data-nosnippet>659</a>}
-<a href=#660 id=660 data-nosnippet>660</a>
-<a href=#661 id=661 data-nosnippet>661</a><span class="kw">impl</span>&lt;T, U&gt; Clone <span class="kw">for </span>Path&lt;T, U&gt; {
-<a href=#662 id=662 data-nosnippet>662</a>    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
-<a href=#663 id=663 data-nosnippet>663</a>        <span class="self">Self </span>{
-<a href=#664 id=664 data-nosnippet>664</a>            untyped: <span class="self">self</span>.untyped.clone(),
-<a href=#665 id=665 data-nosnippet>665</a>            _p: PhantomData,
-<a href=#666 id=666 data-nosnippet>666</a>        }
-<a href=#667 id=667 data-nosnippet>667</a>    }
-<a href=#668 id=668 data-nosnippet>668</a>}
-<a href=#669 id=669 data-nosnippet>669</a>
-<a href=#670 id=670 data-nosnippet>670</a><span class="kw">impl</span>&lt;T, U&gt; IntoExpr&lt;U&gt; <span class="kw">for </span>Path&lt;T, U&gt; {
-<a href=#671 id=671 data-nosnippet>671</a>    <span class="kw">fn </span>into_expr(<span class="self">self</span>) -&gt; Expr&lt;U&gt; {
-<a href=#672 id=672 data-nosnippet>672</a>        Expr {
-<a href=#673 id=673 data-nosnippet>673</a>            untyped: <span class="self">self</span>.untyped.into_stmt(),
-<a href=#674 id=674 data-nosnippet>674</a>            _p: PhantomData,
-<a href=#675 id=675 data-nosnippet>675</a>        }
-<a href=#676 id=676 data-nosnippet>676</a>    }
-<a href=#677 id=677 data-nosnippet>677</a>
-<a href=#678 id=678 data-nosnippet>678</a>    <span class="kw">fn </span>by_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Expr&lt;U&gt; {
-<a href=#679 id=679 data-nosnippet>679</a>        <span class="self">Self</span>::into_expr(<span class="self">self</span>.clone())
-<a href=#680 id=680 data-nosnippet>680</a>    }
-<a href=#681 id=681 data-nosnippet>681</a>}
-<a href=#682 id=682 data-nosnippet>682</a>
-<a href=#683 id=683 data-nosnippet>683</a><span class="kw">impl</span>&lt;T, U&gt; From&lt;Path&lt;T, U&gt;&gt; <span class="kw">for </span>stmt::Path {
-<a href=#684 id=684 data-nosnippet>684</a>    <span class="kw">fn </span>from(value: Path&lt;T, U&gt;) -&gt; <span class="self">Self </span>{
-<a href=#685 id=685 data-nosnippet>685</a>        value.untyped
-<a href=#686 id=686 data-nosnippet>686</a>    }
-<a href=#687 id=687 data-nosnippet>687</a>}
-<a href=#688 id=688 data-nosnippet>688</a>
-<a href=#689 id=689 data-nosnippet>689</a><span class="kw">impl</span>&lt;T, U&gt; fmt::Debug <span class="kw">for </span>Path&lt;T, U&gt; {
-<a href=#690 id=690 data-nosnippet>690</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
-<a href=#691 id=691 data-nosnippet>691</a>        <span class="macro">write!</span>(f, <span class="string">"{:?}"</span>, <span class="self">self</span>.untyped)
-<a href=#692 id=692 data-nosnippet>692</a>    }
-<a href=#693 id=693 data-nosnippet>693</a>}
+<a href=#659 id=659 data-nosnippet>659</a>
+<a href=#660 id=660 data-nosnippet>660</a>    <span class="doccomment">/// Test whether this string field matches a SQL `LIKE` pattern using an
+<a href=#661 id=661 data-nosnippet>661</a>    /// explicit escape character.
+<a href=#662 id=662 data-nosnippet>662</a>    ///
+<a href=#663 id=663 data-nosnippet>663</a>    /// Available on any string-valued field, including `String`,
+<a href=#664 id=664 data-nosnippet>664</a>    /// `Option&lt;String&gt;`, and other wrappers whose `Field::Inner` is `String`.
+<a href=#665 id=665 data-nosnippet>665</a>    ///
+<a href=#666 id=666 data-nosnippet>666</a>    /// The caller is responsible for constructing the `LIKE` pattern. Toasty does
+<a href=#667 id=667 data-nosnippet>667</a>    /// not escape `pattern` automatically. Any `%` or `_` characters that are not
+<a href=#668 id=668 data-nosnippet>668</a>    /// escaped by `escape` are treated as SQL `LIKE` wildcards:
+<a href=#669 id=669 data-nosnippet>669</a>    ///
+<a href=#670 id=670 data-nosnippet>670</a>    /// - `%` matches any sequence of characters.
+<a href=#671 id=671 data-nosnippet>671</a>    /// - `_` matches any single character.
+<a href=#672 id=672 data-nosnippet>672</a>    /// - `escape` followed by `%`, `_`, or `escape` matches that character
+<a href=#673 id=673 data-nosnippet>673</a>    ///   literally.
+<a href=#674 id=674 data-nosnippet>674</a>    ///
+<a href=#675 id=675 data-nosnippet>675</a>    /// This is useful when the pattern needs to match literal `%` or `_`
+<a href=#676 id=676 data-nosnippet>676</a>    /// characters. For example, with `escape` set to `'\\'`, the pattern
+<a href=#677 id=677 data-nosnippet>677</a>    /// `"Alice\\%%"` matches strings beginning with the literal text `"Alice%"`.
+<a href=#678 id=678 data-nosnippet>678</a>    /// The first `%` is escaped and matched literally; the second `%` remains a
+<a href=#679 id=679 data-nosnippet>679</a>    /// wildcard.
+<a href=#680 id=680 data-nosnippet>680</a>    ///
+<a href=#681 id=681 data-nosnippet>681</a>    /// Not supported by the DynamoDB driver. Use [`starts_with`](Self::starts_with)
+<a href=#682 id=682 data-nosnippet>682</a>    /// instead when targeting DynamoDB.
+<a href=#683 id=683 data-nosnippet>683</a>    ///
+<a href=#684 id=684 data-nosnippet>684</a>    /// `.like_with_escape()` is a pass-through to the database's own `LIKE`
+<a href=#685 id=685 data-nosnippet>685</a>    /// operator with an `ESCAPE` clause. Case sensitivity differs by backend:
+<a href=#686 id=686 data-nosnippet>686</a>    /// case-sensitive on PostgreSQL, case-insensitive for ASCII on SQLite, and
+<a href=#687 id=687 data-nosnippet>687</a>    /// collation-dependent on MySQL. For a case-insensitive match on PostgreSQL,
+<a href=#688 id=688 data-nosnippet>688</a>    /// use [`ilike`](Self::ilike).
+<a href=#689 id=689 data-nosnippet>689</a>    ///
+<a href=#690 id=690 data-nosnippet>690</a>    /// # Examples
+<a href=#691 id=691 data-nosnippet>691</a>    ///
+<a href=#692 id=692 data-nosnippet>692</a>    /// ```
+<a href=#693 id=693 data-nosnippet>693</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#694 id=694 data-nosnippet>694</a>    /// # struct User {
+<a href=#695 id=695 data-nosnippet>695</a>    /// #     #[key]
+<a href=#696 id=696 data-nosnippet>696</a>    /// #     id: i64,
+<a href=#697 id=697 data-nosnippet>697</a>    /// #     name: String,
+<a href=#698 id=698 data-nosnippet>698</a>    /// #     nickname: Option&lt;String&gt;,
+<a href=#699 id=699 data-nosnippet>699</a>    /// # }
+<a href=#700 id=700 data-nosnippet>700</a>    /// // Match names starting with "Al".
+<a href=#701 id=701 data-nosnippet>701</a>    /// let filter = User::fields().name().like_with_escape("Al%".to_string(), '\\');
+<a href=#702 id=702 data-nosnippet>702</a>    ///
+<a href=#703 id=703 data-nosnippet>703</a>    /// // Match names starting with the literal text "Alice%".
+<a href=#704 id=704 data-nosnippet>704</a>    /// let filter = User::fields().name().like_with_escape("Alice\\%%".to_string(), '\\');
+<a href=#705 id=705 data-nosnippet>705</a>    ///
+<a href=#706 id=706 data-nosnippet>706</a>    /// // Also works on nullable string fields.
+<a href=#707 id=707 data-nosnippet>707</a>    /// let filter = User::fields().nickname().like_with_escape("Al%".to_string(), '\\');
+<a href=#708 id=708 data-nosnippet>708</a>    /// ```
+<a href=#709 id=709 data-nosnippet>709</a>    </span><span class="kw">pub fn </span>like_with_escape(<span class="self">self</span>, pattern: <span class="kw">impl </span>IntoExpr&lt;String&gt;, escape: char) -&gt; Expr&lt;bool&gt; {
+<a href=#710 id=710 data-nosnippet>710</a>        <span class="kw">let </span>pattern = pattern.into_expr().untyped;
+<a href=#711 id=711 data-nosnippet>711</a>        <span class="self">self</span>.build_filter(<span class="kw">move </span>|path| stmt::Expr::like_with_escape(path, pattern, escape))
+<a href=#712 id=712 data-nosnippet>712</a>    }
+<a href=#713 id=713 data-nosnippet>713</a>
+<a href=#714 id=714 data-nosnippet>714</a>    <span class="doccomment">/// Test whether this string field matches a case-insensitive SQL `LIKE`
+<a href=#715 id=715 data-nosnippet>715</a>    /// pattern using an explicit escape character.
+<a href=#716 id=716 data-nosnippet>716</a>    ///
+<a href=#717 id=717 data-nosnippet>717</a>    /// This is the escaped variant of [`ilike`](Self::ilike). It maps to
+<a href=#718 id=718 data-nosnippet>718</a>    /// PostgreSQL's `ILIKE ... ESCAPE ...` syntax.
+<a href=#719 id=719 data-nosnippet>719</a>    ///
+<a href=#720 id=720 data-nosnippet>720</a>    /// PostgreSQL is the only supported backend with a native `ILIKE`, so
+<a href=#721 id=721 data-nosnippet>721</a>    /// `.ilike_with_escape()` works only there. Toasty does not emulate it: on
+<a href=#722 id=722 data-nosnippet>722</a>    /// MySQL, SQLite, and DynamoDB the query is rejected with an
+<a href=#723 id=723 data-nosnippet>723</a>    /// unsupported-feature error.
+<a href=#724 id=724 data-nosnippet>724</a>    ///
+<a href=#725 id=725 data-nosnippet>725</a>    /// The caller is responsible for constructing the `ILIKE` pattern. Toasty does
+<a href=#726 id=726 data-nosnippet>726</a>    /// not escape `pattern` automatically. Any `%` or `_` characters that are not
+<a href=#727 id=727 data-nosnippet>727</a>    /// escaped by `escape` are treated as SQL pattern wildcards:
+<a href=#728 id=728 data-nosnippet>728</a>    ///
+<a href=#729 id=729 data-nosnippet>729</a>    /// - `%` matches any sequence of characters.
+<a href=#730 id=730 data-nosnippet>730</a>    /// - `_` matches any single character.
+<a href=#731 id=731 data-nosnippet>731</a>    /// - `escape` followed by `%`, `_`, or `escape` matches that character
+<a href=#732 id=732 data-nosnippet>732</a>    ///   literally.
+<a href=#733 id=733 data-nosnippet>733</a>    ///
+<a href=#734 id=734 data-nosnippet>734</a>    /// This is useful when the pattern needs to match literal `%` or `_`
+<a href=#735 id=735 data-nosnippet>735</a>    /// characters while still matching case-insensitively. For example, with
+<a href=#736 id=736 data-nosnippet>736</a>    /// `escape` set to `'\\'`, the pattern `"Alice\\%%"` matches strings beginning
+<a href=#737 id=737 data-nosnippet>737</a>    /// with the literal text `"Alice%"`, ignoring case. It can match `"Alice%1"`,
+<a href=#738 id=738 data-nosnippet>738</a>    /// `"ALICE%1"`, or `"alice%foo"`, but not `"AliceA1"`.
+<a href=#739 id=739 data-nosnippet>739</a>    ///
+<a href=#740 id=740 data-nosnippet>740</a>    /// # Examples
+<a href=#741 id=741 data-nosnippet>741</a>    ///
+<a href=#742 id=742 data-nosnippet>742</a>    /// ```
+<a href=#743 id=743 data-nosnippet>743</a>    /// # #[derive(Debug, toasty::Model)]
+<a href=#744 id=744 data-nosnippet>744</a>    /// # struct User {
+<a href=#745 id=745 data-nosnippet>745</a>    /// #     #[key]
+<a href=#746 id=746 data-nosnippet>746</a>    /// #     id: i64,
+<a href=#747 id=747 data-nosnippet>747</a>    /// #     name: String,
+<a href=#748 id=748 data-nosnippet>748</a>    /// # }
+<a href=#749 id=749 data-nosnippet>749</a>    /// // Match names starting with "al", ignoring case.
+<a href=#750 id=750 data-nosnippet>750</a>    /// let filter = User::fields().name().ilike_with_escape("al%".to_string(), '\\');
+<a href=#751 id=751 data-nosnippet>751</a>    ///
+<a href=#752 id=752 data-nosnippet>752</a>    /// // Match names starting with the literal text "alice%", ignoring case.
+<a href=#753 id=753 data-nosnippet>753</a>    /// let filter = User::fields().name().ilike_with_escape("alice\\%%".to_string(), '\\');
+<a href=#754 id=754 data-nosnippet>754</a>    /// ```
+<a href=#755 id=755 data-nosnippet>755</a>    </span><span class="kw">pub fn </span>ilike_with_escape(<span class="self">self</span>, pattern: <span class="kw">impl </span>IntoExpr&lt;String&gt;, escape: char) -&gt; Expr&lt;bool&gt; {
+<a href=#756 id=756 data-nosnippet>756</a>        Expr {
+<a href=#757 id=757 data-nosnippet>757</a>            untyped: stmt::Expr::ilike_with_escape(
+<a href=#758 id=758 data-nosnippet>758</a>                <span class="self">self</span>.untyped.into_stmt(),
+<a href=#759 id=759 data-nosnippet>759</a>                pattern.into_expr().untyped,
+<a href=#760 id=760 data-nosnippet>760</a>                escape,
+<a href=#761 id=761 data-nosnippet>761</a>            ),
+<a href=#762 id=762 data-nosnippet>762</a>            _p: PhantomData,
+<a href=#763 id=763 data-nosnippet>763</a>        }
+<a href=#764 id=764 data-nosnippet>764</a>    }
+<a href=#765 id=765 data-nosnippet>765</a>}
+<a href=#766 id=766 data-nosnippet>766</a>
+<a href=#767 id=767 data-nosnippet>767</a><span class="kw">impl</span>&lt;T, U&gt; Clone <span class="kw">for </span>Path&lt;T, U&gt; {
+<a href=#768 id=768 data-nosnippet>768</a>    <span class="kw">fn </span>clone(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="self">Self </span>{
+<a href=#769 id=769 data-nosnippet>769</a>        <span class="self">Self </span>{
+<a href=#770 id=770 data-nosnippet>770</a>            untyped: <span class="self">self</span>.untyped.clone(),
+<a href=#771 id=771 data-nosnippet>771</a>            _p: PhantomData,
+<a href=#772 id=772 data-nosnippet>772</a>        }
+<a href=#773 id=773 data-nosnippet>773</a>    }
+<a href=#774 id=774 data-nosnippet>774</a>}
+<a href=#775 id=775 data-nosnippet>775</a>
+<a href=#776 id=776 data-nosnippet>776</a><span class="kw">impl</span>&lt;T, U&gt; IntoExpr&lt;U&gt; <span class="kw">for </span>Path&lt;T, U&gt; {
+<a href=#777 id=777 data-nosnippet>777</a>    <span class="kw">fn </span>into_expr(<span class="self">self</span>) -&gt; Expr&lt;U&gt; {
+<a href=#778 id=778 data-nosnippet>778</a>        Expr {
+<a href=#779 id=779 data-nosnippet>779</a>            untyped: <span class="self">self</span>.untyped.into_stmt(),
+<a href=#780 id=780 data-nosnippet>780</a>            _p: PhantomData,
+<a href=#781 id=781 data-nosnippet>781</a>        }
+<a href=#782 id=782 data-nosnippet>782</a>    }
+<a href=#783 id=783 data-nosnippet>783</a>
+<a href=#784 id=784 data-nosnippet>784</a>    <span class="kw">fn </span>by_ref(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Expr&lt;U&gt; {
+<a href=#785 id=785 data-nosnippet>785</a>        <span class="self">Self</span>::into_expr(<span class="self">self</span>.clone())
+<a href=#786 id=786 data-nosnippet>786</a>    }
+<a href=#787 id=787 data-nosnippet>787</a>}
+<a href=#788 id=788 data-nosnippet>788</a>
+<a href=#789 id=789 data-nosnippet>789</a><span class="kw">impl</span>&lt;T, U&gt; From&lt;Path&lt;T, U&gt;&gt; <span class="kw">for </span>stmt::Path {
+<a href=#790 id=790 data-nosnippet>790</a>    <span class="kw">fn </span>from(value: Path&lt;T, U&gt;) -&gt; <span class="self">Self </span>{
+<a href=#791 id=791 data-nosnippet>791</a>        value.untyped
+<a href=#792 id=792 data-nosnippet>792</a>    }
+<a href=#793 id=793 data-nosnippet>793</a>}
+<a href=#794 id=794 data-nosnippet>794</a>
+<a href=#795 id=795 data-nosnippet>795</a><span class="kw">impl</span>&lt;T, U&gt; fmt::Debug <span class="kw">for </span>Path&lt;T, U&gt; {
+<a href=#796 id=796 data-nosnippet>796</a>    <span class="kw">fn </span>fmt(<span class="kw-2">&amp;</span><span class="self">self</span>, f: <span class="kw-2">&amp;mut </span>fmt::Formatter) -&gt; fmt::Result {
+<a href=#797 id=797 data-nosnippet>797</a>        <span class="macro">write!</span>(f, <span class="string">"{:?}"</span>, <span class="self">self</span>.untyped)
+<a href=#798 id=798 data-nosnippet>798</a>    }
+<a href=#799 id=799 data-nosnippet>799</a>}
 </code></pre></div></section></main></body></html>
