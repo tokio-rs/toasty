@@ -89,3 +89,92 @@ pub async fn like_optional_field(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(requires(sql), scenario(crate::scenarios::fixed_item_name))]
+pub async fn like_escape_percent(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(Item::[
+        { id: 1_i64, name: "Alice%1" },
+        { id: 2_i64, name: "AliceA1" },
+        { id: 3_i64, name: "Alice"  },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let mut items: Vec<Item> = Item::filter(
+        Item::fields()
+            .name()
+            .like_with_escape("Alice\\%%".to_string(), '\\'),
+    )
+    .exec(&mut db)
+    .await?;
+
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].name, "Alice%1");
+
+    Ok(())
+}
+
+#[driver_test(requires(sql), scenario(crate::scenarios::fixed_item_name))]
+pub async fn like_escape_underscore(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(Item::[
+        { id: 1_i64, name: "foo_bar" },
+        { id: 2_i64, name: "fooXbar" },
+        { id: 3_i64, name: "foobar"  },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let mut items: Vec<Item> = Item::filter(
+        Item::fields()
+            .name()
+            .like_with_escape("foo\\_bar".to_string(), '\\'),
+    )
+    .exec(&mut db)
+    .await?;
+
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].name, "foo_bar");
+
+    Ok(())
+}
+
+#[driver_test(requires(sql), scenario(crate::scenarios::fixed_item_name))]
+pub async fn like_escape_keeps_wildcards(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(Item::[
+        { id: 1_i64, name: "Alice%1" },
+        { id: 2_i64, name: "Alice%2" },
+        { id: 3_i64, name: "AliceA1" },
+        { id: 4_i64, name: "Bob"     },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let mut items: Vec<Item> = Item::filter(
+        Item::fields()
+            .name()
+            .like_with_escape("Alice\\%%".to_string(), '\\'),
+    )
+    .exec(&mut db)
+    .await?;
+
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].name, "Alice%1");
+    assert_eq!(items[1].name, "Alice%2");
+
+    Ok(())
+}

@@ -656,6 +656,112 @@ where
             _p: PhantomData,
         }
     }
+
+    /// Test whether this string field matches a SQL `LIKE` pattern using an
+    /// explicit escape character.
+    ///
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    ///
+    /// The caller is responsible for constructing the `LIKE` pattern. Toasty does
+    /// not escape `pattern` automatically. Any `%` or `_` characters that are not
+    /// escaped by `escape` are treated as SQL `LIKE` wildcards:
+    ///
+    /// - `%` matches any sequence of characters.
+    /// - `_` matches any single character.
+    /// - `escape` followed by `%`, `_`, or `escape` matches that character
+    ///   literally.
+    ///
+    /// This is useful when the pattern needs to match literal `%` or `_`
+    /// characters. For example, with `escape` set to `'\\'`, the pattern
+    /// `"Alice\\%%"` matches strings beginning with the literal text `"Alice%"`.
+    /// The first `%` is escaped and matched literally; the second `%` remains a
+    /// wildcard.
+    ///
+    /// Not supported by the DynamoDB driver. Use [`starts_with`](Self::starts_with)
+    /// instead when targeting DynamoDB.
+    ///
+    /// `.like_with_escape()` is a pass-through to the database's own `LIKE`
+    /// operator with an `ESCAPE` clause. Case sensitivity differs by backend:
+    /// case-sensitive on PostgreSQL, case-insensitive for ASCII on SQLite, and
+    /// collation-dependent on MySQL. For a case-insensitive match on PostgreSQL,
+    /// use [`ilike`](Self::ilike).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     nickname: Option<String>,
+    /// # }
+    /// // Match names starting with "Al".
+    /// let filter = User::fields().name().like_with_escape("Al%".to_string(), '\\');
+    ///
+    /// // Match names starting with the literal text "Alice%".
+    /// let filter = User::fields().name().like_with_escape("Alice\\%%".to_string(), '\\');
+    ///
+    /// // Also works on nullable string fields.
+    /// let filter = User::fields().nickname().like_with_escape("Al%".to_string(), '\\');
+    /// ```
+    pub fn like_with_escape(self, pattern: impl IntoExpr<String>, escape: char) -> Expr<bool> {
+        let pattern = pattern.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::like_with_escape(path, pattern, escape))
+    }
+
+    /// Test whether this string field matches a case-insensitive SQL `LIKE`
+    /// pattern using an explicit escape character.
+    ///
+    /// This is the escaped variant of [`ilike`](Self::ilike). It maps to
+    /// PostgreSQL's `ILIKE ... ESCAPE ...` syntax.
+    ///
+    /// PostgreSQL is the only supported backend with a native `ILIKE`, so
+    /// `.ilike_with_escape()` works only there. Toasty does not emulate it: on
+    /// MySQL, SQLite, and DynamoDB the query is rejected with an
+    /// unsupported-feature error.
+    ///
+    /// The caller is responsible for constructing the `ILIKE` pattern. Toasty does
+    /// not escape `pattern` automatically. Any `%` or `_` characters that are not
+    /// escaped by `escape` are treated as SQL pattern wildcards:
+    ///
+    /// - `%` matches any sequence of characters.
+    /// - `_` matches any single character.
+    /// - `escape` followed by `%`, `_`, or `escape` matches that character
+    ///   literally.
+    ///
+    /// This is useful when the pattern needs to match literal `%` or `_`
+    /// characters while still matching case-insensitively. For example, with
+    /// `escape` set to `'\\'`, the pattern `"Alice\\%%"` matches strings beginning
+    /// with the literal text `"Alice%"`, ignoring case. It can match `"Alice%1"`,
+    /// `"ALICE%1"`, or `"alice%foo"`, but not `"AliceA1"`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// // Match names starting with "al", ignoring case.
+    /// let filter = User::fields().name().ilike_with_escape("al%".to_string(), '\\');
+    ///
+    /// // Match names starting with the literal text "alice%", ignoring case.
+    /// let filter = User::fields().name().ilike_with_escape("alice\\%%".to_string(), '\\');
+    /// ```
+    pub fn ilike_with_escape(self, pattern: impl IntoExpr<String>, escape: char) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::ilike_with_escape(
+                self.untyped.into_stmt(),
+                pattern.into_expr().untyped,
+                escape,
+            ),
+            _p: PhantomData,
+        }
+    }
 }
 
 impl<T, U> Clone for Path<T, U> {
