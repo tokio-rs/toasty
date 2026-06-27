@@ -407,6 +407,24 @@ impl Expr {
                     _ => todo!("ExprExists with non-Values body"),
                 }
             }
+            Expr::StartsWith(expr_starts_with) => {
+                let lhs = expr_starts_with.expr.eval_ref(scope, input)?;
+                let prefix = expr_starts_with.prefix.eval_ref(scope, input)?;
+                if lhs.is_null() || prefix.is_null() {
+                    return Ok(false.into());
+                }
+                let Some(lhs_str) = lhs.as_str() else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "StartsWith left-hand side must evaluate to a string",
+                    ));
+                };
+                let Some(prefix_str) = prefix.as_str() else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "StartsWith prefix must evaluate to a string",
+                    ));
+                };
+                Ok(lhs_str.starts_with(prefix_str).into())
+            }
             Expr::Value(value) => Ok(value.clone()),
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",

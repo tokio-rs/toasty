@@ -48,6 +48,7 @@ impl Connection {
                     items.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
                 }
             }
+
             insert_items.push(items);
         }
 
@@ -57,7 +58,7 @@ impl Connection {
         let version_condition = table.columns.iter().find(|col| col.versionable).map(|col| {
             let placeholder = format!("#{}", col.id.index);
             let condition = format!("attribute_not_exists({placeholder})");
-            let mut names = std::collections::HashMap::new();
+            let mut names = HashMap::new();
             names.insert(placeholder, col.name.clone());
             (condition, names)
         });
@@ -162,7 +163,6 @@ impl Connection {
                     }
 
                     if !nullable {
-                        // Add primary key values
                         for column in table.primary_key_columns() {
                             let name = &column.name;
                             index_insert_items.insert(name.clone(), insert_items[name].clone());

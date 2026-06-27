@@ -45,15 +45,34 @@ impl Expand<'_> {
         let primary_key_ty = self.expand_primary_key_ty();
         let find_by_primary_key_body = self.expand_find_by_primary_key_body();
 
+        // Item-collection children (`#[item_parent]` declared) must be created
+        // through the parent's relation handle — `tenant.users().create()...`
+        // — so that the partition column is inherited from the parent and the
+        // sort-key is composed by `AutoStrategy::ItemCollectionChildSortKey`.
+        // A top-level `User::create()` would let the caller supply both keys
+        // independently, breaking R2.4 (same-partition guarantee) and R7.1
+        // (hierarchical sk encoding). Suppressing the inherent constructor
+        // turns the misuse into a compile error. `create_many()` is preserved
+        // — it is an aggregator over `IntoInsert` values; correctness is
+        // enforced at item construction, not batching.
+        let is_item_collection_child = self.model.item_parent_field.is_some();
+        let top_level_create = if is_item_collection_child {
+            TokenStream::new()
+        } else {
+            quote! {
+                #vis fn create() -> #create_struct_ident {
+                    #create_struct_ident::default()
+                }
+            }
+        };
+
         quote! {
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
 
-                #vis fn create() -> #create_struct_ident {
-                    #create_struct_ident::default()
-                }
+                #top_level_create
 
                 #vis fn create_many() -> #toasty::stmt::CreateMany<#model_ident> {
                     #toasty::stmt::CreateMany::default()
@@ -522,6 +541,10 @@ impl Expand<'_> {
                     let ty = &rel.ty;
                     quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
                 }
+                FieldTy::ItemParent(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#field_name <#ty as #toasty::Load>::load(record[#index].take())?,)
+                }
             }
         });
 
@@ -597,6 +620,10 @@ impl Expand<'_> {
                         }
                     }
                     FieldTy::HasOne(rel) => {
+                        let ty = &rel.ty;
+                        quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
+                    }
+                    FieldTy::ItemParent(rel) => {
                         let ty = &rel.ty;
                         quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut #field_access, value)?,)
                     }

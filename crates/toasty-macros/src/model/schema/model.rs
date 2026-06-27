@@ -1,6 +1,6 @@
 use super::{
-    Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name,
-    PrimaryKey, Variant, VariantValue,
+    Column, ColumnType, ErrorSet, Field, FieldTy, Index, IndexField, IndexScope, ItemParent,
+    ModelAttr, Name, PrimaryKey, Variant, VariantValue,
 };
 use heck::ToSnakeCase;
 
@@ -145,6 +145,10 @@ pub(crate) struct Model {
 
     /// Optional table to map the model to
     pub(crate) table: Option<syn::LitStr>,
+
+    /// Index of the field annotated with `#[item_parent]`, if any. At most
+    /// one field per model may carry this attribute.
+    pub(crate) item_parent_field: Option<usize>,
 }
 
 impl Model {
@@ -196,6 +200,28 @@ impl Model {
             }
         }
 
+        // At most one `#[item_parent]` per model. Compute the index now so
+        // downstream phases can use it; reject duplicates with one error.
+        let item_parent_indices: Vec<usize> = fields
+            .iter()
+            .enumerate()
+            .filter_map(|(idx, f)| f.item_parent.as_ref().map(|_| idx))
+            .collect();
+        let item_parent_field = match item_parent_indices.as_slice() {
+            [] => None,
+            [idx] => Some(*idx),
+            _ => {
+                errs.push(syn::Error::new(
+                    proc_macro2::Span::call_site(),
+                    format!(
+                        "model `{}` declares multiple `#[item_parent]` fields; exactly one is required",
+                        ast.ident
+                    ),
+                ));
+                None
+            }
+        };
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
@@ -233,6 +259,32 @@ impl Model {
                 ast,
                 "model must either have a struct-level `#[key]` attribute or at least one field-level `#[key]` attribute",
             ));
+        }
+
+        // Synthesise an `ItemParent` relation for the `#[item_parent]` field,
+        // if any. Unlike `BelongsTo`, item-parent navigation carries no
+        // foreign-key columns: an item-collection child encodes its parent in
+        // its own partition + sort keys (R2.9), so navigation lowers to a
+        // partition-scoped query rather than a value-equality join. Embedded
+        // models cannot declare `#[item_parent]` (R2.9, last paragraph).
+        if let Some(item_parent_idx) = item_parent_field
+            && !is_embedded
+        {
+            // The field's declared type — `Deferred<Tenant>` — is what the
+            // downstream relation expansion needs to drive `RelationOneField`
+            // trait dispatch; the `Deferred<M>` blanket impl projects to the
+            // inner `Model` and supplies the `One` future. The original field
+            // type is currently held as `FieldTy::Primitive(...)` from
+            // `Field::from_ast`.
+            let field_ty = match &fields[item_parent_idx].ty {
+                FieldTy::Primitive(ty) => ty.clone(),
+                _ => unreachable!(
+                    "item_parent fields are typed as Primitive in Field::from_ast; \
+                     a relation attribute combined with #[item_parent] is rejected earlier"
+                ),
+            };
+
+            fields[item_parent_idx].ty = FieldTy::ItemParent(ItemParent { ty: field_ty });
         }
 
         // Build ModelKind based on whether this is embedded or root
@@ -350,6 +402,7 @@ impl Model {
             kind,
             indices,
             table: model_attr.table,
+            item_parent_field,
         })
     }
 
@@ -540,6 +593,7 @@ impl Model {
             }),
             indices,
             table: None,
+            item_parent_field: None,
         })
     }
 }

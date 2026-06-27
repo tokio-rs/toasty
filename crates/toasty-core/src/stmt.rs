@@ -105,6 +105,9 @@ pub use expr_in_subquery::ExprInSubquery;
 mod expr_intersects;
 pub use expr_intersects::ExprIntersects;
 
+mod expr_is_model;
+pub use expr_is_model::ExprIsModel;
+
 mod expr_is_null;
 pub use expr_is_null::ExprIsNull;
 
@@ -300,6 +303,7 @@ pub mod visit;
 pub use visit::Visit;
 
 mod with;
+
 pub use with::With;
 
 use crate::schema::db::TableId;

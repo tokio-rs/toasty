@@ -1,5 +1,5 @@
 use super::Expand;
-use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
+use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne, ItemParent};
 
 use proc_macro2::TokenStream;
 use quote::quote;
@@ -14,6 +14,11 @@ struct PairBelongsToCheck<'a> {
     label: &'static str,
 }
 
+// `expand_relation_structs` and `expand_many_chain_methods` were removed
+// when this branch rebased onto the new item-collection-4 base — that base
+// generates the `Many<Kind>` / `One<Kind>` / `OptionOne<Kind>` relation scope
+// types and their method bodies through a different code path. The surviving
+// model-side accessors live in `expand_model_relation_methods` below.
 impl Expand<'_> {
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {
         self.model
@@ -27,6 +32,9 @@ impl Expand<'_> {
                     Some(self.expand_model_relation_has_many_method(rel, field))
                 }
                 FieldTy::HasOne(rel) => Some(self.expand_model_relation_has_one_method(rel, field)),
+                FieldTy::ItemParent(rel) => {
+                    Some(self.expand_model_relation_item_parent_method(rel, field))
+                }
                 FieldTy::Primitive(_) => None,
             })
             .collect()
@@ -96,6 +104,93 @@ impl Expand<'_> {
                 #(
                     #suppress_unused_field_warnings
                 )*
+                &self.#field_ident
+            }
+        }
+    }
+
+    /// Emit the `child.parent()` accessor for an `#[item_parent]` field.
+    ///
+    /// Unlike [`expand_model_relation_belongs_to_method`], item-parent
+    /// navigation does not lower to a value-equality FK join — an
+    /// item-collection child stores its parent's identity in its own
+    /// partition + sort keys (R2.9). The generated method runs a
+    /// partition-scoped query against the parent type, scoped by the
+    /// child's own partition value and a sort-key prefix on the parent's
+    /// upper-camel-case name (e.g. `"Tenant#"`).
+    ///
+    /// ```ignore
+    /// // For:  user: Deferred<Tenant>  (with `#[key(account, sk)]`)
+    /// // emits:
+    /// pub fn tenant(&self) -> One<Tenant> {
+    ///     Tenant::filter(
+    ///         Tenant::fields().account().eq(&self.account)
+    ///             .and(Tenant::fields().sk().starts_with("Tenant#".to_string()))
+    ///     ).into_statement().into_query().unwrap().into()
+    /// }
+    /// ```
+    fn expand_model_relation_item_parent_method(
+        &self,
+        rel: &ItemParent,
+        field: &Field,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let field_ident = &field.name.ident;
+        let ty = &rel.ty;
+        let target_ty = quote!(<#ty as #toasty::RelationOneField>::Target);
+
+        // Partition + sort field idents on the *current* model. By
+        // construction, `#[item_parent]` is only allowed on item-collection
+        // children, which always have a 2-field PK whose first entry is the
+        // partition key and second entry is the sort key. The schema-build
+        // validator enforces that contract — the macro relies on the order
+        // assembled by `Model::from_ast`.
+        let root = self.model.kind.as_root_unwrap();
+        let pk = &root.primary_key.fields;
+        assert!(
+            pk.len() >= 2,
+            "item-collection child must have a (partition, sort) primary key; \
+             schema-build validation rejects single-field PKs on item-parent models"
+        );
+        let partition_field_ident = &self.model.fields[pk[0]].name.ident;
+        let sort_field_ident = &self.model.fields[pk[1]].name.ident;
+
+        // Parent type's UpperCamelCase ident — the `T` from `Deferred<T>` —
+        // surfaces the prefix literal `"<Parent>#"` that the parent's sort
+        // key always begins with (sk auto-mint, R7.5).
+        let parent_ident = parent_ident_from_deferred(ty);
+        let prefix_lit = format!("{parent_ident}#");
+
+        // The `expand_pair_belongs_to_check` mechanism on the parent's
+        // `#[has_many]` / `#[has_one]` accessor calls a method named
+        // `verify_pair_belongs_to_exists_for_<field>` on the target. The
+        // legacy name predates `ItemParent`; emit it here so the parent's
+        // pair check resolves the same way as for a `BelongsTo` pair.
+        let verify_pair_belongs_to_exists = syn::Ident::new(
+            &format!("verify_pair_belongs_to_exists_for_{field_ident}"),
+            field_ident.span(),
+        );
+
+        quote! {
+            #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::One {
+                // Suppress the unused field warning on the marker field
+                // itself; lowering reads its identity through its FieldTy,
+                // not its in-memory value.
+                if false {
+                    let _ = &self.#field_ident;
+                }
+
+                let __filter = #toasty::stmt::Expr::and(
+                    #target_ty::fields().#partition_field_ident().eq(&self.#partition_field_ident),
+                    #target_ty::fields().#sort_field_ident().starts_with(::std::string::String::from(#prefix_lit)),
+                );
+                <#ty as #toasty::RelationOneField>::make_one(#target_ty::filter(__filter))
+            }
+
+            #[doc(hidden)]
+            #vis fn #verify_pair_belongs_to_exists(&self) -> &#ty {
+                let _ = &self.#field_ident;
                 &self.#field_ident
             }
         }
@@ -303,4 +398,40 @@ impl Expand<'_> {
             }
         }
     }
+}
+
+/// Pull the parent type ident (e.g. `Tenant`) out of a `Deferred<Tenant>`
+/// type. The macro's `extract_deferred_inner` validation runs in
+/// `Field::from_ast`, so by the time we land here the type is shaped
+/// `Deferred<...>`; we only need the trailing path segment of `T`.
+///
+/// Falls back to a `proc_macro2::Span::call_site` ident (`Parent`) when
+/// the inner is not a path — that branch is unreachable for valid
+/// `#[item_parent]` fields but keeps the macro from panicking on
+/// malformed input.
+fn parent_ident_from_deferred(ty: &syn::Type) -> syn::Ident {
+    let syn::Type::Path(type_path) = ty else {
+        return syn::Ident::new("Parent", proc_macro2::Span::call_site());
+    };
+
+    // Walk Deferred<...> to its inner T.
+    let last = type_path
+        .path
+        .segments
+        .last()
+        .expect("Deferred path has at least one segment");
+    let syn::PathArguments::AngleBracketed(args) = &last.arguments else {
+        return syn::Ident::new("Parent", proc_macro2::Span::call_site());
+    };
+    let Some(syn::GenericArgument::Type(syn::Type::Path(inner_path))) = args.args.first() else {
+        return syn::Ident::new("Parent", proc_macro2::Span::call_site());
+    };
+
+    inner_path
+        .path
+        .segments
+        .last()
+        .expect("inner type path has at least one segment")
+        .ident
+        .clone()
 }

@@ -19,9 +19,9 @@ impl Connection {
 
         let mut expr_attrs = ExprAttrs::default();
 
-        // When querying an index, use index filter logic (not primary key logic)
-        let is_primary_key = op.index.is_none();
-        let key_expression = ddb_expression(&cx, &mut expr_attrs, is_primary_key, &op.pk_filter);
+        // When querying an index, use index filter logic (not primary key logic).
+        let key_expression =
+            ddb_expression(&cx, &mut expr_attrs, op.index.is_none(), &op.pk_filter);
 
         let filter_expression = op
             .filter

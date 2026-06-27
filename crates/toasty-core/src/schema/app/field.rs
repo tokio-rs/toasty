@@ -2,7 +2,8 @@ mod primitive;
 pub use primitive::{FieldPrimitive, SerializeFormat};
 
 use super::{
-    AutoStrategy, BelongsTo, Constraint, Embedded, Has, Model, ModelId, Schema, VariantId, Via,
+    AutoStrategy, BelongsTo, Constraint, Embedded, Has, HasItems, ItemParent, Model, ModelId,
+    Schema, VariantId, Via,
 };
 use crate::{Result, driver, stmt};
 use std::fmt;
@@ -198,8 +199,18 @@ pub enum FieldTy {
     Embedded(Embedded),
     /// The owning side of a relationship (stores the foreign key).
     BelongsTo(BelongsTo),
-    /// The inverse side of a relationship.
+    /// The inverse side of a relationship paired with [`BelongsTo`]. Lowers
+    /// to a foreign-key value-equality query.
     Has(Has),
+    /// The parent-side relation in an item collection, paired with
+    /// [`ItemParent`]. Lowers to a partition-scoped query with a sort-key
+    /// prefix filter; see design R2.9.
+    HasItems(HasItems),
+    /// An item-collection parent reference. Carries no foreign-key columns
+    /// — the child's primary key encodes the parent directly. Lowering is
+    /// fixed by the relation kind (partition-scoped query with sort-key
+    /// prefix filter); see design R2.9.
+    ItemParent(ItemParent),
     /// A relation reached by following a path of existing relations.
     Via(Via),
 }
@@ -264,6 +275,8 @@ impl Field {
         match &self.ty {
             FieldTy::BelongsTo(belongs_to) => Some(belongs_to.target),
             FieldTy::Has(has) => Some(has.target),
+            FieldTy::HasItems(has_items) => Some(has_items.target),
+            FieldTy::ItemParent(item_parent) => Some(item_parent.target),
             FieldTy::Via(via) => Some(via.target),
             _ => None,
         }
@@ -284,6 +297,8 @@ impl Field {
             FieldTy::Embedded(embedded) => &embedded.expr_ty,
             FieldTy::BelongsTo(belongs_to) => &belongs_to.expr_ty,
             FieldTy::Has(has) => &has.expr_ty,
+            FieldTy::HasItems(has_items) => &has_items.expr_ty,
+            FieldTy::ItemParent(item_parent) => &item_parent.expr_ty,
             FieldTy::Via(via) => &via.expr_ty,
         }
     }
@@ -300,6 +315,11 @@ impl Field {
             FieldTy::Embedded(_) => None,
             FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
             FieldTy::Has(has) => Some(has.pair_id),
+            FieldTy::HasItems(has_items) => Some(has_items.pair_id),
+            // ItemParent's pair_id is the parent's HasItems field; it lives
+            // implicitly via name-based lookup at schema-build time, not as
+            // metadata on the variant.
+            FieldTy::ItemParent(_) => None,
             FieldTy::Via(_) => None,
         }
     }
@@ -398,10 +418,17 @@ impl FieldTy {
         }
     }
 
-    /// Returns `true` if this is a relation type (`BelongsTo`, `Has`, or
-    /// `Via`).
+    /// Returns `true` if this is a relation type (`BelongsTo`, `Has`,
+    /// `HasItems`, `ItemParent`, or `Via`).
     pub fn is_relation(&self) -> bool {
-        matches!(self, Self::BelongsTo(..) | Self::Has(..) | Self::Via(..))
+        matches!(
+            self,
+            Self::BelongsTo(..)
+                | Self::Has(..)
+                | Self::HasItems(..)
+                | Self::ItemParent(..)
+                | Self::Via(..)
+        )
     }
 
     /// Returns `true` if this is a [`FieldTy::Has`] relation.
@@ -528,6 +555,47 @@ impl FieldTy {
         }
     }
 
+    /// Returns `true` if this is a [`FieldTy::HasItems`] relation.
+    pub fn is_has_items(&self) -> bool {
+        matches!(self, Self::HasItems(..))
+    }
+
+    /// Returns the inner [`HasItems`] if this is a has-items field.
+    pub fn as_has_items(&self) -> Option<&HasItems> {
+        match self {
+            Self::HasItems(has_items) => Some(has_items),
+            _ => None,
+        }
+    }
+
+    /// Returns the inner [`HasItems`], panicking if this is not a has-items
+    /// field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::HasItems`].
+    #[track_caller]
+    pub fn as_has_items_unwrap(&self) -> &HasItems {
+        match self {
+            Self::HasItems(has_items) => has_items,
+            _ => panic!("expected field to be `HasItems`, but was {self:?}"),
+        }
+    }
+
+    /// Returns a mutable reference to the inner [`HasItems`], panicking if
+    /// this is not a has-items field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::HasItems`].
+    #[track_caller]
+    pub fn as_has_items_mut_unwrap(&mut self) -> &mut HasItems {
+        match self {
+            Self::HasItems(has_items) => has_items,
+            _ => panic!("expected field to be `HasItems`, but was {self:?}"),
+        }
+    }
+
     /// Returns `true` if this is a [`FieldTy::BelongsTo`].
     pub fn is_belongs_to(&self) -> bool {
         matches!(self, Self::BelongsTo(..))
@@ -568,6 +636,47 @@ impl FieldTy {
             _ => panic!("expected field to be `BelongsTo`, but was {self:?}"),
         }
     }
+
+    /// Returns `true` if this is a [`FieldTy::ItemParent`].
+    pub fn is_item_parent(&self) -> bool {
+        matches!(self, Self::ItemParent(..))
+    }
+
+    /// Returns the inner [`ItemParent`] if this is an item-parent field.
+    pub fn as_item_parent(&self) -> Option<&ItemParent> {
+        match self {
+            Self::ItemParent(item_parent) => Some(item_parent),
+            _ => None,
+        }
+    }
+
+    /// Returns the inner [`ItemParent`], panicking if this is not an
+    /// item-parent field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::ItemParent`].
+    #[track_caller]
+    pub fn as_item_parent_unwrap(&self) -> &ItemParent {
+        match self {
+            Self::ItemParent(item_parent) => item_parent,
+            _ => panic!("expected field to be `ItemParent`, but was {self:?}"),
+        }
+    }
+
+    /// Returns a mutable reference to the inner [`ItemParent`], panicking if
+    /// this is not an item-parent field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::ItemParent`].
+    #[track_caller]
+    pub fn as_item_parent_mut_unwrap(&mut self) -> &mut ItemParent {
+        match self {
+            Self::ItemParent(item_parent) => item_parent,
+            _ => panic!("expected field to be `ItemParent`, but was {self:?}"),
+        }
+    }
 }
 
 impl fmt::Debug for FieldTy {
@@ -577,6 +686,8 @@ impl fmt::Debug for FieldTy {
             Self::Embedded(ty) => ty.fmt(fmt),
             Self::BelongsTo(ty) => ty.fmt(fmt),
             Self::Has(ty) => ty.fmt(fmt),
+            Self::HasItems(ty) => ty.fmt(fmt),
+            Self::ItemParent(ty) => ty.fmt(fmt),
             Self::Via(ty) => ty.fmt(fmt),
         }
     }

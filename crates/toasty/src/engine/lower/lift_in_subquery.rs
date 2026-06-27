@@ -484,6 +484,8 @@ fn lift_relation_path_predicate(
         FieldTy::Has(rel) => rel.target,
         FieldTy::Via(rel) => rel.target,
         FieldTy::BelongsTo(rel) => rel.target,
+        // HasItems navigation does not lift through subqueries; B4.10 may revisit.
+        FieldTy::HasItems(_) => return None,
         _ => return None,
     };
 

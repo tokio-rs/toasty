@@ -19,6 +19,13 @@ use toasty_core::schema::app::AutoStrategy;
 /// |---|---|
 /// | Integer types (`i8`..`i64`, `u8`..`u64`, `isize`, `usize`) | Auto-increment |
 /// | `uuid::Uuid` | UUID v7 |
+///
+/// `String` is *not* generally `Auto`. The `#[auto]` attribute on a `String`
+/// field is permitted only on the sort key of an item-collection participant
+/// (R2.6, R7.5); the macro emits `AutoStrategy::String` syntactically for
+/// that case, and schema-build promotes it to
+/// `AutoStrategy::ItemCollectionRoot/ChildSortKey`. A `#[auto] String` outside
+/// that context is rejected at schema build.
 pub trait Auto: Field {
     /// The strategy the runtime uses to generate values for this type.
     const STRATEGY: AutoStrategy;

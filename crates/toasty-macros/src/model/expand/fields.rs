@@ -1,5 +1,5 @@
 use super::{Expand, util};
-use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, Primitive};
+use crate::model::schema::FieldTy::{BelongsTo, HasMany, HasOne, ItemParent, Primitive};
 use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -49,6 +49,18 @@ impl Expand<'_> {
                         )
                     }
                     HasOne(rel) => {
+                        self.expand_one_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::RelationOneField),
+                            &rel.ty,
+                            &field_offset,
+                        )
+                    }
+                    ItemParent(rel) => {
+                        // ItemParent walks the same `RelationOneField` trait
+                        // surface as BelongsTo for path-typed access; the
+                        // distinction is in lowering (B4.8/B4.9), not the
+                        // accessor's return type.
                         self.expand_one_relation_field_method(
                             field_ident,
                             quote!(#toasty::RelationOneField),
@@ -210,6 +222,15 @@ impl Expand<'_> {
                                 )
                             }
                         }
+                    }
+                    ItemParent(rel) => {
+                        let ty = &rel.ty;
+                        self.expand_list_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::RelationOneField),
+                            ty,
+                            &field_offset,
+                        )
                     }
                     HasMany(rel) => {
                         let ty = &rel.ty;

@@ -127,28 +127,39 @@ impl Builder {
         // Find all models that specified a table name, ensure a table is
         // created for that model, and link the model with the table.
         // Skip embedded models as they don't have their own tables.
+        // Skip item-collection children — they share the parent's table,
+        // which gets resolved in the fixup pass below.
         for model in app.models() {
-            // Skip embedded models - they are flattened into parent tables
             let app::Model::Root(model) = model else {
                 continue;
             };
 
-            let table = builder.build_table_stub_for_model(model);
+            // Item-collection children share the parent's table; assign a
+            // placeholder now and fix it up after all root tables exist.
+            let table = if model.parent.is_some() {
+                TableId::placeholder()
+            } else {
+                builder.build_table_stub_for_model(model)
+            };
 
-            // Create a mapping shell for the model (fields will be built during mapping phase)
             builder.mapping.models.insert(
                 model.id,
                 mapping::Model {
                     id: model.id,
                     table,
                     columns: vec![],
-                    fields: vec![], // Will be populated during mapping phase
+                    fields: vec![],
                     model_to_table: stmt::ExprRecord::default(),
                     table_to_model: TableToModel::default(),
                     default_returning: stmt::Expr::null(),
+                    item_collection: mapping::ItemCollection::default(),
                 },
             );
         }
+
+        // Fix up item-collection children: point them at the root model's table
+        // and populate the FK→PK field mapping used during column building.
+        builder.fixup_item_collection_mappings(&app)?;
 
         builder.build_tables_from_models(&app, db)?;
 
@@ -174,6 +185,91 @@ impl Default for Builder {
 }
 
 impl BuildSchema<'_> {
+    /// Resolve table IDs and FK→PK field mappings for item-collection children.
+    ///
+    /// Walks the ancestry chain of each child until it reaches a root (a model
+    /// with no `parent` pointer), then assigns that root's table to
+    /// every model in the chain.
+    fn fixup_item_collection_mappings(&mut self, app: &app::Schema) -> Result<()> {
+        // Collect child model IDs first to avoid borrow issues.
+        let children: Vec<_> = app
+            .models()
+            .filter_map(|m| {
+                let r = m.as_root()?;
+                r.parent.map(|_| r.id)
+            })
+            .collect();
+
+        for child_id in children {
+            // Walk up to root.
+            let table = self.resolve_item_collection_table(app, child_id);
+            self.mapping.model_mut(child_id).table = table;
+
+            // Build child-PK → parent-PK field mapping. Two relation kinds
+            // contribute pairs:
+            //
+            // - `BelongsTo` — classic FK: each `(source, target)` foreign-key
+            //   pair where the source is part of the child's PK.
+            // - `ItemParent` — symmetric IC: no FK columns exist, but R2.4
+            //   guarantees the child redeclares the parent's PK fields by
+            //   name, so we derive `(child_field, parent_field)` pairs by
+            //   matching field names on the parent (the relation's target).
+            let child_root = app.model(child_id).as_root_unwrap();
+            let mut field_mapping: indexmap::IndexMap<app::FieldId, app::FieldId> =
+                indexmap::IndexMap::new();
+
+            for f in &child_root.fields {
+                if let Some(bt) = f.ty.as_belongs_to() {
+                    for fkf in &bt.foreign_key.fields {
+                        if child_root.fields[fkf.source.index].primary_key {
+                            field_mapping.insert(fkf.source, fkf.target);
+                        }
+                    }
+                } else if let Some(ip) = f.ty.as_item_parent() {
+                    let parent_root = app.model(ip.target).as_root_unwrap();
+                    for child_field in &child_root.fields {
+                        if !child_field.primary_key {
+                            continue;
+                        }
+                        let Some(child_name) = child_field.name.app.as_deref() else {
+                            continue;
+                        };
+                        let Some(parent_field) = parent_root
+                            .fields
+                            .iter()
+                            .find(|pf| pf.name.app.as_deref() == Some(child_name))
+                        else {
+                            continue;
+                        };
+                        // R2.4 guarantees PK fields share both name and
+                        // type across the chain. The `validate_item_collections`
+                        // pass enforces this before we reach here.
+                        field_mapping.insert(child_field.id, parent_field.id);
+                    }
+                }
+            }
+
+            self.mapping
+                .model_mut(child_id)
+                .item_collection
+                .field_mapping = field_mapping;
+        }
+
+        Ok(())
+    }
+
+    fn resolve_item_collection_table(
+        &self,
+        app: &app::Schema,
+        model_id: app::ModelId,
+    ) -> crate::schema::TableId {
+        let root = app.model(model_id).as_root_unwrap();
+        match root.parent {
+            None => self.mapping.model(model_id).table,
+            Some(parent_id) => self.resolve_item_collection_table(app, parent_id),
+        }
+    }
+
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
         let model_name = model.name().to_string();
 

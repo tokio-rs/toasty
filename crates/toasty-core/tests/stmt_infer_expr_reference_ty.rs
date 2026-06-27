@@ -102,6 +102,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
             },
         },
         table_name: None,
+        parent: None,
         indices: vec![],
         version_field: None,
     }

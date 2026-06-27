@@ -26,6 +26,9 @@
 mod field;
 pub use field::{EnumVariant, Field, FieldEnum, FieldPrimitive, FieldRelation, FieldStruct};
 
+mod item_collection;
+pub use item_collection::ItemCollection;
+
 mod model;
 pub use model::{Model, TableToModel};
 

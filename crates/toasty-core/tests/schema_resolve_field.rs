@@ -178,6 +178,7 @@ fn schema() -> Schema {
             },
         },
         table_name: None,
+        parent: None,
         indices: vec![],
         version_field: None,
     });

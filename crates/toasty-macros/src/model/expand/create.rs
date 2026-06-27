@@ -132,11 +132,30 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
+        // Item-collection children inherit the partition column from the
+        // parent handle (R2.4) and have their sort key composed by
+        // `AutoStrategy::ItemCollectionChildSortKey` (R7.1). Letting the
+        // create-builder expose setters for either field would let the caller
+        // override values the engine owns; today that produces a confusing
+        // runtime `assert_eq!` panic on sk-encoder mismatch (B4.11 review).
+        // Suppress both setters at macro-expansion when the model declares
+        // `#[item_parent]`. The `#[item_parent]` field itself is already
+        // suppressed via the `FieldTy::ItemParent` arm below (since B4.7).
+        let suppressed_pk_indices: &[usize] = if self.model.item_parent_field.is_some() {
+            &self.model.kind.as_root_unwrap().primary_key.fields
+        } else {
+            &[]
+        };
+
         self.model
             .fields
             .iter()
             .enumerate()
             .map(move |(index, field)| {
+                if suppressed_pk_indices.contains(&index) {
+                    return TokenStream::new();
+                }
+
                 let name = &field.name.ident;
                 let index_tokenized = util::int(index);
 
@@ -157,6 +176,12 @@ impl Expand<'_> {
                             }
                         }
                     }
+                    // The create-builder setter for an ItemParent field would
+                    // distribute the parent's PK into the child's PK fields,
+                    // but item-collection children inherit those fields by
+                    // schema convention (R2.4) — the create surface is
+                    // resliced in B4.8/B7. For B4.7 we omit the setter.
+                    FieldTy::ItemParent(_) => TokenStream::new(),
                     FieldTy::HasMany(rel) => {
                         if rel.via.is_some() {
                             TokenStream::new()

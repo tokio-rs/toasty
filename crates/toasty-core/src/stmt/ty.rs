@@ -511,3 +511,32 @@ impl From<ModelId> for Type {
         Self::Model(value)
     }
 }
+
+impl std::fmt::Display for Type {
+    /// User-facing rendering for error messages.
+    ///
+    /// Primitives render as their Rust source name (`bool`, `i32`, `u64`,
+    /// `f64`); built-in opaque types render with their PascalCase variant
+    /// name (`String`, `Uuid`, `Bytes`). Container and engine-internal
+    /// variants fall back to `Debug` for now — they are not expected as the
+    /// type of a user-declared field, where this impl primarily fires.
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Bool => f.write_str("bool"),
+            Self::String => f.write_str("String"),
+            Self::I8 => f.write_str("i8"),
+            Self::I16 => f.write_str("i16"),
+            Self::I32 => f.write_str("i32"),
+            Self::I64 => f.write_str("i64"),
+            Self::U8 => f.write_str("u8"),
+            Self::U16 => f.write_str("u16"),
+            Self::U32 => f.write_str("u32"),
+            Self::U64 => f.write_str("u64"),
+            Self::F32 => f.write_str("f32"),
+            Self::F64 => f.write_str("f64"),
+            Self::Uuid => f.write_str("Uuid"),
+            Self::Bytes => f.write_str("Bytes"),
+            other => write!(f, "{other:?}"),
+        }
+    }
+}

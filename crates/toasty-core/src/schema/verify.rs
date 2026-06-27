@@ -181,14 +181,20 @@ impl Verify<'_> {
     fn verify_table_indices_and_nullable(&self) {
         for table in &self.schema.db.tables {
             for index in &table.indices {
+                // Skip the primary key index: item-collection tables have a
+                // compound PK that includes nullable child-specific columns.
+                if index.primary_key {
+                    continue;
+                }
+
                 let nullable = index
                     .columns
                     .iter()
                     .any(|index_column| table.column(index_column.column).nullable);
 
                 if nullable {
-                    // If there are nullable columns, then (for now) the index
-                    // should only have one column
+                    // For secondary indices, a nullable column means the index
+                    // should only have one column.
                     assert_eq!(
                         index.columns.len(),
                         1,
@@ -299,6 +305,17 @@ impl Verify<'_> {
                     field_ty.is_uuid(),
                     "field `{}` has Auto::Uuid but type is not Uuid: {:?}",
                     field.name,
+                    field_ty
+                );
+            }
+            AutoStrategy::String
+            | AutoStrategy::ItemCollectionRootSortKey
+            | AutoStrategy::ItemCollectionChildSortKey => {
+                assert!(
+                    matches!(field_ty, crate::stmt::Type::String),
+                    "field `{}` has Auto::{:?} but type is not String: {:?}",
+                    field.name,
+                    auto,
                     field_ty
                 );
             }

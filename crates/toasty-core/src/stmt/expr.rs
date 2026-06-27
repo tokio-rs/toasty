@@ -3,9 +3,9 @@ use crate::stmt::{ExprExists, Input};
 use super::{
     Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBetween,
     ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects,
-    ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node,
-    Projection, Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
+    ExprIsModel, ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike,
+    ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith,
+    ExprStmt, Node, Projection, Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -101,6 +101,10 @@ pub enum Expr {
 
     /// Tests whether a value is a specific enum variant. See [`ExprIsVariant`].
     IsVariant(ExprIsVariant),
+
+    /// Tests whether the current row belongs to a specific item-collection
+    /// member model. See [`ExprIsModel`].
+    IsModel(ExprIsModel),
 
     /// Integer: the cardinality of an array (PostgreSQL `cardinality(expr)`).
     /// See [`ExprLength`].
@@ -307,6 +311,7 @@ impl Expr {
             Self::AnyOp(e) => e.lhs.is_stable() && e.rhs.is_stable(),
             Self::AllOp(e) => e.lhs.is_stable() && e.rhs.is_stable(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
+            Self::IsModel(_) => true,
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_stable(),
             Self::Not(expr_not) => expr_not.expr.is_stable(),
@@ -428,6 +433,7 @@ impl Expr {
             }
             Self::Not(expr_not) => expr_not.expr.is_const_at_depth(map_depth),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
+            Self::IsModel(_) => false,
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_const_at_depth(map_depth),
             Self::InList(expr_in_list) => {
@@ -514,6 +520,7 @@ impl Expr {
             Self::AllOp(e) => e.lhs.is_eval() && e.rhs.is_eval(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_eval()),
             Self::Not(expr_not) => expr_not.expr.is_eval(),
+            Self::IsModel(_) => false,
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_eval(),
             Self::InList(expr_in_list) => {
@@ -696,6 +703,7 @@ impl fmt::Debug for Expr {
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
             Self::Intersects(e) => e.fmt(f),
+            Self::IsModel(e) => write!(f, "is_model({:?})", e.model),
             Self::IsNull(e) => e.fmt(f),
             Self::IsSuperset(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),

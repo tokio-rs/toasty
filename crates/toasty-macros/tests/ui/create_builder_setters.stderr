@@ -1,0 +1,17 @@
+error[E0599]: no method named `sk` found for struct `UserCreate` in the current scope
+  --> tests/ui/create_builder_setters.rs:31:29
+   |
+15 | struct User {
+   |        ---- method `sk` not found for this struct
+...
+31 |     tenant.users().create().sk("manual".to_string()).name("Alice".to_string()).exec(db).await
+   |                             ^^ method not found in `UserCreate`
+
+error[E0599]: no method named `account` found for struct `UserCreate` in the current scope
+  --> tests/ui/create_builder_setters.rs:35:29
+   |
+15 | struct User {
+   |        ---- method `account` not found for this struct
+...
+35 |     tenant.users().create().account("acme".to_string()).name("Alice".to_string()).exec(db).await
+   |                             ^^^^^^^ method not found in `UserCreate`

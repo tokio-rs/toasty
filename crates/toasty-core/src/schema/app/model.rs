@@ -160,6 +160,10 @@ pub struct ModelRoot {
     /// model name.
     pub table_name: Option<String>,
 
+    /// If set, this model shares a DynamoDB table with the named parent model
+    /// (item collection / single-table design).
+    pub parent: Option<ModelId>,
+
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
 

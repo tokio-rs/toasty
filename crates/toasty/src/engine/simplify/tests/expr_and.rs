@@ -688,6 +688,104 @@ fn range_to_equality_not_simplified_for_non_deterministic() {
     assert_eq!(expr.operands.len(), 2);
 }
 
+// ---------------------------------------------------------------------------
+// Redundant StartsWith pruning (B4.13).
+//
+// Two passes can independently emit `StartsWith(col, ...)` against the same
+// column — `lower::association`'s parent→child read shape and
+// `apply_lowering_filter_constraint`'s IC discriminator. DynamoDB rejects two
+// conditions on the same key, so the simplifier drops the shorter prefix when
+// a longer one subsumes it.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn starts_with_subsumed_by_longer_prefix() {
+    use toasty_core::stmt::Value;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+
+    // `starts_with(a, "Todo#") AND starts_with(a, "Todo#alice#")`
+    //   → `starts_with(a, "Todo#alice#")`
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::starts_with(Expr::arg(0), Value::String("Todo#".into())),
+            Expr::starts_with(Expr::arg(0), Value::String("Todo#alice#".into())),
+        ],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    let Some(Expr::StartsWith(sw)) = result else {
+        panic!("expected StartsWith, got: {expr:?}");
+    };
+    let Expr::Value(Value::String(prefix)) = sw.prefix.as_ref() else {
+        panic!("expected string prefix");
+    };
+    assert_eq!(prefix, "Todo#alice#");
+}
+
+#[test]
+fn starts_with_independent_columns_not_pruned() {
+    use toasty_core::stmt::Value;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+
+    // Different columns — both predicates kept.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::starts_with(Expr::arg(0), Value::String("Todo#".into())),
+            Expr::starts_with(Expr::arg(1), Value::String("Todo#alice#".into())),
+        ],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+#[test]
+fn starts_with_disjoint_prefixes_not_pruned() {
+    use toasty_core::stmt::Value;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+
+    // Same column, neither prefix begins with the other — both kept.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::starts_with(Expr::arg(0), Value::String("User#".into())),
+            Expr::starts_with(Expr::arg(0), Value::String("Todo#".into())),
+        ],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    assert!(result.is_none());
+    assert_eq!(expr.operands.len(), 2);
+}
+
+#[test]
+fn starts_with_equal_prefixes_collapse_to_one() {
+    use toasty_core::stmt::Value;
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+
+    // Identical predicates collapse via the idempotent law (handled before
+    // the new pass), not by length-based subsumption.
+    let mut expr = ExprAnd {
+        operands: vec![
+            Expr::starts_with(Expr::arg(0), Value::String("Todo#".into())),
+            Expr::starts_with(Expr::arg(0), Value::String("Todo#".into())),
+        ],
+    };
+    let result = simplify.simplify_expr_and(&mut expr);
+
+    let Some(Expr::StartsWith(_)) = result else {
+        panic!("expected single StartsWith, got: {expr:?}");
+    };
+}
+
 #[test]
 fn contradicting_eq_not_simplified_for_non_deterministic() {
     let schema = test_schema();

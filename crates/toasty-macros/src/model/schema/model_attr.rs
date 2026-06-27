@@ -73,6 +73,11 @@ impl ModelAttr {
                 };
 
                 self.table = Some(lit.clone());
+            } else if attr.path().is_ident("item_collection") {
+                errs.push(syn::Error::new_spanned(
+                    attr,
+                    "`#[item_collection]` is no longer supported. Use a field-level `#[item_parent]` attribute on a `Deferred<Parent>` field instead.",
+                ));
             }
         }
 

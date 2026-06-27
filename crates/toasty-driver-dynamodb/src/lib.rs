@@ -25,10 +25,7 @@ use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
     driver::{Capability, Driver, ExecResponse, operation::Operation},
-    schema::{
-        db::{self, Column, ColumnId, Migration, Table},
-        diff,
-    },
+    schema::db::{Column, ColumnId, IndexScope, Migration, Table},
     stmt::{self, ExprContext},
 };
 
@@ -44,6 +41,8 @@ use aws_sdk_dynamodb::{
     },
 };
 use std::{borrow::Cow, collections::HashMap, sync::Arc};
+use toasty_core::schema::{db, diff};
+use toasty_core::stmt::Expr;
 
 /// A DynamoDB [`Driver`] backed by the AWS SDK.
 ///
@@ -184,8 +183,8 @@ impl Connection {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
-            Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
-            Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(
@@ -211,14 +210,28 @@ impl Connection {
 
 fn ddb_key(table: &Table, key: &stmt::Value) -> HashMap<String, AttributeValue> {
     let mut ret = HashMap::new();
+    let pk_index = &table.indices[table.primary_key.index.index];
+    let mut sk_values: Vec<(&str, stmt::Value)> = Vec::new();
 
-    for (index, column) in table.primary_key_columns().enumerate() {
+    for (index, index_column) in pk_index.columns.iter().enumerate() {
+        let column = table.column(index_column.column);
         let value = match key {
-            stmt::Value::Record(record) => &record[index],
-            value => value,
+            stmt::Value::Record(record) => record[index].clone(),
+            value => value.clone(),
         };
 
-        ret.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
+        match index_column.scope {
+            IndexScope::Local => {
+                sk_values.push((&column.name, value));
+            }
+            IndexScope::Partition => {
+                ret.insert(column.name.clone(), Value::from(value).to_ddb());
+            }
+        }
+    }
+
+    if let Some((name, val)) = sk_values.into_iter().next() {
+        ret.insert(name.to_string(), Value::from(val).to_ddb());
     }
 
     ret
@@ -277,26 +290,23 @@ fn deserialize_ddb_cursor(cursor: &stmt::Value) -> HashMap<String, AttributeValu
     ret
 }
 
-fn ddb_key_schema(
-    partition_columns: &[&Column],
-    range_columns: &[&Column],
-) -> Vec<KeySchemaElement> {
+fn ddb_key_schema(partition: &[&str], range: &[&str]) -> Vec<KeySchemaElement> {
     let mut ks = vec![];
 
-    for col in partition_columns {
+    for name in partition {
         ks.push(
             KeySchemaElement::builder()
-                .attribute_name(&col.name)
+                .attribute_name(*name)
                 .key_type(KeyType::Hash)
                 .build()
                 .unwrap(),
         );
     }
 
-    for col in range_columns {
+    for name in range {
         ks.push(
             KeySchemaElement::builder()
-                .attribute_name(&col.name)
+                .attribute_name(*name)
                 .key_type(KeyType::Range)
                 .build()
                 .unwrap(),
@@ -306,7 +316,7 @@ fn ddb_key_schema(
     ks
 }
 
-fn item_to_record<'a, 'stmt>(
+fn item_to_record<'a>(
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a Column>,
 ) -> Result<stmt::ValueRecord> {
@@ -505,5 +515,45 @@ impl ExprAttrs {
         let name = format!(":v_{i}");
         self.attr_values.insert(name.clone(), val);
         name
+    }
+}
+
+/// An [`stmt::Input`] that resolves column references into a record produced
+/// by `item_to_record`. After lowering, filter/condition expressions reference
+/// columns via `ExprReference::Column { column: i }` where `i` is the column's
+/// position in `table.columns`. `item_to_record` builds the record in that same
+/// order, so indexing by `col.column` gives the right field.
+struct RecordInput<'a>(&'a stmt::ValueRecord);
+
+impl stmt::Input for RecordInput<'_> {
+    fn resolve_ref(
+        &mut self,
+        expr_reference: &stmt::ExprReference,
+        projection: &stmt::Projection,
+    ) -> Option<stmt::Expr> {
+        match expr_reference {
+            stmt::ExprReference::Column(col) => {
+                Some(self.0.fields[col.column].entry(projection).to_expr())
+            }
+            _ => None,
+        }
+    }
+}
+
+pub(crate) fn combine_filter_and_condition(
+    cx: &ExprContext<db::Schema>,
+    expr_attrs: &mut ExprAttrs,
+    filter: &Option<Expr>,
+    condition: &Option<Expr>,
+) -> Option<String> {
+    match (filter, condition) {
+        (Some(filter), None) => Some(ddb_expression(cx, expr_attrs, false, filter)),
+        (None, Some(condition)) => Some(ddb_expression(cx, expr_attrs, false, condition)),
+        (Some(filter), Some(condition)) => {
+            let f = ddb_expression(cx, expr_attrs, false, filter);
+            let c = ddb_expression(cx, expr_attrs, false, condition);
+            Some(format!("({f}) AND ({c})"))
+        }
+        _ => None,
     }
 }

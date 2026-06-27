@@ -1,8 +1,71 @@
-use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
+use super::{
+    AutoStrategy, EnumVariant, Field, FieldId, FieldPrimitive, FieldTy, Model, ModelId, ModelRoot,
+    VariantId,
+};
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
 use std::collections::HashSet;
+
+/// Resolve the `(partition, sort)` field IDs for an item-collection root.
+///
+/// Roots accept two syntactic key forms:
+///
+///   - simple `#[key(a, b)]` — both idents land in the partition vector;
+///     reinterpreted as `(partition=a, sort=b)` here.
+///   - named `#[key(partition = a, local = b)]` — already split into one
+///     partition field and one local field.
+fn pk_partition_and_sort_fields(root: &ModelRoot) -> Result<(FieldId, FieldId)> {
+    let pk_index = &root.indices[root.primary_key.index.index];
+    let partition_fields_count = pk_index.partition_fields().len();
+    let local_fields_count = pk_index.local_fields().len();
+
+    if local_fields_count == 0 && partition_fields_count == 2 {
+        Ok((
+            pk_index.partition_fields()[0].field,
+            pk_index.partition_fields()[1].field,
+        ))
+    } else if partition_fields_count == 1 && local_fields_count == 1 {
+        Ok((
+            pk_index.partition_fields()[0].field,
+            pk_index.local_fields()[0].field,
+        ))
+    } else {
+        Err(crate::Error::invalid_schema(format!(
+            "root model `{}` must declare a `(partition, sort)` key — \
+             either `#[key(<partition>, <sort>)]` or \
+             `#[key(partition = <p>, local = <s>)]`. Found {} partition \
+             field(s) and {} local field(s).",
+            root.name.upper_camel_case(),
+            partition_fields_count,
+            local_fields_count,
+        )))
+    }
+}
+
+/// Render a primitive field's application-level type as a short, user-facing
+/// string suitable for inclusion in schema-validation error messages.
+///
+/// Defers to `Display` on `stmt::Type` for primitives. Non-primitive fields
+/// (relations, embedded types) are not expected as item-collection key
+/// components, so they render as `<non-primitive>` — a marker that's clearly
+/// wrong if it ever surfaces.
+fn field_ty_repr(field: &Field) -> String {
+    match &field.ty {
+        FieldTy::Primitive(p) => p.ty.to_string(),
+        _ => "<non-primitive>".to_string(),
+    }
+}
+
+fn field_ty_is_string(field: &Field) -> bool {
+    matches!(
+        &field.ty,
+        FieldTy::Primitive(FieldPrimitive {
+            ty: stmt::Type::String,
+            ..
+        })
+    )
+}
 
 /// The result of resolving a [`stmt::Projection`] through the application
 /// schema.
@@ -171,6 +234,23 @@ impl Schema {
                 FieldTy::Has(has) => {
                     current_field = has.target(self).as_root_unwrap().fields.get(*step)?;
                 }
+                FieldTy::HasItems(has_items) => {
+                    // HasItems walks into the child (target) model the same
+                    // way `Has` does at the projection layer; the distinction
+                    // is in lowering (R2.9), not projection resolution.
+                    current_field = has_items.target(self).as_root_unwrap().fields.get(*step)?;
+                }
+                FieldTy::ItemParent(item_parent) => {
+                    // Item-parent navigation walks into the parent model the
+                    // same way `BelongsTo` does at the projection layer; the
+                    // distinction is in lowering (R2.9), which lands in
+                    // B4.8/B4.9 — not in projection resolution.
+                    current_field = item_parent
+                        .target(self)
+                        .as_root_unwrap()
+                        .fields
+                        .get(*step)?;
+                }
                 FieldTy::Via(via) => {
                     current_field = via.target(self).as_root_unwrap().fields.get(*step)?;
                 }
@@ -227,7 +307,48 @@ impl Builder {
         self.link_relations()?;
         self.resolve_via_targets()?;
         self.verify_no_eager_load_cycles()?;
+        self.validate_item_collections()?;
 
+        // Promote `FieldTy::Has` whose resolved pair points at an
+        // `ItemParent` into `FieldTy::HasItems` (R2.9). This must run
+        // after `validate_item_collections` (whose inverse-Has check
+        // expects parent fields to still be `Has`) and before
+        // `verify_relations_are_indexed` (which walks `Has` and assumes
+        // BelongsTo pairing).
+        self.promote_has_items_from_item_parent_pairs();
+
+        // After IC promotion, no field should still carry
+        // `AutoStrategy::String`. The macro emits this strategy when it sees
+        // `#[auto] field: String`; `validate_item_collections` promotes it to
+        // `ItemCollectionRoot/ChildSortKey` for IC sort keys. Anything that
+        // survives to here is a `#[auto] String` outside an item collection,
+        // which has no defined runtime behaviour — `String` is not generally
+        // `Auto`-able workspace-wide.
+        self.reject_unpromoted_auto_string()?;
+
+        Ok(())
+    }
+
+    /// Reject `AutoStrategy::String` left on any field after IC promotion.
+    /// See [`Self::process_models`] for why this is a hard error.
+    fn reject_unpromoted_auto_string(&self) -> Result<()> {
+        for model in self.models.values() {
+            let Some(root) = model.as_root() else {
+                continue;
+            };
+            for field in &root.fields {
+                if matches!(field.auto, Some(AutoStrategy::String)) {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "field `{}` on `{}` is `#[auto] String`, but `String` is `Auto`-able only \
+                         on the sort key of an item-collection participant. Either declare the \
+                         model as an item-collection root/child (with `#[item_parent]` and a \
+                         matching `#[has_many]` link) or change the field's type / drop `#[auto]`.",
+                        field.name.app_unwrap(),
+                        root.name.upper_camel_case(),
+                    )));
+                }
+            }
+        }
         Ok(())
     }
 
@@ -327,6 +448,332 @@ impl Builder {
         }
 
         Ok(current)
+    }
+
+    /// Replace every `FieldTy::Has` whose resolved `pair_id` points at a
+    /// `FieldTy::ItemParent` with `FieldTy::HasItems` carrying the same
+    /// `target`/`expr_ty`/`cardinality`/`pair_id`. The macro emits `Has`
+    /// for every `#[has_many]`/`#[has_one]` because at expansion time it
+    /// can't see the target's `ItemParent` declaration; we promote here,
+    /// after `link_relations` resolves the pair, so downstream verifiers
+    /// and lowering see the final shape.
+    fn promote_has_items_from_item_parent_pairs(&mut self) {
+        // Collect promotions in a pass over the resolved schema, then
+        // apply them in a second pass to avoid borrowing `self.models`
+        // mutably during the lookup.
+        let mut promotions: Vec<(ModelId, usize)> = Vec::new();
+        for (model_id, model) in &self.models {
+            let Some(root) = model.as_root() else {
+                continue;
+            };
+            for (idx, field) in root.fields.iter().enumerate() {
+                let FieldTy::Has(has) = &field.ty else {
+                    continue;
+                };
+                if has.pair_id.is_placeholder() {
+                    continue;
+                }
+                let pair_model = match self.models.get(&has.pair_id.model) {
+                    Some(m) => m,
+                    None => continue,
+                };
+                let pair_field = match pair_model.as_root() {
+                    Some(r) => &r.fields[has.pair_id.index],
+                    None => continue,
+                };
+                if matches!(pair_field.ty, FieldTy::ItemParent(_)) {
+                    promotions.push((*model_id, idx));
+                }
+            }
+        }
+
+        for (model_id, idx) in promotions {
+            let root = self
+                .models
+                .get_mut(&model_id)
+                .expect("promotion target is registered")
+                .as_root_mut_unwrap();
+            // Re-wrap the same data as `HasItems`. The first pass already
+            // confirmed this slot holds a `Has`, so clone its data out and
+            // overwrite the variant — no placeholder swap is needed.
+            let FieldTy::Has(has) = &root.fields[idx].ty else {
+                unreachable!("promotion targeted a non-Has field");
+            };
+            let promoted = FieldTy::HasItems(super::HasItems {
+                target: has.target,
+                expr_ty: has.expr_ty.clone(),
+                cardinality: has.cardinality.clone(),
+                pair_id: has.pair_id,
+            });
+            root.fields[idx].ty = promoted;
+        }
+    }
+
+    /// Validate item-collection key inheritance at schema-build time.
+    ///
+    /// For each child (a model with `parent.is_some()`):
+    ///
+    /// 1. Walk the `parent` chain to locate the root, with cycle detection.
+    /// 2. Confirm the root has exactly one partition-key and one local
+    ///    (sort-key) field — item-collection roots use a single
+    ///    `#[key(partition, sort)]` pair.
+    /// 3. Confirm the root's sort field is `String` (R7.1).
+    /// 4. For every model in the chain except the root itself, confirm it has
+    ///    fields whose names AND types match the root's partition + sort
+    ///    fields.
+    /// 5. Require every model in the chain to tag its sort field `#[auto]`
+    ///    (R2.6) and promote `AutoStrategy::String` →
+    ///    `AutoStrategy::ItemCollectionRootSortKey` (for the chain root) or
+    ///    `AutoStrategy::ItemCollectionChildSortKey` (for descendants) (R7.5)
+    ///    so the row's sort column carries the appropriate hierarchical
+    ///    encoding.
+    ///
+    /// Cross-model invariants like (4) cannot be checked at macro-expansion
+    /// time — each `#[derive(Model)]` invocation sees only its own struct.
+    fn validate_item_collections(&mut self) -> Result<()> {
+        // Triples of (member_model_id, sort_field_index, is_root) collected
+        // during the immutable validation pass; applied as a `String` ->
+        // `ItemCollectionRoot/ChildSortKey` promotion in a follow-up mutable
+        // pass so we don't borrow `self.models` mutably during the chain walk.
+        let mut promotions: Vec<(ModelId, usize, bool)> = Vec::new();
+
+        let model_ids: Vec<ModelId> = self.models.keys().copied().collect();
+        for id in model_ids {
+            let child_root = match self.models.get(&id) {
+                Some(Model::Root(r)) => r,
+                _ => continue,
+            };
+
+            // Skip non-children (models that aren't part of any item collection).
+            if child_root.parent.is_none() {
+                continue;
+            }
+
+            let starting_name = child_root.name.upper_camel_case();
+
+            // Walk the parent chain to find the root, with cycle detection.
+            let mut visited: HashSet<ModelId> = HashSet::new();
+            visited.insert(id);
+            let mut cursor = id;
+            loop {
+                let m = self.models.get(&cursor).ok_or_else(|| {
+                    crate::Error::invalid_schema(format!(
+                        "item-collection chain starting at `{}` references an unregistered \
+                         parent model; ensure all ancestors appear in `Db::builder().models(...)`",
+                        starting_name,
+                    ))
+                })?;
+                let r = m.as_root_unwrap();
+                match r.parent {
+                    None => break,
+                    Some(parent_id) => {
+                        if !visited.insert(parent_id) {
+                            return Err(crate::Error::invalid_schema(format!(
+                                "item-collection cycle detected starting at `{}`",
+                                starting_name,
+                            )));
+                        }
+                        cursor = parent_id;
+                    }
+                }
+            }
+            let root = self
+                .models
+                .get(&cursor)
+                .expect("walked to a registered model")
+                .as_root_unwrap();
+
+            // Read the root's primary key. Item-collection roots accept two
+            // syntactic forms:
+            //
+            //   - simple `#[key(a, b)]` — every bare ident lands in
+            //     `partition`; here we reinterpret the two-arg case as
+            //     `(partition=a, sort=b)`.
+            //   - named `#[key(partition = a, local = b)]` — already split
+            //     into one partition field and one local field.
+            //
+            // Both forms produce the same downstream PK shape; the user picks
+            // whichever they prefer per model.
+            let (partition_field_id, sort_field_id) = pk_partition_and_sort_fields(root)?;
+
+            let partition_root = &root.fields[partition_field_id.index];
+            let sort_root = &root.fields[sort_field_id.index];
+
+            // R7.1: the sort field on the root must be `String`.
+            if !field_ty_is_string(sort_root) {
+                return Err(crate::Error::invalid_schema(format!(
+                    "sort field `{}` must be `String`; found `{}`",
+                    sort_root.name.app_unwrap(),
+                    field_ty_repr(sort_root),
+                )));
+            }
+
+            let partition_name = partition_root.name.app_unwrap().to_string();
+            let partition_repr = field_ty_repr(partition_root);
+            let sort_name = sort_root.name.app_unwrap().to_string();
+            let sort_repr = field_ty_repr(sort_root);
+            let root_name = root.name.upper_camel_case();
+
+            // For every model in the chain except the root itself, confirm it
+            // declares fields whose names AND types match the root's
+            // partition + sort fields.
+            for child_id in &visited {
+                if *child_id == cursor {
+                    continue;
+                }
+                let child = self
+                    .models
+                    .get(child_id)
+                    .expect("visited model is registered")
+                    .as_root_unwrap();
+
+                for (role, expected_name, expected_repr) in [
+                    (
+                        "partition",
+                        partition_name.as_str(),
+                        partition_repr.as_str(),
+                    ),
+                    ("sort", sort_name.as_str(), sort_repr.as_str()),
+                ] {
+                    let actual = child
+                        .fields
+                        .iter()
+                        .find(|f| f.name.app.as_deref() == Some(expected_name));
+                    let actual = actual.ok_or_else(|| {
+                        crate::Error::invalid_schema(format!(
+                            "expected field `{}: {}` matching root `{}`'s {} key, found none on `{}`",
+                            expected_name,
+                            expected_repr,
+                            root_name,
+                            role,
+                            child.name.upper_camel_case(),
+                        ))
+                    })?;
+                    if field_ty_repr(actual) != expected_repr {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "field `{}` on `{}` has type `{}`; root `{}` declares `{}`",
+                            expected_name,
+                            child.name.upper_camel_case(),
+                            field_ty_repr(actual),
+                            root_name,
+                            expected_repr,
+                        )));
+                    }
+                }
+            }
+
+            // R2.6 + R7.5: every model in the chain must tag its sort field
+            // `#[auto]`; promote `AutoStrategy::String` ->
+            // `AutoStrategy::ItemCollectionRootSortKey` (for the chain root)
+            // or `AutoStrategy::ItemCollectionChildSortKey` (for descendants).
+            // Resolve the sort field index for each member by name, then
+            // validate the existing `#[auto]` strategy. Apply the promotion
+            // in a second pass below.
+            for member_id in &visited {
+                let member = self
+                    .models
+                    .get(member_id)
+                    .expect("visited model is registered")
+                    .as_root_unwrap();
+                let member_sort_idx = member
+                    .fields
+                    .iter()
+                    .position(|f| f.name.app.as_deref() == Some(sort_name.as_str()))
+                    .expect("sort field name verified above");
+                let member_sort = &member.fields[member_sort_idx];
+                let is_root = *member_id == cursor;
+                match &member_sort.auto {
+                    None => {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "sort field `{}` on item-collection model `{}` must be tagged `#[auto]`",
+                            member_sort.name.app_unwrap(),
+                            member.name.upper_camel_case(),
+                        )));
+                    }
+                    Some(AutoStrategy::String) => {
+                        promotions.push((*member_id, member_sort_idx, is_root));
+                    }
+                    Some(other) => {
+                        return Err(crate::Error::invalid_schema(format!(
+                            "sort field `{}` on `{}` has incompatible auto strategy `{:?}`; \
+                             item-collection sort fields must be `String` (which implies `AutoStrategy::String`)",
+                            member_sort.name.app_unwrap(),
+                            member.name.upper_camel_case(),
+                            other,
+                        )));
+                    }
+                }
+            }
+        }
+
+        // Apply collected promotions: bare `String` -> `ItemCollectionRoot/
+        // ChildSortKey` per the chain position recorded above.
+        for (model_id, field_idx, is_root) in promotions {
+            let root = self
+                .models
+                .get_mut(&model_id)
+                .expect("promotion target is registered")
+                .as_root_mut_unwrap();
+            let strategy = if is_root {
+                AutoStrategy::ItemCollectionRootSortKey
+            } else {
+                AutoStrategy::ItemCollectionChildSortKey
+            };
+            root.fields[field_idx].auto = Some(strategy);
+        }
+
+        // R1.5: every `#[item_parent]` field on a child requires a matching
+        // inverse `#[has_many]` / `#[has_one]` on the parent that targets
+        // the child. Item-collection membership is symmetric — proc macros
+        // only see one struct at a time, so the parent's `#[derive(Model)]`
+        // can't synthesise the inverse; the user declares it and schema
+        // build verifies the round-trip.
+        //
+        // Validation runs **before** `promote_has_items_from_item_parent_pairs`,
+        // so the parent's inverse field is still `FieldTy::Has` (the macro
+        // emits `Has` for every `#[has_many]`/`#[has_one]`).
+        self.validate_item_parent_inverse_has()?;
+
+        Ok(())
+    }
+
+    /// Verify that every model with a `FieldTy::ItemParent { target }` has
+    /// at least one `FieldTy::Has` field on `target` whose own `target`
+    /// resolves to the child's `ModelId`. Item-collection parents must
+    /// expose their members.
+    fn validate_item_parent_inverse_has(&self) -> Result<()> {
+        for (child_id, child_model) in &self.models {
+            let Some(child_root) = child_model.as_root() else {
+                continue;
+            };
+            for field in &child_root.fields {
+                let FieldTy::ItemParent(item_parent) = &field.ty else {
+                    continue;
+                };
+                let parent_id = item_parent.target;
+                let parent_root = match self.models.get(&parent_id) {
+                    Some(m) => m.as_root().expect("ItemParent target must be a root model"),
+                    None => continue,
+                };
+
+                let inverse_exists = parent_root.fields.iter().any(|pf| match &pf.ty {
+                    FieldTy::Has(has) => has.target == *child_id,
+                    _ => false,
+                });
+
+                if !inverse_exists {
+                    return Err(crate::Error::invalid_schema(format!(
+                        "model `{parent}` is the target of `#[item_parent]` on `{child}` but \
+                         declares no `#[has_many]` or `#[has_one]` field of type \
+                         `Deferred<Vec<{child}>>` (or `Deferred<{child}>`). Item-collection \
+                         parents must expose their members.",
+                        parent = parent_root.name.upper_camel_case(),
+                        child = child_root.name.upper_camel_case(),
+                    )));
+                }
+            }
+        }
+        Ok(())
     }
 
     fn verify_no_eager_load_cycles(&self) -> crate::Result<()> {
@@ -545,6 +992,17 @@ impl Builder {
         Ok(())
     }
 
+    /// Locate the inverse field on `target` that pairs with a `Has` on `src`.
+    ///
+    /// A `Has`/`HasOne` on the parent pairs with either:
+    ///   - a `BelongsTo` on the target (classic FK relationship), or
+    ///   - an `ItemParent` on the target (item-collection child whose
+    ///     primary key already encodes the parent — symmetric IC, R2.9).
+    ///
+    /// Both candidate kinds satisfy the same role here: a single field on
+    /// `target` that names `src` as its parent. The schema linker promotes
+    /// the parent's `Has` to `HasItems` after this resolution if the
+    /// matched candidate turned out to be `ItemParent` (Step 4 of B4.9).
     fn find_belongs_to_pair(
         &self,
         src: ModelId,
@@ -565,24 +1023,27 @@ impl Builder {
             }
         };
 
-        // Find all BelongsTo relations that reference the model
-        let belongs_to: Vec<_> = target
+        // Find all candidate inverse relations that reference the model:
+        // either a `BelongsTo` (classic FK pairing) or an `ItemParent`
+        // (item-collection symmetric-key pairing, R2.9).
+        let candidates: Vec<_> = target
             .as_root_unwrap()
             .fields
             .iter()
             .filter(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => rel.target == src,
+                FieldTy::ItemParent(rel) => rel.target == src,
                 _ => false,
             })
             .collect();
 
-        match &belongs_to[..] {
+        match &candidates[..] {
             [field] => Ok(Some(field.id)),
             [] => Ok(None),
             _ => Err(crate::Error::invalid_schema(format!(
-                "model `{}` has more than one `BelongsTo` relation targeting `{}`; \
-                 disambiguate by adding `pair = <field>` on the paired `has_many`/`has_one` \
-                 field",
+                "model `{}` has more than one `BelongsTo` or `ItemParent` relation \
+                 targeting `{}`; disambiguate by adding `pair = <field>` on the paired \
+                 `has_many`/`has_one` field",
                 target.name().upper_camel_case(),
                 src_model.name().upper_camel_case(),
             ))),
@@ -642,9 +1103,10 @@ impl Builder {
         let paired = &target_model.as_root_unwrap().fields[pair.index];
         match &paired.ty {
             FieldTy::BelongsTo(rel) if rel.target == src => Ok(()),
+            FieldTy::ItemParent(rel) if rel.target == src => Ok(()),
             _ => Err(crate::Error::invalid_schema(format!(
                 "field `{}::{}` specifies `pair = {}`, but `{}::{}` is not a `BelongsTo` \
-                 targeting `{}`",
+                 or `ItemParent` targeting `{}`",
                 src_model.name().upper_camel_case(),
                 field_name,
                 paired.name.app_unwrap(),

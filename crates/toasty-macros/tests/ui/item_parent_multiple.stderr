@@ -1,0 +1,7 @@
+error: model `Bad` declares multiple `#[item_parent]` fields; exactly one is required
+  --> tests/ui/item_parent_multiple.rs:17:10
+   |
+17 | #[derive(Model)]
+   |          ^^^^^
+   |
+   = note: this error originates in the derive macro `Model` (in Nightly builds, run with -Z macro-backtrace for more info)

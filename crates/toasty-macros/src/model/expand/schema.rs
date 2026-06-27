@@ -29,6 +29,7 @@ impl Expand<'_> {
                     }
                     None => quote! { None },
                 };
+                let parent = self.expand_parent();
                 quote! {
                     #toasty::core::schema::app::Model::Root(
                         #toasty::core::schema::app::ModelRoot {
@@ -37,6 +38,7 @@ impl Expand<'_> {
                             fields: #fields,
                             primary_key: #primary_key,
                             table_name: #table_name,
+                            parent: #parent,
                             indices: #indices,
                             version_field: #version_field,
                         }
@@ -210,6 +212,12 @@ impl Expand<'_> {
                     deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
                     field_ty = quote!(<#ty as #toasty::RelationOneField>::has_one_relation_field_ty(#pair, #via));
                 }
+                FieldTy::ItemParent(rel) => {
+                    let ty = &rel.ty;
+                    nullable = quote!(<#ty as #toasty::RelationOneField>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::RelationOneField>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::RelationOneField>::item_parent_relation_field_ty());
+                }
             }
 
             let primary_key = self.model.primary_key_fields()
@@ -224,7 +232,20 @@ impl Expand<'_> {
                         AutoStrategy::Unspecified => {
                             assert!(primary_key, "TODO: better error handling");
 
-                            quote! { Some(<#ty as #toasty::Auto>::STRATEGY) }
+                            // `String` is not `Auto` (the trait is intentionally
+                            // not implemented for `String` workspace-wide).
+                            // Emit `AutoStrategy::String` directly when the
+                            // field's syntactic type is `String`; schema-build
+                            // either promotes this to
+                            // `ItemCollectionRoot/ChildSortKey` for IC sort
+                            // keys, or rejects it. Other types continue to go
+                            // through `<#ty as Auto>::STRATEGY` and surface a
+                            // compile-time error if `Auto` is not impl'd.
+                            if ty_is_plain_string(ty) {
+                                quote! { Some(#toasty::core::schema::app::AutoStrategy::String) }
+                            } else {
+                                quote! { Some(<#ty as #toasty::Auto>::STRATEGY) }
+                            }
                          }
                         AutoStrategy::Uuid(UuidVersion::V4) => quote! { Some(#toasty::core::schema::app::AutoStrategy::Uuid(#toasty::core::schema::app::UuidVersion::V4)) },
                         AutoStrategy::Uuid(UuidVersion::V7) => quote! { Some(#toasty::core::schema::app::AutoStrategy::Uuid(#toasty::core::schema::app::UuidVersion::V7)) },
@@ -359,6 +380,23 @@ impl Expand<'_> {
         } else {
             quote! { None }
         }
+    }
+
+    fn expand_parent(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        // The parent type comes from the field-level `#[item_parent]`
+        // declaration. The parent type was extracted from the field's
+        // `Deferred<T>` in A2 and stored as `Field::item_parent_target`.
+        if let Some(field_idx) = self.model.item_parent_field {
+            let parent_ty = self.model.fields[field_idx]
+                .item_parent_target
+                .as_ref()
+                .expect("item_parent_field implies item_parent_target");
+            return quote! { Some(<#parent_ty as #toasty::Model>::id()) };
+        }
+
+        quote! { None }
     }
 }
 
@@ -540,6 +578,12 @@ impl Expand<'_> {
                         <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);
                     }
                 }
+                FieldTy::ItemParent(rel) => {
+                    let ty = &rel.ty;
+                    quote! {
+                        <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::register(model_set);
+                    }
+                }
             })
             .collect()
     }
@@ -674,4 +718,37 @@ pub(super) fn expand_via_path(
             __via_untyped
         }
     }
+}
+
+/// Returns `true` when `ty` syntactically refers to `String` —
+/// either the bare `String` or the fully-qualified `std::string::String` /
+/// `alloc::string::String`. Conservative on aliases and generics; a type alias
+/// for `String` is not detected and falls through to the trait-lookup path,
+/// where it will fail because `Auto` is not implemented for `String`.
+fn ty_is_plain_string(ty: &syn::Type) -> bool {
+    let syn::Type::Path(tp) = ty else {
+        return false;
+    };
+    if tp.qself.is_some() {
+        return false;
+    }
+    let Some(last) = tp.path.segments.last() else {
+        return false;
+    };
+    if last.ident != "String" || !last.arguments.is_empty() {
+        return false;
+    }
+    let segs: Vec<_> = tp
+        .path
+        .segments
+        .iter()
+        .map(|s| s.ident.to_string())
+        .collect();
+    matches!(
+        segs.as_slice(),
+        [s] if s == "String"
+    ) || matches!(
+        segs.as_slice(),
+        [a, b, c] if (a == "std" || a == "alloc") && b == "string" && c == "String"
+    )
 }

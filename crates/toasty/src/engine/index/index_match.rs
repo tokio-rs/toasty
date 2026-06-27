@@ -77,6 +77,46 @@ impl<'stmt> IndexMatch<'stmt> {
                 }
                 _ => todo!("expr={:#?}", expr),
             },
+            IsModel(e) => {
+                let mapping = cx.schema().mapping_for(e.model);
+                if !mapping.item_collection.participates {
+                    // Model has no item-collection sort column — shouldn't
+                    // happen if lowering emitted IsModel correctly.
+                    return false;
+                }
+                // The model's sort field carries `<ModelName>#<uuid>`; find it
+                // by walking the model's PK index for the local-scoped field.
+                let app_model = cx.schema().app.model(e.model).as_root_unwrap();
+                let pk_index = &app_model.indices[app_model.primary_key.index.index];
+                let sort_field = pk_index
+                    .local_fields()
+                    .iter()
+                    .next()
+                    .map(|ic| ic.field)
+                    .or_else(|| {
+                        // Simple `#[key(a, b)]` form: both fields land in the
+                        // partition vector; the second is the sort component.
+                        pk_index.partition_fields().get(1).map(|ic| ic.field)
+                    });
+                let Some(sort_field_id) = sort_field else {
+                    return false;
+                };
+                let sort_col_id = mapping.fields[sort_field_id.index]
+                    .as_primitive()
+                    .expect("sort field maps to a primitive column")
+                    .column;
+                let mut matched = false;
+                for (i, index_column) in self.index.columns.iter().enumerate() {
+                    if sort_col_id != index_column.column {
+                        continue;
+                    }
+                    self.columns[i]
+                        .exprs
+                        .insert(ByAddress(expr), ExprMatch { eq: true });
+                    matched = true;
+                }
+                matched
+            }
             And(and_exprs) => {
                 let matched = self.match_all_restrictions(cx, and_exprs);
 
@@ -451,6 +491,8 @@ impl<'stmt> IndexMatch<'stmt> {
                     (true.into(), true.into())
                 }
             }
+            // IsModel is always part of the sort key.
+            IsModel(_) => (expr.clone(), true.into()),
             _ => todo!("partition_filter={:#?}", expr),
         }
     }

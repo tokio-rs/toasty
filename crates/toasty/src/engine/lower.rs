@@ -1181,6 +1181,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.visit_expr_mut(expr);
         }
 
+        lower.apply_lowering_filter_constraint(&mut stmt.filter);
+
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
             // Use the lowered assignments (which are now column-indexed)
@@ -1251,12 +1253,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
                     match &field.ty {
                         app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
-                        app::FieldTy::Has(_) | app::FieldTy::Via(_) => todo!(),
+                        app::FieldTy::Has(_) | app::FieldTy::HasItems(_) | app::FieldTy::Via(_) => {
+                            todo!()
+                        }
                         app::FieldTy::BelongsTo(rel) => {
                             *operand = key_field_refs(
                                 nesting,
                                 rel.foreign_key.fields.iter().map(|fk| fk.source),
                             );
+                        }
+                        app::FieldTy::ItemParent(_) => {
+                            todo!("ItemParent lowering: B4.8/B4.9")
                         }
                     }
                 }
@@ -1493,7 +1500,66 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    fn apply_lowering_filter_constraint(&self, _filter: &mut stmt::Filter) {}
+    fn apply_lowering_filter_constraint(&self, filter: &mut stmt::Filter) {
+        let Some(model) = self.model() else { return };
+        let mapping = self.state.engine.schema.mapping_for(model);
+
+        if !mapping.item_collection.participates {
+            return;
+        }
+
+        // The model's sort column carries `<ModelName>#<uuid>` since B4; emit
+        // a `StartsWith(<sort_col>, "<ModelName>#")` predicate so the row's
+        // model identity is tested against the sort value's leading segment.
+        // Both SQL and DynamoDB drivers already serialize StartsWith natively;
+        // the engine retains an `IsModel` representation for index-matching
+        // (`engine/index/index_match.rs`) and DynamoDB's BuildKeyExpression
+        // path, but for downstream serialization the StartsWith form is
+        // exhaustive.
+        let pk_index = &model.indices[model.primary_key.index.index];
+        let sort_field_id = pk_index
+            .local_fields()
+            .iter()
+            .next()
+            .map(|ic| ic.field)
+            .or_else(|| pk_index.partition_fields().get(1).map(|ic| ic.field))
+            .expect("item-collection model has a sort field (validated at schema build)");
+        let sort_col_id = mapping.fields[sort_field_id.index]
+            .as_primitive()
+            .expect("sort field maps to a primitive column")
+            .column;
+        let prefix = format!("{}#", model.name.upper_camel_case());
+
+        // Skip the discriminator if the existing filter already pins the sort
+        // column to a literal that starts with the model prefix. The user's
+        // own `sk = "<Model>#<uuid>"` predicate is strictly more selective and
+        // adding `begins_with(sk, "<Model>#")` produces two predicates on the
+        // same key — DynamoDB rejects that with `KeyConditionExpressions must
+        // only contain one condition per key`. Two simplifier passes catch
+        // the cases this fast-path can't see locally:
+        //   * `prune_starts_with_subsumed_by_eq` — when another lowering pass
+        //     emits `StartsWith` against a user-supplied `sk = <full>`.
+        //   * `prune_starts_with_subsumed_by_starts_with` — when
+        //     `lower::association`'s parent→child read shape emits a longer
+        //     `StartsWith(sk, "<Child>#<chain>#")` alongside this pass's
+        //     `StartsWith(sk, "<Child>#")`.
+        if filter
+            .expr
+            .as_ref()
+            .is_some_and(|expr| sort_col_pinned_to_prefix(expr, sort_col_id.index, &prefix))
+        {
+            return;
+        }
+
+        filter.add_filter(stmt::Expr::starts_with(
+            stmt::Expr::column(stmt::ExprReference::Column(stmt::ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: sort_col_id.index,
+            })),
+            stmt::Value::String(prefix),
+        ));
+    }
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
@@ -2033,6 +2099,38 @@ fn in_list_is_value_list(e: &stmt::ExprInList) -> bool {
             .items
             .iter()
             .all(|i| matches!(i, stmt::Expr::Value(v) if scalar(v))),
+        _ => false,
+    }
+}
+
+/// True when the filter expression already pins column `col_idx` to a string
+/// literal whose value starts with `prefix`. Used by
+/// `apply_lowering_filter_constraint` to elide the IC discriminator
+/// (`StartsWith(sort_col, "<Model>#")`) when the user's filter already
+/// narrows the sort column to a fully-qualified value — re-asserting
+/// `begins_with` over an exact match collides with the equality on
+/// DynamoDB (one condition per key).
+fn sort_col_pinned_to_prefix(expr: &stmt::Expr, col_idx: usize, prefix: &str) -> bool {
+    match expr {
+        stmt::Expr::And(and) => and
+            .operands
+            .iter()
+            .any(|op| sort_col_pinned_to_prefix(op, col_idx, prefix)),
+        stmt::Expr::BinaryOp(binop) if matches!(binop.op, stmt::BinaryOp::Eq) => {
+            let column_eq_literal = |col: &stmt::Expr, val: &stmt::Expr| -> bool {
+                let stmt::Expr::Reference(stmt::ExprReference::Column(c)) = col else {
+                    return false;
+                };
+                if c.column != col_idx || c.nesting != 0 {
+                    return false;
+                }
+                matches!(
+                    val,
+                    stmt::Expr::Value(stmt::Value::String(s)) if s.starts_with(prefix)
+                )
+            };
+            column_eq_literal(&binop.lhs, &binop.rhs) || column_eq_literal(&binop.rhs, &binop.lhs)
+        }
         _ => false,
     }
 }

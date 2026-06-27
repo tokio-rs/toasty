@@ -3,8 +3,8 @@ use crate::{
     Error, Result, driver,
     schema::{
         Name,
-        app::{self, Model, ModelId, ModelRoot},
-        db::{self, ColumnId, IndexId, Table, TableId},
+        app::{self, FieldId, Model, ModelId, ModelRoot},
+        db::{self, ColumnId, IndexId, IndexScope, Table, TableId},
         mapping::{self, Mapping, TableToModel},
     },
     stmt,
@@ -52,6 +52,13 @@ struct BuildMapping<'a> {
     lowering_columns: Vec<ColumnId>,
     model_to_table: Vec<stmt::Expr>,
     table_to_model: Vec<stmt::Expr>,
+    /// Pre-assigned column IDs keyed by field index. Used by item-collection
+    /// child models to reuse parent columns for FK-source fields.
+    column_overrides: indexmap::IndexMap<usize, ColumnId>,
+    /// When true, non-PK primitive fields are created nullable regardless of
+    /// the field's own nullability setting. Used for root models that have
+    /// item-collection children (child rows don't carry the root's non-PK values).
+    force_non_pk_nullable: bool,
 }
 
 /// Per-level state for the recursive `map_field*` methods.
@@ -130,27 +137,34 @@ impl BuildSchema<'_> {
         app: &app::Schema,
         db: &driver::Capability,
     ) -> Result<()> {
-        for table in &mut self.tables {
-            let models = app
+        for table_idx in 0..self.tables.len() {
+            let table_id = self.tables[table_idx].id;
+
+            let all_models: Vec<_> = app
                 .models()
                 .filter(|model| model.is_root())
-                .filter(|model| self.mapping.model(model.id()).table == table.id)
-                .collect::<Vec<_>>();
+                .filter(|model| self.mapping.model(model.id()).table == table_id)
+                .collect();
+
+            let (roots, children): (Vec<_>, Vec<_>) = all_models
+                .iter()
+                .partition(|m| m.as_root_unwrap().parent.is_none());
 
             assert!(
-                models.len() == 1,
-                "TODO: handle mapping many models to one table"
+                roots.len() == 1,
+                "each table must have exactly one root model"
             );
+            let root = roots[0];
 
             BuildTableFromModels {
                 app,
                 db,
-                table,
+                table: &mut self.tables[table_idx],
                 mapping: &mut self.mapping,
-                prefix_table_names: models.len() > 1,
+                prefix_table_names: false,
                 name_prefix: self.builder.table_name_prefix.clone(),
             }
-            .build(models[0])?;
+            .build(root, &children)?;
         }
 
         Ok(())
@@ -178,13 +192,275 @@ impl BuildSchema<'_> {
 }
 
 impl BuildTableFromModels<'_> {
-    fn build(&mut self, model: &Model) -> Result<()> {
-        self.map_model_fields(model)?;
+    fn build(&mut self, model: &Model, children: &[&Model]) -> Result<()> {
+        // Build columns and indices for the root model.
+        // When there are children, non-PK fields of the root become nullable
+        // (child rows don't carry root-specific non-PK values).
+        self.map_model_fields_with_nullability(model, !children.is_empty())?;
+
+        // Map each child model onto the same table.
+        for child in children {
+            self.map_item_collection_child(child, model)?;
+        }
+
         self.update_index_names();
+
+        // Flag every model that participates in this item collection so the
+        // engine can inject an `IsModel` predicate (rendered as a sort-key
+        // prefix on DynamoDB) when reading rows from the shared table.
+        if !children.is_empty() {
+            self.mapping
+                .model_mut(model.id())
+                .item_collection
+                .participates = true;
+            for child in children {
+                self.mapping
+                    .model_mut(child.id())
+                    .item_collection
+                    .participates = true;
+            }
+
+            // Reinterpret the PK index scope for IC roots that used the simple
+            // `#[key(<partition>, <sort>)]` form. The macro lands every bare
+            // ident in `partition`, but for an item-collection root the second
+            // column is the sort key. The app-schema validator
+            // (`pk_partition_and_sort_fields`) accepts both shapes; the DB
+            // index must reflect the actual hash/range split or else
+            // sort-column predicates (e.g. `StartsWith(sk, "Todo#")`) get
+            // rejected by `match_expr_binary_op_column` (partition + non-eq is
+            // not a valid index match). DynamoDB also requires the table's
+            // KeySchema to mark exactly one column as `RANGE`.
+            let pk_index = self
+                .table
+                .indices
+                .iter_mut()
+                .find(|i| i.primary_key)
+                .expect("primary key index must exist");
+            let partition_count = pk_index
+                .columns
+                .iter()
+                .filter(|c| c.scope.is_partition())
+                .count();
+            let local_count = pk_index
+                .columns
+                .iter()
+                .filter(|c| c.scope.is_local())
+                .count();
+            if partition_count == 2 && local_count == 0 {
+                // Demote the trailing column from `Partition` to `Local`. The
+                // first partition column is the hash key; subsequent columns
+                // become sort-key components in declaration order.
+                if let Some(last) = pk_index
+                    .columns
+                    .iter_mut()
+                    .rev()
+                    .find(|c| c.scope.is_partition())
+                {
+                    last.scope = IndexScope::Local;
+                }
+            }
+        }
+
         Ok(())
     }
 
-    fn map_model_fields(&mut self, model: &Model) -> Result<()> {
+    /// Builds columns + mapping for an item-collection child model.
+    ///
+    /// Fields that correspond to FK sources (which share a column with the
+    /// parent's PK) are wired to the existing parent column rather than
+    /// creating new ones.
+    fn map_item_collection_child(&mut self, child: &Model, _root: &Model) -> Result<()> {
+        let child_root = child.as_root_unwrap();
+
+        // Collect the set of FK-source field IDs that reuse a parent column.
+        let fk_sources: std::collections::HashSet<FieldId> = self
+            .mapping
+            .model(child.id())
+            .item_collection
+            .field_mapping
+            .keys()
+            .copied()
+            .collect();
+
+        // --- Column pass ---
+        // For each primitive field: if it's a FK source that maps to the
+        // parent PK column, reuse that column; otherwise create a new column.
+        let mut child_field_mappings: Vec<Option<ColumnId>> = vec![None; child_root.fields.len()];
+
+        for field in &child_root.fields {
+            match &field.ty {
+                app::FieldTy::Primitive(prim) => {
+                    if fk_sources.contains(&field.id) {
+                        // Reuse the parent column.
+                        let parent_field_id =
+                            self.mapping.model(child.id()).item_collection.field_mapping[&field.id];
+                        let parent_col = self.mapping.model(parent_field_id.model).fields
+                            [parent_field_id.index]
+                            .as_primitive()
+                            .expect("parent PK field must map to a primitive column")
+                            .column;
+                        child_field_mappings[field.id.index] = Some(parent_col);
+                    } else {
+                        let col_id = self.create_child_column(child_root, field, prim);
+                        child_field_mappings[field.id.index] = Some(col_id);
+                    }
+                }
+                app::FieldTy::Embedded(_)
+                | app::FieldTy::BelongsTo(_)
+                | app::FieldTy::Has(_)
+                | app::FieldTy::HasItems(_)
+                | app::FieldTy::ItemParent(_)
+                | app::FieldTy::Via(_) => {}
+            }
+        }
+
+        // --- Build mapping via BuildMapping ---
+        // We need to supply the column IDs we determined above so BuildMapping
+        // can build model_to_table / table_to_model.  We do this by temporarily
+        // running BuildMapping with overridden columns.
+        BuildMapping {
+            app: self.app,
+            db: self.db,
+            table: self.table,
+            mapping: self.mapping.model_mut(child),
+            schema_prefix: None,
+            name_prefix: self.name_prefix.clone(),
+            next_bit: 0,
+            lowering_columns: vec![],
+            model_to_table: vec![],
+            table_to_model: vec![],
+            column_overrides: child_field_mappings
+                .into_iter()
+                .enumerate()
+                .filter_map(|(i, col)| col.map(|c| (i, c)))
+                .collect(),
+            force_non_pk_nullable: false,
+        }
+        .build_mapping(child_root)?;
+
+        // --- Build the PK index contributions ---
+        // Local (sort-key) columns from this child are added to the shared PK index.
+        // Partition columns (reused from parent) are already in the index.
+        let pk_index_for_child: Vec<db::IndexColumn> = child_root
+            .primary_key
+            .fields
+            .iter()
+            .filter(|fid| !fk_sources.contains(fid))
+            .map(|fid| {
+                let col = self.mapping.model(child.id()).fields[fid.index]
+                    .as_primitive()
+                    .expect("child PK field must be primitive")
+                    .column;
+                db::IndexColumn {
+                    column: col,
+                    op: db::IndexOp::Eq,
+                    scope: IndexScope::Local,
+                }
+            })
+            .collect();
+
+        if !pk_index_for_child.is_empty() {
+            // These columns also belong to the shared table PK list.
+            for ic in &pk_index_for_child {
+                self.table.primary_key.columns.push(ic.column);
+            }
+
+            let pk_db_index = self
+                .table
+                .indices
+                .iter_mut()
+                .find(|i| i.primary_key)
+                .expect("primary key index must exist");
+            for ic in pk_index_for_child {
+                pk_db_index.columns.push(ic);
+            }
+        }
+
+        // --- Secondary indices for the child ---
+        let child_field_mappings_for_indices: Vec<mapping::Field> =
+            self.mapping.model(child.id()).fields.clone();
+        let mut extra_indices = Vec::new();
+        self.collect_indices(
+            &child_root.fields,
+            &child_field_mappings_for_indices,
+            &child_root.indices,
+            &mut extra_indices,
+        )?;
+        // Filter out the primary key index — it's already handled above.
+        for idx in extra_indices {
+            if !idx.primary_key {
+                self.table.indices.push(db::Index {
+                    id: IndexId {
+                        table: self.table.id,
+                        index: self.table.indices.len(),
+                    },
+                    ..idx
+                });
+            }
+        }
+
+        Ok(())
+    }
+
+    /// Creates a new column for a child model's own (non-shared) primitive field.
+    ///
+    /// The column is prefixed with the child model's snake-case name to avoid
+    /// conflicts with the root model's columns (both may have an `id` field).
+    /// Child columns are always nullable because a row in the shared table may
+    /// belong to a different model and thus not carry this field's value.
+    fn create_child_column(
+        &mut self,
+        child_model: &ModelRoot,
+        field: &app::Field,
+        primitive: &app::FieldPrimitive,
+    ) -> ColumnId {
+        let mut storage_ty = db::Type::from_app(
+            &primitive.ty,
+            primitive.storage_ty.as_ref(),
+            &self.db.storage_types,
+        )
+        .expect("unsupported storage type");
+
+        if let db::Type::Enum(ref mut type_enum) = storage_ty
+            && let (Some(prefix), Some(name)) = (&self.name_prefix, &mut type_enum.name)
+        {
+            *name = format!("{prefix}{name}");
+        }
+
+        let base_name = field
+            .name
+            .storage_name()
+            .unwrap_or_else(|| field.name.app_unwrap())
+            .to_string();
+        let col_name = format!("{}__{base_name}", child_model.name.snake_case());
+
+        let col_id = ColumnId {
+            table: self.table.id,
+            index: self.table.columns.len(),
+        };
+
+        self.table.columns.push(db::Column {
+            id: col_id,
+            name: col_name,
+            ty: storage_ty.bridge_type(&primitive.ty),
+            storage_ty,
+            // Mark all non-pk fields as nullable.
+            // definitionally if a row exists, it has a pk
+            // additionally, this is required to pass index verification later.
+            nullable: !field.primary_key,
+            primary_key: false,
+            auto_increment: false,
+            versionable: false,
+        });
+
+        col_id
+    }
+
+    fn map_model_fields_with_nullability(
+        &mut self,
+        model: &Model,
+        force_nk_nullable: bool,
+    ) -> Result<()> {
         let root = model.as_root_unwrap();
         let schema_prefix = if self.prefix_table_names {
             Some(model.name().snake_case())
@@ -203,6 +479,8 @@ impl BuildTableFromModels<'_> {
             lowering_columns: vec![],
             model_to_table: vec![],
             table_to_model: vec![],
+            column_overrides: indexmap::IndexMap::new(),
+            force_non_pk_nullable: force_nk_nullable,
         }
         .build_mapping(root)?;
 
@@ -480,9 +758,11 @@ impl BuildMapping<'_> {
                 Ok(self.map_table_column_to_model(column_id, primitive))
             }
             app::FieldTy::Embedded(_) => self.populate_embed_default_returning(field, mapping),
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
-                Ok(stmt::Value::Null.into())
-            }
+            app::FieldTy::BelongsTo(_)
+            | app::FieldTy::Has(_)
+            | app::FieldTy::HasItems(_)
+            | app::FieldTy::ItemParent(_)
+            | app::FieldTy::Via(_) => Ok(stmt::Value::Null.into()),
         }
     }
 
@@ -826,9 +1106,11 @@ impl BuildMapping<'_> {
                     _ => unreachable!("invalid schema"),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
-                Ok(stmt::Value::Null.into())
-            }
+            app::FieldTy::BelongsTo(_)
+            | app::FieldTy::Has(_)
+            | app::FieldTy::HasItems(_)
+            | app::FieldTy::ItemParent(_)
+            | app::FieldTy::Via(_) => Ok(stmt::Value::Null.into()),
         }
     }
 }
@@ -871,7 +1153,11 @@ impl<'a, 'b> MapField<'a, 'b> {
                     _ => unreachable!(),
                 }
             }
-            app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
+            app::FieldTy::BelongsTo(_)
+            | app::FieldTy::Has(_)
+            | app::FieldTy::HasItems(_)
+            | app::FieldTy::ItemParent(_)
+            | app::FieldTy::Via(_) => {
                 assert!(!self.force_nullable);
                 let bit = self.build.next_bit();
                 Ok(mapping::Field::Relation(mapping::FieldRelation {
@@ -888,7 +1174,13 @@ impl<'a, 'b> MapField<'a, 'b> {
         field: &app::Field,
         primitive: &app::FieldPrimitive,
     ) -> mapping::Field {
-        let column_id = self.create_column(field, primitive);
+        // Check if there's a pre-assigned column override (e.g., FK-source field
+        // reusing a parent's column in an item-collection child model).
+        let column_id = if let Some(&col) = self.build.column_overrides.get(&field_index) {
+            col
+        } else {
+            self.create_column(field, primitive)
+        };
         let expr = self.field_expr(field, field_index);
         let lowering_index = self.build.push_lowering(column_id, &primitive.ty, expr);
         let bit = self.build.next_bit();
@@ -1193,7 +1485,9 @@ impl<'a, 'b> MapField<'a, 'b> {
     /// `field.nullable || self.force_nullable`, and auto-increment from
     /// `field.is_auto_increment()`.
     fn create_column(&mut self, field: &app::Field, primitive: &app::FieldPrimitive) -> ColumnId {
-        let nullable = field.nullable || self.force_nullable;
+        let nullable = field.nullable
+            || self.force_nullable
+            || (self.build.force_non_pk_nullable && !field.primary_key);
         let is_auto_increment = (field.is_auto_increment() || self.inherited_auto_increment)
             && self.build.db.auto_increment;
 

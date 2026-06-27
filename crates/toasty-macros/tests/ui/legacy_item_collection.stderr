@@ -1,0 +1,5 @@
+error: `#[item_collection]` is no longer supported. Use a field-level `#[item_parent]` attribute on a `Deferred<Parent>` field instead.
+  --> tests/ui/legacy_item_collection.rs:11:1
+   |
+11 | #[item_collection(Tenant)]
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^

@@ -49,7 +49,6 @@ impl Connection {
                 })
             })
         };
-
         match op.limit {
             None => {
                 let mut stream = scan.into_paginator().items().send();
