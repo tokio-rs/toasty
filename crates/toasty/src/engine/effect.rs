@@ -1,0 +1,76 @@
+//! Statement effect classification.
+//!
+//! [`classify`] walks a [`Statement`] AST and returns whether the
+//! statement can be retried transparently on `connection_lost`.  The
+//! pool consults this before attempting a retry; downstream consumers
+//! (e.g. a runtime-checked read-only API surface) read the same
+//! classification.
+//!
+//! See [`docs/dev/design/retry-safe-recovery.md`] for the full
+//! contract.
+//!
+//! [`Statement`]: toasty_core::stmt::Statement
+//! [`docs/dev/design/retry-safe-recovery.md`]: ../../../docs/dev/design/retry-safe-recovery.md
+
+use toasty_core::stmt::{self, ExprStmt, Statement, Visit};
+
+/// Whether a statement mutates database state.
+///
+/// A statement is [`Effect::ReadOnly`] if it is a [`Statement::Query`]
+/// and contains no embedded mutation sub-statement (`Expr::Stmt` whose
+/// wrapped statement is an `Insert`, `Update`, or `Delete`) anywhere
+/// in its tree.  Otherwise it is [`Effect::Mutating`].
+///
+/// CTE-with-mutation queries (e.g.
+/// `WITH ins AS (INSERT ... RETURNING *) SELECT * FROM ins`) parse as
+/// `Statement::Query` shapes that carry an `Expr::Stmt(Insert)` in the
+/// `WITH` clause and are correctly classified as `Mutating`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum Effect {
+    /// The statement reads but does not mutate state.  Safe to retry
+    /// after `connection_lost`.
+    ReadOnly,
+
+    /// The statement mutates state, either directly (top-level
+    /// `Insert` / `Update` / `Delete`) or via an embedded sub-statement.
+    /// Not safe to retry without further analysis.
+    Mutating,
+}
+
+/// Classify a statement's effect on database state.
+///
+/// O(n) in the size of the statement tree; no schema access.
+pub(crate) fn classify(stmt: &Statement) -> Effect {
+    match stmt {
+        Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_) => Effect::Mutating,
+        Statement::Query(query) => {
+            let mut walker = Walker { mutating: false };
+            walker.visit_stmt_query(query);
+            if walker.mutating {
+                Effect::Mutating
+            } else {
+                Effect::ReadOnly
+            }
+        }
+    }
+}
+
+struct Walker {
+    mutating: bool,
+}
+
+impl Visit for Walker {
+    fn visit_expr_stmt(&mut self, i: &ExprStmt) {
+        match &*i.stmt {
+            Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_) => {
+                self.mutating = true;
+            }
+            Statement::Query(_) => {
+                stmt::visit::visit_expr_stmt(self, i);
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests;
