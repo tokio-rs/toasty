@@ -424,7 +424,21 @@ impl Type {
     /// - `Record([...]).is_subtype_of(Union([I64, Record([...])]))` -> true
     /// - `I64.is_subtype_of(Union([I64, Record(...)]))` -> true
     /// - `String.is_subtype_of(Union([I64, Record(...)]))` -> false
+    ///
+    /// A positional record checked against a document target (`Type::Model`)
+    /// is accepted without inspection — the embed's field layout lives in the
+    /// schema, which this form does not carry. Use
+    /// [`is_subtype_of_in`](Self::is_subtype_of_in) where a schema is in
+    /// scope to check that pairing field-by-field.
     pub fn is_subtype_of(&self, other: &Type) -> bool {
+        self.is_subtype_of_in(other, &())
+    }
+
+    /// Schema-aware form of [`is_subtype_of`](Self::is_subtype_of): when
+    /// `resolve` can resolve a document target's embedded model, a positional
+    /// record is checked field-by-field against the embed's layout instead of
+    /// being accepted blindly.
+    pub fn is_subtype_of_in(&self, other: &Type, resolve: &impl super::Resolve) -> bool {
         // Null matches anything (commutative)
         if matches!(self, Type::Null) || matches!(other, Type::Null) {
             return true;
@@ -473,11 +487,36 @@ impl Type {
             (Type::ForeignKey(a), Type::ForeignKey(b)) => a == b,
 
             // List types: element type must be assignable
-            (Type::List(a), Type::List(b)) => a.is_subtype_of(b),
+            (Type::List(a), Type::List(b)) => a.is_subtype_of_in(b, resolve),
 
             // Record types: same length and all fields recursively assignable
             (Type::Record(a), Type::Record(b)) => {
-                a.len() == b.len() && a.iter().zip(b.iter()).all(|(a, b)| a.is_subtype_of(b))
+                a.len() == b.len()
+                    && a.iter()
+                        .zip(b.iter())
+                        .all(|(a, b)| a.is_subtype_of_in(b, resolve))
+            }
+
+            // A positional `Value::Record` is the engine's load form for a
+            // document value (names dropped). When the embedded model resolves,
+            // check the record field-by-field against the embed's layout. A
+            // schema-free context (`is_subtype_of`) cannot resolve it and
+            // accepts the pairing structurally — there is nothing to check
+            // without the layout.
+            (Type::Record(fields), Type::Model(id)) => {
+                match resolve.model(*id) {
+                    Some(crate::schema::app::Model::EmbeddedStruct(embedded)) => {
+                        fields.len() == embedded.fields.len()
+                            && fields
+                                .iter()
+                                .zip(&embedded.fields)
+                                .all(|(ty, field)| ty.is_subtype_of_in(field.expr_ty(), resolve))
+                    }
+                    // A document target must be an embedded struct; any other
+                    // model kind cannot accept a record.
+                    Some(_) => false,
+                    None => true,
+                }
             }
 
             // Sparse records must have the same field set
@@ -486,13 +525,17 @@ impl Type {
             // Union-to-Union: every member of self must be assignable to some member of other
             (Type::Union(a), Type::Union(b)) => a
                 .iter()
-                .all(|a_ty| b.iter().any(|b_ty| a_ty.is_subtype_of(b_ty))),
+                .all(|a_ty| b.iter().any(|b_ty| a_ty.is_subtype_of_in(b_ty, resolve))),
 
             // Concrete type assignable to union if it matches any member
-            (ty, Type::Union(union)) => union.iter().any(|member| ty.is_subtype_of(member)),
+            (ty, Type::Union(union)) => union
+                .iter()
+                .any(|member| ty.is_subtype_of_in(member, resolve)),
 
             // Union assignable to concrete type if every member is assignable
-            (Type::Union(union), other) => union.iter().all(|member| member.is_subtype_of(other)),
+            (Type::Union(union), other) => union
+                .iter()
+                .all(|member| member.is_subtype_of_in(other, resolve)),
 
             // Different type variants are not assignable
             _ => false,

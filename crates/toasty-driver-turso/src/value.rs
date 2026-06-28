@@ -9,6 +9,7 @@
 //! Turso ride on the SQLite-flavored serializer without an
 //! independent type system.
 
+use toasty_core::schema::app;
 use toasty_core::stmt::{self, Value as CoreValue};
 use turso::Value as TursoValue;
 
@@ -30,14 +31,16 @@ pub(crate) fn to_turso(value: &CoreValue) -> TursoValue {
         CoreValue::String(v) => TursoValue::Text(v.clone()),
         CoreValue::Bytes(v) => TursoValue::Blob(v.clone()),
         CoreValue::Null => TursoValue::Null,
-        CoreValue::List(_) => TursoValue::Text(value_list_to_json_text(value)),
+        // A `Vec<scalar>` / document collection (`List`) or a bare
+        // `#[document]` embed (`Object`) is stored as JSON text.
+        CoreValue::List(_) | CoreValue::Object(_) => TursoValue::Text(value_to_json_text(value)),
         _ => todo!("to_turso: value = {value:#?}"),
     }
 }
 
 /// Converts a [`turso::Value`] back to a [`toasty_core::stmt::Value`] using
 /// the expected return type to interpret the raw SQLite value correctly.
-pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type) -> CoreValue {
+pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type, schema: &app::Schema) -> CoreValue {
     match value {
         TursoValue::Null => CoreValue::Null,
         TursoValue::Integer(v) => match ty {
@@ -59,7 +62,10 @@ pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type) -> CoreValue {
         },
         TursoValue::Text(v) => match ty {
             stmt::Type::Uuid => CoreValue::Uuid(v.parse().expect("text is a valid uuid")),
-            stmt::Type::List(elem) => json_text_to_value_list(&v, elem),
+            stmt::Type::List(elem) => json_text_to_value_list(schema, &v, elem),
+            // A bare `#[document]` embed column (`Type::Model`) decodes straight
+            // to the positional `Value::Record` the engine loads.
+            stmt::Type::Model(_) => json_text_to_value(schema, &v, ty),
             _ => CoreValue::String(v),
         },
         TursoValue::Blob(v) => match ty {
@@ -81,13 +87,16 @@ pub(crate) fn from_turso_infer(value: TursoValue) -> CoreValue {
     }
 }
 
-fn value_list_to_json_text(value: &CoreValue) -> String {
-    let json = toasty_sql::value_json::value_list_to_json(value);
-    serde_json::to_string(&json).expect("serialize Vec<scalar> to JSON")
+fn value_to_json_text(value: &CoreValue) -> String {
+    toasty_sql::json::to_string(value).expect("serialize document value to JSON")
 }
 
-fn json_text_to_value_list(text: &str, elem_ty: &stmt::Type) -> CoreValue {
-    let json: serde_json::Value =
-        serde_json::from_str(text).expect("Turso returned non-JSON for a Vec<scalar> column");
-    toasty_sql::value_json::value_list_from_json(json, elem_ty)
+fn json_text_to_value_list(schema: &app::Schema, text: &str, elem_ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::list_from_str(schema, text, elem_ty)
+        .expect("Turso returned non-JSON for a collection column")
+}
+
+fn json_text_to_value(schema: &app::Schema, text: &str, ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::from_str(schema, text, ty)
+        .expect("Turso returned non-JSON for a document column")
 }

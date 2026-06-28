@@ -1,20 +1,20 @@
 use super::{
     Connection, Delete, ExprAttrs, Result, ReturnValuesOnConditionCheckFailure, SdkError,
-    TransactWriteItem, db, ddb_expression, ddb_key, item_to_record, operation,
+    TransactWriteItem, ddb_expression, ddb_key, item_to_record, operation,
 };
-use std::collections::HashMap;
-use toasty_core::{driver::ExecResponse, stmt::ExprContext};
+use std::{collections::HashMap, sync::Arc};
+use toasty_core::{Schema, driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_delete_by_key(
         &mut self,
-        schema: &db::Schema,
+        schema: &Arc<Schema>,
         op: operation::DeleteByKey,
     ) -> Result<ExecResponse> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
-        let table = schema.table(op.table);
-        let cx = ExprContext::new_with_target(schema, table);
+        let table = schema.db.table(op.table);
+        let cx = ExprContext::new_with_target(schema.as_ref(), table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -82,7 +82,8 @@ impl Connection {
                             // Both filter and condition set — check if filter matched
                             if let Some(old_item) = cce.item() {
                                 let record =
-                                    item_to_record(old_item, table.columns.iter()).unwrap();
+                                    item_to_record(&schema.app, old_item, table.columns.iter())
+                                        .unwrap();
                                 use toasty_core::stmt;
                                 struct RecordInput<'a>(&'a stmt::ValueRecord);
                                 impl stmt::Input for RecordInput<'_> {
@@ -183,7 +184,7 @@ impl Connection {
             .columns
             .iter()
             .map(|index_column| {
-                let column = schema.column(index_column.column);
+                let column = schema.db.column(index_column.column);
                 column.name.clone()
             })
             .collect();

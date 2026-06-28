@@ -107,7 +107,7 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
             }
 
             assert!(
-                actual_ty.is_subtype_of(ty),
+                actual_ty.is_subtype_of_in(ty, self.cx.schema()),
                 "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}"
             )
         }

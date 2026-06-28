@@ -502,6 +502,18 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                         Type::Record(mut fields) => {
                             std::mem::replace(&mut fields[*step], Type::Null)
                         }
+                        // A path into an embedded-model document value: descend
+                        // by field index through the embedded model's fields.
+                        // Keeping document projections type-able in the engine is
+                        // what lets them survive as plain `ExprProject` nodes
+                        // (rather than rewritten to a JSON function) until the
+                        // SQL edge.
+                        Type::Model(id) => match self.schema.model(id) {
+                            Some(Model::EmbeddedStruct(embedded)) => {
+                                embedded.fields[*step].expr_ty().clone()
+                            }
+                            _ => todo!("project into non-embedded model {id:?}"),
+                        },
                         Type::List(items) => *items,
                         expr => todo!(
                             "returning_expr={returning_expr:#?}; expr={expr:#?}; project={e:#?}"
@@ -548,6 +560,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Exists(_) => Type::Bool,
             Expr::Func(ExprFunc::Count(_)) => Type::U64,
             Expr::Func(ExprFunc::LastInsertId(_)) => Type::I64,
+            Expr::Func(ExprFunc::JsonExtract(func)) => func.ty.clone(),
             _ => todo!("{expr:#?}"),
         }
     }
@@ -677,6 +690,20 @@ impl Resolve for Schema {
 
     fn table_for_model(&self, model: &ModelRoot) -> Option<&Table> {
         Some(self.table_for(model.id))
+    }
+}
+
+impl Resolve for crate::schema::app::Schema {
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        self.get_model(id)
+    }
+
+    fn table(&self, _id: TableId) -> Option<&Table> {
+        None
+    }
+
+    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
+        None
     }
 }
 

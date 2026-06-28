@@ -49,6 +49,11 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
+#[cfg(feature = "jiff")]
+mod document_temporal_text;
+#[cfg(feature = "jiff")]
+pub use document_temporal_text::DocumentTemporalText;
+
 mod entry;
 pub use entry::Entry;
 
@@ -171,6 +176,9 @@ pub use sorted_index::SortedIndex;
 mod func_count;
 pub use func_count::FuncCount;
 
+mod func_json_extract;
+pub use func_json_extract::FuncJsonExtract;
+
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
@@ -279,6 +287,9 @@ pub use values::Values;
 
 #[cfg(feature = "jiff")]
 mod value_jiff;
+
+mod value_object;
+pub use value_object::ValueObject;
 
 mod value_record;
 pub use value_record::ValueRecord;

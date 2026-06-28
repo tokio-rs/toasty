@@ -188,10 +188,12 @@ impl Expand<'_> {
                         }
                     }
                     FieldTy::Primitive(ty) => {
-                        // The setter binds through the field's
-                        // `Field::ExprTarget` — `Self` for scalars/`Vec<u8>`,
-                        // `List<T>` for `Vec<T: Scalar>`. Trait dispatch
-                        // routes each case correctly; no type parsing here.
+                        // The setter binds through `<Ty as Field>::ExprTarget`
+                        // — `Self` for scalars/`Vec<u8>`/struct embeds,
+                        // `List<T>` for `Vec<T>` collections (scalar or embed).
+                        // A `#[document]` field uses the same `Field` impl as
+                        // its column-expanded form; only the schema `field_ty`
+                        // differs.
                         quote! {
                             #vis fn #name(mut self, #name: impl IntoExpr<FieldExprTarget<#ty>>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());

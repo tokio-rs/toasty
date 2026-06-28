@@ -488,10 +488,7 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 
         // Two literal-list `Append`s concatenate. Non-literal Append
         // shapes fall through to a residual `Batch`.
-        (Append(a), Append(b)) => match try_concat_list_literals(a, b) {
-            Ok(merged) => Append(merged),
-            Err((a, b)) => Batch(vec![Append(a), Append(b)]),
-        },
+        (Append(a), Append(b)) => try_concat_list_literals_to_assignment(a, b),
 
         // A `Batch` accumulator absorbs the next entry as a tail. Arises
         // when a previous compose failed to reduce a pair; collecting the
@@ -509,16 +506,14 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 /// Concatenate two list-shaped expressions if both are literals (either
 /// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
 /// on failure so the caller can preserve the un-folded shape.
-fn try_concat_list_literals(
-    a: stmt::Expr,
-    b: stmt::Expr,
-) -> Result<stmt::Expr, (stmt::Expr, stmt::Expr)> {
+fn try_concat_list_literals_to_assignment(a: stmt::Expr, b: stmt::Expr) -> stmt::Assignment {
+    use stmt::Assignment::{Append, Batch};
     if !is_list_literal(&a) || !is_list_literal(&b) {
-        return Err((a, b));
+        return Batch(vec![Append(a), Append(b)]);
     }
     let mut items = take_list_items(a).expect("checked is_list_literal");
     items.extend(take_list_items(b).expect("checked is_list_literal"));
-    Ok(stmt::Expr::list_from_vec(items))
+    Append(stmt::Expr::list_from_vec(items))
 }
 
 fn is_list_literal(e: &stmt::Expr) -> bool {
@@ -1289,7 +1284,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             (nesting, *pk_field_id)
         };
 
-        let pk = self.expr_cx.schema().app.field(pk_field_id);
+        let schema = self.expr_cx.schema();
+        let pk = schema.app.field(pk_field_id);
 
         // Sanity-check the RHS shape against the PK type.
         match &mut *expr.list {
@@ -1297,7 +1293,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 for item in &mut expr_list.items {
                     match item {
                         stmt::Expr::Value(value) => {
-                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                            assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                         }
                         _ => todo!("{item:#?}"),
                     }
@@ -1305,7 +1301,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             stmt::Expr::Value(stmt::Value::List(values)) => {
                 for value in values {
-                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                    assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                 }
             }
             _ => todo!("expr={expr:#?}"),

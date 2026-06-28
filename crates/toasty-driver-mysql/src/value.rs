@@ -1,5 +1,6 @@
 use mysql_async::{Column, Row, prelude::ToValue};
 use std::fmt;
+use toasty_core::schema::app;
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
@@ -18,19 +19,30 @@ impl Value {
     }
 
     /// Converts a MySQL value within a row to a Toasty value.
-    pub(crate) fn from_sql(i: usize, row: &mut Row, column: &Column, ty: &stmt::Type) -> Self {
+    pub(crate) fn from_sql(
+        i: usize,
+        row: &mut Row,
+        column: &Column,
+        ty: &stmt::Type,
+        schema: &app::Schema,
+    ) -> Self {
         let value = take_mysql_value(row, i);
 
-        Value(typed_mysql_value_to_core(value, column, ty))
+        Value(typed_mysql_value_to_core(value, column, ty, schema))
     }
 
     /// Converts a MySQL value within a row using the value metadata available
     /// from the driver.
-    pub(crate) fn from_sql_infer(i: usize, row: &mut Row, column: &Column) -> Self {
+    pub(crate) fn from_sql_infer(
+        i: usize,
+        row: &mut Row,
+        column: &Column,
+        schema: &app::Schema,
+    ) -> Self {
         let value = take_mysql_value(row, i);
         let ty = infer_mysql_type(column, &value);
 
-        Value(typed_mysql_value_to_core(value, column, &ty))
+        Value(typed_mysql_value_to_core(value, column, &ty, schema))
     }
 }
 
@@ -95,6 +107,7 @@ fn typed_mysql_value_to_core(
     value: mysql_async::Value,
     column: &Column,
     ty: &stmt::Type,
+    schema: &app::Schema,
 ) -> CoreValue {
     use mysql_async::consts::ColumnType as CT;
 
@@ -225,7 +238,12 @@ fn typed_mysql_value_to_core(
         CT::MYSQL_TYPE_JSON => match ty {
             stmt::Type::String => convert_or_null(value, stmt::Value::String),
             stmt::Type::List(elem) => convert_or_null(value, |bytes: Vec<u8>| {
-                json_bytes_to_value_list(&bytes, elem)
+                json_bytes_to_value_list(schema, &bytes, elem)
+            }),
+            // A `#[document]` bare embed (`Type::Model`): decode the JSON object
+            // back to the positional record the engine loads.
+            stmt::Type::Model(_) => convert_or_null(value, |bytes: Vec<u8>| {
+                json_bytes_to_value(schema, &bytes, ty)
             }),
             _ => todo!("MySQL JSON column with stmt::Type {ty:#?}"),
         },
@@ -432,12 +450,20 @@ impl ToValue for Value {
                 )
             }
             CoreValue::List(_) => {
-                // Bound to a MySQL `JSON` column — serialize the list to a
-                // JSON document and send it as text. MySQL accepts JSON as
-                // string or bytes; bytes avoids any utf8 round-trip.
-                let json = toasty_sql::value_json::value_list_to_json(&self.0);
+                // Bound to a MySQL `JSON` column — a `Vec<scalar>` field or a
+                // `#[document]` collection. Serialize the list to a JSON
+                // document and send it as bytes. MySQL accepts JSON as string
+                // or bytes; bytes avoids any utf8 round-trip.
                 mysql_async::Value::Bytes(
-                    serde_json::to_vec(&json).expect("serialize Vec<scalar> to JSON"),
+                    toasty_sql::json::to_vec(&self.0).expect("serialize JSON list column"),
+                )
+            }
+            CoreValue::Object(_) => {
+                // Bound to a MySQL `JSON` column — a bare `#[document]` embed
+                // (`Value::Object`). Serialize the named object to JSON bytes,
+                // the same way the list arm handles a document collection.
+                mysql_async::Value::Bytes(
+                    toasty_sql::json::to_vec(&self.0).expect("serialize JSON document column"),
                 )
             }
             value => todo!("{:#?}", value),
@@ -445,8 +471,14 @@ impl ToValue for Value {
     }
 }
 
-fn json_bytes_to_value_list(bytes: &[u8], elem_ty: &stmt::Type) -> CoreValue {
-    let json: serde_json::Value =
-        serde_json::from_slice(bytes).expect("MySQL returned non-JSON for a JSON column");
-    toasty_sql::value_json::value_list_from_json(json, elem_ty)
+fn json_bytes_to_value_list(schema: &app::Schema, bytes: &[u8], elem_ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::list_from_slice(schema, bytes, elem_ty)
+        .expect("MySQL returned non-JSON for a JSON column")
+}
+
+/// Decode the JSON bytes of a `#[document]` bare embed column (`Type::Model`)
+/// into the positional record the engine loads.
+fn json_bytes_to_value(schema: &app::Schema, bytes: &[u8], ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::from_slice(schema, bytes, ty)
+        .expect("MySQL returned non-JSON for a JSON document column")
 }

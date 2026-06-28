@@ -26,7 +26,8 @@ use toasty_core::{
     Error, Result, Schema,
     driver::{Capability, Driver, ExecResponse, operation::Operation},
     schema::{
-        db::{self, Column, ColumnId, Migration, Table},
+        app,
+        db::{Column, ColumnId, Migration, Table},
         diff,
     },
     stmt::{self, ExprContext},
@@ -184,8 +185,8 @@ impl Connection {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
-            Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
-            Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(
@@ -193,7 +194,7 @@ impl Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
                 );
                 match op.stmt {
-                    stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
+                    stmt::Statement::Insert(insert) => self.exec_insert(schema, insert).await,
                     _ => todo!("op={:#?}", op.stmt),
                 }
             }
@@ -307,6 +308,7 @@ fn ddb_key_schema(
 }
 
 fn item_to_record<'a, 'stmt>(
+    app: &app::Schema,
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a Column>,
 ) -> Result<stmt::ValueRecord> {
@@ -314,7 +316,7 @@ fn item_to_record<'a, 'stmt>(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {
-                    Value::from_ddb(&column.ty, value).into_inner()
+                    Value::from_ddb(app, &column.ty, value).into_inner()
                 } else {
                     stmt::Value::Null
                 }
@@ -324,7 +326,7 @@ fn item_to_record<'a, 'stmt>(
 }
 
 fn ddb_expression(
-    cx: &ExprContext<'_, db::Schema>,
+    cx: &ExprContext<'_, Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,
@@ -373,6 +375,20 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Value(val) => attrs.value(val),
+        // A projection into a `#[document]` column (`profile().name()`):
+        // DynamoDB filter expressions address nested Map attributes natively,
+        // so the path renders as `#col_0.#doc_1.#doc_2`.
+        stmt::Expr::Project(expr_project) => {
+            let (path, leaf_ty) = document_path(cx, attrs, expr_project);
+            // Like a bare bool column reference, a bool leaf in predicate
+            // position needs an explicit equality check.
+            if leaf_ty.is_bool() {
+                let true_val = attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::Bool(true));
+                format!("{path} = {true_val}")
+            } else {
+                path
+            }
+        }
         stmt::Expr::And(expr_and) => {
             let operands = expr_and
                 .operands
@@ -408,14 +424,16 @@ fn ddb_expression(
             format!("{expr} IN ({items})")
         }
         stmt::Expr::IsNull(expr_is_null) => {
-            // `attribute_not_exists` takes a bare attribute name. Resolve the
-            // column alias directly rather than through `ddb_expression`, which
-            // would expand a bool column to `#col = :true` — a comparison valid
-            // only in predicate position, not as a function argument. (Without
-            // this, `.is_none()` on any `Option<bool>` — including an
-            // `Option<Embed>` presence column — produces invalid syntax.)
+            // `attribute_not_exists` takes a bare attribute path. Resolve a
+            // column alias or document path directly rather than through
+            // `ddb_expression`, which would expand a bool column/leaf to
+            // `#col = :true` — a comparison valid only in predicate position,
+            // not as a function argument. (Without this, `.is_none()` on any
+            // `Option<bool>` — including an `Option<Embed>` presence column —
+            // produces invalid syntax.)
             let inner = match &*expr_is_null.expr {
                 stmt::Expr::Reference(expr_reference) => column_alias(cx, attrs, expr_reference).1,
+                stmt::Expr::Project(expr_project) => document_path(cx, attrs, expr_project).0,
                 other => ddb_expression(cx, attrs, primary, other),
             };
             format!("attribute_not_exists({inner})")
@@ -466,7 +484,7 @@ fn ddb_expression(
 /// registering the underlying attribute name in `attrs`. Returns the resolved
 /// column alongside the alias so callers can inspect its storage type.
 fn column_alias<'a>(
-    cx: &ExprContext<'a, db::Schema>,
+    cx: &ExprContext<'a, Schema>,
     attrs: &mut ExprAttrs,
     expr_reference: &stmt::ExprReference,
 ) -> (&'a Column, String) {
@@ -475,9 +493,53 @@ fn column_alias<'a>(
     (column, alias)
 }
 
+/// Resolves a projection into a `#[document]` column to a DynamoDB document
+/// path (`#col_0.#doc_1.#doc_2`), registering each path segment as an
+/// expression attribute name. The projection resolves through the schema's
+/// shared [`project_fields`](toasty_core::schema::app::Schema::project_fields)
+/// walk — the same one the engine's JSON-path lowering uses for SQL drivers.
+/// Returns the rendered path and the leaf field's type.
+fn document_path<'a>(
+    cx: &ExprContext<'a, Schema>,
+    attrs: &mut ExprAttrs,
+    expr_project: &stmt::ExprProject,
+) -> (String, &'a stmt::Type) {
+    let stmt::Expr::Reference(expr_reference) = expr_project.base.as_ref() else {
+        todo!("projection base must be a column reference; expr={expr_project:#?}")
+    };
+    let (column, mut path) = column_alias(cx, attrs, expr_reference);
+    let stmt::Type::Model(embed_id) = column.ty else {
+        todo!("projection into a non-document column; column={column:#?}")
+    };
+
+    let mut leaf_ty = None;
+    for field in cx
+        .schema()
+        .app
+        .project_fields(embed_id, expr_project.projection.as_slice())
+    {
+        let name = field
+            .name
+            .app
+            .as_deref()
+            .expect("document field has an app name");
+        path.push('.');
+        path.push_str(attrs.document_segment(name));
+        leaf_ty = Some(field.expr_ty());
+    }
+
+    (
+        path,
+        leaf_ty.expect("projection into a document column is non-empty"),
+    )
+}
+
 #[derive(Default)]
 struct ExprAttrs {
     columns: HashMap<ColumnId, String>,
+    /// Placeholder per document path segment, keyed by the segment (field)
+    /// name so repeated mentions of the same key share one placeholder.
+    document_segments: HashMap<String, String>,
     attr_names: HashMap<String, String>,
     attr_values: HashMap<String, AttributeValue>,
 }
@@ -491,6 +553,21 @@ impl ExprAttrs {
                 let name = format!("#col_{}", column.id.index);
                 self.attr_names.insert(name.clone(), column.name.clone());
                 e.insert(name)
+            }
+            Entry::Occupied(e) => e.into_mut(),
+        }
+    }
+
+    /// Registers one segment of a document path (a field name inside a Map
+    /// attribute) and returns its placeholder.
+    fn document_segment(&mut self, name: &str) -> &str {
+        use std::collections::hash_map::Entry;
+
+        match self.document_segments.entry(name.to_owned()) {
+            Entry::Vacant(e) => {
+                let placeholder = format!("#doc_{}", self.attr_names.len());
+                self.attr_names.insert(placeholder.clone(), name.to_owned());
+                e.insert(placeholder)
             }
             Entry::Occupied(e) => e.into_mut(),
         }

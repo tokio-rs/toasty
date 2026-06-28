@@ -1,5 +1,7 @@
+use std::sync::Arc;
 use toasty_core::{
     driver::{ExecResponse, Rows},
+    schema::Schema,
     stmt,
 };
 
@@ -25,6 +27,8 @@ impl VarDecls {
 pub(crate) struct VarStore {
     slots: Vec<Option<Entry>>,
     tys: Vec<stmt::Type>,
+    /// Resolves `Type::Model` (`#[document]`) layouts for the value type-checks.
+    schema: Arc<Schema>,
 }
 
 /// Identifies a pipeline variable slot
@@ -38,10 +42,11 @@ struct Entry {
 }
 
 impl VarStore {
-    pub(crate) fn new(decls: VarDecls) -> Self {
+    pub(crate) fn new(decls: VarDecls, schema: Arc<Schema>) -> Self {
         Self {
             slots: vec![],
             tys: decls.vars,
+            schema,
         }
     }
 
@@ -74,8 +79,12 @@ impl VarStore {
                 response.values
             }
             Rows::Value(value) => {
+                // Drivers decode document columns straight to the positional
+                // `Value::Record` form (see `toasty_sql::json` and the
+                // DynamoDB value conversion), so no conversion happens here.
+                // This assertion is a diagnostic shape check only.
                 assert!(
-                    value.is_a(&self.tys[var.0]),
+                    value.is_a(&self.schema.app, &self.tys[var.0]),
                     "type mismatch: {value:?} is not a {:?}",
                     self.tys[var.0]
                 );
@@ -86,7 +95,7 @@ impl VarStore {
                     todo!("ty={:#?}", self.tys[var.0])
                 };
 
-                Rows::Stream(value_stream.typed((**item_tys).clone()))
+                Rows::Stream(value_stream.typed(self.schema.clone(), (**item_tys).clone()))
             }
         };
         let response = ExecResponse {

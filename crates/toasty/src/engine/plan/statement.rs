@@ -1808,7 +1808,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             "const types must be of type `stmt::Type::List`"
         );
         debug_assert!(
-            value.is_a(&ty),
+            value.is_a(&self.planner.engine.schema.app, &ty),
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 

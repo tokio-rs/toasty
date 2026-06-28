@@ -179,6 +179,7 @@ impl Connection {
 
     fn exec_sql(
         &mut self,
+        schema: &Schema,
         sql_str: &str,
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
@@ -221,7 +222,9 @@ impl Connection {
                         SqlReturn::Types(ret_tys) => ret_tys
                             .iter()
                             .enumerate()
-                            .map(|(index, ret_ty)| Value::from_sql(row, index, ret_ty).into_inner())
+                            .map(|(index, ret_ty)| {
+                                Value::from_sql(row, index, ret_ty, &schema.app).into_inner()
+                            })
                             .collect(),
                     };
 
@@ -259,7 +262,7 @@ impl toasty_core::driver::Connection for Connection {
                     RawSqlRet::Infer => SqlReturn::Infer,
                     RawSqlRet::Types(types) => SqlReturn::Types(types),
                 };
-                return self.exec_sql(&op.sql, op.params, ret);
+                return self.exec_sql(schema, &op.sql, op.params, ret);
             }
             // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(mut op) => {
@@ -306,7 +309,7 @@ impl toasty_core::driver::Connection for Connection {
         };
 
         let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
-        self.exec_sql(&sql_str, typed_params, ret)
+        self.exec_sql(schema, &sql_str, typed_params, ret)
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

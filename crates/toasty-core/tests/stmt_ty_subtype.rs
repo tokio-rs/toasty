@@ -134,3 +134,86 @@ fn record_length_mismatch_not_subtype() {
     let expected = Type::Record(vec![Type::U64, Type::I64]);
     assert!(!actual.is_subtype_of(&expected));
 }
+
+// ---------------------------------------------------------------------------
+// Record vs document (`Type::Model`) targets
+// ---------------------------------------------------------------------------
+
+use toasty_core::schema::Name;
+use toasty_core::schema::app;
+use toasty_core::stmt;
+
+const PROFILE: app::ModelId = app::ModelId(0);
+
+fn doc_field(model: app::ModelId, index: usize, name: &str, ty: Type) -> app::Field {
+    app::Field {
+        id: model.field(index),
+        name: app::FieldName {
+            app: Some(name.to_string()),
+            storage: None,
+        },
+        ty: app::FieldTy::Primitive(app::FieldPrimitive {
+            ty,
+            storage_ty: None,
+            serialize: None,
+        }),
+        nullable: false,
+        primary_key: false,
+        auto: None,
+        versionable: false,
+        deferred: false,
+        constraints: vec![],
+        variant: None,
+    }
+}
+
+/// Schema: Profile = embedded struct { name: String, age: I64 }
+fn document_schema() -> app::Schema {
+    let profile = app::Model::EmbeddedStruct(app::EmbeddedStruct {
+        id: PROFILE,
+        name: Name::new("Profile"),
+        fields: vec![
+            doc_field(PROFILE, 0, "name", Type::String),
+            doc_field(PROFILE, 1, "age", Type::I64),
+        ],
+        indices: vec![],
+    });
+    app::Schema::from_macro([profile]).unwrap()
+}
+
+#[test]
+fn matching_record_is_subtype_of_document() {
+    let schema = document_schema();
+    let actual = Type::Record(vec![Type::String, Type::I64]);
+    assert!(actual.is_subtype_of_in(&Type::Model(PROFILE), &schema));
+}
+
+#[test]
+fn wrong_arity_record_not_subtype_of_document() {
+    let schema = document_schema();
+    let actual = Type::Record(vec![Type::String]);
+    assert!(!actual.is_subtype_of_in(&Type::Model(PROFILE), &schema));
+}
+
+#[test]
+fn wrong_field_type_record_not_subtype_of_document() {
+    let schema = document_schema();
+    let actual = Type::Record(vec![Type::String, Type::Bool]);
+    assert!(!actual.is_subtype_of_in(&Type::Model(PROFILE), &schema));
+}
+
+#[test]
+fn schema_free_form_accepts_record_vs_document() {
+    // Without a schema there is no layout to check against; the pairing is
+    // accepted structurally.
+    let actual = Type::Record(vec![Type::String]);
+    assert!(actual.is_subtype_of(&Type::Model(PROFILE)));
+}
+
+#[test]
+fn null_field_in_record_is_subtype_of_document() {
+    // `Type::Null` ("unknown") matches any field type.
+    let schema = document_schema();
+    let actual = Type::Record(vec![stmt::Type::Null, Type::I64]);
+    assert!(actual.is_subtype_of_in(&Type::Model(PROFILE), &schema));
+}

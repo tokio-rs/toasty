@@ -2,6 +2,7 @@ use rusqlite::{
     Row,
     types::{ToSql, ToSqlOutput, Value as SqlValue, ValueRef},
 };
+use toasty_core::schema::app;
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
@@ -20,7 +21,7 @@ impl Value {
     }
 
     /// Converts a SQLite value within a row to a Toasty value.
-    pub(crate) fn from_sql(row: &Row, index: usize, ty: &stmt::Type) -> Self {
+    pub(crate) fn from_sql(row: &Row, index: usize, ty: &stmt::Type, schema: &app::Schema) -> Self {
         let value: Option<SqlValue> = row.get(index).unwrap();
 
         let core_value = match value {
@@ -44,7 +45,10 @@ impl Value {
             },
             Some(SqlValue::Text(value)) => match ty {
                 stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
-                stmt::Type::List(elem) => json_text_to_value_list(&value, elem),
+                stmt::Type::List(elem) => json_text_to_value_list(schema, &value, elem),
+                // A bare `#[document]` embed column (`Type::Model`) decodes
+                // straight to the positional `Value::Record` the engine loads.
+                stmt::Type::Model(_) => json_text_to_value(schema, &value, ty),
                 _ => stmt::Value::String(value),
             },
             Some(SqlValue::Blob(value)) => match ty {
@@ -92,21 +96,26 @@ impl ToSql for Value {
             Value::String(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Text(v.as_bytes()))),
             Value::Bytes(v) => Ok(ToSqlOutput::Borrowed(ValueRef::Blob(&v[..]))),
             Value::Null => Ok(ToSqlOutput::Owned(SqlValue::Null)),
-            Value::List(_) => Ok(ToSqlOutput::Owned(SqlValue::Text(value_list_to_json_text(
-                &self.0,
-            )))),
+            // A `Vec<scalar>` / document collection (`List`) or a bare
+            // `#[document]` embed (`Object`) is stored as JSON text.
+            Value::List(_) | Value::Object(_) => Ok(ToSqlOutput::Owned(SqlValue::Text(
+                value_to_json_text(&self.0),
+            ))),
             _ => todo!("value = {:#?}", self.0),
         }
     }
 }
 
-fn value_list_to_json_text(value: &CoreValue) -> String {
-    let json = toasty_sql::value_json::value_list_to_json(value);
-    serde_json::to_string(&json).expect("serialize Vec<scalar> to JSON")
+fn value_to_json_text(value: &CoreValue) -> String {
+    toasty_sql::json::to_string(value).expect("serialize document value to JSON")
 }
 
-fn json_text_to_value_list(text: &str, elem_ty: &stmt::Type) -> CoreValue {
-    let json: serde_json::Value =
-        serde_json::from_str(text).expect("SQLite returned non-JSON for a Vec<scalar> column");
-    toasty_sql::value_json::value_list_from_json(json, elem_ty)
+fn json_text_to_value_list(schema: &app::Schema, text: &str, elem_ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::list_from_str(schema, text, elem_ty)
+        .expect("SQLite returned non-JSON for a collection column")
+}
+
+fn json_text_to_value(schema: &app::Schema, text: &str, ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::from_str(schema, text, ty)
+        .expect("SQLite returned non-JSON for a document column")
 }

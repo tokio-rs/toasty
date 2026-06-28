@@ -353,6 +353,7 @@ impl Connection {
 
     async fn exec_sql(
         &mut self,
+        schema: &Schema,
         sql_as_str: &str,
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
@@ -397,28 +398,36 @@ impl Connection {
             .await
             .map_err(classify_pg_error)?;
 
-        let results = rows.into_iter().map(move |row| {
-            let mut results = Vec::new();
+        // Collect eagerly so the per-row decode (which borrows `schema`) runs
+        // within this method rather than escaping into the lazy stream.
+        let results = rows
+            .into_iter()
+            .map(|row| {
+                let mut results = Vec::new();
 
-            match &ret {
-                SqlReturn::Count => unreachable!(),
-                SqlReturn::Infer => {
-                    for (i, column) in row.columns().iter().enumerate() {
-                        results.push(Value::from_sql_infer(i, &row, column).into_inner());
+                match &ret {
+                    SqlReturn::Count => unreachable!(),
+                    SqlReturn::Infer => {
+                        for (i, column) in row.columns().iter().enumerate() {
+                            results.push(Value::from_sql_infer(i, &row, column).into_inner());
+                        }
+                    }
+                    SqlReturn::Types(ret_tys) => {
+                        for (i, column) in row.columns().iter().enumerate() {
+                            results.push(
+                                Value::from_sql(i, &row, column, &ret_tys[i], &schema.app)
+                                    .into_inner(),
+                            );
+                        }
                     }
                 }
-                SqlReturn::Types(ret_tys) => {
-                    for (i, column) in row.columns().iter().enumerate() {
-                        results.push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
-                    }
-                }
-            }
 
-            Ok(ValueRecord::from_vec(results))
-        });
+                Ok(ValueRecord::from_vec(results))
+            })
+            .collect::<Vec<_>>();
 
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-            results,
+            results.into_iter(),
         )))
     }
 
@@ -500,7 +509,7 @@ impl toasty_core::driver::Connection for Connection {
                     RawSqlRet::Infer => SqlReturn::Infer,
                     RawSqlRet::Types(types) => SqlReturn::Types(types),
                 };
-                return self.exec_sql(&op.sql, op.params, ret).await;
+                return self.exec_sql(schema, &op.sql, op.params, ret).await;
             }
             op => todo!("op={:#?}", op),
         };
@@ -513,7 +522,7 @@ impl toasty_core::driver::Connection for Connection {
             SqlReturn::Count
         };
 
-        self.exec_sql(&sql_as_str, typed_params, ret).await
+        self.exec_sql(schema, &sql_as_str, typed_params, ret).await
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

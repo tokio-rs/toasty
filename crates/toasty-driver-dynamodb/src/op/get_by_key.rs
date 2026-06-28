@@ -25,7 +25,11 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
 
             if let Some(item) = res.item() {
-                let row = item_to_record(item, op.select.iter().map(|id| schema.db.column(*id)))?;
+                let row = item_to_record(
+                    &schema.app,
+                    item,
+                    op.select.iter().map(|id| schema.db.column(*id)),
+                )?;
                 Ok(ExecResponse::value_stream(stmt::ValueStream::from_value(
                     row,
                 )))
@@ -74,6 +78,7 @@ impl Connection {
             Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
                 items.into_iter().map(move |item| {
                     item_to_record(
+                        &schema.app,
                         &item,
                         op.select
                             .iter()

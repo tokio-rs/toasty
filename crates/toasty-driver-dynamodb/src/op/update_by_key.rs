@@ -4,8 +4,8 @@ use super::{
     ddb_key, item_to_record, operation, stmt,
 };
 use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
-use std::{collections::HashMap, fmt::Write};
-use toasty_core::{driver::ExecResponse, stmt::ExprContext};
+use std::{collections::HashMap, fmt::Write, sync::Arc};
+use toasty_core::{Schema, driver::ExecResponse, schema::app, stmt::ExprContext};
 
 /// An [`stmt::Input`] that resolves column references into a record produced
 /// by `item_to_record`. After lowering, filter/condition expressions reference
@@ -45,6 +45,7 @@ impl stmt::Input for RecordInput<'_> {
 ///   the condition must have been the failing part → error.
 fn filter_failed(
     old_item: Option<&HashMap<String, AttributeValue>>,
+    app: &app::Schema,
     table: &db::Table,
     filter: Option<&stmt::Expr>,
 ) -> bool {
@@ -56,7 +57,7 @@ fn filter_failed(
         return true;
     };
 
-    let record = item_to_record(item, table.columns.iter()).unwrap();
+    let record = item_to_record(app, item, table.columns.iter()).unwrap();
     !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
 }
 
@@ -66,11 +67,12 @@ fn filter_failed(
 fn on_update_item_condition_failed(
     item: Option<&HashMap<String, AttributeValue>>,
     message: Option<&str>,
+    app: &app::Schema,
     table: &db::Table,
     filter: Option<&stmt::Expr>,
     returning: bool,
 ) -> Result<ExecResponse> {
-    if filter_failed(item, table, filter) {
+    if filter_failed(item, app, table, filter) {
         if returning {
             Ok(ExecResponse::empty_value_stream())
         } else {
@@ -92,6 +94,7 @@ fn on_update_item_condition_failed(
 fn on_transaction_cancelled(
     reasons: &[CancellationReason],
     message: Option<&str>,
+    app: &app::Schema,
     table: &db::Table,
     filter: Option<&stmt::Expr>,
     returning: bool,
@@ -99,7 +102,7 @@ fn on_transaction_cancelled(
     let any_condition_failed = reasons
         .iter()
         .filter(|r| r.code() == Some("ConditionalCheckFailed"))
-        .any(|r| !filter_failed(r.item(), table, filter));
+        .any(|r| !filter_failed(r.item(), app, table, filter));
 
     if any_condition_failed {
         Err(toasty_core::Error::condition_failed(
@@ -117,11 +120,11 @@ fn on_transaction_cancelled(
 impl Connection {
     pub(crate) async fn exec_update_by_key(
         &mut self,
-        schema: &db::Schema,
+        schema: &Arc<Schema>,
         op: operation::UpdateByKey,
     ) -> Result<ExecResponse> {
-        let table = schema.table(op.table);
-        let cx = ExprContext::new_with_target(schema, table);
+        let table = schema.db.table(op.table);
+        let cx = ExprContext::new_with_target(schema.as_ref(), table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -131,7 +134,7 @@ impl Connection {
             .filter(|index| {
                 if !index.primary_key && index.unique {
                     index.columns.iter().any(|index_column| {
-                        let column = index_column.table_column(schema);
+                        let column = index_column.table_column(&schema.db);
                         op.assignments
                             .keys()
                             .any(|projection| *projection == column.id.index)
@@ -207,7 +210,11 @@ impl Connection {
                     // atomically concatenates the given List `L` onto the
                     // existing list attribute (creating the attribute if
                     // absent).
-                    let value = expr_attrs.value(value);
+                    let value = expr_attrs.ddb_value(Value::to_ddb_typed(
+                        &schema.app,
+                        &column_ref.ty,
+                        value,
+                    ));
 
                     if !update_expression_set.is_empty() {
                         write!(update_expression_set, ", ").unwrap();
@@ -231,7 +238,11 @@ impl Connection {
                     write!(update_expression_remove, "{column}").unwrap();
                 }
                 AssignKind::Set => {
-                    let value = expr_attrs.value(value);
+                    let value = expr_attrs.ddb_value(Value::to_ddb_typed(
+                        &schema.app,
+                        &column_ref.ty,
+                        value,
+                    ));
 
                     if !update_expression_set.is_empty() {
                         write!(update_expression_set, ", ").unwrap();
@@ -283,7 +294,7 @@ impl Connection {
 
         if let Some(columns) = &op.returning {
             for column_id in columns {
-                let column = schema.column(*column_id);
+                let column = schema.db.column(*column_id);
                 let placeholder = bound_values
                     .get(&column_id.index)
                     .map(|value| (*value).clone())
@@ -330,6 +341,7 @@ impl Connection {
                                 return on_update_item_condition_failed(
                                     cce.item(),
                                     cce.message.as_deref(),
+                                    &schema.app,
                                     table,
                                     op.filter.as_ref(),
                                     op.returning.is_some(),
@@ -347,7 +359,8 @@ impl Connection {
                     if needs_updated_new && let Some(attrs) = output.attributes() {
                         for (idx, column) in &refresh_after_update {
                             if let Some(attr) = attrs.get(&column.name) {
-                                ret[*idx] = Value::from_ddb(&column.ty, attr).into_inner();
+                                ret[*idx] =
+                                    Value::from_ddb(&schema.app, &column.ty, attr).into_inner();
                             }
                         }
                     }
@@ -396,6 +409,7 @@ impl Connection {
                             return on_transaction_cancelled(
                                 tce.cancellation_reasons(),
                                 tce.message(),
+                                &schema.app,
                                 table,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
@@ -447,7 +461,7 @@ impl Connection {
                 let attributes_to_get = index
                     .columns
                     .iter()
-                    .map(|index_column| index_column.table_column(schema).name.clone())
+                    .map(|index_column| index_column.table_column(&schema.db).name.clone())
                     .collect();
 
                 // Records that have had their unique values set initially
@@ -487,7 +501,7 @@ impl Connection {
                 // written.
                 let mut resolved_unique_values = HashMap::new();
                 for index_column in &index.columns {
-                    let column = index_column.table_column(schema);
+                    let column = index_column.table_column(&schema.db);
                     for (projection, assignment) in op.assignments.iter() {
                         if *projection != column.id.index {
                             continue;
@@ -504,7 +518,8 @@ impl Connection {
                                         ))
                                     },
                                 )?;
-                                let prev_value = Value::from_ddb(&column.ty, prev).into_inner();
+                                let prev_value =
+                                    Value::from_ddb(&schema.app, &column.ty, prev).into_inner();
                                 let result = match assignment {
                                     stmt::Assignment::Add(_) => prev_value.checked_add(delta),
                                     _ => prev_value.checked_sub(delta),
@@ -528,7 +543,7 @@ impl Connection {
                 }
 
                 for index_column in &index.columns {
-                    let column = index_column.table_column(schema);
+                    let column = index_column.table_column(&schema.db);
 
                     for (projection, _) in op.assignments.iter() {
                         if *projection != column.id.index {
@@ -536,7 +551,9 @@ impl Connection {
                         }
                         let new_value = &resolved_unique_values[&column.id];
                         if let Some(prev) = curr_unique_values.remove(&column.name) {
-                            if Value::from_ddb(&column.ty, &prev).into_inner() != *new_value {
+                            if Value::from_ddb(&schema.app, &column.ty, &prev).into_inner()
+                                != *new_value
+                            {
                                 updated_unique_attrs.insert(column.id, prev);
                             }
                         } else {
@@ -573,6 +590,7 @@ impl Connection {
                             return on_update_item_condition_failed(
                                 cce.item(),
                                 cce.message.as_deref(),
+                                &schema.app,
                                 table,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
@@ -591,12 +609,12 @@ impl Connection {
                     let mut condition_expression = String::new();
 
                     for column_id in set_unique_attrs.keys() {
-                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
+                        let column = expr_attrs.column(schema.db.column(*column_id)).to_string();
                         condition_expression = format!("attribute_not_exists({column})");
                     }
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
+                        let column = expr_attrs.column(schema.db.column(*column_id)).to_string();
                         let value = expr_attrs.ddb_value(prev.clone());
 
                         condition_expression = format!("{column} = {value}");
@@ -624,7 +642,7 @@ impl Connection {
                     );
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let name = &schema.column(*column_id).name;
+                        let name = &schema.db.column(*column_id).name;
                         transact_items.push(
                             TransactWriteItem::builder()
                                 .delete(
@@ -639,12 +657,12 @@ impl Connection {
                     }
 
                     for column_id in updated_unique_attrs.keys().chain(set_unique_attrs.keys()) {
-                        let name = &schema.column(*column_id).name;
+                        let name = &schema.db.column(*column_id).name;
 
                         let mut index_insert_items = HashMap::new();
 
                         for index_column in &index.columns {
-                            let column = index_column.table_column(schema);
+                            let column = index_column.table_column(&schema.db);
                             let value = &resolved_unique_values[column_id];
                             if !value.is_null() {
                                 index_insert_items.insert(
@@ -703,6 +721,7 @@ impl Connection {
                             return on_transaction_cancelled(
                                 tce.cancellation_reasons(),
                                 tce.message(),
+                                &schema.app,
                                 table,
                                 op.filter.as_ref(),
                                 op.returning.is_some(),
@@ -730,10 +749,11 @@ impl Connection {
 #[cfg(test)]
 mod tests {
     use super::filter_failed;
-    use crate::db;
     use aws_sdk_dynamodb::types::AttributeValue;
     use std::collections::HashMap;
+    use toasty_core::schema::db;
     use toasty_core::{
+        schema::app,
         schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},
         stmt::{self, BinaryOp, Expr, ExprBinaryOp, ExprColumn, ExprReference},
     };
@@ -788,7 +808,7 @@ mod tests {
     #[test]
     fn no_filter_returns_false() {
         let table = make_table();
-        assert!(!filter_failed(None, &table, None));
+        assert!(!filter_failed(None, &app::Schema::default(), &table, None));
     }
 
     // Filter present but item is missing (record was deleted between read and check):
@@ -797,7 +817,12 @@ mod tests {
     fn missing_item_with_filter_returns_true() {
         let table = make_table();
         let filter = status_eq_active();
-        assert!(filter_failed(None, &table, Some(&filter)));
+        assert!(filter_failed(
+            None,
+            &app::Schema::default(),
+            &table,
+            Some(&filter)
+        ));
     }
 
     // Item present and filter matches: the filter was NOT the failing part, so the
@@ -807,7 +832,12 @@ mod tests {
         let table = make_table();
         let filter = status_eq_active();
         let item = item_with_status("active");
-        assert!(!filter_failed(Some(&item), &table, Some(&filter)));
+        assert!(!filter_failed(
+            Some(&item),
+            &app::Schema::default(),
+            &table,
+            Some(&filter)
+        ));
     }
 
     // Item present but filter does not match: the filter failed → count 0.
@@ -816,6 +846,11 @@ mod tests {
         let table = make_table();
         let filter = status_eq_active();
         let item = item_with_status("inactive");
-        assert!(filter_failed(Some(&item), &table, Some(&filter)));
+        assert!(filter_failed(
+            Some(&item),
+            &app::Schema::default(),
+            &table,
+            Some(&filter)
+        ));
     }
 }
