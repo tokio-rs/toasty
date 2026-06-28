@@ -407,6 +407,101 @@ impl Value {
         }
     }
 
+    /// Infers the database storage type ([`db::Type`]) for this value.
+    ///
+    /// This maps each value variant straight to its storage type. It is a
+    /// lighter-weight alternative to going through [`infer_ty`] and
+    /// [`db::Type::from_app`], which first builds the richer [`Type`] only for
+    /// the database layer to immediately collapse it again. String, UUID,
+    /// bytes, decimal, and date/time variants resolve through the driver's
+    /// [`StorageTypes`] defaults; a list maps to the storage type of its
+    /// uniform element type.
+    ///
+    /// Returns an error for values whose storage type cannot be determined from
+    /// the value alone — `NULL`, records, and empty, all-`NULL`, or mixed-type
+    /// lists. Those binds need an explicit type.
+    ///
+    /// [`db::Type`]: crate::schema::db::Type
+    /// [`db::Type::from_app`]: crate::schema::db::Type::from_app
+    /// [`StorageTypes`]: crate::driver::StorageTypes
+    /// [`infer_ty`]: Self::infer_ty
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Value;
+    /// # use toasty_core::driver::StorageTypes;
+    /// # use toasty_core::schema::db;
+    /// let storage = &StorageTypes::SQLITE;
+    /// assert_eq!(Value::from(42_i64).infer_db_ty(storage).unwrap(), db::Type::Integer(8));
+    /// assert_eq!(Value::from("hi").infer_db_ty(storage).unwrap(), db::Type::Text);
+    /// assert!(Value::Null.infer_db_ty(storage).is_err());
+    ///
+    /// // A uniform list infers its element's array type; a mixed-type list does not.
+    /// assert_eq!(
+    ///     Value::List(vec![Value::I64(1), Value::I64(2)]).infer_db_ty(storage).unwrap(),
+    ///     db::Type::List(Box::new(db::Type::Integer(8))),
+    /// );
+    /// assert!(Value::List(vec![Value::I64(1), Value::Bool(true)]).infer_db_ty(storage).is_err());
+    /// ```
+    pub fn infer_db_ty(
+        &self,
+        storage: &crate::driver::StorageTypes,
+    ) -> crate::Result<crate::schema::db::Type> {
+        use crate::schema::db::Type as DbType;
+
+        let cannot_infer = || {
+            crate::Error::unsupported_feature(format!(
+                "cannot infer a database storage type for {self:?}"
+            ))
+        };
+
+        Ok(match self {
+            Value::Bool(_) => DbType::Boolean,
+            Value::I8(_) => DbType::Integer(1),
+            Value::I16(_) => DbType::Integer(2),
+            Value::I32(_) => DbType::Integer(4),
+            Value::I64(_) => DbType::Integer(8),
+            Value::U8(_) => DbType::UnsignedInteger(1),
+            Value::U16(_) => DbType::UnsignedInteger(2),
+            Value::U32(_) => DbType::UnsignedInteger(4),
+            Value::U64(_) => DbType::UnsignedInteger(8),
+            Value::F32(_) => DbType::Float(4),
+            Value::F64(_) => DbType::Float(8),
+            Value::String(_) => storage.default_string_type.clone(),
+            Value::Uuid(_) => storage.default_uuid_type.clone(),
+            Value::Bytes(_) => storage.default_bytes_type.clone(),
+            #[cfg(feature = "rust_decimal")]
+            Value::Decimal(_) => storage.default_decimal_type.clone(),
+            #[cfg(feature = "bigdecimal")]
+            Value::BigDecimal(_) => storage.default_bigdecimal_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(_) => storage.default_timestamp_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Zoned(_) => storage.default_zoned_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Date(_) => storage.default_date_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Time(_) => storage.default_time_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::DateTime(_) => storage.default_datetime_type.clone(),
+            // A list stores as the array type of its element, but only when the
+            // elements are uniform at the *app-type* level. Reuse the full
+            // inference path to enforce that: comparing storage types alone is
+            // too permissive, because distinct value types can collapse to one
+            // backend type (e.g. `String` and `Date` both map to TEXT on
+            // SQLite) and a heterogeneous list would slip through. Inferring
+            // through the `TypeUnion` also rejects empty and all-`NULL` lists,
+            // which have no element type.
+            Value::List(_) => {
+                DbType::from_app(&self.infer_ty(), None, storage).map_err(|_| cannot_infer())?
+            }
+            Value::Null | Value::Record(_) | Value::SparseRecord(_) => {
+                return Err(cannot_infer());
+            }
+        })
+    }
+
     /// Navigates into this value using the given path and returns an [`Entry`]
     /// reference to the nested value.
     ///
