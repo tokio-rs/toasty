@@ -182,7 +182,10 @@ impl Verify<'_, '_> {
 #[track_caller]
 fn assert_i64_literal(expr: &stmt::Expr, what: &str) {
     assert!(
-        matches!(expr, stmt::Expr::Value(stmt::Value::I64(_))),
+        matches!(
+            expr,
+            stmt::Expr::Value(stmt::Value::I64(_)) | stmt::Expr::Static(stmt::Value::I64(_))
+        ),
         "{what} must be a Value::I64 literal; got {expr:#?}"
     );
 }

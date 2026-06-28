@@ -407,7 +407,7 @@ impl Expr {
                     _ => todo!("ExprExists with non-Values body"),
                 }
             }
-            Expr::Value(value) => Ok(value.clone()),
+            Expr::Value(value) | Expr::Static(value) => Ok(value.clone()),
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",
             )),

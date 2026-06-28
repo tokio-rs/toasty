@@ -145,8 +145,17 @@ pub enum Expr {
     /// Embedded sub-statement (e.g., a subquery). See [`ExprStmt`].
     Stmt(ExprStmt),
 
-    /// Constant value. See [`Value`].
+    /// Constant value rendered as a bind parameter.  The default for
+    /// user-supplied leaves; `extract_params` replaces this with
+    /// `Expr::Arg(n)`.
     Value(Value),
+
+    /// Constant value rendered inline as a SQL literal.  Set by the
+    /// engine and the model derive for schema-fixed leaves (`LIMIT n`
+    /// from the builder, enum discriminants, `#[auto]` defaults).
+    /// Survives `extract_params` and reaches the SQL serializer
+    /// unchanged.  See `docs/dev/design/static-sql-values.md`.
+    Static(Value),
 }
 
 impl Expr {
@@ -277,7 +286,7 @@ impl Expr {
     pub fn is_stable(&self) -> bool {
         match self {
             // Always stable - constant values
-            Self::Value(_) => true,
+            Self::Value(_) | Self::Static(_) => true,
 
             // Unresolved identifiers refer to external state (e.g. a column)
             Self::Ident(_) => false,
@@ -373,7 +382,7 @@ impl Expr {
     fn is_const_at_depth(&self, map_depth: usize) -> bool {
         match self {
             // Always constant
-            Self::Value(_) => true,
+            Self::Value(_) | Self::Static(_) => true,
 
             // Unresolved identifiers reference external data
             Self::Ident(_) => false,
@@ -478,7 +487,7 @@ impl Expr {
     pub fn is_eval(&self) -> bool {
         match self {
             // Always evaluable
-            Self::Value(_) => true,
+            Self::Value(_) | Self::Static(_) => true,
 
             // Unresolved identifiers cannot be evaluated
             Self::Ident(_) => false,
@@ -713,6 +722,7 @@ impl fmt::Debug for Expr {
             Self::StartsWith(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
+            Self::Static(e) => write!(f, "Static({e:?})"),
         }
     }
 }

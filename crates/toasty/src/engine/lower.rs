@@ -509,6 +509,11 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 /// Concatenate two list-shaped expressions if both are literals (either
 /// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
 /// on failure so the caller can preserve the un-folded shape.
+//
+// Err carries two owned `Expr`s by design: the caller wants the un-folded
+// pair back on failure, not a borrowed view, and boxing would allocate on
+// every failed concat attempt in a hot lowering path.
+#[allow(clippy::result_large_err)]
 fn try_concat_list_literals(
     a: stmt::Expr,
     b: stmt::Expr,
