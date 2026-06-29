@@ -48,27 +48,22 @@ impl Exec<'_> {
         // filter is adjudicated independently — matching SQL's per-row
         // semantics, and mirroring how delete fans out. These updates are not
         // atomic.
-        let res = if action.returning.is_some() {
-            let mut rows = vec![];
+        let mut total_count = 0u64;
+        let mut rows = vec![];
 
-            for key in keys {
-                let res = self.exec_update_one(action, key).await?;
-
-                debug_assert!(!res.is_count());
-                rows.extend(res.into_value_stream().collect().await?);
+        for key in keys {
+            match self.exec_update_one(action, key).await? {
+                Rows::Count(n) => total_count += n,
+                other => rows.extend(other.into_value_stream().collect().await?),
             }
+        }
 
+        // The output shape is a property of the action, not the results: with
+        // zero keys there is nothing to match on, yet a `returning` update must
+        // still yield an (empty) stream rather than a count.
+        let res = if action.returning.is_some() {
             Rows::value_stream(ValueStream::from_vec(rows))
         } else {
-            let mut total_count = 0u64;
-
-            for key in keys {
-                match self.exec_update_one(action, key).await? {
-                    Rows::Count(n) => total_count += n,
-                    _ => panic!("expected Count from UpdateByKey"),
-                }
-            }
-
             Rows::Count(total_count)
         };
 
