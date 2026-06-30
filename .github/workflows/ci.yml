@@ -33,7 +33,7 @@ jobs:
     name: cargo check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -50,7 +50,7 @@ jobs:
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -91,7 +91,7 @@ jobs:
           - package: example-user-has-one-profile
             extra_args: ""
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -108,7 +108,7 @@ jobs:
     name: Check MSRV
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Read MSRV from Cargo.toml
         id: msrv
         run: |
@@ -132,7 +132,7 @@ jobs:
     name: Run tests for Sqlite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -168,7 +168,7 @@ jobs:
       TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
       TOASTY_TEST_MYSQL_URL: mysql://toasty:toasty@localhost/toasty
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -201,7 +201,7 @@ jobs:
       TOASTY_TEST_POSTGRES_URL: postgresql://toasty:toasty@localhost/toasty
       TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -236,7 +236,7 @@ jobs:
     env:
       TOASTY_TEST_POSTGRES_UDS_URL: postgresql:///runner?host=/var/run/postgresql&user=runner
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -256,7 +256,7 @@ jobs:
     name: Run tests for DynamoDB
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -281,7 +281,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
