@@ -3,13 +3,14 @@
 //! When a compound filter is applied to an update (e.g. secondary-index column
 //! AND non-indexed column), the planner routes it through `UpdateByKey` with
 //! `keys` populated from a `FindPkByIndex` scan and `filter` set to the
-//! non-indexed predicate.  With multiple keys the driver uses
-//! `transact_write_items`; if any item fails the filter condition DynamoDB
-//! returns `TransactionCanceledException`.
+//! non-indexed predicate.  The engine shreds the multi-key update into one
+//! single-key `UpdateByKey` op per key, so each key's filter is adjudicated
+//! independently — matching SQL's per-row semantics.  These updates are not
+//! atomic.
 //!
-//! Before the fix the driver hit `todo!()` on that error.  These tests verify
-//! the corrected semantics: filter miss → count 0 (no panic), no miss → all
-//! items updated.
+//! These tests verify the per-row semantics: every key matching → all updated,
+//! no key matching → none updated, and a partial match → only the matching
+//! subset is updated.
 
 use crate::prelude::*;
 
@@ -51,9 +52,63 @@ pub async fn batch_update_filter_all_match(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// No items match the filter — the transact_write_items call is cancelled with
-/// ConditionalCheckFailed for every item.  The driver must return count 0 rather
-/// than panicking.
+/// A subset of items match the filter — only the matching keys are updated;
+/// the rest are left untouched.  A single `transact_write_items` could not
+/// express this (any condition failure cancels the whole transaction), so this
+/// is the case that shredding fixes.
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
+pub async fn batch_update_filter_partial_match(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(Item {
+        tag: "batch",
+        status: "active",
+        name: "alpha"
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Item {
+        tag: "batch",
+        status: "inactive",
+        name: "beta"
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Item {
+        tag: "batch",
+        status: "active",
+        name: "gamma"
+    })
+    .exec(&mut db)
+    .await?;
+
+    // alpha and gamma match (status == active); beta does not.
+    Item::filter(
+        Item::fields()
+            .tag()
+            .eq("batch")
+            .and(Item::fields().status().eq("active")),
+    )
+    .update()
+    .name("updated")
+    .exec(&mut db)
+    .await?;
+
+    let items: Vec<Item> = Item::filter_by_tag("batch").exec(&mut db).await?;
+    assert_eq!(3, items.len());
+    for item in &items {
+        if item.status == "active" {
+            assert_eq!(item.name, "updated");
+        } else {
+            assert_eq!(item.name, "beta");
+        }
+    }
+
+    Ok(())
+}
+
+/// No items match the filter — every key's filter misses, so nothing is
+/// updated and the call returns count 0.
 #[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
 pub async fn batch_update_filter_no_match(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
