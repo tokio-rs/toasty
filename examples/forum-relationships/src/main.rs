@@ -47,7 +47,7 @@ struct Profile {
     // can be detached without being deleted.
     #[unique]
     user_id: Option<uuid::Uuid>,
-    #[belongs_to(key = user_id, references = id)]
+    #[belongs_to]
     user: toasty::Deferred<Option<User>>,
 }
 
@@ -72,12 +72,12 @@ struct Comment {
     // backed by its own indexed foreign key.
     #[index]
     thread_id: uuid::Uuid,
-    #[belongs_to(key = thread_id, references = id)]
+    #[belongs_to]
     thread: toasty::Deferred<Thread>,
 
     #[index]
     user_id: uuid::Uuid,
-    #[belongs_to(key = user_id, references = id)]
+    #[belongs_to]
     user: toasty::Deferred<User>,
 }
 

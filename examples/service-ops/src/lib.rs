@@ -29,7 +29,7 @@ pub struct ApiKey {
     #[index]
     pub tenant_id: uuid::Uuid,
 
-    #[belongs_to(key = tenant_id, references = id)]
+    #[belongs_to]
     pub tenant: toasty::Deferred<Tenant>,
 
     #[unique]
