@@ -342,14 +342,19 @@ impl Expand<'_> {
             .collect()
     }
 
-    /// Emits a compile-time obligation that every group of variant fields
-    /// sharing a column via `#[column("name")]` agrees on its Rust type.
+    /// Emits compile-time checks for variant fields that share a column via
+    /// `#[column("name")]`.
     ///
     /// Two variants that give a field the same `#[column("name")]` coalesce into
-    /// one shared column, which can hold only one storage type. Rather than defer
-    /// a mismatch to a schema-build error, emit a `SameColumnType` bound between
-    /// each shared field's type and the first in its group; unequal types fail to
-    /// compile with a message pinned to the offending field.
+    /// one shared column, which can hold only one storage type. This emits two
+    /// obligations rather than deferring to a schema-build error:
+    ///
+    /// - **Same-variant collision:** two fields in the *same* variant mapped to
+    ///   one column is invalid — both are active for one discriminant, so the
+    ///   column can't hold both. Emit a `compile_error!` pinned to the second.
+    /// - **Type agreement:** across variants, every shared field must have the
+    ///   same type. Emit a `SameColumnType` bound between each field's type and
+    ///   the first in its group; unequal types fail to compile.
     ///
     /// Only fields with an explicit `#[column("name")]` are grouped. A field
     /// without one is not necessarily single-column (an embedded struct flattens
@@ -379,25 +384,54 @@ impl Expand<'_> {
             }
         }
 
-        let checks = groups
-            .iter()
-            .filter(|(_, fields)| fields.len() > 1)
-            .flat_map(|(_, fields)| {
-                let first = primitive_ty_unwrap(fields[0]);
-                fields[1..].iter().map(move |field| {
-                    let ty = primitive_ty_unwrap(field);
-                    quote_spanned! { ty.span()=>
-                        const _: () = {
-                            fn check<A, B>()
-                            where
-                                A: #toasty::shared_column::SameColumnType<B>,
-                            {
-                            }
-                            let _ = check::<#ty, #first>;
-                        };
-                    }
-                })
-            });
+        let mut checks = Vec::new();
+        for (name, fields) in groups.iter().filter(|(_, fields)| fields.len() > 1) {
+            // Reject a second field in the same variant landing on this column.
+            let mut seen_variants = Vec::new();
+            let mut same_variant = false;
+            for field in fields {
+                let variant = field
+                    .variant
+                    .expect("enum variant field must have a variant");
+                if seen_variants.contains(&variant) {
+                    let ident = &field.name.ident;
+                    checks.push(
+                        syn::Error::new_spanned(
+                            ident,
+                            format!(
+                                "two fields in the same variant map to column `{name}`; \
+                                 a column can be shared only across different variants"
+                            ),
+                        )
+                        .to_compile_error(),
+                    );
+                    same_variant = true;
+                } else {
+                    seen_variants.push(variant);
+                }
+            }
+
+            // A malformed group can't be meaningfully type-checked; the
+            // collision error above is the actionable one.
+            if same_variant {
+                continue;
+            }
+
+            let first = primitive_ty_unwrap(fields[0]);
+            for field in &fields[1..] {
+                let ty = primitive_ty_unwrap(field);
+                checks.push(quote_spanned! { ty.span()=>
+                    const _: () = {
+                        fn check<A, B>()
+                        where
+                            A: #toasty::shared_column::SameColumnType<B>,
+                        {
+                        }
+                        let _ = check::<#ty, #first>;
+                    };
+                });
+            }
+        }
 
         quote! { #( #checks )* }
     }

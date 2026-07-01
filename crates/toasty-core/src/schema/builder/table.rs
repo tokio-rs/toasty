@@ -72,6 +72,10 @@ struct SharedColumn {
     /// App type of the field that first created the column. Reused fields must
     /// match it exactly so the column needs no per-variant casting.
     ty: stmt::Type,
+    /// Discriminant of the variant that created the column. Reuse is only sound
+    /// across *different* variants; a field in the same variant reaching the same
+    /// column is an invalid mapping (both would be active for one discriminant).
+    variant_discriminant: Option<stmt::Value>,
 }
 
 /// Per-level state for the recursive `map_field*` methods.
@@ -123,6 +127,12 @@ struct MapField<'a, 'b> {
     /// column. ORed into the column's flag at creation time so an outer or
     /// inner declaration both take effect.
     inherited_auto_increment: bool,
+
+    /// Discriminant of the enum variant currently being mapped, set by
+    /// [`Self::for_variant`] and inherited by nested embeds within the variant.
+    /// `None` outside an enum variant. Used to distinguish a sound cross-variant
+    /// column share from an invalid same-variant collision.
+    variant_discriminant: Option<stmt::Value>,
 }
 
 impl BuildSchema<'_> {
@@ -886,6 +896,7 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_base: None,
             field_expr_base: stmt::Expr::arg(0),
             inherited_auto_increment: false,
+            variant_discriminant: None,
         }
     }
 
@@ -945,6 +956,24 @@ impl<'a, 'b> MapField<'a, 'b> {
             .and_then(|columns| columns.get(&column_name).cloned());
 
         let (column_id, lowering_index) = if let Some(shared) = shared {
+            // Reuse is only sound across *different* variants — the merged encode
+            // dispatches on the discriminant, and at most one variant is active
+            // per row. Two fields in the *same* variant reaching one column would
+            // append a second arm under the same discriminant, so the encode
+            // would silently keep only the first and both fields would decode from
+            // the one column. Reject that invalid mapping. The `Embed` derive
+            // catches it at compile time; this is the backstop for schemas built
+            // without the macro.
+            if shared.variant_discriminant.is_some()
+                && shared.variant_discriminant == self.variant_discriminant
+            {
+                return Err(Error::invalid_schema(format!(
+                    "two fields in the same enum variant map to the column \
+                     `{column_name}`; a column can be shared only across different \
+                     variants",
+                )));
+            }
+
             // A shared column needs no per-variant casting, so the contributing
             // fields must have identical types. The `Embed` derive rejects a
             // mismatch at compile time via `SameColumnType`; this is the
@@ -973,6 +1002,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                         column: column_id,
                         lowering: lowering_index,
                         ty: primitive.ty.clone(),
+                        variant_discriminant: self.variant_discriminant.clone(),
                     },
                 );
             }
@@ -1407,6 +1437,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_base: self.field_base.clone(),
             field_expr_base: self.field_expr_base.clone(),
             inherited_auto_increment: self.inherited_auto_increment,
+            // A nested embed stays within its enclosing variant, so it inherits
+            // the variant discriminant; `for_variant` overrides it per variant.
+            variant_discriminant: self.variant_discriminant.clone(),
         }
     }
 
@@ -1455,7 +1488,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             }],
             stmt::Expr::null(),
         );
-        self.for_guarded_embed(field, field_index, guard)
+        let mut child = self.for_guarded_embed(field, field_index, guard);
+        child.variant_discriminant = Some(discriminant.clone());
+        child
     }
 
     /// Creates a child `MapField` for recursing into an embedded struct field.
