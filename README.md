@@ -65,7 +65,7 @@ struct Todo {
     #[index]
     user_id: u64,
 
-    #[belongs_to(key = user_id, references = id)]
+    #[belongs_to]
     user: toasty::Deferred<User>,
 
     title: String,

@@ -1,0 +1,5 @@
+error: foreign key field `user_id` not found on the model; add the field or name it explicitly with `key = ...`
+  --> tests/ui/belongs_to_missing_conventional_fk.rs:19:5
+   |
+19 |     user: toasty::Deferred<User>,
+   |     ^^^^

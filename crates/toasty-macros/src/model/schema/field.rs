@@ -226,7 +226,10 @@ impl Field {
                     ));
                 } else {
                     ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
-                        attr, &field.ty, names,
+                        attr,
+                        field.ident.as_ref().unwrap(),
+                        &field.ty,
+                        names,
                     )?));
                 }
             } else if attr.path().is_ident("has_many") {

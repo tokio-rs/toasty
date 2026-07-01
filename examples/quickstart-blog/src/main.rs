@@ -47,9 +47,9 @@ struct Post {
     #[index]
     author_id: uuid::Uuid,
 
-    // `belongs_to` is the other side of `Author::posts`. It spells out how the columns
-    // line up: this post's `author_id` references an author's `id`.
-    #[belongs_to(key = author_id, references = id)]
+    // `belongs_to` is the other side of `Author::posts`. The foreign key (`author_id`)
+    // and referenced key (`id`) follow the naming convention, so both are inferred.
+    #[belongs_to]
     author: toasty::Deferred<Author>,
 }
 
