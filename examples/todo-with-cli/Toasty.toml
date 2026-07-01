@@ -1,5 +1,0 @@
-[migration]
-path = "toasty"
-prefix_style = "Sequential"
-checksums = false
-statement_breakpoints = true

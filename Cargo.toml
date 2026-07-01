@@ -20,16 +20,12 @@ members = [
 
     # Examples
     "examples/cms-article-fields",
-    "examples/composite-key",
     "examples/crm-embedded",
     "examples/forum-relationships",
-    "examples/hello-toasty",
     "examples/product-search",
     "examples/quickstart-blog",
     "examples/service-ops",
     "examples/store-operations",
-    "examples/todo-with-cli",
-    "examples/user-has-one-profile",
 
     # Tests
     "tests",
@@ -49,16 +45,12 @@ default-members = [
     "crates/toasty-driver-integration-suite",
     "crates/toasty-driver-integration-suite-macros",
     "examples/cms-article-fields",
-    "examples/composite-key",
     "examples/crm-embedded",
     "examples/forum-relationships",
-    "examples/hello-toasty",
     "examples/product-search",
     "examples/quickstart-blog",
     "examples/service-ops",
     "examples/store-operations",
-    "examples/todo-with-cli",
-    "examples/user-has-one-profile",
     "tests",
     "tests/tests/fixtures/post",
     "tests/tests/fixtures/user",

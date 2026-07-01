@@ -82,14 +82,6 @@ jobs:
             extra_args: ""
           - package: toasty-driver-postgresql
             extra_args: ""
-          - package: example-composite-key
-            extra_args: ""
-          - package: example-hello-toasty
-            extra_args: ""
-          - package: example-todo-with-cli
-            extra_args: ""
-          - package: example-user-has-one-profile
-            extra_args: ""
     steps:
       - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
@@ -179,8 +171,8 @@ jobs:
         run: cargo test --no-default-features --features mysql
       - name: cargo test -p toasty-driver-mysql
         run: cargo test -p toasty-driver-mysql
-      - name: cargo run --bin example-hello-toasty
-        run: cargo run --bin example-hello-toasty --features mysql
+      - name: cargo run example against MySQL
+        run: cargo run -p example-quickstart-blog --features mysql
 
   test-postgresql:
     needs: check
@@ -222,8 +214,8 @@ jobs:
         run: cargo test --no-default-features --features postgresql
       - name: cargo test -p toasty-driver-postgresql
         run: cargo test -p toasty-driver-postgresql
-      - name: cargo run --bin example-hello-toasty
-        run: cargo run --bin example-hello-toasty --features postgresql
+      - name: cargo run example against PostgreSQL
+        run: cargo run -p example-quickstart-blog --features postgresql
 
   test-postgresql-uds:
     needs: check
@@ -291,4 +283,17 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
       - name: Run examples
-        run: scripts/gen-examples run
+        shell: bash
+        run: |
+          # Run every example that works on the default in-memory SQLite config,
+          # discovered from examples/ so new examples need no CI wiring. Backend-specific
+          # examples (default features other than sqlite) are skipped here; they run in
+          # their own backend jobs.
+          for dir in examples/*/; do
+            [ -f "${dir}Cargo.toml" ] || continue
+            grep -qE '^\s*default\s*=\s*\[[^]]*"sqlite"' "${dir}Cargo.toml" || continue
+            pkg="example-$(basename "$dir")"
+            echo "::group::cargo run -p $pkg"
+            cargo run -p "$pkg"
+            echo "::endgroup::"
+          done
