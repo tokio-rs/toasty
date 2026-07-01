@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// A newly created record starts with version == 1.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn create_initializes_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -14,7 +14,7 @@ pub async fn create_initializes_version(test: &mut Test) -> Result<()> {
 }
 
 /// Updating a record increments the version.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn update_increments_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -38,7 +38,7 @@ pub async fn update_increments_version(test: &mut Test) -> Result<()> {
 /// returning projection. The two must not collide: the engine asks the driver
 /// for exactly the relative column, so the version value never lands in the
 /// returned row and shifts `value` out of its slot.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_counter))]
+#[driver_test(scenario(crate::scenarios::versioned_counter))]
 pub async fn relative_update_increments_value_and_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -64,7 +64,7 @@ pub async fn relative_update_increments_value_and_version(test: &mut Test) -> Re
 
 /// Two updates from the same stale snapshot — the second should fail with a
 /// condition-check error because the DB version has already moved to 2.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn stale_update_fails(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -93,7 +93,7 @@ pub async fn stale_update_fails(test: &mut Test) -> Result<()> {
 
 /// Creating the same primary key twice should fail because of the
 /// attribute_not_exists condition on the version column.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn duplicate_create_fails(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -118,7 +118,7 @@ pub async fn duplicate_create_fails(test: &mut Test) -> Result<()> {
 
 /// Batch-creating multiple versioned items should initialize all versions to 1,
 /// and a duplicate within the batch should fail.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn batch_insert_checks_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -156,7 +156,7 @@ pub async fn batch_insert_checks_version(test: &mut Test) -> Result<()> {
 /// Unlike an instance update there is no per-row OCC guard — a query-based
 /// update is atomic at the database level — but the version still advances so
 /// concurrent stale writers are detected.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn query_update_increments_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -181,7 +181,7 @@ pub async fn query_update_increments_version(test: &mut Test) -> Result<()> {
 /// A query-based update bumps the version, so a concurrent instance update from
 /// a snapshot taken *before* the query update fails its OCC check rather than
 /// silently clobbering the query update's write.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn query_update_invalidates_stale_instance(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -222,7 +222,7 @@ pub async fn query_update_invalidates_stale_instance(test: &mut Test) -> Result<
 /// The increment is applied atomically to every matched row, so each row's
 /// version advances independently. Verifies the multi-key transact path applies
 /// all assignments and bumps each version.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
+#[driver_test(scenario(crate::scenarios::tagged_item))]
 pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -255,10 +255,7 @@ pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
 /// Query-based update through the unique-index path (path 3) increments the
 /// version. The version is a non-unique column, so it rides along in the main
 /// update expression alongside the unique-index surgery.
-#[driver_test(
-    requires(not(sql)),
-    scenario(crate::scenarios::versioned_user_unique_email)
-)]
+#[driver_test(scenario(crate::scenarios::versioned_user_unique_email))]
 pub async fn query_update_unique_index_increments_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -284,10 +281,7 @@ pub async fn query_update_unique_index_increments_version(test: &mut Test) -> Re
 
 /// Updating a record through the unique-index path (path 3) increments the
 /// version when the unique column changes.
-#[driver_test(
-    requires(not(sql)),
-    scenario(crate::scenarios::versioned_user_unique_email)
-)]
+#[driver_test(scenario(crate::scenarios::versioned_user_unique_email))]
 pub async fn unique_index_update_increments_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -315,10 +309,7 @@ pub async fn unique_index_update_increments_version(test: &mut Test) -> Result<(
 
 /// Stale update on a model with a unique index: the second update from a stale
 /// snapshot should fail.
-#[driver_test(
-    requires(not(sql)),
-    scenario(crate::scenarios::versioned_user_unique_email)
-)]
+#[driver_test(scenario(crate::scenarios::versioned_user_unique_email))]
 pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -359,7 +350,7 @@ pub async fn unique_index_stale_update_fails(test: &mut Test) -> Result<()> {
 /// returning column list; the engine-injected version bump is kept *out* of
 /// that list. The driver returns exactly the requested columns, so the version
 /// value never lands in the returned row and shifts `value` out of its slot.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_counter))]
+#[driver_test(scenario(crate::scenarios::versioned_counter))]
 pub async fn query_relative_update_increments_value_and_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -379,7 +370,7 @@ pub async fn query_relative_update_increments_value_and_version(test: &mut Test)
 }
 
 /// Deleting a record checks the version — a fresh handle succeeds.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -399,7 +390,7 @@ pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
 }
 
 /// Deleting from a stale snapshot (wrong version) should fail.
-#[driver_test(requires(not(sql)), scenario(crate::scenarios::versioned_item))]
+#[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn stale_delete_fails(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

@@ -21,8 +21,10 @@ pub(crate) struct ExecStatement {
     /// The return type of this operation.
     pub(crate) ty: stmt::Type,
 
-    /// When `true`, this is a conditional update that returns status, not rows.
-    pub(crate) conditional_update_with_no_returning: bool,
+    /// How this statement's output is interpreted. For a conditional write the
+    /// statement's leading two columns are probe counts checked against each
+    /// other; see [`exec::ConditionalOutput`].
+    pub(crate) conditional: exec::ConditionalOutput,
 
     /// Pagination configuration (None if not paginated)
     pub(crate) pagination: Option<exec::PaginationConfig>,
@@ -77,7 +79,7 @@ impl ExecStatement {
                 },
             },
             stmt: self.stmt.clone(),
-            conditional_update_with_no_returning: self.conditional_update_with_no_returning,
+            conditional: self.conditional,
             pagination: self.pagination.clone(),
         }
     }

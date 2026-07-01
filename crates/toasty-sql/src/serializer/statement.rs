@@ -265,6 +265,15 @@ impl ToSql for &stmt::Delete {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         assert!(self.returning.is_none());
 
+        // Conditions never reach the serializer: a conditional DELETE is
+        // rewritten into a read-modify-write plan that strips the condition and
+        // checks it against a count probe (see `plan_conditional_sql_query_as_rmw`).
+        debug_assert!(
+            self.condition.is_none(),
+            "SQL DELETE condition should have been lowered by the planner; condition={:#?}",
+            self.condition
+        );
+
         // Create a new expression scope to serialize the statement
         let mut f = f.scope(self);
         f.alias = true;
@@ -445,16 +454,17 @@ impl ToSql for &stmt::Returning {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Returning::Project(stmt::Expr::Record(expr_record)) => {
+                // Alias every projected field positionally (`AS column1`, ...).
+                // A nested SELECT/RETURNING referenced from an outer query (e.g.
+                // a data-modifying CTE joined for its returned rows) is read by
+                // that alias — `ColumnAlias` — so a bare column reference must
+                // carry it too, not just computed expressions. Drivers read
+                // top-level results positionally, so the alias is harmless there.
                 let fields = expr_record
                     .fields
                     .iter()
                     .enumerate()
-                    .map(|(i, expr)| match expr {
-                        stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => {
-                            (expr, None, None)
-                        }
-                        _ => (expr, Some(" AS "), Some(ColumnAlias(i))),
-                    });
+                    .map(|(i, expr)| (expr, Some(" AS "), Some(ColumnAlias(i))));
 
                 fmt!(f, Comma(fields));
             }
@@ -641,9 +651,14 @@ impl ToSql for &stmt::Update {
             );
         }
 
-        assert!(
+        // Conditions never reach the serializer: the planner rewrites a
+        // conditional UPDATE into a CTE or read-modify-write plan (see
+        // `plan_conditional_sql_query_as_*`), stripping the condition and
+        // folding its check into a filter predicate.
+        debug_assert!(
             self.condition.is_none(),
-            "SQL does not support update conditions"
+            "SQL UPDATE condition should have been lowered by the planner; condition={:#?}",
+            self.condition
         );
 
         fmt!(&mut f, "UPDATE " self.target " SET " assignments self.filter returning);
