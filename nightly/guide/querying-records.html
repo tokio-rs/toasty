@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -201,6 +201,9 @@ println!("Found: {}", user.name);
 <p>The method name matches the key field name. A model with <code>#[key] code: String</code>
 generates <code>get_by_code()</code>. Composite keys generate combined names like
 <code>get_by_student_id_and_course_id()</code>.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <h2 id="get-all-records"><a class="header" href="#get-all-records">Get all records</a></h2>
 <p><code>&lt;YourModel&gt;::all()</code> returns a query for all records of that model.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -474,6 +477,9 @@ keys, or a <code>created_at</code> timestamp.</p>
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/product-search"><code>product-search</code></a> builds filter expressions, sorts, cursor-paginates, and projects columns.</p>
+</blockquote>
 
                     </main>
 

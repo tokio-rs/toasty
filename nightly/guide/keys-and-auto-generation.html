@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -283,6 +283,9 @@ struct User {
     id: UserId,
     name: String,
 }</code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
 <h2 id="auto-generated-values"><a class="header" href="#auto-generated-values">Auto-generated values</a></h2>
 <p>The <code>#[auto]</code> attribute tells Toasty to generate the field’s value
 automatically. You don’t set auto fields when creating a record — Toasty fills
@@ -533,6 +536,9 @@ let todos = Todo::filter_by_user_id(&amp;1)
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
 <p>For a model with <code>#[key]</code>, Toasty generates these methods:</p>
 <div class="table-wrapper">
@@ -548,6 +554,9 @@ let todos = Todo::filter_by_user_id(&amp;1)
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 
                     </main>
 

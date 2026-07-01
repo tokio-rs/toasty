@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -490,6 +490,9 @@ the underlying relations directly instead.</p>
 <a href="./preloading-associations.html">Preloading Associations</a>. Preloading or
 projecting a <code>via</code> relation is supported on SQL backends; both are not yet
 available on DynamoDB.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
 <p>For a <code>User</code> model with <code>#[has_many] posts: Deferred&lt;Vec&lt;Post&gt;&gt;</code>, Toasty generates:</p>
 <p><strong>On the parent instance:</strong></p>
@@ -532,6 +535,9 @@ available on DynamoDB.</p>
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 
                     </main>
 

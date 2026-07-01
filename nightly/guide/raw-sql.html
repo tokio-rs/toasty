@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -300,6 +300,9 @@ User::filter_by_id(1).delete().exec(&amp;mut tx).await?;
 tx.commit().await?;</code></pre>
 <p>Nested transactions work the same way as they do for query builders: raw SQL
 executed through the nested transaction is part of that savepoint.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 
                     </main>
 

@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -784,6 +784,12 @@ let users = User::filter(
 <p><code>.all()</code> is vacuously true for a parent with no related records — a
 user with no todos matches <code>todos().all(...)</code> for any filter. This
 mirrors Rust’s <code>[].iter().all(...)</code> semantics.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/product-search"><code>product-search</code></a> builds filter expressions, sorts, cursor-paginates, and projects columns.</p>
+</blockquote>
 
                     </main>
 

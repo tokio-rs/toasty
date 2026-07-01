@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -384,6 +384,9 @@ let mut tx = db.transaction_builder()
 they diverge on Turso under <a href="./turso.html#concurrent-writes"><code>concurrent_writes()</code></a>:
 <code>Default</code> issues <code>BEGIN CONCURRENT</code> (MVCC) and <code>Deferred</code> is the way to opt
 out and request classic locking on a single transaction.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 
                     </main>
 

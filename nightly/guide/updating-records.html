@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -387,6 +387,9 @@ embedded types within embedded types.</p>
     meta: Metadata { version: 2, status: "published".into() },
 })
 .exec(&amp;mut db).await?;</code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
 <h2 id="inserting-has-many-children"><a class="header" href="#inserting-has-many-children">Inserting has-many children</a></h2>
 <p>A bracket-of-braces literal on a <a href="./has-many.html">has-many</a> field
 inserts new children. Each <code>{ ... }</code> is a create builder for the
@@ -458,6 +461,9 @@ to every record the query matches:</p>
 <p>Scoped queries like <code>user.todos().filter_by_done(false)</code> are query
 builders too. The query runs as part of the <code>UPDATE</code> statement; no
 records are loaded first.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <h2 id="update-by-indexed-field"><a class="header" href="#update-by-indexed-field">Update by indexed field</a></h2>
 <p>Toasty generates <code>update_by_*</code> convenience methods for key and
 indexed fields:</p>
@@ -558,6 +564,9 @@ update builder.</li>
 </ul>
 <p>The update builder has a setter for each field. The <code>UPDATE</code>
 statement includes only the fields you set.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
 
                     </main>
 

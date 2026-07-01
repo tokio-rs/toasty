@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -241,6 +241,9 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <pre><code class="language-toml">[dependencies]
 toasty = { version = "0.7", features = ["sqlite", "jiff"] }
 </code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
 <h2 id="optional-fields"><a class="header" href="#optional-fields">Optional fields</a></h2>
 <p>Wrap a field in <code>Option&lt;T&gt;</code> to make it nullable. An <code>Option&lt;T&gt;</code> field maps to a
 nullable column in the database — the column allows <code>NULL</code> values instead of
@@ -301,6 +304,9 @@ struct User {
 }
 <span class="boring">}</span></code></pre>
 <p>This maps to a table named <code>people</code> instead of the default <code>users</code>.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
 <p>For a model with basic fields (no relationships or indexes), <code>#[derive(Model)]</code>
 generates:</p>
@@ -449,6 +455,9 @@ let name = "Carol".to_string();
 pass the value in whatever form you have it.</p>
 <p>Additional methods are generated when you add attributes like <code>#[key]</code>,
 <code>#[unique]</code>, and <code>#[index]</code>. The next chapters cover these.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 
                     </main>
 

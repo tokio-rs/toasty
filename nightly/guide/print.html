@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -238,6 +238,9 @@ transactions.</p>
 <li><strong><a href="#database-setup">Database Setup</a></strong> — connection URLs, table creation, and supported databases</li>
 <li><strong><a href="#migrations-and-schema-management">Migrations and Schema Management</a></strong> — create and reset database tables</li>
 </ul>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="getting-started"><a class="header" href="#getting-started">Getting Started</a></h1>
 <p>This chapter walks through creating a project, defining a model, and running
@@ -343,6 +346,12 @@ connection URLs, and supported databases.</p>
 <p><code>db.push_schema()</code> creates all tables and indexes defined by your models. See
 <a href="#migrations-and-schema-management">Migrations and Schema Management</a> for more on managing
 your database schema.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/service-ops"><code>service-ops</code></a> lays out a lib + binaries project with connection pooling, tracing, and the <code>toasty-cli</code> migration workflow.</p>
+</blockquote>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="defining-models"><a class="header" href="#defining-models">Defining Models</a></h1>
 <p>A model is a Rust struct annotated with <code>#[derive(toasty::Model)]</code>. Each struct
@@ -411,6 +420,9 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <pre><code class="language-toml">[dependencies]
 toasty = { version = "0.7", features = ["sqlite", "jiff"] }
 </code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
 <h2 id="optional-fields"><a class="header" href="#optional-fields">Optional fields</a></h2>
 <p>Wrap a field in <code>Option&lt;T&gt;</code> to make it nullable. An <code>Option&lt;T&gt;</code> field maps to a
 nullable column in the database — the column allows <code>NULL</code> values instead of
@@ -471,6 +483,9 @@ struct User {
 }
 <span class="boring">}</span></code></pre>
 <p>This maps to a table named <code>people</code> instead of the default <code>users</code>.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
 <h2 id="what-gets-generated"><a class="header" href="#what-gets-generated">What gets generated</a></h2>
 <p>For a model with basic fields (no relationships or indexes), <code>#[derive(Model)]</code>
 generates:</p>
@@ -619,6 +634,9 @@ let name = "Carol".to_string();
 pass the value in whatever form you have it.</p>
 <p>Additional methods are generated when you add attributes like <code>#[key]</code>,
 <code>#[unique]</code>, and <code>#[index]</code>. The next chapters cover these.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="keys-and-auto-generation"><a class="header" href="#keys-and-auto-generation">Keys and Auto-Generation</a></h1>
 <p>Every model needs a primary key. Toasty uses the <code>#[key]</code> attribute to mark
@@ -729,6 +747,9 @@ struct User {
     id: UserId,
     name: String,
 }</code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
 <h2 id="auto-generated-values"><a class="header" href="#auto-generated-values">Auto-generated values</a></h2>
 <p>The <code>#[auto]</code> attribute tells Toasty to generate the field’s value
 automatically. You don’t set auto fields when creating a record — Toasty fills
@@ -979,6 +1000,9 @@ let todos = Todo::filter_by_user_id(&amp;1)
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <h2 id="what-gets-generated-1"><a class="header" href="#what-gets-generated-1">What gets generated</a></h2>
 <p>For a model with <code>#[key]</code>, Toasty generates these methods:</p>
 <div class="table-wrapper">
@@ -994,6 +1018,9 @@ let todos = Todo::filter_by_user_id(&amp;1)
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="creating-records"><a class="header" href="#creating-records">Creating Records</a></h1>
 <p>Toasty provides two ways to create records: the <code>toasty::create!</code> macro and
@@ -1289,6 +1316,9 @@ records are inserted together or none are.</p>
 ))
 .exec(&amp;mut db)
 .await?;</code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <h3 id="dynamic-batches-with-toastybatch"><a class="header" href="#dynamic-batches-with-toastybatch">Dynamic batches with <code>toasty::batch()</code></a></h3>
 <p>When the number of records is determined at runtime, collect create builders
 into a <code>Vec</code> and pass it to <code>toasty::batch()</code>:</p>
@@ -1357,6 +1387,9 @@ let user = builder.exec(&amp;mut db).await?;
 <code>&amp;String</code>. For numeric fields, you can pass the value directly or by reference.
 See <a href="#what-types-can-you-pass-to-setters">Defining Models — What types can you pass to setters?</a>
 for details.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="querying-records"><a class="header" href="#querying-records">Querying Records</a></h1>
 <p>Toasty generates several ways to retrieve records: by primary key, by indexed
@@ -1385,6 +1418,9 @@ println!("Found: {}", user.name);
 <p>The method name matches the key field name. A model with <code>#[key] code: String</code>
 generates <code>get_by_code()</code>. Composite keys generate combined names like
 <code>get_by_student_id_and_course_id()</code>.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <h2 id="get-all-records"><a class="header" href="#get-all-records">Get all records</a></h2>
 <p><code>&lt;YourModel&gt;::all()</code> returns a query for all records of that model.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1658,6 +1694,9 @@ keys, or a <code>created_at</code> timestamp.</p>
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/product-search"><code>product-search</code></a> builds filter expressions, sorts, cursor-paginates, and projects columns.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="updating-records"><a class="header" href="#updating-records">Updating Records</a></h1>
 <p>To change field values on a record, use the <code>toasty::update!</code> macro.
@@ -1872,6 +1911,9 @@ embedded types within embedded types.</p>
     meta: Metadata { version: 2, status: "published".into() },
 })
 .exec(&amp;mut db).await?;</code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
 <h2 id="inserting-has-many-children"><a class="header" href="#inserting-has-many-children">Inserting has-many children</a></h2>
 <p>A bracket-of-braces literal on a <a href="#hasmany">has-many</a> field
 inserts new children. Each <code>{ ... }</code> is a create builder for the
@@ -1943,6 +1985,9 @@ to every record the query matches:</p>
 <p>Scoped queries like <code>user.todos().filter_by_done(false)</code> are query
 builders too. The query runs as part of the <code>UPDATE</code> statement; no
 records are loaded first.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <h2 id="update-by-indexed-field"><a class="header" href="#update-by-indexed-field">Update by indexed field</a></h2>
 <p>Toasty generates <code>update_by_*</code> convenience methods for key and
 indexed fields:</p>
@@ -2043,6 +2088,9 @@ update builder.</li>
 </ul>
 <p>The update builder has a setter for each field. The <code>UPDATE</code>
 statement includes only the fields you set.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="deleting-records"><a class="header" href="#deleting-records">Deleting Records</a></h1>
 <p>Toasty provides several ways to delete records: from an instance, by primary
@@ -2151,6 +2199,9 @@ given email. Executes immediately.</li>
 <li>Any query builder’s <code>.delete()</code> method — converts the query into a delete
 statement.</li>
 </ul>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="indexes-and-unique-constraints"><a class="header" href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a></h1>
 <p>Toasty supports two field-level attributes for indexing: <code>#[unique]</code> and
@@ -2504,6 +2555,9 @@ keep generated names within a database’s identifier-length limit.</p>
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/product-search"><code>product-search</code></a> builds filter expressions, sorts, cursor-paginates, and projects columns.</p>
+</blockquote>
 <h2 id="multi-column-unique-constraints"><a class="header" href="#multi-column-unique-constraints">Multi-column unique constraints</a></h2>
 <p>A struct-level <code>#[unique(...)]</code> defines a composite unique index. It takes the
 same field list as <code>#[index(...)]</code> — simple mode, named <code>partition</code>/<code>local</code>
@@ -2605,6 +2659,9 @@ naturally repeat — country, status, category.</p>
 <a href="#updating-records">Updating Records</a>, and
 <a href="#deleting-records">Deleting Records</a> for details on terminal methods and
 builders.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="field-options"><a class="header" href="#field-options">Field Options</a></h1>
 <p>Toasty provides several field-level attributes to control how fields map to
@@ -3064,6 +3121,9 @@ wrapper — see <a href="#json-serialization">JSON serialization</a> above. Use
 the JSON literal <code>"null"</code> instead.</p>
 <p>See <a href="#concurrency-control-1">Concurrency Control</a> for the <code>#[version]</code>
 attribute.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="vecscalar-fields"><a class="header" href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> Fields</a></h1>
 <p>A <code>Vec&lt;scalar&gt;</code> field stores a homogeneous, ordered collection of
@@ -3414,6 +3474,9 @@ replacement and the appending builders — <code>set</code>, <code>push</code>, 
 they lower to <code>array_remove</code> and array slicing. On the other drivers
 they return an error. See the per-database pages for the storage and
 operator details specific to each backend.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="relationships"><a class="header" href="#relationships">Relationships</a></h1>
 <p>Models rarely exist in isolation. A blog has users, posts, and comments. An
@@ -3696,6 +3759,9 @@ child, replace and unset behavior</li>
 <li><a href="#preloading-associations"><strong>Preloading Associations</strong></a> — avoiding extra
 queries by loading relations upfront with <code>.include()</code></li>
 </ul>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="belongsto"><a class="header" href="#belongsto">BelongsTo</a></h1>
 <p>A <code>BelongsTo</code> relationship connects a child model to a parent model through a
@@ -3985,6 +4051,9 @@ parent specifies <code>pair = owner</code> to establish the connection.</p>
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="hasmany"><a class="header" href="#hasmany">HasMany</a></h1>
 <p>A <code>HasMany</code> relationship connects a parent model to multiple child records. The
@@ -4302,6 +4371,9 @@ the underlying relations directly instead.</p>
 <a href="#preloading-associations">Preloading Associations</a>. Preloading or
 projecting a <code>via</code> relation is supported on SQL backends; both are not yet
 available on DynamoDB.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
 <h2 id="what-gets-generated-7"><a class="header" href="#what-gets-generated-7">What gets generated</a></h2>
 <p>For a <code>User</code> model with <code>#[has_many] posts: Deferred&lt;Vec&lt;Post&gt;&gt;</code>, Toasty generates:</p>
 <p><strong>On the parent instance:</strong></p>
@@ -4344,6 +4416,9 @@ available on DynamoDB.</p>
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="hasone"><a class="header" href="#hasone">HasOne</a></h1>
 <p>A <code>HasOne</code> relationship connects a parent model to a single child record. Like
@@ -4715,6 +4790,9 @@ generates:</p>
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="preloading-associations"><a class="header" href="#preloading-associations">Preloading Associations</a></h1>
 <p>Preloading (also called eager loading) loads related records alongside the main
@@ -5047,6 +5125,9 @@ for user in &amp;users {
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="filtering-with-expressions-1"><a class="header" href="#filtering-with-expressions-1">Filtering with Expressions</a></h1>
 <p>The <code>filter_by_*</code> methods generated for indexed fields cover simple equality
@@ -5658,6 +5739,12 @@ let users = User::filter(
 <p><code>.all()</code> is vacuously true for a parent with no related records — a
 user with no todos matches <code>todos().all(...)</code> for any filter. This
 mirrors Rust’s <code>[].iter().all(...)</code> semantics.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships"><code>forum-relationships</code></a> loads and traverses relations — <code>has_one</code>, preloading with <code>.include()</code>, <code>via</code> relations, and association filters.</p>
+</blockquote>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/product-search"><code>product-search</code></a> builds filter expressions, sorts, cursor-paginates, and projects columns.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="sorting-limits-and-pagination"><a class="header" href="#sorting-limits-and-pagination">Sorting, Limits, and Pagination</a></h1>
 <p>Queries return results in an unspecified order by default. Use <code>.order_by()</code> to
@@ -6003,6 +6090,9 @@ let page: Page&lt;_&gt; = Item::all()
 </tbody>
 </table>
 </div>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/product-search"><code>product-search</code></a> builds filter expressions, sorts, cursor-paginates, and projects columns.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="embedded-types"><a class="header" href="#embedded-types">Embedded Types</a></h1>
 <p>An embedded type is a struct or enum annotated with <code>#[derive(toasty::Embed)]</code>.
@@ -6373,6 +6463,9 @@ on <code>contact_country</code>. The same rules from
 <a href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a> apply.</p>
 <p>Indexes on data-carrying enum variant fields work the same way. The index is
 created on the nullable column for that variant’s field.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="deferred-fields"><a class="header" href="#deferred-fields">Deferred Fields</a></h1>
 <p>A deferred field is a column Toasty omits from the default <code>SELECT</code>
@@ -6696,6 +6789,9 @@ argument to <code>create!</code>, just like any other non-nullable field —
 <p>Deferred fields are supported on every driver. SQL backends shorten the
 <code>SELECT</code> column list; DynamoDB shortens the <code>ProjectionExpression</code>.
 Drivers do not need a capability flag for this feature.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="batch-operations"><a class="header" href="#batch-operations">Batch Operations</a></h1>
 <p><code>toasty::batch()</code> executes multiple queries or creates in a single database
@@ -6910,6 +7006,9 @@ fields like <code>id</code>.</p>
 </div>
 <p>Use <code>create_many()</code> when inserting multiple records of the same model. Use
 <code>batch()</code> when combining different operations or models.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="transactions"><a class="header" href="#transactions">Transactions</a></h1>
 <p>A transaction groups multiple database operations so they either all succeed or
@@ -7121,6 +7220,9 @@ let mut tx = db.transaction_builder()
 they diverge on Turso under <a href="#concurrent-writes"><code>concurrent_writes()</code></a>:
 <code>Default</code> issues <code>BEGIN CONCURRENT</code> (MVCC) and <code>Deferred</code> is the way to opt
 out and request classic locking on a single transaction.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="raw-sql"><a class="header" href="#raw-sql">Raw SQL</a></h1>
 <p>Raw SQL runs backend SQL through Toasty’s database handles. Use it when you need
@@ -7248,6 +7350,9 @@ User::filter_by_id(1).delete().exec(&amp;mut tx).await?;
 tx.commit().await?;</code></pre>
 <p>Nested transactions work the same way as they do for query builders: raw SQL
 executed through the nested transaction is part of that savepoint.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="concurrency-control-1"><a class="header" href="#concurrency-control-1">Concurrency Control</a></h1>
 <p>When multiple writers modify the same record, you need a way to detect
@@ -7450,6 +7555,9 @@ database), call <code>table_name_prefix()</code> on the builder:</p>
     .table_name_prefix("myapp_")
     .connect("sqlite::memory:")
     .await?;</code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/service-ops"><code>service-ops</code></a> lays out a lib + binaries project with connection pooling, tracing, and the <code>toasty-cli</code> migration workflow.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="migrations-and-schema-management"><a class="header" href="#migrations-and-schema-management">Migrations and Schema Management</a></h1>
 <p>Toasty provides two ways to manage your database schema: <code>push_schema</code> for
@@ -7644,6 +7752,9 @@ command checks this table to determine which migrations are pending.</p>
 <p>For early development when the schema changes frequently, <code>push_schema</code> is
 simpler. Switch to migrations when your database has data you want to preserve
 across schema changes.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/service-ops"><code>service-ops</code></a> lays out a lib + binaries project with connection pooling, tracing, and the <code>toasty-cli</code> migration workflow.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="tracing"><a class="header" href="#tracing">Tracing</a></h1>
 <p>Toasty emits structured events through the <a href="https://docs.rs/tracing"><code>tracing</code></a> crate. The most
@@ -7734,6 +7845,9 @@ events for each item operation it performs (<code>getting single item</code>,
 <code>querying primary key</code>, <code>batch inserting items</code>, and so on) with the
 table name, index name, and item counts. Enable them with
 <code>RUST_LOG=toasty_driver_dynamodb=trace</code>.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/service-ops"><code>service-ops</code></a> lays out a lib + binaries project with connection pooling, tracing, and the <code>toasty-cli</code> migration workflow.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="postgresql"><a class="header" href="#postgresql">PostgreSQL</a></h1>
 <p>Toasty’s PostgreSQL driver uses <a href="https://docs.rs/tokio-postgres"><code>tokio-postgres</code></a> under the hood. It
@@ -8368,6 +8482,9 @@ no work against a SQLite connection.</p>
 <a href="#connection-pool">Database Setup</a> still apply for
 file-backed databases. In-memory mode pins the pool to a single
 connection regardless of <code>max_pool_size</code>.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> is the simplest of the examples; like all of them it runs on in-memory SQLite by default.</p>
+</blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="turso"><a class="header" href="#turso">Turso</a></h1>
 <p><a href="https://turso.tech/">Turso</a> is a SQLite-compatible database engine with native async I/O.

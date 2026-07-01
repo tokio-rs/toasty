@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-c9382024.js";
+            window.path_to_searchindex_js = "searchindex-260ff170.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -468,6 +468,9 @@ records are inserted together or none are.</p>
 ))
 .exec(&amp;mut db)
 .await?;</code></pre>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/store-operations"><code>store-operations</code></a> runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.</p>
+</blockquote>
 <h3 id="dynamic-batches-with-toastybatch"><a class="header" href="#dynamic-batches-with-toastybatch">Dynamic batches with <code>toasty::batch()</code></a></h3>
 <p>When the number of records is determined at runtime, collect create builders
 into a <code>Vec</code> and pass it to <code>toasty::batch()</code>:</p>
@@ -536,6 +539,9 @@ let user = builder.exec(&amp;mut db).await?;
 <code>&amp;String</code>. For numeric fields, you can pass the value directly or by reference.
 See <a href="./defining-models.html#what-types-can-you-pass-to-setters">Defining Models — What types can you pass to setters?</a>
 for details.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
+</blockquote>
 
                     </main>
 
