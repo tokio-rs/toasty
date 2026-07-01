@@ -298,6 +298,19 @@ impl Expand<'_> {
             .map(|field| {
                 let index = util::int(field.id);
                 let app_name = field.name.as_str();
+                // A `#[column("name")]` on a variant field overrides its
+                // database column name. When two variants give a field the same
+                // column name, the schema builder coalesces them into one shared
+                // column (see `BuildMapping::map_field_primitive`).
+                let storage_name = match field
+                    .attrs
+                    .column
+                    .as_ref()
+                    .and_then(|column| column.name.as_ref())
+                {
+                    Some(name) => quote! { Some(#name.to_string()) },
+                    None => quote! { None },
+                };
                 let ty = primitive_ty_unwrap(field);
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
@@ -309,7 +322,7 @@ impl Expand<'_> {
                         },
                         name: #toasty::core::schema::app::FieldName {
                             app: Some(#app_name.to_string()),
-                            storage: None,
+                            storage: #storage_name,
                         },
                         ty: <#ty as #toasty::Field>::field_ty(None),
                         nullable: <#ty as #toasty::Field>::NULLABLE,
