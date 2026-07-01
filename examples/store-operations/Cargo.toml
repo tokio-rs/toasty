@@ -1,0 +1,23 @@
+[package]
+name = "example-store-operations"
+version = "0.1.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+publish = false
+
+[features]
+default = [ "sqlite" ]
+mysql = [ "toasty/mysql" ]
+postgresql = [ "toasty/postgresql" ]
+sqlite = [ "toasty/sqlite" ]
+
+[dependencies]
+toasty.workspace = true
+toasty-core.workspace = true
+tokio.workspace = true
+uuid.workspace = true
+
+[lints]
+workspace = true
