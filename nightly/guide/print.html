@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-260ff170.js";
+            window.path_to_searchindex_js = "searchindex-60d4c981.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -3769,8 +3769,8 @@ foreign key. The child stores the parent’s ID in one of its own fields.</p>
 <h2 id="defining-a-belongsto-relationship"><a class="header" href="#defining-a-belongsto-relationship">Defining a BelongsTo relationship</a></h2>
 <p>A BelongsTo relationship requires two things on the child model: a foreign key
 field and a relation field. Wrap the relation in <code>Deferred&lt;T&gt;</code> for lazy loading,
-or use <code>T</code> directly for eager loading. The <code>#[belongs_to]</code> attribute tells Toasty
-which field holds the foreign key and which field on the parent it references.</p>
+or use <code>T</code> directly for eager loading. The <code>#[belongs_to]</code> attribute marks the
+relation field.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -3795,15 +3795,32 @@ struct Post {
     #[index]
     user_id: u64,
 
-    #[belongs_to(key = user_id, references = id)]
+    #[belongs_to]
     user: toasty::Deferred&lt;User&gt;,
 
     title: String,
 }
 <span class="boring">}</span></code></pre>
 <p>The <code>user_id</code> field is the foreign key — it stores the <code>id</code> of the associated
-<code>User</code>. The <code>#[belongs_to(key = user_id, references = id)]</code> attribute tells
-Toasty that <code>user_id</code> on <code>Post</code> maps to <code>id</code> on <code>User</code>.</p>
+<code>User</code>.</p>
+<h2 id="inferring-the-foreign-key"><a class="header" href="#inferring-the-foreign-key">Inferring the foreign key</a></h2>
+<p><code>#[belongs_to]</code> names two fields: <code>key</code>, the foreign key field on the child, and
+<code>references</code>, the field on the parent it points at. Both are inferred when
+omitted:</p>
+<ul>
+<li><code>key</code> defaults to the relation field name plus <code>_id</code>. The <code>user</code> field above
+uses <code>user_id</code>.</li>
+<li><code>references</code> defaults to <code>id</code>, the conventional primary key.</li>
+</ul>
+<p>Both must name fields that exist; a missing one is a compile error.</p>
+<p>Spell out either when the convention does not match. Name a foreign key field
+that isn’t <code>&lt;field&gt;_id</code>:</p>
+<pre><code class="language-rust ignore">#[belongs_to(key = owner_id)]
+owner: toasty::Deferred&lt;User&gt;,</code></pre>
+<p>Or a parent field that isn’t named <code>id</code>, and both fields of a composite key
+(composite keys are not inferred):</p>
+<pre><code class="language-rust ignore">#[belongs_to(key = [user_id, user_revision], references = [id, revision])]
+user: toasty::Deferred&lt;User&gt;,</code></pre>
 <p>The foreign key field should have <code>#[index]</code> so that Toasty can efficiently look
 up posts by user. In the database, this creates:</p>
 <pre><code class="language-sql">CREATE TABLE posts (
@@ -3816,7 +3833,7 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 <p>The parent model (<code>User</code>) typically declares a <code>#[has_many]</code> field pointing back
 at the child. See <a href="#hasmany">HasMany</a> for details.</p>
 <p>Use a plain relation field when every loaded child should also load its parent:</p>
-<pre><code class="language-rust ignore">#[belongs_to(key = user_id, references = id)]
+<pre><code class="language-rust ignore">#[belongs_to]
 user: User,</code></pre>
 <p>This behaves like an implicit <code>.include(Post::fields().user())</code> on every query
 that returns <code>Post</code>.</p>
@@ -3842,7 +3859,7 @@ struct Post {
     #[index]
     user_id: Option&lt;u64&gt;,
 
-    #[belongs_to(key = user_id, references = id)]
+    #[belongs_to]
     user: toasty::Deferred&lt;Option&lt;User&gt;&gt;,
 
     title: String,
@@ -3850,7 +3867,7 @@ struct Post {
 <span class="boring">}</span></code></pre>
 <p>The <code>user_id</code> column is now nullable. A post can exist without a user.</p>
 <p>For eager loading, omit <code>Deferred</code> and keep the <code>Option</code>:</p>
-<pre><code class="language-rust ignore">#[belongs_to(key = user_id, references = id)]
+<pre><code class="language-rust ignore">#[belongs_to]
 user: Option&lt;User&gt;,</code></pre>
 <h2 id="accessing-the-related-record"><a class="header" href="#accessing-the-related-record">Accessing the related record</a></h2>
 <p>Call the relation method on the child instance to get the parent. The method
@@ -4027,13 +4044,14 @@ struct Todo {
     #[index]
     owner_id: u64,
 
-    #[belongs_to(key = owner_id, references = id)]
+    #[belongs_to]
     owner: toasty::Deferred&lt;User&gt;,
 
     title: String,
 }
 <span class="boring">}</span></code></pre>
-<p>Here the child’s relation field is named <code>owner</code> instead of <code>user</code>, so the
+<p>The <code>owner</code> field still infers its <code>owner_id</code> foreign key. Here the child’s
+relation field is named <code>owner</code> instead of <code>user</code>, so the
 parent specifies <code>pair = owner</code> to establish the connection.</p>
 <h2 id="what-gets-generated-6"><a class="header" href="#what-gets-generated-6">What gets generated</a></h2>
 <p>For a <code>Post</code> model with <code>#[belongs_to] user: Deferred&lt;User&gt;</code>, Toasty generates:</p>
