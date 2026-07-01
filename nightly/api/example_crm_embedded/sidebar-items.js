@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["ContactMethod"],"fn":["main"],"struct":["Address","Contact","ContactId"]};
