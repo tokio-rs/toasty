@@ -345,3 +345,7 @@ For a `Post` model with `#[belongs_to] user: Deferred<User>`, Toasty generates:
 | `toasty::create!(Post { user: &user })` | Create builder | Sets the foreign key from a parent reference |
 | `toasty::create!(Post { user_id: id })` | Create builder | Sets the foreign key directly |
 | `Post::fields().user()` | Field path | Used with `.include()` for preloading |
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

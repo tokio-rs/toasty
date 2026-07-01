@@ -37,8 +37,8 @@ target database.
 ## Using Toasty
 
 You will define your data model using Rust structs annotated with the
-`#[derive(toasty::Model)]` derive macro. Here is the
-[hello-toasty](examples/hello-toasty/src/main.rs) example.
+`#[derive(toasty::Model)]` derive macro. Runnable examples live in the
+[`examples/`](examples/) directory; the snippets below illustrate the basics.
 
 ```rust
 #[derive(Debug, toasty::Model)]

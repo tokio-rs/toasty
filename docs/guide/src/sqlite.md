@@ -264,3 +264,7 @@ The pool sizing knobs from
 [Database Setup](./database-setup.md#connection-pool) still apply for
 file-backed databases. In-memory mode pins the pool to a single
 connection regardless of `max_pool_size`.
+
+> **Runnable example:** [`quickstart-blog`] is the simplest of the examples; like all of them it runs on in-memory SQLite by default.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog

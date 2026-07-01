@@ -358,3 +358,7 @@ argument to `create!`, just like any other non-nullable field —
 Deferred fields are supported on every driver. SQL backends shorten the
 `SELECT` column list; DynamoDB shortens the `ProjectionExpression`.
 Drivers do not need a capability flag for this feature.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields

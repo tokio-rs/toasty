@@ -346,6 +346,9 @@ let (user, todo) = toasty::create!((
 .await?;
 ```
 
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+
 ### Dynamic batches with `toasty::batch()`
 
 When the number of records is determined at runtime, collect create builders
@@ -418,3 +421,8 @@ The create builder's setter methods accept flexible input types through the
 `&String`. For numeric fields, you can pass the value directly or by reference.
 See [Defining Models — What types can you pass to setters?](./defining-models.md#what-types-can-you-pass-to-setters)
 for details.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations
