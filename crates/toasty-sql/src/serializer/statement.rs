@@ -346,7 +346,7 @@ impl ToSql for &stmt::Insert {
         let returning = self
             .returning
             .as_ref()
-            .map(|returning| ("RETURNING ", returning));
+            .map(|returning| (" RETURNING ", returning));
 
         if returning.is_some() && f.serializer.is_mysql() {
             panic!(

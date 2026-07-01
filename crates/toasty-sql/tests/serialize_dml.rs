@@ -189,13 +189,13 @@ fn insert_basic_values() {
 fn insert_with_returning() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a')RETURNING "id" AS column1;"#]]
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a') RETURNING "id" AS column1;"#]]
         .assert_eq(&render(
             Flavor::Sqlite,
             &schema,
             insert_basic(returning.clone()),
         ));
-    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a')RETURNING "id" AS column1;"#]]
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a') RETURNING "id" AS column1;"#]]
         .assert_eq(&render(
             Flavor::Postgresql,
             &schema,
