@@ -44,17 +44,9 @@ impl ReadModifyWrite {
         node.var.set(Some(var));
 
         // When the write carries a `RETURNING`, the node's type is
-        // `List<Record>`; the record field types tell the driver how to decode
-        // the returned rows. Without a `RETURNING` the type is `Unit` and the
-        // write reports only a row count.
-        let output_ty = match &self.ty {
-            stmt::Type::List(item) => match &**item {
-                stmt::Type::Record(fields) => Some(fields.clone()),
-                _ => todo!("rmw output ty={:#?}", self.ty),
-            },
-            stmt::Type::Unit => None,
-            _ => todo!("rmw output ty={:#?}", self.ty),
-        };
+        // `List<Record>`; without one the type is `Unit` and the write reports
+        // only a row count.
+        let output_ty = mir::row_field_types(&self.ty);
 
         exec::ReadModifyWrite {
             input,

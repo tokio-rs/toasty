@@ -91,8 +91,9 @@ pub async fn stale_update_fails(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Creating the same primary key twice should fail because of the
-/// attribute_not_exists condition on the version column.
+/// Creating the same primary key twice should fail. On DynamoDB the insert
+/// carries an attribute_not_exists condition on the version column; on SQL
+/// backends the primary-key constraint rejects the duplicate.
 #[driver_test(scenario(crate::scenarios::versioned_item))]
 pub async fn duplicate_create_fails(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -216,12 +217,13 @@ pub async fn query_update_invalidates_stale_instance(test: &mut Test) -> Result<
     Ok(())
 }
 
-/// Query-based update on a versioned model: exercises update_by_key path 2
-/// (no unique index, N keys via transact_write_items on DDB).
+/// Query-based update on a versioned model matching multiple rows. On DynamoDB
+/// this exercises update_by_key path 2 (no unique index, N keys via
+/// transact_write_items); on SQL backends it is a single multi-row UPDATE.
 ///
 /// The increment is applied atomically to every matched row, so each row's
-/// version advances independently. Verifies the multi-key transact path applies
-/// all assignments and bumps each version.
+/// version advances independently. Verifies the multi-row path applies all
+/// assignments and bumps each version.
 #[driver_test(scenario(crate::scenarios::tagged_item))]
 pub async fn query_update_multi_key_works(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -385,6 +387,93 @@ pub async fn delete_checks_version(test: &mut Test) -> Result<()> {
     // Item should be gone — get() should return not-found
     let after_delete = Item::filter_by_id(id).get(&mut db).await;
     assert!(after_delete.is_err(), "item should have been deleted");
+
+    Ok(())
+}
+
+/// An instance update whose row has been deleted fails instead of silently
+/// succeeding. SQL backends raise `record_not_found`.
+#[driver_test(scenario(crate::scenarios::versioned_item))]
+pub async fn update_after_delete_fails(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut item = toasty::create!(Item { name: "hello" })
+        .exec(&mut db)
+        .await?;
+
+    // Delete the row out from under the instance.
+    Item::filter_by_id(item.id).delete().exec(&mut db).await?;
+
+    let result: Result<()> = item.update().name("stale").exec(&mut db).await;
+    let err = assert_err!(result);
+    if test.capability().sql {
+        assert!(
+            err.is_record_not_found(),
+            "expected record_not_found, got {err:?}"
+        );
+    }
+
+    Ok(())
+}
+
+/// The read-back variant of `update_after_delete_fails`: a relative update
+/// (`increment`) carries a `RETURNING`, so the conditional write goes through
+/// the row-returning path. With the row deleted there is nothing to return —
+/// the update fails rather than reloading the instance from a phantom row.
+#[driver_test(scenario(crate::scenarios::versioned_counter))]
+pub async fn relative_update_after_delete_fails(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut counter = toasty::create!(Counter { value: 10 }).exec(&mut db).await?;
+
+    Counter::filter_by_id(counter.id)
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let result: Result<()> = counter
+        .update()
+        .value(toasty::stmt::increment())
+        .exec(&mut db)
+        .await;
+    let err = assert_err!(result);
+    if test.capability().sql {
+        assert!(
+            err.is_record_not_found(),
+            "expected record_not_found, got {err:?}"
+        );
+    }
+
+    Ok(())
+}
+
+/// A conditional write binding a value whose database type cannot be inferred
+/// from the value alone (`f64`). Exercises bind-param type refinement through
+/// both SQL conditional-write plans (regression: the PostgreSQL CTE plan left
+/// `f64` assignment params untyped and panicked).
+#[driver_test]
+pub async fn update_with_float_field_works(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Gauge {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+
+        value: f64,
+
+        #[version]
+        version: u64,
+    }
+
+    let mut db = test.setup_db(models!(Gauge)).await;
+
+    let mut gauge = toasty::create!(Gauge { value: 1.5 }).exec(&mut db).await?;
+
+    gauge.update().value(2.5).exec(&mut db).await?;
+    assert_struct!(gauge, _ { value: 2.5, version: 2, .. });
+
+    let reloaded = Gauge::filter_by_id(gauge.id).get(&mut db).await?;
+    assert_struct!(reloaded, _ { value: 2.5, version: 2, .. });
 
     Ok(())
 }

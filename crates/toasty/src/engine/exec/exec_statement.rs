@@ -17,7 +17,7 @@ use crate::{
 /// CTE statement) prefixes its result with two probe columns: the number of
 /// rows matching the filter and, of those, the number satisfying the condition.
 /// The write applied only when the two agree; a mismatch is a condition
-/// failure.
+/// failure, and zero matched rows means the record no longer exists.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum ConditionalOutput {
     /// Not a conditional write. Output is passed through unchanged.
@@ -210,46 +210,48 @@ impl Exec<'_> {
                         .await?;
                 }
             }
-            ConditionalOutput::Count => {
+            ConditionalOutput::Count | ConditionalOutput::Returning => {
                 let rows = collect_conditional_probe(res.values).await?;
                 let (matched, conditioned) = conditional_probe_counts(&rows[0])?;
-                if matched != conditioned {
-                    return Err(toasty_core::Error::condition_failed(
-                        "write condition did not match",
+
+                // A conditional write targets a row the caller holds an
+                // instance of: zero matched rows means it has since been
+                // deleted.
+                if matched == 0 {
+                    return Err(toasty_core::Error::record_not_found(
+                        "conditional write matched no rows",
                     ));
                 }
-                res.values = Rows::Count(matched as u64);
-            }
-            ConditionalOutput::Returning => {
-                let rows = collect_conditional_probe(res.values).await?;
-                let (matched, conditioned) = conditional_probe_counts(&rows[0])?;
                 if matched != conditioned {
                     return Err(toasty_core::Error::condition_failed(
                         "write condition did not match",
                     ));
                 }
 
-                // When nothing matched, the LEFT JOIN yields a single
-                // NULL-padded row; drop it. Otherwise every row is a real
-                // changed row — strip the two leading probe columns.
-                let changed = if matched == 0 {
-                    vec![]
-                } else {
-                    rows.into_iter()
-                        .map(|row| {
-                            let stmt::Value::Record(record) = row else {
-                                return Err(toasty_core::Error::invalid_result(
-                                    "conditional write expected Record",
-                                ));
-                            };
-                            Ok(stmt::Value::record_from_vec(
-                                record.fields.into_iter().skip(2).collect(),
-                            ))
-                        })
-                        .collect::<Result<Vec<_>>>()?
+                res.values = match action.conditional {
+                    ConditionalOutput::Count => Rows::Count(matched as u64),
+                    _ => {
+                        // The probe locked the matched rows, so the write
+                        // applied to exactly those rows and every result row is
+                        // a real changed row — strip the two leading probe
+                        // columns.
+                        let changed = rows
+                            .into_iter()
+                            .map(|row| {
+                                let stmt::Value::Record(record) = row else {
+                                    return Err(toasty_core::Error::invalid_result(
+                                        "conditional write expected Record",
+                                    ));
+                                };
+                                Ok(stmt::Value::record_from_vec(
+                                    record.fields.into_iter().skip(2).collect(),
+                                ))
+                            })
+                            .collect::<Result<Vec<_>>>()?;
+
+                        Rows::value_stream(changed)
+                    }
                 };
-
-                res.values = Rows::value_stream(changed);
             }
         }
 

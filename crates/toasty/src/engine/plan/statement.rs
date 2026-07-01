@@ -1041,26 +1041,49 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::ExecStatement {
         let (condition, filter, source, mut write) = self.conditional_write_parts(stmt);
 
-        // `found`: the probe. Counts rows matching the filter and, of those,
-        // how many satisfy the OCC condition.
+        // `found`: the probe. Projects the OCC condition once per row matching
+        // the filter, locking those rows (`FOR UPDATE`) so the condition is
+        // evaluated against the latest committed row version and the rows
+        // cannot change before the write applies. Without the lock, a stale
+        // writer blocking on a concurrent committed update would pass the
+        // write's re-check (the probe is already materialized from the old
+        // snapshot and the write's own filter is key-only) and silently
+        // overwrite the newer row — the lost update `#[version]` exists to
+        // prevent.
         let found = stmt::Cte {
-            query: stmt::Query::builder(stmt::Select {
+            query: conditional_probe_query(
+                condition,
+                filter.clone(),
                 source,
-                filter: stmt::Filter::new(filter.clone()),
-                returning: stmt::Returning::Project(conditional_probe_projection(condition)),
+                self.planner.engine.capability().select_for_update,
+            ),
+        };
+
+        // `counts`: aggregates the probe rows into `[matched, conditioned]`.
+        // Kept separate from `found` because a locking SELECT cannot carry
+        // aggregates. `found` sits one scope out (CTE body → WITH).
+        let counts = stmt::Cte {
+            query: stmt::Query::builder(stmt::Select {
+                source: stmt::TableRef::Cte {
+                    nesting: 1,
+                    index: 0,
+                }
+                .into(),
+                filter: stmt::Filter::new(true),
+                returning: stmt::Returning::Project(conditional_probe_projection(cte_column(0, 0))),
                 distinct: false,
             })
             .build(),
         };
 
         // `changed`: the write. It applies only when the probe's two counts
-        // agree, expressed as a scalar subquery over `found` ANDed onto the
-        // filter. `found` sits two scopes out from here (subquery → CTE body →
+        // agree, expressed as a scalar subquery over `counts` ANDed onto the
+        // filter. `counts` sits two scopes out from here (subquery → CTE body →
         // WITH).
         let counts_agree = stmt::Expr::stmt(stmt::Select {
             source: stmt::TableRef::Cte {
                 nesting: 2,
-                index: 0,
+                index: 1,
             }
             .into(),
             filter: true.into(),
@@ -1114,7 +1137,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             stmt::Query::builder(stmt::Select {
                 source: stmt::TableRef::Cte {
                     nesting: 0,
-                    index: 0,
+                    index: 1,
                 }
                 .into(),
                 filter: stmt::Filter::new(true),
@@ -1125,7 +1148,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 distinct: false,
             })
         } else {
-            // Read the probe counts alongside the changed rows. `found` yields
+            // Read the probe counts alongside the changed rows. `counts` yields
             // exactly one row, so the LEFT JOIN repeats the counts across every
             // changed row (and yields a single NULL-padded row when nothing
             // changed).
@@ -1139,11 +1162,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     vec![
                         stmt::TableRef::Cte {
                             nesting: 0,
-                            index: 0,
+                            index: 1,
                         },
                         stmt::TableRef::Cte {
                             nesting: 0,
-                            index: 1,
+                            index: 2,
                         },
                     ],
                     stmt::TableWithJoins {
@@ -1160,7 +1183,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             })
         };
 
-        let stmt = outer.with(vec![found, changed]).build().into();
+        let stmt = outer.with(vec![found, counts, changed]).build().into();
 
         mir::ExecStatement {
             inputs: mem::take(&mut self.load_data.inputs),
@@ -1185,26 +1208,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // A conditional write on a backend without data-modifying CTEs (SQLite,
         // MySQL) becomes a transaction: first probe the matched rows, then apply
         // the write (filter only, no condition) when every matched row satisfies
-        // the condition.
-        //
-        // The probe evaluates the condition per matched row (`SELECT
-        // <condition> FROM t WHERE <filter>`) rather than as an aggregate: a
-        // per-row projection can carry `FOR UPDATE` to lock exactly those rows
-        // against a concurrent writer, while `SELECT count(*) ... FOR UPDATE` is
-        // not universally accepted. The engine derives the matched and satisfied
-        // counts from the returned rows.
-        let read = stmt::Query::builder(stmt::Select {
+        // the condition. The engine derives the matched and satisfied counts
+        // from the probe's per-row results.
+        let read = conditional_probe_query(
+            condition,
+            filter,
             source,
-            filter: stmt::Filter::new(filter),
-            returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![condition])),
-            distinct: false,
-        })
-        .locks(if self.planner.engine.capability().select_for_update {
-            vec![stmt::Lock::Update]
-        } else {
-            vec![]
-        })
-        .build();
+            self.planner.engine.capability().select_for_update,
+        );
 
         mir::ReadModifyWrite {
             inputs: mem::take(&mut self.load_data.inputs),
@@ -1868,10 +1879,40 @@ fn cte_column(table: usize, column: usize) -> stmt::Expr {
     })
 }
 
-/// The probe projection shared by both SQL conditional-write strategies:
-/// `[count(*), count(*) FILTER (WHERE <condition>)]`. The first column counts
-/// rows matching the filter; the second counts those that also satisfy the OCC
-/// condition. The write is safe to apply exactly when the two agree.
+/// The probe query shared by both SQL conditional-write strategies:
+/// `SELECT <condition> FROM <source> WHERE <filter> [FOR UPDATE]`.
+///
+/// The condition is projected once per matched row rather than as an
+/// aggregate: a per-row projection can carry `FOR UPDATE` while `SELECT
+/// count(*) ... FOR UPDATE` is rejected. Locking the matched rows makes the
+/// probe authoritative — the condition is evaluated against the latest
+/// committed row version and the rows cannot change before the write applies.
+fn conditional_probe_query(
+    condition: stmt::Expr,
+    filter: stmt::Expr,
+    source: stmt::Source,
+    lock: bool,
+) -> stmt::Query {
+    stmt::Query::builder(stmt::Select {
+        source,
+        filter: stmt::Filter::new(filter),
+        returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![condition])),
+        distinct: false,
+    })
+    .locks(if lock {
+        vec![stmt::Lock::Update]
+    } else {
+        vec![]
+    })
+    .build()
+}
+
+/// The aggregate projection over the probe's per-row results:
+/// `[count(*), count(*) FILTER (WHERE <ok>)]`. The first column counts rows
+/// matching the filter; the second counts those that also satisfy the OCC
+/// condition. The write is safe to apply exactly when the two agree. Used by
+/// the CTE strategy's `counts` CTE; the read-modify-write strategy derives the
+/// same counts client-side.
 fn conditional_probe_projection(condition: stmt::Expr) -> stmt::Expr {
     stmt::Expr::record_from_vec(vec![
         stmt::Expr::count_star(),

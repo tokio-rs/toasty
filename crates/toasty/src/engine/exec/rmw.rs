@@ -146,6 +146,14 @@ impl Exec<'_> {
             }
         }
 
+        // A conditional write targets a row the caller holds an instance of:
+        // zero matched rows means it has since been deleted.
+        if matched == 0 {
+            return Err(toasty_core::Error::record_not_found(
+                "conditional write matched no rows",
+            ));
+        }
+
         if matched != satisfied {
             return Err(toasty_core::Error::condition_failed(
                 "write condition did not match",
@@ -210,7 +218,15 @@ impl Exec<'_> {
             ));
         };
 
-        assert_eq!(actual, count);
+        // The write is supposed to touch exactly the probed rows. On backends
+        // whose probe cannot lock (`select_for_update` is false), a concurrent
+        // writer may change the matched set between the probe and the write —
+        // surface a retryable conflict; the caller rolls back.
+        if actual != count {
+            return Err(toasty_core::Error::condition_failed(format!(
+                "write applied to {actual} rows but the probe matched {count}"
+            )));
+        }
 
         Ok(Rows::Count(actual))
     }

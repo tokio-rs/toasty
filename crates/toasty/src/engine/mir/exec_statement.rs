@@ -56,18 +56,7 @@ impl ExecStatement {
         let var = var_table.register_var(self.ty.clone());
         node.var.set(Some(var));
 
-        let output_ty = match &self.ty {
-            stmt::Type::List(ty_rows) => {
-                let ty_fields = match &**ty_rows {
-                    stmt::Type::Record(ty_fields) => ty_fields.clone(),
-                    _ => todo!("ty={:#?}; node={node:#?}", self.ty),
-                };
-
-                Some(ty_fields)
-            }
-            stmt::Type::Unit => None,
-            _ => todo!("ty={:#?}", self.ty),
-        };
+        let output_ty = mir::row_field_types(&self.ty);
 
         exec::ExecStatement {
             input: input_vars,

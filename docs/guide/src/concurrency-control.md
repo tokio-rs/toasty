@@ -92,4 +92,5 @@ same everywhere:
   applying the write.
 
 A conflicting write returns `Error::condition_failed`; recover by reloading the
-record and retrying.
+record and retrying. If the record has been deleted since it was loaded, the
+write returns `Error::record_not_found` instead.

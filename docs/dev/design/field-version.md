@@ -333,27 +333,35 @@ present → condition failed → `condition_failed`.
 SQL drivers consume the same `condition` through two conditional-write
 strategies, chosen per-capability. Both apply to `UPDATE` and `DELETE`:
 
-1. **CTE plan** (PostgreSQL). Compiles to a single statement with two
-   CTEs: a `found` `SELECT` that counts matching rows and rows matching
-   both the filter and the condition, and a `changed` `UPDATE`/`DELETE`
-   whose filter is `original_filter AND (matched = conditioned)`. The
-   outer query reads the counts (and, when an update reads columns back,
-   the changed rows). A count mismatch raises `condition_failed`. A
+1. **CTE plan** (PostgreSQL). Compiles to a single statement with three
+   CTEs: a `found` `SELECT` that projects the condition once per matching
+   row and locks those rows with `FOR UPDATE`, a `counts` aggregate over
+   `found` producing `[matched, conditioned]`, and a `changed`
+   `UPDATE`/`DELETE` whose filter is `original_filter AND (matched =
+   conditioned)`. The outer query reads the counts (and, when an update
+   reads columns back, the changed rows). Locking the probed rows makes
+   the condition authoritative under READ COMMITTED: `FOR UPDATE`
+   evaluates it against the latest committed row version, and the rows
+   cannot change before the write applies. A count mismatch raises
+   `condition_failed`; zero matched rows raise `record_not_found`. A
    data-modifying `DELETE` sits in the CTE via the `ExprSet::Delete`
    statement variant.
 
 2. **Read-modify-write plan** (SQLite, MySQL). Opens a transaction, probes
-   the target rows with `SELECT <condition> FROM … WHERE <filter>` — one
-   boolean per matched row, carrying `FOR UPDATE` where the backend
-   supports it so the rows are locked — then applies the write (filter
-   only, no condition) when every matched row satisfied the condition. A
-   mismatch raises `condition_failed` and rolls back.
+   the target rows with the same per-row `SELECT <condition> FROM … WHERE
+   <filter>` query, then applies the write (filter only, no condition)
+   when every matched row satisfied the condition. A mismatch raises
+   `condition_failed` and rolls back; zero matched rows raise
+   `record_not_found`.
 
-The read-modify-write probe reads the condition per matched row rather
-than as an aggregate count so it can carry `FOR UPDATE` and lock exactly
+Both strategies read the condition per matched row rather than as an
+aggregate count so the probe can carry `FOR UPDATE` and lock exactly
 those rows — `SELECT count(*) … FOR UPDATE` is not universally accepted
-(PostgreSQL rejects it outright). The engine derives the matched and
-satisfied counts from the returned rows.
+(PostgreSQL rejects it outright). The counts come from the `counts` CTE
+on the CTE plan and from the returned rows on the read-modify-write
+plan. `FOR UPDATE` is emitted where the backend supports it
+(`Capability::select_for_update`); SQLite serializes writers at the
+database level instead.
 
 The SQL `UPDATE` and `DELETE` serializers assert `condition.is_none()`:
 the planner strips the condition and folds its check into a filter

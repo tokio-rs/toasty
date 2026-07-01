@@ -265,9 +265,10 @@ impl ToSql for &stmt::Delete {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         assert!(self.returning.is_none());
 
-        // Conditions never reach the serializer: a conditional DELETE is
-        // rewritten into a read-modify-write plan that strips the condition and
-        // checks it against a count probe (see `plan_conditional_sql_query_as_rmw`).
+        // Conditions never reach the serializer: the planner rewrites a
+        // conditional DELETE into a CTE or read-modify-write plan (see
+        // `plan_conditional_sql_query_as_*`), stripping the condition and
+        // folding its check into a filter predicate.
         debug_assert!(
             self.condition.is_none(),
             "SQL DELETE condition should have been lowered by the planner; condition={:#?}",
