@@ -237,6 +237,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
+    let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
 
     // A unit (data-less) enum maps to a single discriminant column, so it can
@@ -253,6 +254,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #enum_field_list_struct
 
         #storage_compat_checks
+        #shared_column_checks
         #indexable_checks
         #indexable_impl
 

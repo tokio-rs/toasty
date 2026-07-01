@@ -140,46 +140,9 @@ pub async fn shared_column_update(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Fields coalesced onto one shared column must have identical types. Giving
-/// two variants the same `#[column("v")]` but incompatible field types is
-/// rejected when the schema is built rather than silently coerced.
-#[driver_test]
-pub async fn shared_column_type_mismatch_rejected(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    #[allow(dead_code)]
-    enum Value {
-        #[column(variant = 1)]
-        Text {
-            #[column("v")]
-            text: String,
-        },
-        #[column(variant = 2)]
-        Number {
-            #[column("v")]
-            number: i64,
-        },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Record {
-        #[key]
-        id: String,
-        value: Value,
-    }
-
-    let result = t.try_setup_db(models!(Record)).await;
-
-    let err = result
-        .err()
-        .expect("incompatible shared-column types should be rejected");
-    assert!(
-        err.to_string().contains("incompatible"),
-        "unexpected error: {err}"
-    );
-
-    Ok(())
-}
+// Mismatched shared-column types are rejected at compile time by the
+// `SameColumnType` obligation the `Embed` derive emits; see the trybuild case
+// `tests/ui/enum_shared_column_type_mismatch.rs`.
 
 /// Both variants store their `name` in the same physical `creature_name`
 /// column. A variant-rooted filter on that column keeps its implicit variant

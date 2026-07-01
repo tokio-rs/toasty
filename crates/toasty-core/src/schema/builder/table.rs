@@ -946,9 +946,11 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let (column_id, lowering_index) = if let Some(shared) = shared {
             // A shared column needs no per-variant casting, so the contributing
-            // fields must have identical types. Width or kind mismatches (e.g.
-            // `i32` vs `i64`, or `String` vs `i64`) are rejected here rather
-            // than silently coerced.
+            // fields must have identical types. The `Embed` derive rejects a
+            // mismatch at compile time via `SameColumnType`; this is the
+            // backstop for schemas built without the macro. Width or kind
+            // mismatches (e.g. `i32` vs `i64`, or `String` vs `i64`) are
+            // rejected here rather than silently coerced.
             if shared.ty != primitive.ty {
                 return Err(Error::invalid_schema(format!(
                     "enum variant fields mapped to the shared column `{column_name}` \

@@ -2,7 +2,8 @@ use super::{Expand, schema, util};
 use crate::model::schema::{EnumStorageStrategy, FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
 
 impl Expand<'_> {
     /// Returns fields belonging to a specific variant index.
@@ -339,6 +340,66 @@ impl Expand<'_> {
                 }
             })
             .collect()
+    }
+
+    /// Emits a compile-time obligation that every group of variant fields
+    /// sharing a column via `#[column("name")]` agrees on its Rust type.
+    ///
+    /// Two variants that give a field the same `#[column("name")]` coalesce into
+    /// one shared column, which can hold only one storage type. Rather than defer
+    /// a mismatch to a schema-build error, emit a `SameColumnType` bound between
+    /// each shared field's type and the first in its group; unequal types fail to
+    /// compile with a message pinned to the offending field.
+    ///
+    /// Only fields with an explicit `#[column("name")]` are grouped. A field
+    /// without one is not necessarily single-column (an embedded struct flattens
+    /// to several columns named after its own fields), so predicting a collision
+    /// from the field name alone would reject legitimate schemas. Those cases
+    /// fall back to the schema-build check.
+    pub(super) fn expand_shared_column_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        // Group variant fields by their explicit column name, preserving
+        // declaration order within each group.
+        let mut groups: Vec<(String, Vec<&crate::model::schema::Field>)> = Vec::new();
+        for field in &self.model.fields {
+            let Some(name) = field
+                .attrs
+                .column
+                .as_ref()
+                .and_then(|column| column.name.as_ref())
+                .map(|name| name.value())
+            else {
+                continue;
+            };
+
+            match groups.iter_mut().find(|(existing, _)| *existing == name) {
+                Some((_, fields)) => fields.push(field),
+                None => groups.push((name, vec![field])),
+            }
+        }
+
+        let checks = groups
+            .iter()
+            .filter(|(_, fields)| fields.len() > 1)
+            .flat_map(|(_, fields)| {
+                let first = primitive_ty_unwrap(fields[0]);
+                fields[1..].iter().map(move |field| {
+                    let ty = primitive_ty_unwrap(field);
+                    quote_spanned! { ty.span()=>
+                        const _: () = {
+                            fn check<A, B>()
+                            where
+                                A: #toasty::shared_column::SameColumnType<B>,
+                            {
+                            }
+                            let _ = check::<#ty, #first>;
+                        };
+                    }
+                })
+            });
+
+        quote! { #( #checks )* }
     }
 
     /// Generates the full `impl Load for Enum { ... }` block, adapting
