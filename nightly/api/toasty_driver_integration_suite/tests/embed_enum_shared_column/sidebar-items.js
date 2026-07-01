@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["shared_column_db_schema","shared_column_roundtrip","shared_column_schema_fields","shared_column_update","shared_column_variant_gated_filter"]};
+window.SIDEBAR_ITEMS = {"fn":["shared_column_cross_variant_or","shared_column_db_schema","shared_column_roundtrip","shared_column_schema_fields","shared_column_update","shared_column_variant_gated_filter"]};

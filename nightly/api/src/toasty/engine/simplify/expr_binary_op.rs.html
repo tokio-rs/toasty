@@ -221,20 +221,56 @@
 <a href=#221 id=221 data-nosnippet>221</a>    }
 <a href=#222 id=222 data-nosnippet>222</a>}
 <a href=#223 id=223 data-nosnippet>223</a>
-<a href=#224 id=224 data-nosnippet>224</a><span class="doccomment">/// A distributed-comparison term is dead — it can never be `true`, so it
-<a href=#225 id=225 data-nosnippet>225</a>/// contributes nothing to the surrounding `OR` — when it is `false`, a bare
-<a href=#226 id=226 data-nosnippet>226</a>/// `NULL`, or an `AND` with a `NULL` conjunct. The last case arises when an arm
-<a href=#227 id=227 data-nosnippet>227</a>/// compares against a decode `Match`'s `null` else branch (e.g.
-<a href=#228 id=228 data-nosnippet>228</a>/// `eq(option_embed, Some(..))` evaluated against a `None` row): `x AND NULL`
-<a href=#229 id=229 data-nosnippet>229</a>/// never holds in three-valued filter logic, and DynamoDB rejects the bare
-<a href=#230 id=230 data-nosnippet>230</a>/// value placeholder the `NULL` would otherwise serialize to.
-<a href=#231 id=231 data-nosnippet>231</a></span><span class="kw">fn </span>is_dead_filter_term(term: <span class="kw-2">&amp;</span>Expr) -&gt; bool {
-<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">if </span>term.is_unsatisfiable() {
-<a href=#233 id=233 data-nosnippet>233</a>        <span class="kw">return </span><span class="bool-val">true</span>;
-<a href=#234 id=234 data-nosnippet>234</a>    }
-<a href=#235 id=235 data-nosnippet>235</a>    <span class="macro">matches!</span>(
-<a href=#236 id=236 data-nosnippet>236</a>        term,
-<a href=#237 id=237 data-nosnippet>237</a>        Expr::And(and) <span class="kw">if </span>and.operands.iter().any(Expr::is_value_null)
-<a href=#238 id=238 data-nosnippet>238</a>    )
-<a href=#239 id=239 data-nosnippet>239</a>}
+<a href=#224 id=224 data-nosnippet>224</a><span class="doccomment">/// Returns `true` when a distributed-comparison term can never be `true`, so it
+<a href=#225 id=225 data-nosnippet>225</a>/// adds nothing to the surrounding `OR` and can be dropped.
+<a href=#226 id=226 data-nosnippet>226</a>///
+<a href=#227 id=227 data-nosnippet>227</a>/// Three shapes qualify:
+<a href=#228 id=228 data-nosnippet>228</a>///
+<a href=#229 id=229 data-nosnippet>229</a>/// 1. The term is `false` or a bare `NULL`.
+<a href=#230 id=230 data-nosnippet>230</a>///
+<a href=#231 id=231 data-nosnippet>231</a>/// 2. The term is an `AND` with a `NULL` conjunct, such as `x AND NULL`. This
+<a href=#232 id=232 data-nosnippet>232</a>///    comes from comparing against a decode `Match`'s `null` else branch — for
+<a href=#233 id=233 data-nosnippet>233</a>///    example `eq(option_embed, Some(..))` on a `None` row. `x AND NULL` never
+<a href=#234 id=234 data-nosnippet>234</a>///    holds in three-valued logic, and DynamoDB rejects the bare `NULL`
+<a href=#235 id=235 data-nosnippet>235</a>///    placeholder it would otherwise serialize to.
+<a href=#236 id=236 data-nosnippet>236</a>///
+<a href=#237 id=237 data-nosnippet>237</a>/// 3. The term compares against an `Expr::Error`, the placeholder a total enum
+<a href=#238 id=238 data-nosnippet>238</a>///    decode puts in its unreachable else branch. For a two-variant enum,
+<a href=#239 id=239 data-nosnippet>239</a>///    distributing `field == "x"` over the decode produces a term like
+<a href=#240 id=240 data-nosnippet>240</a>///    `disc != 1 AND disc != 2 AND Error == "x"`. A surrounding variant gate
+<a href=#241 id=241 data-nosnippet>241</a>///    usually contradicts the `disc != k` guards and folds this away, but
+<a href=#242 id=242 data-nosnippet>242</a>///    factoring a shared predicate out from under its gates removes that gate
+<a href=#243 id=243 data-nosnippet>243</a>///    (issue #1061). Since `Error` marks a branch that never runs, the
+<a href=#244 id=244 data-nosnippet>244</a>///    comparison can never hold. Dropping the term also keeps `Error` out of
+<a href=#245 id=245 data-nosnippet>245</a>///    the SQL serializer, which cannot render it.
+<a href=#246 id=246 data-nosnippet>246</a></span><span class="kw">fn </span>is_dead_filter_term(term: <span class="kw-2">&amp;</span>Expr) -&gt; bool {
+<a href=#247 id=247 data-nosnippet>247</a>    <span class="kw">if </span>term.is_unsatisfiable() {
+<a href=#248 id=248 data-nosnippet>248</a>        <span class="kw">return </span><span class="bool-val">true</span>;
+<a href=#249 id=249 data-nosnippet>249</a>    }
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="kw">if </span>contains_error(term) {
+<a href=#251 id=251 data-nosnippet>251</a>        <span class="kw">return </span><span class="bool-val">true</span>;
+<a href=#252 id=252 data-nosnippet>252</a>    }
+<a href=#253 id=253 data-nosnippet>253</a>    <span class="macro">matches!</span>(
+<a href=#254 id=254 data-nosnippet>254</a>        term,
+<a href=#255 id=255 data-nosnippet>255</a>        Expr::And(and) <span class="kw">if </span>and.operands.iter().any(Expr::is_value_null)
+<a href=#256 id=256 data-nosnippet>256</a>    )
+<a href=#257 id=257 data-nosnippet>257</a>}
+<a href=#258 id=258 data-nosnippet>258</a>
+<a href=#259 id=259 data-nosnippet>259</a><span class="doccomment">/// Returns `true` if `expr` contains an `Expr::Error` node anywhere in its
+<a href=#260 id=260 data-nosnippet>260</a>/// subtree — the unreachable-branch placeholder produced by enum decode.
+<a href=#261 id=261 data-nosnippet>261</a></span><span class="kw">fn </span>contains_error(expr: <span class="kw-2">&amp;</span>Expr) -&gt; bool {
+<a href=#262 id=262 data-nosnippet>262</a>    <span class="kw">use </span>toasty_core::stmt::Visit;
+<a href=#263 id=263 data-nosnippet>263</a>
+<a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">struct </span>FindError(bool);
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a>    <span class="kw">impl </span>Visit <span class="kw">for </span>FindError {
+<a href=#267 id=267 data-nosnippet>267</a>        <span class="kw">fn </span>visit_expr_error(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw">_</span>: <span class="kw-2">&amp;</span>stmt::ExprError) {
+<a href=#268 id=268 data-nosnippet>268</a>            <span class="self">self</span>.<span class="number">0 </span>= <span class="bool-val">true</span>;
+<a href=#269 id=269 data-nosnippet>269</a>        }
+<a href=#270 id=270 data-nosnippet>270</a>    }
+<a href=#271 id=271 data-nosnippet>271</a>
+<a href=#272 id=272 data-nosnippet>272</a>    <span class="kw">let </span><span class="kw-2">mut </span>find = FindError(<span class="bool-val">false</span>);
+<a href=#273 id=273 data-nosnippet>273</a>    find.visit_expr(expr);
+<a href=#274 id=274 data-nosnippet>274</a>    find.<span class="number">0
+<a href=#275 id=275 data-nosnippet>275</a></span>}
 </code></pre></div></section></main></body></html>

@@ -199,4 +199,53 @@
 <a href=#199 id=199 data-nosnippet>199</a>
 <a href=#200 id=200 data-nosnippet>200</a>    <span class="prelude-val">Ok</span>(())
 <a href=#201 id=201 data-nosnippet>201</a>}
+<a href=#202 id=202 data-nosnippet>202</a>
+<a href=#203 id=203 data-nosnippet>203</a><span class="doccomment">/// OR-ing the two variant-gated predicates on the shared `creature_name` column
+<a href=#204 id=204 data-nosnippet>204</a>/// is the natural way to query a single shared column across variants: "any
+<a href=#205 id=205 data-nosnippet>205</a>/// creature named Bob, regardless of variant". This used to panic in the SQL
+<a href=#206 id=206 data-nosnippet>206</a>/// serializer (issue #1061) because factoring lifted the shared predicate out
+<a href=#207 id=207 data-nosnippet>207</a>/// from under its variant gates, exposing the decode's unreachable `Error` else
+<a href=#208 id=208 data-nosnippet>208</a>/// branch.
+<a href=#209 id=209 data-nosnippet>209</a></span><span class="attr">#[driver_test(requires(scan), scenario(<span class="kw">crate</span>::scenarios::character_creature))]
+<a href=#210 id=210 data-nosnippet>210</a></span><span class="kw">pub async fn </span>shared_column_cross_variant_or(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#211 id=211 data-nosnippet>211</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#212 id=212 data-nosnippet>212</a>
+<a href=#213 id=213 data-nosnippet>213</a>    Character::create()
+<a href=#214 id=214 data-nosnippet>214</a>        .creature(Creature::Human {
+<a href=#215 id=215 data-nosnippet>215</a>            name: <span class="string">"Bob"</span>.to_string(),
+<a href=#216 id=216 data-nosnippet>216</a>            profession: <span class="string">"builder"</span>.to_string(),
+<a href=#217 id=217 data-nosnippet>217</a>        })
+<a href=#218 id=218 data-nosnippet>218</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#219 id=219 data-nosnippet>219</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#220 id=220 data-nosnippet>220</a>    Character::create()
+<a href=#221 id=221 data-nosnippet>221</a>        .creature(Creature::Animal {
+<a href=#222 id=222 data-nosnippet>222</a>            name: <span class="string">"Bob"</span>.to_string(),
+<a href=#223 id=223 data-nosnippet>223</a>            species: <span class="string">"dog"</span>.to_string(),
+<a href=#224 id=224 data-nosnippet>224</a>        })
+<a href=#225 id=225 data-nosnippet>225</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#226 id=226 data-nosnippet>226</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#227 id=227 data-nosnippet>227</a>    Character::create()
+<a href=#228 id=228 data-nosnippet>228</a>        .creature(Creature::Animal {
+<a href=#229 id=229 data-nosnippet>229</a>            name: <span class="string">"Rex"</span>.to_string(),
+<a href=#230 id=230 data-nosnippet>230</a>            species: <span class="string">"cat"</span>.to_string(),
+<a href=#231 id=231 data-nosnippet>231</a>        })
+<a href=#232 id=232 data-nosnippet>232</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#233 id=233 data-nosnippet>233</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="comment">// Both a Human "Bob" and an Animal "Bob" live in the shared column; the
+<a href=#236 id=236 data-nosnippet>236</a>    // cross-variant OR finds both while excluding "Rex".
+<a href=#237 id=237 data-nosnippet>237</a>    </span><span class="kw">let </span>bobs = Character::filter(
+<a href=#238 id=238 data-nosnippet>238</a>        Character::fields()
+<a href=#239 id=239 data-nosnippet>239</a>            .creature()
+<a href=#240 id=240 data-nosnippet>240</a>            .human()
+<a href=#241 id=241 data-nosnippet>241</a>            .name()
+<a href=#242 id=242 data-nosnippet>242</a>            .eq(<span class="string">"Bob"</span>)
+<a href=#243 id=243 data-nosnippet>243</a>            .or(Character::fields().creature().animal().name().eq(<span class="string">"Bob"</span>)),
+<a href=#244 id=244 data-nosnippet>244</a>    )
+<a href=#245 id=245 data-nosnippet>245</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#246 id=246 data-nosnippet>246</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#247 id=247 data-nosnippet>247</a>    <span class="macro">assert_eq!</span>(bobs.len(), <span class="number">2</span>);
+<a href=#248 id=248 data-nosnippet>248</a>
+<a href=#249 id=249 data-nosnippet>249</a>    <span class="prelude-val">Ok</span>(())
+<a href=#250 id=250 data-nosnippet>250</a>}
 </code></pre></div></section></main></body></html>
