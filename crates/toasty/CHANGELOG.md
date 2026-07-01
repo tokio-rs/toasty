@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.7.0...toasty-v0.8.0) - 2026-07-01
+
+### Added
+
+- Automatic inference of `key` and `references` in `#[belongs_to]` ([#1063])
+- Share columns across enum variants via `#[column("name")]` ([#1064])
+- Escape support for `LIKE` expressions ([#1039])
+- New `set_*` replace-variants for Query builder ([#1037])
+- Serde serialization and deserialization for `toasty::Json<T>` ([#1035])
+- Indexing support for unit enums ([#1027])
+- New `between` operator in query DSL ([#1029])
+- Support for `Option<EmbeddedType>` model fields ([#1021])
+- Scalar terminal fields in `has_many` relations ([#1012])
+
+### Fixed
+
+- Pruning of unreachable branches in OR'd variant filters ([#1067])
+- Consistent handling of multi-key delete and update operations ([#1053])
+- `#[version]` field now increments on query-based updates ([#1022])
+
+### Changed
+
+- [**breaking**] Explicit column specification for `UpdateByKey` return values ([#1024])
+- [**breaking**] Renamed `RelationManyField` and `RelationOneField` associated type to `Target` ([#1015])
+- [**breaking**] Aligned `stmt::Query` with per-model `Query` ([#1011])
+- [**breaking**] Unified per-model query structs into `Query<T>` ([#995])
+- [**breaking**] Removed the `Register` trait ([#1006])
+- [**breaking**] Removed compile-time field validation from `create!` macro ([#997])
+
+[#995]: https://github.com/tokio-rs/toasty/pull/995
+[#997]: https://github.com/tokio-rs/toasty/pull/997
+[#1006]: https://github.com/tokio-rs/toasty/pull/1006
+[#1011]: https://github.com/tokio-rs/toasty/pull/1011
+[#1012]: https://github.com/tokio-rs/toasty/pull/1012
+[#1015]: https://github.com/tokio-rs/toasty/pull/1015
+[#1021]: https://github.com/tokio-rs/toasty/pull/1021
+[#1022]: https://github.com/tokio-rs/toasty/pull/1022
+[#1024]: https://github.com/tokio-rs/toasty/pull/1024
+[#1027]: https://github.com/tokio-rs/toasty/pull/1027
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1035]: https://github.com/tokio-rs/toasty/pull/1035
+[#1037]: https://github.com/tokio-rs/toasty/pull/1037
+[#1039]: https://github.com/tokio-rs/toasty/pull/1039
+[#1053]: https://github.com/tokio-rs/toasty/pull/1053
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1064]: https://github.com/tokio-rs/toasty/pull/1064
+[#1067]: https://github.com/tokio-rs/toasty/pull/1067
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.6.1...toasty-v0.7.0) - 2026-05-29
 
 ### Added
