@@ -250,3 +250,7 @@ A common development cycle looks like this:
 For early development when the schema changes frequently, `push_schema` is
 simpler. Switch to migrations when your database has data you want to preserve
 across schema changes.
+
+> **Runnable example:** [`service-ops`] lays out a lib + binaries project with connection pooling, tracing, and the `toasty-cli` migration workflow.
+
+[`service-ops`]: https://github.com/tokio-rs/toasty/tree/main/examples/service-ops

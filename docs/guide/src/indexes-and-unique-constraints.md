@@ -366,6 +366,9 @@ keep generated names within a database's identifier-length limit.
 | Query matching | Database uses leftmost-prefix matching | All `partition` fields required; `local` fields optional left-to-right |
 | Column limits | No artificial limits | Up to 4 partition and 4 local attributes per index |
 
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+
 ## Multi-column unique constraints
 
 A struct-level `#[unique(...)]` defines a composite unique index. It takes the
@@ -479,3 +482,8 @@ These methods follow the same patterns as key-generated methods. See
 [Updating Records](./updating-records.md), and
 [Deleting Records](./deleting-records.md) for details on terminal methods and
 builders.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search

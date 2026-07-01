@@ -117,3 +117,7 @@ events for each item operation it performs (`getting single item`,
 `querying primary key`, `batch inserting items`, and so on) with the
 table name, index name, and item counts. Enable them with
 `RUST_LOG=toasty_driver_dynamodb=trace`.
+
+> **Runnable example:** [`service-ops`] lays out a lib + binaries project with connection pooling, tracing, and the `toasty-cli` migration workflow.
+
+[`service-ops`]: https://github.com/tokio-rs/toasty/tree/main/examples/service-ops

@@ -496,3 +496,7 @@ on `contact_country`. The same rules from
 
 Indexes on data-carrying enum variant fields work the same way. The index is
 created on the nullable column for that variant's field.
+
+> **Runnable example:** [`crm-embedded`] flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.
+
+[`crm-embedded`]: https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded
