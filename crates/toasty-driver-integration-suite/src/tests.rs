@@ -32,6 +32,7 @@ pub mod embed_enum_filter_variant_field;
 pub mod embed_enum_index;
 pub mod embed_enum_native_ops;
 pub mod embed_enum_optional;
+pub mod embed_enum_shared_column;
 pub mod embed_enum_shared_type;
 pub mod embed_enum_string_discriminant;
 pub mod embed_enum_unit;
