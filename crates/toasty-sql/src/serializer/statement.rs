@@ -427,6 +427,7 @@ impl ToSql for &stmt::ExprSet {
             stmt::ExprSet::Select(expr) => expr.to_sql(f),
             stmt::ExprSet::Values(expr) => expr.to_sql(f),
             stmt::ExprSet::Update(expr) => expr.to_sql(f),
+            stmt::ExprSet::Delete(expr) => expr.to_sql(f),
             _ => todo!("self={self:?}"),
         }
     }

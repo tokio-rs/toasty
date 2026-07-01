@@ -844,13 +844,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 "only UPDATE and DELETE carry conditions; stmt={stmt:#?}"
             );
 
-            // A conditional UPDATE compiles to a single CTE statement on
-            // backends that support data-modifying CTEs (PostgreSQL). A DELETE
-            // cannot: the statement AST has no DELETE-in-CTE form, so it always
-            // uses the read-modify-write transaction, which every SQL backend
-            // supports (PostgreSQL locks the probed rows via `SELECT ... FOR
-            // UPDATE`).
-            if stmt.is_update() && self.planner.engine.capability().cte_with_update {
+            // A conditional UPDATE or DELETE compiles to a single CTE statement
+            // on backends that support data-modifying CTEs (PostgreSQL);
+            // elsewhere it becomes a read-modify-write transaction (which every
+            // SQL backend supports, locking the probed rows via `SELECT ... FOR
+            // UPDATE` where available).
+            if self.planner.engine.capability().cte_with_update {
                 mir::Operation::ExecStatement(Box::new(
                     self.plan_conditional_sql_query_as_cte(stmt, ty),
                 ))
@@ -1040,13 +1039,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: stmt::Statement,
         ty: stmt::Type,
     ) -> mir::ExecStatement {
-        let (condition, filter, source, write) = self.conditional_write_parts(stmt);
-
-        // Only UPDATE reaches the CTE path; DELETE cannot be nested in a CTE and
-        // is routed to read-modify-write by the caller.
-        let stmt::Statement::Update(mut write) = write else {
-            unreachable!("only UPDATE compiles to a CTE; write={write:#?}");
-        };
+        let (condition, filter, source, mut write) = self.conditional_write_parts(stmt);
 
         // `found`: the probe. Counts rows matching the filter and, of those,
         // how many satisfy the OCC condition.
@@ -1085,19 +1078,33 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             )])),
             distinct: false,
         });
-        write.filter = stmt::Filter::new(stmt::Expr::and(filter, counts_agree));
+        // The write applies only when the two counts agree — AND that guard
+        // onto the write's filter.
+        let guarded_filter = stmt::Filter::new(stmt::Expr::and(filter, counts_agree));
+        match &mut write {
+            stmt::Statement::Update(update) => update.filter = guarded_filter,
+            stmt::Statement::Delete(delete) => delete.filter = guarded_filter,
+            _ => unreachable!("conditional write is UPDATE or DELETE; write={write:#?}"),
+        }
 
         // A `RETURNING` on the write (e.g. a relative `value = value + 1` read
         // back) means the caller wants the changed rows; otherwise the write
-        // just reports how many rows it touched.
-        let returning_len = match &write.returning {
+        // just reports how many rows it touched. Only an UPDATE reads columns
+        // back — a DELETE never has a returning.
+        let returning_len = match write.returning() {
             Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record.fields.len(),
-            Some(returning) => todo!("unexpected conditional update returning={returning:#?}"),
+            Some(returning) => todo!("unexpected conditional write returning={returning:#?}"),
             None => 0,
         };
 
+        // `changed`: the write, wrapped as a data-modifying CTE body.
+        let changed_body: stmt::ExprSet = match write {
+            stmt::Statement::Update(update) => update.into(),
+            stmt::Statement::Delete(delete) => delete.into(),
+            _ => unreachable!("conditional write is UPDATE or DELETE"),
+        };
         let changed = stmt::Cte {
-            query: stmt::Query::new(write),
+            query: stmt::Query::new(changed_body),
         };
 
         let outer = if returning_len == 0 {
@@ -1176,15 +1183,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let (condition, filter, source, write) = self.conditional_write_parts(stmt);
 
         // A conditional write on a backend without data-modifying CTEs (SQLite,
-        // MySQL) — or any conditional DELETE — becomes a transaction: first
-        // probe the matched rows, then apply the write (filter only, no
-        // condition) when every matched row satisfies the condition.
+        // MySQL) becomes a transaction: first probe the matched rows, then apply
+        // the write (filter only, no condition) when every matched row satisfies
+        // the condition.
         //
         // The probe evaluates the condition per matched row (`SELECT
         // <condition> FROM t WHERE <filter>`) rather than as an aggregate: a
-        // per-row projection can carry `FOR UPDATE` to lock the rows against a
-        // concurrent writer, whereas `SELECT count(*) ... FOR UPDATE` is
-        // rejected by PostgreSQL. The engine derives the matched and satisfied
+        // per-row projection can carry `FOR UPDATE` to lock exactly those rows
+        // against a concurrent writer, while `SELECT count(*) ... FOR UPDATE` is
+        // not universally accepted. The engine derives the matched and satisfied
         // counts from the returned rows.
         let read = stmt::Query::builder(stmt::Select {
             source,
