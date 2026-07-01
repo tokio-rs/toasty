@@ -8,7 +8,7 @@ on:
 env:
   # Pinned so a new Rust release cannot break release-plz on its own.
   # Bumped automatically by Renovate; see .github/renovate.json5.
-  RUST_STABLE_VERSION: "1.95.0"
+  RUST_STABLE_VERSION: "1.96.0"
 
 jobs:
   release-plz-release:

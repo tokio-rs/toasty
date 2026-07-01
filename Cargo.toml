@@ -110,7 +110,7 @@ index_vec = "0.1.4"
 inventory = "0.3.24"
 # Must match the version used by `postgres-protocol` (the postgres driver
 # iterates over its `FallibleIterator` types); do not bump independently.
-fallible-iterator = "0.2"
+fallible-iterator = "0.3"
 jiff = "0.2.23"
 lru = "0.18.0"
 mysql_async = { version = "0.37.0", default-features = false, features = [
@@ -128,7 +128,7 @@ quote = "1.0.45"
 rand = "0.10"
 rust_decimal = "1.41.0"
 bigdecimal = "0.4.10"
-rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 syn = { version = "2.0.117", features = ["full", "extra-traits", "visit-mut"] }
