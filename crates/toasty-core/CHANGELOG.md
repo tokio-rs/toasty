@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.7.0...toasty-core-v0.8.0) - 2026-07-01
+
+### Added
+
+- Infer `key` and `references` automatically in `#[belongs_to]` ([#1063])
+- Share columns across enum variants using `#[column("name")]` ([#1064])
+- Add escape support for LIKE expressions ([#1039])
+- Add `set_*` replace-variant methods to the Query builder ([#1037])
+- Allow indexing on unit enums ([#1027])
+- Add BETWEEN operator to query expressions ([#1029])
+- Support `Option<EmbeddedType>` in model fields ([#1021])
+- Support scalar terminal fields in `has_many` relations ([#1012])
+
+### Fixed
+
+- Truncate auto-generated index names that exceed database backend limits ([#1023])
+- Correctly encode boolean values in DynamoDB key attributes ([#945])
+
+### Changed
+
+- [**breaking**] Make UpdateByKey returning columns explicit ([#1024])
+
+[#945]: https://github.com/tokio-rs/toasty/pull/945
+[#1012]: https://github.com/tokio-rs/toasty/pull/1012
+[#1021]: https://github.com/tokio-rs/toasty/pull/1021
+[#1023]: https://github.com/tokio-rs/toasty/pull/1023
+[#1024]: https://github.com/tokio-rs/toasty/pull/1024
+[#1027]: https://github.com/tokio-rs/toasty/pull/1027
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1037]: https://github.com/tokio-rs/toasty/pull/1037
+[#1039]: https://github.com/tokio-rs/toasty/pull/1039
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1064]: https://github.com/tokio-rs/toasty/pull/1064
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.1...toasty-core-v0.7.0) - 2026-05-29
 
 ### Added

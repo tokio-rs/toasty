@@ -7,6 +7,32 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.7.0...toasty-driver-dynamodb-v0.8.0) - 2026-07-01
+
+### Added
+
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+- Add `between` operator to query DSL ([#1029])
+- Support `Option<EmbeddedType>` model fields ([#1021])
+- Support composite unique indices ([#1018])
+
+### Fixed
+
+- Multi-key delete and update operations are now consistent ([#1053])
+- Boolean values are now encoded as N("1"/"0") to match key attribute types ([#945])
+
+### Changed
+
+- [**breaking**] `UpdateByKey` now requires explicit column selection for return values ([#1024])
+
+[#945]: https://github.com/tokio-rs/toasty/pull/945
+[#1018]: https://github.com/tokio-rs/toasty/pull/1018
+[#1021]: https://github.com/tokio-rs/toasty/pull/1021
+[#1024]: https://github.com/tokio-rs/toasty/pull/1024
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1053]: https://github.com/tokio-rs/toasty/pull/1053
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.6.1...toasty-driver-dynamodb-v0.7.0) - 2026-05-29
 
 ### Added

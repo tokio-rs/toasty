@@ -7,6 +7,50 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.7.0...toasty-driver-integration-suite-v0.8.0) - 2026-07-01
+
+### Added
+
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+- Share columns across enum variants via `#[column("name")]` ([#1064])
+- Add escape support for LIKE expressions ([#1039])
+- Allow index on unit enums ([#1027])
+- Add between operator to query DSL ([#1029])
+- Support `Option<EmbeddedType>` model fields ([#1021])
+- Support composite unique indices ([#1018])
+- Support scalar terminal fields in `has_many` ([#1012])
+
+### Fixed
+
+- Prune unreachable enum-decode branch in OR'd variant filters ([#1067])
+- Make multi-key delete and update consistent ([#1053])
+- Truncate auto-generated index names that exceed the backend limit ([#1023])
+- Increment `#[version]` field on query-based updates ([#1022])
+- Encode bool values as N("1"/"0") to match key attribute type ([#945])
+
+### Changed
+
+- [**breaking**] Make UpdateByKey returning columns explicit ([#1024])
+- [**breaking**] Unify per-model query structs into Query<T> ([#995])
+- [**breaking**] Remove the Register trait ([#1006])
+
+[#945]: https://github.com/tokio-rs/toasty/pull/945
+[#995]: https://github.com/tokio-rs/toasty/pull/995
+[#1006]: https://github.com/tokio-rs/toasty/pull/1006
+[#1012]: https://github.com/tokio-rs/toasty/pull/1012
+[#1018]: https://github.com/tokio-rs/toasty/pull/1018
+[#1021]: https://github.com/tokio-rs/toasty/pull/1021
+[#1022]: https://github.com/tokio-rs/toasty/pull/1022
+[#1023]: https://github.com/tokio-rs/toasty/pull/1023
+[#1024]: https://github.com/tokio-rs/toasty/pull/1024
+[#1027]: https://github.com/tokio-rs/toasty/pull/1027
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1039]: https://github.com/tokio-rs/toasty/pull/1039
+[#1053]: https://github.com/tokio-rs/toasty/pull/1053
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1064]: https://github.com/tokio-rs/toasty/pull/1064
+[#1067]: https://github.com/tokio-rs/toasty/pull/1067
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.6.1...toasty-driver-integration-suite-v0.7.0) - 2026-05-29
 
 ### Added

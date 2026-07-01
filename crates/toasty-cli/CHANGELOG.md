@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.7.0...toasty-cli-v0.8.0) - 2026-07-01
+
+### Added
+
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+
+### Fixed
+
+- Include the path in Toasty config load errors ([#1036])
+
+[#1036]: https://github.com/tokio-rs/toasty/pull/1036
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.6.1...toasty-cli-v0.7.0) - 2026-05-29
 
 ### Added
