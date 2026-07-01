@@ -17,6 +17,9 @@ pub struct AlterTable {
 pub enum AlterTableAction {
     /// Rename the table to a new name.
     RenameTo(Name),
+
+    /// Set or clear a database-native table comment.
+    SetComment(Option<String>),
 }
 
 impl Statement {
@@ -25,6 +28,15 @@ impl Statement {
         AlterTable {
             name: Name::from(&table.name[..]),
             action: AlterTableAction::RenameTo(Name::from(new_name)),
+        }
+        .into()
+    }
+
+    /// Sets or clears a table comment.
+    pub fn alter_table_comment(table: &Table) -> Self {
+        AlterTable {
+            name: Name::from(&table.name[..]),
+            action: AlterTableAction::SetComment(table.comment.clone()),
         }
         .into()
     }

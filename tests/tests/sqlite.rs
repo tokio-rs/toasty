@@ -45,6 +45,17 @@ struct PoolItem {
     id: i64,
 }
 
+#[derive(Debug, toasty::Model)]
+#[comment("commented item table")]
+struct CommentedItem {
+    #[key]
+    #[auto]
+    id: i64,
+
+    #[comment("item name")]
+    name: String,
+}
+
 /// In-memory SQLite forces `max_connections = 1`; verify the driver cap
 /// overrides a larger user-requested pool size.
 #[tokio::test]
@@ -71,4 +82,29 @@ async fn auto_i64_key_uses_sqlite_integer_storage_type() {
 
     assert_eq!(id.storage_ty, toasty::schema::db::Type::Integer(4));
     assert!(id.auto_increment);
+}
+
+#[tokio::test]
+async fn model_comments_reach_schema() {
+    let db = toasty::Db::builder()
+        .models(toasty::models!(CommentedItem))
+        .build(toasty_driver_sqlite::Sqlite::in_memory())
+        .await
+        .unwrap();
+
+    let table = db
+        .schema()
+        .db
+        .tables
+        .iter()
+        .find(|table| table.name == "commented_items")
+        .unwrap();
+    let name = table
+        .columns
+        .iter()
+        .find(|column| column.name == "name")
+        .unwrap();
+
+    assert_eq!(table.comment.as_deref(), Some("commented item table"));
+    assert_eq!(name.comment.as_deref(), Some("item name"));
 }

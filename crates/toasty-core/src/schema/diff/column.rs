@@ -42,6 +42,7 @@ impl<'a> Column<'a> {
         fn has_diff(previous: &db::Column, next: &db::Column) -> bool {
             previous.name != next.name
                 || previous.storage_ty != next.storage_ty
+                || previous.comment != next.comment
                 || previous.nullable != next.nullable
                 || previous.primary_key != next.primary_key
                 || previous.auto_increment != next.auto_increment

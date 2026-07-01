@@ -160,6 +160,9 @@ pub struct ModelRoot {
     /// model name.
     pub table_name: Option<String>,
 
+    /// Optional database-native table comment.
+    pub comment: Option<String>,
+
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
 

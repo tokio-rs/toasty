@@ -15,6 +15,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
             index,
         },
         name: name.to_string(),
+        comment: None,
         ty: core_stmt::Type::String,
         storage_ty,
         nullable: false,
@@ -34,6 +35,7 @@ fn make_table(id: usize, name: &str, columns: Vec<Column>) -> Table {
     Table {
         id: TableId(id),
         name: name.to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: pk_columns,
@@ -198,4 +200,44 @@ fn rename_without_hint_is_drop_and_create() {
         sql[1],
         "CREATE TABLE \"accounts\" (\n    \"id\" BIGINT NOT NULL,\n    \"name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);"
     );
+}
+
+#[test]
+fn alter_table_comment_postgresql() {
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8))],
+        )],
+    };
+    let mut to = from.clone();
+    to.tables[0].comment = Some("user table".to_string());
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    assert_eq!(sql, vec!["COMMENT ON TABLE \"users\" IS 'user table';"]);
+}
+
+#[test]
+fn alter_table_comment_mysql() {
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8))],
+        )],
+    };
+    let mut to = from.clone();
+    to.tables[0].comment = Some("user table".to_string());
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
+    let sql = serialize_migration(&stmts, "mysql");
+
+    assert_eq!(sql, vec!["ALTER TABLE `users` COMMENT = 'user table';"]);
 }

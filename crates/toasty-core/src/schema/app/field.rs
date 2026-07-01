@@ -33,6 +33,9 @@ pub struct Field {
     /// The field's application and storage names.
     pub name: FieldName,
 
+    /// Optional database-native column comment.
+    pub comment: Option<String>,
+
     /// The field's type: primitive, embedded, or a relation variant.
     pub ty: FieldTy,
 

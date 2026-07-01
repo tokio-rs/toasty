@@ -18,6 +18,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
             index,
         },
         name: name.to_string(),
+        comment: None,
         ty: core_stmt::Type::String,
         storage_ty,
         nullable: false,
@@ -37,6 +38,7 @@ fn make_table(id: usize, name: &str, columns: Vec<Column>, indices: Vec<Index>) 
     Table {
         id: TableId(id),
         name: name.to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: pk_columns,
@@ -376,4 +378,69 @@ fn create_table_no_redundant_pk_index() {
     );
     assert!(sql[0].starts_with("CREATE TABLE"), "got: {}", sql[0]);
     assert!(sql[0].contains("PRIMARY KEY"), "got: {}", sql[0]);
+}
+
+#[test]
+fn create_table_comments_postgresql() {
+    let from = Schema::default();
+    let mut table = make_table(
+        0,
+        "users",
+        vec![
+            make_column(0, 0, "id", Type::Integer(8)),
+            make_column(0, 1, "name", Type::Text),
+        ],
+        vec![],
+    );
+    table.comment = Some("user table".to_string());
+    table.columns[1].comment = Some("display name".to_string());
+    let to = Schema {
+        tables: vec![table],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    assert_eq!(sql.len(), 3);
+    assert_eq!(
+        sql[0],
+        "CREATE TABLE \"users\" (\n    \"id\" BIGINT NOT NULL,\n    \"name\" TEXT NOT NULL,\n    PRIMARY KEY (\"id\")\n);"
+    );
+    assert_eq!(sql[1], "COMMENT ON TABLE \"users\" IS 'user table';");
+    assert_eq!(
+        sql[2],
+        "COMMENT ON COLUMN \"users\".\"name\" IS 'display name';"
+    );
+}
+
+#[test]
+fn create_table_comments_mysql() {
+    let from = Schema::default();
+    let mut table = make_table(
+        0,
+        "users",
+        vec![
+            make_column(0, 0, "id", Type::Integer(8)),
+            make_column(0, 1, "name", Type::Text),
+        ],
+        vec![],
+    );
+    table.comment = Some("user table".to_string());
+    table.columns[1].comment = Some("display name".to_string());
+    let to = Schema {
+        tables: vec![table],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
+    let sql = serialize_migration(&stmts, "mysql");
+
+    assert_eq!(sql.len(), 1);
+    assert_eq!(
+        sql[0],
+        "CREATE TABLE `users` (\n    `id` BIGINT NOT NULL,\n    `name` TEXT NOT NULL COMMENT 'display name',\n    PRIMARY KEY (`id`)\n) COMMENT='user table';"
+    );
 }

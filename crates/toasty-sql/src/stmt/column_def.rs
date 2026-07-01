@@ -13,6 +13,8 @@ pub struct ColumnDef {
     pub name: String,
     /// Storage type (e.g. `INTEGER`, `TEXT`).
     pub ty: db::Type,
+    /// Optional database-native column comment.
+    pub comment: Option<String>,
     /// When `true`, the column has a `NOT NULL` constraint.
     pub not_null: bool,
     /// When `true`, the column auto-increments.
@@ -36,6 +38,7 @@ impl ColumnDef {
             return Self {
                 name: column.name.clone(),
                 ty: db::Type::Text,
+                comment: column.comment.clone(),
                 not_null: !column.nullable,
                 auto_increment: column.auto_increment,
                 check: Some(CheckConstraint {
@@ -56,6 +59,7 @@ impl ColumnDef {
         Self {
             name: column.name.clone(),
             ty: column.storage_ty.clone(),
+            comment: column.comment.clone(),
             not_null: !column.nullable,
             auto_increment: column.auto_increment,
             check: None,
