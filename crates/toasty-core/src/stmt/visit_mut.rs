@@ -1228,6 +1228,7 @@ where
         ExprSet::Select(expr) => v.visit_stmt_select_mut(expr),
         ExprSet::SetOp(expr) => v.visit_expr_set_op_mut(expr),
         ExprSet::Update(expr) => v.visit_stmt_update_mut(expr),
+        ExprSet::Delete(expr) => v.visit_stmt_delete_mut(expr),
         ExprSet::Values(expr) => v.visit_values_mut(expr),
         ExprSet::Insert(expr) => v.visit_stmt_insert_mut(expr),
     }
