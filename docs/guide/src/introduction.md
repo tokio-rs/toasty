@@ -64,3 +64,7 @@ transactions.
 - **[Transactions](./transactions.md)** — atomic operations
 - **[Database Setup](./database-setup.md)** — connection URLs, table creation, and supported databases
 - **[Migrations and Schema Management](./schema-management.md)** — create and reset database tables
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog

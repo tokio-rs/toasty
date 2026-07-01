@@ -260,3 +260,7 @@ PostgreSQL and MySQL accept only `Default` and `Deferred`; calling
 they diverge on Turso under [`concurrent_writes()`](./turso.md#concurrent-writes):
 `Default` issues `BEGIN CONCURRENT` (MVCC) and `Deferred` is the way to opt
 out and request classic locking on a single transaction.
+
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

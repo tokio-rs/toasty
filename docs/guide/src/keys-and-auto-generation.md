@@ -125,6 +125,9 @@ struct User {
 }
 ```
 
+> **Runnable example:** [`crm-embedded`] flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.
+
+
 ## Auto-generated values
 
 The `#[auto]` attribute tells Toasty to generate the field's value
@@ -399,6 +402,9 @@ let todos = Todo::filter_by_user_id(&1)
 # }
 ```
 
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+
 ## What gets generated
 
 For a model with `#[key]`, Toasty generates these methods:
@@ -409,3 +415,9 @@ For a model with `#[key]`, Toasty generates these methods:
 | `#[key]` on multiple fields | `get_by_<a>_and_<b>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
 | `#[key(a, b)]` on struct | Same generated methods as `#[key]` on multiple fields; `a` is the partition key, `b` is the local (sort) key |
 | `#[key(partition = a, local = b)]` | `get_by_<a>_and_<b>()`, `filter_by_<a>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`crm-embedded`]: https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations
