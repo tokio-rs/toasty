@@ -199,3 +199,52 @@ pub async fn shared_column_variant_gated_filter(t: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// OR-ing the two variant-gated predicates on the shared `creature_name` column
+/// is the natural way to query a single shared column across variants: "any
+/// creature named Bob, regardless of variant". This used to panic in the SQL
+/// serializer (issue #1061) because factoring lifted the shared predicate out
+/// from under its variant gates, exposing the decode's unreachable `Error` else
+/// branch.
+#[driver_test(requires(scan), scenario(crate::scenarios::character_creature))]
+pub async fn shared_column_cross_variant_or(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    Character::create()
+        .creature(Creature::Human {
+            name: "Bob".to_string(),
+            profession: "builder".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    Character::create()
+        .creature(Creature::Animal {
+            name: "Bob".to_string(),
+            species: "dog".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    Character::create()
+        .creature(Creature::Animal {
+            name: "Rex".to_string(),
+            species: "cat".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    // Both a Human "Bob" and an Animal "Bob" live in the shared column; the
+    // cross-variant OR finds both while excluding "Rex".
+    let bobs = Character::filter(
+        Character::fields()
+            .creature()
+            .human()
+            .name()
+            .eq("Bob")
+            .or(Character::fields().creature().animal().name().eq("Bob")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(bobs.len(), 2);
+
+    Ok(())
+}
