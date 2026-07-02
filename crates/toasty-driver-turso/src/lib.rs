@@ -500,33 +500,6 @@ impl fmt::Debug for Turso {
 }
 
 #[async_trait]
-trait TursoTrait {
-    fn path(&self) -> &TursoPath;
-    fn concurrent_writes(&self) -> bool;
-    fn database_mutex(&self) -> &Mutex<Option<Database>>;
-    async fn cached_database(&self) -> Result<Database>;
-}
-
-#[async_trait]
-impl TursoTrait for Turso {
-    fn path(&self) -> &TursoPath {
-        &self.base.path
-    }
-
-    fn concurrent_writes(&self) -> bool {
-        self.base.concurrent_writes
-    }
-
-    fn database_mutex(&self) -> &Mutex<Option<Database>> {
-        &self.database
-    }
-
-    async fn cached_database(&self) -> Result<Database> {
-        self.database().await
-    }
-}
-
-#[async_trait]
 impl Driver for Turso {
     fn url(&self) -> Cow<'_, str> {
         TursoBase::url(&self.base.path)
