@@ -154,14 +154,76 @@ impl BuilderOptions {
     }
 }
 
-/// Shared config struct
-struct TursoConfig {
+struct TursoBase {
     path: TursoPath,
     options: BuilderOptions,
     concurrent_writes: bool,
 }
 
-impl TursoConfig {
+impl TursoBase {
+    pub fn url(path: &TursoPath) -> Cow<'_, str> {
+        match path {
+            TursoPath::InMemory => Cow::Borrowed("turso::memory:"),
+            TursoPath::File(path) => Cow::Owned(format!("turso:{}", path.display())),
+        }
+    }
+
+    pub fn capability() -> &'static Capability {
+        &Capability::TURSO
+    }
+
+    pub async fn connect(
+        db: Database,
+        concurrent_writes: bool,
+    ) -> Result<Box<dyn toasty_core::Connection>> {
+        let conn = db.connect().map_err(classify_turso_error)?;
+
+        if concurrent_writes {
+            // `PRAGMA journal_mode = ...` returns the new mode as a row; the
+            // `execute` path errors with "unexpected row during execution"
+            // on any pragma that emits one. Use `pragma_update` so the row
+            // is consumed.
+            conn.pragma_update("journal_mode", "'mvcc'")
+                .await
+                .map_err(classify_turso_error)?;
+        }
+
+        Ok(Box::new(Connection {
+            conn,
+            default_begin_sql: if concurrent_writes {
+                "BEGIN CONCURRENT"
+            } else {
+                "BEGIN"
+            },
+        }))
+    }
+
+    pub fn generate_migration(schema_diff: &diff::Schema<'_>) -> Migration {
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement()))
+            .collect();
+
+        Migration::new_sql_with_breakpoints(&sql_strings)
+    }
+
+    pub async fn reset_db(database: &Mutex<Option<Database>>, path: &TursoPath) -> Result<()> {
+        // Drop the cached Database so subsequent `connect()` calls open a
+        // fresh one. For in-memory this is the only way to wipe state;
+        // for file-backed databases the file is also removed below.
+        database.lock().await.take();
+
+        if let TursoPath::File(path) = path
+            && path.exists()
+        {
+            std::fs::remove_file(path).map_err(toasty_core::Error::driver_operation_failed)?;
+        }
+
+        Ok(())
+    }
+
     pub fn concurrent_writes(mut self) -> Self {
         self.concurrent_writes = true;
         self
@@ -239,7 +301,7 @@ impl TursoConfig {
 ///     .experimental_attach(true);
 /// ```
 pub struct Turso {
-    config: TursoConfig,
+    base: TursoBase,
     /// Shared `turso::Database` reused across every `connect()` call so that
     /// all pool slots see the same underlying database. Without this, each
     /// connection to `:memory:` would open a fresh empty database; even
@@ -288,7 +350,7 @@ impl Turso {
 
     fn with_path(path: TursoPath) -> Self {
         Self {
-            config: TursoConfig {
+            base: TursoBase {
                 path,
                 options: BuilderOptions::default(),
                 concurrent_writes: false,
@@ -314,7 +376,7 @@ impl Turso {
     /// `Exclusive` issue `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE` respectively.
     pub fn concurrent_writes(self) -> Self {
         Self {
-            config: self.config.concurrent_writes(),
+            base: self.base.concurrent_writes(),
             ..self
         }
     }
@@ -325,7 +387,7 @@ impl Turso {
     /// encryption without supplying a key.
     pub fn experimental_encryption(self, opts: EncryptionOpts) -> Self {
         Self {
-            config: self.config.experimental_encryption(opts),
+            base: self.base.experimental_encryption(opts),
             ..self
         }
     }
@@ -334,7 +396,7 @@ impl Turso {
     /// `turso::Builder::experimental_attach`.
     pub fn experimental_attach(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_attach(on),
+            base: self.base.experimental_attach(on),
             ..self
         }
     }
@@ -343,7 +405,7 @@ impl Turso {
     /// `turso::Builder::experimental_custom_types`.
     pub fn experimental_custom_types(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_custom_types(on),
+            base: self.base.experimental_custom_types(on),
             ..self
         }
     }
@@ -352,7 +414,7 @@ impl Turso {
     /// `turso::Builder::experimental_generated_columns`.
     pub fn experimental_generated_columns(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_generated_columns(on),
+            base: self.base.experimental_generated_columns(on),
             ..self
         }
     }
@@ -361,7 +423,7 @@ impl Turso {
     /// `turso::Builder::experimental_index_method`.
     pub fn experimental_index_method(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_index_method(on),
+            base: self.base.experimental_index_method(on),
             ..self
         }
     }
@@ -370,7 +432,7 @@ impl Turso {
     /// `turso::Builder::experimental_materialized_views`.
     pub fn experimental_materialized_views(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_materialized_views(on),
+            base: self.base.experimental_materialized_views(on),
             ..self
         }
     }
@@ -379,7 +441,7 @@ impl Turso {
     /// `turso::Builder::experimental_vacuum`.
     pub fn experimental_vacuum(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_vacuum(on),
+            base: self.base.experimental_vacuum(on),
             ..self
         }
     }
@@ -388,7 +450,7 @@ impl Turso {
     /// `turso::Builder::experimental_multiprocess_wal`.
     pub fn experimental_multiprocess_wal(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_multiprocess_wal(on),
+            base: self.base.experimental_multiprocess_wal(on),
             ..self
         }
     }
@@ -397,13 +459,13 @@ impl Turso {
     /// `turso::Builder::experimental_without_rowid`.
     pub fn experimental_without_rowid(self, on: bool) -> Self {
         Self {
-            config: self.config.experimental_without_rowid(on),
+            base: self.base.experimental_without_rowid(on),
             ..self
         }
     }
 
     fn path_str(&self) -> &str {
-        match &self.config.path {
+        match &self.base.path {
             TursoPath::File(p) => p.to_str().unwrap_or(":memory:"),
             TursoPath::InMemory => ":memory:",
         }
@@ -420,10 +482,7 @@ impl Turso {
         if let Some(db) = slot.as_ref() {
             return Ok(db.clone());
         }
-        let builder = self
-            .config
-            .options
-            .apply(Builder::new_local(self.path_str()));
+        let builder = self.base.options.apply(Builder::new_local(self.path_str()));
         let db = builder.build().await.map_err(classify_turso_error)?;
         *slot = Some(db.clone());
         Ok(db)
@@ -433,91 +492,29 @@ impl Turso {
 impl fmt::Debug for Turso {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Turso")
-            .field("path", &self.config.path)
-            .field("concurrent_writes", &self.config.concurrent_writes)
-            .field("options", &self.config.options)
+            .field("path", &self.base.path)
+            .field("concurrent_writes", &self.base.concurrent_writes)
+            .field("options", &self.base.options)
             .finish_non_exhaustive()
     }
 }
 
 #[async_trait]
-trait TursoCommon {
+trait TursoTrait {
     fn path(&self) -> &TursoPath;
     fn concurrent_writes(&self) -> bool;
     fn database_mutex(&self) -> &Mutex<Option<Database>>;
     async fn cached_database(&self) -> Result<Database>;
-
-    fn url(&self) -> Cow<'_, str> {
-        match self.path() {
-            TursoPath::InMemory => Cow::Borrowed("turso::memory:"),
-            TursoPath::File(path) => Cow::Owned(format!("turso:{}", path.display())),
-        }
-    }
-
-    fn capability(&self) -> &'static Capability {
-        &Capability::TURSO
-    }
-
-    async fn connect(&self) -> Result<Box<dyn toasty_core::Connection>> {
-        let db = self.cached_database().await?;
-        let conn = db.connect().map_err(classify_turso_error)?;
-
-        let concurrent_writes = self.concurrent_writes();
-        if concurrent_writes {
-            // `PRAGMA journal_mode = ...` returns the new mode as a row; the
-            // `execute` path errors with "unexpected row during execution"
-            // on any pragma that emits one. Use `pragma_update` so the row
-            // is consumed.
-            conn.pragma_update("journal_mode", "'mvcc'")
-                .await
-                .map_err(classify_turso_error)?;
-        }
-
-        Ok(Box::new(Connection {
-            conn,
-            default_begin_sql: if concurrent_writes {
-                "BEGIN CONCURRENT"
-            } else {
-                "BEGIN"
-            },
-        }))
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql_with_breakpoints(&sql_strings)
-    }
-
-    async fn reset_db(&self) -> Result<()> {
-        // Drop the cached Database so subsequent `connect()` calls open a
-        // fresh one. For in-memory this is the only way to wipe state;
-        // for file-backed databases the file is also removed below.
-        self.database_mutex().lock().await.take();
-
-        if let TursoPath::File(path) = &self.path()
-            && path.exists()
-        {
-            std::fs::remove_file(path).map_err(toasty_core::Error::driver_operation_failed)?;
-        }
-
-        Ok(())
-    }
 }
 
 #[async_trait]
-impl TursoCommon for Turso {
+impl TursoTrait for Turso {
     fn path(&self) -> &TursoPath {
-        &self.config.path
+        &self.base.path
     }
 
     fn concurrent_writes(&self) -> bool {
-        self.config.concurrent_writes
+        self.base.concurrent_writes
     }
 
     fn database_mutex(&self) -> &Mutex<Option<Database>> {
@@ -532,23 +529,24 @@ impl TursoCommon for Turso {
 #[async_trait]
 impl Driver for Turso {
     fn url(&self) -> Cow<'_, str> {
-        TursoCommon::url(self)
+        TursoBase::url(&self.base.path)
     }
 
     fn capability(&self) -> &'static Capability {
-        TursoCommon::capability(self)
+        TursoBase::capability()
     }
 
     async fn connect(&self) -> Result<Box<dyn toasty_core::Connection>> {
-        TursoCommon::connect(self).await
+        let database = self.database().await?;
+        TursoBase::connect(database, self.base.concurrent_writes).await
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        TursoCommon::generate_migration(self, schema_diff)
+        TursoBase::generate_migration(schema_diff)
     }
 
     async fn reset_db(&self) -> Result<()> {
-        TursoCommon::reset_db(self).await
+        TursoBase::reset_db(&self.database, &self.base.path).await
     }
 }
 
@@ -800,7 +798,7 @@ mod tests {
 
     /// The file path `Turso::new` resolves out of a `turso:` URL.
     fn file_path(url: &str) -> PathBuf {
-        match Turso::new(url).unwrap().config.path {
+        match Turso::new(url).unwrap().base.path {
             TursoPath::File(path) => path,
             TursoPath::InMemory => panic!("expected a file-backed database for {url}"),
         }
@@ -831,7 +829,7 @@ mod tests {
     #[test]
     fn new_memory_url_stays_in_memory() {
         assert!(matches!(
-            Turso::new("turso::memory:").unwrap().config.path,
+            Turso::new("turso::memory:").unwrap().base.path,
             TursoPath::InMemory
         ));
     }
