@@ -177,6 +177,11 @@ impl ValueStream {
         if let Some(stream) = &mut self.stream {
             while let Some(res) = stream.next().await {
                 let value = res?;
+                let value = if let Some((ty, _)) = &self.ty {
+                    value.normalize_for_load(ty)
+                } else {
+                    value
+                };
 
                 if let Some((ty, location)) = &self.ty {
                     assert!(
@@ -242,20 +247,17 @@ impl ValueStream {
         match &self.ty {
             Some((prev, _)) => assert_eq!(*prev, ty),
             None => {
-                match &self.buffer {
-                    Buffer::One(value) => assert!(
+                // Normalize already-buffered values against the new type so
+                // any `Value::Object` carried over from the driver collapses
+                // to `Value::Record` here — single conversion site.
+                let mut tmp = mem::take(&mut self.buffer);
+                while let Some(value) = tmp.next() {
+                    let value = value.normalize_for_load(&ty);
+                    assert!(
                         value.is_a(&ty),
                         "expected `{ty:?}`; was={value:#?}; origin={location}"
-                    ),
-                    Buffer::Many(values) => {
-                        for value in values {
-                            assert!(
-                                value.is_a(&ty),
-                                "expected `{ty:?}`; was={value:#?}; origin={location}"
-                            );
-                        }
-                    }
-                    _ => {}
+                    );
+                    self.buffer.push(value);
                 }
 
                 self.ty = Some((ty, location));
@@ -273,16 +275,23 @@ impl Stream for ValueStream {
         if let Some(next) = self.buffer.next() {
             Poll::Ready(Some(Ok(next)))
         } else if let Some(stream) = self.stream.as_mut() {
-            let next = Pin::new(stream).poll_next(cx);
-            if let Poll::Ready(Some(Ok(value))) = &next
-                && let Some((ty, location)) = &self.ty
-            {
-                assert!(
-                    value.is_a(ty),
-                    "expected `{ty:?}`; was={value:#?}; origin={location}"
-                );
+            match Pin::new(stream).poll_next(cx) {
+                Poll::Ready(Some(Ok(value))) => {
+                    let value = if let Some((ty, _)) = &self.ty {
+                        value.normalize_for_load(ty)
+                    } else {
+                        value
+                    };
+                    if let Some((ty, location)) = &self.ty {
+                        assert!(
+                            value.is_a(ty),
+                            "expected `{ty:?}`; was={value:#?}; origin={location}"
+                        );
+                    }
+                    Poll::Ready(Some(Ok(value)))
+                }
+                other => other,
             }
-            next
         } else {
             Poll::Ready(None)
         }

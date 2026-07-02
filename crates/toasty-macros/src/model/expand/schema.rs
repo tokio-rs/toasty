@@ -128,9 +128,13 @@ impl Expand<'_> {
                         _ => quote!(None),
                     };
 
-                    nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
-                    deferred = quote!(<#ty as #toasty::Field>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
+                    // `#[document]` fields resolve through `Document`;
+                    // the rest go through `Field`. Both traits expose the
+                    // same `NULLABLE` / `DEFERRED` / `field_ty` surface.
+                    let trait_ident = field.trait_ident();
+                    nullable = quote!(<#ty as #toasty::#trait_ident>::NULLABLE);
+                    deferred = quote!(<#ty as #toasty::#trait_ident>::DEFERRED);
+                    field_ty = quote!(<#ty as #toasty::#trait_ident>::field_ty(#storage_ty));
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
@@ -509,10 +513,11 @@ impl Expand<'_> {
             .iter()
             .map(|field| match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    // Primitives use Field::register which delegates to inner
-                    // type if it's an embedded type (via the Field impl).
+                    // Field / Document both expose `register`; pick the right
+                    // trait for the field.
+                    let trait_ident = field.trait_ident();
                     quote! {
-                        <#ty as #toasty::Field>::register(model_set);
+                        <#ty as #toasty::#trait_ident>::register(model_set);
                     }
                 }
                 FieldTy::BelongsTo(rel) => {

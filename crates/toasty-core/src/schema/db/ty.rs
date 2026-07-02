@@ -114,6 +114,17 @@ pub enum Type {
     /// parameters that the engine sends as a single PG array operand.
     List(Box<Type>),
 
+    /// A document column storing a structured value as a single unit:
+    /// `jsonb` / `json` on PostgreSQL, `JSON` on MySQL, JSON1 text on SQLite,
+    /// BSON on MongoDB, a Map attribute on DynamoDB. `binary` selects the
+    /// binary encoding (`jsonb`) over the text encoding (`json`) where the
+    /// backend distinguishes them.
+    Document {
+        /// Selects the binary document encoding (`jsonb`) over the text
+        /// encoding (`json`) where the backend distinguishes them.
+        binary: bool,
+    },
+
     /// User-specified unrecognized type
     Custom(String),
 }
@@ -160,6 +171,13 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
+                // A document, or a list of documents, is stored as a single
+                // document column (`jsonb` on PG, `JSON` elsewhere) — never a
+                // native array.
+                stmt::Type::Document(_) => Ok(Type::Document { binary: true }),
+                stmt::Type::List(elem) if matches!(**elem, stmt::Type::Document(_)) => {
+                    Ok(Type::Document { binary: true })
+                }
                 stmt::Type::List(elem) => Ok(Type::List(Box::new(Self::from_app(elem, None, db)?))),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",

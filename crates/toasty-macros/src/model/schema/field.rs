@@ -4,6 +4,21 @@ use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
 
+/// Parsed `#[document]` / `#[document(text)]` attribute data.
+///
+/// `#[document]` forces a field into document storage. The `text` modifier
+/// (`#[document(text)]`) selects PostgreSQL's text `json` over `jsonb`; it is
+/// parsed here but rejected during validation until the text encoding path is
+/// wired up.
+#[derive(Debug, Clone)]
+pub(crate) struct DocumentAttr {
+    /// True if `#[document(text)]` was written (the `binary: false` encoding).
+    pub(crate) text: bool,
+
+    /// The originating attribute, retained for span-accurate diagnostics.
+    pub(crate) attr: syn::Attribute,
+}
+
 #[derive(Debug)]
 pub(crate) struct Field {
     /// Index of field in the containing model
@@ -49,6 +64,9 @@ pub(crate) struct FieldAttr {
     /// Expression to apply on create and update: `#[update(<expr>)]`
     pub(crate) update_expr: Option<syn::Expr>,
 
+    /// Document-storage info for the field: `#[document]` or `#[document(text)]`
+    pub(crate) document: Option<DocumentAttr>,
+
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
 }
@@ -80,6 +98,7 @@ impl FieldAttr {
             column: None,
             default_expr: None,
             update_expr: None,
+            document: None,
             versionable: false,
         };
 
@@ -181,6 +200,51 @@ impl FieldAttr {
                      wrap the field type in `toasty::Json<T>` instead \
                      (e.g. `tags: toasty::Json<Vec<String>>`)",
                 ));
+            } else if attr.path().is_ident("document") {
+                if field_attr.document.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[document] attribute",
+                    ));
+                } else {
+                    let mut text = false;
+
+                    match &attr.meta {
+                        // Bare `#[document]`.
+                        syn::Meta::Path(_) => {}
+                        // `#[document(text)]` and friends.
+                        syn::Meta::List(_) => {
+                            match attr.parse_args_with(
+                                syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated,
+                            ) {
+                                Ok(args) => {
+                                    for arg in &args {
+                                        if arg == "text" {
+                                            text = true;
+                                        } else {
+                                            errs.push(syn::Error::new_spanned(
+                                                arg,
+                                                "unsupported document argument; expected `text`",
+                                            ));
+                                        }
+                                    }
+                                }
+                                Err(e) => errs.push(e),
+                            }
+                        }
+                        syn::Meta::NameValue(_) => {
+                            errs.push(syn::Error::new_spanned(
+                                attr,
+                                "#[document] does not take a value; use `#[document]` or `#[document(text)]`",
+                            ));
+                        }
+                    }
+
+                    field_attr.document = Some(DocumentAttr {
+                        text,
+                        attr: attr.clone(),
+                    });
+                }
             }
         }
 
@@ -193,6 +257,20 @@ impl FieldAttr {
 }
 
 impl Field {
+    /// The toasty schema trait this field's primitive codegen resolves
+    /// through — `Document` for `#[document]` fields, `Field` otherwise.
+    ///
+    /// The two traits expose the same shape (`ExprTarget`, `NULLABLE`,
+    /// `field_ty`, `register`), so callers can splice this ident into a
+    /// `<#ty as #toasty::#trait_ident>::…` path uniformly.
+    pub(crate) fn trait_ident(&self) -> proc_macro2::TokenStream {
+        if self.attrs.document.is_some() {
+            quote::quote!(Document)
+        } else {
+            quote::quote!(Field)
+        }
+    }
+
     pub(super) fn from_ast(
         field: &syn::Field,
         model_ident: &syn::Ident,
@@ -327,6 +405,59 @@ impl Field {
                 field,
                 "#[version] cannot be combined with #[auto]",
             ));
+        }
+
+        if let Some(doc) = &attrs.document {
+            // `#[document(text)]` is parsed but the text-encoding path is not
+            // yet implemented.
+            if doc.text {
+                errs.push(syn::Error::new_spanned(
+                    &doc.attr,
+                    "#[document(text)] is not yet supported",
+                ));
+            }
+
+            if ty.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with relation attributes",
+                ));
+            }
+
+            if attrs.key.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[key]",
+                ));
+            }
+
+            if attrs.versionable {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[version]",
+                ));
+            }
+
+            if attrs.auto.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[auto]",
+                ));
+            }
+
+            if attrs.is_indexed() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[index] / #[unique] on a #[document] field is not yet supported",
+                ));
+            }
+
+            if attrs.column.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[column] on a #[document] field is not yet supported",
+                ));
+            }
         }
 
         if let Some(err) = errs.collect() {
