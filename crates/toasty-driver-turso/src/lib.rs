@@ -161,18 +161,18 @@ struct TursoBase {
 }
 
 impl TursoBase {
-    pub fn url(path: &TursoPath) -> Cow<'_, str> {
+    fn url(path: &TursoPath) -> Cow<'_, str> {
         match path {
             TursoPath::InMemory => Cow::Borrowed("turso::memory:"),
             TursoPath::File(path) => Cow::Owned(format!("turso:{}", path.display())),
         }
     }
 
-    pub fn capability() -> &'static Capability {
+    fn capability() -> &'static Capability {
         &Capability::TURSO
     }
 
-    pub async fn connect(
+    async fn connect(
         db: Database,
         concurrent_writes: bool,
     ) -> Result<Box<dyn toasty_core::Connection>> {
@@ -198,7 +198,7 @@ impl TursoBase {
         }))
     }
 
-    pub fn generate_migration(schema_diff: &diff::Schema<'_>) -> Migration {
+    fn generate_migration(schema_diff: &diff::Schema<'_>) -> Migration {
         let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
 
         let sql_strings: Vec<String> = statements
@@ -209,7 +209,7 @@ impl TursoBase {
         Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
-    pub async fn reset_db(database: &Mutex<Option<Database>>, path: &TursoPath) -> Result<()> {
+    async fn reset_db(database: &Mutex<Option<Database>>, path: &TursoPath) -> Result<()> {
         // Drop the cached Database so subsequent `connect()` calls open a
         // fresh one. For in-memory this is the only way to wipe state;
         // for file-backed databases the file is also removed below.
@@ -224,52 +224,52 @@ impl TursoBase {
         Ok(())
     }
 
-    pub fn concurrent_writes(mut self) -> Self {
+    fn concurrent_writes(mut self) -> Self {
         self.concurrent_writes = true;
         self
     }
 
-    pub fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
+    fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
         self.options.encryption = Some(opts);
         self
     }
 
-    pub fn experimental_attach(mut self, on: bool) -> Self {
+    fn experimental_attach(mut self, on: bool) -> Self {
         self.options.attach = on;
         self
     }
 
-    pub fn experimental_custom_types(mut self, on: bool) -> Self {
+    fn experimental_custom_types(mut self, on: bool) -> Self {
         self.options.custom_types = on;
         self
     }
 
-    pub fn experimental_generated_columns(mut self, on: bool) -> Self {
+    fn experimental_generated_columns(mut self, on: bool) -> Self {
         self.options.generated_columns = on;
         self
     }
 
-    pub fn experimental_index_method(mut self, on: bool) -> Self {
+    fn experimental_index_method(mut self, on: bool) -> Self {
         self.options.index_method = on;
         self
     }
 
-    pub fn experimental_materialized_views(mut self, on: bool) -> Self {
+    fn experimental_materialized_views(mut self, on: bool) -> Self {
         self.options.materialized_views = on;
         self
     }
 
-    pub fn experimental_vacuum(mut self, on: bool) -> Self {
+    fn experimental_vacuum(mut self, on: bool) -> Self {
         self.options.vacuum = on;
         self
     }
 
-    pub fn experimental_multiprocess_wal(mut self, on: bool) -> Self {
+    fn experimental_multiprocess_wal(mut self, on: bool) -> Self {
         self.options.multiprocess_wal = on;
         self
     }
 
-    pub fn experimental_without_rowid(mut self, on: bool) -> Self {
+    fn experimental_without_rowid(mut self, on: bool) -> Self {
         self.options.without_rowid = on;
         self
     }
