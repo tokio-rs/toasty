@@ -13,6 +13,10 @@ categories.workspace = true
 readme.workspace = true
 documentation = "https://docs.rs/toasty-driver-turso"
 
+[features]
+default = ["sync"]
+sync = ["turso/sync"]
+
 [dependencies]
 async-trait.workspace = true
 toasty-core.workspace = true
