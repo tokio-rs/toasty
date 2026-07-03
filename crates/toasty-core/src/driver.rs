@@ -55,6 +55,9 @@
 mod capability;
 pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
 
+pub mod log;
+pub use log::QueryLogConfig;
+
 mod response;
 pub use response::{ExecResponse, Rows};
 
@@ -144,6 +147,14 @@ pub trait Connection: Debug + Send + 'static {
     /// dispatches them here. The driver translates each operation into
     /// backend-specific calls and returns an [`ExecResponse`].
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
+
+    /// Applies the per-query tracing configuration.
+    ///
+    /// Called once by the connection pool when it creates the connection,
+    /// with the values set on `Db::builder()`. Drivers that emit the
+    /// `toasty::query` event (see [`log`]) store the config and consult it
+    /// on every operation; the default implementation ignores it.
+    fn set_query_log_config(&mut self, _config: QueryLogConfig) {}
 
     /// Cheap, synchronous, local check that the driver's client object
     /// still considers the connection open.

@@ -8,7 +8,7 @@ use std::{
     },
     time::Duration,
 };
-use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, Driver, QueryLogConfig};
 use tokio::{sync::Notify, task::JoinHandle};
 
 use super::connection_task::{ConnectionHandle, ConnectionOperation};
@@ -35,6 +35,9 @@ pub(crate) struct PoolConfig {
     pub(crate) pre_ping: bool,
     pub(crate) max_connection_lifetime: Option<Duration>,
     pub(crate) max_connection_idle_time: Option<Duration>,
+    /// Per-query tracing configuration applied to each connection the
+    /// pool creates.
+    pub(crate) query_log: QueryLogConfig,
 }
 
 impl Default for PoolConfig {
@@ -46,6 +49,7 @@ impl Default for PoolConfig {
             pre_ping: false,
             max_connection_lifetime: None,
             max_connection_idle_time: None,
+            query_log: QueryLogConfig::default(),
         }
     }
 }
@@ -100,6 +104,7 @@ impl Pool {
             pre_ping: config.pre_ping,
             max_connection_lifetime: config.max_connection_lifetime,
             max_connection_idle_time: config.max_connection_idle_time,
+            query_log: config.query_log,
         })
         .runtime(deadpool::Runtime::Tokio1)
         .max_size(effective_max)
@@ -130,7 +135,7 @@ impl Pool {
     /// Retrieves a connection from the pool.
     pub(crate) async fn get(&self, shared: Arc<super::Shared>) -> crate::Result<super::Connection> {
         let connection = self.inner.get().await.map_err(|e| {
-            tracing::error!(error = %e, "failed to acquire connection from pool");
+            tracing::warn!(error = %e, "failed to acquire connection from pool");
             toasty_core::Error::connection_pool(e)
         })?;
         Ok(super::Connection {
@@ -169,6 +174,7 @@ pub(super) struct Manager {
     pre_ping: bool,
     max_connection_lifetime: Option<Duration>,
     max_connection_idle_time: Option<Duration>,
+    query_log: QueryLogConfig,
 }
 
 impl std::fmt::Debug for Manager {
@@ -185,9 +191,10 @@ impl deadpool::managed::Manager for Manager {
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
         tracing::debug!("creating new pooled connection");
-        let connection = self.driver.connect().await.inspect_err(|e| {
-            tracing::error!(error = %e, "failed to create database connection");
+        let mut connection = self.driver.connect().await.inspect_err(|e| {
+            tracing::warn!(error = %e, "failed to create database connection");
         })?;
+        connection.set_query_log_config(self.query_log);
         Ok(ConnectionHandle::spawn(
             connection,
             self.engine.clone(),
@@ -224,7 +231,11 @@ impl deadpool::managed::Manager for Manager {
         }
         if self.pre_ping {
             let (tx, rx) = tokio::sync::oneshot::channel();
-            if obj.in_tx.send(ConnectionOperation::Ping { tx }).is_err() {
+            let ping = ConnectionOperation::Ping {
+                span: tracing::Span::current(),
+                tx,
+            };
+            if obj.in_tx.send(ping).is_err() {
                 tracing::debug!("pre-ping channel closed; discarding pooled connection");
                 return Err(deadpool::managed::RecycleError::message(
                     "background task is no longer running",
@@ -233,7 +244,7 @@ impl deadpool::managed::Manager for Manager {
             match rx.await {
                 Ok(Ok(())) => {}
                 Ok(Err(err)) => {
-                    tracing::debug!(error = %err, "pre-ping failed; discarding pooled connection");
+                    tracing::warn!(error = %err, "pre-ping failed; discarding pooled connection");
                     return Err(deadpool::managed::RecycleError::Backend(err));
                 }
                 Err(_) => {
@@ -394,18 +405,22 @@ impl SweepTask {
     /// healthy connection.
     async fn ping_conn(handle: &ConnectionHandle) -> bool {
         let (tx, rx) = tokio::sync::oneshot::channel();
-        if handle.in_tx.send(ConnectionOperation::Ping { tx }).is_err() {
+        let ping = ConnectionOperation::Ping {
+            span: tracing::Span::current(),
+            tx,
+        };
+        if handle.in_tx.send(ping).is_err() {
             return false;
         }
         match tokio::time::timeout(DEFAULT_SWEEP_PING_TIMEOUT, rx).await {
             Ok(Ok(Ok(()))) => true,
             Ok(Ok(Err(err))) => {
-                tracing::debug!(error = %err, "sweep ping failed");
+                tracing::warn!(error = %err, "sweep ping failed; discarding pooled connection");
                 false
             }
             Ok(Err(_)) => false, // connection task dropped tx
             Err(_) => {
-                tracing::debug!("sweep ping timed out");
+                tracing::warn!("sweep ping timed out; discarding pooled connection");
                 false
             }
         }

@@ -26,7 +26,8 @@ use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, Operation,
+        Capability, Driver, ExecResponse, Operation, QueryLogConfig,
+        log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode, TypedValue},
     },
     schema::{
@@ -320,6 +321,7 @@ pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
     oid_cache: OidCache,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
@@ -329,6 +331,7 @@ impl Connection {
             client,
             statement_cache: StatementCache::new(100),
             oid_cache: OidCache::new(),
+            query_log: QueryLogConfig::default(),
         }
     }
 
@@ -357,8 +360,26 @@ impl Connection {
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
     ) -> Result<ExecResponse> {
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
+        let mut log = QueryLog::sql(
+            &self.query_log,
+            "postgresql",
+            sql_as_str,
+            typed_params.iter().map(|tv| &tv.value),
+        );
+        let result = self
+            .exec_sql_inner(sql_as_str, typed_params, ret, &mut log)
+            .await;
+        log.finish(&result);
+        result
+    }
 
+    async fn exec_sql_inner(
+        &mut self,
+        sql_as_str: &str,
+        typed_params: Vec<TypedValue>,
+        ret: SqlReturn,
+        log: &mut QueryLog<'_>,
+    ) -> Result<ExecResponse> {
         self.oid_cache
             .preload(&self.client, typed_params.iter().map(|tv| &tv.ty))
             .await?;
@@ -396,6 +417,8 @@ impl Connection {
             .query(&statement, &params)
             .await
             .map_err(classify_pg_error)?;
+
+        log.rows(rows.len() as u64);
 
         let results = rows.into_iter().map(move |row| {
             let mut results = Vec::new();
@@ -461,6 +484,10 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
+    fn set_query_log_config(&mut self, config: QueryLogConfig) {
+        self.query_log = config;
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "postgresql", op = %op.name(), "driver exec");
 

@@ -24,7 +24,9 @@ pub(crate) use value::Value;
 use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
-    driver::{Capability, Driver, ExecResponse, operation::Operation},
+    driver::{
+        Capability, Driver, ExecResponse, QueryLogConfig, log::QueryLog, operation::Operation,
+    },
     schema::{
         db::{self, Column, ColumnId, Migration, Table},
         diff,
@@ -140,19 +142,49 @@ impl Driver for DynamoDb {
 pub struct Connection {
     /// Handle to the AWS SDK client
     client: Client,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
     /// Wrap an existing [`aws_sdk_dynamodb::Client`] as a Toasty connection.
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            query_log: QueryLogConfig::default(),
+        }
     }
+}
+
+/// Resolves the table an operation targets, for the per-query event.
+fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
+    let table_id = match op {
+        Operation::GetByKey(op) => op.table,
+        Operation::QueryPk(op) => op.table,
+        Operation::DeleteByKey(op) => op.table,
+        Operation::UpdateByKey(op) => op.table,
+        Operation::FindPkByIndex(op) => op.table,
+        Operation::Scan(op) => op.table,
+        _ => return None,
+    };
+    Some(&schema.db.table(table_id).name)
 }
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
+    fn set_query_log_config(&mut self, config: QueryLogConfig) {
+        self.query_log = config;
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
-        self.exec2(schema, op).await
+        let log = QueryLog::operation(
+            &self.query_log,
+            "dynamodb",
+            op.name(),
+            op_table_name(schema, &op),
+        );
+        let result = self.exec2(schema, op).await;
+        log.finish(&result);
+        result
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

@@ -30,7 +30,8 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse,
+        Capability, Driver, ExecResponse, QueryLogConfig,
+        log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
     schema::{
@@ -159,6 +160,7 @@ impl Driver for Sqlite {
 #[derive(Debug)]
 pub struct Connection {
     connection: RusqliteConnection,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
@@ -166,14 +168,20 @@ impl Connection {
     pub fn in_memory() -> Self {
         let connection = RusqliteConnection::open_in_memory().unwrap();
 
-        Self { connection }
+        Self {
+            connection,
+            query_log: QueryLogConfig::default(),
+        }
     }
 
     /// Open a SQLite connection to a file at `path`.
     pub fn open<P: AsRef<Path>>(path: P) -> Result<Self> {
         let connection =
             RusqliteConnection::open(path).map_err(toasty_core::Error::driver_operation_failed)?;
-        let sqlite = Self { connection };
+        let sqlite = Self {
+            connection,
+            query_log: QueryLogConfig::default(),
+        };
         Ok(sqlite)
     }
 
@@ -183,8 +191,24 @@ impl Connection {
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
     ) -> Result<ExecResponse> {
-        tracing::debug!(db.system = "sqlite", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
+        let mut log = QueryLog::sql(
+            &self.query_log,
+            "sqlite",
+            sql_str,
+            typed_params.iter().map(|tv| &tv.value),
+        );
+        let result = self.exec_sql_inner(sql_str, typed_params, ret, &mut log);
+        log.finish(&result);
+        result
+    }
 
+    fn exec_sql_inner(
+        &mut self,
+        sql_str: &str,
+        typed_params: Vec<TypedValue>,
+        ret: SqlReturn,
+        log: &mut QueryLog<'_>,
+    ) -> Result<ExecResponse> {
         let mut stmt = self
             .connection
             .prepare_cached(sql_str)
@@ -234,6 +258,7 @@ impl Connection {
             }
         }
 
+        log.rows(values.len() as u64);
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(
             values,
         )))
@@ -242,6 +267,10 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
+    fn set_query_log_config(&mut self, config: QueryLogConfig) {
+        self.query_log = config;
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
 

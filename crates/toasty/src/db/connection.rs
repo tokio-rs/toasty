@@ -14,6 +14,7 @@ use toasty_core::{
     stmt,
 };
 use tokio::sync::oneshot;
+use tracing::Instrument;
 
 /// A dedicated database connection retrieved from a pool.
 ///
@@ -43,6 +44,10 @@ impl Connection {
         stmt: stmt::Statement,
         in_transaction: bool,
     ) -> crate::Result<ExecResponse> {
+        // Created on the caller's task so the span parents to the caller's
+        // current span; the worker task enters it while executing.
+        let span = crate::instrument::query_span(&self.shared.engine.schema, &stmt);
+
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -50,11 +55,12 @@ impl Connection {
             .send(ConnectionOperation::ExecStatement {
                 stmt: Box::new(stmt),
                 in_transaction,
+                span: span.clone(),
                 tx,
             })
             .unwrap();
 
-        rx.await.unwrap()
+        rx.instrument(span).await.unwrap()
     }
 
     pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<ExecResponse> {
@@ -64,6 +70,7 @@ impl Connection {
             .in_tx
             .send(ConnectionOperation::ExecOperation {
                 operation: Box::new(operation),
+                span: tracing::Span::current(),
                 tx,
             })
             .unwrap();
@@ -72,17 +79,20 @@ impl Connection {
     }
 
     pub(crate) async fn exec_raw_sql(&self, raw: RawSql) -> crate::Result<ExecResponse> {
+        let span = crate::instrument::raw_sql_span();
+
         let (tx, rx) = oneshot::channel();
 
         self.handle()
             .in_tx
             .send(ConnectionOperation::ExecRawSql {
                 raw: Box::new(raw),
+                span: span.clone(),
                 tx,
             })
             .unwrap();
 
-        rx.await.unwrap()
+        rx.instrument(span).await.unwrap()
     }
 
     /// Begin a transaction on this connection.
@@ -110,7 +120,10 @@ impl Connection {
         let (tx, rx) = oneshot::channel();
         self.handle()
             .in_tx
-            .send(ConnectionOperation::PushSchema { tx })
+            .send(ConnectionOperation::PushSchema {
+                span: tracing::Span::current(),
+                tx,
+            })
             .unwrap();
         rx.await.unwrap()
     }

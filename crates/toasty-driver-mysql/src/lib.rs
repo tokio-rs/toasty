@@ -24,7 +24,8 @@ use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, Operation,
+        Capability, Driver, ExecResponse, Operation, QueryLogConfig,
+        log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode},
     },
     schema::{
@@ -196,6 +197,7 @@ pub struct Connection {
     /// error. `mysql_async::Conn` does not expose a passive flag, so
     /// the driver tracks one itself. Read by [`is_valid`].
     valid: Cell<bool>,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
@@ -204,6 +206,7 @@ impl Connection {
         Self {
             conn,
             valid: Cell::new(true),
+            query_log: QueryLogConfig::default(),
         }
     }
 
@@ -212,9 +215,8 @@ impl Connection {
         sql_as_str: &str,
         args: Vec<mysql_async::Value>,
         ret: SqlReturn,
+        log: &mut QueryLog<'_>,
     ) -> Result<ExecResponse> {
-        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = args.len(), "executing SQL");
-
         let statement = self
             .conn
             .prep(sql_as_str)
@@ -255,6 +257,7 @@ impl Connection {
                     Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
                 });
 
+                log.rows(num_rows);
                 return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
                     results,
                 )));
@@ -268,6 +271,8 @@ impl Connection {
             .exec(&statement, &args)
             .await
             .map_err(|e| record_mysql_err(&self.valid, e))?;
+
+        log.rows(rows.len() as u64);
 
         let results = rows.into_iter().map(move |mut row| {
             let mut results = Vec::new();
@@ -340,6 +345,10 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
+    fn set_query_log_config(&mut self, config: QueryLogConfig) {
+        self.query_log = config;
+    }
+
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
@@ -353,8 +362,8 @@ impl toasty_core::driver::Connection for Connection {
             Operation::RawSql(op) => {
                 let args = op
                     .params
-                    .into_iter()
-                    .map(|tv| Value::from(tv.value).to_value())
+                    .iter()
+                    .map(|tv| Value::from(tv.value.clone()).to_value())
                     .collect();
                 let ret = match op.ret {
                     RawSqlRet::None => SqlReturn::Count {
@@ -364,7 +373,15 @@ impl toasty_core::driver::Connection for Connection {
                     RawSqlRet::Infer => SqlReturn::Infer,
                     RawSqlRet::Types(types) => SqlReturn::Types(types),
                 };
-                return self.exec_sql(&op.sql, args, ret).await;
+                let mut log = QueryLog::sql(
+                    &self.query_log,
+                    "mysql",
+                    &op.sql,
+                    op.params.iter().map(|tv| &tv.value),
+                );
+                let result = self.exec_sql(&op.sql, args, ret, &mut log).await;
+                log.finish(&result);
+                return result;
             }
             Operation::Transaction(op) => {
                 // MySQL has no `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE`
@@ -411,7 +428,15 @@ impl toasty_core::driver::Connection for Connection {
             },
         };
 
-        self.exec_sql(&sql_as_str, args, ret).await
+        let mut log = QueryLog::sql(
+            &self.query_log,
+            "mysql",
+            &sql_as_str,
+            params.iter().map(|value| value.inner()),
+        );
+        let result = self.exec_sql(&sql_as_str, args, ret, &mut log).await;
+        log.finish(&result);
+        result
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

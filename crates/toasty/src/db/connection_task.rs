@@ -17,29 +17,40 @@ use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
 };
+use tracing::Instrument;
 
 use super::pool::SweepWaker;
 use crate::engine::Engine;
 
 /// Operations sent to the connection task.
+///
+/// Each variant carries the caller's `tracing::Span`, captured at send time.
+/// The worker task runs on its own tokio task, so span context does not
+/// propagate to it implicitly; the task enters the carried span while
+/// handling the operation so engine and driver events land inside the
+/// caller's span tree.
 pub(crate) enum ConnectionOperation {
     /// Execute a statement (compile + run on the connection).
     ExecStatement {
         stmt: Box<toasty_core::stmt::Statement>,
         in_transaction: bool,
+        span: tracing::Span,
         tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     ExecOperation {
         operation: Box<toasty_core::driver::operation::Operation>,
+        span: tracing::Span,
         tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     /// Execute user-authored SQL through the engine's SQL capability guard.
     ExecRawSql {
         raw: Box<RawSql>,
+        span: tracing::Span,
         tx: oneshot::Sender<crate::Result<toasty_core::driver::ExecResponse>>,
     },
     /// Push schema to the database.
     PushSchema {
+        span: tracing::Span,
         tx: oneshot::Sender<crate::Result<()>>,
     },
     /// Active liveness probe issued by the pool's background sweep
@@ -47,6 +58,7 @@ pub(crate) enum ConnectionOperation {
     /// connection task so the ping is serialized against any in-flight
     /// `exec` on the same connection.
     Ping {
+        span: tracing::Span,
         tx: oneshot::Sender<crate::Result<()>>,
     },
 }
@@ -117,32 +129,53 @@ impl ConnectionTask {
         }
     }
 
-    /// Dispatch one operation. Returns `false` if the connection went bad
-    /// during it and the task should exit.
+    /// Dispatch one operation, entering the caller's span for its duration.
+    /// Returns `false` if the connection went bad during it and the task
+    /// should exit.
     async fn handle(&mut self, op: ConnectionOperation) -> bool {
         match op {
             ConnectionOperation::ExecStatement {
                 stmt,
                 in_transaction,
+                span,
                 tx,
             } => {
-                let result = self.exec_statement(*stmt, in_transaction).await;
+                let result = self
+                    .exec_statement(*stmt, in_transaction)
+                    .instrument(span)
+                    .await;
                 self.respond(tx, result)
             }
-            ConnectionOperation::ExecOperation { operation, tx } => {
-                let result = self.connection.exec(&self.engine.schema, *operation).await;
+            ConnectionOperation::ExecOperation {
+                operation,
+                span,
+                tx,
+            } => {
+                let result = self
+                    .connection
+                    .exec(&self.engine.schema, *operation)
+                    .instrument(span)
+                    .await;
                 self.respond(tx, result)
             }
-            ConnectionOperation::ExecRawSql { raw, tx } => {
-                let result = self.engine.exec_raw_sql(&mut *self.connection, *raw).await;
+            ConnectionOperation::ExecRawSql { raw, span, tx } => {
+                let result = self
+                    .engine
+                    .exec_raw_sql(&mut *self.connection, *raw)
+                    .instrument(span)
+                    .await;
                 self.respond(tx, result)
             }
-            ConnectionOperation::PushSchema { tx } => {
-                let result = self.connection.push_schema(&self.engine.schema).await;
+            ConnectionOperation::PushSchema { span, tx } => {
+                let result = self
+                    .connection
+                    .push_schema(&self.engine.schema)
+                    .instrument(span)
+                    .await;
                 self.respond(tx, result)
             }
-            ConnectionOperation::Ping { tx } => {
-                let result = self.connection.ping().await;
+            ConnectionOperation::Ping { span, tx } => {
+                let result = self.connection.ping().instrument(span).await;
                 self.respond(tx, result)
             }
         }
@@ -193,7 +226,7 @@ impl ConnectionTask {
             let _ = tx.send(result);
             true
         } else {
-            tracing::debug!("connection reported invalid; closing channel and exiting");
+            tracing::warn!("connection reported invalid; closing channel and exiting");
             self.in_rx.close();
             self.sweep_waker.wake();
             let _ = tx.send(result);

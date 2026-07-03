@@ -176,6 +176,29 @@ impl Builder {
         self
     }
 
+    /// Include bound parameter values in the per-query `toasty::query`
+    /// tracing event.
+    ///
+    /// Off by default: parameter values are application data and may
+    /// contain secrets (password hashes, personal information). Enable
+    /// only when the log destination is trusted. Values are rendered in
+    /// a bounded form — long strings are truncated and byte blobs are
+    /// summarized by length.
+    pub fn log_statement_params(&mut self, enabled: bool) -> &mut Self {
+        self.pool.query_log.params = enabled;
+        self
+    }
+
+    /// Emit the per-query `toasty::query` tracing event at `WARN` instead
+    /// of `DEBUG` when a statement takes at least this long, so slow
+    /// queries surface in production logs without enabling debug output.
+    ///
+    /// Defaults to `Some(1s)`. Pass `None` to disable the escalation.
+    pub fn slow_statement_threshold(&mut self, threshold: Option<Duration>) -> &mut Self {
+        self.pool.query_log.slow_statement_threshold = threshold;
+        self
+    }
+
     /// Evict any pooled connection that has been sitting unused for
     /// longer than this duration. Complements
     /// [`pool_max_connection_lifetime`](Self::pool_max_connection_lifetime):
