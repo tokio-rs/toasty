@@ -353,326 +353,330 @@
 <a href=#353 id=353 data-nosnippet>353</a>    }
 <a href=#354 id=354 data-nosnippet>354</a>
 <a href=#355 id=355 data-nosnippet>355</a>    <span class="kw">fn </span>expand_table_name(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(table_name) = <span class="kw-2">&amp;</span><span class="self">self</span>.model.table {
-<a href=#357 id=357 data-nosnippet>357</a>            <span class="kw">let </span>table_name = table_name.value();
-<a href=#358 id=358 data-nosnippet>358</a>            <span class="macro">quote!</span> { <span class="prelude-val">Some</span>(#table_name.to_string()) }
-<a href=#359 id=359 data-nosnippet>359</a>        } <span class="kw">else </span>{
-<a href=#360 id=360 data-nosnippet>360</a>            <span class="macro">quote!</span> { <span class="prelude-val">None </span>}
-<a href=#361 id=361 data-nosnippet>361</a>        }
-<a href=#362 id=362 data-nosnippet>362</a>    }
-<a href=#363 id=363 data-nosnippet>363</a>}
+<a href=#356 id=356 data-nosnippet>356</a>        <span class="kw">let </span>table_name = <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.model.table {
+<a href=#357 id=357 data-nosnippet>357</a>            <span class="prelude-val">Some</span>(table_name) =&gt; table_name.value(),
+<a href=#358 id=358 data-nosnippet>358</a>            <span class="comment">// Derive the default table name at compile time so building the
+<a href=#359 id=359 data-nosnippet>359</a>            // schema at runtime never pays the cost of the `pluralizer` crate's
+<a href=#360 id=360 data-nosnippet>360</a>            // lazy regex compilation: snake_case the model name, then pluralize.
+<a href=#361 id=361 data-nosnippet>361</a>            // The table-name prefix, if any, is applied at runtime by the builder.
+<a href=#362 id=362 data-nosnippet>362</a>            </span><span class="prelude-val">None </span>=&gt; pluralizer::pluralize(<span class="kw-2">&amp;</span><span class="self">self</span>.model.name.snake_case, <span class="number">2</span>, <span class="bool-val">false</span>),
+<a href=#363 id=363 data-nosnippet>363</a>        };
 <a href=#364 id=364 data-nosnippet>364</a>
-<a href=#365 id=365 data-nosnippet>365</a><span class="kw">impl </span>Expand&lt;<span class="lifetime">'_</span>&gt; {
-<a href=#366 id=366 data-nosnippet>366</a>    <span class="doccomment">/// Emit one obligation per primitive field with `#[column(type = ...)]`
-<a href=#367 id=367 data-nosnippet>367</a>    /// that the field's Rust type implements
-<a href=#368 id=368 data-nosnippet>368</a>    /// `codegen_support::storage::CompatibleWith&lt;Tag&gt;` for the matching tag.
-<a href=#369 id=369 data-nosnippet>369</a>    ///
-<a href=#370 id=370 data-nosnippet>370</a>    /// The check leans on the Rust type checker — the macro does not inspect
-<a href=#371 id=371 data-nosnippet>371</a>    /// the field type, it only names it. Type aliases, re-exports, and
-<a href=#372 id=372 data-nosnippet>372</a>    /// generic parameters resolve through normal trait resolution.
-<a href=#373 id=373 data-nosnippet>373</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_storage_compat_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#374 id=374 data-nosnippet>374</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#375 id=375 data-nosnippet>375</a>
-<a href=#376 id=376 data-nosnippet>376</a>        <span class="kw">let </span>checks = <span class="self">self</span>.model.fields.iter().filter_map(|field| {
-<a href=#377 id=377 data-nosnippet>377</a>            <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span>field.ty <span class="kw">else </span>{
-<a href=#378 id=378 data-nosnippet>378</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#379 id=379 data-nosnippet>379</a>            };
-<a href=#380 id=380 data-nosnippet>380</a>
-<a href=#381 id=381 data-nosnippet>381</a>            <span class="kw">let </span>col_ty = field.attrs.column.as_ref().and_then(|c| c.ty.as_ref())<span class="question-mark">?</span>;
-<a href=#382 id=382 data-nosnippet>382</a>            <span class="kw">let </span>marker = col_ty.compat_marker(toasty)<span class="question-mark">?</span>;
-<a href=#383 id=383 data-nosnippet>383</a>
-<a href=#384 id=384 data-nosnippet>384</a>            <span class="prelude-val">Some</span>(compat_check(
-<a href=#385 id=385 data-nosnippet>385</a>                ty,
-<a href=#386 id=386 data-nosnippet>386</a>                <span class="macro">quote!</span> { #toasty::storage::CompatibleWith&lt;#marker&gt; },
-<a href=#387 id=387 data-nosnippet>387</a>            ))
-<a href=#388 id=388 data-nosnippet>388</a>        });
-<a href=#389 id=389 data-nosnippet>389</a>
-<a href=#390 id=390 data-nosnippet>390</a>        <span class="macro">quote!</span> { #( #checks )* }
-<a href=#391 id=391 data-nosnippet>391</a>    }
-<a href=#392 id=392 data-nosnippet>392</a>
-<a href=#393 id=393 data-nosnippet>393</a>    <span class="doccomment">/// Emit one obligation per field with an explicit `#[auto(...)]` strategy
-<a href=#394 id=394 data-nosnippet>394</a>    /// that the field's Rust type implements
-<a href=#395 id=395 data-nosnippet>395</a>    /// `codegen_support::auto::AutoCompatible&lt;Tag&gt;` for the matching tag.
-<a href=#396 id=396 data-nosnippet>396</a>    ///
-<a href=#397 id=397 data-nosnippet>397</a>    /// The bare `#[auto]` form already gets a `T: Auto` obligation from the
-<a href=#398 id=398 data-nosnippet>398</a>    /// `STRATEGY` const lookup in `expand_model_fields`, so it does not need
-<a href=#399 id=399 data-nosnippet>399</a>    /// a separate check here.
-<a href=#400 id=400 data-nosnippet>400</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_auto_compat_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#401 id=401 data-nosnippet>401</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#402 id=402 data-nosnippet>402</a>
-<a href=#403 id=403 data-nosnippet>403</a>        <span class="kw">let </span>checks = <span class="self">self</span>.model.fields.iter().filter_map(|field| {
-<a href=#404 id=404 data-nosnippet>404</a>            <span class="kw">let </span>auto = field.attrs.auto.as_ref()<span class="question-mark">?</span>;
-<a href=#405 id=405 data-nosnippet>405</a>
-<a href=#406 id=406 data-nosnippet>406</a>            <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span>field.ty <span class="kw">else </span>{
-<a href=#407 id=407 data-nosnippet>407</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#408 id=408 data-nosnippet>408</a>            };
+<a href=#365 id=365 data-nosnippet>365</a>        <span class="macro">quote!</span> { #table_name.to_string() }
+<a href=#366 id=366 data-nosnippet>366</a>    }
+<a href=#367 id=367 data-nosnippet>367</a>}
+<a href=#368 id=368 data-nosnippet>368</a>
+<a href=#369 id=369 data-nosnippet>369</a><span class="kw">impl </span>Expand&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#370 id=370 data-nosnippet>370</a>    <span class="doccomment">/// Emit one obligation per primitive field with `#[column(type = ...)]`
+<a href=#371 id=371 data-nosnippet>371</a>    /// that the field's Rust type implements
+<a href=#372 id=372 data-nosnippet>372</a>    /// `codegen_support::storage::CompatibleWith&lt;Tag&gt;` for the matching tag.
+<a href=#373 id=373 data-nosnippet>373</a>    ///
+<a href=#374 id=374 data-nosnippet>374</a>    /// The check leans on the Rust type checker — the macro does not inspect
+<a href=#375 id=375 data-nosnippet>375</a>    /// the field type, it only names it. Type aliases, re-exports, and
+<a href=#376 id=376 data-nosnippet>376</a>    /// generic parameters resolve through normal trait resolution.
+<a href=#377 id=377 data-nosnippet>377</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_storage_compat_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#379 id=379 data-nosnippet>379</a>
+<a href=#380 id=380 data-nosnippet>380</a>        <span class="kw">let </span>checks = <span class="self">self</span>.model.fields.iter().filter_map(|field| {
+<a href=#381 id=381 data-nosnippet>381</a>            <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span>field.ty <span class="kw">else </span>{
+<a href=#382 id=382 data-nosnippet>382</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#383 id=383 data-nosnippet>383</a>            };
+<a href=#384 id=384 data-nosnippet>384</a>
+<a href=#385 id=385 data-nosnippet>385</a>            <span class="kw">let </span>col_ty = field.attrs.column.as_ref().and_then(|c| c.ty.as_ref())<span class="question-mark">?</span>;
+<a href=#386 id=386 data-nosnippet>386</a>            <span class="kw">let </span>marker = col_ty.compat_marker(toasty)<span class="question-mark">?</span>;
+<a href=#387 id=387 data-nosnippet>387</a>
+<a href=#388 id=388 data-nosnippet>388</a>            <span class="prelude-val">Some</span>(compat_check(
+<a href=#389 id=389 data-nosnippet>389</a>                ty,
+<a href=#390 id=390 data-nosnippet>390</a>                <span class="macro">quote!</span> { #toasty::storage::CompatibleWith&lt;#marker&gt; },
+<a href=#391 id=391 data-nosnippet>391</a>            ))
+<a href=#392 id=392 data-nosnippet>392</a>        });
+<a href=#393 id=393 data-nosnippet>393</a>
+<a href=#394 id=394 data-nosnippet>394</a>        <span class="macro">quote!</span> { #( #checks )* }
+<a href=#395 id=395 data-nosnippet>395</a>    }
+<a href=#396 id=396 data-nosnippet>396</a>
+<a href=#397 id=397 data-nosnippet>397</a>    <span class="doccomment">/// Emit one obligation per field with an explicit `#[auto(...)]` strategy
+<a href=#398 id=398 data-nosnippet>398</a>    /// that the field's Rust type implements
+<a href=#399 id=399 data-nosnippet>399</a>    /// `codegen_support::auto::AutoCompatible&lt;Tag&gt;` for the matching tag.
+<a href=#400 id=400 data-nosnippet>400</a>    ///
+<a href=#401 id=401 data-nosnippet>401</a>    /// The bare `#[auto]` form already gets a `T: Auto` obligation from the
+<a href=#402 id=402 data-nosnippet>402</a>    /// `STRATEGY` const lookup in `expand_model_fields`, so it does not need
+<a href=#403 id=403 data-nosnippet>403</a>    /// a separate check here.
+<a href=#404 id=404 data-nosnippet>404</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_auto_compat_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#405 id=405 data-nosnippet>405</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#406 id=406 data-nosnippet>406</a>
+<a href=#407 id=407 data-nosnippet>407</a>        <span class="kw">let </span>checks = <span class="self">self</span>.model.fields.iter().filter_map(|field| {
+<a href=#408 id=408 data-nosnippet>408</a>            <span class="kw">let </span>auto = field.attrs.auto.as_ref()<span class="question-mark">?</span>;
 <a href=#409 id=409 data-nosnippet>409</a>
-<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">let </span>tag = <span class="kw">match </span>auto {
-<a href=#411 id=411 data-nosnippet>411</a>                AutoStrategy::Unspecified =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
-<a href=#412 id=412 data-nosnippet>412</a>                AutoStrategy::Uuid(<span class="kw">_</span>) =&gt; <span class="macro">quote!</span> { #toasty::auto::tag::Uuid },
-<a href=#413 id=413 data-nosnippet>413</a>                AutoStrategy::Increment =&gt; <span class="macro">quote!</span> { #toasty::auto::tag::Increment },
-<a href=#414 id=414 data-nosnippet>414</a>            };
-<a href=#415 id=415 data-nosnippet>415</a>
-<a href=#416 id=416 data-nosnippet>416</a>            <span class="prelude-val">Some</span>(compat_check(
-<a href=#417 id=417 data-nosnippet>417</a>                ty,
-<a href=#418 id=418 data-nosnippet>418</a>                <span class="macro">quote!</span> { #toasty::auto::AutoCompatible&lt;#tag&gt; },
-<a href=#419 id=419 data-nosnippet>419</a>            ))
-<a href=#420 id=420 data-nosnippet>420</a>        });
-<a href=#421 id=421 data-nosnippet>421</a>
-<a href=#422 id=422 data-nosnippet>422</a>        <span class="macro">quote!</span> { #( #checks )* }
-<a href=#423 id=423 data-nosnippet>423</a>    }
-<a href=#424 id=424 data-nosnippet>424</a>
-<a href=#425 id=425 data-nosnippet>425</a>    <span class="doccomment">/// Emit a compile-time obligation that every `#[version]` field's Rust type
-<a href=#426 id=426 data-nosnippet>426</a>    /// implements [`Version`].
-<a href=#427 id=427 data-nosnippet>427</a>    ///
-<a href=#428 id=428 data-nosnippet>428</a>    /// The bare `u64` type satisfies the bound directly; tuple-newtype embeds
-<a href=#429 id=429 data-nosnippet>429</a>    /// satisfy it via the blanket in `codegen_support::version`. Any other type
-<a href=#430 id=430 data-nosnippet>430</a>    /// produces a compiler error with the `#[diagnostic::on_unimplemented]`
-<a href=#431 id=431 data-nosnippet>431</a>    /// message on [`Version`].
-<a href=#432 id=432 data-nosnippet>432</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_version_compat_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#433 id=433 data-nosnippet>433</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#434 id=434 data-nosnippet>434</a>
-<a href=#435 id=435 data-nosnippet>435</a>        <span class="kw">let </span>checks = <span class="self">self</span>.model.fields.iter().filter_map(|field| {
-<a href=#436 id=436 data-nosnippet>436</a>            <span class="kw">if </span>!field.attrs.versionable {
-<a href=#437 id=437 data-nosnippet>437</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#438 id=438 data-nosnippet>438</a>            }
-<a href=#439 id=439 data-nosnippet>439</a>
-<a href=#440 id=440 data-nosnippet>440</a>            <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span>field.ty <span class="kw">else </span>{
+<a href=#410 id=410 data-nosnippet>410</a>            <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span>field.ty <span class="kw">else </span>{
+<a href=#411 id=411 data-nosnippet>411</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#412 id=412 data-nosnippet>412</a>            };
+<a href=#413 id=413 data-nosnippet>413</a>
+<a href=#414 id=414 data-nosnippet>414</a>            <span class="kw">let </span>tag = <span class="kw">match </span>auto {
+<a href=#415 id=415 data-nosnippet>415</a>                AutoStrategy::Unspecified =&gt; <span class="kw">return </span><span class="prelude-val">None</span>,
+<a href=#416 id=416 data-nosnippet>416</a>                AutoStrategy::Uuid(<span class="kw">_</span>) =&gt; <span class="macro">quote!</span> { #toasty::auto::tag::Uuid },
+<a href=#417 id=417 data-nosnippet>417</a>                AutoStrategy::Increment =&gt; <span class="macro">quote!</span> { #toasty::auto::tag::Increment },
+<a href=#418 id=418 data-nosnippet>418</a>            };
+<a href=#419 id=419 data-nosnippet>419</a>
+<a href=#420 id=420 data-nosnippet>420</a>            <span class="prelude-val">Some</span>(compat_check(
+<a href=#421 id=421 data-nosnippet>421</a>                ty,
+<a href=#422 id=422 data-nosnippet>422</a>                <span class="macro">quote!</span> { #toasty::auto::AutoCompatible&lt;#tag&gt; },
+<a href=#423 id=423 data-nosnippet>423</a>            ))
+<a href=#424 id=424 data-nosnippet>424</a>        });
+<a href=#425 id=425 data-nosnippet>425</a>
+<a href=#426 id=426 data-nosnippet>426</a>        <span class="macro">quote!</span> { #( #checks )* }
+<a href=#427 id=427 data-nosnippet>427</a>    }
+<a href=#428 id=428 data-nosnippet>428</a>
+<a href=#429 id=429 data-nosnippet>429</a>    <span class="doccomment">/// Emit a compile-time obligation that every `#[version]` field's Rust type
+<a href=#430 id=430 data-nosnippet>430</a>    /// implements [`Version`].
+<a href=#431 id=431 data-nosnippet>431</a>    ///
+<a href=#432 id=432 data-nosnippet>432</a>    /// The bare `u64` type satisfies the bound directly; tuple-newtype embeds
+<a href=#433 id=433 data-nosnippet>433</a>    /// satisfy it via the blanket in `codegen_support::version`. Any other type
+<a href=#434 id=434 data-nosnippet>434</a>    /// produces a compiler error with the `#[diagnostic::on_unimplemented]`
+<a href=#435 id=435 data-nosnippet>435</a>    /// message on [`Version`].
+<a href=#436 id=436 data-nosnippet>436</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_version_compat_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#437 id=437 data-nosnippet>437</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#438 id=438 data-nosnippet>438</a>
+<a href=#439 id=439 data-nosnippet>439</a>        <span class="kw">let </span>checks = <span class="self">self</span>.model.fields.iter().filter_map(|field| {
+<a href=#440 id=440 data-nosnippet>440</a>            <span class="kw">if </span>!field.attrs.versionable {
 <a href=#441 id=441 data-nosnippet>441</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#442 id=442 data-nosnippet>442</a>            };
+<a href=#442 id=442 data-nosnippet>442</a>            }
 <a href=#443 id=443 data-nosnippet>443</a>
-<a href=#444 id=444 data-nosnippet>444</a>            <span class="prelude-val">Some</span>(compat_check(ty, <span class="macro">quote!</span> { #toasty::Version }))
-<a href=#445 id=445 data-nosnippet>445</a>        });
-<a href=#446 id=446 data-nosnippet>446</a>
-<a href=#447 id=447 data-nosnippet>447</a>        <span class="macro">quote!</span> { #( #checks )* }
-<a href=#448 id=448 data-nosnippet>448</a>    }
-<a href=#449 id=449 data-nosnippet>449</a>
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="doccomment">/// Emit one obligation per field that participates in a secondary index or
-<a href=#451 id=451 data-nosnippet>451</a>    /// unique constraint (`#[index]`, `#[unique]`, or a model-level
-<a href=#452 id=452 data-nosnippet>452</a>    /// `#[index(...)]` / `#[unique(...)]`) that the field's Rust type implements
-<a href=#453 id=453 data-nosnippet>453</a>    /// `codegen_support::index::IndexableField`.
-<a href=#454 id=454 data-nosnippet>454</a>    ///
-<a href=#455 id=455 data-nosnippet>455</a>    /// Scalars satisfy the bound directly; newtype embeds via the `NewtypeOf`
-<a href=#456 id=456 data-nosnippet>456</a>    /// blanket; unit (data-less) enums via the impl emitted by
-<a href=#457 id=457 data-nosnippet>457</a>    /// `#[derive(Embed)]`. Data-carrying enums and multi-field embedded structs
-<a href=#458 id=458 data-nosnippet>458</a>    /// span multiple columns and do not implement it, so naming one in an index
-<a href=#459 id=459 data-nosnippet>459</a>    /// is a compile error instead of a runtime panic.
-<a href=#460 id=460 data-nosnippet>460</a>    ///
-<a href=#461 id=461 data-nosnippet>461</a>    /// The primary key is excluded: keys are validated through their own paths.
-<a href=#462 id=462 data-nosnippet>462</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_indexable_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
-<a href=#463 id=463 data-nosnippet>463</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#464 id=464 data-nosnippet>464</a>
-<a href=#465 id=465 data-nosnippet>465</a>        <span class="kw">let </span><span class="kw-2">mut </span>seen = std::collections::BTreeSet::new();
-<a href=#466 id=466 data-nosnippet>466</a>        <span class="kw">let </span>checks = <span class="self">self
-<a href=#467 id=467 data-nosnippet>467</a>            </span>.model
-<a href=#468 id=468 data-nosnippet>468</a>            .indices
-<a href=#469 id=469 data-nosnippet>469</a>            .iter()
-<a href=#470 id=470 data-nosnippet>470</a>            .filter(|index| !index.primary_key)
-<a href=#471 id=471 data-nosnippet>471</a>            .flat_map(|index| index.fields.iter())
-<a href=#472 id=472 data-nosnippet>472</a>            .filter_map(|index_field| {
-<a href=#473 id=473 data-nosnippet>473</a>                <span class="kw">if </span>!seen.insert(index_field.field) {
-<a href=#474 id=474 data-nosnippet>474</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#475 id=475 data-nosnippet>475</a>                }
-<a href=#476 id=476 data-nosnippet>476</a>
-<a href=#477 id=477 data-nosnippet>477</a>                <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span><span class="self">self</span>.model.fields[index_field.field].ty <span class="kw">else </span>{
+<a href=#444 id=444 data-nosnippet>444</a>            <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span>field.ty <span class="kw">else </span>{
+<a href=#445 id=445 data-nosnippet>445</a>                <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#446 id=446 data-nosnippet>446</a>            };
+<a href=#447 id=447 data-nosnippet>447</a>
+<a href=#448 id=448 data-nosnippet>448</a>            <span class="prelude-val">Some</span>(compat_check(ty, <span class="macro">quote!</span> { #toasty::Version }))
+<a href=#449 id=449 data-nosnippet>449</a>        });
+<a href=#450 id=450 data-nosnippet>450</a>
+<a href=#451 id=451 data-nosnippet>451</a>        <span class="macro">quote!</span> { #( #checks )* }
+<a href=#452 id=452 data-nosnippet>452</a>    }
+<a href=#453 id=453 data-nosnippet>453</a>
+<a href=#454 id=454 data-nosnippet>454</a>    <span class="doccomment">/// Emit one obligation per field that participates in a secondary index or
+<a href=#455 id=455 data-nosnippet>455</a>    /// unique constraint (`#[index]`, `#[unique]`, or a model-level
+<a href=#456 id=456 data-nosnippet>456</a>    /// `#[index(...)]` / `#[unique(...)]`) that the field's Rust type implements
+<a href=#457 id=457 data-nosnippet>457</a>    /// `codegen_support::index::IndexableField`.
+<a href=#458 id=458 data-nosnippet>458</a>    ///
+<a href=#459 id=459 data-nosnippet>459</a>    /// Scalars satisfy the bound directly; newtype embeds via the `NewtypeOf`
+<a href=#460 id=460 data-nosnippet>460</a>    /// blanket; unit (data-less) enums via the impl emitted by
+<a href=#461 id=461 data-nosnippet>461</a>    /// `#[derive(Embed)]`. Data-carrying enums and multi-field embedded structs
+<a href=#462 id=462 data-nosnippet>462</a>    /// span multiple columns and do not implement it, so naming one in an index
+<a href=#463 id=463 data-nosnippet>463</a>    /// is a compile error instead of a runtime panic.
+<a href=#464 id=464 data-nosnippet>464</a>    ///
+<a href=#465 id=465 data-nosnippet>465</a>    /// The primary key is excluded: keys are validated through their own paths.
+<a href=#466 id=466 data-nosnippet>466</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_indexable_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
+<a href=#467 id=467 data-nosnippet>467</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#468 id=468 data-nosnippet>468</a>
+<a href=#469 id=469 data-nosnippet>469</a>        <span class="kw">let </span><span class="kw-2">mut </span>seen = std::collections::BTreeSet::new();
+<a href=#470 id=470 data-nosnippet>470</a>        <span class="kw">let </span>checks = <span class="self">self
+<a href=#471 id=471 data-nosnippet>471</a>            </span>.model
+<a href=#472 id=472 data-nosnippet>472</a>            .indices
+<a href=#473 id=473 data-nosnippet>473</a>            .iter()
+<a href=#474 id=474 data-nosnippet>474</a>            .filter(|index| !index.primary_key)
+<a href=#475 id=475 data-nosnippet>475</a>            .flat_map(|index| index.fields.iter())
+<a href=#476 id=476 data-nosnippet>476</a>            .filter_map(|index_field| {
+<a href=#477 id=477 data-nosnippet>477</a>                <span class="kw">if </span>!seen.insert(index_field.field) {
 <a href=#478 id=478 data-nosnippet>478</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#479 id=479 data-nosnippet>479</a>                };
+<a href=#479 id=479 data-nosnippet>479</a>                }
 <a href=#480 id=480 data-nosnippet>480</a>
-<a href=#481 id=481 data-nosnippet>481</a>                <span class="comment">// Pin the diagnostic at the field type's span so the error
-<a href=#482 id=482 data-nosnippet>482</a>                // lands on the user's declaration, not the derive call site.
-<a href=#483 id=483 data-nosnippet>483</a>                </span><span class="prelude-val">Some</span>(<span class="macro">quote_spanned!</span> { ty.span()=&gt;
-<a href=#484 id=484 data-nosnippet>484</a>                    <span class="kw">const _</span>: () = {
-<a href=#485 id=485 data-nosnippet>485</a>                        <span class="kw">fn </span>_check&lt;__T&gt;()
-<a href=#486 id=486 data-nosnippet>486</a>                        <span class="kw">where
-<a href=#487 id=487 data-nosnippet>487</a>                            </span>__T: #toasty::index::IndexableField,
-<a href=#488 id=488 data-nosnippet>488</a>                        {}
-<a href=#489 id=489 data-nosnippet>489</a>                        <span class="kw">let _ </span>= _check::&lt;#ty&gt;;
-<a href=#490 id=490 data-nosnippet>490</a>                    };
-<a href=#491 id=491 data-nosnippet>491</a>                })
-<a href=#492 id=492 data-nosnippet>492</a>            })
-<a href=#493 id=493 data-nosnippet>493</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
-<a href=#494 id=494 data-nosnippet>494</a>
-<a href=#495 id=495 data-nosnippet>495</a>        <span class="macro">quote!</span> { #( #checks )* }
-<a href=#496 id=496 data-nosnippet>496</a>    }
-<a href=#497 id=497 data-nosnippet>497</a>
-<a href=#498 id=498 data-nosnippet>498</a>    <span class="doccomment">/// Generate calls to register all models reachable from this model's fields.
-<a href=#499 id=499 data-nosnippet>499</a>    ///
-<a href=#500 id=500 data-nosnippet>500</a>    /// For primitive fields, no call is emitted (the default `Field::register`
-<a href=#501 id=501 data-nosnippet>501</a>    /// is a no-op). For embedded fields, `&lt;Type as Field&gt;::register` is called.
-<a href=#502 id=502 data-nosnippet>502</a>    /// For relation fields (BelongsTo, HasMany, HasOne), `&lt;TargetModel as
-<a href=#503 id=503 data-nosnippet>503</a>    /// Model&gt;::register` is called directly.
-<a href=#504 id=504 data-nosnippet>504</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_field_register_calls(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;TokenStream&gt; {
-<a href=#505 id=505 data-nosnippet>505</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
-<a href=#506 id=506 data-nosnippet>506</a>
-<a href=#507 id=507 data-nosnippet>507</a>        <span class="self">self</span>.model
-<a href=#508 id=508 data-nosnippet>508</a>            .fields
-<a href=#509 id=509 data-nosnippet>509</a>            .iter()
-<a href=#510 id=510 data-nosnippet>510</a>            .map(|field| <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
-<a href=#511 id=511 data-nosnippet>511</a>                FieldTy::Primitive(ty) =&gt; {
-<a href=#512 id=512 data-nosnippet>512</a>                    <span class="comment">// Primitives use Field::register which delegates to inner
-<a href=#513 id=513 data-nosnippet>513</a>                    // type if it's an embedded type (via the Field impl).
-<a href=#514 id=514 data-nosnippet>514</a>                    </span><span class="macro">quote!</span> {
-<a href=#515 id=515 data-nosnippet>515</a>                        &lt;#ty <span class="kw">as </span>#toasty::Field&gt;::register(model_set);
-<a href=#516 id=516 data-nosnippet>516</a>                    }
-<a href=#517 id=517 data-nosnippet>517</a>                }
-<a href=#518 id=518 data-nosnippet>518</a>                FieldTy::BelongsTo(rel) =&gt; {
-<a href=#519 id=519 data-nosnippet>519</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#520 id=520 data-nosnippet>520</a>                    <span class="macro">quote!</span> {
-<a href=#521 id=521 data-nosnippet>521</a>                        &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::register(model_set);
-<a href=#522 id=522 data-nosnippet>522</a>                    }
-<a href=#523 id=523 data-nosnippet>523</a>                }
-<a href=#524 id=524 data-nosnippet>524</a>                FieldTy::HasMany(rel) <span class="kw">if </span>rel.via.is_some() =&gt; {
-<a href=#525 id=525 data-nosnippet>525</a>                    <span class="comment">// A via relation reaches its terminal through existing
-<a href=#526 id=526 data-nosnippet>526</a>                    // relation fields, each of which registers the models it
-<a href=#527 id=527 data-nosnippet>527</a>                    // traverses; the terminal of a scalar via is not a model at
-<a href=#528 id=528 data-nosnippet>528</a>                    // all. So a via field registers nothing of its own.
-<a href=#529 id=529 data-nosnippet>529</a>                    </span>TokenStream::new()
-<a href=#530 id=530 data-nosnippet>530</a>                }
-<a href=#531 id=531 data-nosnippet>531</a>                FieldTy::HasMany(rel) =&gt; {
-<a href=#532 id=532 data-nosnippet>532</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#533 id=533 data-nosnippet>533</a>                    <span class="macro">quote!</span> {
-<a href=#534 id=534 data-nosnippet>534</a>                        &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::register(model_set);
-<a href=#535 id=535 data-nosnippet>535</a>                    }
-<a href=#536 id=536 data-nosnippet>536</a>                }
-<a href=#537 id=537 data-nosnippet>537</a>                FieldTy::HasOne(rel) =&gt; {
-<a href=#538 id=538 data-nosnippet>538</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
-<a href=#539 id=539 data-nosnippet>539</a>                    <span class="macro">quote!</span> {
-<a href=#540 id=540 data-nosnippet>540</a>                        &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::register(model_set);
-<a href=#541 id=541 data-nosnippet>541</a>                    }
-<a href=#542 id=542 data-nosnippet>542</a>                }
-<a href=#543 id=543 data-nosnippet>543</a>            })
-<a href=#544 id=544 data-nosnippet>544</a>            .collect()
-<a href=#545 id=545 data-nosnippet>545</a>    }
-<a href=#546 id=546 data-nosnippet>546</a>}
-<a href=#547 id=547 data-nosnippet>547</a>
-<a href=#548 id=548 data-nosnippet>548</a><span class="doccomment">/// Emit a span-pinned compile-time obligation that `ty` satisfies `bound`.
-<a href=#549 id=549 data-nosnippet>549</a>///
-<a href=#550 id=550 data-nosnippet>550</a>/// The check leans on the type checker rather than inspecting `ty`: the
-<a href=#551 id=551 data-nosnippet>551</a>/// zero-cost `_check::&lt;#ty&gt;` reference forces the bound to hold. `quote_spanned`
-<a href=#552 id=552 data-nosnippet>552</a>/// pins any resulting diagnostic at the field type's span so the error lands on
-<a href=#553 id=553 data-nosnippet>553</a>/// the user's declaration, not the derive call site. Shared by the
-<a href=#554 id=554 data-nosnippet>554</a>/// storage/auto/version `expand_*_compat_checks` expansions, which differ only
-<a href=#555 id=555 data-nosnippet>555</a>/// in the `bound` they require.
-<a href=#556 id=556 data-nosnippet>556</a></span><span class="kw">fn </span>compat_check(ty: <span class="kw-2">&amp;</span>syn::Type, bound: TokenStream) -&gt; TokenStream {
-<a href=#557 id=557 data-nosnippet>557</a>    <span class="macro">quote_spanned!</span> { ty.span()=&gt;
-<a href=#558 id=558 data-nosnippet>558</a>        <span class="kw">const _</span>: () = {
-<a href=#559 id=559 data-nosnippet>559</a>            <span class="kw">fn </span>_check&lt;__T&gt;()
-<a href=#560 id=560 data-nosnippet>560</a>            <span class="kw">where
-<a href=#561 id=561 data-nosnippet>561</a>                </span>__T: #bound,
-<a href=#562 id=562 data-nosnippet>562</a>            {}
-<a href=#563 id=563 data-nosnippet>563</a>            <span class="kw">let _ </span>= _check::&lt;#ty&gt;;
-<a href=#564 id=564 data-nosnippet>564</a>        };
-<a href=#565 id=565 data-nosnippet>565</a>    }
-<a href=#566 id=566 data-nosnippet>566</a>}
-<a href=#567 id=567 data-nosnippet>567</a>
-<a href=#568 id=568 data-nosnippet>568</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_name(toasty: <span class="kw-2">&amp;</span>TokenStream, name: <span class="kw-2">&amp;</span>Name) -&gt; TokenStream {
-<a href=#569 id=569 data-nosnippet>569</a>    <span class="kw">let </span>parts = name.parts.iter().map(|part| {
-<a href=#570 id=570 data-nosnippet>570</a>        <span class="kw">let </span>part = part.to_string();
-<a href=#571 id=571 data-nosnippet>571</a>        <span class="macro">quote!</span> { #part.to_string() }
-<a href=#572 id=572 data-nosnippet>572</a>    });
-<a href=#573 id=573 data-nosnippet>573</a>
-<a href=#574 id=574 data-nosnippet>574</a>    <span class="macro">quote!</span> {
-<a href=#575 id=575 data-nosnippet>575</a>        #toasty::core::schema::Name {
-<a href=#576 id=576 data-nosnippet>576</a>            parts: <span class="macro">vec!</span>[#( #parts ),<span class="kw-2">*</span>],
-<a href=#577 id=577 data-nosnippet>577</a>        }
-<a href=#578 id=578 data-nosnippet>578</a>    }
-<a href=#579 id=579 data-nosnippet>579</a>}
-<a href=#580 id=580 data-nosnippet>580</a>
-<a href=#581 id=581 data-nosnippet>581</a><span class="kw">fn </span>expand_pair(
-<a href=#582 id=582 data-nosnippet>582</a>    toasty: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#583 id=583 data-nosnippet>583</a>    field_trait: TokenStream,
-<a href=#584 id=584 data-nosnippet>584</a>    target_ty: <span class="kw-2">&amp;</span>syn::Type,
-<a href=#585 id=585 data-nosnippet>585</a>    pair: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>syn::Ident&gt;,
-<a href=#586 id=586 data-nosnippet>586</a>) -&gt; TokenStream {
-<a href=#587 id=587 data-nosnippet>587</a>    <span class="kw">match </span>pair {
-<a href=#588 id=588 data-nosnippet>588</a>        <span class="prelude-val">Some</span>(ident) =&gt; {
-<a href=#589 id=589 data-nosnippet>589</a>            <span class="kw">let </span>name = ident.to_string();
-<a href=#590 id=590 data-nosnippet>590</a>            <span class="macro">quote!</span> {
-<a href=#591 id=591 data-nosnippet>591</a>                <span class="prelude-val">Some</span>({
-<a href=#592 id=592 data-nosnippet>592</a>                    <span class="kw">type </span>__RelationTarget = &lt;#target_ty <span class="kw">as </span>#field_trait&gt;::Target;
-<a href=#593 id=593 data-nosnippet>593</a>                    &lt;__RelationTarget <span class="kw">as </span>#toasty::Model&gt;::field_name_to_id(#name)
-<a href=#594 id=594 data-nosnippet>594</a>                })
-<a href=#595 id=595 data-nosnippet>595</a>            }
-<a href=#596 id=596 data-nosnippet>596</a>        }
-<a href=#597 id=597 data-nosnippet>597</a>        <span class="prelude-val">None </span>=&gt; <span class="macro">quote!</span> { <span class="prelude-val">None </span>},
-<a href=#598 id=598 data-nosnippet>598</a>    }
-<a href=#599 id=599 data-nosnippet>599</a>}
-<a href=#600 id=600 data-nosnippet>600</a>
-<a href=#601 id=601 data-nosnippet>601</a><span class="doccomment">/// Emit the `via` argument for `many_relation_field_ty` / `has_one_relation_field_ty`: a
-<a href=#602 id=602 data-nosnippet>602</a>/// fully resolved [`stmt::Path`] built by chaining the named segments onto the
-<a href=#603 id=603 data-nosnippet>603</a>/// model's `Fields` struct (e.g. `User::fields().comments().article()`).
-<a href=#604 id=604 data-nosnippet>604</a>///
-<a href=#605 id=605 data-nosnippet>605</a>/// Resolution happens at Rust-compile time — a misspelled segment surfaces as
-<a href=#606 id=606 data-nosnippet>606</a>/// "no method named `foo` found for struct `UserFields`", not as a runtime
-<a href=#607 id=607 data-nosnippet>607</a>/// schema validation error. The two `.into()` conversions go via
-<a href=#608 id=608 data-nosnippet>608</a>/// `FieldsStruct: Into&lt;Path&lt;Origin, T&gt;&gt;` and `Path&lt;T, U&gt;: Into&lt;stmt::Path&gt;`;
-<a href=#609 id=609 data-nosnippet>609</a>/// the intermediate `Path&lt;#model_ident, _&gt;` ascription is what disambiguates
-<a href=#610 id=610 data-nosnippet>610</a>/// them.
-<a href=#611 id=611 data-nosnippet>611</a></span><span class="kw">fn </span>expand_via(
-<a href=#612 id=612 data-nosnippet>612</a>    toasty: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#613 id=613 data-nosnippet>613</a>    model_ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#614 id=614 data-nosnippet>614</a>    via: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Vec&lt;syn::Ident&gt;&gt;,
-<a href=#615 id=615 data-nosnippet>615</a>    terminal_ty: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#616 id=616 data-nosnippet>616</a>) -&gt; TokenStream {
-<a href=#617 id=617 data-nosnippet>617</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(segments) = via <span class="kw">else </span>{
-<a href=#618 id=618 data-nosnippet>618</a>        <span class="kw">return </span><span class="macro">quote!</span> { <span class="prelude-val">None </span>};
-<a href=#619 id=619 data-nosnippet>619</a>    };
-<a href=#620 id=620 data-nosnippet>620</a>
-<a href=#621 id=621 data-nosnippet>621</a>    <span class="kw">let </span>path = expand_via_path(toasty, model_ident, segments, terminal_ty);
-<a href=#622 id=622 data-nosnippet>622</a>    <span class="macro">quote!</span> { <span class="prelude-val">Some</span>(#path) }
-<a href=#623 id=623 data-nosnippet>623</a>}
+<a href=#481 id=481 data-nosnippet>481</a>                <span class="kw">let </span>FieldTy::Primitive(ty) = <span class="kw-2">&amp;</span><span class="self">self</span>.model.fields[index_field.field].ty <span class="kw">else </span>{
+<a href=#482 id=482 data-nosnippet>482</a>                    <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#483 id=483 data-nosnippet>483</a>                };
+<a href=#484 id=484 data-nosnippet>484</a>
+<a href=#485 id=485 data-nosnippet>485</a>                <span class="comment">// Pin the diagnostic at the field type's span so the error
+<a href=#486 id=486 data-nosnippet>486</a>                // lands on the user's declaration, not the derive call site.
+<a href=#487 id=487 data-nosnippet>487</a>                </span><span class="prelude-val">Some</span>(<span class="macro">quote_spanned!</span> { ty.span()=&gt;
+<a href=#488 id=488 data-nosnippet>488</a>                    <span class="kw">const _</span>: () = {
+<a href=#489 id=489 data-nosnippet>489</a>                        <span class="kw">fn </span>_check&lt;__T&gt;()
+<a href=#490 id=490 data-nosnippet>490</a>                        <span class="kw">where
+<a href=#491 id=491 data-nosnippet>491</a>                            </span>__T: #toasty::index::IndexableField,
+<a href=#492 id=492 data-nosnippet>492</a>                        {}
+<a href=#493 id=493 data-nosnippet>493</a>                        <span class="kw">let _ </span>= _check::&lt;#ty&gt;;
+<a href=#494 id=494 data-nosnippet>494</a>                    };
+<a href=#495 id=495 data-nosnippet>495</a>                })
+<a href=#496 id=496 data-nosnippet>496</a>            })
+<a href=#497 id=497 data-nosnippet>497</a>            .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
+<a href=#498 id=498 data-nosnippet>498</a>
+<a href=#499 id=499 data-nosnippet>499</a>        <span class="macro">quote!</span> { #( #checks )* }
+<a href=#500 id=500 data-nosnippet>500</a>    }
+<a href=#501 id=501 data-nosnippet>501</a>
+<a href=#502 id=502 data-nosnippet>502</a>    <span class="doccomment">/// Generate calls to register all models reachable from this model's fields.
+<a href=#503 id=503 data-nosnippet>503</a>    ///
+<a href=#504 id=504 data-nosnippet>504</a>    /// For primitive fields, no call is emitted (the default `Field::register`
+<a href=#505 id=505 data-nosnippet>505</a>    /// is a no-op). For embedded fields, `&lt;Type as Field&gt;::register` is called.
+<a href=#506 id=506 data-nosnippet>506</a>    /// For relation fields (BelongsTo, HasMany, HasOne), `&lt;TargetModel as
+<a href=#507 id=507 data-nosnippet>507</a>    /// Model&gt;::register` is called directly.
+<a href=#508 id=508 data-nosnippet>508</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_field_register_calls(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; Vec&lt;TokenStream&gt; {
+<a href=#509 id=509 data-nosnippet>509</a>        <span class="kw">let </span>toasty = <span class="kw-2">&amp;</span><span class="self">self</span>.toasty;
+<a href=#510 id=510 data-nosnippet>510</a>
+<a href=#511 id=511 data-nosnippet>511</a>        <span class="self">self</span>.model
+<a href=#512 id=512 data-nosnippet>512</a>            .fields
+<a href=#513 id=513 data-nosnippet>513</a>            .iter()
+<a href=#514 id=514 data-nosnippet>514</a>            .map(|field| <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
+<a href=#515 id=515 data-nosnippet>515</a>                FieldTy::Primitive(ty) =&gt; {
+<a href=#516 id=516 data-nosnippet>516</a>                    <span class="comment">// Primitives use Field::register which delegates to inner
+<a href=#517 id=517 data-nosnippet>517</a>                    // type if it's an embedded type (via the Field impl).
+<a href=#518 id=518 data-nosnippet>518</a>                    </span><span class="macro">quote!</span> {
+<a href=#519 id=519 data-nosnippet>519</a>                        &lt;#ty <span class="kw">as </span>#toasty::Field&gt;::register(model_set);
+<a href=#520 id=520 data-nosnippet>520</a>                    }
+<a href=#521 id=521 data-nosnippet>521</a>                }
+<a href=#522 id=522 data-nosnippet>522</a>                FieldTy::BelongsTo(rel) =&gt; {
+<a href=#523 id=523 data-nosnippet>523</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
+<a href=#524 id=524 data-nosnippet>524</a>                    <span class="macro">quote!</span> {
+<a href=#525 id=525 data-nosnippet>525</a>                        &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::register(model_set);
+<a href=#526 id=526 data-nosnippet>526</a>                    }
+<a href=#527 id=527 data-nosnippet>527</a>                }
+<a href=#528 id=528 data-nosnippet>528</a>                FieldTy::HasMany(rel) <span class="kw">if </span>rel.via.is_some() =&gt; {
+<a href=#529 id=529 data-nosnippet>529</a>                    <span class="comment">// A via relation reaches its terminal through existing
+<a href=#530 id=530 data-nosnippet>530</a>                    // relation fields, each of which registers the models it
+<a href=#531 id=531 data-nosnippet>531</a>                    // traverses; the terminal of a scalar via is not a model at
+<a href=#532 id=532 data-nosnippet>532</a>                    // all. So a via field registers nothing of its own.
+<a href=#533 id=533 data-nosnippet>533</a>                    </span>TokenStream::new()
+<a href=#534 id=534 data-nosnippet>534</a>                }
+<a href=#535 id=535 data-nosnippet>535</a>                FieldTy::HasMany(rel) =&gt; {
+<a href=#536 id=536 data-nosnippet>536</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
+<a href=#537 id=537 data-nosnippet>537</a>                    <span class="macro">quote!</span> {
+<a href=#538 id=538 data-nosnippet>538</a>                        &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationManyField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::register(model_set);
+<a href=#539 id=539 data-nosnippet>539</a>                    }
+<a href=#540 id=540 data-nosnippet>540</a>                }
+<a href=#541 id=541 data-nosnippet>541</a>                FieldTy::HasOne(rel) =&gt; {
+<a href=#542 id=542 data-nosnippet>542</a>                    <span class="kw">let </span>ty = <span class="kw-2">&amp;</span>rel.ty;
+<a href=#543 id=543 data-nosnippet>543</a>                    <span class="macro">quote!</span> {
+<a href=#544 id=544 data-nosnippet>544</a>                        &lt;&lt;#ty <span class="kw">as </span>#toasty::RelationOneField&gt;::Target <span class="kw">as </span>#toasty::Model&gt;::register(model_set);
+<a href=#545 id=545 data-nosnippet>545</a>                    }
+<a href=#546 id=546 data-nosnippet>546</a>                }
+<a href=#547 id=547 data-nosnippet>547</a>            })
+<a href=#548 id=548 data-nosnippet>548</a>            .collect()
+<a href=#549 id=549 data-nosnippet>549</a>    }
+<a href=#550 id=550 data-nosnippet>550</a>}
+<a href=#551 id=551 data-nosnippet>551</a>
+<a href=#552 id=552 data-nosnippet>552</a><span class="doccomment">/// Emit a span-pinned compile-time obligation that `ty` satisfies `bound`.
+<a href=#553 id=553 data-nosnippet>553</a>///
+<a href=#554 id=554 data-nosnippet>554</a>/// The check leans on the type checker rather than inspecting `ty`: the
+<a href=#555 id=555 data-nosnippet>555</a>/// zero-cost `_check::&lt;#ty&gt;` reference forces the bound to hold. `quote_spanned`
+<a href=#556 id=556 data-nosnippet>556</a>/// pins any resulting diagnostic at the field type's span so the error lands on
+<a href=#557 id=557 data-nosnippet>557</a>/// the user's declaration, not the derive call site. Shared by the
+<a href=#558 id=558 data-nosnippet>558</a>/// storage/auto/version `expand_*_compat_checks` expansions, which differ only
+<a href=#559 id=559 data-nosnippet>559</a>/// in the `bound` they require.
+<a href=#560 id=560 data-nosnippet>560</a></span><span class="kw">fn </span>compat_check(ty: <span class="kw-2">&amp;</span>syn::Type, bound: TokenStream) -&gt; TokenStream {
+<a href=#561 id=561 data-nosnippet>561</a>    <span class="macro">quote_spanned!</span> { ty.span()=&gt;
+<a href=#562 id=562 data-nosnippet>562</a>        <span class="kw">const _</span>: () = {
+<a href=#563 id=563 data-nosnippet>563</a>            <span class="kw">fn </span>_check&lt;__T&gt;()
+<a href=#564 id=564 data-nosnippet>564</a>            <span class="kw">where
+<a href=#565 id=565 data-nosnippet>565</a>                </span>__T: #bound,
+<a href=#566 id=566 data-nosnippet>566</a>            {}
+<a href=#567 id=567 data-nosnippet>567</a>            <span class="kw">let _ </span>= _check::&lt;#ty&gt;;
+<a href=#568 id=568 data-nosnippet>568</a>        };
+<a href=#569 id=569 data-nosnippet>569</a>    }
+<a href=#570 id=570 data-nosnippet>570</a>}
+<a href=#571 id=571 data-nosnippet>571</a>
+<a href=#572 id=572 data-nosnippet>572</a><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_name(toasty: <span class="kw-2">&amp;</span>TokenStream, name: <span class="kw-2">&amp;</span>Name) -&gt; TokenStream {
+<a href=#573 id=573 data-nosnippet>573</a>    <span class="kw">let </span>parts = name.parts.iter().map(|part| {
+<a href=#574 id=574 data-nosnippet>574</a>        <span class="kw">let </span>part = part.to_string();
+<a href=#575 id=575 data-nosnippet>575</a>        <span class="macro">quote!</span> { #part.to_string() }
+<a href=#576 id=576 data-nosnippet>576</a>    });
+<a href=#577 id=577 data-nosnippet>577</a>
+<a href=#578 id=578 data-nosnippet>578</a>    <span class="macro">quote!</span> {
+<a href=#579 id=579 data-nosnippet>579</a>        #toasty::core::schema::Name {
+<a href=#580 id=580 data-nosnippet>580</a>            parts: <span class="macro">vec!</span>[#( #parts ),<span class="kw-2">*</span>],
+<a href=#581 id=581 data-nosnippet>581</a>        }
+<a href=#582 id=582 data-nosnippet>582</a>    }
+<a href=#583 id=583 data-nosnippet>583</a>}
+<a href=#584 id=584 data-nosnippet>584</a>
+<a href=#585 id=585 data-nosnippet>585</a><span class="kw">fn </span>expand_pair(
+<a href=#586 id=586 data-nosnippet>586</a>    toasty: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#587 id=587 data-nosnippet>587</a>    field_trait: TokenStream,
+<a href=#588 id=588 data-nosnippet>588</a>    target_ty: <span class="kw-2">&amp;</span>syn::Type,
+<a href=#589 id=589 data-nosnippet>589</a>    pair: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>syn::Ident&gt;,
+<a href=#590 id=590 data-nosnippet>590</a>) -&gt; TokenStream {
+<a href=#591 id=591 data-nosnippet>591</a>    <span class="kw">match </span>pair {
+<a href=#592 id=592 data-nosnippet>592</a>        <span class="prelude-val">Some</span>(ident) =&gt; {
+<a href=#593 id=593 data-nosnippet>593</a>            <span class="kw">let </span>name = ident.to_string();
+<a href=#594 id=594 data-nosnippet>594</a>            <span class="macro">quote!</span> {
+<a href=#595 id=595 data-nosnippet>595</a>                <span class="prelude-val">Some</span>({
+<a href=#596 id=596 data-nosnippet>596</a>                    <span class="kw">type </span>__RelationTarget = &lt;#target_ty <span class="kw">as </span>#field_trait&gt;::Target;
+<a href=#597 id=597 data-nosnippet>597</a>                    &lt;__RelationTarget <span class="kw">as </span>#toasty::Model&gt;::field_name_to_id(#name)
+<a href=#598 id=598 data-nosnippet>598</a>                })
+<a href=#599 id=599 data-nosnippet>599</a>            }
+<a href=#600 id=600 data-nosnippet>600</a>        }
+<a href=#601 id=601 data-nosnippet>601</a>        <span class="prelude-val">None </span>=&gt; <span class="macro">quote!</span> { <span class="prelude-val">None </span>},
+<a href=#602 id=602 data-nosnippet>602</a>    }
+<a href=#603 id=603 data-nosnippet>603</a>}
+<a href=#604 id=604 data-nosnippet>604</a>
+<a href=#605 id=605 data-nosnippet>605</a><span class="doccomment">/// Emit the `via` argument for `many_relation_field_ty` / `has_one_relation_field_ty`: a
+<a href=#606 id=606 data-nosnippet>606</a>/// fully resolved [`stmt::Path`] built by chaining the named segments onto the
+<a href=#607 id=607 data-nosnippet>607</a>/// model's `Fields` struct (e.g. `User::fields().comments().article()`).
+<a href=#608 id=608 data-nosnippet>608</a>///
+<a href=#609 id=609 data-nosnippet>609</a>/// Resolution happens at Rust-compile time — a misspelled segment surfaces as
+<a href=#610 id=610 data-nosnippet>610</a>/// "no method named `foo` found for struct `UserFields`", not as a runtime
+<a href=#611 id=611 data-nosnippet>611</a>/// schema validation error. The two `.into()` conversions go via
+<a href=#612 id=612 data-nosnippet>612</a>/// `FieldsStruct: Into&lt;Path&lt;Origin, T&gt;&gt;` and `Path&lt;T, U&gt;: Into&lt;stmt::Path&gt;`;
+<a href=#613 id=613 data-nosnippet>613</a>/// the intermediate `Path&lt;#model_ident, _&gt;` ascription is what disambiguates
+<a href=#614 id=614 data-nosnippet>614</a>/// them.
+<a href=#615 id=615 data-nosnippet>615</a></span><span class="kw">fn </span>expand_via(
+<a href=#616 id=616 data-nosnippet>616</a>    toasty: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#617 id=617 data-nosnippet>617</a>    model_ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#618 id=618 data-nosnippet>618</a>    via: <span class="prelude-ty">Option</span>&lt;<span class="kw-2">&amp;</span>Vec&lt;syn::Ident&gt;&gt;,
+<a href=#619 id=619 data-nosnippet>619</a>    terminal_ty: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#620 id=620 data-nosnippet>620</a>) -&gt; TokenStream {
+<a href=#621 id=621 data-nosnippet>621</a>    <span class="kw">let </span><span class="prelude-val">Some</span>(segments) = via <span class="kw">else </span>{
+<a href=#622 id=622 data-nosnippet>622</a>        <span class="kw">return </span><span class="macro">quote!</span> { <span class="prelude-val">None </span>};
+<a href=#623 id=623 data-nosnippet>623</a>    };
 <a href=#624 id=624 data-nosnippet>624</a>
-<a href=#625 id=625 data-nosnippet>625</a><span class="doccomment">/// Emit the fully-resolved [`stmt::Path`] for a `via` relation: chain the named
-<a href=#626 id=626 data-nosnippet>626</a>/// segments onto the model's `Fields` struct (e.g.
-<a href=#627 id=627 data-nosnippet>627</a>/// `User::fields().comments().article()`) and convert to an `stmt::Path`.
-<a href=#628 id=628 data-nosnippet>628</a>///
-<a href=#629 id=629 data-nosnippet>629</a>/// Resolution happens at Rust-compile time — a misspelled segment surfaces as
-<a href=#630 id=630 data-nosnippet>630</a>/// "no method named `foo` found", and an intermediate that is not navigable
-<a href=#631 id=631 data-nosnippet>631</a>/// fails to chain, so only the terminal segment may be a scalar field.
+<a href=#625 id=625 data-nosnippet>625</a>    <span class="kw">let </span>path = expand_via_path(toasty, model_ident, segments, terminal_ty);
+<a href=#626 id=626 data-nosnippet>626</a>    <span class="macro">quote!</span> { <span class="prelude-val">Some</span>(#path) }
+<a href=#627 id=627 data-nosnippet>627</a>}
+<a href=#628 id=628 data-nosnippet>628</a>
+<a href=#629 id=629 data-nosnippet>629</a><span class="doccomment">/// Emit the fully-resolved [`stmt::Path`] for a `via` relation: chain the named
+<a href=#630 id=630 data-nosnippet>630</a>/// segments onto the model's `Fields` struct (e.g.
+<a href=#631 id=631 data-nosnippet>631</a>/// `User::fields().comments().article()`) and convert to an `stmt::Path`.
 <a href=#632 id=632 data-nosnippet>632</a>///
-<a href=#633 id=633 data-nosnippet>633</a>/// `terminal_ty` is the type the path's terminal must reach, derived from the
-<a href=#634 id=634 data-nosnippet>634</a>/// declared field (e.g. `List&lt;i64&gt;` for `Vec&lt;i64&gt;`). Pinning the typed path's
-<a href=#635 id=635 data-nosnippet>635</a>/// second parameter to it — rather than leaving it inferred — is what rejects a
-<a href=#636 id=636 data-nosnippet>636</a>/// field whose declared element type disagrees with the path
-<a href=#637 id=637 data-nosnippet>637</a>/// (`#[has_many(via = a.b.title)] x: Vec&lt;i64&gt;` where `title` is a `String`), so
-<a href=#638 id=638 data-nosnippet>638</a>/// the mismatch is a compile error here instead of a runtime load failure.
-<a href=#639 id=639 data-nosnippet>639</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_via_path(
-<a href=#640 id=640 data-nosnippet>640</a>    toasty: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#641 id=641 data-nosnippet>641</a>    model_ident: <span class="kw-2">&amp;</span>syn::Ident,
-<a href=#642 id=642 data-nosnippet>642</a>    segments: <span class="kw-2">&amp;</span>[syn::Ident],
-<a href=#643 id=643 data-nosnippet>643</a>    terminal_ty: <span class="kw-2">&amp;</span>TokenStream,
-<a href=#644 id=644 data-nosnippet>644</a>) -&gt; TokenStream {
-<a href=#645 id=645 data-nosnippet>645</a>    <span class="kw">let </span><span class="kw-2">mut </span>chain = <span class="macro">quote!</span> { #model_ident::fields() };
-<a href=#646 id=646 data-nosnippet>646</a>    <span class="kw">for </span>segment <span class="kw">in </span>segments {
-<a href=#647 id=647 data-nosnippet>647</a>        chain = <span class="macro">quote_spanned!</span> { segment.span()=&gt; #chain.#segment() };
-<a href=#648 id=648 data-nosnippet>648</a>    }
-<a href=#649 id=649 data-nosnippet>649</a>
-<a href=#650 id=650 data-nosnippet>650</a>    <span class="comment">// Pin the typed path's terminal to `terminal_ty`. When it disagrees with
-<a href=#651 id=651 data-nosnippet>651</a>    // the path, the `.into()` has no matching conversion. Point that failure at
-<a href=#652 id=652 data-nosnippet>652</a>    // the offending path step rather than the derive:
-<a href=#653 id=653 data-nosnippet>653</a>    //
-<a href=#654 id=654 data-nosnippet>654</a>    // - Bind the chain to a local first, so the conversion's receiver is that
-<a href=#655 id=655 data-nosnippet>655</a>    //   local (emitted at the terminal span) rather than the chain expression,
-<a href=#656 id=656 data-nosnippet>656</a>    //   whose root `Model::fields()` carries the derive call site.
-<a href=#657 id=657 data-nosnippet>657</a>    // - Span the whole target annotation — including the interpolated
-<a href=#658 id=658 data-nosnippet>658</a>    //   `terminal_ty`, which `quote_spanned!` would otherwise leave at the
-<a href=#659 id=659 data-nosnippet>659</a>    //   derive — to the terminal segment via `respan`.
-<a href=#660 id=660 data-nosnippet>660</a>    </span><span class="kw">let </span>span = segments
-<a href=#661 id=661 data-nosnippet>661</a>        .last()
-<a href=#662 id=662 data-nosnippet>662</a>        .map_or_else(proc_macro2::Span::call_site, syn::Ident::span);
-<a href=#663 id=663 data-nosnippet>663</a>    <span class="kw">let </span>typed_path_ty = util::respan(<span class="macro">quote!</span>(#toasty::Path&lt;#model_ident, #terminal_ty&gt;), span);
-<a href=#664 id=664 data-nosnippet>664</a>    <span class="macro">quote_spanned!</span> { span=&gt;
-<a href=#665 id=665 data-nosnippet>665</a>        {
-<a href=#666 id=666 data-nosnippet>666</a>            <span class="kw">let </span>__via_chain = #chain;
-<a href=#667 id=667 data-nosnippet>667</a>            <span class="comment">// The chain terminal is a `FieldList`/`ManyField` for a relation or
-<a href=#668 id=668 data-nosnippet>668</a>            // model via-of-via terminal (a real conversion to `Path`), but
-<a href=#669 id=669 data-nosnippet>669</a>            // already a `Path` for a scalar terminal, where `.into()` is
-<a href=#670 id=670 data-nosnippet>670</a>            // identity — allow that.
-<a href=#671 id=671 data-nosnippet>671</a>            </span><span class="attr">#[allow(clippy::useless_conversion)]
-<a href=#672 id=672 data-nosnippet>672</a>            </span><span class="kw">let </span>__via_typed: #typed_path_ty = __via_chain.into();
-<a href=#673 id=673 data-nosnippet>673</a>            <span class="kw">let </span>__via_untyped: #toasty::core::stmt::Path = __via_typed.into();
-<a href=#674 id=674 data-nosnippet>674</a>            __via_untyped
-<a href=#675 id=675 data-nosnippet>675</a>        }
-<a href=#676 id=676 data-nosnippet>676</a>    }
-<a href=#677 id=677 data-nosnippet>677</a>}
+<a href=#633 id=633 data-nosnippet>633</a>/// Resolution happens at Rust-compile time — a misspelled segment surfaces as
+<a href=#634 id=634 data-nosnippet>634</a>/// "no method named `foo` found", and an intermediate that is not navigable
+<a href=#635 id=635 data-nosnippet>635</a>/// fails to chain, so only the terminal segment may be a scalar field.
+<a href=#636 id=636 data-nosnippet>636</a>///
+<a href=#637 id=637 data-nosnippet>637</a>/// `terminal_ty` is the type the path's terminal must reach, derived from the
+<a href=#638 id=638 data-nosnippet>638</a>/// declared field (e.g. `List&lt;i64&gt;` for `Vec&lt;i64&gt;`). Pinning the typed path's
+<a href=#639 id=639 data-nosnippet>639</a>/// second parameter to it — rather than leaving it inferred — is what rejects a
+<a href=#640 id=640 data-nosnippet>640</a>/// field whose declared element type disagrees with the path
+<a href=#641 id=641 data-nosnippet>641</a>/// (`#[has_many(via = a.b.title)] x: Vec&lt;i64&gt;` where `title` is a `String`), so
+<a href=#642 id=642 data-nosnippet>642</a>/// the mismatch is a compile error here instead of a runtime load failure.
+<a href=#643 id=643 data-nosnippet>643</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_via_path(
+<a href=#644 id=644 data-nosnippet>644</a>    toasty: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#645 id=645 data-nosnippet>645</a>    model_ident: <span class="kw-2">&amp;</span>syn::Ident,
+<a href=#646 id=646 data-nosnippet>646</a>    segments: <span class="kw-2">&amp;</span>[syn::Ident],
+<a href=#647 id=647 data-nosnippet>647</a>    terminal_ty: <span class="kw-2">&amp;</span>TokenStream,
+<a href=#648 id=648 data-nosnippet>648</a>) -&gt; TokenStream {
+<a href=#649 id=649 data-nosnippet>649</a>    <span class="kw">let </span><span class="kw-2">mut </span>chain = <span class="macro">quote!</span> { #model_ident::fields() };
+<a href=#650 id=650 data-nosnippet>650</a>    <span class="kw">for </span>segment <span class="kw">in </span>segments {
+<a href=#651 id=651 data-nosnippet>651</a>        chain = <span class="macro">quote_spanned!</span> { segment.span()=&gt; #chain.#segment() };
+<a href=#652 id=652 data-nosnippet>652</a>    }
+<a href=#653 id=653 data-nosnippet>653</a>
+<a href=#654 id=654 data-nosnippet>654</a>    <span class="comment">// Pin the typed path's terminal to `terminal_ty`. When it disagrees with
+<a href=#655 id=655 data-nosnippet>655</a>    // the path, the `.into()` has no matching conversion. Point that failure at
+<a href=#656 id=656 data-nosnippet>656</a>    // the offending path step rather than the derive:
+<a href=#657 id=657 data-nosnippet>657</a>    //
+<a href=#658 id=658 data-nosnippet>658</a>    // - Bind the chain to a local first, so the conversion's receiver is that
+<a href=#659 id=659 data-nosnippet>659</a>    //   local (emitted at the terminal span) rather than the chain expression,
+<a href=#660 id=660 data-nosnippet>660</a>    //   whose root `Model::fields()` carries the derive call site.
+<a href=#661 id=661 data-nosnippet>661</a>    // - Span the whole target annotation — including the interpolated
+<a href=#662 id=662 data-nosnippet>662</a>    //   `terminal_ty`, which `quote_spanned!` would otherwise leave at the
+<a href=#663 id=663 data-nosnippet>663</a>    //   derive — to the terminal segment via `respan`.
+<a href=#664 id=664 data-nosnippet>664</a>    </span><span class="kw">let </span>span = segments
+<a href=#665 id=665 data-nosnippet>665</a>        .last()
+<a href=#666 id=666 data-nosnippet>666</a>        .map_or_else(proc_macro2::Span::call_site, syn::Ident::span);
+<a href=#667 id=667 data-nosnippet>667</a>    <span class="kw">let </span>typed_path_ty = util::respan(<span class="macro">quote!</span>(#toasty::Path&lt;#model_ident, #terminal_ty&gt;), span);
+<a href=#668 id=668 data-nosnippet>668</a>    <span class="macro">quote_spanned!</span> { span=&gt;
+<a href=#669 id=669 data-nosnippet>669</a>        {
+<a href=#670 id=670 data-nosnippet>670</a>            <span class="kw">let </span>__via_chain = #chain;
+<a href=#671 id=671 data-nosnippet>671</a>            <span class="comment">// The chain terminal is a `FieldList`/`ManyField` for a relation or
+<a href=#672 id=672 data-nosnippet>672</a>            // model via-of-via terminal (a real conversion to `Path`), but
+<a href=#673 id=673 data-nosnippet>673</a>            // already a `Path` for a scalar terminal, where `.into()` is
+<a href=#674 id=674 data-nosnippet>674</a>            // identity — allow that.
+<a href=#675 id=675 data-nosnippet>675</a>            </span><span class="attr">#[allow(clippy::useless_conversion)]
+<a href=#676 id=676 data-nosnippet>676</a>            </span><span class="kw">let </span>__via_typed: #typed_path_ty = __via_chain.into();
+<a href=#677 id=677 data-nosnippet>677</a>            <span class="kw">let </span>__via_untyped: #toasty::core::stmt::Path = __via_typed.into();
+<a href=#678 id=678 data-nosnippet>678</a>            __via_untyped
+<a href=#679 id=679 data-nosnippet>679</a>        }
+<a href=#680 id=680 data-nosnippet>680</a>    }
+<a href=#681 id=681 data-nosnippet>681</a>}
 </code></pre></div></section></main></body></html>
