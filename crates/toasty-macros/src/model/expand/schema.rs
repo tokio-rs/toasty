@@ -353,12 +353,16 @@ impl Expand<'_> {
     }
 
     fn expand_table_name(&self) -> TokenStream {
-        if let Some(table_name) = &self.model.table {
-            let table_name = table_name.value();
-            quote! { Some(#table_name.to_string()) }
-        } else {
-            quote! { None }
-        }
+        let table_name = match &self.model.table {
+            Some(table_name) => table_name.value(),
+            // Derive the default table name at compile time so building the
+            // schema at runtime never pays the cost of the `pluralizer` crate's
+            // lazy regex compilation: snake_case the model name, then pluralize.
+            // The table-name prefix, if any, is applied at runtime by the builder.
+            None => pluralizer::pluralize(&self.model.name.snake_case, 2, false),
+        };
+
+        quote! { #table_name.to_string() }
     }
 }
 

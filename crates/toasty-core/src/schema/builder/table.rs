@@ -2,7 +2,6 @@ use super::BuildSchema;
 use crate::{
     Error, Result, driver,
     schema::{
-        Name,
         app::{self, Model, ModelId, ModelRoot},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
@@ -137,22 +136,14 @@ struct MapField<'a, 'b> {
 
 impl BuildSchema<'_> {
     pub(super) fn build_table_stub_for_model(&mut self, model: &ModelRoot) -> TableId {
-        if let Some(table_name) = model.table_name.as_ref() {
-            let table_name = self.prefix_table_name(table_name);
+        let table_name = self.prefix_table_name(&model.table_name);
 
-            if !self.table_lookup.contains_key(&table_name) {
-                let id = self.register_table(&table_name);
-                self.tables.push(Table::new(id, table_name.clone()));
-            }
-
-            *self.table_lookup.get(&table_name).unwrap()
-        } else {
-            let name = self.table_name_from_model(&model.name);
-            let id = self.register_table(&name);
-
-            self.tables.push(Table::new(id, name));
-            id
+        if !self.table_lookup.contains_key(&table_name) {
+            let id = self.register_table(&table_name);
+            self.tables.push(Table::new(id, table_name.clone()));
         }
+
+        *self.table_lookup.get(&table_name).unwrap()
     }
 
     pub(super) fn build_tables_from_models(
@@ -191,11 +182,6 @@ impl BuildSchema<'_> {
         let id = TableId(self.table_lookup.len());
         self.table_lookup.insert(name.as_ref().to_string(), id);
         id
-    }
-
-    fn table_name_from_model(&self, model_name: &Name) -> String {
-        let base = pluralizer::pluralize(&model_name.snake_case(), 2, false);
-        self.prefix_table_name(&base)
     }
 
     fn prefix_table_name(&self, name: &str) -> String {
