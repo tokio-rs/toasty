@@ -64,15 +64,38 @@ impl tracing::field::Visit for FieldVisitor {
 /// Per-span field storage, kept in the registry's extensions.
 struct SpanFields(HashMap<String, String>);
 
-#[derive(Clone, Default)]
+#[derive(Clone)]
 struct CaptureLayer {
     events: Arc<Mutex<Vec<CapturedEvent>>>,
+    max_level: Level,
 }
 
 impl<S> Layer<S> for CaptureLayer
 where
     S: tracing::Subscriber + for<'a> LookupSpan<'a>,
 {
+    // Force a dynamic `enabled` check on every event. Tests run in
+    // parallel, each with its own thread-local subscriber; a cached
+    // per-callsite Interest computed against one test's subscriber must
+    // not decide event delivery for another's. (This is also why the
+    // level cutoff lives here instead of in `Layer::with_filter` — the
+    // `Filtered` wrapper keys off state set in `enabled()`, which the
+    // global Interest cache can skip.)
+    fn register_callsite(
+        &self,
+        _metadata: &'static tracing::Metadata<'static>,
+    ) -> tracing::subscriber::Interest {
+        tracing::subscriber::Interest::sometimes()
+    }
+
+    fn enabled(
+        &self,
+        metadata: &tracing::Metadata<'_>,
+        _ctx: tracing_subscriber::layer::Context<'_, S>,
+    ) -> bool {
+        *metadata.level() <= self.max_level
+    }
+
     fn on_new_span(
         &self,
         attrs: &tracing::span::Attributes<'_>,
@@ -100,6 +123,9 @@ where
     }
 
     fn on_event(&self, event: &tracing::Event<'_>, ctx: tracing_subscriber::layer::Context<'_, S>) {
+        if *event.metadata().level() > self.max_level {
+            return;
+        }
         let mut visitor = FieldVisitor::default();
         event.record(&mut visitor);
 
@@ -130,7 +156,21 @@ fn capture() -> (
     Arc<Mutex<Vec<CapturedEvent>>>,
     tracing::subscriber::DefaultGuard,
 ) {
-    let layer = CaptureLayer::default();
+    capture_at(Level::TRACE)
+}
+
+/// Like [`capture`], but only events at `max_level` or above reach the
+/// capturing layer — mimics a production `RUST_LOG` filter.
+fn capture_at(
+    max_level: Level,
+) -> (
+    Arc<Mutex<Vec<CapturedEvent>>>,
+    tracing::subscriber::DefaultGuard,
+) {
+    let layer = CaptureLayer {
+        events: Arc::default(),
+        max_level,
+    };
     let events = layer.events.clone();
     let subscriber = tracing_subscriber::registry().with(layer);
     let guard = tracing::subscriber::set_default(subscriber);
@@ -216,6 +256,35 @@ async fn slow_statement_escalates_to_warn() {
     let ev = &captured[0];
     assert_eq!(ev.level, Level::WARN);
     assert_eq!(ev.message(), "slow query");
+}
+
+/// A `RUST_LOG=warn`-style filter disables the DEBUG event but still emits
+/// slow queries at WARN; opted-in params must appear on those events too.
+#[tokio::test]
+async fn params_present_on_slow_query_under_warn_filter() {
+    let (events, _guard) = capture_at(Level::WARN);
+    let mut db = setup_db(|builder| {
+        builder
+            .log_statement_params(true)
+            .slow_statement_threshold(Some(Duration::ZERO));
+    })
+    .await;
+
+    toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await
+        .unwrap();
+    events.lock().unwrap().clear();
+
+    User::filter_by_name("Alice").exec(&mut db).await.unwrap();
+
+    let captured = query_events(&events);
+    let all: Vec<_> = events.lock().unwrap().clone();
+    let ev = captured
+        .first()
+        .unwrap_or_else(|| panic!("no toasty::query events; all captured: {all:#?}"));
+    assert_eq!(ev.level, Level::WARN);
+    assert_eq!(ev.fields["db.params"], "[\"Alice\"]");
 }
 
 /// Regression test for tokio-rs/toasty#1043: driver events must land inside

@@ -184,11 +184,17 @@ impl<'a> QueryLog<'a> {
 
 /// Renders parameter values to a bounded, human-readable list, or `None`
 /// when param logging is disabled or the event could not be observed anyway.
+/// Rendering happens before execution, when it is not yet known whether the
+/// event fires at `DEBUG` or (past the slow threshold) `WARN`, so both
+/// callsites are checked: a `RUST_LOG=warn` filter must still get params on
+/// slow-query events.
 fn render_params<'v>(
     config: &QueryLogConfig,
     params: impl IntoIterator<Item = &'v Value>,
 ) -> Option<String> {
-    if !config.params || !tracing::event_enabled!(target: "toasty::query", tracing::Level::DEBUG) {
+    let enabled = tracing::event_enabled!(target: "toasty::query", tracing::Level::DEBUG)
+        || tracing::event_enabled!(target: "toasty::query", tracing::Level::WARN);
+    if !config.params || !enabled {
         return None;
     }
 
