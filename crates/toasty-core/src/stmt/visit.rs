@@ -1226,6 +1226,7 @@ where
         ExprSet::Select(expr) => v.visit_stmt_select(expr),
         ExprSet::SetOp(expr) => v.visit_expr_set_op(expr),
         ExprSet::Update(expr) => v.visit_stmt_update(expr),
+        ExprSet::Delete(expr) => v.visit_stmt_delete(expr),
         ExprSet::Values(expr) => v.visit_values(expr),
         ExprSet::Insert(expr) => v.visit_stmt_insert(expr),
     }

@@ -90,7 +90,7 @@
 use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
-use toasty_core::stmt::{self, Condition, visit_mut};
+use toasty_core::stmt::{self, visit_mut};
 
 use toasty_core::driver::operation::Pagination;
 
@@ -834,20 +834,29 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let pagination_config = pagination_info.map(|info| self.build_extract_cursor(info, &ty));
 
         let node = if stmt.condition().is_some() {
-            if let stmt::Statement::Update(stmt) = stmt {
-                assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
+            // A conditional UPDATE or DELETE (e.g. an OCC `#[version]` check).
+            // The condition is checked against the current rows and the write
+            // only applies when it holds; a mismatch surfaces as an error. Two
+            // strategies, chosen by capability: a single CTE statement
+            // (PostgreSQL) or a read-modify-write transaction (SQLite, MySQL).
+            debug_assert!(
+                stmt.is_update() || stmt.is_delete(),
+                "only UPDATE and DELETE carry conditions; stmt={stmt:#?}"
+            );
 
-                if self.planner.engine.capability().cte_with_update {
-                    mir::Operation::ExecStatement(Box::new(
-                        self.plan_conditional_sql_query_as_cte(stmt, ty),
-                    ))
-                } else {
-                    mir::Operation::ReadModifyWrite(Box::new(
-                        self.plan_conditional_sql_query_as_rmw(stmt, ty),
-                    ))
-                }
+            // A conditional UPDATE or DELETE compiles to a single CTE statement
+            // on backends that support data-modifying CTEs (PostgreSQL);
+            // elsewhere it becomes a read-modify-write transaction (which every
+            // SQL backend supports, locking the probed rows via `SELECT ... FOR
+            // UPDATE` where available).
+            if self.planner.engine.capability().cte_with_update {
+                mir::Operation::ExecStatement(Box::new(
+                    self.plan_conditional_sql_query_as_cte(stmt, ty),
+                ))
             } else {
-                todo!("stmt={stmt:#?}");
+                mir::Operation::ReadModifyWrite(Box::new(
+                    self.plan_conditional_sql_query_as_rmw(stmt, ty),
+                ))
             }
         } else {
             debug_assert!(
@@ -863,7 +872,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 inputs: mem::take(&mut self.load_data.inputs),
                 stmt,
                 ty,
-                conditional_update_with_no_returning: false,
+                conditional: exec::ConditionalOutput::None,
                 pagination: pagination_config.clone(),
             }))
         };
@@ -1027,207 +1036,222 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_conditional_sql_query_as_cte(
         &mut self,
-        stmt: stmt::Update,
+        stmt: stmt::Statement,
         ty: stmt::Type,
     ) -> mir::ExecStatement {
-        let Some(condition) = stmt.condition.expr else {
-            panic!("conditional update without condition");
+        let (condition, filter, source, mut write) = self.conditional_write_parts(stmt);
+
+        // `found`: the probe. Projects the OCC condition once per row matching
+        // the filter, locking those rows (`FOR UPDATE`) so the condition is
+        // evaluated against the latest committed row version and the rows
+        // cannot change before the write applies. Without the lock, a stale
+        // writer blocking on a concurrent committed update would pass the
+        // write's re-check (the probe is already materialized from the old
+        // snapshot and the write's own filter is key-only) and silently
+        // overwrite the newer row — the lost update `#[version]` exists to
+        // prevent.
+        let found = stmt::Cte {
+            query: conditional_probe_query(
+                condition,
+                filter.clone(),
+                source,
+                self.planner.engine.capability().select_for_update,
+            ),
         };
 
-        let Some(filter) = stmt.filter.expr else {
-            panic!("conditional update without filter");
+        // `counts`: aggregates the probe rows into `[matched, conditioned]`.
+        // Kept separate from `found` because a locking SELECT cannot carry
+        // aggregates. `found` sits one scope out (CTE body → WITH).
+        let counts = stmt::Cte {
+            query: stmt::Query::builder(stmt::Select {
+                source: stmt::TableRef::Cte {
+                    nesting: 1,
+                    index: 0,
+                }
+                .into(),
+                filter: stmt::Filter::new(true),
+                returning: stmt::Returning::Project(conditional_probe_projection(cte_column(0, 0))),
+                distinct: false,
+            })
+            .build(),
         };
 
-        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
-            panic!("conditional update without table");
-        };
-
-        let mut ctes = vec![];
-
-        // Select from update table without the update condition.
-        ctes.push(stmt::Cte {
-            query: stmt::Query::builder(target)
-                .filter(filter.clone())
-                .returning_project(stmt::Expr::record_from_vec(vec![
-                    stmt::Expr::count_star(),
-                    stmt::FuncCount {
-                        arg: None,
-                        filter: Some(Box::new(condition)),
-                    }
-                    .into(),
-                ]))
-                .build(),
-        });
-
-        let returning_len = match &stmt.returning {
-            Some(stmt::Returning::Project(expr)) => {
-                let stmt::Expr::Record(expr_record) = expr else {
-                    panic!("returning must be a record");
-                };
-
-                expr_record.fields.len()
+        // `changed`: the write. It applies only when the probe's two counts
+        // agree, expressed as a scalar subquery over `counts` ANDed onto the
+        // filter. `counts` sits two scopes out from here (subquery → CTE body →
+        // WITH).
+        let counts_agree = stmt::Expr::stmt(stmt::Select {
+            source: stmt::TableRef::Cte {
+                nesting: 2,
+                index: 1,
             }
-            Some(_) => todo!(),
+            .into(),
+            filter: true.into(),
+            returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![stmt::Expr::eq(
+                stmt::ExprColumn {
+                    nesting: 0,
+                    table: 0,
+                    column: 0,
+                },
+                stmt::ExprColumn {
+                    nesting: 0,
+                    table: 0,
+                    column: 1,
+                },
+            )])),
+            distinct: false,
+        });
+        // The write applies only when the two counts agree — AND that guard
+        // onto the write's filter.
+        let guarded_filter = stmt::Filter::new(stmt::Expr::and(filter, counts_agree));
+        match &mut write {
+            stmt::Statement::Update(update) => update.filter = guarded_filter,
+            stmt::Statement::Delete(delete) => delete.filter = guarded_filter,
+            _ => unreachable!("conditional write is UPDATE or DELETE; write={write:#?}"),
+        }
+
+        // A `RETURNING` on the write (e.g. a relative `value = value + 1` read
+        // back) means the caller wants the changed rows; otherwise the write
+        // just reports how many rows it touched. Only an UPDATE reads columns
+        // back — a DELETE never has a returning.
+        let returning_len = match write.returning() {
+            Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record.fields.len(),
+            Some(returning) => todo!("unexpected conditional write returning={returning:#?}"),
             None => 0,
         };
 
-        // The update statement. The update condition is expressed using the select above
-        ctes.push(stmt::Cte {
-            query: stmt::Query::new(stmt::Update {
-                target: stmt.target,
-                assignments: stmt.assignments,
-                filter: stmt::Filter::new(stmt::Expr::and(
-                    filter,
-                    // SELECT found.count(*) = found.count(CONDITION) FROM found
-                    stmt::Expr::stmt(stmt::Select {
-                        source: stmt::TableRef::Cte {
-                            nesting: 2,
-                            index: 0,
-                        }
-                        .into(),
-                        filter: true.into(),
-                        returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
-                            stmt::Expr::eq(
-                                stmt::ExprColumn {
-                                    nesting: 0,
-                                    table: 0,
-                                    column: 0,
-                                },
-                                stmt::ExprColumn {
-                                    nesting: 0,
-                                    table: 0,
-                                    column: 1,
-                                },
-                            ),
-                        ])),
-                        distinct: false,
-                    }),
-                )),
-                condition: Condition::default(),
-                returning: Some(
-                    stmt.returning
-                        // TODO: hax
-                        .unwrap_or_else(|| {
-                            stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
-                                stmt::Expr::from("hello"),
-                            ]))
-                        }),
+        // `changed`: the write, wrapped as a data-modifying CTE body.
+        let changed_body: stmt::ExprSet = match write {
+            stmt::Statement::Update(update) => update.into(),
+            stmt::Statement::Delete(delete) => delete.into(),
+            _ => unreachable!("conditional write is UPDATE or DELETE"),
+        };
+        let changed = stmt::Cte {
+            query: stmt::Query::new(changed_body),
+        };
+
+        let outer = if returning_len == 0 {
+            // No columns to read back: select just the two probe counts. The
+            // `changed` CTE is data-modifying, so PostgreSQL runs it even though
+            // the outer query does not reference it.
+            stmt::Query::builder(stmt::Select {
+                source: stmt::TableRef::Cte {
+                    nesting: 0,
+                    index: 1,
+                }
+                .into(),
+                filter: stmt::Filter::new(true),
+                returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
+                    cte_column(0, 0),
+                    cte_column(0, 1),
+                ])),
+                distinct: false,
+            })
+        } else {
+            // Read the probe counts alongside the changed rows. `counts` yields
+            // exactly one row, so the LEFT JOIN repeats the counts across every
+            // changed row (and yields a single NULL-padded row when nothing
+            // changed).
+            let mut columns = vec![cte_column(0, 0), cte_column(0, 1)];
+            for i in 0..returning_len {
+                columns.push(cte_column(1, i));
+            }
+
+            stmt::Query::builder(stmt::Select {
+                source: stmt::Source::table_with_joins(
+                    vec![
+                        stmt::TableRef::Cte {
+                            nesting: 0,
+                            index: 1,
+                        },
+                        stmt::TableRef::Cte {
+                            nesting: 0,
+                            index: 2,
+                        },
+                    ],
+                    stmt::TableWithJoins {
+                        relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
+                        joins: vec![stmt::Join {
+                            table: stmt::SourceTableId(1),
+                            constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                        }],
+                    },
                 ),
-            }),
-        });
+                filter: stmt::Filter::new(true),
+                returning: stmt::Returning::Project(stmt::Expr::record_from_vec(columns)),
+                distinct: false,
+            })
+        };
 
-        let mut columns = vec![
-            stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: 0,
-            }),
-            stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: 1,
-            }),
-        ];
-
-        for i in 0..returning_len {
-            columns.push(stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 1,
-                column: i,
-            }));
-        }
-
-        let stmt = stmt::Query::builder(stmt::Select {
-            source: stmt::Source::table_with_joins(
-                vec![
-                    stmt::TableRef::Cte {
-                        nesting: 0,
-                        index: 0,
-                    },
-                    stmt::TableRef::Cte {
-                        nesting: 0,
-                        index: 1,
-                    },
-                ],
-                stmt::TableWithJoins {
-                    relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
-                    joins: vec![stmt::Join {
-                        table: stmt::SourceTableId(1),
-                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
-                    }],
-                },
-            ),
-            filter: stmt::Filter::new(true),
-            returning: stmt::Returning::Project(stmt::Expr::record_from_vec(columns)),
-            distinct: false,
-        })
-        .with(ctes)
-        .build()
-        .into();
+        let stmt = outer.with(vec![found, counts, changed]).build().into();
 
         mir::ExecStatement {
             inputs: mem::take(&mut self.load_data.inputs),
             stmt,
             ty,
-            conditional_update_with_no_returning: true,
+            conditional: if returning_len == 0 {
+                exec::ConditionalOutput::Count
+            } else {
+                exec::ConditionalOutput::Returning
+            },
             pagination: None,
         }
     }
 
     fn plan_conditional_sql_query_as_rmw(
         &mut self,
-        stmt: stmt::Update,
+        stmt: stmt::Statement,
         ty: stmt::Type,
     ) -> mir::ReadModifyWrite {
-        // For now, no returning supported
-        assert!(stmt.returning.is_none(), "TODO: support returning");
+        let (condition, filter, source, write) = self.conditional_write_parts(stmt);
 
-        let Some(condition) = stmt.condition.expr else {
-            panic!("conditional update without condition");
-        };
-
-        let Some(filter) = stmt.filter.expr else {
-            panic!("conditional update without filter");
-        };
-
-        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
-            panic!("conditional update without table");
-        };
-
-        // Neither SQLite nor MySQL support CTE with update. We should transform
-        // the conditional update into a transaction with checks between.
-
-        let read = stmt::Query::builder(target)
-            .filter(filter.clone())
-            .returning_project(stmt::Expr::record_from_vec(vec![
-                stmt::Expr::count_star(),
-                stmt::FuncCount {
-                    arg: None,
-                    filter: Some(Box::new(condition)),
-                }
-                .into(),
-            ]))
-            .locks(if self.planner.engine.capability().select_for_update {
-                vec![stmt::Lock::Update]
-            } else {
-                vec![]
-            })
-            .build();
-
-        let write = stmt::Update {
-            target: stmt.target,
-            assignments: stmt.assignments,
-            filter: stmt::Filter::new(filter),
-            condition: stmt::Condition::default(),
-            returning: None,
-        };
+        // A conditional write on a backend without data-modifying CTEs (SQLite,
+        // MySQL) becomes a transaction: first probe the matched rows, then apply
+        // the write (filter only, no condition) when every matched row satisfies
+        // the condition. The engine derives the matched and satisfied counts
+        // from the probe's per-row results.
+        let read = conditional_probe_query(
+            condition,
+            filter,
+            source,
+            self.planner.engine.capability().select_for_update,
+        );
 
         mir::ReadModifyWrite {
             inputs: mem::take(&mut self.load_data.inputs),
             read,
-            write: write.into(),
+            write,
             ty,
         }
+    }
+
+    /// Decompose a conditional UPDATE/DELETE into the parts both SQL
+    /// conditional-write strategies need: the OCC condition, the row filter, a
+    /// SELECT source over the target table (for the count probe), and the bare
+    /// write statement with its condition stripped. The filter and any
+    /// `RETURNING` stay on the write.
+    fn conditional_write_parts(
+        &self,
+        mut stmt: stmt::Statement,
+    ) -> (stmt::Expr, stmt::Expr, stmt::Source, stmt::Statement) {
+        let condition = stmt
+            .condition_mut_unwrap()
+            .expr
+            .take()
+            .expect("conditional write without condition");
+
+        let filter = stmt
+            .filter()
+            .and_then(|filter| filter.expr.clone())
+            .expect("conditional write without filter");
+
+        let source = match &stmt {
+            stmt::Statement::Update(update) => stmt::Source::table(update.target.as_table_unwrap()),
+            stmt::Statement::Delete(delete) => delete.from.clone(),
+            _ => unreachable!("conditional write is UPDATE or DELETE; stmt={stmt:#?}"),
+        };
+
+        (condition, filter, source, stmt)
     }
 
     // ===== NoSQL execution =====
@@ -1843,6 +1867,61 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn stmt(&self) -> &stmt::Statement {
         self.stmt_info.stmt.as_deref().unwrap()
     }
+}
+
+/// A reference to column `column` of CTE `table` in the outer query's `FROM`
+/// (both at zero nesting).
+fn cte_column(table: usize, column: usize) -> stmt::Expr {
+    stmt::Expr::column(stmt::ExprColumn {
+        nesting: 0,
+        table,
+        column,
+    })
+}
+
+/// The probe query shared by both SQL conditional-write strategies:
+/// `SELECT <condition> FROM <source> WHERE <filter> [FOR UPDATE]`.
+///
+/// The condition is projected once per matched row rather than as an
+/// aggregate: a per-row projection can carry `FOR UPDATE` while `SELECT
+/// count(*) ... FOR UPDATE` is rejected. Locking the matched rows makes the
+/// probe authoritative — the condition is evaluated against the latest
+/// committed row version and the rows cannot change before the write applies.
+fn conditional_probe_query(
+    condition: stmt::Expr,
+    filter: stmt::Expr,
+    source: stmt::Source,
+    lock: bool,
+) -> stmt::Query {
+    stmt::Query::builder(stmt::Select {
+        source,
+        filter: stmt::Filter::new(filter),
+        returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![condition])),
+        distinct: false,
+    })
+    .locks(if lock {
+        vec![stmt::Lock::Update]
+    } else {
+        vec![]
+    })
+    .build()
+}
+
+/// The aggregate projection over the probe's per-row results:
+/// `[count(*), count(*) FILTER (WHERE <ok>)]`. The first column counts rows
+/// matching the filter; the second counts those that also satisfy the OCC
+/// condition. The write is safe to apply exactly when the two agree. Used by
+/// the CTE strategy's `counts` CTE; the read-modify-write strategy derives the
+/// same counts client-side.
+fn conditional_probe_projection(condition: stmt::Expr) -> stmt::Expr {
+    stmt::Expr::record_from_vec(vec![
+        stmt::Expr::count_star(),
+        stmt::FuncCount {
+            arg: None,
+            filter: Some(Box::new(condition)),
+        }
+        .into(),
+    ])
 }
 
 /// Extract limit/pagination bounds from a query statement for use with

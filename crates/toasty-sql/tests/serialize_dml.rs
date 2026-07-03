@@ -189,12 +189,18 @@ fn insert_basic_values() {
 fn insert_with_returning() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a')RETURNING "id";"#]].assert_eq(
-        &render(Flavor::Sqlite, &schema, insert_basic(returning.clone())),
-    );
-    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a')RETURNING "id";"#]].assert_eq(
-        &render(Flavor::Postgresql, &schema, insert_basic(returning)),
-    );
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a') RETURNING "id" AS column1;"#]]
+        .assert_eq(&render(
+            Flavor::Sqlite,
+            &schema,
+            insert_basic(returning.clone()),
+        ));
+    expect![[r#"INSERT INTO "users" ("id", "name") VALUES (1, 'a') RETURNING "id" AS column1;"#]]
+        .assert_eq(&render(
+            Flavor::Postgresql,
+            &schema,
+            insert_basic(returning),
+        ));
 }
 
 #[test]
@@ -253,18 +259,22 @@ fn update_with_where() {
 fn update_with_returning() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
-    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1 RETURNING "id";"#]]
-        .assert_eq(&render(
-            Flavor::Sqlite,
-            &schema,
-            update_stmt(true, returning.clone()),
-        ));
-    expect![[r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1 RETURNING "id";"#]]
-        .assert_eq(&render(
-            Flavor::Postgresql,
-            &schema,
-            update_stmt(true, returning),
-        ));
+    expect![[
+        r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1 RETURNING "id" AS column1;"#
+    ]]
+    .assert_eq(&render(
+        Flavor::Sqlite,
+        &schema,
+        update_stmt(true, returning.clone()),
+    ));
+    expect![[
+        r#"UPDATE "users" AS tbl_0_0 SET "name" = 'b' WHERE "id" = 1 RETURNING "id" AS column1;"#
+    ]]
+    .assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        update_stmt(true, returning),
+    ));
 }
 
 #[test]
