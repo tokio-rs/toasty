@@ -226,7 +226,7 @@ impl ConnectionTask {
             let _ = tx.send(result);
             true
         } else {
-            tracing::warn!("connection reported invalid; closing channel and exiting");
+            tracing::debug!("connection reported invalid; closing channel and exiting");
             self.in_rx.close();
             self.sweep_waker.wake();
             let _ = tx.send(result);

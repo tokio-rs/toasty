@@ -135,7 +135,7 @@ impl Pool {
     /// Retrieves a connection from the pool.
     pub(crate) async fn get(&self, shared: Arc<super::Shared>) -> crate::Result<super::Connection> {
         let connection = self.inner.get().await.map_err(|e| {
-            tracing::warn!(error = %e, "failed to acquire connection from pool");
+            tracing::debug!(error = %e, "failed to acquire connection from pool");
             toasty_core::Error::connection_pool(e)
         })?;
         Ok(super::Connection {
@@ -192,7 +192,7 @@ impl deadpool::managed::Manager for Manager {
     async fn create(&self) -> Result<Self::Type, Self::Error> {
         tracing::debug!("creating new pooled connection");
         let mut connection = self.driver.connect().await.inspect_err(|e| {
-            tracing::warn!(error = %e, "failed to create database connection");
+            tracing::debug!(error = %e, "failed to create database connection");
         })?;
         connection.set_query_log_config(self.query_log);
         Ok(ConnectionHandle::spawn(
@@ -244,7 +244,7 @@ impl deadpool::managed::Manager for Manager {
             match rx.await {
                 Ok(Ok(())) => {}
                 Ok(Err(err)) => {
-                    tracing::warn!(error = %err, "pre-ping failed; discarding pooled connection");
+                    tracing::debug!(error = %err, "pre-ping failed; discarding pooled connection");
                     return Err(deadpool::managed::RecycleError::Backend(err));
                 }
                 Err(_) => {
@@ -415,12 +415,12 @@ impl SweepTask {
         match tokio::time::timeout(DEFAULT_SWEEP_PING_TIMEOUT, rx).await {
             Ok(Ok(Ok(()))) => true,
             Ok(Ok(Err(err))) => {
-                tracing::warn!(error = %err, "sweep ping failed; discarding pooled connection");
+                tracing::debug!(error = %err, "sweep ping failed; discarding pooled connection");
                 false
             }
             Ok(Err(_)) => false, // connection task dropped tx
             Err(_) => {
-                tracing::warn!("sweep ping timed out; discarding pooled connection");
+                tracing::debug!("sweep ping timed out; discarding pooled connection");
                 false
             }
         }

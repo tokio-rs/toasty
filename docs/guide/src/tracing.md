@@ -212,15 +212,21 @@ Toasty assigns levels by audience, so a production filter like
 | Level | What it reports |
 |---|---|
 | `ERROR` | Toasty itself failed in a way it cannot recover from (e.g. the connection pool cannot be built). |
-| `WARN` | Anomalies Toasty handled but an operator should know about: slow statements, dead connections discovered by a ping, failed connection attempts. |
+| `WARN` | Statements past the slow-statement threshold, and configuration mismatches (e.g. the driver caps the pool below the requested size). |
 | `INFO` | One-time lifecycle events: schema build, database ready, applied migrations. |
-| `DEBUG` | One event per query (the `toasty::query` event), transaction begin/commit/rollback, pool connection lifecycle. |
+| `DEBUG` | One event per query (the `toasty::query` event), transaction begin/commit/rollback, and pool connection lifecycle: creation, discards, health-check failures. |
 | `TRACE` | Engine internals: execution plan actions, per-operation driver dispatch, decoded result dumps. |
 
-Failed statements are reported at `DEBUG` (in the query event's `error`
-field), not `ERROR`: the error propagates to the caller, who decides
-whether it is an application error. A unique-constraint violation your
-code handles is not an error worth logging twice.
+Two principles keep the higher levels quiet:
+
+- Errors that propagate to the caller are reported at `DEBUG`, not
+  `ERROR` — the caller decides whether they are application errors. This
+  covers failed statements (the query event's `error` field) and pool
+  acquire failures. A unique-constraint violation your code handles is
+  not an error worth logging twice.
+- The pool recovering from a dead connection — an idle timeout, a
+  server restart, a failed ping — is normal operation, not an anomaly,
+  so discards and health-check failures log at `DEBUG`.
 
 ## Filtering
 
