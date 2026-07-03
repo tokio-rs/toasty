@@ -1228,482 +1228,483 @@
 <a href=#1228 id=1228 data-nosnippet>1228</a>        ExprSet::Select(expr) =&gt; v.visit_stmt_select_mut(expr),
 <a href=#1229 id=1229 data-nosnippet>1229</a>        ExprSet::SetOp(expr) =&gt; v.visit_expr_set_op_mut(expr),
 <a href=#1230 id=1230 data-nosnippet>1230</a>        ExprSet::Update(expr) =&gt; v.visit_stmt_update_mut(expr),
-<a href=#1231 id=1231 data-nosnippet>1231</a>        ExprSet::Values(expr) =&gt; v.visit_values_mut(expr),
-<a href=#1232 id=1232 data-nosnippet>1232</a>        ExprSet::Insert(expr) =&gt; v.visit_stmt_insert_mut(expr),
-<a href=#1233 id=1233 data-nosnippet>1233</a>    }
-<a href=#1234 id=1234 data-nosnippet>1234</a>}
-<a href=#1235 id=1235 data-nosnippet>1235</a>
-<a href=#1236 id=1236 data-nosnippet>1236</a><span class="doccomment">/// Default mutable traversal for [`ExprSetOp`] nodes. Visits each operand.
-<a href=#1237 id=1237 data-nosnippet>1237</a></span><span class="kw">pub fn </span>visit_expr_set_op_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprSetOp)
-<a href=#1238 id=1238 data-nosnippet>1238</a><span class="kw">where
-<a href=#1239 id=1239 data-nosnippet>1239</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1240 id=1240 data-nosnippet>1240</a>{
-<a href=#1241 id=1241 data-nosnippet>1241</a>    <span class="kw">for </span>operand <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.operands {
-<a href=#1242 id=1242 data-nosnippet>1242</a>        v.visit_expr_set_mut(operand);
-<a href=#1243 id=1243 data-nosnippet>1243</a>    }
-<a href=#1244 id=1244 data-nosnippet>1244</a>}
-<a href=#1245 id=1245 data-nosnippet>1245</a>
-<a href=#1246 id=1246 data-nosnippet>1246</a><span class="doccomment">/// Default mutable traversal for [`ExprStartsWith`] nodes. Visits the attribute expression and prefix.
-<a href=#1247 id=1247 data-nosnippet>1247</a></span><span class="kw">pub fn </span>visit_expr_starts_with_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprStartsWith)
-<a href=#1248 id=1248 data-nosnippet>1248</a><span class="kw">where
-<a href=#1249 id=1249 data-nosnippet>1249</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1250 id=1250 data-nosnippet>1250</a>{
-<a href=#1251 id=1251 data-nosnippet>1251</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.expr);
-<a href=#1252 id=1252 data-nosnippet>1252</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.prefix);
-<a href=#1253 id=1253 data-nosnippet>1253</a>}
-<a href=#1254 id=1254 data-nosnippet>1254</a>
-<a href=#1255 id=1255 data-nosnippet>1255</a><span class="doccomment">/// Default mutable traversal for [`ExprStmt`] nodes. Visits the inner statement.
-<a href=#1256 id=1256 data-nosnippet>1256</a></span><span class="kw">pub fn </span>visit_expr_stmt_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprStmt)
-<a href=#1257 id=1257 data-nosnippet>1257</a><span class="kw">where
-<a href=#1258 id=1258 data-nosnippet>1258</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1259 id=1259 data-nosnippet>1259</a>{
-<a href=#1260 id=1260 data-nosnippet>1260</a>    v.visit_stmt_mut(<span class="kw-2">&amp;mut </span>node.stmt);
-<a href=#1261 id=1261 data-nosnippet>1261</a>}
-<a href=#1262 id=1262 data-nosnippet>1262</a>
-<a href=#1263 id=1263 data-nosnippet>1263</a><span class="doccomment">/// Default mutable traversal for [`ExprProject`] nodes. Visits the base expression and the projection.
-<a href=#1264 id=1264 data-nosnippet>1264</a></span><span class="kw">pub fn </span>visit_expr_project_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprProject)
-<a href=#1265 id=1265 data-nosnippet>1265</a><span class="kw">where
-<a href=#1266 id=1266 data-nosnippet>1266</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1267 id=1267 data-nosnippet>1267</a>{
-<a href=#1268 id=1268 data-nosnippet>1268</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.base);
-<a href=#1269 id=1269 data-nosnippet>1269</a>    v.visit_projection_mut(<span class="kw-2">&amp;mut </span>node.projection);
-<a href=#1270 id=1270 data-nosnippet>1270</a>}
-<a href=#1271 id=1271 data-nosnippet>1271</a>
-<a href=#1272 id=1272 data-nosnippet>1272</a><span class="doccomment">/// Default mutable traversal for [`Filter`] nodes. Visits the optional filter expression.
-<a href=#1273 id=1273 data-nosnippet>1273</a></span><span class="kw">pub fn </span>visit_filter_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Filter)
-<a href=#1274 id=1274 data-nosnippet>1274</a><span class="kw">where
-<a href=#1275 id=1275 data-nosnippet>1275</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1276 id=1276 data-nosnippet>1276</a>{
-<a href=#1277 id=1277 data-nosnippet>1277</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(expr) = <span class="kw-2">&amp;mut </span>node.expr {
-<a href=#1278 id=1278 data-nosnippet>1278</a>        v.visit_expr_mut(expr);
-<a href=#1279 id=1279 data-nosnippet>1279</a>    }
-<a href=#1280 id=1280 data-nosnippet>1280</a>}
-<a href=#1281 id=1281 data-nosnippet>1281</a>
-<a href=#1282 id=1282 data-nosnippet>1282</a><span class="doccomment">/// Default mutable traversal for [`Condition`] nodes. Visits the optional condition expression.
-<a href=#1283 id=1283 data-nosnippet>1283</a></span><span class="kw">pub fn </span>visit_condition_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Condition)
-<a href=#1284 id=1284 data-nosnippet>1284</a><span class="kw">where
-<a href=#1285 id=1285 data-nosnippet>1285</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1286 id=1286 data-nosnippet>1286</a>{
-<a href=#1287 id=1287 data-nosnippet>1287</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(expr) = <span class="kw-2">&amp;mut </span>node.expr {
-<a href=#1288 id=1288 data-nosnippet>1288</a>        v.visit_expr_mut(expr);
-<a href=#1289 id=1289 data-nosnippet>1289</a>    }
-<a href=#1290 id=1290 data-nosnippet>1290</a>}
-<a href=#1291 id=1291 data-nosnippet>1291</a>
-<a href=#1292 id=1292 data-nosnippet>1292</a><span class="doccomment">/// Default mutable traversal for [`InsertTarget`] nodes. Visits the scope query if present.
-<a href=#1293 id=1293 data-nosnippet>1293</a></span><span class="kw">pub fn </span>visit_insert_target_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>InsertTarget)
-<a href=#1294 id=1294 data-nosnippet>1294</a><span class="kw">where
-<a href=#1295 id=1295 data-nosnippet>1295</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1296 id=1296 data-nosnippet>1296</a>{
-<a href=#1297 id=1297 data-nosnippet>1297</a>    <span class="kw">if let </span>InsertTarget::Scope(stmt) = node {
-<a href=#1298 id=1298 data-nosnippet>1298</a>        v.visit_stmt_query_mut(stmt)
-<a href=#1299 id=1299 data-nosnippet>1299</a>    }
-<a href=#1300 id=1300 data-nosnippet>1300</a>}
-<a href=#1301 id=1301 data-nosnippet>1301</a>
-<a href=#1302 id=1302 data-nosnippet>1302</a><span class="doccomment">/// Default mutable traversal for [`Join`] nodes. Visits the table and the join constraint expression.
-<a href=#1303 id=1303 data-nosnippet>1303</a></span><span class="kw">pub fn </span>visit_join_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Join)
-<a href=#1304 id=1304 data-nosnippet>1304</a><span class="kw">where
-<a href=#1305 id=1305 data-nosnippet>1305</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1306 id=1306 data-nosnippet>1306</a>{
-<a href=#1307 id=1307 data-nosnippet>1307</a>    v.visit_source_table_id_mut(<span class="kw-2">&amp;mut </span>node.table);
-<a href=#1308 id=1308 data-nosnippet>1308</a>    <span class="kw">match </span><span class="kw-2">&amp;mut </span>node.constraint {
-<a href=#1309 id=1309 data-nosnippet>1309</a>        JoinOp::Inner(expr) | JoinOp::Left(expr) =&gt; v.visit_expr_mut(expr),
-<a href=#1310 id=1310 data-nosnippet>1310</a>    }
-<a href=#1311 id=1311 data-nosnippet>1311</a>}
-<a href=#1312 id=1312 data-nosnippet>1312</a>
-<a href=#1313 id=1313 data-nosnippet>1313</a><span class="doccomment">/// Default mutable traversal for [`Limit`] nodes.
-<a href=#1314 id=1314 data-nosnippet>1314</a></span><span class="kw">pub fn </span>visit_limit_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Limit)
-<a href=#1315 id=1315 data-nosnippet>1315</a><span class="kw">where
-<a href=#1316 id=1316 data-nosnippet>1316</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1317 id=1317 data-nosnippet>1317</a>{
-<a href=#1318 id=1318 data-nosnippet>1318</a>    <span class="kw">match </span>node {
-<a href=#1319 id=1319 data-nosnippet>1319</a>        Limit::Cursor(cursor) =&gt; v.visit_limit_cursor_mut(cursor),
-<a href=#1320 id=1320 data-nosnippet>1320</a>        Limit::Offset(offset) =&gt; v.visit_limit_offset_mut(offset),
-<a href=#1321 id=1321 data-nosnippet>1321</a>    }
-<a href=#1322 id=1322 data-nosnippet>1322</a>}
-<a href=#1323 id=1323 data-nosnippet>1323</a>
-<a href=#1324 id=1324 data-nosnippet>1324</a><span class="doccomment">/// Default mutable traversal for [`LimitCursor`] nodes.
-<a href=#1325 id=1325 data-nosnippet>1325</a></span><span class="kw">pub fn </span>visit_limit_cursor_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>LimitCursor)
-<a href=#1326 id=1326 data-nosnippet>1326</a><span class="kw">where
-<a href=#1327 id=1327 data-nosnippet>1327</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1328 id=1328 data-nosnippet>1328</a>{
-<a href=#1329 id=1329 data-nosnippet>1329</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.page_size);
-<a href=#1330 id=1330 data-nosnippet>1330</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(after) = <span class="kw-2">&amp;mut </span>node.after {
-<a href=#1331 id=1331 data-nosnippet>1331</a>        v.visit_expr_mut(after);
-<a href=#1332 id=1332 data-nosnippet>1332</a>    }
-<a href=#1333 id=1333 data-nosnippet>1333</a>}
-<a href=#1334 id=1334 data-nosnippet>1334</a>
-<a href=#1335 id=1335 data-nosnippet>1335</a><span class="doccomment">/// Default mutable traversal for [`LimitOffset`] nodes.
-<a href=#1336 id=1336 data-nosnippet>1336</a></span><span class="kw">pub fn </span>visit_limit_offset_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>LimitOffset)
-<a href=#1337 id=1337 data-nosnippet>1337</a><span class="kw">where
-<a href=#1338 id=1338 data-nosnippet>1338</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1339 id=1339 data-nosnippet>1339</a>{
-<a href=#1340 id=1340 data-nosnippet>1340</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.limit);
-<a href=#1341 id=1341 data-nosnippet>1341</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(offset) = <span class="kw-2">&amp;mut </span>node.offset {
-<a href=#1342 id=1342 data-nosnippet>1342</a>        v.visit_expr_mut(offset);
-<a href=#1343 id=1343 data-nosnippet>1343</a>    }
-<a href=#1344 id=1344 data-nosnippet>1344</a>}
-<a href=#1345 id=1345 data-nosnippet>1345</a>
-<a href=#1346 id=1346 data-nosnippet>1346</a><span class="doccomment">/// Default mutable traversal for [`OrderBy`] nodes. Visits each ordering expression.
-<a href=#1347 id=1347 data-nosnippet>1347</a></span><span class="kw">pub fn </span>visit_order_by_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>OrderBy)
-<a href=#1348 id=1348 data-nosnippet>1348</a><span class="kw">where
-<a href=#1349 id=1349 data-nosnippet>1349</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1350 id=1350 data-nosnippet>1350</a>{
-<a href=#1351 id=1351 data-nosnippet>1351</a>    <span class="kw">for </span>expr <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.exprs {
-<a href=#1352 id=1352 data-nosnippet>1352</a>        v.visit_order_by_expr_mut(expr);
-<a href=#1353 id=1353 data-nosnippet>1353</a>    }
-<a href=#1354 id=1354 data-nosnippet>1354</a>}
-<a href=#1355 id=1355 data-nosnippet>1355</a>
-<a href=#1356 id=1356 data-nosnippet>1356</a><span class="doccomment">/// Default mutable traversal for [`OrderByExpr`] nodes. Visits the ordering expression.
-<a href=#1357 id=1357 data-nosnippet>1357</a></span><span class="kw">pub fn </span>visit_order_by_expr_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>OrderByExpr)
-<a href=#1358 id=1358 data-nosnippet>1358</a><span class="kw">where
-<a href=#1359 id=1359 data-nosnippet>1359</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1360 id=1360 data-nosnippet>1360</a>{
-<a href=#1361 id=1361 data-nosnippet>1361</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.expr);
-<a href=#1362 id=1362 data-nosnippet>1362</a>}
-<a href=#1363 id=1363 data-nosnippet>1363</a>
-<a href=#1364 id=1364 data-nosnippet>1364</a><span class="doccomment">/// Default mutable traversal for [`Path`] nodes. Visits the projection.
-<a href=#1365 id=1365 data-nosnippet>1365</a></span><span class="kw">pub fn </span>visit_path_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Path)
-<a href=#1366 id=1366 data-nosnippet>1366</a><span class="kw">where
-<a href=#1367 id=1367 data-nosnippet>1367</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1368 id=1368 data-nosnippet>1368</a>{
-<a href=#1369 id=1369 data-nosnippet>1369</a>    v.visit_projection_mut(<span class="kw-2">&amp;mut </span>node.projection);
-<a href=#1370 id=1370 data-nosnippet>1370</a>}
-<a href=#1371 id=1371 data-nosnippet>1371</a>
-<a href=#1372 id=1372 data-nosnippet>1372</a><span class="doccomment">/// Default mutable traversal for [`Projection`] nodes. This is a leaf node with no children to visit.
-<a href=#1373 id=1373 data-nosnippet>1373</a></span><span class="kw">pub fn </span>visit_projection_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Projection)
-<a href=#1374 id=1374 data-nosnippet>1374</a><span class="kw">where
-<a href=#1375 id=1375 data-nosnippet>1375</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1376 id=1376 data-nosnippet>1376</a>{
-<a href=#1377 id=1377 data-nosnippet>1377</a>}
-<a href=#1378 id=1378 data-nosnippet>1378</a>
-<a href=#1379 id=1379 data-nosnippet>1379</a><span class="doccomment">/// Default mutable traversal for [`Returning`] nodes. Visits each path for model variants, or the expression for expr and value variants.
-<a href=#1380 id=1380 data-nosnippet>1380</a></span><span class="kw">pub fn </span>visit_returning_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Returning)
-<a href=#1381 id=1381 data-nosnippet>1381</a><span class="kw">where
-<a href=#1382 id=1382 data-nosnippet>1382</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1383 id=1383 data-nosnippet>1383</a>{
-<a href=#1384 id=1384 data-nosnippet>1384</a>    <span class="kw">match </span>node {
-<a href=#1385 id=1385 data-nosnippet>1385</a>        Returning::Model { include } =&gt; {
-<a href=#1386 id=1386 data-nosnippet>1386</a>            <span class="kw">for </span>path <span class="kw">in </span>include {
-<a href=#1387 id=1387 data-nosnippet>1387</a>                v.visit_path_mut(path);
-<a href=#1388 id=1388 data-nosnippet>1388</a>            }
-<a href=#1389 id=1389 data-nosnippet>1389</a>        }
-<a href=#1390 id=1390 data-nosnippet>1390</a>        Returning::Changed =&gt; {}
-<a href=#1391 id=1391 data-nosnippet>1391</a>        Returning::Project(expr) =&gt; v.visit_expr_mut(expr),
-<a href=#1392 id=1392 data-nosnippet>1392</a>        Returning::Expr(expr) =&gt; v.visit_expr_mut(expr),
-<a href=#1393 id=1393 data-nosnippet>1393</a>    }
-<a href=#1394 id=1394 data-nosnippet>1394</a>}
-<a href=#1395 id=1395 data-nosnippet>1395</a>
-<a href=#1396 id=1396 data-nosnippet>1396</a><span class="doccomment">/// Default mutable traversal for [`Source`] nodes. Dispatches to the model or table source visitor.
-<a href=#1397 id=1397 data-nosnippet>1397</a></span><span class="kw">pub fn </span>visit_source_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Source)
-<a href=#1398 id=1398 data-nosnippet>1398</a><span class="kw">where
-<a href=#1399 id=1399 data-nosnippet>1399</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1400 id=1400 data-nosnippet>1400</a>{
-<a href=#1401 id=1401 data-nosnippet>1401</a>    <span class="kw">match </span>node {
-<a href=#1402 id=1402 data-nosnippet>1402</a>        Source::Model(source_model) =&gt; v.visit_source_model_mut(source_model),
-<a href=#1403 id=1403 data-nosnippet>1403</a>        Source::Table(source_table) =&gt; v.visit_source_table_mut(source_table),
-<a href=#1404 id=1404 data-nosnippet>1404</a>    }
-<a href=#1405 id=1405 data-nosnippet>1405</a>}
-<a href=#1406 id=1406 data-nosnippet>1406</a>
-<a href=#1407 id=1407 data-nosnippet>1407</a><span class="doccomment">/// Default mutable traversal for [`SourceModel`] nodes. Visits the optional association.
-<a href=#1408 id=1408 data-nosnippet>1408</a></span><span class="kw">pub fn </span>visit_source_model_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>SourceModel)
-<a href=#1409 id=1409 data-nosnippet>1409</a><span class="kw">where
-<a href=#1410 id=1410 data-nosnippet>1410</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1411 id=1411 data-nosnippet>1411</a>{
-<a href=#1412 id=1412 data-nosnippet>1412</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(association) = <span class="kw-2">&amp;mut </span>node.via {
-<a href=#1413 id=1413 data-nosnippet>1413</a>        v.visit_association_mut(association);
-<a href=#1414 id=1414 data-nosnippet>1414</a>    }
-<a href=#1415 id=1415 data-nosnippet>1415</a>}
-<a href=#1416 id=1416 data-nosnippet>1416</a>
-<a href=#1417 id=1417 data-nosnippet>1417</a><span class="doccomment">/// Default mutable traversal for [`SourceTable`] nodes. Visits each table reference and each FROM clause table-with-joins.
-<a href=#1418 id=1418 data-nosnippet>1418</a></span><span class="kw">pub fn </span>visit_source_table_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>SourceTable)
-<a href=#1419 id=1419 data-nosnippet>1419</a><span class="kw">where
-<a href=#1420 id=1420 data-nosnippet>1420</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1421 id=1421 data-nosnippet>1421</a>{
-<a href=#1422 id=1422 data-nosnippet>1422</a>    <span class="kw">for </span>table_ref <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.tables {
-<a href=#1423 id=1423 data-nosnippet>1423</a>        v.visit_table_ref_mut(table_ref);
-<a href=#1424 id=1424 data-nosnippet>1424</a>    }
-<a href=#1425 id=1425 data-nosnippet>1425</a>    <span class="kw">for </span>table_with_joins <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.from {
-<a href=#1426 id=1426 data-nosnippet>1426</a>        v.visit_table_with_joins_mut(table_with_joins);
-<a href=#1427 id=1427 data-nosnippet>1427</a>    }
-<a href=#1428 id=1428 data-nosnippet>1428</a>}
-<a href=#1429 id=1429 data-nosnippet>1429</a>
-<a href=#1430 id=1430 data-nosnippet>1430</a><span class="doccomment">/// Default mutable traversal for [`SourceTableId`] nodes. This is a leaf node with no children to visit.
-<a href=#1431 id=1431 data-nosnippet>1431</a></span><span class="kw">pub fn </span>visit_source_table_id_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>SourceTableId)
-<a href=#1432 id=1432 data-nosnippet>1432</a><span class="kw">where
-<a href=#1433 id=1433 data-nosnippet>1433</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1434 id=1434 data-nosnippet>1434</a>{
-<a href=#1435 id=1435 data-nosnippet>1435</a>    <span class="comment">// SourceTableId is just an index, nothing to visit
-<a href=#1436 id=1436 data-nosnippet>1436</a></span>}
-<a href=#1437 id=1437 data-nosnippet>1437</a>
-<a href=#1438 id=1438 data-nosnippet>1438</a><span class="doccomment">/// Default mutable traversal for [`TableFactor`] nodes. Dispatches by factor type.
-<a href=#1439 id=1439 data-nosnippet>1439</a></span><span class="kw">pub fn </span>visit_table_factor_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableFactor)
-<a href=#1440 id=1440 data-nosnippet>1440</a><span class="kw">where
-<a href=#1441 id=1441 data-nosnippet>1441</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1442 id=1442 data-nosnippet>1442</a>{
-<a href=#1443 id=1443 data-nosnippet>1443</a>    <span class="kw">match </span>node {
-<a href=#1444 id=1444 data-nosnippet>1444</a>        TableFactor::Table(table_id) =&gt; v.visit_source_table_id_mut(table_id),
-<a href=#1445 id=1445 data-nosnippet>1445</a>    }
-<a href=#1446 id=1446 data-nosnippet>1446</a>}
-<a href=#1447 id=1447 data-nosnippet>1447</a>
-<a href=#1448 id=1448 data-nosnippet>1448</a><span class="doccomment">/// Default mutable traversal for [`Statement`] nodes. Dispatches to the statement-specific visitor.
-<a href=#1449 id=1449 data-nosnippet>1449</a></span><span class="kw">pub fn </span>visit_stmt_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Statement)
-<a href=#1450 id=1450 data-nosnippet>1450</a><span class="kw">where
-<a href=#1451 id=1451 data-nosnippet>1451</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1452 id=1452 data-nosnippet>1452</a>{
-<a href=#1453 id=1453 data-nosnippet>1453</a>    <span class="kw">match </span>node {
-<a href=#1454 id=1454 data-nosnippet>1454</a>        Statement::Delete(stmt) =&gt; v.visit_stmt_delete_mut(stmt),
-<a href=#1455 id=1455 data-nosnippet>1455</a>        Statement::Insert(stmt) =&gt; v.visit_stmt_insert_mut(stmt),
-<a href=#1456 id=1456 data-nosnippet>1456</a>        Statement::Query(stmt) =&gt; v.visit_stmt_query_mut(stmt),
-<a href=#1457 id=1457 data-nosnippet>1457</a>        Statement::Update(stmt) =&gt; v.visit_stmt_update_mut(stmt),
-<a href=#1458 id=1458 data-nosnippet>1458</a>    }
-<a href=#1459 id=1459 data-nosnippet>1459</a>}
-<a href=#1460 id=1460 data-nosnippet>1460</a>
-<a href=#1461 id=1461 data-nosnippet>1461</a><span class="doccomment">/// Default mutable traversal for [`Delete`] nodes. Visits the source, filter, and optional returning clause.
-<a href=#1462 id=1462 data-nosnippet>1462</a></span><span class="kw">pub fn </span>visit_stmt_delete_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Delete)
-<a href=#1463 id=1463 data-nosnippet>1463</a><span class="kw">where
-<a href=#1464 id=1464 data-nosnippet>1464</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1465 id=1465 data-nosnippet>1465</a>{
-<a href=#1466 id=1466 data-nosnippet>1466</a>    v.visit_source_mut(<span class="kw-2">&amp;mut </span>node.from);
-<a href=#1467 id=1467 data-nosnippet>1467</a>    v.visit_filter_mut(<span class="kw-2">&amp;mut </span>node.filter);
-<a href=#1468 id=1468 data-nosnippet>1468</a>    v.visit_condition_mut(<span class="kw-2">&amp;mut </span>node.condition);
-<a href=#1469 id=1469 data-nosnippet>1469</a>
-<a href=#1470 id=1470 data-nosnippet>1470</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(returning) = <span class="kw-2">&amp;mut </span>node.returning {
-<a href=#1471 id=1471 data-nosnippet>1471</a>        v.visit_returning_mut(returning);
-<a href=#1472 id=1472 data-nosnippet>1472</a>    }
-<a href=#1473 id=1473 data-nosnippet>1473</a>}
-<a href=#1474 id=1474 data-nosnippet>1474</a>
-<a href=#1475 id=1475 data-nosnippet>1475</a><span class="doccomment">/// Default mutable traversal for [`Insert`] nodes. Visits the target, source query, and optional returning clause.
-<a href=#1476 id=1476 data-nosnippet>1476</a></span><span class="kw">pub fn </span>visit_stmt_insert_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Insert)
-<a href=#1477 id=1477 data-nosnippet>1477</a><span class="kw">where
-<a href=#1478 id=1478 data-nosnippet>1478</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1479 id=1479 data-nosnippet>1479</a>{
-<a href=#1480 id=1480 data-nosnippet>1480</a>    v.visit_insert_target_mut(<span class="kw-2">&amp;mut </span>node.target);
-<a href=#1481 id=1481 data-nosnippet>1481</a>    v.visit_stmt_query_mut(<span class="kw-2">&amp;mut </span>node.source);
-<a href=#1482 id=1482 data-nosnippet>1482</a>
-<a href=#1483 id=1483 data-nosnippet>1483</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(returning) = <span class="kw-2">&amp;mut </span>node.returning {
-<a href=#1484 id=1484 data-nosnippet>1484</a>        v.visit_returning_mut(returning);
-<a href=#1485 id=1485 data-nosnippet>1485</a>    }
-<a href=#1486 id=1486 data-nosnippet>1486</a>}
-<a href=#1487 id=1487 data-nosnippet>1487</a>
-<a href=#1488 id=1488 data-nosnippet>1488</a><span class="doccomment">/// Default mutable traversal for [`Query`] nodes. Visits the optional WITH clause, body, optional ORDER BY, and optional LIMIT.
-<a href=#1489 id=1489 data-nosnippet>1489</a></span><span class="kw">pub fn </span>visit_stmt_query_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Query)
-<a href=#1490 id=1490 data-nosnippet>1490</a><span class="kw">where
-<a href=#1491 id=1491 data-nosnippet>1491</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1492 id=1492 data-nosnippet>1492</a>{
-<a href=#1493 id=1493 data-nosnippet>1493</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(with) = <span class="kw-2">&amp;mut </span>node.with {
-<a href=#1494 id=1494 data-nosnippet>1494</a>        v.visit_with_mut(with);
-<a href=#1495 id=1495 data-nosnippet>1495</a>    }
-<a href=#1496 id=1496 data-nosnippet>1496</a>
-<a href=#1497 id=1497 data-nosnippet>1497</a>    v.visit_expr_set_mut(<span class="kw-2">&amp;mut </span>node.body);
-<a href=#1498 id=1498 data-nosnippet>1498</a>
-<a href=#1499 id=1499 data-nosnippet>1499</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(order_by) = <span class="kw-2">&amp;mut </span>node.order_by {
-<a href=#1500 id=1500 data-nosnippet>1500</a>        v.visit_order_by_mut(order_by);
-<a href=#1501 id=1501 data-nosnippet>1501</a>    }
-<a href=#1502 id=1502 data-nosnippet>1502</a>
-<a href=#1503 id=1503 data-nosnippet>1503</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(limit) = <span class="kw-2">&amp;mut </span>node.limit {
-<a href=#1504 id=1504 data-nosnippet>1504</a>        v.visit_limit_mut(limit);
-<a href=#1505 id=1505 data-nosnippet>1505</a>    }
-<a href=#1506 id=1506 data-nosnippet>1506</a>}
-<a href=#1507 id=1507 data-nosnippet>1507</a>
-<a href=#1508 id=1508 data-nosnippet>1508</a><span class="doccomment">/// Default mutable traversal for [`Select`] nodes. Visits the source, filter, and returning clause.
-<a href=#1509 id=1509 data-nosnippet>1509</a></span><span class="kw">pub fn </span>visit_stmt_select_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Select)
-<a href=#1510 id=1510 data-nosnippet>1510</a><span class="kw">where
-<a href=#1511 id=1511 data-nosnippet>1511</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1512 id=1512 data-nosnippet>1512</a>{
-<a href=#1513 id=1513 data-nosnippet>1513</a>    v.visit_source_mut(<span class="kw-2">&amp;mut </span>node.source);
-<a href=#1514 id=1514 data-nosnippet>1514</a>    v.visit_filter_mut(<span class="kw-2">&amp;mut </span>node.filter);
-<a href=#1515 id=1515 data-nosnippet>1515</a>    v.visit_returning_mut(<span class="kw-2">&amp;mut </span>node.returning);
-<a href=#1516 id=1516 data-nosnippet>1516</a>}
-<a href=#1517 id=1517 data-nosnippet>1517</a>
-<a href=#1518 id=1518 data-nosnippet>1518</a><span class="doccomment">/// Default mutable traversal for [`Update`] nodes. Visits the target, assignments, filter, condition, and optional returning clause.
-<a href=#1519 id=1519 data-nosnippet>1519</a></span><span class="kw">pub fn </span>visit_stmt_update_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Update)
-<a href=#1520 id=1520 data-nosnippet>1520</a><span class="kw">where
-<a href=#1521 id=1521 data-nosnippet>1521</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1522 id=1522 data-nosnippet>1522</a>{
-<a href=#1523 id=1523 data-nosnippet>1523</a>    v.visit_update_target_mut(<span class="kw-2">&amp;mut </span>node.target);
-<a href=#1524 id=1524 data-nosnippet>1524</a>    v.visit_assignments_mut(<span class="kw-2">&amp;mut </span>node.assignments);
-<a href=#1525 id=1525 data-nosnippet>1525</a>    v.visit_filter_mut(<span class="kw-2">&amp;mut </span>node.filter);
-<a href=#1526 id=1526 data-nosnippet>1526</a>    v.visit_condition_mut(<span class="kw-2">&amp;mut </span>node.condition);
-<a href=#1527 id=1527 data-nosnippet>1527</a>
-<a href=#1528 id=1528 data-nosnippet>1528</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(returning) = <span class="kw-2">&amp;mut </span>node.returning {
-<a href=#1529 id=1529 data-nosnippet>1529</a>        v.visit_returning_mut(returning);
-<a href=#1530 id=1530 data-nosnippet>1530</a>    }
-<a href=#1531 id=1531 data-nosnippet>1531</a>}
-<a href=#1532 id=1532 data-nosnippet>1532</a>
-<a href=#1533 id=1533 data-nosnippet>1533</a><span class="doccomment">/// Default mutable traversal for [`TableDerived`] nodes. Visits the subquery.
-<a href=#1534 id=1534 data-nosnippet>1534</a></span><span class="kw">pub fn </span>visit_table_derived_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableDerived)
-<a href=#1535 id=1535 data-nosnippet>1535</a><span class="kw">where
-<a href=#1536 id=1536 data-nosnippet>1536</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1537 id=1537 data-nosnippet>1537</a>{
-<a href=#1538 id=1538 data-nosnippet>1538</a>    v.visit_stmt_query_mut(<span class="kw-2">&amp;mut </span>node.subquery);
-<a href=#1539 id=1539 data-nosnippet>1539</a>}
-<a href=#1540 id=1540 data-nosnippet>1540</a>
-<a href=#1541 id=1541 data-nosnippet>1541</a><span class="doccomment">/// Default mutable traversal for [`TableRef`] nodes. Dispatches by reference kind, visiting derived tables and arg expressions.
-<a href=#1542 id=1542 data-nosnippet>1542</a></span><span class="kw">pub fn </span>visit_table_ref_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableRef)
-<a href=#1543 id=1543 data-nosnippet>1543</a><span class="kw">where
-<a href=#1544 id=1544 data-nosnippet>1544</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1545 id=1545 data-nosnippet>1545</a>{
-<a href=#1546 id=1546 data-nosnippet>1546</a>    <span class="kw">match </span>node {
-<a href=#1547 id=1547 data-nosnippet>1547</a>        TableRef::Cte { .. } =&gt; {}
-<a href=#1548 id=1548 data-nosnippet>1548</a>        TableRef::Derived(table_derived) =&gt; v.visit_table_derived_mut(table_derived),
-<a href=#1549 id=1549 data-nosnippet>1549</a>        TableRef::Table(<span class="kw">_</span>) =&gt; {}
-<a href=#1550 id=1550 data-nosnippet>1550</a>        TableRef::Arg(expr_arg) =&gt; v.visit_expr_arg_mut(expr_arg),
-<a href=#1551 id=1551 data-nosnippet>1551</a>    }
-<a href=#1552 id=1552 data-nosnippet>1552</a>}
-<a href=#1553 id=1553 data-nosnippet>1553</a>
-<a href=#1554 id=1554 data-nosnippet>1554</a><span class="doccomment">/// Default mutable traversal for [`TableWithJoins`] nodes. Visits the relation and each join.
-<a href=#1555 id=1555 data-nosnippet>1555</a></span><span class="kw">pub fn </span>visit_table_with_joins_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableWithJoins)
-<a href=#1556 id=1556 data-nosnippet>1556</a><span class="kw">where
-<a href=#1557 id=1557 data-nosnippet>1557</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1558 id=1558 data-nosnippet>1558</a>{
-<a href=#1559 id=1559 data-nosnippet>1559</a>    v.visit_table_factor_mut(<span class="kw-2">&amp;mut </span>node.relation);
-<a href=#1560 id=1560 data-nosnippet>1560</a>    <span class="kw">for </span>join <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.joins {
-<a href=#1561 id=1561 data-nosnippet>1561</a>        v.visit_join_mut(join);
-<a href=#1562 id=1562 data-nosnippet>1562</a>    }
-<a href=#1563 id=1563 data-nosnippet>1563</a>}
-<a href=#1564 id=1564 data-nosnippet>1564</a>
-<a href=#1565 id=1565 data-nosnippet>1565</a><span class="doccomment">/// Default mutable traversal for [`Type`] nodes. This is a leaf node with no children to visit.
-<a href=#1566 id=1566 data-nosnippet>1566</a></span><span class="kw">pub fn </span>visit_type_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Type)
-<a href=#1567 id=1567 data-nosnippet>1567</a><span class="kw">where
-<a href=#1568 id=1568 data-nosnippet>1568</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1569 id=1569 data-nosnippet>1569</a>{
-<a href=#1570 id=1570 data-nosnippet>1570</a>    <span class="comment">// Type is just type information, no traversal needed
-<a href=#1571 id=1571 data-nosnippet>1571</a></span>}
-<a href=#1572 id=1572 data-nosnippet>1572</a>
-<a href=#1573 id=1573 data-nosnippet>1573</a><span class="doccomment">/// Default mutable traversal for [`UpdateTarget`] nodes. Visits the query if present.
-<a href=#1574 id=1574 data-nosnippet>1574</a></span><span class="kw">pub fn </span>visit_update_target_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>UpdateTarget)
-<a href=#1575 id=1575 data-nosnippet>1575</a><span class="kw">where
-<a href=#1576 id=1576 data-nosnippet>1576</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1577 id=1577 data-nosnippet>1577</a>{
-<a href=#1578 id=1578 data-nosnippet>1578</a>    <span class="kw">if let </span>UpdateTarget::Query(stmt) = node {
-<a href=#1579 id=1579 data-nosnippet>1579</a>        v.visit_stmt_query_mut(stmt)
-<a href=#1580 id=1580 data-nosnippet>1580</a>    }
-<a href=#1581 id=1581 data-nosnippet>1581</a>}
-<a href=#1582 id=1582 data-nosnippet>1582</a>
-<a href=#1583 id=1583 data-nosnippet>1583</a><span class="doccomment">/// Default mutable traversal for [`Value`] nodes. Visits the inner record if the value is a record variant.
-<a href=#1584 id=1584 data-nosnippet>1584</a></span><span class="kw">pub fn </span>visit_value_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Value)
-<a href=#1585 id=1585 data-nosnippet>1585</a><span class="kw">where
-<a href=#1586 id=1586 data-nosnippet>1586</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1587 id=1587 data-nosnippet>1587</a>{
-<a href=#1588 id=1588 data-nosnippet>1588</a>    <span class="kw">if let </span>Value::Record(node) = node {
-<a href=#1589 id=1589 data-nosnippet>1589</a>        v.visit_value_record(node);
-<a href=#1590 id=1590 data-nosnippet>1590</a>    }
-<a href=#1591 id=1591 data-nosnippet>1591</a>}
-<a href=#1592 id=1592 data-nosnippet>1592</a>
-<a href=#1593 id=1593 data-nosnippet>1593</a><span class="doccomment">/// Default mutable traversal for [`ValueRecord`] nodes. Visits each value field.
-<a href=#1594 id=1594 data-nosnippet>1594</a></span><span class="kw">pub fn </span>visit_value_record&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ValueRecord)
-<a href=#1595 id=1595 data-nosnippet>1595</a><span class="kw">where
-<a href=#1596 id=1596 data-nosnippet>1596</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1597 id=1597 data-nosnippet>1597</a>{
-<a href=#1598 id=1598 data-nosnippet>1598</a>    <span class="kw">for </span>expr <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.fields {
-<a href=#1599 id=1599 data-nosnippet>1599</a>        v.visit_value_mut(expr);
-<a href=#1600 id=1600 data-nosnippet>1600</a>    }
-<a href=#1601 id=1601 data-nosnippet>1601</a>}
-<a href=#1602 id=1602 data-nosnippet>1602</a>
-<a href=#1603 id=1603 data-nosnippet>1603</a><span class="doccomment">/// Default mutable traversal for [`Values`] nodes. Visits each row expression.
-<a href=#1604 id=1604 data-nosnippet>1604</a></span><span class="kw">pub fn </span>visit_values_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Values)
-<a href=#1605 id=1605 data-nosnippet>1605</a><span class="kw">where
-<a href=#1606 id=1606 data-nosnippet>1606</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1607 id=1607 data-nosnippet>1607</a>{
-<a href=#1608 id=1608 data-nosnippet>1608</a>    <span class="kw">for </span>expr <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.rows {
-<a href=#1609 id=1609 data-nosnippet>1609</a>        v.visit_expr_mut(expr);
-<a href=#1610 id=1610 data-nosnippet>1610</a>    }
-<a href=#1611 id=1611 data-nosnippet>1611</a>}
-<a href=#1612 id=1612 data-nosnippet>1612</a>
-<a href=#1613 id=1613 data-nosnippet>1613</a><span class="doccomment">/// Default mutable traversal for [`With`] nodes. Visits each CTE.
-<a href=#1614 id=1614 data-nosnippet>1614</a></span><span class="kw">pub fn </span>visit_with_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>With)
-<a href=#1615 id=1615 data-nosnippet>1615</a><span class="kw">where
-<a href=#1616 id=1616 data-nosnippet>1616</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
-<a href=#1617 id=1617 data-nosnippet>1617</a>{
-<a href=#1618 id=1618 data-nosnippet>1618</a>    <span class="kw">for </span>cte <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.ctes {
-<a href=#1619 id=1619 data-nosnippet>1619</a>        v.visit_cte_mut(cte);
-<a href=#1620 id=1620 data-nosnippet>1620</a>    }
-<a href=#1621 id=1621 data-nosnippet>1621</a>}
-<a href=#1622 id=1622 data-nosnippet>1622</a>
-<a href=#1623 id=1623 data-nosnippet>1623</a><span class="doccomment">/// Calls `f` for every [`Expr`] node reachable from `node`, in post-order,
-<a href=#1624 id=1624 data-nosnippet>1624</a>/// allowing mutation.
-<a href=#1625 id=1625 data-nosnippet>1625</a></span><span class="kw">pub fn </span>for_each_expr_mut&lt;F&gt;(node: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Node, f: F)
-<a href=#1626 id=1626 data-nosnippet>1626</a><span class="kw">where
-<a href=#1627 id=1627 data-nosnippet>1627</a>    </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr),
-<a href=#1628 id=1628 data-nosnippet>1628</a>{
-<a href=#1629 id=1629 data-nosnippet>1629</a>    <span class="kw">struct </span>ForEach&lt;F&gt; {
-<a href=#1630 id=1630 data-nosnippet>1630</a>        f: F,
-<a href=#1631 id=1631 data-nosnippet>1631</a>    }
-<a href=#1632 id=1632 data-nosnippet>1632</a>
-<a href=#1633 id=1633 data-nosnippet>1633</a>    <span class="kw">impl</span>&lt;F&gt; VisitMut <span class="kw">for </span>ForEach&lt;F&gt;
-<a href=#1634 id=1634 data-nosnippet>1634</a>    <span class="kw">where
-<a href=#1635 id=1635 data-nosnippet>1635</a>        </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr),
-<a href=#1636 id=1636 data-nosnippet>1636</a>    {
-<a href=#1637 id=1637 data-nosnippet>1637</a>        <span class="kw">fn </span>visit_expr_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>Expr) {
-<a href=#1638 id=1638 data-nosnippet>1638</a>            visit_expr_mut(<span class="self">self</span>, node);
-<a href=#1639 id=1639 data-nosnippet>1639</a>            (<span class="self">self</span>.f)(node);
-<a href=#1640 id=1640 data-nosnippet>1640</a>        }
-<a href=#1641 id=1641 data-nosnippet>1641</a>    }
-<a href=#1642 id=1642 data-nosnippet>1642</a>
-<a href=#1643 id=1643 data-nosnippet>1643</a>    node.visit_mut(ForEach { f });
-<a href=#1644 id=1644 data-nosnippet>1644</a>}
-<a href=#1645 id=1645 data-nosnippet>1645</a>
-<a href=#1646 id=1646 data-nosnippet>1646</a><span class="doccomment">/// Walk an expression tree in pre-order, tracking scope depth through
-<a href=#1647 id=1647 data-nosnippet>1647</a>/// Let/Map scopes.
-<a href=#1648 id=1648 data-nosnippet>1648</a>///
-<a href=#1649 id=1649 data-nosnippet>1649</a>/// For each node, calls `f(expr, scope_depth)`:
-<a href=#1650 id=1650 data-nosnippet>1650</a>/// - If `f` returns `true`, recursion into children continues.
-<a href=#1651 id=1651 data-nosnippet>1651</a>/// - If `f` returns `false`, children are skipped (e.g., when the callback
-<a href=#1652 id=1652 data-nosnippet>1652</a>///   has replaced the expression and doesn't want to recurse into the
-<a href=#1653 id=1653 data-nosnippet>1653</a>///   replacement).
-<a href=#1654 id=1654 data-nosnippet>1654</a>///
-<a href=#1655 id=1655 data-nosnippet>1655</a>/// Scope depth rules:
-<a href=#1656 id=1656 data-nosnippet>1656</a>/// - `Let` bindings are visited at the current depth; the body at `depth + 1`
-<a href=#1657 id=1657 data-nosnippet>1657</a>/// - `Map` base is visited at the current depth; the map function at `depth + 1`
-<a href=#1658 id=1658 data-nosnippet>1658</a>/// - All other compound expressions: children at the same depth
-<a href=#1659 id=1659 data-nosnippet>1659</a>///
-<a href=#1660 id=1660 data-nosnippet>1660</a>/// This matches the semantics of `ExprArg.nesting`: an arg with
-<a href=#1661 id=1661 data-nosnippet>1661</a>/// `nesting == scope_depth` references the outermost (statement-level) scope,
-<a href=#1662 id=1662 data-nosnippet>1662</a>/// while `nesting &lt; scope_depth` references a Let/Map binding.
-<a href=#1663 id=1663 data-nosnippet>1663</a></span><span class="kw">pub fn </span>walk_expr_scoped_mut&lt;F&gt;(expr: <span class="kw-2">&amp;mut </span>Expr, scope_depth: usize, <span class="kw-2">mut </span>f: F)
-<a href=#1664 id=1664 data-nosnippet>1664</a><span class="kw">where
-<a href=#1665 id=1665 data-nosnippet>1665</a>    </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr, usize) -&gt; bool,
-<a href=#1666 id=1666 data-nosnippet>1666</a>{
-<a href=#1667 id=1667 data-nosnippet>1667</a>    walk_expr_scoped_mut_ref(expr, scope_depth, <span class="kw-2">&amp;mut </span>f);
-<a href=#1668 id=1668 data-nosnippet>1668</a>}
-<a href=#1669 id=1669 data-nosnippet>1669</a>
-<a href=#1670 id=1670 data-nosnippet>1670</a><span class="kw">fn </span>walk_expr_scoped_mut_ref&lt;F&gt;(expr: <span class="kw-2">&amp;mut </span>Expr, scope_depth: usize, f: <span class="kw-2">&amp;mut </span>F)
-<a href=#1671 id=1671 data-nosnippet>1671</a><span class="kw">where
-<a href=#1672 id=1672 data-nosnippet>1672</a>    </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr, usize) -&gt; bool,
-<a href=#1673 id=1673 data-nosnippet>1673</a>{
-<a href=#1674 id=1674 data-nosnippet>1674</a>    <span class="kw">struct </span>ScopedWalk&lt;<span class="lifetime">'a</span>, F&gt; {
-<a href=#1675 id=1675 data-nosnippet>1675</a>        f: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>F,
-<a href=#1676 id=1676 data-nosnippet>1676</a>        scope_depth: usize,
-<a href=#1677 id=1677 data-nosnippet>1677</a>    }
-<a href=#1678 id=1678 data-nosnippet>1678</a>
-<a href=#1679 id=1679 data-nosnippet>1679</a>    <span class="kw">impl</span>&lt;F&gt; VisitMut <span class="kw">for </span>ScopedWalk&lt;<span class="lifetime">'_</span>, F&gt;
-<a href=#1680 id=1680 data-nosnippet>1680</a>    <span class="kw">where
-<a href=#1681 id=1681 data-nosnippet>1681</a>        </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr, usize) -&gt; bool,
-<a href=#1682 id=1682 data-nosnippet>1682</a>    {
-<a href=#1683 id=1683 data-nosnippet>1683</a>        <span class="kw">fn </span>visit_expr_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>Expr) {
-<a href=#1684 id=1684 data-nosnippet>1684</a>            <span class="kw">if </span>!(<span class="self">self</span>.f)(node, <span class="self">self</span>.scope_depth) {
-<a href=#1685 id=1685 data-nosnippet>1685</a>                <span class="kw">return</span>;
-<a href=#1686 id=1686 data-nosnippet>1686</a>            }
-<a href=#1687 id=1687 data-nosnippet>1687</a>            visit_expr_mut(<span class="self">self</span>, node);
-<a href=#1688 id=1688 data-nosnippet>1688</a>        }
-<a href=#1689 id=1689 data-nosnippet>1689</a>
-<a href=#1690 id=1690 data-nosnippet>1690</a>        <span class="kw">fn </span>visit_expr_let_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>ExprLet) {
-<a href=#1691 id=1691 data-nosnippet>1691</a>            <span class="kw">for </span>binding <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.bindings {
-<a href=#1692 id=1692 data-nosnippet>1692</a>                <span class="self">self</span>.visit_expr_mut(binding);
-<a href=#1693 id=1693 data-nosnippet>1693</a>            }
-<a href=#1694 id=1694 data-nosnippet>1694</a>            <span class="self">self</span>.scope_depth += <span class="number">1</span>;
-<a href=#1695 id=1695 data-nosnippet>1695</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.body);
-<a href=#1696 id=1696 data-nosnippet>1696</a>            <span class="self">self</span>.scope_depth -= <span class="number">1</span>;
-<a href=#1697 id=1697 data-nosnippet>1697</a>        }
-<a href=#1698 id=1698 data-nosnippet>1698</a>
-<a href=#1699 id=1699 data-nosnippet>1699</a>        <span class="kw">fn </span>visit_expr_map_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>ExprMap) {
-<a href=#1700 id=1700 data-nosnippet>1700</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.base);
-<a href=#1701 id=1701 data-nosnippet>1701</a>            <span class="self">self</span>.scope_depth += <span class="number">1</span>;
-<a href=#1702 id=1702 data-nosnippet>1702</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.map);
-<a href=#1703 id=1703 data-nosnippet>1703</a>            <span class="self">self</span>.scope_depth -= <span class="number">1</span>;
-<a href=#1704 id=1704 data-nosnippet>1704</a>        }
-<a href=#1705 id=1705 data-nosnippet>1705</a>    }
-<a href=#1706 id=1706 data-nosnippet>1706</a>
-<a href=#1707 id=1707 data-nosnippet>1707</a>    ScopedWalk { f, scope_depth }.visit_expr_mut(expr);
-<a href=#1708 id=1708 data-nosnippet>1708</a>}
+<a href=#1231 id=1231 data-nosnippet>1231</a>        ExprSet::Delete(expr) =&gt; v.visit_stmt_delete_mut(expr),
+<a href=#1232 id=1232 data-nosnippet>1232</a>        ExprSet::Values(expr) =&gt; v.visit_values_mut(expr),
+<a href=#1233 id=1233 data-nosnippet>1233</a>        ExprSet::Insert(expr) =&gt; v.visit_stmt_insert_mut(expr),
+<a href=#1234 id=1234 data-nosnippet>1234</a>    }
+<a href=#1235 id=1235 data-nosnippet>1235</a>}
+<a href=#1236 id=1236 data-nosnippet>1236</a>
+<a href=#1237 id=1237 data-nosnippet>1237</a><span class="doccomment">/// Default mutable traversal for [`ExprSetOp`] nodes. Visits each operand.
+<a href=#1238 id=1238 data-nosnippet>1238</a></span><span class="kw">pub fn </span>visit_expr_set_op_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprSetOp)
+<a href=#1239 id=1239 data-nosnippet>1239</a><span class="kw">where
+<a href=#1240 id=1240 data-nosnippet>1240</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1241 id=1241 data-nosnippet>1241</a>{
+<a href=#1242 id=1242 data-nosnippet>1242</a>    <span class="kw">for </span>operand <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.operands {
+<a href=#1243 id=1243 data-nosnippet>1243</a>        v.visit_expr_set_mut(operand);
+<a href=#1244 id=1244 data-nosnippet>1244</a>    }
+<a href=#1245 id=1245 data-nosnippet>1245</a>}
+<a href=#1246 id=1246 data-nosnippet>1246</a>
+<a href=#1247 id=1247 data-nosnippet>1247</a><span class="doccomment">/// Default mutable traversal for [`ExprStartsWith`] nodes. Visits the attribute expression and prefix.
+<a href=#1248 id=1248 data-nosnippet>1248</a></span><span class="kw">pub fn </span>visit_expr_starts_with_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprStartsWith)
+<a href=#1249 id=1249 data-nosnippet>1249</a><span class="kw">where
+<a href=#1250 id=1250 data-nosnippet>1250</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1251 id=1251 data-nosnippet>1251</a>{
+<a href=#1252 id=1252 data-nosnippet>1252</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.expr);
+<a href=#1253 id=1253 data-nosnippet>1253</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.prefix);
+<a href=#1254 id=1254 data-nosnippet>1254</a>}
+<a href=#1255 id=1255 data-nosnippet>1255</a>
+<a href=#1256 id=1256 data-nosnippet>1256</a><span class="doccomment">/// Default mutable traversal for [`ExprStmt`] nodes. Visits the inner statement.
+<a href=#1257 id=1257 data-nosnippet>1257</a></span><span class="kw">pub fn </span>visit_expr_stmt_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprStmt)
+<a href=#1258 id=1258 data-nosnippet>1258</a><span class="kw">where
+<a href=#1259 id=1259 data-nosnippet>1259</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1260 id=1260 data-nosnippet>1260</a>{
+<a href=#1261 id=1261 data-nosnippet>1261</a>    v.visit_stmt_mut(<span class="kw-2">&amp;mut </span>node.stmt);
+<a href=#1262 id=1262 data-nosnippet>1262</a>}
+<a href=#1263 id=1263 data-nosnippet>1263</a>
+<a href=#1264 id=1264 data-nosnippet>1264</a><span class="doccomment">/// Default mutable traversal for [`ExprProject`] nodes. Visits the base expression and the projection.
+<a href=#1265 id=1265 data-nosnippet>1265</a></span><span class="kw">pub fn </span>visit_expr_project_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ExprProject)
+<a href=#1266 id=1266 data-nosnippet>1266</a><span class="kw">where
+<a href=#1267 id=1267 data-nosnippet>1267</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1268 id=1268 data-nosnippet>1268</a>{
+<a href=#1269 id=1269 data-nosnippet>1269</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.base);
+<a href=#1270 id=1270 data-nosnippet>1270</a>    v.visit_projection_mut(<span class="kw-2">&amp;mut </span>node.projection);
+<a href=#1271 id=1271 data-nosnippet>1271</a>}
+<a href=#1272 id=1272 data-nosnippet>1272</a>
+<a href=#1273 id=1273 data-nosnippet>1273</a><span class="doccomment">/// Default mutable traversal for [`Filter`] nodes. Visits the optional filter expression.
+<a href=#1274 id=1274 data-nosnippet>1274</a></span><span class="kw">pub fn </span>visit_filter_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Filter)
+<a href=#1275 id=1275 data-nosnippet>1275</a><span class="kw">where
+<a href=#1276 id=1276 data-nosnippet>1276</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1277 id=1277 data-nosnippet>1277</a>{
+<a href=#1278 id=1278 data-nosnippet>1278</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(expr) = <span class="kw-2">&amp;mut </span>node.expr {
+<a href=#1279 id=1279 data-nosnippet>1279</a>        v.visit_expr_mut(expr);
+<a href=#1280 id=1280 data-nosnippet>1280</a>    }
+<a href=#1281 id=1281 data-nosnippet>1281</a>}
+<a href=#1282 id=1282 data-nosnippet>1282</a>
+<a href=#1283 id=1283 data-nosnippet>1283</a><span class="doccomment">/// Default mutable traversal for [`Condition`] nodes. Visits the optional condition expression.
+<a href=#1284 id=1284 data-nosnippet>1284</a></span><span class="kw">pub fn </span>visit_condition_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Condition)
+<a href=#1285 id=1285 data-nosnippet>1285</a><span class="kw">where
+<a href=#1286 id=1286 data-nosnippet>1286</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1287 id=1287 data-nosnippet>1287</a>{
+<a href=#1288 id=1288 data-nosnippet>1288</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(expr) = <span class="kw-2">&amp;mut </span>node.expr {
+<a href=#1289 id=1289 data-nosnippet>1289</a>        v.visit_expr_mut(expr);
+<a href=#1290 id=1290 data-nosnippet>1290</a>    }
+<a href=#1291 id=1291 data-nosnippet>1291</a>}
+<a href=#1292 id=1292 data-nosnippet>1292</a>
+<a href=#1293 id=1293 data-nosnippet>1293</a><span class="doccomment">/// Default mutable traversal for [`InsertTarget`] nodes. Visits the scope query if present.
+<a href=#1294 id=1294 data-nosnippet>1294</a></span><span class="kw">pub fn </span>visit_insert_target_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>InsertTarget)
+<a href=#1295 id=1295 data-nosnippet>1295</a><span class="kw">where
+<a href=#1296 id=1296 data-nosnippet>1296</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1297 id=1297 data-nosnippet>1297</a>{
+<a href=#1298 id=1298 data-nosnippet>1298</a>    <span class="kw">if let </span>InsertTarget::Scope(stmt) = node {
+<a href=#1299 id=1299 data-nosnippet>1299</a>        v.visit_stmt_query_mut(stmt)
+<a href=#1300 id=1300 data-nosnippet>1300</a>    }
+<a href=#1301 id=1301 data-nosnippet>1301</a>}
+<a href=#1302 id=1302 data-nosnippet>1302</a>
+<a href=#1303 id=1303 data-nosnippet>1303</a><span class="doccomment">/// Default mutable traversal for [`Join`] nodes. Visits the table and the join constraint expression.
+<a href=#1304 id=1304 data-nosnippet>1304</a></span><span class="kw">pub fn </span>visit_join_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Join)
+<a href=#1305 id=1305 data-nosnippet>1305</a><span class="kw">where
+<a href=#1306 id=1306 data-nosnippet>1306</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1307 id=1307 data-nosnippet>1307</a>{
+<a href=#1308 id=1308 data-nosnippet>1308</a>    v.visit_source_table_id_mut(<span class="kw-2">&amp;mut </span>node.table);
+<a href=#1309 id=1309 data-nosnippet>1309</a>    <span class="kw">match </span><span class="kw-2">&amp;mut </span>node.constraint {
+<a href=#1310 id=1310 data-nosnippet>1310</a>        JoinOp::Inner(expr) | JoinOp::Left(expr) =&gt; v.visit_expr_mut(expr),
+<a href=#1311 id=1311 data-nosnippet>1311</a>    }
+<a href=#1312 id=1312 data-nosnippet>1312</a>}
+<a href=#1313 id=1313 data-nosnippet>1313</a>
+<a href=#1314 id=1314 data-nosnippet>1314</a><span class="doccomment">/// Default mutable traversal for [`Limit`] nodes.
+<a href=#1315 id=1315 data-nosnippet>1315</a></span><span class="kw">pub fn </span>visit_limit_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Limit)
+<a href=#1316 id=1316 data-nosnippet>1316</a><span class="kw">where
+<a href=#1317 id=1317 data-nosnippet>1317</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1318 id=1318 data-nosnippet>1318</a>{
+<a href=#1319 id=1319 data-nosnippet>1319</a>    <span class="kw">match </span>node {
+<a href=#1320 id=1320 data-nosnippet>1320</a>        Limit::Cursor(cursor) =&gt; v.visit_limit_cursor_mut(cursor),
+<a href=#1321 id=1321 data-nosnippet>1321</a>        Limit::Offset(offset) =&gt; v.visit_limit_offset_mut(offset),
+<a href=#1322 id=1322 data-nosnippet>1322</a>    }
+<a href=#1323 id=1323 data-nosnippet>1323</a>}
+<a href=#1324 id=1324 data-nosnippet>1324</a>
+<a href=#1325 id=1325 data-nosnippet>1325</a><span class="doccomment">/// Default mutable traversal for [`LimitCursor`] nodes.
+<a href=#1326 id=1326 data-nosnippet>1326</a></span><span class="kw">pub fn </span>visit_limit_cursor_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>LimitCursor)
+<a href=#1327 id=1327 data-nosnippet>1327</a><span class="kw">where
+<a href=#1328 id=1328 data-nosnippet>1328</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1329 id=1329 data-nosnippet>1329</a>{
+<a href=#1330 id=1330 data-nosnippet>1330</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.page_size);
+<a href=#1331 id=1331 data-nosnippet>1331</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(after) = <span class="kw-2">&amp;mut </span>node.after {
+<a href=#1332 id=1332 data-nosnippet>1332</a>        v.visit_expr_mut(after);
+<a href=#1333 id=1333 data-nosnippet>1333</a>    }
+<a href=#1334 id=1334 data-nosnippet>1334</a>}
+<a href=#1335 id=1335 data-nosnippet>1335</a>
+<a href=#1336 id=1336 data-nosnippet>1336</a><span class="doccomment">/// Default mutable traversal for [`LimitOffset`] nodes.
+<a href=#1337 id=1337 data-nosnippet>1337</a></span><span class="kw">pub fn </span>visit_limit_offset_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>LimitOffset)
+<a href=#1338 id=1338 data-nosnippet>1338</a><span class="kw">where
+<a href=#1339 id=1339 data-nosnippet>1339</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1340 id=1340 data-nosnippet>1340</a>{
+<a href=#1341 id=1341 data-nosnippet>1341</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.limit);
+<a href=#1342 id=1342 data-nosnippet>1342</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(offset) = <span class="kw-2">&amp;mut </span>node.offset {
+<a href=#1343 id=1343 data-nosnippet>1343</a>        v.visit_expr_mut(offset);
+<a href=#1344 id=1344 data-nosnippet>1344</a>    }
+<a href=#1345 id=1345 data-nosnippet>1345</a>}
+<a href=#1346 id=1346 data-nosnippet>1346</a>
+<a href=#1347 id=1347 data-nosnippet>1347</a><span class="doccomment">/// Default mutable traversal for [`OrderBy`] nodes. Visits each ordering expression.
+<a href=#1348 id=1348 data-nosnippet>1348</a></span><span class="kw">pub fn </span>visit_order_by_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>OrderBy)
+<a href=#1349 id=1349 data-nosnippet>1349</a><span class="kw">where
+<a href=#1350 id=1350 data-nosnippet>1350</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1351 id=1351 data-nosnippet>1351</a>{
+<a href=#1352 id=1352 data-nosnippet>1352</a>    <span class="kw">for </span>expr <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.exprs {
+<a href=#1353 id=1353 data-nosnippet>1353</a>        v.visit_order_by_expr_mut(expr);
+<a href=#1354 id=1354 data-nosnippet>1354</a>    }
+<a href=#1355 id=1355 data-nosnippet>1355</a>}
+<a href=#1356 id=1356 data-nosnippet>1356</a>
+<a href=#1357 id=1357 data-nosnippet>1357</a><span class="doccomment">/// Default mutable traversal for [`OrderByExpr`] nodes. Visits the ordering expression.
+<a href=#1358 id=1358 data-nosnippet>1358</a></span><span class="kw">pub fn </span>visit_order_by_expr_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>OrderByExpr)
+<a href=#1359 id=1359 data-nosnippet>1359</a><span class="kw">where
+<a href=#1360 id=1360 data-nosnippet>1360</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1361 id=1361 data-nosnippet>1361</a>{
+<a href=#1362 id=1362 data-nosnippet>1362</a>    v.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.expr);
+<a href=#1363 id=1363 data-nosnippet>1363</a>}
+<a href=#1364 id=1364 data-nosnippet>1364</a>
+<a href=#1365 id=1365 data-nosnippet>1365</a><span class="doccomment">/// Default mutable traversal for [`Path`] nodes. Visits the projection.
+<a href=#1366 id=1366 data-nosnippet>1366</a></span><span class="kw">pub fn </span>visit_path_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Path)
+<a href=#1367 id=1367 data-nosnippet>1367</a><span class="kw">where
+<a href=#1368 id=1368 data-nosnippet>1368</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1369 id=1369 data-nosnippet>1369</a>{
+<a href=#1370 id=1370 data-nosnippet>1370</a>    v.visit_projection_mut(<span class="kw-2">&amp;mut </span>node.projection);
+<a href=#1371 id=1371 data-nosnippet>1371</a>}
+<a href=#1372 id=1372 data-nosnippet>1372</a>
+<a href=#1373 id=1373 data-nosnippet>1373</a><span class="doccomment">/// Default mutable traversal for [`Projection`] nodes. This is a leaf node with no children to visit.
+<a href=#1374 id=1374 data-nosnippet>1374</a></span><span class="kw">pub fn </span>visit_projection_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Projection)
+<a href=#1375 id=1375 data-nosnippet>1375</a><span class="kw">where
+<a href=#1376 id=1376 data-nosnippet>1376</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1377 id=1377 data-nosnippet>1377</a>{
+<a href=#1378 id=1378 data-nosnippet>1378</a>}
+<a href=#1379 id=1379 data-nosnippet>1379</a>
+<a href=#1380 id=1380 data-nosnippet>1380</a><span class="doccomment">/// Default mutable traversal for [`Returning`] nodes. Visits each path for model variants, or the expression for expr and value variants.
+<a href=#1381 id=1381 data-nosnippet>1381</a></span><span class="kw">pub fn </span>visit_returning_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Returning)
+<a href=#1382 id=1382 data-nosnippet>1382</a><span class="kw">where
+<a href=#1383 id=1383 data-nosnippet>1383</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1384 id=1384 data-nosnippet>1384</a>{
+<a href=#1385 id=1385 data-nosnippet>1385</a>    <span class="kw">match </span>node {
+<a href=#1386 id=1386 data-nosnippet>1386</a>        Returning::Model { include } =&gt; {
+<a href=#1387 id=1387 data-nosnippet>1387</a>            <span class="kw">for </span>path <span class="kw">in </span>include {
+<a href=#1388 id=1388 data-nosnippet>1388</a>                v.visit_path_mut(path);
+<a href=#1389 id=1389 data-nosnippet>1389</a>            }
+<a href=#1390 id=1390 data-nosnippet>1390</a>        }
+<a href=#1391 id=1391 data-nosnippet>1391</a>        Returning::Changed =&gt; {}
+<a href=#1392 id=1392 data-nosnippet>1392</a>        Returning::Project(expr) =&gt; v.visit_expr_mut(expr),
+<a href=#1393 id=1393 data-nosnippet>1393</a>        Returning::Expr(expr) =&gt; v.visit_expr_mut(expr),
+<a href=#1394 id=1394 data-nosnippet>1394</a>    }
+<a href=#1395 id=1395 data-nosnippet>1395</a>}
+<a href=#1396 id=1396 data-nosnippet>1396</a>
+<a href=#1397 id=1397 data-nosnippet>1397</a><span class="doccomment">/// Default mutable traversal for [`Source`] nodes. Dispatches to the model or table source visitor.
+<a href=#1398 id=1398 data-nosnippet>1398</a></span><span class="kw">pub fn </span>visit_source_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Source)
+<a href=#1399 id=1399 data-nosnippet>1399</a><span class="kw">where
+<a href=#1400 id=1400 data-nosnippet>1400</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1401 id=1401 data-nosnippet>1401</a>{
+<a href=#1402 id=1402 data-nosnippet>1402</a>    <span class="kw">match </span>node {
+<a href=#1403 id=1403 data-nosnippet>1403</a>        Source::Model(source_model) =&gt; v.visit_source_model_mut(source_model),
+<a href=#1404 id=1404 data-nosnippet>1404</a>        Source::Table(source_table) =&gt; v.visit_source_table_mut(source_table),
+<a href=#1405 id=1405 data-nosnippet>1405</a>    }
+<a href=#1406 id=1406 data-nosnippet>1406</a>}
+<a href=#1407 id=1407 data-nosnippet>1407</a>
+<a href=#1408 id=1408 data-nosnippet>1408</a><span class="doccomment">/// Default mutable traversal for [`SourceModel`] nodes. Visits the optional association.
+<a href=#1409 id=1409 data-nosnippet>1409</a></span><span class="kw">pub fn </span>visit_source_model_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>SourceModel)
+<a href=#1410 id=1410 data-nosnippet>1410</a><span class="kw">where
+<a href=#1411 id=1411 data-nosnippet>1411</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1412 id=1412 data-nosnippet>1412</a>{
+<a href=#1413 id=1413 data-nosnippet>1413</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(association) = <span class="kw-2">&amp;mut </span>node.via {
+<a href=#1414 id=1414 data-nosnippet>1414</a>        v.visit_association_mut(association);
+<a href=#1415 id=1415 data-nosnippet>1415</a>    }
+<a href=#1416 id=1416 data-nosnippet>1416</a>}
+<a href=#1417 id=1417 data-nosnippet>1417</a>
+<a href=#1418 id=1418 data-nosnippet>1418</a><span class="doccomment">/// Default mutable traversal for [`SourceTable`] nodes. Visits each table reference and each FROM clause table-with-joins.
+<a href=#1419 id=1419 data-nosnippet>1419</a></span><span class="kw">pub fn </span>visit_source_table_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>SourceTable)
+<a href=#1420 id=1420 data-nosnippet>1420</a><span class="kw">where
+<a href=#1421 id=1421 data-nosnippet>1421</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1422 id=1422 data-nosnippet>1422</a>{
+<a href=#1423 id=1423 data-nosnippet>1423</a>    <span class="kw">for </span>table_ref <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.tables {
+<a href=#1424 id=1424 data-nosnippet>1424</a>        v.visit_table_ref_mut(table_ref);
+<a href=#1425 id=1425 data-nosnippet>1425</a>    }
+<a href=#1426 id=1426 data-nosnippet>1426</a>    <span class="kw">for </span>table_with_joins <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.from {
+<a href=#1427 id=1427 data-nosnippet>1427</a>        v.visit_table_with_joins_mut(table_with_joins);
+<a href=#1428 id=1428 data-nosnippet>1428</a>    }
+<a href=#1429 id=1429 data-nosnippet>1429</a>}
+<a href=#1430 id=1430 data-nosnippet>1430</a>
+<a href=#1431 id=1431 data-nosnippet>1431</a><span class="doccomment">/// Default mutable traversal for [`SourceTableId`] nodes. This is a leaf node with no children to visit.
+<a href=#1432 id=1432 data-nosnippet>1432</a></span><span class="kw">pub fn </span>visit_source_table_id_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>SourceTableId)
+<a href=#1433 id=1433 data-nosnippet>1433</a><span class="kw">where
+<a href=#1434 id=1434 data-nosnippet>1434</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1435 id=1435 data-nosnippet>1435</a>{
+<a href=#1436 id=1436 data-nosnippet>1436</a>    <span class="comment">// SourceTableId is just an index, nothing to visit
+<a href=#1437 id=1437 data-nosnippet>1437</a></span>}
+<a href=#1438 id=1438 data-nosnippet>1438</a>
+<a href=#1439 id=1439 data-nosnippet>1439</a><span class="doccomment">/// Default mutable traversal for [`TableFactor`] nodes. Dispatches by factor type.
+<a href=#1440 id=1440 data-nosnippet>1440</a></span><span class="kw">pub fn </span>visit_table_factor_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableFactor)
+<a href=#1441 id=1441 data-nosnippet>1441</a><span class="kw">where
+<a href=#1442 id=1442 data-nosnippet>1442</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1443 id=1443 data-nosnippet>1443</a>{
+<a href=#1444 id=1444 data-nosnippet>1444</a>    <span class="kw">match </span>node {
+<a href=#1445 id=1445 data-nosnippet>1445</a>        TableFactor::Table(table_id) =&gt; v.visit_source_table_id_mut(table_id),
+<a href=#1446 id=1446 data-nosnippet>1446</a>    }
+<a href=#1447 id=1447 data-nosnippet>1447</a>}
+<a href=#1448 id=1448 data-nosnippet>1448</a>
+<a href=#1449 id=1449 data-nosnippet>1449</a><span class="doccomment">/// Default mutable traversal for [`Statement`] nodes. Dispatches to the statement-specific visitor.
+<a href=#1450 id=1450 data-nosnippet>1450</a></span><span class="kw">pub fn </span>visit_stmt_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Statement)
+<a href=#1451 id=1451 data-nosnippet>1451</a><span class="kw">where
+<a href=#1452 id=1452 data-nosnippet>1452</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1453 id=1453 data-nosnippet>1453</a>{
+<a href=#1454 id=1454 data-nosnippet>1454</a>    <span class="kw">match </span>node {
+<a href=#1455 id=1455 data-nosnippet>1455</a>        Statement::Delete(stmt) =&gt; v.visit_stmt_delete_mut(stmt),
+<a href=#1456 id=1456 data-nosnippet>1456</a>        Statement::Insert(stmt) =&gt; v.visit_stmt_insert_mut(stmt),
+<a href=#1457 id=1457 data-nosnippet>1457</a>        Statement::Query(stmt) =&gt; v.visit_stmt_query_mut(stmt),
+<a href=#1458 id=1458 data-nosnippet>1458</a>        Statement::Update(stmt) =&gt; v.visit_stmt_update_mut(stmt),
+<a href=#1459 id=1459 data-nosnippet>1459</a>    }
+<a href=#1460 id=1460 data-nosnippet>1460</a>}
+<a href=#1461 id=1461 data-nosnippet>1461</a>
+<a href=#1462 id=1462 data-nosnippet>1462</a><span class="doccomment">/// Default mutable traversal for [`Delete`] nodes. Visits the source, filter, and optional returning clause.
+<a href=#1463 id=1463 data-nosnippet>1463</a></span><span class="kw">pub fn </span>visit_stmt_delete_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Delete)
+<a href=#1464 id=1464 data-nosnippet>1464</a><span class="kw">where
+<a href=#1465 id=1465 data-nosnippet>1465</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1466 id=1466 data-nosnippet>1466</a>{
+<a href=#1467 id=1467 data-nosnippet>1467</a>    v.visit_source_mut(<span class="kw-2">&amp;mut </span>node.from);
+<a href=#1468 id=1468 data-nosnippet>1468</a>    v.visit_filter_mut(<span class="kw-2">&amp;mut </span>node.filter);
+<a href=#1469 id=1469 data-nosnippet>1469</a>    v.visit_condition_mut(<span class="kw-2">&amp;mut </span>node.condition);
+<a href=#1470 id=1470 data-nosnippet>1470</a>
+<a href=#1471 id=1471 data-nosnippet>1471</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(returning) = <span class="kw-2">&amp;mut </span>node.returning {
+<a href=#1472 id=1472 data-nosnippet>1472</a>        v.visit_returning_mut(returning);
+<a href=#1473 id=1473 data-nosnippet>1473</a>    }
+<a href=#1474 id=1474 data-nosnippet>1474</a>}
+<a href=#1475 id=1475 data-nosnippet>1475</a>
+<a href=#1476 id=1476 data-nosnippet>1476</a><span class="doccomment">/// Default mutable traversal for [`Insert`] nodes. Visits the target, source query, and optional returning clause.
+<a href=#1477 id=1477 data-nosnippet>1477</a></span><span class="kw">pub fn </span>visit_stmt_insert_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Insert)
+<a href=#1478 id=1478 data-nosnippet>1478</a><span class="kw">where
+<a href=#1479 id=1479 data-nosnippet>1479</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1480 id=1480 data-nosnippet>1480</a>{
+<a href=#1481 id=1481 data-nosnippet>1481</a>    v.visit_insert_target_mut(<span class="kw-2">&amp;mut </span>node.target);
+<a href=#1482 id=1482 data-nosnippet>1482</a>    v.visit_stmt_query_mut(<span class="kw-2">&amp;mut </span>node.source);
+<a href=#1483 id=1483 data-nosnippet>1483</a>
+<a href=#1484 id=1484 data-nosnippet>1484</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(returning) = <span class="kw-2">&amp;mut </span>node.returning {
+<a href=#1485 id=1485 data-nosnippet>1485</a>        v.visit_returning_mut(returning);
+<a href=#1486 id=1486 data-nosnippet>1486</a>    }
+<a href=#1487 id=1487 data-nosnippet>1487</a>}
+<a href=#1488 id=1488 data-nosnippet>1488</a>
+<a href=#1489 id=1489 data-nosnippet>1489</a><span class="doccomment">/// Default mutable traversal for [`Query`] nodes. Visits the optional WITH clause, body, optional ORDER BY, and optional LIMIT.
+<a href=#1490 id=1490 data-nosnippet>1490</a></span><span class="kw">pub fn </span>visit_stmt_query_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Query)
+<a href=#1491 id=1491 data-nosnippet>1491</a><span class="kw">where
+<a href=#1492 id=1492 data-nosnippet>1492</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1493 id=1493 data-nosnippet>1493</a>{
+<a href=#1494 id=1494 data-nosnippet>1494</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(with) = <span class="kw-2">&amp;mut </span>node.with {
+<a href=#1495 id=1495 data-nosnippet>1495</a>        v.visit_with_mut(with);
+<a href=#1496 id=1496 data-nosnippet>1496</a>    }
+<a href=#1497 id=1497 data-nosnippet>1497</a>
+<a href=#1498 id=1498 data-nosnippet>1498</a>    v.visit_expr_set_mut(<span class="kw-2">&amp;mut </span>node.body);
+<a href=#1499 id=1499 data-nosnippet>1499</a>
+<a href=#1500 id=1500 data-nosnippet>1500</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(order_by) = <span class="kw-2">&amp;mut </span>node.order_by {
+<a href=#1501 id=1501 data-nosnippet>1501</a>        v.visit_order_by_mut(order_by);
+<a href=#1502 id=1502 data-nosnippet>1502</a>    }
+<a href=#1503 id=1503 data-nosnippet>1503</a>
+<a href=#1504 id=1504 data-nosnippet>1504</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(limit) = <span class="kw-2">&amp;mut </span>node.limit {
+<a href=#1505 id=1505 data-nosnippet>1505</a>        v.visit_limit_mut(limit);
+<a href=#1506 id=1506 data-nosnippet>1506</a>    }
+<a href=#1507 id=1507 data-nosnippet>1507</a>}
+<a href=#1508 id=1508 data-nosnippet>1508</a>
+<a href=#1509 id=1509 data-nosnippet>1509</a><span class="doccomment">/// Default mutable traversal for [`Select`] nodes. Visits the source, filter, and returning clause.
+<a href=#1510 id=1510 data-nosnippet>1510</a></span><span class="kw">pub fn </span>visit_stmt_select_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Select)
+<a href=#1511 id=1511 data-nosnippet>1511</a><span class="kw">where
+<a href=#1512 id=1512 data-nosnippet>1512</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1513 id=1513 data-nosnippet>1513</a>{
+<a href=#1514 id=1514 data-nosnippet>1514</a>    v.visit_source_mut(<span class="kw-2">&amp;mut </span>node.source);
+<a href=#1515 id=1515 data-nosnippet>1515</a>    v.visit_filter_mut(<span class="kw-2">&amp;mut </span>node.filter);
+<a href=#1516 id=1516 data-nosnippet>1516</a>    v.visit_returning_mut(<span class="kw-2">&amp;mut </span>node.returning);
+<a href=#1517 id=1517 data-nosnippet>1517</a>}
+<a href=#1518 id=1518 data-nosnippet>1518</a>
+<a href=#1519 id=1519 data-nosnippet>1519</a><span class="doccomment">/// Default mutable traversal for [`Update`] nodes. Visits the target, assignments, filter, condition, and optional returning clause.
+<a href=#1520 id=1520 data-nosnippet>1520</a></span><span class="kw">pub fn </span>visit_stmt_update_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Update)
+<a href=#1521 id=1521 data-nosnippet>1521</a><span class="kw">where
+<a href=#1522 id=1522 data-nosnippet>1522</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1523 id=1523 data-nosnippet>1523</a>{
+<a href=#1524 id=1524 data-nosnippet>1524</a>    v.visit_update_target_mut(<span class="kw-2">&amp;mut </span>node.target);
+<a href=#1525 id=1525 data-nosnippet>1525</a>    v.visit_assignments_mut(<span class="kw-2">&amp;mut </span>node.assignments);
+<a href=#1526 id=1526 data-nosnippet>1526</a>    v.visit_filter_mut(<span class="kw-2">&amp;mut </span>node.filter);
+<a href=#1527 id=1527 data-nosnippet>1527</a>    v.visit_condition_mut(<span class="kw-2">&amp;mut </span>node.condition);
+<a href=#1528 id=1528 data-nosnippet>1528</a>
+<a href=#1529 id=1529 data-nosnippet>1529</a>    <span class="kw">if let </span><span class="prelude-val">Some</span>(returning) = <span class="kw-2">&amp;mut </span>node.returning {
+<a href=#1530 id=1530 data-nosnippet>1530</a>        v.visit_returning_mut(returning);
+<a href=#1531 id=1531 data-nosnippet>1531</a>    }
+<a href=#1532 id=1532 data-nosnippet>1532</a>}
+<a href=#1533 id=1533 data-nosnippet>1533</a>
+<a href=#1534 id=1534 data-nosnippet>1534</a><span class="doccomment">/// Default mutable traversal for [`TableDerived`] nodes. Visits the subquery.
+<a href=#1535 id=1535 data-nosnippet>1535</a></span><span class="kw">pub fn </span>visit_table_derived_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableDerived)
+<a href=#1536 id=1536 data-nosnippet>1536</a><span class="kw">where
+<a href=#1537 id=1537 data-nosnippet>1537</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1538 id=1538 data-nosnippet>1538</a>{
+<a href=#1539 id=1539 data-nosnippet>1539</a>    v.visit_stmt_query_mut(<span class="kw-2">&amp;mut </span>node.subquery);
+<a href=#1540 id=1540 data-nosnippet>1540</a>}
+<a href=#1541 id=1541 data-nosnippet>1541</a>
+<a href=#1542 id=1542 data-nosnippet>1542</a><span class="doccomment">/// Default mutable traversal for [`TableRef`] nodes. Dispatches by reference kind, visiting derived tables and arg expressions.
+<a href=#1543 id=1543 data-nosnippet>1543</a></span><span class="kw">pub fn </span>visit_table_ref_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableRef)
+<a href=#1544 id=1544 data-nosnippet>1544</a><span class="kw">where
+<a href=#1545 id=1545 data-nosnippet>1545</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1546 id=1546 data-nosnippet>1546</a>{
+<a href=#1547 id=1547 data-nosnippet>1547</a>    <span class="kw">match </span>node {
+<a href=#1548 id=1548 data-nosnippet>1548</a>        TableRef::Cte { .. } =&gt; {}
+<a href=#1549 id=1549 data-nosnippet>1549</a>        TableRef::Derived(table_derived) =&gt; v.visit_table_derived_mut(table_derived),
+<a href=#1550 id=1550 data-nosnippet>1550</a>        TableRef::Table(<span class="kw">_</span>) =&gt; {}
+<a href=#1551 id=1551 data-nosnippet>1551</a>        TableRef::Arg(expr_arg) =&gt; v.visit_expr_arg_mut(expr_arg),
+<a href=#1552 id=1552 data-nosnippet>1552</a>    }
+<a href=#1553 id=1553 data-nosnippet>1553</a>}
+<a href=#1554 id=1554 data-nosnippet>1554</a>
+<a href=#1555 id=1555 data-nosnippet>1555</a><span class="doccomment">/// Default mutable traversal for [`TableWithJoins`] nodes. Visits the relation and each join.
+<a href=#1556 id=1556 data-nosnippet>1556</a></span><span class="kw">pub fn </span>visit_table_with_joins_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>TableWithJoins)
+<a href=#1557 id=1557 data-nosnippet>1557</a><span class="kw">where
+<a href=#1558 id=1558 data-nosnippet>1558</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1559 id=1559 data-nosnippet>1559</a>{
+<a href=#1560 id=1560 data-nosnippet>1560</a>    v.visit_table_factor_mut(<span class="kw-2">&amp;mut </span>node.relation);
+<a href=#1561 id=1561 data-nosnippet>1561</a>    <span class="kw">for </span>join <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.joins {
+<a href=#1562 id=1562 data-nosnippet>1562</a>        v.visit_join_mut(join);
+<a href=#1563 id=1563 data-nosnippet>1563</a>    }
+<a href=#1564 id=1564 data-nosnippet>1564</a>}
+<a href=#1565 id=1565 data-nosnippet>1565</a>
+<a href=#1566 id=1566 data-nosnippet>1566</a><span class="doccomment">/// Default mutable traversal for [`Type`] nodes. This is a leaf node with no children to visit.
+<a href=#1567 id=1567 data-nosnippet>1567</a></span><span class="kw">pub fn </span>visit_type_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Type)
+<a href=#1568 id=1568 data-nosnippet>1568</a><span class="kw">where
+<a href=#1569 id=1569 data-nosnippet>1569</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1570 id=1570 data-nosnippet>1570</a>{
+<a href=#1571 id=1571 data-nosnippet>1571</a>    <span class="comment">// Type is just type information, no traversal needed
+<a href=#1572 id=1572 data-nosnippet>1572</a></span>}
+<a href=#1573 id=1573 data-nosnippet>1573</a>
+<a href=#1574 id=1574 data-nosnippet>1574</a><span class="doccomment">/// Default mutable traversal for [`UpdateTarget`] nodes. Visits the query if present.
+<a href=#1575 id=1575 data-nosnippet>1575</a></span><span class="kw">pub fn </span>visit_update_target_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>UpdateTarget)
+<a href=#1576 id=1576 data-nosnippet>1576</a><span class="kw">where
+<a href=#1577 id=1577 data-nosnippet>1577</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1578 id=1578 data-nosnippet>1578</a>{
+<a href=#1579 id=1579 data-nosnippet>1579</a>    <span class="kw">if let </span>UpdateTarget::Query(stmt) = node {
+<a href=#1580 id=1580 data-nosnippet>1580</a>        v.visit_stmt_query_mut(stmt)
+<a href=#1581 id=1581 data-nosnippet>1581</a>    }
+<a href=#1582 id=1582 data-nosnippet>1582</a>}
+<a href=#1583 id=1583 data-nosnippet>1583</a>
+<a href=#1584 id=1584 data-nosnippet>1584</a><span class="doccomment">/// Default mutable traversal for [`Value`] nodes. Visits the inner record if the value is a record variant.
+<a href=#1585 id=1585 data-nosnippet>1585</a></span><span class="kw">pub fn </span>visit_value_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Value)
+<a href=#1586 id=1586 data-nosnippet>1586</a><span class="kw">where
+<a href=#1587 id=1587 data-nosnippet>1587</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1588 id=1588 data-nosnippet>1588</a>{
+<a href=#1589 id=1589 data-nosnippet>1589</a>    <span class="kw">if let </span>Value::Record(node) = node {
+<a href=#1590 id=1590 data-nosnippet>1590</a>        v.visit_value_record(node);
+<a href=#1591 id=1591 data-nosnippet>1591</a>    }
+<a href=#1592 id=1592 data-nosnippet>1592</a>}
+<a href=#1593 id=1593 data-nosnippet>1593</a>
+<a href=#1594 id=1594 data-nosnippet>1594</a><span class="doccomment">/// Default mutable traversal for [`ValueRecord`] nodes. Visits each value field.
+<a href=#1595 id=1595 data-nosnippet>1595</a></span><span class="kw">pub fn </span>visit_value_record&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>ValueRecord)
+<a href=#1596 id=1596 data-nosnippet>1596</a><span class="kw">where
+<a href=#1597 id=1597 data-nosnippet>1597</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1598 id=1598 data-nosnippet>1598</a>{
+<a href=#1599 id=1599 data-nosnippet>1599</a>    <span class="kw">for </span>expr <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.fields {
+<a href=#1600 id=1600 data-nosnippet>1600</a>        v.visit_value_mut(expr);
+<a href=#1601 id=1601 data-nosnippet>1601</a>    }
+<a href=#1602 id=1602 data-nosnippet>1602</a>}
+<a href=#1603 id=1603 data-nosnippet>1603</a>
+<a href=#1604 id=1604 data-nosnippet>1604</a><span class="doccomment">/// Default mutable traversal for [`Values`] nodes. Visits each row expression.
+<a href=#1605 id=1605 data-nosnippet>1605</a></span><span class="kw">pub fn </span>visit_values_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>Values)
+<a href=#1606 id=1606 data-nosnippet>1606</a><span class="kw">where
+<a href=#1607 id=1607 data-nosnippet>1607</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1608 id=1608 data-nosnippet>1608</a>{
+<a href=#1609 id=1609 data-nosnippet>1609</a>    <span class="kw">for </span>expr <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.rows {
+<a href=#1610 id=1610 data-nosnippet>1610</a>        v.visit_expr_mut(expr);
+<a href=#1611 id=1611 data-nosnippet>1611</a>    }
+<a href=#1612 id=1612 data-nosnippet>1612</a>}
+<a href=#1613 id=1613 data-nosnippet>1613</a>
+<a href=#1614 id=1614 data-nosnippet>1614</a><span class="doccomment">/// Default mutable traversal for [`With`] nodes. Visits each CTE.
+<a href=#1615 id=1615 data-nosnippet>1615</a></span><span class="kw">pub fn </span>visit_with_mut&lt;V&gt;(v: <span class="kw-2">&amp;mut </span>V, node: <span class="kw-2">&amp;mut </span>With)
+<a href=#1616 id=1616 data-nosnippet>1616</a><span class="kw">where
+<a href=#1617 id=1617 data-nosnippet>1617</a>    </span>V: VisitMut + <span class="question-mark">?</span>Sized,
+<a href=#1618 id=1618 data-nosnippet>1618</a>{
+<a href=#1619 id=1619 data-nosnippet>1619</a>    <span class="kw">for </span>cte <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.ctes {
+<a href=#1620 id=1620 data-nosnippet>1620</a>        v.visit_cte_mut(cte);
+<a href=#1621 id=1621 data-nosnippet>1621</a>    }
+<a href=#1622 id=1622 data-nosnippet>1622</a>}
+<a href=#1623 id=1623 data-nosnippet>1623</a>
+<a href=#1624 id=1624 data-nosnippet>1624</a><span class="doccomment">/// Calls `f` for every [`Expr`] node reachable from `node`, in post-order,
+<a href=#1625 id=1625 data-nosnippet>1625</a>/// allowing mutation.
+<a href=#1626 id=1626 data-nosnippet>1626</a></span><span class="kw">pub fn </span>for_each_expr_mut&lt;F&gt;(node: <span class="kw-2">&amp;mut </span><span class="kw">impl </span>Node, f: F)
+<a href=#1627 id=1627 data-nosnippet>1627</a><span class="kw">where
+<a href=#1628 id=1628 data-nosnippet>1628</a>    </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr),
+<a href=#1629 id=1629 data-nosnippet>1629</a>{
+<a href=#1630 id=1630 data-nosnippet>1630</a>    <span class="kw">struct </span>ForEach&lt;F&gt; {
+<a href=#1631 id=1631 data-nosnippet>1631</a>        f: F,
+<a href=#1632 id=1632 data-nosnippet>1632</a>    }
+<a href=#1633 id=1633 data-nosnippet>1633</a>
+<a href=#1634 id=1634 data-nosnippet>1634</a>    <span class="kw">impl</span>&lt;F&gt; VisitMut <span class="kw">for </span>ForEach&lt;F&gt;
+<a href=#1635 id=1635 data-nosnippet>1635</a>    <span class="kw">where
+<a href=#1636 id=1636 data-nosnippet>1636</a>        </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr),
+<a href=#1637 id=1637 data-nosnippet>1637</a>    {
+<a href=#1638 id=1638 data-nosnippet>1638</a>        <span class="kw">fn </span>visit_expr_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>Expr) {
+<a href=#1639 id=1639 data-nosnippet>1639</a>            visit_expr_mut(<span class="self">self</span>, node);
+<a href=#1640 id=1640 data-nosnippet>1640</a>            (<span class="self">self</span>.f)(node);
+<a href=#1641 id=1641 data-nosnippet>1641</a>        }
+<a href=#1642 id=1642 data-nosnippet>1642</a>    }
+<a href=#1643 id=1643 data-nosnippet>1643</a>
+<a href=#1644 id=1644 data-nosnippet>1644</a>    node.visit_mut(ForEach { f });
+<a href=#1645 id=1645 data-nosnippet>1645</a>}
+<a href=#1646 id=1646 data-nosnippet>1646</a>
+<a href=#1647 id=1647 data-nosnippet>1647</a><span class="doccomment">/// Walk an expression tree in pre-order, tracking scope depth through
+<a href=#1648 id=1648 data-nosnippet>1648</a>/// Let/Map scopes.
+<a href=#1649 id=1649 data-nosnippet>1649</a>///
+<a href=#1650 id=1650 data-nosnippet>1650</a>/// For each node, calls `f(expr, scope_depth)`:
+<a href=#1651 id=1651 data-nosnippet>1651</a>/// - If `f` returns `true`, recursion into children continues.
+<a href=#1652 id=1652 data-nosnippet>1652</a>/// - If `f` returns `false`, children are skipped (e.g., when the callback
+<a href=#1653 id=1653 data-nosnippet>1653</a>///   has replaced the expression and doesn't want to recurse into the
+<a href=#1654 id=1654 data-nosnippet>1654</a>///   replacement).
+<a href=#1655 id=1655 data-nosnippet>1655</a>///
+<a href=#1656 id=1656 data-nosnippet>1656</a>/// Scope depth rules:
+<a href=#1657 id=1657 data-nosnippet>1657</a>/// - `Let` bindings are visited at the current depth; the body at `depth + 1`
+<a href=#1658 id=1658 data-nosnippet>1658</a>/// - `Map` base is visited at the current depth; the map function at `depth + 1`
+<a href=#1659 id=1659 data-nosnippet>1659</a>/// - All other compound expressions: children at the same depth
+<a href=#1660 id=1660 data-nosnippet>1660</a>///
+<a href=#1661 id=1661 data-nosnippet>1661</a>/// This matches the semantics of `ExprArg.nesting`: an arg with
+<a href=#1662 id=1662 data-nosnippet>1662</a>/// `nesting == scope_depth` references the outermost (statement-level) scope,
+<a href=#1663 id=1663 data-nosnippet>1663</a>/// while `nesting &lt; scope_depth` references a Let/Map binding.
+<a href=#1664 id=1664 data-nosnippet>1664</a></span><span class="kw">pub fn </span>walk_expr_scoped_mut&lt;F&gt;(expr: <span class="kw-2">&amp;mut </span>Expr, scope_depth: usize, <span class="kw-2">mut </span>f: F)
+<a href=#1665 id=1665 data-nosnippet>1665</a><span class="kw">where
+<a href=#1666 id=1666 data-nosnippet>1666</a>    </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr, usize) -&gt; bool,
+<a href=#1667 id=1667 data-nosnippet>1667</a>{
+<a href=#1668 id=1668 data-nosnippet>1668</a>    walk_expr_scoped_mut_ref(expr, scope_depth, <span class="kw-2">&amp;mut </span>f);
+<a href=#1669 id=1669 data-nosnippet>1669</a>}
+<a href=#1670 id=1670 data-nosnippet>1670</a>
+<a href=#1671 id=1671 data-nosnippet>1671</a><span class="kw">fn </span>walk_expr_scoped_mut_ref&lt;F&gt;(expr: <span class="kw-2">&amp;mut </span>Expr, scope_depth: usize, f: <span class="kw-2">&amp;mut </span>F)
+<a href=#1672 id=1672 data-nosnippet>1672</a><span class="kw">where
+<a href=#1673 id=1673 data-nosnippet>1673</a>    </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr, usize) -&gt; bool,
+<a href=#1674 id=1674 data-nosnippet>1674</a>{
+<a href=#1675 id=1675 data-nosnippet>1675</a>    <span class="kw">struct </span>ScopedWalk&lt;<span class="lifetime">'a</span>, F&gt; {
+<a href=#1676 id=1676 data-nosnippet>1676</a>        f: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>F,
+<a href=#1677 id=1677 data-nosnippet>1677</a>        scope_depth: usize,
+<a href=#1678 id=1678 data-nosnippet>1678</a>    }
+<a href=#1679 id=1679 data-nosnippet>1679</a>
+<a href=#1680 id=1680 data-nosnippet>1680</a>    <span class="kw">impl</span>&lt;F&gt; VisitMut <span class="kw">for </span>ScopedWalk&lt;<span class="lifetime">'_</span>, F&gt;
+<a href=#1681 id=1681 data-nosnippet>1681</a>    <span class="kw">where
+<a href=#1682 id=1682 data-nosnippet>1682</a>        </span>F: FnMut(<span class="kw-2">&amp;mut </span>Expr, usize) -&gt; bool,
+<a href=#1683 id=1683 data-nosnippet>1683</a>    {
+<a href=#1684 id=1684 data-nosnippet>1684</a>        <span class="kw">fn </span>visit_expr_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>Expr) {
+<a href=#1685 id=1685 data-nosnippet>1685</a>            <span class="kw">if </span>!(<span class="self">self</span>.f)(node, <span class="self">self</span>.scope_depth) {
+<a href=#1686 id=1686 data-nosnippet>1686</a>                <span class="kw">return</span>;
+<a href=#1687 id=1687 data-nosnippet>1687</a>            }
+<a href=#1688 id=1688 data-nosnippet>1688</a>            visit_expr_mut(<span class="self">self</span>, node);
+<a href=#1689 id=1689 data-nosnippet>1689</a>        }
+<a href=#1690 id=1690 data-nosnippet>1690</a>
+<a href=#1691 id=1691 data-nosnippet>1691</a>        <span class="kw">fn </span>visit_expr_let_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>ExprLet) {
+<a href=#1692 id=1692 data-nosnippet>1692</a>            <span class="kw">for </span>binding <span class="kw">in </span><span class="kw-2">&amp;mut </span>node.bindings {
+<a href=#1693 id=1693 data-nosnippet>1693</a>                <span class="self">self</span>.visit_expr_mut(binding);
+<a href=#1694 id=1694 data-nosnippet>1694</a>            }
+<a href=#1695 id=1695 data-nosnippet>1695</a>            <span class="self">self</span>.scope_depth += <span class="number">1</span>;
+<a href=#1696 id=1696 data-nosnippet>1696</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.body);
+<a href=#1697 id=1697 data-nosnippet>1697</a>            <span class="self">self</span>.scope_depth -= <span class="number">1</span>;
+<a href=#1698 id=1698 data-nosnippet>1698</a>        }
+<a href=#1699 id=1699 data-nosnippet>1699</a>
+<a href=#1700 id=1700 data-nosnippet>1700</a>        <span class="kw">fn </span>visit_expr_map_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, node: <span class="kw-2">&amp;mut </span>ExprMap) {
+<a href=#1701 id=1701 data-nosnippet>1701</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.base);
+<a href=#1702 id=1702 data-nosnippet>1702</a>            <span class="self">self</span>.scope_depth += <span class="number">1</span>;
+<a href=#1703 id=1703 data-nosnippet>1703</a>            <span class="self">self</span>.visit_expr_mut(<span class="kw-2">&amp;mut </span>node.map);
+<a href=#1704 id=1704 data-nosnippet>1704</a>            <span class="self">self</span>.scope_depth -= <span class="number">1</span>;
+<a href=#1705 id=1705 data-nosnippet>1705</a>        }
+<a href=#1706 id=1706 data-nosnippet>1706</a>    }
+<a href=#1707 id=1707 data-nosnippet>1707</a>
+<a href=#1708 id=1708 data-nosnippet>1708</a>    ScopedWalk { f, scope_depth }.visit_expr_mut(expr);
+<a href=#1709 id=1709 data-nosnippet>1709</a>}
 </code></pre></div></section></main></body></html>
