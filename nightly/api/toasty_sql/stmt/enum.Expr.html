@@ -152,8 +152,9 @@ represent function parameters that can be bound at evaluation time.</p>
 transformed by <code>f</code>.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.entry" class="method"><h4 class="code-header">pub fn <a href="#method.entry" class="fn">entry</a>(&amp;self, path: impl <a class="trait" href="trait.EntryPath.html" title="trait toasty_sql::stmt::EntryPath">EntryPath</a>) -&gt; <a class="enum" href="https://doc.rust-lang.org/1.95.0/core/option/enum.Option.html" title="enum core::option::Option">Option</a>&lt;<a class="enum" href="enum.Entry.html" title="enum toasty_sql::stmt::Entry">Entry</a>&lt;'_&gt;&gt;</h4></section></summary><div class="docblock"><p>Navigates into a nested record or list expression by <code>path</code> and returns
 a read-only <a href="enum.Entry.html" title="enum toasty_sql::stmt::Entry"><code>Entry</code></a> reference.</p>
-<p>Returns <code>None</code> if the path cannot be followed (e.g., the expression is
-not a record or list at the expected depth).</p>
+<p>Returns <code>None</code> if the path cannot be followed: the expression is not a
+record or list at the expected depth, or a step indexes past the end of
+a record or list.</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="method.entry_mut" class="method"><h4 class="code-header">pub fn <a href="#method.entry_mut" class="fn">entry_mut</a>(&amp;mut self, path: impl <a class="trait" href="trait.EntryPath.html" title="trait toasty_sql::stmt::EntryPath">EntryPath</a>) -&gt; <a class="enum" href="enum.EntryMut.html" title="enum toasty_sql::stmt::EntryMut">EntryMut</a>&lt;'_&gt;</h4></section></summary><div class="docblock"><p>Navigates into a nested record or list expression by <code>path</code> and returns
 a mutable <a href="enum.EntryMut.html" title="enum toasty_sql::stmt::EntryMut"><code>EntryMut</code></a> reference.</p>
 <h5 id="panics-2"><a class="doc-anchor" href="#panics-2">§</a>Panics</h5>
