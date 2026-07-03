@@ -554,20 +554,23 @@ impl Expr {
     /// Navigates into a nested record or list expression by `path` and returns
     /// a read-only [`Entry`] reference.
     ///
-    /// Returns `None` if the path cannot be followed (e.g., the expression is
-    /// not a record or list at the expected depth).
+    /// Returns `None` if the path cannot be followed: the expression is not a
+    /// record or list at the expected depth, or a step indexes past the end of
+    /// a record or list.
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Option<Entry<'_>> {
         let mut ret = Entry::Expr(self);
 
         for step in path.step_iter() {
             ret = match ret {
-                Entry::Expr(Self::Record(expr)) => Entry::Expr(&expr[step]),
-                Entry::Expr(Self::List(expr)) => Entry::Expr(&expr.items[step]),
+                Entry::Expr(Self::Record(expr)) => Entry::Expr(expr.get(step)?),
+                Entry::Expr(Self::List(expr)) => Entry::Expr(expr.items.get(step)?),
                 Entry::Value(Value::Record(record))
-                | Entry::Expr(Self::Value(Value::Record(record))) => Entry::Value(&record[step]),
+                | Entry::Expr(Self::Value(Value::Record(record))) => {
+                    Entry::Value(record.get(step)?)
+                }
                 Entry::Value(Value::List(items)) | Entry::Expr(Self::Value(Value::List(items))) => {
-                    Entry::Value(&items[step])
+                    Entry::Value(items.get(step)?)
                 }
                 _ => return None,
             }
