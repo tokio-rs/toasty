@@ -36,7 +36,7 @@ use error::classify_turso_error;
 /// `turso` crate so callers don't need a direct dependency on it.
 pub use turso::EncryptionOpts;
 
-/// Turso's Sync featueres.
+/// Turso Sync featueres.
 #[cfg(feature = "sync")]
 pub mod sync;
 
