@@ -14,7 +14,7 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty-driver-turso"
 
 [features]
-default = ["sync"]
+default = []
 sync = ["turso/sync"]
 
 [dependencies]
