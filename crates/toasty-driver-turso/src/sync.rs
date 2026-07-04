@@ -1,7 +1,7 @@
 #![warn(missing_docs)]
 
 use async_trait::async_trait;
-use std::{borrow::Cow, fmt, path::Path};
+use std::{borrow::Cow, fmt, path::Path, sync::Arc};
 use toasty_core::{
     Result,
     driver::{Capability, Driver},
@@ -10,7 +10,7 @@ use toasty_core::{
 use tokio::sync::Mutex;
 use turso::sync::{Builder, Database};
 
-use crate::{TursoBase, TursoPath, error::classify_turso_error};
+use crate::{TursoBase, error::classify_turso_error};
 
 pub use crate::Connection;
 
@@ -37,10 +37,11 @@ impl BuilderOptions {
 }
 
 ///
+#[derive(Clone)]
 pub struct TursoSync {
     base: TursoBase,
     options: BuilderOptions,
-    database: Mutex<Option<Database>>,
+    database: Arc<Mutex<Option<Database>>>,
 }
 
 impl TursoSync {
@@ -49,7 +50,7 @@ impl TursoSync {
         Ok(Self {
             base: TursoBase::from_url(url)?,
             options: BuilderOptions::default(),
-            database: Mutex::new(None),
+            database: Arc::new(Mutex::new(None)),
         })
     }
 
@@ -113,7 +114,7 @@ impl From<TursoBase> for TursoSync {
         Self {
             base,
             options: BuilderOptions::default(),
-            database: Mutex::new(None),
+            database: Arc::new(Mutex::new(None)),
         }
     }
 }

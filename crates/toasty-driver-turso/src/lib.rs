@@ -154,6 +154,7 @@ impl BuilderOptions {
     }
 }
 
+#[derive(Clone)]
 struct TursoBase {
     path: TursoPath,
     concurrent_writes: bool,
