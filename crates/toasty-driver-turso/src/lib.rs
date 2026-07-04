@@ -156,58 +156,40 @@ impl BuilderOptions {
 
 struct TursoBase {
     path: TursoPath,
-    options: BuilderOptions,
     concurrent_writes: bool,
 }
 
 impl TursoBase {
+    fn from_url(url: impl Into<String>) -> Result<Self> {
+        let url_str = url.into();
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+
+        if url.scheme() != "turso" {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "connection URL does not have a `turso` scheme; url={url_str}"
+            )));
+        }
+
+        let path = if url.path() == ":memory:" {
+            TursoPath::InMemory
+        } else {
+            TursoPath::File(PathBuf::from(
+                percent_encoding::percent_decode(url.path().as_bytes())
+                    .decode_utf8_lossy()
+                    .to_string()
+                    .as_str(),
+            ))
+        };
+
+        Ok(Self::with_path(path))
+    }
+
+    fn capability() -> &'static Capability {
+        &Capability::TURSO
+    }
+
     fn concurrent_writes(mut self) -> Self {
         self.concurrent_writes = true;
-        self
-    }
-
-    fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
-        self.options.encryption = Some(opts);
-        self
-    }
-
-    fn experimental_attach(mut self, on: bool) -> Self {
-        self.options.attach = on;
-        self
-    }
-
-    fn experimental_custom_types(mut self, on: bool) -> Self {
-        self.options.custom_types = on;
-        self
-    }
-
-    fn experimental_generated_columns(mut self, on: bool) -> Self {
-        self.options.generated_columns = on;
-        self
-    }
-
-    fn experimental_index_method(mut self, on: bool) -> Self {
-        self.options.index_method = on;
-        self
-    }
-
-    fn experimental_materialized_views(mut self, on: bool) -> Self {
-        self.options.materialized_views = on;
-        self
-    }
-
-    fn experimental_vacuum(mut self, on: bool) -> Self {
-        self.options.vacuum = on;
-        self
-    }
-
-    fn experimental_multiprocess_wal(mut self, on: bool) -> Self {
-        self.options.multiprocess_wal = on;
-        self
-    }
-
-    fn experimental_without_rowid(mut self, on: bool) -> Self {
-        self.options.without_rowid = on;
         self
     }
 
@@ -218,23 +200,26 @@ impl TursoBase {
         }
     }
 
-    fn capability() -> &'static Capability {
-        &Capability::TURSO
+    fn path_str(&self) -> &str {
+        match &self.path {
+            TursoPath::File(p) => p.to_str().unwrap_or(":memory:"),
+            TursoPath::InMemory => ":memory:",
+        }
     }
 
-    async fn connect(&self, db: Database) -> Result<Box<dyn toasty_core::Connection>> {
-        let conn = db.connect().map_err(classify_turso_error)?;
+    fn with_path(path: TursoPath) -> Self {
+        Self {
+            path,
+            concurrent_writes: false,
+        }
+    }
 
+    async fn connect(&self, conn: TursoConn) -> Result<Box<dyn toasty_core::Connection>> {
         if self.concurrent_writes {
-            // `PRAGMA journal_mode = ...` returns the new mode as a row; the
-            // `execute` path errors with "unexpected row during execution"
-            // on any pragma that emits one. Use `pragma_update` so the row
-            // is consumed.
             conn.pragma_update("journal_mode", "'mvcc'")
                 .await
                 .map_err(classify_turso_error)?;
         }
-
         Ok(Box::new(Connection {
             conn,
             default_begin_sql: if self.concurrent_writes {
@@ -256,7 +241,7 @@ impl TursoBase {
         Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
-    async fn reset_db(database: &Mutex<Option<Database>>, path: &TursoPath) -> Result<()> {
+    async fn reset_db<T>(database: &Mutex<Option<T>>, path: &TursoPath) -> Result<()> {
         // Drop the cached Database so subsequent `connect()` calls open a
         // fresh one. For in-memory this is the only way to wipe state;
         // for file-backed databases the file is also removed below.
@@ -299,6 +284,7 @@ impl TursoBase {
 /// ```
 pub struct Turso {
     base: TursoBase,
+    options: BuilderOptions,
     /// Shared `turso::Database` reused across every `connect()` call so that
     /// all pool slots see the same underlying database. Without this, each
     /// connection to `:memory:` would open a fresh empty database; even
@@ -313,26 +299,11 @@ impl Turso {
     /// The URL scheme must be `turso` (e.g. `turso::memory:` or
     /// `turso:/path/to/db`).
     pub fn new(url: impl Into<String>) -> Result<Self> {
-        let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if url.scheme() != "turso" {
-            return Err(toasty_core::Error::invalid_connection_url(format!(
-                "connection URL does not have a `turso` scheme; url={url_str}"
-            )));
-        }
-
-        let path = if url.path() == ":memory:" {
-            TursoPath::InMemory
-        } else {
-            TursoPath::File(PathBuf::from(
-                percent_encoding::percent_decode(url.path().as_bytes())
-                    .decode_utf8_lossy()
-                    .to_string()
-                    .as_str(),
-            ))
-        };
-        Ok(Self::with_path(path))
+        Ok(Self {
+            base: TursoBase::from_url(url)?,
+            options: BuilderOptions::default(),
+            database: Mutex::new(None),
+        })
     }
 
     /// Create an in-memory Turso database.
@@ -347,11 +318,8 @@ impl Turso {
 
     fn with_path(path: TursoPath) -> Self {
         Self {
-            base: TursoBase {
-                path,
-                options: BuilderOptions::default(),
-                concurrent_writes: false,
-            },
+            base: TursoBase::with_path(path),
+            options: BuilderOptions::default(),
             database: Mutex::new(None),
         }
     }
@@ -382,90 +350,65 @@ impl Turso {
     /// key. Bundles `turso::Builder::experimental_encryption(true)` with
     /// `turso::Builder::with_encryption(opts)` so callers cannot enable
     /// encryption without supplying a key.
-    pub fn experimental_encryption(self, opts: EncryptionOpts) -> Self {
-        Self {
-            base: self.base.experimental_encryption(opts),
-            ..self
-        }
+    pub fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
+        self.options.encryption = Some(opts);
+        self
     }
 
     /// Enable Turso's experimental `ATTACH DATABASE` support. Mirrors
     /// `turso::Builder::experimental_attach`.
-    pub fn experimental_attach(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_attach(on),
-            ..self
-        }
+    pub fn experimental_attach(mut self, on: bool) -> Self {
+        self.options.attach = on;
+        self
     }
 
     /// Enable Turso's experimental custom types. Mirrors
     /// `turso::Builder::experimental_custom_types`.
-    pub fn experimental_custom_types(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_custom_types(on),
-            ..self
-        }
+    pub fn experimental_custom_types(mut self, on: bool) -> Self {
+        self.options.custom_types = on;
+        self
     }
 
     /// Enable Turso's experimental generated columns. Mirrors
     /// `turso::Builder::experimental_generated_columns`.
-    pub fn experimental_generated_columns(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_generated_columns(on),
-            ..self
-        }
+    pub fn experimental_generated_columns(mut self, on: bool) -> Self {
+        self.options.generated_columns = on;
+        self
     }
 
     /// Enable Turso's experimental index methods. Mirrors
     /// `turso::Builder::experimental_index_method`.
-    pub fn experimental_index_method(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_index_method(on),
-            ..self
-        }
+    pub fn experimental_index_method(mut self, on: bool) -> Self {
+        self.options.index_method = on;
+        self
     }
 
     /// Enable Turso's experimental materialized views. Mirrors
     /// `turso::Builder::experimental_materialized_views`.
-    pub fn experimental_materialized_views(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_materialized_views(on),
-            ..self
-        }
+    pub fn experimental_materialized_views(mut self, on: bool) -> Self {
+        self.options.materialized_views = on;
+        self
     }
 
     /// Enable Turso's experimental `VACUUM`. Mirrors
     /// `turso::Builder::experimental_vacuum`.
-    pub fn experimental_vacuum(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_vacuum(on),
-            ..self
-        }
+    pub fn experimental_vacuum(mut self, on: bool) -> Self {
+        self.options.vacuum = on;
+        self
     }
 
     /// Enable Turso's experimental multi-process WAL. Mirrors
     /// `turso::Builder::experimental_multiprocess_wal`.
-    pub fn experimental_multiprocess_wal(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_multiprocess_wal(on),
-            ..self
-        }
+    pub fn experimental_multiprocess_wal(mut self, on: bool) -> Self {
+        self.options.multiprocess_wal = on;
+        self
     }
 
     /// Enable Turso's experimental `WITHOUT ROWID` support. Mirrors
     /// `turso::Builder::experimental_without_rowid`.
-    pub fn experimental_without_rowid(self, on: bool) -> Self {
-        Self {
-            base: self.base.experimental_without_rowid(on),
-            ..self
-        }
-    }
-
-    fn path_str(&self) -> &str {
-        match &self.base.path {
-            TursoPath::File(p) => p.to_str().unwrap_or(":memory:"),
-            TursoPath::InMemory => ":memory:",
-        }
+    pub fn experimental_without_rowid(mut self, on: bool) -> Self {
+        self.options.without_rowid = on;
+        self
     }
 
     /// Returns the cached `turso::Database`, opening it on first use.
@@ -479,7 +422,7 @@ impl Turso {
         if let Some(db) = slot.as_ref() {
             return Ok(db.clone());
         }
-        let builder = self.base.options.apply(Builder::new_local(self.path_str()));
+        let builder = self.options.apply(Builder::new_local(self.base.path_str()));
         let db = builder.build().await.map_err(classify_turso_error)?;
         *slot = Some(db.clone());
         Ok(db)
@@ -491,7 +434,7 @@ impl fmt::Debug for Turso {
         f.debug_struct("Turso")
             .field("path", &self.base.path)
             .field("concurrent_writes", &self.base.concurrent_writes)
-            .field("options", &self.base.options)
+            .field("options", &self.options)
             .finish_non_exhaustive()
     }
 }
@@ -508,7 +451,8 @@ impl Driver for Turso {
 
     async fn connect(&self) -> Result<Box<dyn toasty_core::Connection>> {
         let database = self.database().await?;
-        self.base.connect(database).await
+        let conn = database.connect().map_err(classify_turso_error)?;
+        self.base.connect(conn).await
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
