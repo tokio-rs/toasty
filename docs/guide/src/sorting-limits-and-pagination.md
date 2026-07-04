@@ -367,3 +367,7 @@ Methods available on `Page`:
 | `.items` | `Vec<M>` | The records in this page |
 | `.len()` | `usize` | Number of items (via `Deref` to slice) |
 | `.iter()` | iterator | Iterate items (via `Deref` to slice) |
+
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search

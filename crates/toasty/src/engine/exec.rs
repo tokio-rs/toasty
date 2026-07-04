@@ -8,7 +8,9 @@ mod eval;
 pub(crate) use eval::Eval;
 
 mod exec_statement;
-pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput, PaginationConfig};
+pub(crate) use exec_statement::{
+    ConditionalOutput, ExecStatement, ExecStatementOutput, PaginationConfig,
+};
 
 mod filter;
 pub(crate) use filter::Filter;

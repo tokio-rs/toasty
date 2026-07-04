@@ -24,7 +24,6 @@ rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
 heck.workspace = true
-pluralizer.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
 uuid.workspace = true

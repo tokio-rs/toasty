@@ -40,15 +40,21 @@ impl ReadModifyWrite {
             .map(|input| logical_plan[input].var.get().unwrap())
             .collect();
 
-        // A hack since rmw doesn't support output yet
-        let var = var_table.register_var(stmt::Type::list(stmt::Type::Unit));
+        let var = var_table.register_var(self.ty.clone());
+        node.var.set(Some(var));
+
+        // When the write carries a `RETURNING`, the node's type is
+        // `List<Record>`; without one the type is `Unit` and the write reports
+        // only a row count.
+        let output_ty = mir::row_field_types(&self.ty);
 
         exec::ReadModifyWrite {
             input,
-            output: Some(exec::Output {
+            output: exec::Output {
                 var,
                 num_uses: node.num_uses.get(),
-            }),
+            },
+            output_ty,
             read: self.read.clone(),
             write: self.write.clone(),
         }

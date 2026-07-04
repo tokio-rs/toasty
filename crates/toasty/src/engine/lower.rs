@@ -1935,7 +1935,20 @@ impl stmt::Input for AssignmentInput<'_> {
         if expr_projection.as_slice() == remaining_steps {
             Some(self.value.clone())
         } else {
-            self.value.entry(expr_projection).map(|e| e.to_expr())
+            // The column's encode template projects into variant-field
+            // positions of the assignment value. When a mixed enum is updated
+            // to a unit (or otherwise shorter) variant, the value record is
+            // narrower than a sibling variant's column expects, so the
+            // projection falls out of bounds and `entry` returns `None`. Those
+            // references live inside a discriminant-guarded match arm that is
+            // unreachable for this value, so resolving them to `null` is safe —
+            // the simplifier drops the dead arm.
+            Some(
+                self.value
+                    .entry(expr_projection)
+                    .map(|e| e.to_expr())
+                    .unwrap_or_else(stmt::Expr::null),
+            )
         }
     }
 }

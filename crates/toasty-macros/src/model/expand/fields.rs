@@ -159,12 +159,20 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let is_root = matches!(self.model.kind, ModelKind::Root(_));
 
-        // Generate methods that return list field paths
+        // Generate methods that return list field paths.
+        //
+        // An embedded enum flattens every variant's fields into one list, so two
+        // variants may declare the same field name — e.g. a column shared across
+        // variants via `#[column("name")]`. Emit each accessor name only once to
+        // avoid duplicate method definitions. Root models and embedded structs
+        // can never have duplicate field names, so this dedup is a no-op there.
+        let mut seen_names = std::collections::HashSet::new();
         let methods = self
             .model
             .fields
             .iter()
             .enumerate()
+            .filter(move |(_, field)| seen_names.insert(field.name.as_str().to_string()))
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);

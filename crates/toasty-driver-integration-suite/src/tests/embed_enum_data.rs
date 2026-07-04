@@ -188,6 +188,97 @@ pub async fn mixed_enum_roundtrip(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Updating a mixed enum field from a data-carrying variant to a unit variant
+/// (and back) round-trips correctly. Regression test for #1068: the unit
+/// variant's value record is narrower than the data variant's data column
+/// expects, which used to panic while lowering the update.
+#[driver_test(scenario(crate::scenarios::task_with_status))]
+pub async fn mixed_enum_update_data_to_unit_variant(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    let mut task = toasty::create!(Task {
+        title: "task",
+        status: Status::Failed {
+            reason: "boom".to_string(),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Data variant -> unit variant (the reported panic).
+    task.update().status(Status::Pending).exec(&mut db).await?;
+    assert_eq!(
+        Task::get_by_id(&mut db, &task.id).await?.status,
+        Status::Pending
+    );
+
+    // Unit variant -> data variant, to confirm the reverse still works.
+    task.update()
+        .status(Status::Failed {
+            reason: "again".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(
+        Task::get_by_id(&mut db, &task.id).await?.status,
+        Status::Failed {
+            reason: "again".to_string()
+        }
+    );
+
+    Ok(())
+}
+
+/// Updating a data-carrying enum between variants with *different field counts*
+/// round-trips. The narrower variant's value record is shorter than the wider
+/// variant's data columns expect, exercising the same out-of-bounds projection
+/// path as #1068 without any unit variant involved.
+#[driver_test]
+pub async fn enum_update_between_variants_of_different_width(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Event {
+        #[column(variant = 1)]
+        Login { user: String },
+        #[column(variant = 2)]
+        Purchase { item: String, amount: i64 },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Log {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        event: Event,
+    }
+
+    let mut db = test.setup_db(models!(Log)).await;
+
+    let mut log = toasty::create!(Log {
+        event: Event::Purchase {
+            item: "book".to_string(),
+            amount: 42,
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Wider variant -> narrower variant.
+    log.update()
+        .event(Event::Login {
+            user: "alice".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    assert_eq!(
+        Log::get_by_id(&mut db, &log.id).await?.event,
+        Event::Login {
+            user: "alice".to_string()
+        }
+    );
+
+    Ok(())
+}
+
 /// Tests that UUID fields inside data-carrying enum variants round-trip correctly.
 /// UUID is a non-trivial primitive that requires type casting on some databases.
 #[driver_test]

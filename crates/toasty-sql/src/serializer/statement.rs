@@ -265,6 +265,16 @@ impl ToSql for &stmt::Delete {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         assert!(self.returning.is_none());
 
+        // Conditions never reach the serializer: the planner rewrites a
+        // conditional DELETE into a CTE or read-modify-write plan (see
+        // `plan_conditional_sql_query_as_*`), stripping the condition and
+        // folding its check into a filter predicate.
+        debug_assert!(
+            self.condition.is_none(),
+            "SQL DELETE condition should have been lowered by the planner; condition={:#?}",
+            self.condition
+        );
+
         // Create a new expression scope to serialize the statement
         let mut f = f.scope(self);
         f.alias = true;
@@ -337,7 +347,7 @@ impl ToSql for &stmt::Insert {
         let returning = self
             .returning
             .as_ref()
-            .map(|returning| ("RETURNING ", returning));
+            .map(|returning| (" RETURNING ", returning));
 
         if returning.is_some() && f.serializer.is_mysql() {
             panic!(
@@ -418,6 +428,7 @@ impl ToSql for &stmt::ExprSet {
             stmt::ExprSet::Select(expr) => expr.to_sql(f),
             stmt::ExprSet::Values(expr) => expr.to_sql(f),
             stmt::ExprSet::Update(expr) => expr.to_sql(f),
+            stmt::ExprSet::Delete(expr) => expr.to_sql(f),
             _ => todo!("self={self:?}"),
         }
     }
@@ -445,16 +456,17 @@ impl ToSql for &stmt::Returning {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Returning::Project(stmt::Expr::Record(expr_record)) => {
+                // Alias every projected field positionally (`AS column1`, ...).
+                // A nested SELECT/RETURNING referenced from an outer query (e.g.
+                // a data-modifying CTE joined for its returned rows) is read by
+                // that alias — `ColumnAlias` — so a bare column reference must
+                // carry it too, not just computed expressions. Drivers read
+                // top-level results positionally, so the alias is harmless there.
                 let fields = expr_record
                     .fields
                     .iter()
                     .enumerate()
-                    .map(|(i, expr)| match expr {
-                        stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => {
-                            (expr, None, None)
-                        }
-                        _ => (expr, Some(" AS "), Some(ColumnAlias(i))),
-                    });
+                    .map(|(i, expr)| (expr, Some(" AS "), Some(ColumnAlias(i))));
 
                 fmt!(f, Comma(fields));
             }
@@ -641,9 +653,14 @@ impl ToSql for &stmt::Update {
             );
         }
 
-        assert!(
+        // Conditions never reach the serializer: the planner rewrites a
+        // conditional UPDATE into a CTE or read-modify-write plan (see
+        // `plan_conditional_sql_query_as_*`), stripping the condition and
+        // folding its check into a filter predicate.
+        debug_assert!(
             self.condition.is_none(),
-            "SQL does not support update conditions"
+            "SQL UPDATE condition should have been lowered by the planner; condition={:#?}",
+            self.condition
         );
 
         fmt!(&mut f, "UPDATE " self.target " SET " assignments self.filter returning);

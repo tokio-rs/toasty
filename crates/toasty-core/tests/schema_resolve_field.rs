@@ -177,7 +177,7 @@ fn schema() -> Schema {
                 index: 0,
             },
         },
-        table_name: None,
+        table_name: "users".to_string(),
         indices: vec![],
         version_field: None,
     });

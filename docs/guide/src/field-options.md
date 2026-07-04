@@ -487,3 +487,7 @@ the JSON literal `"null"` instead.
 
 See [Concurrency Control](./concurrency-control.md) for the `#[version]`
 attribute.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields
