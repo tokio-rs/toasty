@@ -108,7 +108,7 @@ impl TursoSync {
     }
 }
 
-impl From<TursoBase> for Turso {
+impl From<TursoBase> for TursoSync {
     fn from(base: TursoBase) -> Self {
         Self {
             base,
