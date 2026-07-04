@@ -184,6 +184,14 @@ impl TursoBase {
         Ok(Self::with_path(path))
     }
 
+    fn in_memory() -> Self {
+        Self::with_path(TursoPath::InMemory)
+    }
+
+    fn file(path: impl AsRef<Path>) -> Self {
+        Self::with_path(TursoPath::File(path.as_ref().to_path_buf()))
+    }
+
     fn capability() -> &'static Capability {
         &Capability::TURSO
     }
@@ -308,20 +316,12 @@ impl Turso {
 
     /// Create an in-memory Turso database.
     pub fn in_memory() -> Self {
-        Self::with_path(TursoPath::InMemory)
+        TursoBase::in_memory().into()
     }
 
     /// Open a Turso database at the specified file path.
-    pub fn file<P: AsRef<Path>>(path: P) -> Self {
-        Self::with_path(TursoPath::File(path.as_ref().to_path_buf()))
-    }
-
-    fn with_path(path: TursoPath) -> Self {
-        Self {
-            base: TursoBase::with_path(path),
-            options: BuilderOptions::default(),
-            database: Mutex::new(None),
-        }
+    pub fn file(path: impl AsRef<Path>) -> Self {
+        TursoBase::file(path).into()
     }
 
     /// Allow transactions to run concurrently instead of serializing on a
@@ -426,6 +426,16 @@ impl Turso {
         let db = builder.build().await.map_err(classify_turso_error)?;
         *slot = Some(db.clone());
         Ok(db)
+    }
+}
+
+impl From<TursoBase> for Turso {
+    fn from(base: TursoBase) -> Self {
+        Self {
+            base,
+            options: BuilderOptions::default(),
+            database: Mutex::new(None),
+        }
     }
 }
 

@@ -55,12 +55,12 @@ impl TursoSync {
 
     /// Create an in-memory Turso database.
     pub fn in_memory() -> Self {
-        Self::with_path(TursoPath::InMemory)
+        TursoBase::in_memory().into()
     }
 
     /// Open a Turso database at the specified file path.
     pub fn file<P: AsRef<Path>>(path: P) -> Self {
-        Self::with_path(TursoPath::File(path.as_ref().to_path_buf()))
+        TursoBase::file(path).into()
     }
 
     /// Set remote_url for HTTP requests.
@@ -94,14 +94,6 @@ impl TursoSync {
         self
     }
 
-    fn with_path(path: TursoPath) -> Self {
-        Self {
-            base: TursoBase::with_path(path),
-            options: BuilderOptions::default(),
-            database: Mutex::new(None),
-        }
-    }
-
     async fn database(&self) -> Result<Database> {
         let mut slot = self.database.lock().await;
         if let Some(db) = slot.as_ref() {
@@ -113,6 +105,16 @@ impl TursoSync {
         let db = builder.build().await.map_err(classify_turso_error)?;
         *slot = Some(db.clone());
         Ok(db)
+    }
+}
+
+impl From<TursoBase> for Turso {
+    fn from(base: TursoBase) -> Self {
+        Self {
+            base,
+            options: BuilderOptions::default(),
+            database: Mutex::new(None),
+        }
     }
 }
 
