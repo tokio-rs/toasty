@@ -46,7 +46,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, QueryLogConfig,
+        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
@@ -368,7 +368,7 @@ impl Driver for Turso {
         &Capability::TURSO
     }
 
-    async fn connect(&self) -> Result<Box<dyn toasty_core::Connection>> {
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn toasty_core::Connection>> {
         let db = self.database().await?;
         let conn = db.connect().map_err(classify_turso_error)?;
 
@@ -389,7 +389,7 @@ impl Driver for Turso {
             } else {
                 "BEGIN"
             },
-            query_log: QueryLogConfig::default(),
+            query_log: cx.query_log,
         }))
     }
 
@@ -528,10 +528,6 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn set_query_log_config(&mut self, config: QueryLogConfig) {
-        self.query_log = config;
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "turso", op = %op.name(), "driver exec");
 

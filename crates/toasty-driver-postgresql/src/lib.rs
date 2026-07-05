@@ -26,7 +26,7 @@ use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, Operation, QueryLogConfig,
+        Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode, TypedValue},
     },
@@ -236,10 +236,13 @@ impl Driver for PostgreSQL {
         &Capability::POSTGRESQL
     }
 
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
-        Ok(Box::new(
-            self.connect_with_config(self.config.clone()).await?,
-        ))
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        let mut connection = self.connect_with_config(self.config.clone()).await?;
+        connection.query_log = cx.query_log;
+        Ok(Box::new(connection))
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
@@ -484,10 +487,6 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn set_query_log_config(&mut self, config: QueryLogConfig) {
-        self.query_log = config;
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "postgresql", op = %op.name(), "driver exec");
 

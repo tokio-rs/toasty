@@ -30,7 +30,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, QueryLogConfig,
+        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
@@ -115,11 +115,15 @@ impl Driver for Sqlite {
         &Capability::SQLITE
     }
 
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
-        let connection = match self {
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> toasty_core::Result<Box<dyn toasty_core::Connection>> {
+        let mut connection = match self {
             Sqlite::File(path) => Connection::open(path)?,
             Sqlite::InMemory => Connection::in_memory(),
         };
+        connection.query_log = cx.query_log;
         Ok(Box::new(connection))
     }
 
@@ -267,10 +271,6 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn set_query_log_config(&mut self, config: QueryLogConfig) {
-        self.query_log = config;
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
 

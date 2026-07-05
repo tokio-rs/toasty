@@ -24,7 +24,7 @@ use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, Operation, QueryLogConfig,
+        Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode},
     },
@@ -142,11 +142,16 @@ impl Driver for MySQL {
         &Capability::MYSQL
     }
 
-    async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> Result<Box<dyn toasty_core::driver::Connection>> {
         let conn = Conn::new(self.opts.clone())
             .await
             .map_err(classify_mysql_error)?;
-        Ok(Box::new(Connection::new(conn)))
+        let mut connection = Connection::new(conn);
+        connection.query_log = cx.query_log;
+        Ok(Box::new(connection))
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
@@ -345,10 +350,6 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn set_query_log_config(&mut self, config: QueryLogConfig) {
-        self.query_log = config;
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 

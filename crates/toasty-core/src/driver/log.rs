@@ -31,9 +31,9 @@ const MAX_LIST_ITEMS: usize = 8;
 
 /// Configuration for the per-query `toasty::query` tracing event.
 ///
-/// Set on `Db::builder()` and handed to each driver connection by the
-/// connection pool via
-/// [`Connection::set_query_log_config`](super::Connection::set_query_log_config).
+/// Set on `Db::builder()` and handed to each driver connection at creation
+/// time through the [`ConnectContext`](super::ConnectContext) passed to
+/// [`Driver::connect`](super::Driver::connect).
 #[derive(Debug, Clone, Copy)]
 pub struct QueryLogConfig {
     /// Include bound parameter values in the event. Off by default:

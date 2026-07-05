@@ -25,7 +25,8 @@ use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, QueryLogConfig, log::QueryLog, operation::Operation,
+        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig, log::QueryLog,
+        operation::Operation,
     },
     schema::{
         db::{self, Column, ColumnId, Migration, Table},
@@ -91,9 +92,14 @@ impl Driver for DynamoDb {
         &Capability::DYNAMODB
     }
 
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         // Clone the shared client - cheap operation (Client uses Arc internally)
-        Ok(Box::new(Connection::new(self.client.clone())))
+        let mut connection = Connection::new(self.client.clone());
+        connection.query_log = cx.query_log;
+        Ok(Box::new(connection))
     }
 
     fn generate_migration(&self, _schema_diff: &diff::Schema<'_>) -> Migration {
@@ -171,10 +177,6 @@ fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    fn set_query_log_config(&mut self, config: QueryLogConfig) {
-        self.query_log = config;
-    }
-
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         let log = QueryLog::operation(
             &self.query_log,

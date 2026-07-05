@@ -10,7 +10,7 @@ use std::{
 };
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Connection, Driver, ExecResponse, Operation, Rows},
+    driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation, Rows},
     schema::{
         db::{AppliedMigration, Migration},
         diff,
@@ -138,9 +138,9 @@ impl Driver for InstrumentedDriver {
         self.inner.capability()
     }
 
-    async fn connect(&self) -> Result<Box<dyn Connection>> {
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
         Ok(Box::new(InstrumentedConnection {
-            inner: self.inner.connect().await?,
+            inner: self.inner.connect(cx).await?,
             handle: self.handle.clone(),
             valid: AtomicBool::new(true),
         }))

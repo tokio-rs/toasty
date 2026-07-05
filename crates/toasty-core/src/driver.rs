@@ -74,6 +74,25 @@ use async_trait::async_trait;
 
 use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
+/// Per-connection configuration passed to [`Driver::connect`].
+///
+/// The connection pool builds one from the values set on `Db::builder()` and
+/// hands it to the driver every time a new connection is created, so drivers
+/// can apply configuration at construction time rather than through separate
+/// setters. Callers connecting outside a pool use
+/// [`ConnectContext::default()`].
+///
+/// The struct is non-exhaustive: construct it with `default()` and assign the
+/// fields to override.
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct ConnectContext {
+    /// Configuration for the per-query `toasty::query` tracing event (see
+    /// [`log`]). Drivers that emit the event store this on the connection
+    /// and consult it on every operation.
+    pub query_log: QueryLogConfig,
+}
+
 /// Factory for database connections and provider of driver-level metadata.
 ///
 /// Each database backend (SQLite, PostgreSQL, MySQL, DynamoDB) implements this
@@ -92,7 +111,7 @@ use std::{borrow::Cow, fmt::Debug, sync::Arc};
 /// let capability = driver.capability();
 /// assert!(capability.sql);
 ///
-/// let conn = driver.connect().await.unwrap();
+/// let conn = driver.connect(&ConnectContext::default()).await.unwrap();
 /// ```
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
@@ -105,8 +124,9 @@ pub trait Driver: Debug + Send + Sync + 'static {
     /// Creates a new connection to the database.
     ///
     /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is
-    /// available and there is room to create a new [`Connection`].
-    async fn connect(&self) -> crate::Result<Box<dyn Connection>>;
+    /// available and there is room to create a new [`Connection`]. The [`ConnectContext`] carries
+    /// per-connection configuration the driver applies at construction time.
+    async fn connect(&self, cx: &ConnectContext) -> crate::Result<Box<dyn Connection>>;
 
     /// Returns the maximum number of simultaneous database connections supported. For example,
     /// this is `Some(1)` for the in-memory SQLite driver which cannot be pooled.
@@ -147,14 +167,6 @@ pub trait Connection: Debug + Send + 'static {
     /// dispatches them here. The driver translates each operation into
     /// backend-specific calls and returns an [`ExecResponse`].
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
-
-    /// Applies the per-query tracing configuration.
-    ///
-    /// Called once by the connection pool when it creates the connection,
-    /// with the values set on `Db::builder()`. Drivers that emit the
-    /// `toasty::query` event (see [`log`]) store the config and consult it
-    /// on every operation; the default implementation ignores it.
-    fn set_query_log_config(&mut self, _config: QueryLogConfig) {}
 
     /// Cheap, synchronous, local check that the driver's client object
     /// still considers the connection open.

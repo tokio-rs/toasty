@@ -8,7 +8,7 @@ use std::{
     },
     time::Duration,
 };
-use toasty_core::driver::{Capability, Driver, QueryLogConfig};
+use toasty_core::driver::{Capability, ConnectContext, Driver, QueryLogConfig};
 use tokio::{sync::Notify, task::JoinHandle};
 
 use super::connection_task::{ConnectionHandle, ConnectionOperation};
@@ -97,6 +97,9 @@ impl Pool {
 
         let sweep_waker = Arc::new(SweepWaker::new());
 
+        let mut connect_cx = ConnectContext::default();
+        connect_cx.query_log = config.query_log;
+
         let inner = deadpool::managed::Pool::builder(Manager {
             driver: Box::new(driver),
             engine,
@@ -104,7 +107,7 @@ impl Pool {
             pre_ping: config.pre_ping,
             max_connection_lifetime: config.max_connection_lifetime,
             max_connection_idle_time: config.max_connection_idle_time,
-            query_log: config.query_log,
+            connect_cx,
         })
         .runtime(deadpool::Runtime::Tokio1)
         .max_size(effective_max)
@@ -174,7 +177,9 @@ pub(super) struct Manager {
     pre_ping: bool,
     max_connection_lifetime: Option<Duration>,
     max_connection_idle_time: Option<Duration>,
-    query_log: QueryLogConfig,
+    /// Per-connection configuration handed to `Driver::connect` for every
+    /// connection the pool creates.
+    connect_cx: ConnectContext,
 }
 
 impl std::fmt::Debug for Manager {
@@ -191,10 +196,13 @@ impl deadpool::managed::Manager for Manager {
 
     async fn create(&self) -> Result<Self::Type, Self::Error> {
         tracing::debug!("creating new pooled connection");
-        let mut connection = self.driver.connect().await.inspect_err(|e| {
-            tracing::debug!(error = %e, "failed to create database connection");
-        })?;
-        connection.set_query_log_config(self.query_log);
+        let connection = self
+            .driver
+            .connect(&self.connect_cx)
+            .await
+            .inspect_err(|e| {
+                tracing::debug!(error = %e, "failed to create database connection");
+            })?;
         Ok(ConnectionHandle::spawn(
             connection,
             self.engine.clone(),
