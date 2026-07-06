@@ -36,10 +36,6 @@ use error::classify_turso_error;
 /// `turso` crate so callers don't need a direct dependency on it.
 pub use turso::EncryptionOpts;
 
-/// Turso Sync featueres.
-#[cfg(feature = "sync")]
-pub mod sync;
-
 use async_trait::async_trait;
 use std::{
     borrow::Cow,
@@ -61,7 +57,11 @@ use toasty_core::{
 };
 use toasty_sql::{self as sql};
 use tokio::sync::Mutex;
-use turso::{Builder, Connection as TursoConn, Database, Statement, Value as TursoValue};
+#[cfg(feature = "sync")]
+use turso::sync::{Builder, Database};
+#[cfg(not(feature = "sync"))]
+use turso::{Builder, Database};
+use turso::{Connection as TursoConn, Statement, Value as TursoValue};
 use url::Url;
 
 enum SqlReturn {
@@ -114,8 +114,12 @@ struct BuilderOptions {
     vacuum: bool,
     multiprocess_wal: bool,
     without_rowid: bool,
+
+    #[cfg(feature = "sync")]
+    remote_url: Option<String>,
 }
 
+#[cfg(not(feature = "sync"))]
 impl BuilderOptions {
     fn apply(&self, mut b: Builder) -> Builder {
         if let Some(opts) = &self.encryption {
@@ -154,115 +158,16 @@ impl BuilderOptions {
     }
 }
 
-#[derive(Clone)]
-struct TursoBase {
-    path: TursoPath,
-    concurrent_writes: bool,
-}
-
-impl TursoBase {
-    fn from_url(url: impl Into<String>) -> Result<Self> {
-        let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if url.scheme() != "turso" {
-            return Err(toasty_core::Error::invalid_connection_url(format!(
-                "connection URL does not have a `turso` scheme; url={url_str}"
-            )));
+#[cfg(feature = "sync")]
+impl BuilderOptions {
+    fn apply(&self, mut b: Builder) -> Builder {
+        if let Some(remote_url) = &self.remote_url {
+            b = b.with_remote_url(remote_url)
         }
-
-        let path = if url.path() == ":memory:" {
-            TursoPath::InMemory
-        } else {
-            TursoPath::File(PathBuf::from(
-                percent_encoding::percent_decode(url.path().as_bytes())
-                    .decode_utf8_lossy()
-                    .to_string()
-                    .as_str(),
-            ))
-        };
-
-        Ok(Self::with_path(path))
-    }
-
-    fn in_memory() -> Self {
-        Self::with_path(TursoPath::InMemory)
-    }
-
-    fn file(path: impl AsRef<Path>) -> Self {
-        Self::with_path(TursoPath::File(path.as_ref().to_path_buf()))
-    }
-
-    fn capability() -> &'static Capability {
-        &Capability::TURSO
-    }
-
-    fn concurrent_writes(mut self) -> Self {
-        self.concurrent_writes = true;
-        self
-    }
-
-    fn url(&self) -> Cow<'_, str> {
-        match &self.path {
-            TursoPath::InMemory => Cow::Borrowed("turso::memory:"),
-            TursoPath::File(path) => Cow::Owned(format!("turso:{}", path.display())),
+        if self.index_method {
+            b = b.experimental_index_method(true);
         }
-    }
-
-    fn path_str(&self) -> &str {
-        match &self.path {
-            TursoPath::File(p) => p.to_str().unwrap_or(":memory:"),
-            TursoPath::InMemory => ":memory:",
-        }
-    }
-
-    fn with_path(path: TursoPath) -> Self {
-        Self {
-            path,
-            concurrent_writes: false,
-        }
-    }
-
-    async fn connect(&self, conn: TursoConn) -> Result<Box<dyn toasty_core::Connection>> {
-        if self.concurrent_writes {
-            conn.pragma_update("journal_mode", "'mvcc'")
-                .await
-                .map_err(classify_turso_error)?;
-        }
-        Ok(Box::new(Connection {
-            conn,
-            default_begin_sql: if self.concurrent_writes {
-                "BEGIN CONCURRENT"
-            } else {
-                "BEGIN"
-            },
-        }))
-    }
-
-    fn generate_migration(schema_diff: &diff::Schema<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql_with_breakpoints(&sql_strings)
-    }
-
-    async fn reset_db<T>(database: &Mutex<Option<T>>, path: &TursoPath) -> Result<()> {
-        // Drop the cached Database so subsequent `connect()` calls open a
-        // fresh one. For in-memory this is the only way to wipe state;
-        // for file-backed databases the file is also removed below.
-        database.lock().await.take();
-
-        if let TursoPath::File(path) = path
-            && path.exists()
-        {
-            std::fs::remove_file(path).map_err(toasty_core::Error::driver_operation_failed)?;
-        }
-
-        Ok(())
+        b
     }
 }
 
@@ -291,15 +196,17 @@ impl TursoBase {
 ///     })
 ///     .experimental_attach(true);
 /// ```
+#[derive(Clone)]
 pub struct Turso {
-    base: TursoBase,
+    path: TursoPath,
     options: BuilderOptions,
+    concurrent_writes: bool,
     /// Shared `turso::Database` reused across every `connect()` call so that
     /// all pool slots see the same underlying database. Without this, each
     /// connection to `:memory:` would open a fresh empty database; even
     /// file-backed handles open faster after the first builder run.
     /// Cleared by [`Driver::reset_db`] so the next `connect()` starts fresh.
-    database: Mutex<Option<Database>>,
+    database: Arc<Mutex<Option<Database>>>,
 }
 
 impl Turso {
@@ -308,21 +215,72 @@ impl Turso {
     /// The URL scheme must be `turso` (e.g. `turso::memory:` or
     /// `turso:/path/to/db`).
     pub fn new(url: impl Into<String>) -> Result<Self> {
-        Ok(Self {
-            base: TursoBase::from_url(url)?,
-            options: BuilderOptions::default(),
-            database: Mutex::new(None),
-        })
+        let url_str = url.into();
+        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+
+        if url.scheme() != "turso" {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "connection URL does not have a `turso` scheme; url={url_str}"
+            )));
+        }
+
+        let path = if url.path() == ":memory:" {
+            TursoPath::InMemory
+        } else {
+            TursoPath::File(PathBuf::from(
+                percent_encoding::percent_decode(url.path().as_bytes())
+                    .decode_utf8_lossy()
+                    .to_string()
+                    .as_str(),
+            ))
+        };
+        Ok(Self::with_path(path))
     }
 
     /// Create an in-memory Turso database.
     pub fn in_memory() -> Self {
-        TursoBase::in_memory().into()
+        Self::with_path(TursoPath::InMemory)
     }
 
     /// Open a Turso database at the specified file path.
-    pub fn file(path: impl AsRef<Path>) -> Self {
-        TursoBase::file(path).into()
+    pub fn file<P: AsRef<Path>>(path: P) -> Self {
+        Self::with_path(TursoPath::File(path.as_ref().to_path_buf()))
+    }
+
+    fn with_path(path: TursoPath) -> Self {
+        Self {
+            path,
+            options: BuilderOptions::default(),
+            concurrent_writes: false,
+            database: Arc::new(Mutex::new(None)),
+        }
+    }
+
+    /// Set remote_url for HTTP requests.
+    #[cfg(feature = "sync")]
+    pub fn with_remote_url(mut self, remote_url: impl Into<String>) -> Self {
+        self.options.remote_url = Some(remote_url.into());
+        self
+    }
+
+    /// Push local changes to the remote.
+    #[cfg(feature = "sync")]
+    pub async fn push(&self) -> Result<()> {
+        self.database()
+            .await?
+            .push()
+            .await
+            .map_err(classify_turso_error)
+    }
+
+    /// Pull remote changes; returns true if any changes were applied.
+    #[cfg(feature = "sync")]
+    pub async fn pull(&self) -> Result<bool> {
+        self.database()
+            .await?
+            .pull()
+            .await
+            .map_err(classify_turso_error)
     }
 
     /// Allow transactions to run concurrently instead of serializing on a
@@ -340,11 +298,9 @@ impl Turso {
     /// [`TransactionMode`](toasty_core::driver::operation::TransactionMode):
     /// `Deferred` falls back to plain `BEGIN`, while `Immediate` and
     /// `Exclusive` issue `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE` respectively.
-    pub fn concurrent_writes(self) -> Self {
-        Self {
-            base: self.base.concurrent_writes(),
-            ..self
-        }
+    pub fn concurrent_writes(mut self) -> Self {
+        self.concurrent_writes = true;
+        self
     }
 
     /// Enable Turso's experimental encryption with the given cipher and
@@ -412,6 +368,13 @@ impl Turso {
         self
     }
 
+    fn path_str(&self) -> &str {
+        match &self.path {
+            TursoPath::File(p) => p.to_str().unwrap_or(":memory:"),
+            TursoPath::InMemory => ":memory:",
+        }
+    }
+
     /// Returns the cached `turso::Database`, opening it on first use.
     ///
     /// All connections handed out by [`Driver::connect`] go through the
@@ -423,28 +386,23 @@ impl Turso {
         if let Some(db) = slot.as_ref() {
             return Ok(db.clone());
         }
-        let builder = self.options.apply(Builder::new_local(self.base.path_str()));
+
+        #[cfg(not(feature = "sync"))]
+        let builder = self.options.apply(Builder::new_local(self.path_str()));
+        #[cfg(feature = "sync")]
+        let builder = self.options.apply(Builder::new_remote(self.path_str()));
+
         let db = builder.build().await.map_err(classify_turso_error)?;
         *slot = Some(db.clone());
         Ok(db)
     }
 }
 
-impl From<TursoBase> for Turso {
-    fn from(base: TursoBase) -> Self {
-        Self {
-            base,
-            options: BuilderOptions::default(),
-            database: Mutex::new(None),
-        }
-    }
-}
-
 impl fmt::Debug for Turso {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("Turso")
-            .field("path", &self.base.path)
-            .field("concurrent_writes", &self.base.concurrent_writes)
+            .field("path", &self.path)
+            .field("concurrent_writes", &self.concurrent_writes)
             .field("options", &self.options)
             .finish_non_exhaustive()
     }
@@ -453,25 +411,68 @@ impl fmt::Debug for Turso {
 #[async_trait]
 impl Driver for Turso {
     fn url(&self) -> Cow<'_, str> {
-        self.base.url()
+        match &self.path {
+            TursoPath::InMemory => Cow::Borrowed("turso::memory:"),
+            TursoPath::File(path) => Cow::Owned(format!("turso:{}", path.display())),
+        }
     }
 
     fn capability(&self) -> &'static Capability {
-        TursoBase::capability()
+        &Capability::TURSO
     }
 
     async fn connect(&self) -> Result<Box<dyn toasty_core::Connection>> {
-        let database = self.database().await?;
-        let conn = database.connect().map_err(classify_turso_error)?;
-        self.base.connect(conn).await
+        let db = self.database().await?;
+
+        #[cfg(not(feature = "sync"))]
+        let conn = db.connect().map_err(classify_turso_error)?;
+        #[cfg(feature = "sync")]
+        let conn = db.connect().await.map_err(classify_turso_error)?;
+
+        if self.concurrent_writes {
+            // `PRAGMA journal_mode = ...` returns the new mode as a row; the
+            // `execute` path errors with "unexpected row during execution"
+            // on any pragma that emits one. Use `pragma_update` so the row
+            // is consumed.
+            conn.pragma_update("journal_mode", "'mvcc'")
+                .await
+                .map_err(classify_turso_error)?;
+        }
+
+        Ok(Box::new(Connection {
+            conn,
+            default_begin_sql: if self.concurrent_writes {
+                "BEGIN CONCURRENT"
+            } else {
+                "BEGIN"
+            },
+        }))
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        TursoBase::generate_migration(schema_diff)
+        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::SQLITE);
+
+        let sql_strings: Vec<String> = statements
+            .iter()
+            .map(|stmt| sql::Serializer::sqlite(stmt.schema()).serialize(stmt.statement()))
+            .collect();
+
+        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
     async fn reset_db(&self) -> Result<()> {
-        TursoBase::reset_db(&self.database, &self.base.path).await
+        // Drop the cached Database so subsequent `connect()` calls open a
+        // fresh one. For in-memory this is the only way to wipe state;
+        // for file-backed databases the file is also removed below.
+        self.database.lock().await.take();
+
+        if let TursoPath::File(path) = &self.path
+            && path.exists()
+        {
+            std::fs::remove_file(path).map_err(toasty_core::Error::driver_operation_failed)?;
+        }
+
+        Ok(())
     }
 }
 
@@ -723,7 +724,7 @@ mod tests {
 
     /// The file path `Turso::new` resolves out of a `turso:` URL.
     fn file_path(url: &str) -> PathBuf {
-        match Turso::new(url).unwrap().base.path {
+        match Turso::new(url).unwrap().path {
             TursoPath::File(path) => path,
             TursoPath::InMemory => panic!("expected a file-backed database for {url}"),
         }
@@ -754,7 +755,7 @@ mod tests {
     #[test]
     fn new_memory_url_stays_in_memory() {
         assert!(matches!(
-            Turso::new("turso::memory:").unwrap().base.path,
+            Turso::new("turso::memory:").unwrap().path,
             TursoPath::InMemory
         ));
     }
