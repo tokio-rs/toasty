@@ -17,6 +17,11 @@ impl Value {
         self.0
     }
 
+    /// Returns a reference to the wrapped core Toasty value.
+    pub(crate) fn inner(&self) -> &CoreValue {
+        &self.0
+    }
+
     /// Converts a MySQL value within a row to a Toasty value.
     pub(crate) fn from_sql(i: usize, row: &mut Row, column: &Column, ty: &stmt::Type) -> Self {
         let value = take_mysql_value(row, i);

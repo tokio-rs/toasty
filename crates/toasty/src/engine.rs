@@ -72,8 +72,6 @@ impl Engine {
         stmt: Statement,
         in_transaction: bool,
     ) -> Result<toasty_core::driver::ExecResponse> {
-        tracing::debug!(stmt.kind = stmt.name(), "executing statement");
-
         self.verify(&stmt)?;
 
         // Lower the statement to High-level intermediate representation
@@ -104,8 +102,6 @@ impl Engine {
                 "raw SQL is only supported by SQL drivers",
             ));
         }
-
-        tracing::debug!("executing raw SQL");
 
         connection.exec(&self.schema, raw.into()).await
     }

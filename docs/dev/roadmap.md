@@ -156,9 +156,10 @@ the entry lands here.
 
 ## Observability
 
-- Query logging — `tracing` debug / trace output from the engine ([#254])
-
-[#254]: https://github.com/tokio-rs/toasty/issues/254
+- Per-query row counts for key-value drivers — the `toasty::query` event
+  reports `rows` for SQL drivers and count-style responses; DynamoDB
+  streaming responses do not report a count yet
+- OpenTelemetry span-per-statement export helpers
 
 ## Safety
 
