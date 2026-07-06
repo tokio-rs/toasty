@@ -72,47 +72,43 @@
 <a href=#72 id=72 data-nosnippet>72</a>        stmt: Statement,
 <a href=#73 id=73 data-nosnippet>73</a>        in_transaction: bool,
 <a href=#74 id=74 data-nosnippet>74</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;toasty_core::driver::ExecResponse&gt; {
-<a href=#75 id=75 data-nosnippet>75</a>        <span class="macro">tracing::debug!</span>(stmt.kind = stmt.name(), <span class="string">"executing statement"</span>);
+<a href=#75 id=75 data-nosnippet>75</a>        <span class="self">self</span>.verify(<span class="kw-2">&amp;</span>stmt)<span class="question-mark">?</span>;
 <a href=#76 id=76 data-nosnippet>76</a>
-<a href=#77 id=77 data-nosnippet>77</a>        <span class="self">self</span>.verify(<span class="kw-2">&amp;</span>stmt)<span class="question-mark">?</span>;
-<a href=#78 id=78 data-nosnippet>78</a>
-<a href=#79 id=79 data-nosnippet>79</a>        <span class="comment">// Lower the statement to High-level intermediate representation
-<a href=#80 id=80 data-nosnippet>80</a>        </span><span class="kw">let </span>hir = <span class="self">self</span>.lower_stmt(stmt)<span class="question-mark">?</span>;
-<a href=#81 id=81 data-nosnippet>81</a>
-<a href=#82 id=82 data-nosnippet>82</a>        <span class="comment">// Translate the optimized statement into a series of driver operations.
-<a href=#83 id=83 data-nosnippet>83</a>        </span><span class="kw">let </span>plan = <span class="self">self</span>.plan_hir_statement(hir)<span class="question-mark">?</span>;
-<a href=#84 id=84 data-nosnippet>84</a>
-<a href=#85 id=85 data-nosnippet>85</a>        <span class="macro">tracing::trace!</span>(
-<a href=#86 id=86 data-nosnippet>86</a>            actions = plan.actions.len(),
-<a href=#87 id=87 data-nosnippet>87</a>            needs_transaction = plan.needs_transaction,
-<a href=#88 id=88 data-nosnippet>88</a>            <span class="string">"execution plan ready"
-<a href=#89 id=89 data-nosnippet>89</a>        </span>);
-<a href=#90 id=90 data-nosnippet>90</a>
-<a href=#91 id=91 data-nosnippet>91</a>        <span class="comment">// The plan is called once (single entry record stream) with no arguments
-<a href=#92 id=92 data-nosnippet>92</a>        // (empty record).
-<a href=#93 id=93 data-nosnippet>93</a>        </span><span class="self">self</span>.exec_plan(connection, plan, in_transaction).<span class="kw">await
-<a href=#94 id=94 data-nosnippet>94</a>    </span>}
-<a href=#95 id=95 data-nosnippet>95</a>
-<a href=#96 id=96 data-nosnippet>96</a>    <span class="doccomment">/// Executes user-authored SQL through the driver SQL path.
-<a href=#97 id=97 data-nosnippet>97</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>exec_raw_sql(
-<a href=#98 id=98 data-nosnippet>98</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#99 id=99 data-nosnippet>99</a>        connection: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Connection,
-<a href=#100 id=100 data-nosnippet>100</a>        raw: RawSql,
-<a href=#101 id=101 data-nosnippet>101</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;toasty_core::driver::ExecResponse&gt; {
-<a href=#102 id=102 data-nosnippet>102</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.sql {
-<a href=#103 id=103 data-nosnippet>103</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::unsupported_feature(
-<a href=#104 id=104 data-nosnippet>104</a>                <span class="string">"raw SQL is only supported by SQL drivers"</span>,
-<a href=#105 id=105 data-nosnippet>105</a>            ));
-<a href=#106 id=106 data-nosnippet>106</a>        }
-<a href=#107 id=107 data-nosnippet>107</a>
-<a href=#108 id=108 data-nosnippet>108</a>        <span class="macro">tracing::debug!</span>(<span class="string">"executing raw SQL"</span>);
-<a href=#109 id=109 data-nosnippet>109</a>
-<a href=#110 id=110 data-nosnippet>110</a>        connection.exec(<span class="kw-2">&amp;</span><span class="self">self</span>.schema, raw.into()).<span class="kw">await
-<a href=#111 id=111 data-nosnippet>111</a>    </span>}
-<a href=#112 id=112 data-nosnippet>112</a>
-<a href=#113 id=113 data-nosnippet>113</a>    <span class="doccomment">/// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.
-<a href=#114 id=114 data-nosnippet>114</a>    </span><span class="kw">fn </span>expr_cx_for&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, target: <span class="kw">impl </span>stmt::IntoExprTarget&lt;<span class="lifetime">'a</span>&gt;) -&gt; stmt::ExprContext&lt;<span class="lifetime">'a</span>&gt; {
-<a href=#115 id=115 data-nosnippet>115</a>        stmt::ExprContext::new_with_target(<span class="kw-2">&amp;</span><span class="self">self</span>.schema, target)
-<a href=#116 id=116 data-nosnippet>116</a>    }
-<a href=#117 id=117 data-nosnippet>117</a>}
+<a href=#77 id=77 data-nosnippet>77</a>        <span class="comment">// Lower the statement to High-level intermediate representation
+<a href=#78 id=78 data-nosnippet>78</a>        </span><span class="kw">let </span>hir = <span class="self">self</span>.lower_stmt(stmt)<span class="question-mark">?</span>;
+<a href=#79 id=79 data-nosnippet>79</a>
+<a href=#80 id=80 data-nosnippet>80</a>        <span class="comment">// Translate the optimized statement into a series of driver operations.
+<a href=#81 id=81 data-nosnippet>81</a>        </span><span class="kw">let </span>plan = <span class="self">self</span>.plan_hir_statement(hir)<span class="question-mark">?</span>;
+<a href=#82 id=82 data-nosnippet>82</a>
+<a href=#83 id=83 data-nosnippet>83</a>        <span class="macro">tracing::trace!</span>(
+<a href=#84 id=84 data-nosnippet>84</a>            actions = plan.actions.len(),
+<a href=#85 id=85 data-nosnippet>85</a>            needs_transaction = plan.needs_transaction,
+<a href=#86 id=86 data-nosnippet>86</a>            <span class="string">"execution plan ready"
+<a href=#87 id=87 data-nosnippet>87</a>        </span>);
+<a href=#88 id=88 data-nosnippet>88</a>
+<a href=#89 id=89 data-nosnippet>89</a>        <span class="comment">// The plan is called once (single entry record stream) with no arguments
+<a href=#90 id=90 data-nosnippet>90</a>        // (empty record).
+<a href=#91 id=91 data-nosnippet>91</a>        </span><span class="self">self</span>.exec_plan(connection, plan, in_transaction).<span class="kw">await
+<a href=#92 id=92 data-nosnippet>92</a>    </span>}
+<a href=#93 id=93 data-nosnippet>93</a>
+<a href=#94 id=94 data-nosnippet>94</a>    <span class="doccomment">/// Executes user-authored SQL through the driver SQL path.
+<a href=#95 id=95 data-nosnippet>95</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">async fn </span>exec_raw_sql(
+<a href=#96 id=96 data-nosnippet>96</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#97 id=97 data-nosnippet>97</a>        connection: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>Connection,
+<a href=#98 id=98 data-nosnippet>98</a>        raw: RawSql,
+<a href=#99 id=99 data-nosnippet>99</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;toasty_core::driver::ExecResponse&gt; {
+<a href=#100 id=100 data-nosnippet>100</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.sql {
+<a href=#101 id=101 data-nosnippet>101</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::unsupported_feature(
+<a href=#102 id=102 data-nosnippet>102</a>                <span class="string">"raw SQL is only supported by SQL drivers"</span>,
+<a href=#103 id=103 data-nosnippet>103</a>            ));
+<a href=#104 id=104 data-nosnippet>104</a>        }
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a>        connection.exec(<span class="kw-2">&amp;</span><span class="self">self</span>.schema, raw.into()).<span class="kw">await
+<a href=#107 id=107 data-nosnippet>107</a>    </span>}
+<a href=#108 id=108 data-nosnippet>108</a>
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="doccomment">/// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.
+<a href=#110 id=110 data-nosnippet>110</a>    </span><span class="kw">fn </span>expr_cx_for&lt;<span class="lifetime">'a</span>&gt;(<span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="self">self</span>, target: <span class="kw">impl </span>stmt::IntoExprTarget&lt;<span class="lifetime">'a</span>&gt;) -&gt; stmt::ExprContext&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#111 id=111 data-nosnippet>111</a>        stmt::ExprContext::new_with_target(<span class="kw-2">&amp;</span><span class="self">self</span>.schema, target)
+<a href=#112 id=112 data-nosnippet>112</a>    }
+<a href=#113 id=113 data-nosnippet>113</a>}
 </code></pre></div></section></main></body></html>

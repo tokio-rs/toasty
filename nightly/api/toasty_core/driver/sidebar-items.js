@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"enum":["Rows","SqlPlaceholder"],"mod":["operation"],"struct":["Capability","ExecResponse","SchemaMutations","StorageTypes"],"trait":["Connection","Driver"]};
+window.SIDEBAR_ITEMS = {"enum":["Rows","SqlPlaceholder"],"mod":["log","operation"],"struct":["Capability","ConnectContext","ExecResponse","SchemaMutations","StorageTypes"],"trait":["Connection","Driver"]};

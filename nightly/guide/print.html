@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-55643995.js";
+            window.path_to_searchindex_js = "searchindex-abd53f8e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -3321,7 +3321,7 @@ a comparison (<code>.gt()</code>, <code>.eq()</code>, …) to form a predicate.<
 <code>= ANY(col)</code>, <code>cardinality</code>). On document-backed drivers the engine
 substitutes equivalent JSON or list operations. A few carry
 backend-specific restrictions — see the per-database pages (for
-example, <a href="#dynamodb-1">DynamoDB</a>, where <code>is_superset</code> and
+example, <a href="#dynamodb">DynamoDB</a>, where <code>is_superset</code> and
 <code>intersects</code> require a literal right-hand side).</p>
 <h2 id="updating"><a class="header" href="#updating">Updating</a></h2>
 <h3 id="replacing-the-whole-list"><a class="header" href="#replacing-the-whole-list">Replacing the whole list</a></h3>
@@ -7785,14 +7785,20 @@ across schema changes.</p>
 </blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="tracing"><a class="header" href="#tracing">Tracing</a></h1>
-<p>Toasty emits structured events through the <a href="https://docs.rs/tracing"><code>tracing</code></a> crate. The most
-common reason to enable them is to see the SQL each query produces.
+<p>Toasty emits structured spans and events through the <a href="https://docs.rs/tracing"><code>tracing</code></a> crate.
 Toasty does not print anything by default — install a subscriber in your
 application and the events appear.</p>
-<h2 id="seeing-executed-sql"><a class="header" href="#seeing-executed-sql">Seeing executed SQL</a></h2>
-<p>The SQL drivers emit a <code>tracing::debug!</code> event for every statement they
-send to the database. Install <a href="https://docs.rs/tracing-subscriber"><code>tracing-subscriber</code></a> with the
-<code>env-filter</code> feature and run with <code>RUST_LOG=toasty=debug</code>:</p>
+<h2 id="the-query-event"><a class="header" href="#the-query-event">The query event</a></h2>
+<p>Every driver emits one event per database operation, after the operation
+completes, on the target <code>toasty::query</code>. The event carries the statement,
+elapsed time, row count, and outcome, so a single filter shows every
+database round-trip regardless of backend:</p>
+<pre><code class="language-text">DEBUG request:query: toasty::query: query executed duration_ms=0.4 rows=1
+    db.system=sqlite db.statement=SELECT tbl_0_0."id", tbl_0_0."name" FROM
+    "users" AS tbl_0_0 WHERE tbl_0_0."name" = ?1
+</code></pre>
+<p>Install <a href="https://docs.rs/tracing-subscriber"><code>tracing-subscriber</code></a> with the <code>env-filter</code> feature and run with
+<code>RUST_LOG=toasty::query=debug</code>:</p>
 <pre><code class="language-toml">[dependencies]
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 </code></pre>
@@ -7812,62 +7818,180 @@ async fn main() -&gt; toasty::Result&lt;()&gt; {
     // ... queries here ...
     Ok(())
 }</code></pre>
-<p>Run the program with:</p>
-<pre><code class="language-sh">RUST_LOG=toasty=debug cargo run
-</code></pre>
-<p>Each query produces two events. The engine logs the statement kind, and
-the driver logs the SQL it sends:</p>
-<pre><code class="language-text">DEBUG toasty::engine: executing statement stmt.kind="query"
-DEBUG toasty_driver_sqlite: executing SQL db.system="sqlite" db.statement=SELECT tbl_0_0."id", tbl_0_0."name" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" = ?1; params=1
-</code></pre>
-<p>The SQL event carries three fields:</p>
+<p>The event’s fields:</p>
 <div class="table-wrapper">
 <table>
 <thead>
 <tr><th>Field</th><th>Meaning</th></tr>
 </thead>
 <tbody>
-<tr><td><code>db.system</code></td><td>Driver that ran the statement: <code>sqlite</code>, <code>turso</code>, <code>postgresql</code>, or <code>mysql</code>.</td></tr>
-<tr><td><code>db.statement</code></td><td>The serialized SQL, with <code>?N</code> (SQLite, Turso, MySQL) or <code>$N</code> (PostgreSQL) placeholders for parameters.</td></tr>
-<tr><td><code>params</code></td><td>Number of bound parameters. The values themselves are not logged.</td></tr>
+<tr><td><code>db.system</code></td><td>Backend that ran the operation: <code>sqlite</code>, <code>turso</code>, <code>postgresql</code>, <code>mysql</code>, or <code>dynamodb</code>.</td></tr>
+<tr><td><code>db.statement</code></td><td>The serialized SQL, with <code>?N</code> (SQLite, Turso, MySQL) or <code>$N</code> (PostgreSQL) placeholders. SQL drivers only.</td></tr>
+<tr><td><code>db.operation</code></td><td>The operation name (<code>get_by_key</code>, <code>query_pk</code>, <code>scan</code>, …). Key-value drivers only.</td></tr>
+<tr><td><code>db.collection</code></td><td>The table the operation targets. Key-value drivers only.</td></tr>
+<tr><td><code>db.params</code></td><td>Bound parameter values. Only present when enabled — see <a href="#parameter-values">Parameter values</a>.</td></tr>
+<tr><td><code>duration_ms</code></td><td>Elapsed execution time in milliseconds.</td></tr>
+<tr><td><code>rows</code></td><td>Rows returned or affected, when the driver knows the count.</td></tr>
+<tr><td><code>error</code></td><td>The error, when the operation failed.</td></tr>
 </tbody>
 </table>
 </div>
-<p><code>db.statement</code> is recorded with the <code>Display</code> representation, so the SQL
-appears bare in the default <code>fmt</code> subscriber — no surrounding quotes,
-no escaping of the identifier quotes inside.</p>
-<p>Parameter values are passed to the driver as typed bindings and are not
-included in the trace. To inspect a specific parameter, log it from your
-application code.</p>
-<p>The field names follow <a href="https://opentelemetry.io/docs/specs/semconv/database/">OpenTelemetry’s database semantic conventions</a>,
-so subscribers that understand those conventions (for example, an OTLP
-exporter) pick the SQL up without extra mapping.</p>
-<h2 id="filtering-to-one-driver"><a class="header" href="#filtering-to-one-driver">Filtering to one driver</a></h2>
-<p><code>RUST_LOG</code> accepts per-target directives. To see SQL from one driver
-only, filter on its crate:</p>
-<pre><code class="language-sh"># Only PostgreSQL statements
-RUST_LOG=toasty_driver_postgresql=debug cargo run
-
-# Only SQLite statements
-RUST_LOG=toasty_driver_sqlite=debug cargo run
-
-# Only MySQL statements
-RUST_LOG=toasty_driver_mysql=debug cargo run
+<p>The field names follow <a href="https://opentelemetry.io/docs/specs/semconv/database/">OpenTelemetry’s database semantic conventions</a>, so
+subscribers that understand those conventions (for example, an OTLP
+exporter) pick the fields up without extra mapping. <code>db.statement</code> is
+recorded as a string, so the SQL appears bare in the default <code>fmt</code>
+subscriber — no surrounding quotes, no escaping of the identifier quotes
+inside.</p>
+<h2 id="the-query-span"><a class="header" href="#the-query-span">The query span</a></h2>
+<p>Each statement executes inside a <code>toasty::query</code> span named <code>query</code>, with
+two fields:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field</th><th>Meaning</th></tr>
+</thead>
+<tbody>
+<tr><td><code>stmt.kind</code></td><td><code>query</code>, <code>insert</code>, <code>update</code>, <code>delete</code>, or <code>raw_sql</code>.</td></tr>
+<tr><td><code>model</code></td><td>The model the statement targets (e.g. <code>User</code>), when it targets one.</td></tr>
+</tbody>
+</table>
+</div>
+<p>The span is created on the task that calls Toasty, so it is parented to
+whatever span is current there — a per-request span created by axum or
+tower middleware, for example. Toasty executes statements on a dedicated
+worker task per pooled connection; the span is carried across to that task
+and entered there, so query events (and everything else Toasty logs during
+execution) land inside the calling request’s span tree:</p>
+<pre><code class="language-text">DEBUG request{rid=324580}:query{stmt.kind="query" model="User"}: toasty::query: query executed ...
 </code></pre>
-<h2 id="other-events"><a class="header" href="#other-events">Other events</a></h2>
-<p>The <code>info</code> level reports lifecycle events: schema build, database ready,
-and applied migrations. Enable it with <code>RUST_LOG=toasty=info</code>.</p>
-<p>At <code>debug</code>, the engine also dumps the decoded result of each statement
-(<code>Final result from var ...</code>) alongside the SQL event. This is verbose
-on large result sets; filter it out with
-<code>RUST_LOG=toasty=debug,toasty::engine::exec=info</code> if you only want the
-SQL.</p>
-<p>The <code>trace</code> level adds per-operation detail — driver dispatch, execution
-plan size, and transaction begin/commit/rollback. It is verbose; reach
-for it when <code>debug</code> does not show enough.</p>
-<pre><code class="language-sh">RUST_LOG=toasty=trace cargo run
+<h2 id="slow-queries"><a class="header" href="#slow-queries">Slow queries</a></h2>
+<p>When a statement takes at least one second, its query event is emitted at
+<code>WARN</code> instead of <code>DEBUG</code>, so slow queries surface in production logs
+without enabling debug output. Configure the threshold on the builder:</p>
+<pre><code class="language-rust ignore">let db = toasty::Db::builder()
+    .models(toasty::models!(User))
+    // Escalate statements slower than 250ms.
+    .slow_statement_threshold(Some(std::time::Duration::from_millis(250)))
+    .connect("sqlite::memory:")
+    .await?;</code></pre>
+<p>Pass <code>None</code> to disable the escalation.</p>
+<h2 id="parameter-values"><a class="header" href="#parameter-values">Parameter values</a></h2>
+<p>By default the query event does not include bound parameter values —
+they are application data and may contain secrets. Opt in on the builder:</p>
+<pre><code class="language-rust ignore">let db = toasty::Db::builder()
+    .models(toasty::models!(User))
+    .log_statement_params(true)
+    .connect("sqlite::memory:")
+    .await?;</code></pre>
+<p>The values appear in the <code>db.params</code> field, in placeholder order, in a
+bounded form: long strings are truncated, byte blobs are summarized by
+length, and long lists are capped.</p>
+<pre><code class="language-text">DEBUG toasty::query: query executed ... db.statement=SELECT ... WHERE tbl_0_0."name" = ?1 db.params=["Alice"]
 </code></pre>
-<h2 id="dynamodb"><a class="header" href="#dynamodb">DynamoDB</a></h2>
+<p>Enable this only when the log destination is trusted.</p>
+<h2 id="custom-formatting"><a class="header" href="#custom-formatting">Custom formatting</a></h2>
+<p>The query event carries everything as structured fields, so a custom
+<a href="https://docs.rs/tracing-subscriber/latest/tracing_subscriber/layer/trait.Layer.html"><code>Layer</code></a> can reformat it however you like — for example, rendering
+parameter values inline into the SQL for copy-paste into a database
+client. Match on the <code>toasty::query</code> target and read the fields:</p>
+<pre><code class="language-rust ignore">use tracing_subscriber::Layer;
+
+struct SqlLogLayer;
+
+impl&lt;S: tracing::Subscriber&gt; Layer&lt;S&gt; for SqlLogLayer {
+    fn on_event(
+        &amp;self,
+        event: &amp;tracing::Event&lt;'_&gt;,
+        _ctx: tracing_subscriber::layer::Context&lt;'_, S&gt;,
+    ) {
+        if event.metadata().target() != "toasty::query" {
+            return;
+        }
+
+        #[derive(Default)]
+        struct Fields {
+            statement: Option&lt;String&gt;,
+            params: Option&lt;String&gt;,
+            duration_ms: Option&lt;f64&gt;,
+        }
+        impl tracing::field::Visit for Fields {
+            fn record_str(&amp;mut self, field: &amp;tracing::field::Field, value: &amp;str) {
+                match field.name() {
+                    "db.statement" =&gt; self.statement = Some(value.to_string()),
+                    "db.params" =&gt; self.params = Some(value.to_string()),
+                    _ =&gt; {}
+                }
+            }
+            fn record_f64(&amp;mut self, field: &amp;tracing::field::Field, value: f64) {
+                if field.name() == "duration_ms" {
+                    self.duration_ms = Some(value);
+                }
+            }
+            fn record_debug(&amp;mut self, _: &amp;tracing::field::Field, _: &amp;dyn std::fmt::Debug) {}
+        }
+
+        let mut fields = Fields::default();
+        event.record(&amp;mut fields);
+        if let Some(sql) = fields.statement {
+            println!(
+                "SQL ({:.1}ms): {} -- params: {}",
+                fields.duration_ms.unwrap_or(0.0),
+                sql,
+                fields.params.as_deref().unwrap_or("[]"),
+            );
+        }
+    }
+}</code></pre>
+<p>Register it alongside your other layers:</p>
+<pre><code class="language-rust ignore">use tracing_subscriber::layer::SubscriberExt;
+
+let subscriber = tracing_subscriber::registry().with(SqlLogLayer);
+tracing::subscriber::set_global_default(subscriber)?;</code></pre>
+<p>⚠️ If you render parameter values into the SQL string, treat the result as
+debug output only — never execute it. Placeholder substitution is not
+escaping-aware.</p>
+<h2 id="level-policy"><a class="header" href="#level-policy">Level policy</a></h2>
+<p>Toasty assigns levels by audience, so a production filter like
+<code>RUST_LOG=warn,toasty=info</code> stays quiet until something needs attention:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Level</th><th>What it reports</th></tr>
+</thead>
+<tbody>
+<tr><td><code>ERROR</code></td><td>Toasty itself failed in a way it cannot recover from (e.g. the connection pool cannot be built).</td></tr>
+<tr><td><code>WARN</code></td><td>Statements past the slow-statement threshold, and configuration mismatches (e.g. the driver caps the pool below the requested size).</td></tr>
+<tr><td><code>INFO</code></td><td>One-time lifecycle events: schema build, database ready, applied migrations.</td></tr>
+<tr><td><code>DEBUG</code></td><td>One event per query (the <code>toasty::query</code> event), transaction begin/commit/rollback, and pool connection lifecycle: creation, discards, health-check failures.</td></tr>
+<tr><td><code>TRACE</code></td><td>Engine internals: execution plan actions, per-operation driver dispatch, decoded result dumps.</td></tr>
+</tbody>
+</table>
+</div>
+<p>Two principles keep the higher levels quiet:</p>
+<ul>
+<li>Errors that propagate to the caller are reported at <code>DEBUG</code>, not
+<code>ERROR</code> — the caller decides whether they are application errors. This
+covers failed statements (the query event’s <code>error</code> field) and pool
+acquire failures. A unique-constraint violation your code handles is
+not an error worth logging twice.</li>
+<li>The pool recovering from a dead connection — an idle timeout, a
+server restart, a failed ping — is normal operation, not an anomaly,
+so discards and health-check failures log at <code>DEBUG</code>.</li>
+</ul>
+<h2 id="filtering"><a class="header" href="#filtering">Filtering</a></h2>
+<p><code>RUST_LOG</code> accepts per-target directives:</p>
+<pre><code class="language-sh"># Just the per-query events
+RUST_LOG=toasty::query=debug cargo run
+
+# Everything Toasty logs at debug, but only PostgreSQL internals at trace
+RUST_LOG=toasty=debug,toasty_driver_postgresql=trace cargo run
+
+# Lifecycle only
+RUST_LOG=toasty=info cargo run
+</code></pre>
+<p>All drivers emit the query event on the same <code>toasty::query</code> target; use
+the <code>db.system</code> field to tell backends apart in an application that uses
+more than one.</p>
 <p>The DynamoDB driver does not run SQL, but it emits <code>tracing::trace!</code>
 events for each item operation it performs (<code>getting single item</code>,
 <code>querying primary key</code>, <code>batch inserting items</code>, and so on) with the
@@ -8711,7 +8835,7 @@ emits the same SQLite-compatible DDL as the SQLite driver, including
 the same six-step rebuild for unsupported <code>ALTER COLUMN</code>s. See
 <a href="#migrations-2">SQLite migrations</a> for the mechanics.</p>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="dynamodb-1"><a class="header" href="#dynamodb-1">DynamoDB</a></h1>
+<h1 id="dynamodb"><a class="header" href="#dynamodb">DynamoDB</a></h1>
 <p>Toasty’s DynamoDB driver uses the official <a href="https://docs.rs/aws-sdk-dynamodb"><code>aws-sdk-dynamodb</code></a> crate.
 DynamoDB is a key-value / document store, not a SQL database, so the
 mapping is meaningfully different from the SQL backends. Most Toasty
