@@ -2,7 +2,7 @@
 
 Addresses [Issue #280](https://github.com/tokio-rs/toasty/issues/280).
 
-Base support for embedded structs and data-carrying enums has shipped. Three
+Base support for embedded structs and data-carrying enums has shipped. Four
 extensions remain, none started except where noted:
 
 1. **Tuple variants** — unnamed variant fields (`Phone(String, String)`).
@@ -10,6 +10,9 @@ extensions remain, none started except where noted:
    several variants carry.
 3. **Within-variant partial updates** — `stmt::patch` on a variant+field path
    (the path machinery exists; variant-gating does not).
+4. **Indexes on shared columns** — `#[index]` / `#[unique]` for a column
+   shared across variants (per-variant columns already support the field-level
+   attributes).
 
 This document designs only what is left. The "Already shipped" section is
 context, kept deliberately short.
@@ -18,7 +21,10 @@ context, kept deliberately short.
 
 CRUD on embedded structs and data-carrying enums, variant filtering, and
 `stmt::patch` on embedded **structs** all work and are covered by the
-`embed_struct.rs` / `embed_enum_*.rs` suites.
+`embed_struct.rs` / `embed_enum_*.rs` suites. Field-level `#[index]` /
+`#[unique]` on a variant field that has its **own** column also works
+(`embed_enum_index.rs`) — the index lands on that variant's nullable column.
+§4 covers only the shared-column case.
 
 ```rust
 // Data-carrying enum, struct variants only (tuple variants rejected today).
@@ -124,18 +130,19 @@ variant; `column_name` (`table.rs:1149`) yields
 
 ### Design
 
-Multiple variants share one column by giving the same `#[column("name")]` to a
-field in each variant. `#[column("name")]` already parses into
-`FieldName::storage` (`model/expand/schema.rs:108`) — nothing merges matching
-names.
+Multiple variants share one column by declaring the same **shared logical
+field** with `#[column(shared = <ident>)]`. The identifier — not a storage
+string — is the unit of sharing: it names the logical field on the enum, and
+everything else derives from it. Variants may use different Rust field names
+for it.
 
 ```rust
 #[derive(toasty::Embed)]
 enum Creature {
     #[column(variant = 1)]
-    Human  { #[column("name")] name: String, profession: String },
+    Human  { #[column(shared = name)] full_name: String, profession: String },
     #[column(variant = 2)]
-    Animal { #[column("name")] name: String, species: String },
+    Animal { #[column(shared = name)] nickname: String, species: String },
 }
 // Columns:
 //   creature                    (discriminator)
@@ -144,40 +151,67 @@ enum Creature {
 //   creature_animal_species
 ```
 
+The identifier drives three things:
+
+- **Column name**, by the normal derivation rule: `{enum_field}_{shared_ident}`
+  → `creature_name`. To target a different column (e.g. a legacy name),
+  combine with the string form: `#[column("b_legacy_old_lol_column", shared =
+  name)]` — the column is renamed, but the logical field is still `name`. The
+  identifier is how user code references the shared field; the column name
+  never appears in Rust code.
+- **Cross-variant accessor name**: `creature().name()`, regardless of the
+  per-variant Rust field names.
+- **Index references**: `#[index(name)]` / `#[unique(name)]` at the enum
+  level (§4).
+
 The shared column is **nullable**: only variants that declare it write a
 value, and readers must tolerate NULL even when every defined variant happens
 to write it.
 
-A field on the enum resolves to the shared column directly, with **no
+The shared logical field resolves to the shared column directly, with **no
 variant gate** — that is the point of sharing, cross-variant queries:
 
 ```rust
 // Any creature named "Bob", regardless of variant.
 Character::all().filter(Character::fields().creature().name().eq("Bob"));
 
-// Variant-specific still uses the gated closure form.
+// Variant-specific still uses the gated closure form; per-variant accessors
+// keep their Rust field names.
 Character::all().filter(
-    Character::fields().creature().human().matches(|h| h.name().eq("Alice"))
+    Character::fields().creature().human().matches(|h| h.full_name().eq("Alice"))
 );
 ```
 
+Two variant fields with matching `#[column("name")]` strings but no `shared`
+do **not** merge — that is a duplicate-column build error. Sharing is always
+explicit.
+
 ### What to change
 
-- **Merge by storage name.** In `map_field_enum` (`table.rs:895`), when two
-  variant fields resolve to the same `storage_name()`, emit a single nullable
-  column instead of one per variant. Each variant's encode/decode path targets
-  that shared column.
-- **Type-compatibility check at schema build.** Fields sharing a column must
-  have the **identical** primitive type. **Decision (resolves prior open
-  question):** v1 requires an exact type match — `i32` in one variant and
-  `i64` in another is a build error, not a silent widen. Silent coercion and
-  an explicit `#[column(type = ...)]` override are out of scope.
+- **Parse `shared = <ident>`** in the per-field `#[column]` attribute
+  (`model/expand/schema.rs:108` parses only the string form today). Both
+  forms compose: `#[column("legacy", shared = name)]`.
+- **Merge by shared identifier.** In `map_field_enum` (`table.rs:895`), when
+  variant fields declare the same `shared` identifier, emit a single nullable
+  column instead of one per variant. Each variant's encode/decode path
+  targets that shared column. Two fields in the **same** variant declaring
+  the same identifier is a build error.
+- **Consistency checks at schema build.** Fields sharing a logical field must
+  agree on: the primitive type (**decision, resolves prior open question:**
+  v1 requires an exact match — `i32` in one variant and `i64` in another is
+  a build error, not a silent widen; coercion and `#[column(type = ...)]`
+  are out of scope), and the column-name override if any variant sets one
+  (one variant saying `#[column("a", shared = name)]` and another
+  `#[column("b", shared = name)]` is a build error).
+- **Name collision check.** The shared identifier must not collide with
+  another shared identifier or with anything else that names an accessor on
+  the enum's fields struct (variant accessors like `human()`).
 - **Cross-variant accessor.** Generate a field accessor on the enum fields
-  struct (`creature().name()`) that produces an **un-gated** model-rooted
-  `Path` to the shared column. This is distinct from the existing
-  `creature().human().name()` accessor, which is variant-rooted and gates on
-  the discriminator. Codegen lives alongside the per-variant accessors in
-  `model/expand/embedded_enum.rs`.
+  struct, named after the shared identifier (`creature().name()`), that
+  produces an **un-gated** model-rooted `Path` to the shared column. This is
+  distinct from the existing `creature().human().full_name()` accessor, which
+  is variant-rooted and gates on the discriminator. Codegen lives alongside
+  the per-variant accessors in `model/expand/embedded_enum.rs`.
 
 ---
 
@@ -260,6 +294,67 @@ column.
 
 ---
 
+## 4. Indexes on shared columns
+
+Field-level `#[index]` / `#[unique]` on a variant field with its own column
+already works (`embed_enum_index.rs`). A shared column (§2) has no single
+declaration site for the attribute: putting it on one variant's field reads as
+variant-scoped when the effect is column-wide, and requiring it on every
+sharing variant is repetitive and invites disagreement.
+
+### Design
+
+Declare the index **once, at the enum level**, referencing the shared logical
+field by its identifier — the same convention as model-level `#[index(field)]`
+attributes, which reference field names, never column names:
+
+```rust
+#[derive(toasty::Embed)]
+#[unique(name)]
+enum Creature {
+    #[column(variant = 1)]
+    Human  { #[column(shared = name)] full_name: String, profession: String },
+    #[column(variant = 2)]
+    Animal { #[column(shared = name)] nickname: String, species: String },
+}
+```
+
+The index covers the whole column — rows of every variant, including NULLs
+from variants that do not declare the field. For `#[unique]` this means
+uniqueness is **cross-variant**: a `Human` named "Bob" and an `Animal` named
+"Bob" conflict. That matches the shared column's query semantics (§2's
+un-gated accessor); a per-variant constraint needs per-variant columns
+instead. Standard SQL NULL semantics apply: rows whose variant does not
+declare the field never conflict.
+
+Enum-level `#[index(...)]` / `#[unique(...)]` may reference:
+
+- a shared logical field (`name` above), or
+- a variant field that has its own column, qualified as
+  `<variant>::<field>` (e.g. `#[index(human::profession)]`) — equivalent to
+  the field-level attribute, provided for composite indexes.
+
+Composite indexes mix both: `#[unique(name, human::profession)]`.
+
+Field-level `#[index]` / `#[unique]` on a field declaring `shared` is a
+build error pointing at the enum-level form — the attribute on one variant
+would silently constrain rows of other variants.
+
+### What to change
+
+- **Parse enum-level `#[index]` / `#[unique]`** on `#[derive(Embed)]` enums.
+  Model-level parsing (`model/schema/model.rs:293`) resolves field names to
+  field offsets; the enum version resolves shared identifiers and
+  `variant::field` paths to the mapped columns.
+- **Reject field-level index attributes on `shared` fields** during macro
+  schema parsing, with an error naming the enum-level equivalent.
+- **Register indices on the embedded enum's app-schema entry** (the
+  `Model::EmbeddedEnum` `indices` list that field-level attributes already
+  populate) so the db-schema builder lowers them to table indices the same
+  way.
+
+---
+
 ## Out of scope
 
 - **Non-newtype tuple structs outside enums.** `#[derive(Embed)]` on a tuple
@@ -271,6 +366,10 @@ column.
 - **Native DynamoDB within-variant patch.** Capability-gated off in v1 (§3).
 - **DynamoDB index shapes for tuple/shared columns.** Both reuse existing
   per-column encoding, so existing GSI rules apply.
+- **Partial (variant-gated) indexes.** An index restricted to one variant's
+  rows (SQL `CREATE INDEX ... WHERE disc = N`) would need partial-index
+  machinery Toasty does not have and has no DynamoDB equivalent. Per-variant
+  uniqueness uses per-variant columns.
 
 ## Alternatives considered (settled, do not revisit)
 
@@ -280,3 +379,18 @@ column.
   typed-path accessors.
 - **JSON-serialized tuple variants** — rejected; blocks per-field indexes and
   filters.
+- **Sharing keyed by matching `#[column("name")]` strings** (an earlier draft
+  of §2) — rejected; the storage string was the column's only identity, so
+  `#[index]` and the cross-variant accessor had nothing to reference except a
+  db column name, breaking the convention that attributes reference field
+  names. `shared = <ident>` names the logical field and derives the column
+  name from it.
+- **Field-level `#[index]` on one sharing variant meaning a column-wide
+  index** — rejected; reads as variant-scoped while silently constraining
+  rows of other variants.
+- **Field-level `#[index]` on one sharing variant meaning a partial
+  (variant-gated) index** — rejected for v1; needs partial-index machinery
+  and a capability gate (no DynamoDB equivalent). See Out of scope.
+- **`#[column("name", as = alias)]`** — an alias bolted onto string-keyed
+  sharing; rejected in favor of `shared = <ident>`, which makes the
+  identifier primary and carries one name instead of two.
