@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["delete_by_partition_key","update_by_partition_key"]};

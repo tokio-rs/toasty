@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["Generated","History","HistoryEntry","Snapshot"]};

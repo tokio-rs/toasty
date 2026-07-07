@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch_all_four_statement_types","batch_instance_delete","batch_two_deletes_same_model","batch_two_updates_same_model","batch_update_and_delete"]};

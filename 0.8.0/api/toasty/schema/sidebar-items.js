@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["from_macro","generate_unique_id"],"mod":["app","db","diff","mapping"],"struct":["Deferred","ModelSet"],"trait":["Auto","Embed","Field","Load","Model","RelationManyField","RelationOneField","Scalar","Scope","ViaManyField","ViaTarget"],"type":["QueryMany","QueryOne","QueryOptionOne","ViaMany","ViaPath"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["belongs_to_with_embed_pk"]};

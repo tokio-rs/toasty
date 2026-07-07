@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["composite_id_uuid","single_id_u64","single_id_uuid"]};

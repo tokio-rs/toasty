@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["pair_hint_create_via_has_many_accessor","pair_hint_disambiguates_has_many"]};

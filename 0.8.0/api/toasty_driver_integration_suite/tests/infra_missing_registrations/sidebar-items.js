@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["missing_registration_belongs_to","missing_registration_embedded","missing_registration_has_many","missing_registration_has_one"]};

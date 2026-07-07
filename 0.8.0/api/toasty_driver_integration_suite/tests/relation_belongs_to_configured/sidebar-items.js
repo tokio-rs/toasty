@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["different_field_name","has_one_different_field_name"]};

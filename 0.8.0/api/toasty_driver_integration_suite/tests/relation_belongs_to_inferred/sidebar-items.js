@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["infers_key_and_references","infers_optional_relation","infers_references_only"]};

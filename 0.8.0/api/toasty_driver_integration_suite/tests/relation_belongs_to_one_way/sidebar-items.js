@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["crud_user_optional_profile_one_direction"]};

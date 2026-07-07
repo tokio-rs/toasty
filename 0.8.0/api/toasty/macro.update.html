@@ -1,0 +1,73 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Expands struct-literal syntax into update-builder method chains. Returns the same builder `target.update()` would return — call `.exec(&#38;mut db).await?` to execute the update."><title>update in toasty - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc macro"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">update</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty/index.html">toasty</a><span class="version">0.8.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">update</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#syntax" title="Syntax">Syntax</a></li><li><a href="#field-shapes" title="Field shapes">Field shapes</a><ul><li><a href="#explicit" title="Explicit">Explicit</a></li><li><a href="#shorthand" title="Shorthand">Shorthand</a></li><li><a href="#method-shorthand" title="Method shorthand">Method shorthand</a></li><li><a href="#embedded-patch" title="Embedded patch">Embedded patch</a></li><li><a href="#has-many-insert" title="Has-many insert">Has-many insert</a></li></ul></li><li><a href="#field-validation" title="Field validation">Field validation</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate toasty</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">toasty</a></div><h1>Macro <span class="macro">update</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty_macros/lib.rs.html#2124">Source</a> </span></div><pre class="rust item-decl"><code>update!() { <span class="comment">/* proc-macro */</span> }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Expands struct-literal syntax into update-builder method chains. Returns
+the same builder <code>target.update()</code> would return — call
+<code>.exec(&amp;mut db).await?</code> to execute the update.</p>
+<h2 id="syntax"><a class="doc-anchor" href="#syntax">§</a>Syntax</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="macro">toasty::update!</span>(target { field: value, ... })</code></pre></div>
+<p><code>target</code> is any expression that has an <code>.update()</code> method — a model
+instance, a query builder, or a scoped relation accessor.</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// Instance target
+</span><span class="macro">toasty::update!</span>(user { name: <span class="string">"Alice Smith" </span>})
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="comment">// Query target
+</span><span class="macro">toasty::update!</span>(User::filter_by_id(id) { name: <span class="string">"Bob" </span>})
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Instance targets do not consume the binding — the macro expands to
+<code>user.update()</code>, which auto-borrows <code>&amp;mut user</code> the same way the
+chain form does. <code>user</code> stays owned after the macro returns.</p>
+<h2 id="field-shapes"><a class="doc-anchor" href="#field-shapes">§</a>Field shapes</h2><h3 id="explicit"><a class="doc-anchor" href="#explicit">§</a>Explicit</h3>
+<p><code>field: expr</code> sets the field to <code>expr</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">toasty::update!</span>(user {
+    name: <span class="string">"Alice Smith"</span>,
+    email: <span class="string">"alice.smith@example.com"</span>,
+}).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p><code>expr</code> is any Rust expression. For collection fields, pass a
+<code>toasty::stmt::*</code> combinator (e.g. <code>stmt::push("x")</code>,
+<code>stmt::apply([...])</code>) for non-set semantics.</p>
+<h3 id="shorthand"><a class="doc-anchor" href="#shorthand">§</a>Shorthand</h3>
+<p><code>field</code> alone is equivalent to <code>field: field</code>, matching Rust struct
+literal shorthand:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">let </span>name = <span class="string">"Alice Smith"</span>;
+<span class="macro">toasty::update!</span>(user { name }).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div><h3 id="method-shorthand"><a class="doc-anchor" href="#method-shorthand">§</a>Method shorthand</h3>
+<p><code>field.combinator(args)</code> is shorthand for
+<code>field: toasty::stmt::combinator(args)</code>. Any function in <code>toasty::stmt</code>
+works; missing functions surface as ordinary “no function” errors:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="comment">// tags.push("rust") expands to tags: stmt::push("rust")
+</span><span class="macro">toasty::update!</span>(article { tags.push(<span class="string">"rust"</span>) })
+    .exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>The shorthand is one method call deep. For chained expressions, use
+the explicit <code>field: expr</code> form.</p>
+<h3 id="embedded-patch"><a class="doc-anchor" href="#embedded-patch">§</a>Embedded patch</h3>
+<p><code>field: { sub: val, ... }</code> partially updates an embedded struct
+field, leaving sub-fields not listed unchanged. Expands to
+<code>stmt::apply([stmt::patch(...), ...])</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">toasty::update!</span>(doc {
+    meta: { version: <span class="number">2</span>, status: <span class="string">"published" </span>},
+}).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Sub-fields nest to arbitrary depth. To replace an embedded value
+wholesale, pass the typed value directly: <code>meta: Metadata { ... }</code>.</p>
+<h3 id="has-many-insert"><a class="doc-anchor" href="#has-many-insert">§</a>Has-many insert</h3>
+<p><code>field: [{ ... }, ...]</code> inserts new children of a has-many relation.
+Each <code>{ ... }</code> becomes a create builder wrapped in
+<code>stmt::insert(...)</code>; the whole list is wrapped in
+<code>stmt::apply([...])</code>:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">toasty::update!</span>(user {
+    todos: [{ title: <span class="string">"buy milk" </span>}, { title: <span class="string">"walk dog" </span>}],
+}).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>Items can also be plain expressions, mixed in with builder
+shorthands — useful for combining inserts and removals:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="macro">toasty::update!</span>(user {
+    todos: [{ title: <span class="string">"new" </span>}, toasty::stmt::remove(<span class="kw-2">&amp;</span>old)],
+}).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div><h2 id="field-validation"><a class="doc-anchor" href="#field-validation">§</a>Field validation</h2>
+<p>The macro emits a method call per named field on the update builder.
+A field name the model does not expose for update fails with the
+compiler’s standard “no method named …” error at the macro call
+site.</p>
+</div></details></section></div></main></body></html>

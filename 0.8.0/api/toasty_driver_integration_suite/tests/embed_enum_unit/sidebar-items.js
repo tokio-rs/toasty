@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["basic_embedded_enum","filter_by_enum_variant","root_model_with_embedded_enum_field"],"mod":["create_and_query_enum"]};
