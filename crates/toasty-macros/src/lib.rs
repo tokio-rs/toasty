@@ -1947,6 +1947,23 @@ pub fn create(input: TokenStream) -> TokenStream {
 /// `user.update()`, which auto-borrows `&mut user` the same way the
 /// chain form does. `user` stays owned after the macro returns.
 ///
+/// Value expressions are evaluated before the target is borrowed, so
+/// they may read the target's own fields:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     done: bool,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut todo: Todo) -> toasty::Result<()> {
+/// toasty::update!(todo { done: !todo.done }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
 /// # Field shapes
 ///
 /// ## Explicit

@@ -205,6 +205,53 @@ pub async fn update_macro_method_shorthand_clear(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
+/// Value expressions may read the target instance's own fields inline
+/// (issue #1073). The macro evaluates values before `.update()` borrows
+/// the target, so `active: !user.active` compiles.
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_active))]
+pub async fn update_macro_value_reads_target_field(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = toasty::create!(User {
+        name: "Carl",
+        age: 30,
+        active: false,
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::update!(user {
+        active: !user.active,
+        age: user.age + 1,
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_struct!(user, _ { active: true, age: 31, .. });
+
+    let reloaded = User::get_by_id(&mut db, &user.id).await?;
+    assert_struct!(reloaded, _ { active: true, age: 31, .. });
+
+    Ok(())
+}
+
+/// Method-shorthand arguments may also read the target instance's own
+/// fields inline (issue #1073).
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+pub async fn update_macro_method_shorthand_reads_target_field(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = User::create().name("carl").exec(&mut db).await?;
+
+    toasty::update!(user { name.set(user.name.to_uppercase()) })
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(user.name, "CARL");
+
+    Ok(())
+}
+
 /// Update through a query builder target — no instance required.
 #[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn update_macro_query_target(test: &mut Test) -> Result<()> {
