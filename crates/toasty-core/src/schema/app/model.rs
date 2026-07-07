@@ -156,9 +156,11 @@ pub struct ModelRoot {
     /// The primary key definition. Root models always have a primary key.
     pub primary_key: PrimaryKey,
 
-    /// Optional explicit table name. When `None`, a name is derived from the
-    /// model name.
-    pub table_name: Option<String>,
+    /// The table this model maps to, before any builder-level prefix is
+    /// applied. Always set by the caller constructing the schema: `#[derive(Model)]`
+    /// derives the default (snake_case + pluralized) name at compile time, or
+    /// uses the explicit `#[table = "..."]` override.
+    pub table_name: String,
 
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,

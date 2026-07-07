@@ -97,6 +97,47 @@ fn or_chain_joins_operands_with_or_keyword() {
     expect!["VALUES ($1 = $2 OR $3 = $4 OR $5 = $6);"].assert_eq(&render_pg(expr));
 }
 
+/// An `OR` nested inside an `AND` must be parenthesized: `OR` binds looser than
+/// `AND`, so `a AND (b OR c)` would otherwise serialize to `a AND b OR c`, which
+/// SQL parses as `(a AND b) OR c` — a different query (issue #1061).
+#[test]
+fn and_parenthesizes_nested_or_operand() {
+    let expr: Expr = ExprAnd {
+        operands: vec![
+            Expr::eq(Expr::arg(0), Expr::arg(1)),
+            ExprOr {
+                operands: vec![
+                    Expr::eq(Expr::arg(2), Expr::arg(3)),
+                    Expr::eq(Expr::arg(4), Expr::arg(5)),
+                ],
+            }
+            .into(),
+        ],
+    }
+    .into();
+    expect!["VALUES ($1 = $2 AND ($3 = $4 OR $5 = $6));"].assert_eq(&render_pg(expr));
+}
+
+/// The mirror case needs no parens: `AND` binds tighter than `OR`, so
+/// `(a AND b) OR c` renders correctly without them.
+#[test]
+fn or_does_not_parenthesize_nested_and_operand() {
+    let expr: Expr = ExprOr {
+        operands: vec![
+            ExprAnd {
+                operands: vec![
+                    Expr::eq(Expr::arg(0), Expr::arg(1)),
+                    Expr::eq(Expr::arg(2), Expr::arg(3)),
+                ],
+            }
+            .into(),
+            Expr::eq(Expr::arg(4), Expr::arg(5)),
+        ],
+    }
+    .into();
+    expect!["VALUES ($1 = $2 AND $3 = $4 OR $5 = $6);"].assert_eq(&render_pg(expr));
+}
+
 // ---------- LIKE family ----------
 
 #[test]

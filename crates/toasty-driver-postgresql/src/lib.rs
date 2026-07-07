@@ -26,7 +26,8 @@ use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse, Operation,
+        Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
+        log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode, TypedValue},
     },
     schema::{
@@ -235,10 +236,13 @@ impl Driver for PostgreSQL {
         &Capability::POSTGRESQL
     }
 
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
-        Ok(Box::new(
-            self.connect_with_config(self.config.clone()).await?,
-        ))
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+        let mut connection = self.connect_with_config(self.config.clone()).await?;
+        connection.query_log = cx.query_log;
+        Ok(Box::new(connection))
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
@@ -320,6 +324,7 @@ pub struct Connection {
     client: Client,
     statement_cache: StatementCache,
     oid_cache: OidCache,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
@@ -329,6 +334,7 @@ impl Connection {
             client,
             statement_cache: StatementCache::new(100),
             oid_cache: OidCache::new(),
+            query_log: QueryLogConfig::default(),
         }
     }
 
@@ -358,8 +364,27 @@ impl Connection {
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
     ) -> Result<ExecResponse> {
-        tracing::debug!(db.system = "postgresql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
+        let mut log = QueryLog::sql(
+            &self.query_log,
+            "postgresql",
+            sql_as_str,
+            typed_params.iter().map(|tv| &tv.value),
+        );
+        let result = self
+            .exec_sql_inner(schema, sql_as_str, typed_params, ret, &mut log)
+            .await;
+        log.finish(&result);
+        result
+    }
 
+    async fn exec_sql_inner(
+        &mut self,
+        schema: &Schema,
+        sql_as_str: &str,
+        typed_params: Vec<TypedValue>,
+        ret: SqlReturn,
+        log: &mut QueryLog<'_>,
+    ) -> Result<ExecResponse> {
         self.oid_cache
             .preload(&self.client, typed_params.iter().map(|tv| &tv.ty))
             .await?;
@@ -397,6 +422,8 @@ impl Connection {
             .query(&statement, &params)
             .await
             .map_err(classify_pg_error)?;
+
+        log.rows(rows.len() as u64);
 
         // Collect eagerly so the per-row decode (which borrows `schema`) runs
         // within this method rather than escaping into the lazy stream.

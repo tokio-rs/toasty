@@ -5,7 +5,9 @@
 #![doc(hidden)]
 
 pub mod auto;
+pub mod index;
 pub mod newtype;
+pub mod shared_column;
 pub mod storage;
 pub mod version;
 pub mod via;

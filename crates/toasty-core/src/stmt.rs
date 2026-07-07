@@ -74,6 +74,9 @@ pub use expr_all_op::ExprAllOp;
 mod expr_and;
 pub use expr_and::ExprAnd;
 
+mod expr_between;
+pub use expr_between::ExprBetween;
+
 mod expr_any;
 pub use expr_any::ExprAny;
 

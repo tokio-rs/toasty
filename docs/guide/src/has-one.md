@@ -400,3 +400,7 @@ generates:
 | `user.update().profile(...)` | Update builder | Replace or associate a profile |
 | `user.update().profile(None)` | Update builder | Disassociate the profile |
 | `User::fields().profile()` | Field path | Used with `.include()` for preloading |
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

@@ -1,4 +1,5 @@
 pub mod account_optional_contact_status;
+pub mod character_creature;
 pub mod company_office_address;
 pub mod composite_chain_relations;
 pub mod composite_fk_has_many_belongs_to;

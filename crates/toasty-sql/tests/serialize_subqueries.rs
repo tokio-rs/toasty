@@ -221,7 +221,7 @@ fn select_with_single_cte() {
             .build(),
     );
 
-    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&render_sqlite(&schema, stmt));
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 AS column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&render_sqlite(&schema, stmt));
 }
 
 #[test]
@@ -259,7 +259,7 @@ fn select_with_multiple_ctes() {
             .build(),
     );
 
-    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0), cte_0_1 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&render_sqlite(&schema, stmt));
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0), cte_0_1 as (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 AS column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&render_sqlite(&schema, stmt));
 }
 
 // -----------------------------------------------------------------------------
@@ -289,9 +289,7 @@ fn select_from_derived_subquery() {
     };
     let stmt = stmt::Statement::Query(stmt::Query::builder(outer_select).build());
 
-    expect![[
-        r#"SELECT tbl_0_0.column1 FROM (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) AS tbl_0_0;"#
-    ]]
+    expect![[r#"SELECT tbl_0_0.column1 AS column1 FROM (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0) AS tbl_0_0;"#]]
     .assert_eq(&render_sqlite(&schema, stmt));
 }
 
@@ -321,11 +319,11 @@ fn expr_exists_subquery() {
     let schema = users_schema();
     let exists = Expr::exists(select_id_from_users());
 
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0);"#]].assert_eq(&render_postgresql(
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 WHERE EXISTS (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0);"#]].assert_eq(&render_postgresql(
         &schema,
         select_users_with_filter(exists.clone()),
     ));
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0);"#]].assert_eq(&render_sqlite(&schema, select_users_with_filter(exists)));
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 WHERE EXISTS (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0);"#]].assert_eq(&render_sqlite(&schema, select_users_with_filter(exists)));
 }
 
 #[test]
@@ -335,11 +333,11 @@ fn expr_not_exists_subquery() {
     // as `NOT (EXISTS (...))`.
     let not_exists = Expr::not_exists(select_id_from_users());
 
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE NOT (EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0));"#]].assert_eq(&render_postgresql(
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 WHERE NOT (EXISTS (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0));"#]].assert_eq(&render_postgresql(
         &schema,
         select_users_with_filter(not_exists.clone()),
     ));
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE NOT (EXISTS (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0));"#]].assert_eq(&render_sqlite(
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 WHERE NOT (EXISTS (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0));"#]].assert_eq(&render_sqlite(
         &schema,
         select_users_with_filter(not_exists),
     ));
@@ -354,9 +352,9 @@ fn expr_in_subquery() {
     let schema = users_schema();
     let in_sub = Expr::in_subquery(col(0, 0), select_id_from_users());
 
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" IN (SELECT tbl_0_0."id" FROM "users" AS tbl_0_0);"#]].assert_eq(&render_postgresql(
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" IN (SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0);"#]].assert_eq(&render_postgresql(
         &schema,
         select_users_with_filter(in_sub.clone()),
     ));
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" IN (SELECT tbl_0_0."id" FROM "users" AS tbl_0_0);"#]].assert_eq(&render_sqlite(&schema, select_users_with_filter(in_sub)));
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 WHERE tbl_0_0."id" IN (SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0);"#]].assert_eq(&render_sqlite(&schema, select_users_with_filter(in_sub)));
 }

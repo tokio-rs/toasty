@@ -311,104 +311,39 @@ impl Connection {
 
         match &unique_indices[..] {
             [] => {
-                if op.keys.len() == 1 {
-                    let key = &op.keys[0];
+                // The engine shreds multi-key updates into one op per key, so a
+                // non-unique-index update always carries exactly one key.
+                let [key] = &op.keys[..] else {
+                    panic!("expected exactly 1 key, got {}", op.keys.len());
+                };
 
-                    let res = self
-                        .client
-                        .update_item()
-                        .table_name(&table.name)
-                        .set_key(Some(ddb_key(table, key)))
-                        .set_update_expression(Some(update_expression))
-                        .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                        .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
-                            Some(expr_attrs.attr_values)
-                        } else {
-                            None
-                        })
-                        .set_condition_expression(filter_expression)
-                        .return_values_on_condition_check_failure(
-                            ReturnValuesOnConditionCheckFailure::AllOld,
-                        )
-                        .set_return_values(needs_updated_new.then_some(ReturnValue::UpdatedNew))
-                        .send()
-                        .await;
+                let res = self
+                    .client
+                    .update_item()
+                    .table_name(&table.name)
+                    .set_key(Some(ddb_key(table, key)))
+                    .set_update_expression(Some(update_expression))
+                    .set_expression_attribute_names(Some(expr_attrs.attr_names))
+                    .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
+                        Some(expr_attrs.attr_values)
+                    } else {
+                        None
+                    })
+                    .set_condition_expression(filter_expression)
+                    .return_values_on_condition_check_failure(
+                        ReturnValuesOnConditionCheckFailure::AllOld,
+                    )
+                    .set_return_values(needs_updated_new.then_some(ReturnValue::UpdatedNew))
+                    .send()
+                    .await;
 
-                    let output = match res {
-                        Ok(output) => output,
-                        Err(SdkError::ServiceError(e)) => {
-                            if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
-                                return on_update_item_condition_failed(
-                                    cce.item(),
-                                    cce.message.as_deref(),
-                                    &schema.app,
-                                    table,
-                                    op.filter.as_ref(),
-                                    op.returning.is_some(),
-                                );
-                            }
-                            return Err(toasty_core::Error::driver_operation_failed(
-                                SdkError::ServiceError(e),
-                            ));
-                        }
-                        Err(other) => {
-                            return Err(toasty_core::Error::driver_operation_failed(other));
-                        }
-                    };
-
-                    if needs_updated_new && let Some(attrs) = output.attributes() {
-                        for (idx, column) in &refresh_after_update {
-                            if let Some(attr) = attrs.get(&column.name) {
-                                ret[*idx] =
-                                    Value::from_ddb(&schema.app, &column.ty, attr).into_inner();
-                            }
-                        }
-                    }
-                } else {
-                    let mut transact_items = vec![];
-
-                    for key in &op.keys {
-                        transact_items.push(
-                            TransactWriteItem::builder()
-                                .update(
-                                    Update::builder()
-                                        .table_name(&table.name)
-                                        .set_key(Some(ddb_key(table, key)))
-                                        .set_update_expression(Some(update_expression.clone()))
-                                        .set_expression_attribute_names(Some(
-                                            expr_attrs.attr_names.clone(),
-                                        ))
-                                        .set_expression_attribute_values(
-                                            if !expr_attrs.attr_values.is_empty() {
-                                                Some(expr_attrs.attr_values.clone())
-                                            } else {
-                                                None
-                                            },
-                                        )
-                                        .set_condition_expression(filter_expression.clone())
-                                        .return_values_on_condition_check_failure(
-                                            ReturnValuesOnConditionCheckFailure::AllOld,
-                                        )
-                                        .build()
-                                        .unwrap(),
-                                )
-                                .build(),
-                        );
-                    }
-
-                    let res = self
-                        .client
-                        .transact_write_items()
-                        .set_transact_items(Some(transact_items))
-                        .send()
-                        .await;
-
-                    if let Err(SdkError::ServiceError(e)) = res {
-                        if let TransactWriteItemsError::TransactionCanceledException(tce) = e.err()
-                        {
-                            return on_transaction_cancelled(
-                                tce.cancellation_reasons(),
-                                tce.message(),
+                let output = match res {
+                    Ok(output) => output,
+                    Err(SdkError::ServiceError(e)) => {
+                        if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
+                            return on_update_item_condition_failed(
+                                cce.item(),
+                                cce.message.as_deref(),
                                 &schema.app,
                                 table,
                                 op.filter.as_ref(),
@@ -418,6 +353,17 @@ impl Connection {
                         return Err(toasty_core::Error::driver_operation_failed(
                             SdkError::ServiceError(e),
                         ));
+                    }
+                    Err(other) => {
+                        return Err(toasty_core::Error::driver_operation_failed(other));
+                    }
+                };
+
+                if needs_updated_new && let Some(attrs) = output.attributes() {
+                    for (idx, column) in &refresh_after_update {
+                        if let Some(attr) = attrs.get(&column.name) {
+                            ret[*idx] = Value::from_ddb(&schema.app, &column.ty, attr).into_inner();
+                        }
                     }
                 }
             }

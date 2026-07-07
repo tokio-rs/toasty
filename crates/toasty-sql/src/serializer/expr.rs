@@ -8,7 +8,10 @@ impl ToSql for &stmt::Expr {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Expr::And(expr) => {
-                fmt!(f, Delimited(&expr.operands, " AND "));
+                fmt!(f, Delimited(expr.operands.iter().map(AndOperand), " AND "));
+            }
+            stmt::Expr::Between(expr) => {
+                fmt!(f, expr.expr " BETWEEN " expr.low " AND " expr.high);
             }
             stmt::Expr::BinaryOp(expr) => {
                 assert!(!expr.lhs.is_value_null());
@@ -119,7 +122,12 @@ impl ToSql for &stmt::Expr {
                     };
                 fmt!(f, expr.expr op expr.pattern);
                 if let Some(escape) = expr.escape {
-                    let escape = &stmt::Value::String(escape.to_string());
+                    let escape = if f.serializer.is_mysql() && escape == '\\' {
+                        stmt::Value::String("\\\\".to_string())
+                    } else {
+                        stmt::Value::String(escape.to_string())
+                    };
+                    let escape = &escape;
                     fmt!(f, " ESCAPE " escape);
                 }
             }
@@ -204,6 +212,25 @@ impl ToSql for &stmt::Expr {
                 Flavor::Sqlite => fmt!(f, "NULL"),
             },
             _ => todo!("expr={:#?}", self),
+        }
+    }
+}
+
+/// A single operand of an `AND` chain.
+///
+/// `OR` binds looser than `AND` in SQL, so an `Or` operand must be
+/// parenthesized: `a AND (b OR c)` would otherwise serialize as
+/// `a AND b OR c`, which parses as `(a AND b) OR c` and silently changes the
+/// query's meaning. Operands of other kinds bind at least as tightly as `AND`
+/// (comparisons, `IS NULL`, `NOT (..)`, nested `AND`), so they need no parens.
+struct AndOperand<'a>(&'a stmt::Expr);
+
+impl ToSql for AndOperand<'_> {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        if matches!(self.0, stmt::Expr::Or(_)) {
+            fmt!(f, "(" self.0 ")");
+        } else {
+            fmt!(f, self.0);
         }
     }
 }

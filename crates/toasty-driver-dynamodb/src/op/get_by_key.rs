@@ -14,7 +14,10 @@ impl Connection {
 
         if op.keys.len() == 1 {
             // TODO: set attributes to get
-            tracing::trace!(key = ?op.keys[0], table_name = %table.name, "getting single item");
+            // Key values are intentionally not logged; they are data, and
+            // data only appears in traces via the opt-in
+            // `log_statement_params` path.
+            tracing::trace!(table_name = %table.name, "getting single item");
             let res = self
                 .client
                 .get_item()

@@ -43,135 +43,86 @@ impl Connection {
         }
 
         if unique_indices.is_empty() {
-            if op.keys.len() == 1 {
-                let key = &op.keys[0];
+            // The engine shreds multi-key deletes into one op per key, so a
+            // non-unique-index delete always carries exactly one key.
+            let [key] = &op.keys[..] else {
+                panic!("expected exactly 1 key, got {}", op.keys.len());
+            };
 
-                let mut req = self
-                    .client
-                    .delete_item()
-                    .table_name(&table.name)
-                    .set_key(Some(ddb_key(table, key)))
-                    .set_expression_attribute_names(if condition_expression.is_some() {
-                        Some(expr_attrs.attr_names)
-                    } else {
-                        None
-                    })
-                    .set_expression_attribute_values(if condition_expression.is_some() {
-                        Some(expr_attrs.attr_values)
-                    } else {
-                        None
-                    })
-                    .set_condition_expression(condition_expression);
+            let mut req = self
+                .client
+                .delete_item()
+                .table_name(&table.name)
+                .set_key(Some(ddb_key(table, key)))
+                .set_expression_attribute_names(if condition_expression.is_some() {
+                    Some(expr_attrs.attr_names)
+                } else {
+                    None
+                })
+                .set_expression_attribute_values(if condition_expression.is_some() {
+                    Some(expr_attrs.attr_values)
+                } else {
+                    None
+                })
+                .set_condition_expression(condition_expression);
 
-                if has_condition || filter_expr.is_some() {
-                    req = req.return_values_on_condition_check_failure(
-                        ReturnValuesOnConditionCheckFailure::AllOld,
-                    );
-                }
+            if has_condition || filter_expr.is_some() {
+                req = req.return_values_on_condition_check_failure(
+                    ReturnValuesOnConditionCheckFailure::AllOld,
+                );
+            }
 
-                let res = req.send().await;
+            let res = req.send().await;
 
-                if let Err(SdkError::ServiceError(e)) = res {
-                    if let DeleteItemError::ConditionalCheckFailedException(cce) = e.err() {
-                        if !has_condition {
-                            // Pure filter failure → count 0
-                            return Ok(ExecResponse::count(0));
-                        }
-
-                        if let Some(filter) = filter_expr {
-                            // Both filter and condition set — check if filter matched
-                            if let Some(old_item) = cce.item() {
-                                let record =
-                                    item_to_record(&schema.app, old_item, table.columns.iter())
-                                        .unwrap();
-                                use toasty_core::stmt;
-                                struct RecordInput<'a>(&'a stmt::ValueRecord);
-                                impl stmt::Input for RecordInput<'_> {
-                                    fn resolve_ref(
-                                        &mut self,
-                                        expr_reference: &stmt::ExprReference,
-                                        projection: &stmt::Projection,
-                                    ) -> Option<stmt::Expr> {
-                                        match expr_reference {
-                                            stmt::ExprReference::Column(col) => Some(
-                                                self.0.fields[col.column]
-                                                    .entry(projection)
-                                                    .to_expr(),
-                                            ),
-                                            _ => None,
-                                        }
-                                    }
-                                }
-                                if !filter.eval_bool(RecordInput(&record)).unwrap_or(false) {
-                                    return Ok(ExecResponse::count(0));
-                                }
-                            } else {
-                                // Record gone — filter trivially didn't match
-                                return Ok(ExecResponse::count(0));
-                            }
-                        }
-
-                        return Err(toasty_core::Error::condition_failed(
-                            "DynamoDB conditional check failed",
-                        ));
+            if let Err(SdkError::ServiceError(e)) = res {
+                if let DeleteItemError::ConditionalCheckFailedException(cce) = e.err() {
+                    if !has_condition {
+                        // Pure filter failure → count 0
+                        return Ok(ExecResponse::count(0));
                     }
 
-                    return Err(toasty_core::Error::driver_operation_failed(
-                        SdkError::ServiceError(e),
+                    if let Some(filter) = filter_expr {
+                        // Both filter and condition set — check if filter matched
+                        if let Some(old_item) = cce.item() {
+                            let record =
+                                item_to_record(&schema.app, old_item, table.columns.iter())
+                                    .unwrap();
+                            use toasty_core::stmt;
+                            struct RecordInput<'a>(&'a stmt::ValueRecord);
+                            impl stmt::Input for RecordInput<'_> {
+                                fn resolve_ref(
+                                    &mut self,
+                                    expr_reference: &stmt::ExprReference,
+                                    projection: &stmt::Projection,
+                                ) -> Option<stmt::Expr> {
+                                    match expr_reference {
+                                        stmt::ExprReference::Column(col) => Some(
+                                            self.0.fields[col.column].entry(projection).to_expr(),
+                                        ),
+                                        _ => None,
+                                    }
+                                }
+                            }
+                            if !filter.eval_bool(RecordInput(&record)).unwrap_or(false) {
+                                return Ok(ExecResponse::count(0));
+                            }
+                        } else {
+                            // Record gone — filter trivially didn't match
+                            return Ok(ExecResponse::count(0));
+                        }
+                    }
+
+                    return Err(toasty_core::Error::condition_failed(
+                        "DynamoDB conditional check failed",
                     ));
                 }
 
-                return Ok(ExecResponse::count(1));
-            } else {
-                let mut transact_items = vec![];
-
-                for key in &op.keys {
-                    transact_items.push(
-                        TransactWriteItem::builder()
-                            .delete(
-                                Delete::builder()
-                                    .table_name(&table.name)
-                                    .set_key(Some(ddb_key(table, key)))
-                                    .set_expression_attribute_names(
-                                        if condition_expression.is_some() {
-                                            Some(expr_attrs.attr_names.clone())
-                                        } else {
-                                            None
-                                        },
-                                    )
-                                    .set_expression_attribute_values(
-                                        if condition_expression.is_some() {
-                                            Some(expr_attrs.attr_values.clone())
-                                        } else {
-                                            None
-                                        },
-                                    )
-                                    .set_condition_expression(condition_expression.clone())
-                                    .build()
-                                    .unwrap(),
-                            )
-                            .build(),
-                    );
-                }
-
-                let res = self
-                    .client
-                    .transact_write_items()
-                    .set_transact_items(Some(transact_items))
-                    .send()
-                    .await;
-
-                if let Err(SdkError::ServiceError(e)) = res {
-                    if has_condition {
-                        return Err(toasty_core::Error::condition_failed(
-                            "DynamoDB conditional check failed",
-                        ));
-                    }
-                    todo!("err={:#?}", e);
-                }
-
-                return Ok(ExecResponse::count(op.keys.len() as _));
+                return Err(toasty_core::Error::driver_operation_failed(
+                    SdkError::ServiceError(e),
+                ));
             }
+
+            return Ok(ExecResponse::count(1));
         }
 
         let [key] = &op.keys[..] else {

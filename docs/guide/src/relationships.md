@@ -312,3 +312,7 @@ querying, creating, and updating:
   child, replace and unset behavior
 - [**Preloading Associations**](./preloading-associations.md) — avoiding extra
   queries by loading relations upfront with `.include()`
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

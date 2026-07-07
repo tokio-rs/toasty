@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-turso"
-version = "0.7.0"
+version = "0.8.0"
 description = "Turso (SQLite-compatible) driver for Toasty"
 authors.workspace = true
 edition.workspace = true
@@ -28,6 +28,7 @@ tracing.workspace = true
 turso.workspace = true
 url.workspace = true
 uuid.workspace = true
+percent-encoding.workspace = true
 
 [lints]
 workspace = true

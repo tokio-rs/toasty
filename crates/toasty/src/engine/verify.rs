@@ -239,6 +239,7 @@ impl VerifyExpr<'_, '_> {
             And(_)
             | AllOp(_)
             | AnyOp(_)
+            | Between(_)
             | BinaryOp(_)
             | Like(_)
             | InList(_)

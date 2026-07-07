@@ -2,7 +2,8 @@ use super::{Expand, schema, util};
 use crate::model::schema::{EnumStorageStrategy, FieldTy, VariantValue};
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
+use syn::spanned::Spanned;
 
 impl Expand<'_> {
     /// Returns fields belonging to a specific variant index.
@@ -298,6 +299,19 @@ impl Expand<'_> {
             .map(|field| {
                 let index = util::int(field.id);
                 let app_name = field.name.as_str();
+                // A `#[column("name")]` on a variant field overrides its
+                // database column name. When two variants give a field the same
+                // column name, the schema builder coalesces them into one shared
+                // column (see `BuildMapping::map_field_primitive`).
+                let storage_name = match field
+                    .attrs
+                    .column
+                    .as_ref()
+                    .and_then(|column| column.name.as_ref())
+                {
+                    Some(name) => quote! { Some(#name.to_string()) },
+                    None => quote! { None },
+                };
                 let ty = primitive_ty_unwrap(field);
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
@@ -309,7 +323,7 @@ impl Expand<'_> {
                         },
                         name: #toasty::core::schema::app::FieldName {
                             app: Some(#app_name.to_string()),
-                            storage: None,
+                            storage: #storage_name,
                         },
                         ty: <#ty as #toasty::Field>::field_ty(None),
                         nullable: <#ty as #toasty::Field>::NULLABLE,
@@ -326,6 +340,100 @@ impl Expand<'_> {
                 }
             })
             .collect()
+    }
+
+    /// Emits compile-time checks for variant fields that share a column via
+    /// `#[column("name")]`.
+    ///
+    /// Two variants that give a field the same `#[column("name")]` coalesce into
+    /// one shared column, which can hold only one storage type. This emits two
+    /// obligations rather than deferring to a schema-build error:
+    ///
+    /// - **Same-variant collision:** two fields in the *same* variant mapped to
+    ///   one column is invalid — both are active for one discriminant, so the
+    ///   column can't hold both. Emit a `compile_error!` pinned to the second.
+    /// - **Type agreement:** across variants, every shared field must have the
+    ///   same type. Emit a `SameColumnType` bound between each field's type and
+    ///   the first in its group; unequal types fail to compile.
+    ///
+    /// Only fields with an explicit `#[column("name")]` are grouped. A field
+    /// without one is not necessarily single-column (an embedded struct flattens
+    /// to several columns named after its own fields), so predicting a collision
+    /// from the field name alone would reject legitimate schemas. Those cases
+    /// fall back to the schema-build check.
+    pub(super) fn expand_shared_column_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        // Group variant fields by their explicit column name, preserving
+        // declaration order within each group.
+        let mut groups: Vec<(String, Vec<&crate::model::schema::Field>)> = Vec::new();
+        for field in &self.model.fields {
+            let Some(name) = field
+                .attrs
+                .column
+                .as_ref()
+                .and_then(|column| column.name.as_ref())
+                .map(|name| name.value())
+            else {
+                continue;
+            };
+
+            match groups.iter_mut().find(|(existing, _)| *existing == name) {
+                Some((_, fields)) => fields.push(field),
+                None => groups.push((name, vec![field])),
+            }
+        }
+
+        let mut checks = Vec::new();
+        for (name, fields) in groups.iter().filter(|(_, fields)| fields.len() > 1) {
+            // Reject a second field in the same variant landing on this column.
+            let mut seen_variants = Vec::new();
+            let mut same_variant = false;
+            for field in fields {
+                let variant = field
+                    .variant
+                    .expect("enum variant field must have a variant");
+                if seen_variants.contains(&variant) {
+                    let ident = &field.name.ident;
+                    checks.push(
+                        syn::Error::new_spanned(
+                            ident,
+                            format!(
+                                "two fields in the same variant map to column `{name}`; \
+                                 a column can be shared only across different variants"
+                            ),
+                        )
+                        .to_compile_error(),
+                    );
+                    same_variant = true;
+                } else {
+                    seen_variants.push(variant);
+                }
+            }
+
+            // A malformed group can't be meaningfully type-checked; the
+            // collision error above is the actionable one.
+            if same_variant {
+                continue;
+            }
+
+            let first = primitive_ty_unwrap(fields[0]);
+            for field in &fields[1..] {
+                let ty = primitive_ty_unwrap(field);
+                checks.push(quote_spanned! { ty.span()=>
+                    const _: () = {
+                        fn check<A, B>()
+                        where
+                            A: #toasty::shared_column::SameColumnType<B>,
+                        {
+                        }
+                        let _ = check::<#ty, #first>;
+                    };
+                });
+            }
+        }
+
+        quote! { #( #checks )* }
     }
 
     /// Generates the full `impl Load for Enum { ... }` block, adapting

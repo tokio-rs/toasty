@@ -24,7 +24,10 @@ pub(crate) use value::Value;
 use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
-    driver::{Capability, Driver, ExecResponse, operation::Operation},
+    driver::{
+        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig, log::QueryLog,
+        operation::Operation,
+    },
     schema::{
         app,
         db::{Column, ColumnId, Migration, Table},
@@ -90,9 +93,14 @@ impl Driver for DynamoDb {
         &Capability::DYNAMODB
     }
 
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         // Clone the shared client - cheap operation (Client uses Arc internally)
-        Ok(Box::new(Connection::new(self.client.clone())))
+        let mut connection = Connection::new(self.client.clone());
+        connection.query_log = cx.query_log;
+        Ok(Box::new(connection))
     }
 
     fn generate_migration(&self, _schema_diff: &diff::Schema<'_>) -> Migration {
@@ -141,19 +149,45 @@ impl Driver for DynamoDb {
 pub struct Connection {
     /// Handle to the AWS SDK client
     client: Client,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
     /// Wrap an existing [`aws_sdk_dynamodb::Client`] as a Toasty connection.
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            query_log: QueryLogConfig::default(),
+        }
     }
+}
+
+/// Resolves the table an operation targets, for the per-query event.
+fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
+    let table_id = match op {
+        Operation::GetByKey(op) => op.table,
+        Operation::QueryPk(op) => op.table,
+        Operation::DeleteByKey(op) => op.table,
+        Operation::UpdateByKey(op) => op.table,
+        Operation::FindPkByIndex(op) => op.table,
+        Operation::Scan(op) => op.table,
+        _ => return None,
+    };
+    Some(&schema.db.table(table_id).name)
 }
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
-        self.exec2(schema, op).await
+        let log = QueryLog::operation(
+            &self.query_log,
+            "dynamodb",
+            op.name(),
+            op_table_name(schema, &op),
+        );
+        let result = self.exec2(schema, op).await;
+        log.finish(&result);
+        result
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
@@ -332,6 +366,12 @@ fn ddb_expression(
     expr: &stmt::Expr,
 ) -> String {
     match expr {
+        stmt::Expr::Between(expr_between) => {
+            let field = ddb_expression(cx, attrs, primary, &expr_between.expr);
+            let low = ddb_expression(cx, attrs, primary, &expr_between.low);
+            let high = ddb_expression(cx, attrs, primary, &expr_between.high);
+            format!("{field} BETWEEN {low} AND {high}")
+        }
         stmt::Expr::BinaryOp(expr_binary_op) => {
             let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
             let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);

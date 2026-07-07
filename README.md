@@ -4,7 +4,7 @@
 
 <div align="center">
   <h3>The cozy, easy ORM for Rust</h3>
-  <a href="https://tokio-rs.github.io/toasty/0.7.0/guide/">Guide</a> •
+  <a href="https://tokio-rs.github.io/toasty/0.8.0/guide/">Guide</a> •
   <a href="https://docs.rs/toasty">API Docs</a> •
   <a href="https://crates.io/crates/toasty">Crates.io</a> •
   <a href="https://discord.gg/tokio">Discord</a>
@@ -37,8 +37,8 @@ target database.
 ## Using Toasty
 
 You will define your data model using Rust structs annotated with the
-`#[derive(toasty::Model)]` derive macro. Here is the
-[hello-toasty](examples/hello-toasty/src/main.rs) example.
+`#[derive(toasty::Model)]` derive macro. Runnable examples live in the
+[`examples/`](examples/) directory; the snippets below illustrate the basics.
 
 ```rust
 #[derive(Debug, toasty::Model)]
@@ -65,7 +65,7 @@ struct Todo {
     #[index]
     user_id: u64,
 
-    #[belongs_to(key = user_id, references = id)]
+    #[belongs_to]
     user: toasty::Deferred<User>,
 
     title: String,

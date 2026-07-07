@@ -179,6 +179,15 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
                 synthesize(row, &cx, params);
             }
         }
+        // Data-modifying CTE bodies (a conditional write compiled to a CTE):
+        // the write's assignments and filter carry params that need the same
+        // column-driven refinement as a top-level UPDATE/DELETE.
+        stmt::ExprSet::Update(update) => {
+            refine_update(update, &cx, cx.schema(), params);
+        }
+        stmt::ExprSet::Delete(delete) => {
+            refine_filter(&delete.filter, &cx, params);
+        }
         _ => {}
     }
 

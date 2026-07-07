@@ -8,7 +8,9 @@ mod eval;
 pub(crate) use eval::Eval;
 
 mod exec_statement;
-pub(crate) use exec_statement::{ExecStatement, ExecStatementOutput, PaginationConfig};
+pub(crate) use exec_statement::{
+    ConditionalOutput, ExecStatement, ExecStatementOutput, PaginationConfig,
+};
 
 mod filter;
 pub(crate) use filter::Filter;
@@ -114,8 +116,11 @@ impl Engine {
 
         for (i, step) in plan.actions.iter().enumerate() {
             tracing::trace!(step = i, action = %step.name(), "executing action");
+            // Debug, not error: the failure propagates to the caller, who
+            // decides whether it is an application error. A handled unique
+            // violation should not error-spam production logs.
             if let Err(e) = exec.exec_step(step).await {
-                tracing::error!(step = i, action = %step.name(), error = %e, "action failed");
+                tracing::debug!(step = i, action = %step.name(), error = %e, "action failed");
                 if plan.needs_transaction {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
@@ -132,7 +137,7 @@ impl Engine {
 
         let result = if let Some(returning) = plan.returning {
             let response = exec.vars.load(returning).await?;
-            tracing::debug!("Final result from var {:?}:\n{:#?}", returning, response);
+            tracing::trace!("final result from var {:?}:\n{:#?}", returning, response);
 
             let value_stream = match response.values {
                 Rows::Count(_) => ValueStream::default(),
