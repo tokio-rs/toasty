@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.7.0...toasty-macros-v0.8.0) - 2026-07-06
+
+### Added
+
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+- Share columns across enum variants via `#[column("name")]` ([#1064])
+- Index unit enum types ([#1027])
+- Between operator for queries ([#1029])
+- Composite unique indices ([#1018])
+- Support scalar terminal fields in `has_many` ([#1012])
+
+### Changed
+
+- [**breaking**] Derive default table names at compile time ([#1070])
+- [**breaking**] Rename `RelationManyField`/`RelationOneField` associated type to `Target` ([#1015])
+- [**breaking**] Align `stmt::Query` with per-model `Query` ([#1011])
+- [**breaking**] Unify per-model query structs into `Query<T>` ([#995])
+- [**breaking**] Remove the `Register` trait ([#1006])
+- Remove compile-time field validation from `create!` macro ([#997])
+
+[#995]: https://github.com/tokio-rs/toasty/pull/995
+[#997]: https://github.com/tokio-rs/toasty/pull/997
+[#1006]: https://github.com/tokio-rs/toasty/pull/1006
+[#1011]: https://github.com/tokio-rs/toasty/pull/1011
+[#1012]: https://github.com/tokio-rs/toasty/pull/1012
+[#1015]: https://github.com/tokio-rs/toasty/pull/1015
+[#1018]: https://github.com/tokio-rs/toasty/pull/1018
+[#1027]: https://github.com/tokio-rs/toasty/pull/1027
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1064]: https://github.com/tokio-rs/toasty/pull/1064
+[#1070]: https://github.com/tokio-rs/toasty/pull/1070
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.6.1...toasty-macros-v0.7.0) - 2026-05-29
 
 ### Added
