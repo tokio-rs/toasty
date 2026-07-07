@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-abd53f8e.js";
+            window.path_to_searchindex_js = "searchindex-3e830acd.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -182,7 +182,7 @@ integrates with Toasty’s connection pool for retry and recovery.</p>
 <h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
 <p>Add the <code>postgresql</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.7", features = ["postgresql"] }
+toasty = { version = "0.8", features = ["postgresql"] }
 </code></pre>
 <p>Then pass a <code>postgresql://</code> (or <code>postgres://</code>) URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
