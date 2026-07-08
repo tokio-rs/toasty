@@ -250,6 +250,7 @@ impl Expand<'_> {
                     deferred: #deferred,
                     constraints: vec![],
                     variant: None,
+                    shared: None,
                 }
             }
         });

@@ -293,6 +293,27 @@ impl Expand<'_> {
     pub(super) fn expand_enum_schema_fields(&self) -> Vec<TokenStream> {
         let toasty = &self.toasty;
 
+        // Effective `#[column("name")]` override per shared group: declaring
+        // the override on one sharing field suffices, so propagate it to every
+        // member. Disagreeing overrides are rejected by
+        // `expand_shared_column_checks`; here the first one wins.
+        let mut shared_overrides: Vec<(String, &syn::LitStr)> = Vec::new();
+        for field in &self.model.fields {
+            let Some(ident) = &field.attrs.shared else {
+                continue;
+            };
+            let Some(lit) = field.attrs.column.as_ref().and_then(|c| c.name.as_ref()) else {
+                continue;
+            };
+            let name = ident.to_string();
+            if !shared_overrides
+                .iter()
+                .any(|(existing, _)| *existing == name)
+            {
+                shared_overrides.push((name, lit));
+            }
+        }
+
         self.model
             .fields
             .iter()
@@ -300,16 +321,33 @@ impl Expand<'_> {
                 let index = util::int(field.id);
                 let app_name = field.name.as_str();
                 // A `#[column("name")]` on a variant field overrides its
-                // database column name. When two variants give a field the same
-                // column name, the schema builder coalesces them into one shared
-                // column (see `BuildMapping::map_field_primitive`).
-                let storage_name = match field
+                // database column name. For a `#[shared]` field, the override
+                // declared by any member of the group applies to all of them.
+                let storage_override = field
                     .attrs
                     .column
                     .as_ref()
                     .and_then(|column| column.name.as_ref())
-                {
+                    .or_else(|| {
+                        let ident = field.attrs.shared.as_ref()?.to_string();
+                        shared_overrides
+                            .iter()
+                            .find(|(existing, _)| *existing == ident)
+                            .map(|(_, lit)| *lit)
+                    });
+                let storage_name = match storage_override {
                     Some(name) => quote! { Some(#name.to_string()) },
+                    None => quote! { None },
+                };
+                // `#[shared(<ident>)]` names the logical field this variant
+                // field participates in. Fields declaring the same identifier
+                // are coalesced into one shared column by the schema builder
+                // (see `BuildMapping::map_field_primitive`).
+                let shared = match &field.attrs.shared {
+                    Some(ident) => {
+                        let name = ident.to_string();
+                        quote! { Some(#name.to_string()) }
+                    }
                     None => quote! { None },
                 };
                 let ty = primitive_ty_unwrap(field);
@@ -336,47 +374,49 @@ impl Expand<'_> {
                             model: id,
                             index: #variant_idx,
                         }),
+                        shared: #shared,
                     }
                 }
             })
             .collect()
     }
 
-    /// Emits compile-time checks for variant fields that share a column via
-    /// `#[column("name")]`.
+    /// Emits compile-time checks for variant fields that declare a shared
+    /// logical field via `#[shared(<ident>)]`.
     ///
-    /// Two variants that give a field the same `#[column("name")]` coalesce into
-    /// one shared column, which can hold only one storage type. This emits two
+    /// Fields declaring the same identifier coalesce into one shared column,
+    /// which can hold only one storage type. This emits the following
     /// obligations rather than deferring to a schema-build error:
     ///
-    /// - **Same-variant collision:** two fields in the *same* variant mapped to
-    ///   one column is invalid — both are active for one discriminant, so the
-    ///   column can't hold both. Emit a `compile_error!` pinned to the second.
-    /// - **Type agreement:** across variants, every shared field must have the
+    /// - **Same-variant collision:** two fields in the *same* variant sharing
+    ///   one identifier is invalid — both are active for one discriminant, so
+    ///   the column can't hold both. Emit a `compile_error!` pinned to the
+    ///   second.
+    /// - **Type agreement:** across variants, every sharing field must have the
     ///   same type. Emit a `SameColumnType` bound between each field's type and
     ///   the first in its group; unequal types fail to compile.
-    ///
-    /// Only fields with an explicit `#[column("name")]` are grouped. A field
-    /// without one is not necessarily single-column (an embedded struct flattens
-    /// to several columns named after its own fields), so predicting a collision
-    /// from the field name alone would reject legitimate schemas. Those cases
-    /// fall back to the schema-build check.
+    /// - **Column-name agreement:** a `#[column("...")]` override declared by
+    ///   one member of a group applies to the whole group, so two members
+    ///   declaring *different* overrides is a contradiction.
+    /// - **Explicit sharing:** two variant fields resolving to the same column
+    ///   name (same `#[column("name")]`, or a field name matching another
+    ///   variant's) without a common `#[shared]` identifier are a duplicate
+    ///   column, not an implicit merge. Explicit `#[column]` collisions are
+    ///   caught here; name-derived collisions fall back to the schema-build
+    ///   check (a field without `#[column]` is not necessarily single-column —
+    ///   an embedded struct flattens to several columns — so predicting a
+    ///   collision from the field name alone would reject legitimate schemas).
     pub(super) fn expand_shared_column_checks(&self) -> TokenStream {
         let toasty = &self.toasty;
 
-        // Group variant fields by their explicit column name, preserving
+        // Group variant fields by their `#[shared]` identifier, preserving
         // declaration order within each group.
         let mut groups: Vec<(String, Vec<&crate::model::schema::Field>)> = Vec::new();
         for field in &self.model.fields {
-            let Some(name) = field
-                .attrs
-                .column
-                .as_ref()
-                .and_then(|column| column.name.as_ref())
-                .map(|name| name.value())
-            else {
+            let Some(ident) = &field.attrs.shared else {
                 continue;
             };
+            let name = ident.to_string();
 
             match groups.iter_mut().find(|(existing, _)| *existing == name) {
                 Some((_, fields)) => fields.push(field),
@@ -385,8 +425,8 @@ impl Expand<'_> {
         }
 
         let mut checks = Vec::new();
-        for (name, fields) in groups.iter().filter(|(_, fields)| fields.len() > 1) {
-            // Reject a second field in the same variant landing on this column.
+        for (name, fields) in &groups {
+            // Reject a second field in the same variant declaring this ident.
             let mut seen_variants = Vec::new();
             let mut same_variant = false;
             for field in fields {
@@ -399,7 +439,7 @@ impl Expand<'_> {
                         syn::Error::new_spanned(
                             ident,
                             format!(
-                                "two fields in the same variant map to column `{name}`; \
+                                "two fields in the same variant declare `#[shared({name})]`; \
                                  a column can be shared only across different variants"
                             ),
                         )
@@ -411,10 +451,37 @@ impl Expand<'_> {
                 }
             }
 
-            // A malformed group can't be meaningfully type-checked; the
+            // A malformed group can't be meaningfully checked further; the
             // collision error above is the actionable one.
             if same_variant {
                 continue;
+            }
+
+            // A `#[column("...")]` override on any member applies to the whole
+            // group; disagreeing overrides are a contradiction.
+            let mut column_override: Option<&syn::LitStr> = None;
+            for field in fields {
+                let Some(lit) = field.attrs.column.as_ref().and_then(|c| c.name.as_ref()) else {
+                    continue;
+                };
+                match column_override {
+                    None => column_override = Some(lit),
+                    Some(first) if first.value() == lit.value() => {}
+                    Some(first) => {
+                        checks.push(
+                            syn::Error::new_spanned(
+                                lit,
+                                format!(
+                                    "fields sharing `{name}` declare conflicting column \
+                                     names `{}` and `{}`; a shared field maps to one column",
+                                    first.value(),
+                                    lit.value(),
+                                ),
+                            )
+                            .to_compile_error(),
+                        );
+                    }
+                }
             }
 
             let first = primitive_ty_unwrap(fields[0]);
@@ -430,6 +497,47 @@ impl Expand<'_> {
                         let _ = check::<#ty, #first>;
                     };
                 });
+            }
+        }
+
+        // Explicit `#[column("name")]` collisions without a common `#[shared]`
+        // identifier are duplicate columns, not implicit merges.
+        let mut by_column: Vec<(String, Vec<&crate::model::schema::Field>)> = Vec::new();
+        for field in &self.model.fields {
+            let Some(name) = field
+                .attrs
+                .column
+                .as_ref()
+                .and_then(|column| column.name.as_ref())
+                .map(|name| name.value())
+            else {
+                continue;
+            };
+
+            match by_column.iter_mut().find(|(existing, _)| *existing == name) {
+                Some((_, fields)) => fields.push(field),
+                None => by_column.push((name, vec![field])),
+            }
+        }
+
+        for (name, fields) in by_column.iter().filter(|(_, fields)| fields.len() > 1) {
+            let first_shared = fields[0].attrs.shared.as_ref().map(|i| i.to_string());
+            for field in &fields[1..] {
+                let shared = field.attrs.shared.as_ref().map(|i| i.to_string());
+                if shared.is_none() || shared != first_shared {
+                    let ident = &field.name.ident;
+                    checks.push(
+                        syn::Error::new_spanned(
+                            ident,
+                            format!(
+                                "two variant fields map to the column `{name}` without \
+                                 declaring a shared field; annotate both with \
+                                 `#[shared(<ident>)]` to share the column"
+                            ),
+                        )
+                        .to_compile_error(),
+                    );
+                }
             }
         }
 

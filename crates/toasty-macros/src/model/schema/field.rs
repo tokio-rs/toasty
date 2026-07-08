@@ -43,6 +43,11 @@ pub(crate) struct FieldAttr {
     /// Optional database column name and / or type
     pub(crate) column: Option<Column>,
 
+    /// Shared logical field this enum variant field participates in:
+    /// `#[shared(<ident>)]`. Variant fields declaring the same identifier are
+    /// backed by a single shared column. Only valid on enum variant fields.
+    pub(crate) shared: Option<syn::Ident>,
+
     /// Expression to use as default value on create: `#[default(<expr>)]`
     pub(crate) default_expr: Option<syn::Expr>,
 
@@ -69,7 +74,8 @@ impl FieldAttr {
     /// Parse `FieldAttr`-related attributes from an attribute list.
     ///
     /// Handles `#[key]`, `#[auto]`, `#[unique]`, `#[index]`, `#[column]`,
-    /// `#[default]`, and `#[update]`. Other attributes are silently skipped.
+    /// `#[shared]`, `#[default]`, and `#[update]`. Other attributes are
+    /// silently skipped.
     pub(crate) fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self> {
         let mut errs = ErrorSet::new();
         let mut field_attr = FieldAttr {
@@ -78,6 +84,7 @@ impl FieldAttr {
             auto: None,
             index: false,
             column: None,
+            shared: None,
             default_expr: None,
             update_expr: None,
             versionable: false,
@@ -134,6 +141,22 @@ impl FieldAttr {
                     match Column::from_ast(attr) {
                         Ok(col) => field_attr.column = Some(col),
                         Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("shared") {
+                if field_attr.shared.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[shared] attribute",
+                    ));
+                } else {
+                    match attr.parse_args::<syn::Ident>() {
+                        Ok(ident) => field_attr.shared = Some(ident),
+                        Err(_) => errs.push(syn::Error::new_spanned(
+                            attr,
+                            "expected `#[shared(<identifier>)]`; the argument names \
+                             the logical field shared across enum variants",
+                        )),
                     }
                 }
             } else if attr.path().is_ident("default") {

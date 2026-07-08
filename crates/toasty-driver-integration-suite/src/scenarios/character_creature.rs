@@ -11,7 +11,7 @@ scenario! {
         creature: Creature,
     }
 
-    // Both variants carry a `name`, mapped to the same `#[column("name")]`.
+    // Both variants carry a `name`, declared shared via `#[shared(name)]`.
     // The two variant fields coalesce into a single shared, nullable
     // `creature_name` column; each variant keeps its own distinct column for
     // its variant-specific attribute (`creature_profession` / `creature_species`).
@@ -19,13 +19,13 @@ scenario! {
     enum Creature {
         #[column(variant = 1)]
         Human {
-            #[column("name")]
+            #[shared(name)]
             name: String,
             profession: String,
         },
         #[column(variant = 2)]
         Animal {
-            #[column("name")]
+            #[shared(name)]
             name: String,
             species: String,
         },

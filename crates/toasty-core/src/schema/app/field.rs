@@ -58,6 +58,12 @@ pub struct Field {
     /// If this field belongs to an enum variant, identifies that variant.
     /// `None` for fields on root models and embedded structs.
     pub variant: Option<VariantId>,
+
+    /// The shared logical field this variant field participates in, from
+    /// `#[shared(<ident>)]`. Variant fields declaring the same identifier are
+    /// backed by a single shared column. `None` for fields that own their
+    /// column outright (including all fields outside enum variants).
+    pub shared: Option<String>,
 }
 
 /// Uniquely identifies a [`Field`] within a schema.

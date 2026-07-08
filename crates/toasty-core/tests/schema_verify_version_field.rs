@@ -27,6 +27,7 @@ fn make_field(model_id: ModelId, index: usize, name: &str, versionable: bool) ->
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
