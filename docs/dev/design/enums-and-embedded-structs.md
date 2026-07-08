@@ -131,18 +131,19 @@ variant; `column_name` (`table.rs:1149`) yields
 ### Design
 
 Multiple variants share one column by declaring the same **shared logical
-field** with `#[column(shared = <ident>)]`. The identifier — not a storage
-string — is the unit of sharing: it names the logical field on the enum, and
-everything else derives from it. Variants may use different Rust field names
-for it.
+field** with a first-class `#[shared(<ident>)]` attribute on each
+participating variant field. Sharing is a model-level concept, so it gets its
+own attribute rather than riding on `#[column]`, which is about storage
+naming. The identifier names the logical field on the enum, and everything
+else derives from it. Variants may use different Rust field names for it.
 
 ```rust
 #[derive(toasty::Embed)]
 enum Creature {
     #[column(variant = 1)]
-    Human  { #[column(shared = name)] full_name: String, profession: String },
+    Human  { #[shared(name)] full_name: String, profession: String },
     #[column(variant = 2)]
-    Animal { #[column(shared = name)] nickname: String, species: String },
+    Animal { #[shared(name)] nickname: String, species: String },
 }
 // Columns:
 //   creature                    (discriminator)
@@ -154,11 +155,12 @@ enum Creature {
 The identifier drives three things:
 
 - **Column name**, by the normal derivation rule: `{enum_field}_{shared_ident}`
-  → `creature_name`. To target a different column (e.g. a legacy name),
-  combine with the string form: `#[column("b_legacy_old_lol_column", shared =
-  name)]` — the column is renamed, but the logical field is still `name`. The
-  identifier is how user code references the shared field; the column name
-  never appears in Rust code.
+  → `creature_name`. To target a different column (e.g. a legacy name), add
+  the ordinary `#[column]` attribute alongside:
+  `#[shared(name)] #[column("b_legacy_old_lol_column")]`. Declaring the
+  override on one sharing field suffices; if several declare it, they must
+  agree. The identifier is how user code references the shared field; the
+  column name never appears in Rust code.
 - **Cross-variant accessor name**: `creature().name()`, regardless of the
   per-variant Rust field names.
 - **Index references**: `#[index(name)]` / `#[unique(name)]` at the enum
@@ -182,27 +184,29 @@ Character::all().filter(
 );
 ```
 
-Two variant fields with matching `#[column("name")]` strings but no `shared`
-do **not** merge — that is a duplicate-column build error. Sharing is always
-explicit.
+Two variant fields with matching `#[column("name")]` strings but no
+`#[shared]` do **not** merge — that is a duplicate-column build error.
+Sharing is always explicit.
 
 ### What to change
 
-- **Parse `shared = <ident>`** in the per-field `#[column]` attribute
-  (`model/expand/schema.rs:108` parses only the string form today). Both
-  forms compose: `#[column("legacy", shared = name)]`.
+- **Parse a new per-field `#[shared(<ident>)]` attribute** on variant fields
+  (attribute parsing lives alongside `#[column]` in
+  `model/expand/schema.rs:108`). The argument must be an identifier, not a
+  string. `#[shared]` composes with `#[column("...")]` as separate
+  attributes.
 - **Merge by shared identifier.** In `map_field_enum` (`table.rs:895`), when
-  variant fields declare the same `shared` identifier, emit a single nullable
-  column instead of one per variant. Each variant's encode/decode path
-  targets that shared column. Two fields in the **same** variant declaring
-  the same identifier is a build error.
+  variant fields declare the same `#[shared]` identifier, emit a single
+  nullable column instead of one per variant. Each variant's encode/decode
+  path targets that shared column. Two fields in the **same** variant
+  declaring the same identifier is a build error.
 - **Consistency checks at schema build.** Fields sharing a logical field must
   agree on: the primitive type (**decision, resolves prior open question:**
   v1 requires an exact match — `i32` in one variant and `i64` in another is
   a build error, not a silent widen; coercion and `#[column(type = ...)]`
-  are out of scope), and the column-name override if any variant sets one
-  (one variant saying `#[column("a", shared = name)]` and another
-  `#[column("b", shared = name)]` is a build error).
+  are out of scope), and the `#[column]` override if any sharing field sets
+  one (one field saying `#[shared(name)] #[column("a")]` and another
+  `#[shared(name)] #[column("b")]` is a build error).
 - **Name collision check.** The shared identifier must not collide with
   another shared identifier or with anything else that names an accessor on
   the enum's fields struct (variant accessors like `human()`).
@@ -313,9 +317,9 @@ attributes, which reference field names, never column names:
 #[unique(name)]
 enum Creature {
     #[column(variant = 1)]
-    Human  { #[column(shared = name)] full_name: String, profession: String },
+    Human  { #[shared(name)] full_name: String, profession: String },
     #[column(variant = 2)]
-    Animal { #[column(shared = name)] nickname: String, species: String },
+    Animal { #[shared(name)] nickname: String, species: String },
 }
 ```
 
@@ -336,7 +340,7 @@ Enum-level `#[index(...)]` / `#[unique(...)]` may reference:
 
 Composite indexes mix both: `#[unique(name, human::profession)]`.
 
-Field-level `#[index]` / `#[unique]` on a field declaring `shared` is a
+Field-level `#[index]` / `#[unique]` on a field declaring `#[shared]` is a
 build error pointing at the enum-level form — the attribute on one variant
 would silently constrain rows of other variants.
 
@@ -346,7 +350,7 @@ would silently constrain rows of other variants.
   Model-level parsing (`model/schema/model.rs:293`) resolves field names to
   field offsets; the enum version resolves shared identifiers and
   `variant::field` paths to the mapped columns.
-- **Reject field-level index attributes on `shared` fields** during macro
+- **Reject field-level index attributes on `#[shared]` fields** during macro
   schema parsing, with an error naming the enum-level equivalent.
 - **Register indices on the embedded enum's app-schema entry** (the
   `Model::EmbeddedEnum` `indices` list that field-level attributes already
@@ -383,8 +387,12 @@ would silently constrain rows of other variants.
   of §2) — rejected; the storage string was the column's only identity, so
   `#[index]` and the cross-variant accessor had nothing to reference except a
   db column name, breaking the convention that attributes reference field
-  names. `shared = <ident>` names the logical field and derives the column
+  names. `#[shared(<ident>)]` names the logical field and derives the column
   name from it.
+- **`#[column(shared = <ident>)]`** (a later draft of §2) — rejected; it
+  fixed the naming problem but still hung sharing off `#[column]`, conflating
+  a model-level concept with storage naming. Sharing gets its own attribute;
+  `#[column]` stays purely about the column name.
 - **Field-level `#[index]` on one sharing variant meaning a column-wide
   index** — rejected; reads as variant-scoped while silently constraining
   rows of other variants.
@@ -392,5 +400,5 @@ would silently constrain rows of other variants.
   (variant-gated) index** — rejected for v1; needs partial-index machinery
   and a capability gate (no DynamoDB equivalent). See Out of scope.
 - **`#[column("name", as = alias)]`** — an alias bolted onto string-keyed
-  sharing; rejected in favor of `shared = <ident>`, which makes the
+  sharing; rejected in favor of `#[shared(<ident>)]`, which makes the
   identifier primary and carries one name instead of two.
