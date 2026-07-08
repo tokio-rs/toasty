@@ -1,7 +1,6 @@
 use super::{
     Entry, EntryPath, Type, TypeUnion, ValueObject, ValueRecord, sparse_record::SparseRecord,
 };
-use crate::schema::app;
 use std::cmp::Ordering;
 
 /// A dynamically typed value used throughout Toasty's query engine.
@@ -303,10 +302,12 @@ impl Value {
     /// Null values are compatible with any type. For union types, the value
     /// must be compatible with at least one member type. A `Type::Model`
     /// (a `#[document]` embed) is checked field-by-field against the embedded
-    /// model's layout, resolved from `schema`.
-    pub fn is_a(&self, schema: &app::Schema, ty: &Type) -> bool {
+    /// model's layout, resolved via `resolve`. When `resolve` cannot resolve
+    /// the model (a schema-free context such as `()`), there is no layout to
+    /// check against and the document pairing is accepted without inspection.
+    pub fn is_a(&self, resolve: &impl super::Resolve, ty: &Type) -> bool {
         if let Type::Union(types) = ty {
-            return types.iter().any(|t| self.is_a(schema, t));
+            return types.iter().any(|t| self.is_a(resolve, t));
         }
         match self {
             Self::Null => true,
@@ -326,41 +327,47 @@ impl Value {
                     if value.is_empty() {
                         true
                     } else {
-                        value[0].is_a(schema, ty)
+                        value[0].is_a(resolve, ty)
                     }
                 }
                 _ => false,
             },
             Self::Record(value) => match ty {
                 Type::Record(field_tys) if value.len() == field_tys.len() => {
-                    Self::fields_match(schema, &value.fields, field_tys.iter())
+                    Self::fields_match(resolve, &value.fields, field_tys.iter())
                 }
                 // A positional `Value::Record` is the engine's load form for a
                 // document value (an embedded model, field names dropped).
                 // Resolve the embed's field types from the schema and check each
                 // positionally.
-                Type::Model(id) => {
-                    let fields = schema.fields(*id);
-                    value.len() == fields.len()
-                        && Self::fields_match(
-                            schema,
-                            &value.fields,
-                            fields.iter().map(|field| field.expr_ty()),
-                        )
-                }
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => {
+                        let fields = model.fields();
+                        value.len() == fields.len()
+                            && Self::fields_match(
+                                resolve,
+                                &value.fields,
+                                fields.iter().map(|field| field.expr_ty()),
+                            )
+                    }
+                    None => true,
+                },
                 _ => false,
             },
             // A named `Value::Object` is the write-path form of a document
             // value: check each embed field against the entry of the same name
             // (an absent key is `None`, compatible with any field type).
             Self::Object(object) => match ty {
-                Type::Model(id) => schema.fields(*id).iter().all(|field| {
-                    let name = field.name().app_unwrap();
-                    object
-                        .iter()
-                        .find(|(key, _)| key == name)
-                        .is_none_or(|(_, v)| v.is_a(schema, field.expr_ty()))
-                }),
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => model.fields().iter().all(|field| {
+                        let name = field.name().app_unwrap();
+                        object
+                            .iter()
+                            .find(|(key, _)| key == name)
+                            .is_none_or(|(_, v)| v.is_a(resolve, field.expr_ty()))
+                    }),
+                    None => true,
+                },
                 _ => false,
             },
             Self::SparseRecord(value) => match ty {
@@ -390,14 +397,14 @@ impl Value {
     /// Whether each value `is_a` the type at the same position. Callers guard
     /// the lengths first — `zip` would otherwise accept a short prefix.
     fn fields_match<'a>(
-        schema: &app::Schema,
+        resolve: &impl super::Resolve,
         values: &[Value],
         tys: impl Iterator<Item = &'a Type>,
     ) -> bool {
         values
             .iter()
             .zip(tys)
-            .all(|(value, ty)| value.is_a(schema, ty))
+            .all(|(value, ty)| value.is_a(resolve, ty))
     }
 
     /// Infers and returns the [`Type`] of this value.

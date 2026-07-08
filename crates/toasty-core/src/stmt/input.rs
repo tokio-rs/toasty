@@ -64,8 +64,8 @@ pub struct ConstInput {}
 /// expected types at resolution time.
 ///
 /// `TypedInput` delegates resolution to an inner `Input` and then checks
-/// that the resolved expression's inferred type is a subtype of the
-/// expected argument type from `tys`.
+/// that the resolved expression can evaluate to a value of the expected
+/// argument type from `tys` (via [`Expr::is_a`]).
 pub struct TypedInput<'a, I, T = Schema> {
     cx: ExprContext<'a, T>,
     tys: &'a [Type],
@@ -93,24 +93,20 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
     fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Option<Expr> {
         let expr = self.input.resolve_arg(expr_arg, projection)?;
 
-        if !expr.is_value_null() {
-            let actual_ty = self.cx.infer_expr_ty(&expr, &[]);
+        let mut ty = &self.tys[expr_arg.position];
 
-            let mut ty = &self.tys[expr_arg.position];
-
-            for step in projection {
-                ty = match ty {
-                    Type::Record(tys) => &tys[step],
-                    Type::List(item) => item,
-                    _ => todo!("ty={ty:#?}"),
-                };
-            }
-
-            assert!(
-                actual_ty.is_subtype_of_in(ty, self.cx.schema()),
-                "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}"
-            )
+        for step in projection {
+            ty = match ty {
+                Type::Record(tys) => &tys[step],
+                Type::List(item) => item,
+                _ => todo!("ty={ty:#?}"),
+            };
         }
+
+        assert!(
+            expr.is_a(self.cx.schema(), ty),
+            "resolved input cannot evaluate to the requested argument type; expected={ty:#?}; actual={expr:#?}"
+        );
 
         Some(expr)
     }
