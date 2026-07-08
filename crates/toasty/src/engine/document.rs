@@ -370,23 +370,20 @@ fn to_named(app: &app::Schema, value: stmt::Value, ty: &stmt::Type) -> stmt::Val
     }
 }
 
-/// The text form `value` takes inside a stored JSON document, for comparison
-/// operands bound against a plain-text extraction. Temporal values go through
-/// the shared [`stmt::DocumentTemporalText`] form; decimals use their
-/// `Display` form — exactly what the codec's `collect_str` writes. `None` for
-/// values with no document text form (including `Null`, which comparisons
-/// reach via `IsNull` instead).
+/// The text form `value` takes inside a stored JSON document
+/// ([`stmt::Value::document_storage_text`]), for comparison operands bound
+/// against a plain-text extraction — exactly what the codec's `collect_str`
+/// writes. `None` for values with no document text form (including `Null`,
+/// which comparisons reach via `IsNull` instead).
 fn document_text(value: &stmt::Value) -> Option<String> {
-    #[cfg(feature = "jiff")]
-    if let Some(text) = stmt::DocumentTemporalText::of(value) {
-        return Some(text.to_string());
+    #[cfg(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal"))]
+    {
+        value.document_storage_text().map(|text| text.to_string())
     }
-    match value {
-        #[cfg(feature = "rust_decimal")]
-        stmt::Value::Decimal(v) => Some(v.to_string()),
-        #[cfg(feature = "bigdecimal")]
-        stmt::Value::BigDecimal(v) => Some(v.to_string()),
-        _ => None,
+    #[cfg(not(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal")))]
+    {
+        let _ = value;
+        None
     }
 }
 

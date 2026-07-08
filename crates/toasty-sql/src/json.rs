@@ -79,23 +79,31 @@ impl Serialize for Encode<'_> {
                 }
                 map.end()
             }
-            #[cfg(feature = "rust_decimal")]
-            Value::Decimal(v) => s.collect_str(v),
-            #[cfg(feature = "bigdecimal")]
-            Value::BigDecimal(v) => s.collect_str(v),
-            // jiff temporal scalars store the shared document text form
-            // ([`stmt::DocumentTemporalText`]): ISO 8601 / RFC 3339 text,
-            // truncated to microseconds (the precision the SQL temporal types
-            // hold) and printed with fixed six-digit subsecond precision so
+            // Decimals and jiff temporal scalars store the shared document
+            // text form ([`Value::document_storage_text`]): decimals as their
+            // `Display` form, temporals as ISO 8601 / RFC 3339 text truncated
+            // to microseconds (the precision the SQL temporal types hold) and
+            // printed with fixed six-digit subsecond precision so
             // text-comparing backends (SQLite) order document leaves
-            // chronologically. The engine's document lowering builds temporal
-            // comparison operands through the same type, so the stored form
+            // chronologically. The engine's document lowering builds
+            // comparison operands through the same method, so the stored form
             // and a bound operand cannot drift apart. `Zoned` is rejected at
             // schema-build (its RFC 9557 annotation has no SQL cast), so it
             // never reaches a document column.
+            #[cfg(feature = "rust_decimal")]
+            v @ Value::Decimal(_) => s.collect_str(
+                &v.document_storage_text()
+                    .expect("decimal value has a document text form"),
+            ),
+            #[cfg(feature = "bigdecimal")]
+            v @ Value::BigDecimal(_) => s.collect_str(
+                &v.document_storage_text()
+                    .expect("decimal value has a document text form"),
+            ),
             #[cfg(feature = "jiff")]
             v @ (Value::Timestamp(_) | Value::Date(_) | Value::Time(_) | Value::DateTime(_)) => {
-                let text = stmt::DocumentTemporalText::of(v)
+                let text = v
+                    .document_storage_text()
                     .expect("temporal value has a document text form");
                 s.collect_str(&text)
             }

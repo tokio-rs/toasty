@@ -49,10 +49,10 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
-#[cfg(feature = "jiff")]
-mod document_temporal_text;
-#[cfg(feature = "jiff")]
-pub use document_temporal_text::DocumentTemporalText;
+#[cfg(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal"))]
+mod document_storage_text;
+#[cfg(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal"))]
+pub use document_storage_text::DocumentStorageText;
 
 mod entry;
 pub use entry::Entry;
