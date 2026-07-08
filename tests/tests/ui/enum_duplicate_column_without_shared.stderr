@@ -1,5 +1,0 @@
-error: two variant fields map to the column `value` without declaring a shared field; annotate both with `#[shared(<ident>)]` to share the column
-  --> tests/ui/enum_duplicate_column_without_shared.rs:15:9
-   |
-15 |         number: String,
-   |         ^^^^^^

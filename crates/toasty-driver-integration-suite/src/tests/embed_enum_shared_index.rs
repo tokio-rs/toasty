@@ -255,6 +255,163 @@ pub async fn composite_index_shared_and_variant_field(test: &mut Test) -> Result
     Ok(())
 }
 
+/// Two variant fields resolving to the same column name without a common
+/// `#[shared]` identifier are a duplicate column, not an implicit merge. The
+/// macro cannot catch this case (for embedded fields `#[column]` is a
+/// flattening prefix, not a single column), so the schema builder rejects it.
+#[driver_test]
+pub async fn duplicate_column_without_shared_rejected(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    enum Value {
+        #[column(variant = 1)]
+        Text {
+            #[allow(dead_code)]
+            #[column("value")]
+            text: String,
+        },
+        #[column(variant = 2)]
+        Number {
+            #[allow(dead_code)]
+            #[column("value")]
+            number: String,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Holder {
+        #[key]
+        id: String,
+        #[allow(dead_code)]
+        value: Value,
+    }
+
+    let err = assert_err!(test.try_setup_db(models!(Holder)).await);
+    assert!(
+        err.to_string().contains("without declaring a shared field"),
+        "unexpected error: {err}"
+    );
+
+    Ok(())
+}
+
+/// Columns created while mapping a nested enum stay in the outer enum's
+/// namespace: a later variant field of the outer enum whose flattened name
+/// collides with one of the nested enum's columns is a duplicate, not a
+/// silent second column.
+#[driver_test]
+pub async fn nested_enum_column_collision_rejected(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Inner {
+        #[column(variant = 1)]
+        A {
+            #[allow(dead_code)]
+            x: String,
+        },
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Outer {
+        #[column(variant = 1)]
+        V1 {
+            #[allow(dead_code)]
+            inner: Inner,
+        },
+        // Flattens to the same column as `Inner::A::x` above
+        // (`{field}_inner_x`).
+        #[column(variant = 2)]
+        V2 {
+            #[allow(dead_code)]
+            inner_x: String,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Holder {
+        #[key]
+        id: String,
+        #[allow(dead_code)]
+        value: Outer,
+    }
+
+    let err = assert_err!(test.try_setup_db(models!(Holder)).await);
+    assert!(
+        err.to_string().contains("without declaring a shared field"),
+        "unexpected error: {err}"
+    );
+
+    Ok(())
+}
+
+/// Embedded-struct variant fields sharing a `#[column("...")]` *prefix* are
+/// not a collision: the string prefixes each flattened leaf, so differently
+/// shaped embeds produce disjoint columns.
+#[driver_test]
+pub async fn embedded_prefix_collision_is_not_duplicate(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    struct Geo {
+        lat: String,
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    struct Postal {
+        zip: String,
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Location {
+        #[column(variant = 1)]
+        Coords {
+            #[column("common")]
+            geo: Geo,
+        },
+        #[column(variant = 2)]
+        Mail {
+            #[column("common")]
+            postal: Postal,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Place {
+        #[key]
+        id: String,
+        location: Location,
+    }
+
+    let mut db = test.setup_db(models!(Place)).await;
+
+    // Disjoint flattened columns, no duplicate-column error.
+    let table = &db.schema().db.tables[0];
+    assert!(
+        table
+            .columns
+            .iter()
+            .any(|c| c.name == "location_common_lat")
+    );
+    assert!(
+        table
+            .columns
+            .iter()
+            .any(|c| c.name == "location_common_zip")
+    );
+
+    toasty::create!(Place {
+        id: "1",
+        location: Location::Coords {
+            geo: Geo {
+                lat: "47.6".to_string()
+            }
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let place = Place::get_by_id(&mut db, &"1".to_string()).await?;
+    assert!(matches!(place.location, Location::Coords { .. }));
+
+    Ok(())
+}
+
 /// A `#[column("...")]` override on a shared group renames the shared column;
 /// the shared identifier keeps naming the field in `#[unique(...)]`, and the
 /// index lands on the renamed column. The override needs declaring on only one

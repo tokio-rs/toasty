@@ -53,8 +53,10 @@ struct BuildMapping<'a> {
     table_to_model: Vec<stmt::Expr>,
     /// Column-sharing registry, active only while mapping the variant fields of
     /// an embedded enum. `None` outside an enum's variant mapping. Saved and
-    /// restored around each enum so sharing is scoped to a single enum's
-    /// variants (and never leaks across nested enums).
+    /// restored around each enum so `#[shared]` identifiers are scoped to a
+    /// single enum's variants (and never leak across nested enums); the
+    /// physical column `names` a nested enum creates are merged back into the
+    /// outer registry on restore, since they live in the parent's namespace.
     enum_columns: Option<EnumColumns>,
 }
 
@@ -1075,6 +1077,21 @@ impl<'a, 'b> MapField<'a, 'b> {
         let column_id = self.create_column(field, &embedded_enum.discriminant);
         let field_expr = self.field_expr(field, field_index);
 
+        // A nested enum's discriminant column lives in the parent enum's
+        // column namespace; record it so a later variant field of the parent
+        // resolving to the same name is caught as a duplicate.
+        if self.build.enum_columns.is_some() {
+            let column_name = self.build.table.column(column_id).name.clone();
+            let columns = self.build.enum_columns.as_mut().unwrap();
+            if !columns.names.insert(column_name.clone()) {
+                return Err(Error::invalid_schema(format!(
+                    "two enum variant fields map to the column `{column_name}` \
+                     without declaring a shared field; annotate both with \
+                     `#[shared(<ident>)]` to share the column",
+                )));
+            }
+        }
+
         // For data-carrying enums the model value is Record([I64(disc), ...]),
         // so project [0] to extract the discriminant; for unit-only enums the
         // value IS the I64 discriminant directly.
@@ -1096,7 +1113,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         // Activate a fresh column-sharing registry for this enum's variant
         // fields. A nested enum installs (and restores) its own, so sharing
         // never crosses enum boundaries. Restored after the variants are mapped.
-        let saved_shared = self.build.enum_columns.replace(EnumColumns::default());
+        let mut saved_shared = self.build.enum_columns.replace(EnumColumns::default());
 
         let variants: Result<Vec<mapping::EnumVariant>> = embedded_enum
             .variants
@@ -1123,6 +1140,14 @@ impl<'a, 'b> MapField<'a, 'b> {
             })
             .collect();
 
+        // Restore the outer registry. Shared-identifier scoping stays local to
+        // this enum, but the physical column names it created live in the
+        // parent's namespace — merge them back so a later field of the outer
+        // enum colliding with a nested enum's column is still caught.
+        if let (Some(outer), Some(inner)) = (saved_shared.as_mut(), self.build.enum_columns.take())
+        {
+            outer.names.extend(inner.names);
+        }
         self.build.enum_columns = saved_shared;
         let variants = variants?;
 

@@ -398,14 +398,13 @@ impl Expand<'_> {
     /// - **Column-name agreement:** a `#[column("...")]` override declared by
     ///   one member of a group applies to the whole group, so two members
     ///   declaring *different* overrides is a contradiction.
-    /// - **Explicit sharing:** two variant fields resolving to the same column
-    ///   name (same `#[column("name")]`, or a field name matching another
-    ///   variant's) without a common `#[shared]` identifier are a duplicate
-    ///   column, not an implicit merge. Explicit `#[column]` collisions are
-    ///   caught here; name-derived collisions fall back to the schema-build
-    ///   check (a field without `#[column]` is not necessarily single-column —
-    ///   an embedded struct flattens to several columns — so predicting a
-    ///   collision from the field name alone would reject legitimate schemas).
+    ///
+    /// Duplicate columns *without* `#[shared]` are **not** checked here. The
+    /// macro cannot tell a scalar from an embedded type, and for an embedded
+    /// field `#[column("...")]` is a flattening prefix rather than a single
+    /// column name — two variants may give embedded fields the same prefix and
+    /// still flatten to disjoint columns. The schema builder checks the actual
+    /// flattened leaf column names (`BuildMapping::map_field_primitive`).
     pub(super) fn expand_shared_column_checks(&self) -> TokenStream {
         let toasty = &self.toasty;
 
@@ -497,47 +496,6 @@ impl Expand<'_> {
                         let _ = check::<#ty, #first>;
                     };
                 });
-            }
-        }
-
-        // Explicit `#[column("name")]` collisions without a common `#[shared]`
-        // identifier are duplicate columns, not implicit merges.
-        let mut by_column: Vec<(String, Vec<&crate::model::schema::Field>)> = Vec::new();
-        for field in &self.model.fields {
-            let Some(name) = field
-                .attrs
-                .column
-                .as_ref()
-                .and_then(|column| column.name.as_ref())
-                .map(|name| name.value())
-            else {
-                continue;
-            };
-
-            match by_column.iter_mut().find(|(existing, _)| *existing == name) {
-                Some((_, fields)) => fields.push(field),
-                None => by_column.push((name, vec![field])),
-            }
-        }
-
-        for (name, fields) in by_column.iter().filter(|(_, fields)| fields.len() > 1) {
-            let first_shared = fields[0].attrs.shared.as_ref().map(|i| i.to_string());
-            for field in &fields[1..] {
-                let shared = field.attrs.shared.as_ref().map(|i| i.to_string());
-                if shared.is_none() || shared != first_shared {
-                    let ident = &field.name.ident;
-                    checks.push(
-                        syn::Error::new_spanned(
-                            ident,
-                            format!(
-                                "two variant fields map to the column `{name}` without \
-                                 declaring a shared field; annotate both with \
-                                 `#[shared(<ident>)]` to share the column"
-                            ),
-                        )
-                        .to_compile_error(),
-                    );
-                }
             }
         }
 
