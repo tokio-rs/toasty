@@ -64,6 +64,9 @@ use turso::{Builder, Database};
 use turso::{Connection as TursoConn, Statement, Value as TursoValue};
 use url::Url;
 
+#[cfg(feature = "sync")]
+use turso::sync::AuthTokenFn;
+
 enum SqlReturn {
     Count,
     Infer,
@@ -103,7 +106,7 @@ enum TursoPath {
 /// `turso::Builder::experimental_*` method and is applied in
 /// [`BuilderOptions::apply`] when the driver constructs a fresh
 /// [`turso::Builder`] at connection time.
-#[derive(Debug, Default, Clone)]
+#[derive(Default, Clone)]
 struct BuilderOptions {
     encryption: Option<EncryptionOpts>,
     attach: bool,
@@ -116,7 +119,15 @@ struct BuilderOptions {
     without_rowid: bool,
 
     #[cfg(feature = "sync")]
+    sync_options: SyncBuilderOptions,
+}
+
+#[cfg(feature = "sync")]
+#[derive(Default, Clone)]
+struct SyncBuilderOptions {
     remote_url: Option<String>,
+    auth_token: Option<AuthTokenFn>,
+    client_name: Option<String>,
 }
 
 #[cfg(not(feature = "sync"))]
@@ -161,13 +172,42 @@ impl BuilderOptions {
 #[cfg(feature = "sync")]
 impl BuilderOptions {
     fn apply(&self, mut b: Builder) -> Builder {
-        if let Some(remote_url) = &self.remote_url {
+        if let Some(remote_url) = &self.sync_options.remote_url {
             b = b.with_remote_url(remote_url)
         }
         if self.index_method {
             b = b.experimental_index_method(true);
         }
         b
+    }
+}
+
+impl fmt::Debug for BuilderOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let mut ds = f.debug_struct("BuilderOptions");
+        ds.field("encryption", &self.encryption)
+            .field("attach", &self.attach)
+            .field("custom_types", &self.custom_types)
+            .field("generated_columns", &self.generated_columns)
+            .field("index_method", &self.index_method)
+            .field("materialized_views", &self.materialized_views)
+            .field("vacuum", &self.vacuum)
+            .field("multiprocess_wal", &self.multiprocess_wal)
+            .field("without_rowid", &self.without_rowid);
+
+        #[cfg(feature = "sync")]
+        {
+            ds.field("remote_url", &self.sync_options.remote_url).field(
+                "auth_token",
+                &self
+                    .sync_options
+                    .auth_token
+                    .as_ref()
+                    .map(|_| "<redacted fn>"),
+            );
+        }
+
+        ds.finish()
     }
 }
 
@@ -259,7 +299,7 @@ impl Turso {
     /// Set remote_url for HTTP requests.
     #[cfg(feature = "sync")]
     pub fn with_remote_url(mut self, remote_url: impl Into<String>) -> Self {
-        self.options.remote_url = Some(remote_url.into());
+        self.options.sync_options.remote_url = Some(remote_url.into());
         self
     }
 
