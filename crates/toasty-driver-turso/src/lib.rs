@@ -454,7 +454,7 @@ impl Connection {
             typed_params.iter().map(|tv| &tv.value),
         );
         let result = self
-            .exec_sql_inner(sql_str, typed_params, ret, &mut log)
+            .exec_sql_inner(schema, sql_str, typed_params, ret, &mut log)
             .await;
         log.finish(&result);
         result
@@ -462,6 +462,7 @@ impl Connection {
 
     async fn exec_sql_inner(
         &mut self,
+        schema: &Schema,
         sql_str: &str,
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
