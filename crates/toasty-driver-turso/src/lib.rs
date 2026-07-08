@@ -103,7 +103,7 @@ enum TursoPath {
 /// `turso::Builder::experimental_*` method and is applied in
 /// [`BuilderOptions::apply`] when the driver constructs a fresh
 /// [`turso::Builder`] at connection time.
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 struct BuilderOptions {
     encryption: Option<EncryptionOpts>,
     attach: bool,
@@ -120,7 +120,7 @@ struct BuilderOptions {
 }
 
 #[cfg(feature = "sync")]
-#[derive(Default, Clone)]
+#[derive(Debug, Default, Clone)]
 struct SyncBuilderOptions {
     remote_url: Option<String>,
     auth_token: Option<String>,
@@ -182,35 +182,6 @@ impl BuilderOptions {
             b = b.experimental_index_method(true);
         }
         b
-    }
-}
-
-impl fmt::Debug for BuilderOptions {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let mut ds = f.debug_struct("BuilderOptions");
-        ds.field("encryption", &self.encryption)
-            .field("attach", &self.attach)
-            .field("custom_types", &self.custom_types)
-            .field("generated_columns", &self.generated_columns)
-            .field("index_method", &self.index_method)
-            .field("materialized_views", &self.materialized_views)
-            .field("vacuum", &self.vacuum)
-            .field("multiprocess_wal", &self.multiprocess_wal)
-            .field("without_rowid", &self.without_rowid);
-
-        #[cfg(feature = "sync")]
-        {
-            ds.field("remote_url", &self.sync_options.remote_url).field(
-                "auth_token",
-                &self
-                    .sync_options
-                    .auth_token
-                    .as_ref()
-                    .map(|_| "<redacted fn>"),
-            );
-        }
-
-        ds.finish()
     }
 }
 
