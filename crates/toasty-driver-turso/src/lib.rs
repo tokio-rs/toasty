@@ -64,9 +64,6 @@ use turso::{Builder, Database};
 use turso::{Connection as TursoConn, Statement, Value as TursoValue};
 use url::Url;
 
-#[cfg(feature = "sync")]
-use turso::sync::AuthTokenFn;
-
 enum SqlReturn {
     Count,
     Infer,
@@ -126,7 +123,7 @@ struct BuilderOptions {
 #[derive(Default, Clone)]
 struct SyncBuilderOptions {
     remote_url: Option<String>,
-    auth_token: Option<AuthTokenFn>,
+    auth_token: Option<String>,
     client_name: Option<String>,
 }
 
@@ -174,6 +171,12 @@ impl BuilderOptions {
     fn apply(&self, mut b: Builder) -> Builder {
         if let Some(remote_url) = &self.sync_options.remote_url {
             b = b.with_remote_url(remote_url)
+        }
+        if let Some(auth_token) = &self.sync_options.auth_token {
+            b = b.with_auth_token(auth_token)
+        }
+        if let Some(client_name) = &self.sync_options.client_name {
+            b = b.with_client_name(client_name)
         }
         if self.index_method {
             b = b.experimental_index_method(true);
@@ -300,6 +303,20 @@ impl Turso {
     #[cfg(feature = "sync")]
     pub fn with_remote_url(mut self, remote_url: impl Into<String>) -> Self {
         self.options.sync_options.remote_url = Some(remote_url.into());
+        self
+    }
+
+    /// Set optional authorization token for HTTP requests.
+    #[cfg(feature = "sync")]
+    pub fn with_auth_token(mut self, token: impl Into<String>) -> Self {
+        self.options.sync_options.auth_token = Some(token.into());
+        self
+    }
+
+    /// Set custom client name (defaults to 'turso-sync-rust').
+    #[cfg(feature = "sync")]
+    pub fn with_client_name(mut self, name: impl Into<String>) -> Self {
+        self.options.sync_options.client_name = Some(name.into());
         self
     }
 
