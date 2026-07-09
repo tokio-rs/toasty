@@ -29,7 +29,8 @@ pub use field::{EnumVariant, Field, FieldEnum, FieldPrimitive, FieldRelation, Fi
 mod model;
 pub use model::{Model, TableToModel};
 
-use super::app::ModelId;
+use super::{app::ModelId, db::ColumnId};
+use crate::stmt;
 use indexmap::IndexMap;
 
 /// Defines the correspondence between app-level models and database-level
@@ -53,6 +54,16 @@ use indexmap::IndexMap;
 pub struct Mapping {
     /// Per-model mappings indexed by model identifier.
     pub models: IndexMap<ModelId, Model>,
+
+    /// The app-level type of each `#[document]` column.
+    ///
+    /// A document column's [`db::Column`](crate::schema::db::Column) is typed
+    /// by the structural [`stmt::Type::Object`] — the column does not know
+    /// which embedded model it stores. This index carries that knowledge on
+    /// the engine's behalf: it maps the column to the `Type::Model` (or
+    /// `List(Model)`) view the engine uses to name document writes, raise
+    /// document reads, and type column references at the app level.
+    pub document_columns: IndexMap<ColumnId, stmt::Type>,
 }
 
 impl Mapping {
@@ -86,5 +97,12 @@ impl Mapping {
     /// ```
     pub fn model_mut(&mut self, id: impl Into<ModelId>) -> &mut Model {
         self.models.get_mut(&id.into()).expect("invalid model ID")
+    }
+
+    /// Returns the app-level type of a `#[document]` column — `Type::Model`
+    /// for a bare embed, `List(Model)` for an embed collection — or `None` if
+    /// the column does not store a document.
+    pub fn document_column_ty(&self, id: impl Into<ColumnId>) -> Option<&stmt::Type> {
+        self.document_columns.get(&id.into())
     }
 }

@@ -97,7 +97,7 @@ use toasty_core::driver::operation::Pagination;
 use crate::{
     Result,
     engine::{
-        SelectItem, SelectItems, eval, exec,
+        SelectItem, SelectItems, document, eval, exec,
         hir::{self},
         index::{self, IndexPlan},
         mir,
@@ -1337,10 +1337,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ));
         }
 
-        let row_filter = {
+        let mut row_filter = {
             let f = stmt.filter_expr_unwrap();
             if f.is_true() { None } else { Some(f.clone()) }
         };
+        self.lower_kv_expr(table_id, &mut row_filter);
 
         let limit = extract_pagination(&stmt);
 
@@ -1381,6 +1382,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let limit = extract_pagination(&stmt);
                 let order = extract_query_pk_order(&stmt);
 
+                let mut row_filter = index_plan.result_filter.take();
+                self.lower_kv_expr(index_plan.table_id(), &mut row_filter);
+
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
                     input,
@@ -1388,7 +1392,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     index: None, // Querying primary key
                     columns: self.load_data.select_items.extract_expr_references(),
                     pk_filter: index_plan.index_filter.take(),
-                    row_filter: index_plan.result_filter.take(),
+                    row_filter,
                     ty: ty.clone(),
                     limit,
                     order,
@@ -1411,13 +1415,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     }));
                 }
 
+                let mut row_filter = index_plan.result_filter.take();
+                self.lower_kv_expr(index_plan.table_id(), &mut row_filter);
+
                 let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
                     input,
                     table: index_plan.table_id(),
                     index: None, // Querying primary key
                     columns,
                     pk_filter: index_plan.index_filter.take(),
-                    row_filter: index_plan.result_filter.take(),
+                    row_filter,
                     ty: index_key_ty,
                     limit: None,
                     order: None,
@@ -1455,6 +1462,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let limit = extract_pagination(&stmt);
             let order = extract_query_pk_order(&stmt);
 
+            let mut row_filter = index_plan.result_filter.take();
+            self.lower_kv_expr(index_plan.index.on, &mut row_filter);
+
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
             return self.insert_mir_with_deps(mir::QueryPk {
@@ -1463,7 +1473,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 index: Some(index_plan.index.id), // Query the secondary index
                 columns: self.load_data.select_items.extract_expr_references(), // Return full records
                 pk_filter: index_plan.index_filter.take(),
-                row_filter: index_plan.result_filter.take(),
+                row_filter,
                 ty: ty.clone(), // Full record type, not just PKs
                 limit,
                 order,
@@ -1570,6 +1580,29 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
+    /// Lower a driver-bound key-value operation expression (a filter or
+    /// condition the driver compiles, e.g. into a DynamoDB expression):
+    /// projections into `#[document]` columns become resolved
+    /// `FuncJsonExtract` name paths, mirroring what `document::lower` does to
+    /// full statements at the SQL boundary. In-memory expressions (post
+    /// filters, guards) are deliberately *not* lowered — the interpreter
+    /// wants the positional form.
+    fn lower_kv_expr(
+        &self,
+        table: toasty_core::schema::db::TableId,
+        expr: &mut Option<stmt::Expr>,
+    ) {
+        if let Some(expr) = expr {
+            let engine = &self.planner.engine;
+            document::lower_table_expr(
+                &engine.schema,
+                engine.capability(),
+                engine.schema.db.table(table),
+                expr,
+            );
+        }
+    }
+
     fn build_key_operation(
         &mut self,
         stmt: &stmt::Statement,
@@ -1587,25 +1620,50 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     ty: ty.clone(),
                 })
             }
-            stmt::Statement::Delete(delete_stmt) => self.insert_mir_with_deps(mir::DeleteByKey {
-                input: get_by_key_input,
-                table: index_plan.table_id(),
-                filter: index_plan.result_filter.take(),
-                condition: delete_stmt.condition.expr.clone(),
-                ty: stmt::Type::Unit,
-            }),
+            stmt::Statement::Delete(delete_stmt) => {
+                let mut filter = index_plan.result_filter.take();
+                self.lower_kv_expr(index_plan.table_id(), &mut filter);
+                let mut condition = delete_stmt.condition.expr.clone();
+                self.lower_kv_expr(index_plan.table_id(), &mut condition);
+
+                self.insert_mir_with_deps(mir::DeleteByKey {
+                    input: get_by_key_input,
+                    table: index_plan.table_id(),
+                    filter,
+                    condition,
+                    ty: stmt::Type::Unit,
+                })
+            }
             stmt::Statement::Update(update_stmt) => {
                 // If there is a pre-filter, wrap the key input in a Guard
                 // node that produces an empty list when the guard is false,
                 // causing UpdateByKey to naturally no-op.
                 let guarded_input = self.apply_guard(get_by_key_input, index_plan);
 
+                let mut filter = index_plan.result_filter.take();
+                self.lower_kv_expr(index_plan.table_id(), &mut filter);
+                let mut condition = update_stmt.condition.expr.clone();
+                self.lower_kv_expr(index_plan.table_id(), &mut condition);
+
+                // Name the document values in the assignments (positional
+                // records become named objects), the same conversion the SQL
+                // boundary applies to UPDATE statements.
+                let mut assignments = update_stmt.assignments.clone();
+                {
+                    let engine = &self.planner.engine;
+                    document::name_assignment_values(
+                        &engine.schema,
+                        engine.schema.db.table(index_plan.table_id()),
+                        &mut assignments,
+                    );
+                }
+
                 self.insert_mir_with_deps(mir::UpdateByKey {
                     input: guarded_input,
                     table: index_plan.table_id(),
-                    assignments: update_stmt.assignments.clone(),
-                    filter: index_plan.result_filter.take(),
-                    condition: update_stmt.condition.expr.clone(),
+                    assignments,
+                    filter,
+                    condition,
                     columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })

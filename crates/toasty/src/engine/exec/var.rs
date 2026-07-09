@@ -1,9 +1,11 @@
+use crate::engine::document;
 use std::sync::Arc;
 use toasty_core::{
     driver::{ExecResponse, Rows},
     schema::Schema,
     stmt,
 };
+use tokio_stream::StreamExt;
 
 /// Tracks variable declarations during planning. Each variable has a type and
 /// is assigned a unique VarId. This is converted into a VarStore for execution.
@@ -79,14 +81,19 @@ impl VarStore {
                 response.values
             }
             Rows::Value(value) => {
-                // Drivers decode document columns straight to the positional
-                // `Value::Record` form (see `toasty_sql::json` and the
-                // DynamoDB value conversion), so no conversion happens here.
-                // This assertion is a diagnostic shape check only.
+                // Raise driver-returned document values — named wire objects —
+                // into the typed positional `Value::Record` form the engine
+                // consumes, then shape-check.
+                let ty = &self.tys[var.0];
+                let value = if document::ty_contains_document(ty) {
+                    document::raise(&self.schema.app, ty, value)
+                        .expect("failed to raise document value")
+                } else {
+                    value
+                };
                 assert!(
-                    value.is_a(&self.schema.app, &self.tys[var.0]),
-                    "type mismatch: {value:?} is not a {:?}",
-                    self.tys[var.0]
+                    value.is_a(&self.schema.app, ty),
+                    "type mismatch: {value:?} is not a {ty:?}",
                 );
                 Rows::Value(value)
             }
@@ -94,8 +101,22 @@ impl VarStore {
                 let stmt::Type::List(item_tys) = &self.tys[var.0] else {
                     todo!("ty={:#?}", self.tys[var.0])
                 };
+                let item_ty = (**item_tys).clone();
 
-                Rows::Stream(value_stream.typed(self.schema.clone(), (**item_tys).clone()))
+                // Raise document values in each driver row before the typed
+                // stream's shape check sees them.
+                let value_stream =
+                    if document::ty_contains_document(&item_ty) {
+                        let schema = self.schema.clone();
+                        let ty = item_ty.clone();
+                        stmt::ValueStream::from_stream(value_stream.map(move |row| {
+                            row.and_then(|row| document::raise(&schema.app, &ty, row))
+                        }))
+                    } else {
+                        value_stream
+                    };
+
+                Rows::Stream(value_stream.typed(self.schema.clone(), item_ty))
             }
         };
         let response = ExecResponse {

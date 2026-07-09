@@ -111,14 +111,16 @@ impl Builder {
             tables: vec![],
             mapping: Mapping {
                 models: IndexMap::new(),
+                document_columns: IndexMap::new(),
             },
         };
 
-        // Validate `#[document]` embeds now that every embed is registered. A
-        // document column tracks its shape as `Type::Model(embed_id)` (or
-        // `List(Model)`) and resolves the embed's fields on demand, so there is
-        // nothing to rewrite — only to check (named fields, no `#[column]`
-        // rename, no relations, no unrepresentable leaf).
+        // Validate `#[document]` embeds now that every embed is registered.
+        // A document column is typed by the structural `Type::Object`; its
+        // embedded model (`Type::Model`) is recorded in the mapping's
+        // document-column index and resolved on demand, so there is nothing
+        // to rewrite — only to check (named fields, no `#[column]` rename, no
+        // relations, no unrepresentable leaf).
         verify_document_types(&app)?;
 
         for model in app.models.values_mut() {
@@ -158,6 +160,7 @@ impl Builder {
         }
 
         builder.build_tables_from_models(&app, db)?;
+        builder.index_document_columns(&app);
 
         let schema = Schema {
             app,
@@ -181,6 +184,61 @@ impl Default for Builder {
 }
 
 impl BuildSchema<'_> {
+    /// Populates [`Mapping::document_columns`]: for every `#[document]` field
+    /// — including fields nested inside column-expanded embedded structs and
+    /// embedded enum variants — record the field's app-level type
+    /// (`Type::Model` or `List(Model)`) against the column that stores it.
+    ///
+    /// The column itself is typed by the structural `stmt::Type::Object`
+    /// (columns don't know about models); this index is where the engine
+    /// recovers the embedded-model view of a document column.
+    fn index_document_columns(&mut self, app: &app::Schema) {
+        fn collect_field(
+            app: &app::Schema,
+            field: &app::Field,
+            mapped: &mapping::Field,
+            out: &mut IndexMap<db::ColumnId, stmt::Type>,
+        ) {
+            match (&field.ty, mapped) {
+                (app::FieldTy::Primitive(primitive), mapping::Field::Primitive(p))
+                    if document_embed_id(&primitive.ty).is_some() =>
+                {
+                    out.insert(p.column, primitive.ty.clone());
+                }
+                (app::FieldTy::Embedded(_), mapping::Field::Struct(s)) => {
+                    for (field, mapped) in app.fields(s.id).iter().zip(&s.fields) {
+                        collect_field(app, field, mapped, out);
+                    }
+                }
+                (app::FieldTy::Embedded(embedded), mapping::Field::Enum(e)) => {
+                    let app::Model::EmbeddedEnum(embedded_enum) = app.model(embedded.target) else {
+                        panic!("enum field mapping on a non-enum embed")
+                    };
+                    for (index, variant) in e.variants.iter().enumerate() {
+                        for (field, mapped) in
+                            embedded_enum.variant_fields(index).zip(&variant.fields)
+                        {
+                            collect_field(app, field, mapped, out);
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+
+        let mut out = IndexMap::new();
+        for model_mapping in self.mapping.models.values() {
+            for (field, mapped) in app
+                .fields(model_mapping.id)
+                .iter()
+                .zip(&model_mapping.fields)
+            {
+                collect_field(app, field, mapped, &mut out);
+            }
+        }
+        self.mapping.document_columns = out;
+    }
+
     fn build_model_constraints(&self, model: &mut app::Model) -> Result<()> {
         let model_name = model.name().to_string();
 

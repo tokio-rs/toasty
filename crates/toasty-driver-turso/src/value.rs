@@ -9,7 +9,6 @@
 //! Turso ride on the SQLite-flavored serializer without an
 //! independent type system.
 
-use toasty_core::schema::app;
 use toasty_core::stmt::{self, Value as CoreValue};
 use turso::Value as TursoValue;
 
@@ -40,7 +39,7 @@ pub(crate) fn to_turso(value: &CoreValue) -> TursoValue {
 
 /// Converts a [`turso::Value`] back to a [`toasty_core::stmt::Value`] using
 /// the expected return type to interpret the raw SQLite value correctly.
-pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type, schema: &app::Schema) -> CoreValue {
+pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type) -> CoreValue {
     match value {
         TursoValue::Null => CoreValue::Null,
         TursoValue::Integer(v) => match ty {
@@ -62,10 +61,11 @@ pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type, schema: &app::Schem
         },
         TursoValue::Text(v) => match ty {
             stmt::Type::Uuid => CoreValue::Uuid(v.parse().expect("text is a valid uuid")),
-            stmt::Type::List(elem) => json_text_to_value_list(schema, &v, elem),
-            // A bare `#[document]` embed column (`Type::Model`) decodes straight
-            // to the positional `Value::Record` the engine loads.
-            stmt::Type::Model(_) => json_text_to_value(schema, &v, ty),
+            stmt::Type::List(elem) => json_text_to_value_list(&v, elem),
+            // A bare `#[document]` column (`Type::Object`) decodes
+            // shape-directed to the named `Value::Object` wire form; the
+            // engine raises it to the embed's positional record.
+            stmt::Type::Object => json_text_to_value(&v, ty),
             _ => CoreValue::String(v),
         },
         TursoValue::Blob(v) => match ty {
@@ -91,12 +91,11 @@ fn value_to_json_text(value: &CoreValue) -> String {
     toasty_sql::json::to_string(value).expect("serialize document value to JSON")
 }
 
-fn json_text_to_value_list(schema: &app::Schema, text: &str, elem_ty: &stmt::Type) -> CoreValue {
-    toasty_sql::json::list_from_str(schema, text, elem_ty)
+fn json_text_to_value_list(text: &str, elem_ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::list_from_str(text, elem_ty)
         .expect("Turso returned non-JSON for a collection column")
 }
 
-fn json_text_to_value(schema: &app::Schema, text: &str, ty: &stmt::Type) -> CoreValue {
-    toasty_sql::json::from_str(schema, text, ty)
-        .expect("Turso returned non-JSON for a document column")
+fn json_text_to_value(text: &str, ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::from_str(text, ty).expect("Turso returned non-JSON for a document column")
 }

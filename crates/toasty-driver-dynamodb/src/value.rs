@@ -1,9 +1,6 @@
 use aws_sdk_dynamodb::types::AttributeValue;
 use std::collections::HashMap;
-use toasty_core::{
-    schema::app,
-    stmt::{self, Value as CoreValue},
-};
+use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
 pub struct Value(CoreValue);
@@ -22,13 +19,13 @@ impl Value {
 
     /// Converts a DynamoDB AttributeValue to a Toasty value.
     ///
-    /// Decoding is type-directed: `ty` (the column's engine type) determines
-    /// how each attribute is interpreted. A `#[document]` column
-    /// (`Type::Model`) decodes a Map `M` attribute to the positional
-    /// `Value::Record` the engine consumes, resolving field names and order
-    /// from the embed's schema — the DynamoDB analogue of the SQL drivers'
-    /// type-directed JSON decoding.
-    pub fn from_ddb(app: &app::Schema, ty: &stmt::Type, val: &AttributeValue) -> Self {
+    /// Decoding is type-directed for scalar columns: `ty` (the column's
+    /// storage-level type) determines how each attribute is interpreted. A
+    /// `#[document]` column (`Type::Object`) decodes shape-directed instead —
+    /// a Map `M` attribute becomes the named `Value::Object` wire form
+    /// ([`from_ddb_any`](Self::from_ddb_any)), which the engine raises to the
+    /// embedded model's positional record. No schema is consulted here.
+    pub fn from_ddb(ty: &stmt::Type, val: &AttributeValue) -> Self {
         use AttributeValue as AV;
         use stmt::Type;
 
@@ -50,25 +47,15 @@ impl Value {
             (Type::List(elem), AV::L(items)) => {
                 let items = items
                     .iter()
-                    .map(|item| Value::from_ddb(app, elem, item).into_inner())
+                    .map(|item| Value::from_ddb(elem, item).into_inner())
                     .collect();
                 stmt::Value::List(items)
             }
-            // A `#[document]` embed stored as a Map `M`: decode to the
-            // positional record the engine consumes, in schema field order. A
-            // key the writer omitted (an `Option` leaf holding `None`) decodes
-            // to `Null`.
-            (Type::Model(embed_id), AV::M(map)) => {
-                stmt::Value::Record(stmt::ValueRecord::from_vec(
-                    app.fields(*embed_id)
-                        .iter()
-                        .map(|field| match map.get(field.name().app_unwrap()) {
-                            Some(attr) => Value::from_ddb(app, field.expr_ty(), attr).into_inner(),
-                            None => stmt::Value::Null,
-                        })
-                        .collect(),
-                ))
-            }
+            // A `#[document]` column stored as a Map `M`: decode
+            // shape-directed to the named wire object. The engine raises it
+            // to the embed's positional record — the field layout is a
+            // model-level concept this driver does not know.
+            (Type::Object, val @ AV::M(_)) => Self::from_ddb_any(val),
             (_, AV::Null(_)) => stmt::Value::Null,
             // Scalars whose DynamoDB representation is their string form
             // (temporals, decimals): recover the typed value through the same
@@ -82,45 +69,76 @@ impl Value {
         Value(core_value)
     }
 
-    /// Converts a Toasty value to a DynamoDB AttributeValue, directed by the
-    /// value's engine type.
-    ///
-    /// The type only matters for `#[document]` columns: a `Type::Model` embed
-    /// carries a positional `Value::Record` whose field names live in the
-    /// schema, so encoding a Map `M` needs the embed's field list. Everything
-    /// else defers to the shape-directed [`to_ddb`](Self::to_ddb).
-    pub fn to_ddb_typed(app: &app::Schema, ty: &stmt::Type, value: &stmt::Value) -> AttributeValue {
+    /// Converts a DynamoDB AttributeValue to a Toasty value shape-directed —
+    /// the document-interior decode, with no type to consult. Every attribute
+    /// takes its wire-natural form: strings stay `String`, numbers decode by
+    /// integer fit (`I64`, then `U64`, then `F64` — mirroring the JSON codec),
+    /// maps become named `Value::Object`s in stored key order. The engine
+    /// casts the leaves to their field types when it raises the document.
+    fn from_ddb_any(val: &AttributeValue) -> CoreValue {
         use AttributeValue as AV;
-        use stmt::Type;
 
-        match (ty, value) {
-            // A `#[document]` embed: encode the positional record as a Map
-            // keyed by the embed's field names. `Null` fields (an `Option`
-            // leaf holding `None`) are omitted, matching the SQL drivers'
-            // JSON encoding; they decode back from the missing key.
-            (Type::Model(embed_id), stmt::Value::Record(record)) => {
+        match val {
+            AV::Bool(val) => stmt::Value::Bool(*val),
+            AV::S(val) => stmt::Value::String(val.clone()),
+            AV::N(val) => {
+                if let Ok(v) = val.parse::<i64>() {
+                    stmt::Value::I64(v)
+                } else if let Ok(v) = val.parse::<u64>() {
+                    stmt::Value::U64(v)
+                } else {
+                    stmt::Value::F64(
+                        val.parse::<f64>()
+                            .expect("numeric attribute is not a number"),
+                    )
+                }
+            }
+            AV::B(val) => stmt::Value::Bytes(val.clone().into_inner()),
+            AV::Null(_) => stmt::Value::Null,
+            AV::L(items) => stmt::Value::List(items.iter().map(Self::from_ddb_any).collect()),
+            AV::M(map) => stmt::Value::Object(stmt::ValueObject::from_vec(
+                map.iter()
+                    .map(|(key, val)| (key.clone(), Self::from_ddb_any(val)))
+                    .collect(),
+            )),
+            _ => todo!("value={:#?}", val),
+        }
+    }
+
+    /// Converts a document-interior value to a DynamoDB AttributeValue,
+    /// mirroring the SQL drivers' JSON document encoding:
+    ///
+    /// - an object's `Null` entries (an `Option` leaf holding `None`) are
+    ///   omitted; they decode back from the missing key.
+    /// - temporal and decimal leaves store the shared document text form
+    ///   ([`stmt::Value::document_storage_text`], fixed six-digit sub-second
+    ///   precision) — the exact text the engine's document lowering binds as
+    ///   a comparison operand, so a stored leaf and an operand cannot drift
+    ///   apart.
+    /// - everything else shares the column wire forms of
+    ///   [`to_ddb`](Self::to_ddb).
+    fn to_ddb_document(value: &CoreValue) -> AttributeValue {
+        use AttributeValue as AV;
+
+        match value {
+            stmt::Value::Object(object) => {
                 let mut map = HashMap::new();
-                for (embed_field, field) in app.fields(*embed_id).iter().zip(record.iter()) {
-                    if !field.is_null() {
-                        map.insert(
-                            embed_field.name().app_unwrap().to_owned(),
-                            Self::to_ddb_typed(app, embed_field.expr_ty(), field),
-                        );
+                for (key, value) in object.iter() {
+                    if !value.is_null() {
+                        map.insert(key.clone(), Self::to_ddb_document(value));
                     }
                 }
                 AV::M(map)
             }
-            (Type::List(elem), stmt::Value::List(items)) => AV::L(
-                items
-                    .iter()
-                    .map(|item| Self::to_ddb_typed(app, elem, item))
-                    .collect(),
-            ),
-            (_, value) => Value(value.clone()).to_ddb(),
+            stmt::Value::List(items) => AV::L(items.iter().map(Self::to_ddb_document).collect()),
+            value => match value.document_storage_text() {
+                Some(text) => AV::S(text.to_string()),
+                None => Value(value.clone()).to_ddb(),
+            },
         }
     }
 
-    /// Converts this value to a DynamoDB AttributeValue.
+    /// Converts a Toasty value to a DynamoDB AttributeValue, shape-directed.
     pub fn to_ddb(&self) -> AttributeValue {
         use AttributeValue as AV;
 
@@ -146,6 +164,10 @@ impl Value {
                     .collect::<Vec<_>>();
                 AV::L(items)
             }
+            // A `#[document]` value, named by the engine's document lowering:
+            // encode through the document leaf encoding
+            // ([`to_ddb_document`](Self::to_ddb_document)).
+            value @ stmt::Value::Object(_) => Self::to_ddb_document(value),
             stmt::Value::Null => AV::Null(true),
             // Scalars whose DynamoDB representation is their string form
             // (temporals, decimals): the same `Type::cast` conversions the

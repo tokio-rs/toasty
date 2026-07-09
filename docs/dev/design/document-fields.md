@@ -840,16 +840,19 @@ used regardless.
   inside the DynamoDB driver, which picks `L` / typed-Set / `M` for
   collection and map fields directly.
 
-  The carrier types are `stmt::Type::Document(TypeDocument)` and
-  `stmt::Type::List(Document(..))`. `TypeDocument` records the field
-  names alongside their types, unlike a positional `Record`. The schema
-  builder rewrites the macro-emitted `Type::List(Model(id))` to
-  `Type::List(Document(..))` while resolving document fields. On the
-  write path the engine converts `Value::Record` to a named
-  `Value::Object` at the driver boundary, where the column's
-  `TypeDocument` supplies the field names; on the read path the driver
-  decodes JSON straight to `Value::Record` using the type, so
-  `Value::Object` is a write-side representation only.
+  The carrier types are the structural `stmt::Type::Object` (the
+  type-level mirror of `Value::Object`) and `stmt::Type::List(Object)`.
+  A document column is typed the way a `jsonb` column is: it records
+  *that* the column holds a document, not which embedded model it
+  stores — the model identity stays engine-side, in the schema mapping.
+  A document crosses the driver boundary as a named `Value::Object` in
+  both directions: the engine names the positional `Value::Record` into
+  an object just before the driver serializes it, and raises a
+  driver-decoded object back to the typed positional record as rows
+  return. Drivers encode and decode documents shape-directed — interior
+  leaves take their wire forms (numbers by integer fit, temporals and
+  decimals as text), and the engine casts them to their field types
+  during the raise — so a driver never consults the application schema.
 
 **New operations.** SQL drivers gain new statement nodes for collection
 predicates, collection mutations, and document-specific path operations.

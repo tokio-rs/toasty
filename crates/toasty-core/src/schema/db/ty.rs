@@ -235,6 +235,18 @@ impl Type {
             // The engine casts Bool <-> I8 transparently via encode_column /
             // map_table_column_to_model; the driver handles them as plain numbers.
             (Self::Integer(1), stmt::Type::Bool) => stmt::Type::I8,
+            // A `#[document]` column stores a structural document: the column
+            // is typed by `Type::Object` (mirroring `Value::Object`), not by
+            // the embedded model. The model identity stays an app/engine
+            // concept, carried by `mapping::Mapping::document_columns`. A
+            // document collection (`List(Model)`, whose storage collapses to
+            // one document) keeps its list shape with `Object` elements.
+            (Self::Document { .. }, stmt::Type::Model(_)) => stmt::Type::Object,
+            (Self::Document { .. }, stmt::Type::List(elem))
+                if matches!(**elem, stmt::Type::Model(_)) =>
+            {
+                stmt::Type::List(Box::new(stmt::Type::Object))
+            }
             _ => ty.clone(),
         }
     }

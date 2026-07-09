@@ -171,6 +171,18 @@ pub trait Resolve {
     /// Returns the database table that stores the given model, if any.
     fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
 
+    /// Returns the [`Type`] an expression referencing `column` has in this
+    /// resolution context.
+    ///
+    /// Defaults to the column's stored type. The full [`Schema`] overrides
+    /// this for `#[document]` columns: the engine views such a column at the
+    /// app level (`Type::Model`, resolved through the mapping), while the
+    /// column itself — the view drivers and the SQL serializer get — is typed
+    /// by the structural `Type::Object`.
+    fn column_expr_ty(&self, column: &Column) -> Type {
+        column.ty.clone()
+    }
+
     /// Returns a reference to the application Model with the specified ID.
     ///
     /// Used during high-level query building to access model metadata such as
@@ -574,7 +586,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
     pub fn infer_expr_reference_ty(&self, expr_reference: &ExprReference) -> Type {
         match self.resolve_expr_reference(expr_reference) {
             ResolvedRef::Model(model) => Type::Model(model.id),
-            ResolvedRef::Column(column) => column.ty.clone(),
+            ResolvedRef::Column(column) => self.schema.column_expr_ty(column),
             ResolvedRef::Field(field) => field.expr_ty().clone(),
             ResolvedRef::Cte { .. } => todo!("type inference for CTE columns not implemented"),
             ResolvedRef::Derived(_) => {
@@ -687,6 +699,15 @@ impl<'a> ResolvedRef<'a> {
 impl Resolve for Schema {
     fn model(&self, id: ModelId) -> Option<&Model> {
         Some(self.app.model(id))
+    }
+
+    fn column_expr_ty(&self, column: &Column) -> Type {
+        // The engine types a `#[document]` column reference at the app level
+        // (`Type::Model`), not by the column's structural `Type::Object`.
+        match self.mapping.document_column_ty(column.id) {
+            Some(ty) => ty.clone(),
+            None => column.ty.clone(),
+        }
     }
 
     fn table(&self, id: TableId) -> Option<&Table> {

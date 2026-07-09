@@ -246,8 +246,9 @@ impl ValueStream {
             Some((_, prev, _)) => assert_eq!(*prev, ty),
             None => {
                 // Validate already-buffered values against the new type.
-                // Drivers decode document columns straight to the positional
-                // `Value::Record` form, so no conversion is needed here.
+                // Document values have already been raised to their positional
+                // `Value::Record` form by the engine (see the engine's
+                // document raising), so this is a shape check only.
                 let mut tmp = mem::take(&mut self.buffer);
                 while let Some(value) = tmp.next() {
                     assert!(

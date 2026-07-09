@@ -71,7 +71,7 @@ impl Exec<'_> {
             let res = self
                 .connection
                 .exec(
-                    &self.engine.schema,
+                    &self.engine.db_schema,
                     operation::QueryPk {
                         table: action.table,
                         index: action.index,

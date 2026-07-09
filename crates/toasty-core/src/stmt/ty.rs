@@ -123,6 +123,17 @@ pub enum Type {
     /// A fixed-length tuple where each item can have a different type.
     Record(Vec<Type>),
 
+    /// A document value with named fields — the type-level mirror of
+    /// [`Value::Object`](super::Value::Object).
+    ///
+    /// This is how a `#[document]` column is typed at the database and driver
+    /// level: purely structural, like a `jsonb` column. It does not name the
+    /// embedded model whose fields it stores — that identity is an app/engine
+    /// concept, and the engine views the same column as [`Type::Model`]. The
+    /// two views are converted at the driver boundary (see the engine's
+    /// document lowering and raising).
+    Object,
+
     /// A byte array, more efficient than `List(U8)`.
     Bytes,
 
@@ -241,6 +252,11 @@ impl Type {
     /// Returns `true` if this is [`Type::Record`].
     pub fn is_record(&self) -> bool {
         matches!(self, Self::Record(..))
+    }
+
+    /// Returns `true` if this is [`Type::Object`].
+    pub fn is_object(&self) -> bool {
+        matches!(self, Self::Object)
     }
 
     /// Returns `true` if this is [`Type::Bytes`].
@@ -386,6 +402,14 @@ impl Type {
             (value, Self::U16) => Value::U16(u16::try_from(value)?),
             (value, Self::U32) => Value::U32(u32::try_from(value)?),
             (value, Self::U64) => Value::U64(u64::try_from(value)?),
+            // Integer -> float conversions. Document leaves decode from the
+            // wire by integer fit (an integral JSON number or DynamoDB `N`
+            // arrives as `I64`/`U64`), so raising a float document field must
+            // accept integer-shaped input.
+            (Value::I64(v), Self::F32) => Value::F32(v as f32),
+            (Value::I64(v), Self::F64) => Value::F64(v as f64),
+            (Value::U64(v), Self::F32) => Value::F32(v as f32),
+            (Value::U64(v), Self::F64) => Value::F64(v as f64),
             // Float casts
             (Value::F32(v), Self::F32) => Value::F32(v),
             (Value::F64(v), Self::F32) => {

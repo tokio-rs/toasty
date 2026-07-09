@@ -3,17 +3,17 @@ use super::{
     TransactWriteItem, ddb_expression, ddb_key, item_to_record, operation,
 };
 use std::{collections::HashMap, sync::Arc};
-use toasty_core::{Schema, driver::ExecResponse, stmt::ExprContext};
+use toasty_core::{driver::ExecResponse, schema::db, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_delete_by_key(
         &mut self,
-        schema: &Arc<Schema>,
+        schema: &Arc<db::Schema>,
         op: operation::DeleteByKey,
     ) -> Result<ExecResponse> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
-        let table = schema.db.table(op.table);
+        let table = schema.table(op.table);
         let cx = ExprContext::new_with_target(schema.as_ref(), table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -84,9 +84,7 @@ impl Connection {
                     if let Some(filter) = filter_expr {
                         // Both filter and condition set — check if filter matched
                         if let Some(old_item) = cce.item() {
-                            let record =
-                                item_to_record(&schema.app, old_item, table.columns.iter())
-                                    .unwrap();
+                            let record = item_to_record(old_item, table.columns.iter()).unwrap();
                             use toasty_core::stmt;
                             struct RecordInput<'a>(&'a stmt::ValueRecord);
                             impl stmt::Input for RecordInput<'_> {
@@ -135,7 +133,7 @@ impl Connection {
             .columns
             .iter()
             .map(|index_column| {
-                let column = schema.db.column(index_column.column);
+                let column = schema.column(index_column.column);
                 column.name.clone()
             })
             .collect();

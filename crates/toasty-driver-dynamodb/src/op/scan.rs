@@ -1,5 +1,5 @@
 use super::{
-    Connection, ExprAttrs, Result, Schema, ddb_expression, deserialize_ddb_cursor, item_to_record,
+    Connection, ExprAttrs, Result, db, ddb_expression, deserialize_ddb_cursor, item_to_record,
     operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
@@ -12,10 +12,10 @@ use toasty_core::{
 impl Connection {
     pub(crate) async fn exec_scan(
         &mut self,
-        schema: &Arc<Schema>,
+        schema: &Arc<db::Schema>,
         op: operation::Scan,
     ) -> Result<ExecResponse> {
-        let table = schema.db.table(op.table);
+        let table = schema.table(op.table);
         let cx = ExprContext::new_with_target(schema.as_ref(), table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -43,7 +43,7 @@ impl Connection {
         let col_indices = op.columns;
         let cols = || {
             col_indices.iter().map(|&idx| {
-                schema.db.column(ColumnId {
+                schema.column(ColumnId {
                     table: table_id,
                     index: idx,
                 })
@@ -61,7 +61,7 @@ impl Connection {
                     .transpose()
                     .map_err(toasty_core::Error::driver_operation_failed)?
                 {
-                    rows.push(item_to_record(&schema.app, &item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -88,7 +88,7 @@ impl Connection {
 
                 let mut rows: Vec<stmt::Value> = Vec::new();
                 for item in res.items.into_iter().flatten() {
-                    rows.push(item_to_record(&schema.app, &item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -127,10 +127,7 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            rows.push(
-                                item_to_record(&schema.app, &item, cols())
-                                    .map(stmt::Value::from)?,
-                            );
+                            rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                         }
                         None => break,
                     }

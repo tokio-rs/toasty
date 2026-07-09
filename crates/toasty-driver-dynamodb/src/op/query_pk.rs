@@ -1,5 +1,5 @@
 use super::{
-    Connection, ExprAttrs, Result, Schema, ddb_expression, deserialize_ddb_cursor, item_to_record,
+    Connection, ExprAttrs, Result, db, ddb_expression, deserialize_ddb_cursor, item_to_record,
     operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
@@ -11,10 +11,10 @@ use toasty_core::{
 impl Connection {
     pub(crate) async fn exec_query_pk(
         &mut self,
-        schema: &Arc<Schema>,
+        schema: &Arc<db::Schema>,
         op: operation::QueryPk,
     ) -> Result<ExecResponse> {
-        let table = schema.db.table(op.table);
+        let table = schema.table(op.table);
         let cx = ExprContext::new_with_target(schema.as_ref(), table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -39,7 +39,7 @@ impl Connection {
             .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
         if let Some(index_id) = op.index {
-            let index = schema.db.index(index_id);
+            let index = schema.index(index_id);
             if index.unique {
                 return Err(toasty_core::Error::from_args(format_args!(
                     "Unique index {} doesn't have fields.",
@@ -57,7 +57,7 @@ impl Connection {
         }
 
         let select = op.select;
-        let cols = || select.iter().map(|&id| schema.db.column(id));
+        let cols = || select.iter().map(|&id| schema.column(id));
 
         match op.limit {
             None => {
@@ -70,7 +70,7 @@ impl Connection {
                     .transpose()
                     .map_err(toasty_core::Error::driver_operation_failed)?
                 {
-                    rows.push(item_to_record(&schema.app, &item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -96,7 +96,7 @@ impl Connection {
 
                 let mut rows: Vec<stmt::Value> = Vec::new();
                 for item in res.items.into_iter().flatten() {
-                    rows.push(item_to_record(&schema.app, &item, cols()).map(stmt::Value::from)?);
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                 }
 
                 Ok(ExecResponse {
@@ -135,10 +135,7 @@ impl Connection {
                         .map_err(toasty_core::Error::driver_operation_failed)?
                     {
                         Some(item) => {
-                            rows.push(
-                                item_to_record(&schema.app, &item, cols())
-                                    .map(stmt::Value::from)?,
-                            );
+                            rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
                         }
                         None => break,
                     }

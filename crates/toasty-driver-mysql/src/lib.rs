@@ -22,7 +22,7 @@ use mysql_async::{
 };
 use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
-    Result, Schema,
+    Result,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
@@ -217,7 +217,6 @@ impl Connection {
 
     async fn exec_sql(
         &mut self,
-        schema: &Schema,
         sql_as_str: &str,
         args: Vec<mysql_async::Value>,
         ret: SqlReturn,
@@ -288,9 +287,7 @@ impl Connection {
                 SqlReturn::Infer => {
                     for i in 0..row.len() {
                         let column = row.columns()[i].clone();
-                        results.push(
-                            Value::from_sql_infer(i, &mut row, &column, &schema.app).into_inner(),
-                        );
+                        results.push(Value::from_sql_infer(i, &mut row, &column).into_inner());
                     }
                 }
                 SqlReturn::Types(returning) => {
@@ -303,8 +300,7 @@ impl Connection {
                     for i in 0..row.len() {
                         let column = row.columns()[i].clone();
                         results.push(
-                            Value::from_sql(i, &mut row, &column, &returning[i], &schema.app)
-                                .into_inner(),
+                            Value::from_sql(i, &mut row, &column, &returning[i]).into_inner(),
                         );
                     }
                 }
@@ -358,7 +354,7 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret, last_insert_id_hack) = match op {
@@ -388,7 +384,7 @@ impl toasty_core::driver::Connection for Connection {
                     &op.sql,
                     op.params.iter().map(|tv| &tv.value),
                 );
-                let result = self.exec_sql(schema, &op.sql, args, ret, &mut log).await;
+                let result = self.exec_sql(&op.sql, args, ret, &mut log).await;
                 log.finish(&result);
                 return result;
             }
@@ -405,7 +401,7 @@ impl toasty_core::driver::Connection for Connection {
                         "MySQL does not support TransactionMode::{mode:?}"
                     )));
                 }
-                let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
+                let sql = sql::Serializer::mysql(schema).serialize_transaction(&op);
                 self.conn
                     .query_drop(sql)
                     .await
@@ -415,8 +411,7 @@ impl toasty_core::driver::Connection for Connection {
             op => todo!("op={:#?}", op),
         };
 
-        let (sql_as_str, arg_order) =
-            sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
+        let (sql_as_str, arg_order) = sql::Serializer::mysql(schema).serialize_with_arg_order(&sql);
 
         // MySQL uses positional `?` without indices, so params must be reordered
         // to match the order `Expr::Arg(n)` placeholders appear in the SQL.
@@ -443,17 +438,15 @@ impl toasty_core::driver::Connection for Connection {
             &sql_as_str,
             params.iter().map(|value| value.inner()),
         );
-        let result = self
-            .exec_sql(schema, &sql_as_str, args, ret, &mut log)
-            .await;
+        let result = self.exec_sql(&sql_as_str, args, ret, &mut log).await;
         log.finish(&result);
         result
     }
 
-    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.db.tables {
+    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
+        for table in &schema.tables {
             tracing::debug!(table = %table.name, "creating table");
-            self.create_table(&schema.db, table).await?;
+            self.create_table(schema, table).await?;
         }
         Ok(())
     }

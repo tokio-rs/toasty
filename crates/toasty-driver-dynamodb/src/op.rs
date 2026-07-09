@@ -15,7 +15,7 @@ use super::{
     deserialize_ddb_cursor, item_to_record, serialize_ddb_cursor,
 };
 use toasty_core::{
-    Result, Schema,
+    Result,
     driver::operation,
     schema::db::{self, Table},
     stmt,

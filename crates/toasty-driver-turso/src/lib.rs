@@ -44,7 +44,7 @@ use std::{
     sync::Arc,
 };
 use toasty_core::{
-    Result, Schema,
+    Result,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
@@ -442,7 +442,6 @@ impl fmt::Debug for Connection {
 impl Connection {
     async fn exec_sql(
         &mut self,
-        schema: &Schema,
         sql_str: &str,
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
@@ -454,7 +453,7 @@ impl Connection {
             typed_params.iter().map(|tv| &tv.value),
         );
         let result = self
-            .exec_sql_inner(schema, sql_str, typed_params, ret, &mut log)
+            .exec_sql_inner(sql_str, typed_params, ret, &mut log)
             .await;
         log.finish(&result);
         result
@@ -462,7 +461,6 @@ impl Connection {
 
     async fn exec_sql_inner(
         &mut self,
-        schema: &Schema,
         sql_str: &str,
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
@@ -508,7 +506,7 @@ impl Connection {
                             for (index, ret_ty) in ret_tys.iter().enumerate() {
                                 let turso_val =
                                     row.get_value(index).map_err(classify_turso_error)?;
-                                items.push(value::from_turso(turso_val, ret_ty, &schema.app));
+                                items.push(value::from_turso(turso_val, ret_ty));
                             }
                             items
                         }
@@ -530,7 +528,7 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "turso", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret_tys) = match op {
@@ -547,7 +545,7 @@ impl toasty_core::driver::Connection for Connection {
                     RawSqlRet::Infer => SqlReturn::Infer,
                     RawSqlRet::Types(types) => SqlReturn::Types(types),
                 };
-                return self.exec_sql(schema, &op.sql, op.params, ret).await;
+                return self.exec_sql(&op.sql, op.params, ret).await;
             }
             Operation::Transaction(op) => {
                 if let Transaction::Start { isolation, .. } = &op
@@ -562,7 +560,7 @@ impl toasty_core::driver::Connection for Connection {
                 // and the serializer maps the other `TransactionMode`s to
                 // standard SQLite SQL.
                 let sql_str =
-                    sql::Serializer::sqlite_with_default_begin(&schema.db, self.default_begin_sql)
+                    sql::Serializer::sqlite_with_default_begin(schema, self.default_begin_sql)
                         .serialize_transaction(&op);
                 self.conn
                     .execute(&sql_str, ())
@@ -579,14 +577,14 @@ impl toasty_core::driver::Connection for Connection {
             SqlReturn::Count
         };
 
-        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
-        self.exec_sql(schema, &sql_str, typed_params, ret).await
+        let sql_str = sql::Serializer::sqlite(schema).serialize(&sql);
+        self.exec_sql(&sql_str, typed_params, ret).await
     }
 
-    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.db.tables {
+    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
+        for table in &schema.tables {
             tracing::debug!(table = %table.name, "creating table");
-            for sql in create_table_stmts(&schema.db, table) {
+            for sql in create_table_stmts(schema, table) {
                 self.conn
                     .execute(&sql, ())
                     .await

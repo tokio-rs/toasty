@@ -354,10 +354,15 @@ impl Value {
                 },
                 _ => false,
             },
-            // A named `Value::Object` is the write-path form of a document
-            // value: check each embed field against the entry of the same name
-            // (an absent key is `None`, compatible with any field type).
+            // A named `Value::Object` is the driver-boundary form of a
+            // document value. Against the structural `Type::Object` (how the
+            // database schema types a `#[document]` column) any object is
+            // compatible — the type carries no field layout. Against
+            // `Type::Model` (the engine's view) check each embed field against
+            // the entry of the same name (an absent key is `None`, compatible
+            // with any field type).
             Self::Object(object) => match ty {
+                Type::Object => true,
                 Type::Model(id) => match resolve.model(*id) {
                     Some(model) => model.fields().iter().all(|field| {
                         let name = field.name().app_unwrap();

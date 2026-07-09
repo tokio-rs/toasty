@@ -2,7 +2,6 @@ use rusqlite::{
     Row,
     types::{ToSql, ToSqlOutput, Value as SqlValue, ValueRef},
 };
-use toasty_core::schema::app;
 use toasty_core::stmt::{self, Value as CoreValue};
 
 #[derive(Debug)]
@@ -21,7 +20,7 @@ impl Value {
     }
 
     /// Converts a SQLite value within a row to a Toasty value.
-    pub(crate) fn from_sql(row: &Row, index: usize, ty: &stmt::Type, schema: &app::Schema) -> Self {
+    pub(crate) fn from_sql(row: &Row, index: usize, ty: &stmt::Type) -> Self {
         let value: Option<SqlValue> = row.get(index).unwrap();
 
         let core_value = match value {
@@ -45,10 +44,11 @@ impl Value {
             },
             Some(SqlValue::Text(value)) => match ty {
                 stmt::Type::Uuid => stmt::Value::Uuid(value.parse().expect("text is a valid uuid")),
-                stmt::Type::List(elem) => json_text_to_value_list(schema, &value, elem),
-                // A bare `#[document]` embed column (`Type::Model`) decodes
-                // straight to the positional `Value::Record` the engine loads.
-                stmt::Type::Model(_) => json_text_to_value(schema, &value, ty),
+                stmt::Type::List(elem) => json_text_to_value_list(&value, elem),
+                // A bare `#[document]` column (`Type::Object`) decodes
+                // shape-directed to the named `Value::Object` wire form; the
+                // engine raises it to the embed's positional record.
+                stmt::Type::Object => json_text_to_value(&value, ty),
                 _ => stmt::Value::String(value),
             },
             Some(SqlValue::Blob(value)) => match ty {
@@ -110,12 +110,11 @@ fn value_to_json_text(value: &CoreValue) -> String {
     toasty_sql::json::to_string(value).expect("serialize document value to JSON")
 }
 
-fn json_text_to_value_list(schema: &app::Schema, text: &str, elem_ty: &stmt::Type) -> CoreValue {
-    toasty_sql::json::list_from_str(schema, text, elem_ty)
+fn json_text_to_value_list(text: &str, elem_ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::list_from_str(text, elem_ty)
         .expect("SQLite returned non-JSON for a collection column")
 }
 
-fn json_text_to_value(schema: &app::Schema, text: &str, ty: &stmt::Type) -> CoreValue {
-    toasty_sql::json::from_str(schema, text, ty)
-        .expect("SQLite returned non-JSON for a document column")
+fn json_text_to_value(text: &str, ty: &stmt::Type) -> CoreValue {
+    toasty_sql::json::from_str(text, ty).expect("SQLite returned non-JSON for a document column")
 }

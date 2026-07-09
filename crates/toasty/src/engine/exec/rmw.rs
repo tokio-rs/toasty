@@ -56,7 +56,7 @@ impl Exec<'_> {
         };
 
         self.connection
-            .exec(&self.engine.schema, begin.into())
+            .exec(&self.engine.db_schema, begin.into())
             .await?;
 
         let rows = match self.rmw_exec(action).await {
@@ -65,14 +65,14 @@ impl Exec<'_> {
                 // Best effort: ignore rollback errors so the original error is returned
                 let _ = self
                     .connection
-                    .exec(&self.engine.schema, rollback.into())
+                    .exec(&self.engine.db_schema, rollback.into())
                     .await;
                 return Err(e);
             }
         };
 
         self.connection
-            .exec(&self.engine.schema, commit.into())
+            .exec(&self.engine.db_schema, commit.into())
             .await?;
 
         self.vars.store(
@@ -97,6 +97,7 @@ impl Exec<'_> {
         let ty = Some(vec![stmt::Type::Bool]);
 
         let mut read_stmt: stmt::Statement = action.read.clone().into();
+        self.engine.lower_documents(&mut read_stmt);
         let read_params = if self.engine.capability().sql {
             self.engine.extract_params(&mut read_stmt)
         } else {
@@ -106,7 +107,7 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.schema,
+                &self.engine.db_schema,
                 operation::QuerySql {
                     stmt: read_stmt,
                     params: read_params,
@@ -170,6 +171,7 @@ impl Exec<'_> {
         let mysql_update = self.process_stmt_update_with_returning_on_mysql(&mut write_stmt);
         let native_returning = write_stmt.returning().is_some();
 
+        self.engine.lower_documents(&mut write_stmt);
         let write_params = if self.engine.capability().sql {
             self.engine.extract_params(&mut write_stmt)
         } else {
@@ -179,12 +181,18 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.schema,
+                &self.engine.db_schema,
                 operation::QuerySql {
                     stmt: write_stmt,
                     params: write_params,
                     ret: if native_returning {
-                        action.output_ty.clone()
+                        // Driver-facing types: document positions lower to
+                        // the structural `Type::Object`.
+                        action.output_ty.clone().map(|tys| {
+                            tys.into_iter()
+                                .map(crate::engine::document::lower_ty)
+                                .collect()
+                        })
                     } else {
                         None
                     },

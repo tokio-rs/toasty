@@ -23,14 +23,13 @@ pub(crate) use value::Value;
 
 use async_trait::async_trait;
 use toasty_core::{
-    Error, Result, Schema,
+    Error, Result,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig, log::QueryLog,
         operation::Operation,
     },
     schema::{
-        app,
-        db::{Column, ColumnId, Migration, Table},
+        db::{self, Column, ColumnId, Migration, Table},
         diff,
     },
     stmt::{self, ExprContext},
@@ -163,7 +162,7 @@ impl Connection {
 }
 
 /// Resolves the table an operation targets, for the per-query event.
-fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
+fn op_table_name<'a>(schema: &'a db::Schema, op: &Operation) -> Option<&'a str> {
     let table_id = match op {
         Operation::GetByKey(op) => op.table,
         Operation::QueryPk(op) => op.table,
@@ -173,12 +172,12 @@ fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
         Operation::Scan(op) => op.table,
         _ => return None,
     };
-    Some(&schema.db.table(table_id).name)
+    Some(&schema.table(table_id).name)
 }
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
         let log = QueryLog::operation(
             &self.query_log,
             "dynamodb",
@@ -190,10 +189,10 @@ impl toasty_core::driver::Connection for Connection {
         result
     }
 
-    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
-        for table in &schema.db.tables {
+    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
+        for table in &schema.tables {
             tracing::debug!(table = %table.name, "creating table");
-            self.create_table(&schema.db, table, true).await?;
+            self.create_table(schema, table, true).await?;
         }
         Ok(())
     }
@@ -215,7 +214,7 @@ impl toasty_core::driver::Connection for Connection {
 }
 
 impl Connection {
-    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec2(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
@@ -342,7 +341,6 @@ fn ddb_key_schema(
 }
 
 fn item_to_record<'a, 'stmt>(
-    app: &app::Schema,
     item: &HashMap<String, AttributeValue>,
     columns: impl Iterator<Item = &'a Column>,
 ) -> Result<stmt::ValueRecord> {
@@ -350,7 +348,7 @@ fn item_to_record<'a, 'stmt>(
         columns
             .map(|column| {
                 if let Some(value) = item.get(&column.name) {
-                    Value::from_ddb(app, &column.ty, value).into_inner()
+                    Value::from_ddb(&column.ty, value).into_inner()
                 } else {
                     stmt::Value::Null
                 }
@@ -360,7 +358,7 @@ fn item_to_record<'a, 'stmt>(
 }
 
 fn ddb_expression(
-    cx: &ExprContext<'_, Schema>,
+    cx: &ExprContext<'_, db::Schema>,
     attrs: &mut ExprAttrs,
     primary: bool,
     expr: &stmt::Expr,
@@ -409,11 +407,12 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Value(val) => attrs.value(val),
-        // A projection into a `#[document]` column (`profile().name()`):
-        // DynamoDB filter expressions address nested Map attributes natively,
-        // so the path renders as `#col_0.#doc_1.#doc_2`.
-        stmt::Expr::Project(expr_project) => {
-            let (path, leaf_ty) = document_path(cx, attrs, expr_project);
+        // A projection into a `#[document]` column (`profile().name()`)
+        // arrives lowered as a `FuncJsonExtract` name path. DynamoDB filter
+        // expressions address nested Map attributes natively, so it renders
+        // as `#col_0.#doc_1.#doc_2`.
+        stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
+            let (path, leaf_ty) = document_path(cx, attrs, func);
             // Like a bare bool column reference, a bool leaf in predicate
             // position needs an explicit equality check.
             if leaf_ty.is_bool() {
@@ -467,7 +466,9 @@ fn ddb_expression(
             // produces invalid syntax.)
             let inner = match &*expr_is_null.expr {
                 stmt::Expr::Reference(expr_reference) => column_alias(cx, attrs, expr_reference).1,
-                stmt::Expr::Project(expr_project) => document_path(cx, attrs, expr_project).0,
+                stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
+                    document_path(cx, attrs, func).0
+                }
                 other => ddb_expression(cx, attrs, primary, other),
             };
             format!("attribute_not_exists({inner})")
@@ -518,7 +519,7 @@ fn ddb_expression(
 /// registering the underlying attribute name in `attrs`. Returns the resolved
 /// column alongside the alias so callers can inspect its storage type.
 fn column_alias<'a>(
-    cx: &ExprContext<'a, Schema>,
+    cx: &ExprContext<'a, db::Schema>,
     attrs: &mut ExprAttrs,
     expr_reference: &stmt::ExprReference,
 ) -> (&'a Column, String) {
@@ -527,45 +528,27 @@ fn column_alias<'a>(
     (column, alias)
 }
 
-/// Resolves a projection into a `#[document]` column to a DynamoDB document
-/// path (`#col_0.#doc_1.#doc_2`), registering each path segment as an
-/// expression attribute name. The projection resolves through the schema's
-/// shared [`project_fields`](toasty_core::schema::app::Schema::project_fields)
-/// walk — the same one the engine's JSON-path lowering uses for SQL drivers.
-/// Returns the rendered path and the leaf field's type.
+/// Renders a lowered document path ([`stmt::FuncJsonExtract`]) as a DynamoDB
+/// attribute path (`#col_0.#doc_1.#doc_2`), registering each path segment as
+/// an expression attribute name. The path arrives fully resolved from the
+/// engine's document lowering — segment names and leaf type live in the node,
+/// so no schema is consulted. Returns the rendered path and the leaf type.
 fn document_path<'a>(
-    cx: &ExprContext<'a, Schema>,
+    cx: &ExprContext<'a, db::Schema>,
     attrs: &mut ExprAttrs,
-    expr_project: &stmt::ExprProject,
+    func: &'a stmt::FuncJsonExtract,
 ) -> (String, &'a stmt::Type) {
-    let stmt::Expr::Reference(expr_reference) = expr_project.base.as_ref() else {
-        todo!("projection base must be a column reference; expr={expr_project:#?}")
+    let stmt::Expr::Reference(expr_reference) = func.base.as_ref() else {
+        todo!("document path base must be a column reference; func={func:#?}")
     };
-    let (column, mut path) = column_alias(cx, attrs, expr_reference);
-    let stmt::Type::Model(embed_id) = column.ty else {
-        todo!("projection into a non-document column; column={column:#?}")
-    };
+    let (_, mut path) = column_alias(cx, attrs, expr_reference);
 
-    let mut leaf_ty = None;
-    for field in cx
-        .schema()
-        .app
-        .project_fields(embed_id, expr_project.projection.as_slice())
-    {
-        let name = field
-            .name
-            .app
-            .as_deref()
-            .expect("document field has an app name");
+    for name in &func.path {
         path.push('.');
         path.push_str(attrs.document_segment(name));
-        leaf_ty = Some(field.expr_ty());
     }
 
-    (
-        path,
-        leaf_ty.expect("projection into a document column is non-empty"),
-    )
+    (path, &func.ty)
 }
 
 #[derive(Default)]

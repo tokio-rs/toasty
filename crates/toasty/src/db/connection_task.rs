@@ -153,7 +153,7 @@ impl ConnectionTask {
             } => {
                 let result = self
                     .connection
-                    .exec(&self.engine.schema, *operation)
+                    .exec(&self.engine.db_schema, *operation)
                     .instrument(span)
                     .await;
                 self.respond(tx, result)
@@ -169,7 +169,7 @@ impl ConnectionTask {
             ConnectionOperation::PushSchema { span, tx } => {
                 let result = self
                     .connection
-                    .push_schema(&self.engine.schema)
+                    .push_schema(&self.engine.db_schema)
                     .instrument(span)
                     .await;
                 self.respond(tx, result)

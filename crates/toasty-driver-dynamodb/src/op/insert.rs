@@ -1,17 +1,17 @@
 use super::{Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest, stmt};
 use std::collections::HashMap;
-use toasty_core::{Schema, driver::ExecResponse};
+use toasty_core::{driver::ExecResponse, schema::db};
 
 impl Connection {
     pub(crate) async fn exec_insert(
         &mut self,
-        schema: &Schema,
+        schema: &db::Schema,
         insert: stmt::Insert,
     ) -> Result<ExecResponse> {
         assert!(insert.returning.is_none());
 
         let insert_table = insert.target.as_table_unwrap();
-        let table = &schema.db.table(insert_table.table);
+        let table = &schema.table(insert_table.table);
 
         let unique_indices = table
             .indices
@@ -20,7 +20,7 @@ impl Connection {
                 if !index.primary_key && index.unique {
                     // Don't update the index if the value is not included.
                     index.columns.iter().all(|index_column| {
-                        let column = schema.db.column(index_column.column);
+                        let column = schema.column(index_column.column);
                         insert_table.columns.contains(&column.id)
                     })
                 } else {
@@ -38,15 +38,12 @@ impl Connection {
             let mut items = HashMap::new();
 
             for (i, column_id) in insert_table.columns.iter().enumerate() {
-                let column = schema.db.column(*column_id);
+                let column = schema.column(*column_id);
                 let entry = row.entry(i).unwrap();
                 let value = entry.as_value_unwrap();
 
                 if !value.is_null() {
-                    items.insert(
-                        column.name.clone(),
-                        Value::to_ddb_typed(&schema.app, &column.ty, value),
-                    );
+                    items.insert(column.name.clone(), Value::from(value.clone()).to_ddb());
                 }
             }
             insert_items.push(items);
@@ -145,7 +142,7 @@ impl Connection {
                     let mut nullable = false;
 
                     for index_column in &index.columns {
-                        let column = schema.db.column(index_column.column);
+                        let column = schema.column(index_column.column);
 
                         if !insert_items.contains_key(&column.name) {
                             nullable = true;

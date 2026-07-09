@@ -65,8 +65,7 @@ pub mod operation;
 pub use operation::{IsolationLevel, Operation};
 
 use crate::schema::{
-    Schema,
-    db::{AppliedMigration, Migration},
+    db::{self, AppliedMigration, Migration},
     diff,
 };
 
@@ -166,7 +165,19 @@ pub trait Connection: Debug + Send + 'static {
     /// query engine compiles user queries into [`Operation`] values and
     /// dispatches them here. The driver translates each operation into
     /// backend-specific calls and returns an [`ExecResponse`].
-    async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
+    ///
+    /// Drivers receive only the database-level schema (tables, columns,
+    /// indices) — the application schema (models, fields, mappings) is an
+    /// engine concept that never crosses this boundary. Everything in the
+    /// operation is already expressed in database terms: `#[document]`
+    /// values arrive as named `Value::Object`s, document paths as resolved
+    /// `FuncJsonExtract` name paths, and document columns are typed by the
+    /// structural `Type::Object`.
+    async fn exec(
+        &mut self,
+        schema: &Arc<db::Schema>,
+        plan: Operation,
+    ) -> crate::Result<ExecResponse>;
 
     /// Cheap, synchronous, local check that the driver's client object
     /// still considers the connection open.
@@ -229,7 +240,7 @@ pub trait Connection: Debug + Send + 'static {
 
     /// Creates tables and indices defined in the schema on the database.
     /// TODO: This will probably use database introspection in the future.
-    async fn push_schema(&mut self, _schema: &Schema) -> crate::Result<()>;
+    async fn push_schema(&mut self, _schema: &db::Schema) -> crate::Result<()>;
 
     /// Returns a list of currently applied database migrations.
     async fn applied_migrations(&mut self) -> crate::Result<Vec<AppliedMigration>>;

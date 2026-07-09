@@ -1,17 +1,15 @@
-use super::{
-    Connection, ExprAttrs, Result, Schema, ddb_expression, item_to_record, operation, stmt,
-};
+use super::{Connection, ExprAttrs, Result, db, ddb_expression, item_to_record, operation, stmt};
 use std::sync::Arc;
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_find_pk_by_index(
         &mut self,
-        schema: &Arc<Schema>,
+        schema: &Arc<db::Schema>,
         op: operation::FindPkByIndex,
     ) -> Result<ExecResponse> {
-        let table = schema.db.table(op.table);
-        let index = schema.db.index(op.index);
+        let table = schema.table(op.table);
+        let index = schema.index(op.index);
         let cx = ExprContext::new_with_target(schema.as_ref(), table);
 
         let mut expr_attrs = ExprAttrs::default();
@@ -54,8 +52,8 @@ impl Connection {
 
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
             res.items.into_iter().flatten().map(move |item| {
-                let table = schema.db.table(op.table);
-                item_to_record(&schema.app, &item, table.primary_key_columns())
+                let table = schema.table(op.table);
+                item_to_record(&item, table.primary_key_columns())
             }),
         )))
     }

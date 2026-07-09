@@ -6,7 +6,7 @@ use toasty_core::{
 use crate::{
     Result,
     engine::{
-        eval,
+        document, eval,
         exec::{Action, Exec, Output, VarId},
     },
 };
@@ -155,6 +155,10 @@ impl Exec<'_> {
             return Ok(());
         }
 
+        // Lower `#[document]` columns into their driver-consumable shape —
+        // named objects and resolved document paths — for every backend.
+        self.engine.lower_documents(&mut stmt);
+
         // Only extract bind parameters for SQL drivers. Key-value drivers
         // (e.g., DynamoDB) read values directly from the statement.
         let params = if self.engine.capability().sql {
@@ -163,42 +167,51 @@ impl Exec<'_> {
             vec![]
         };
 
+        let ret = match action.conditional {
+            // A conditional write prefixes its result with two `I64` probe
+            // counts; the `Returning` variant follows them with the changed
+            // rows' columns.
+            ConditionalOutput::Count => Some(vec![stmt::Type::I64, stmt::Type::I64]),
+            ConditionalOutput::Returning => {
+                let mut tys = vec![stmt::Type::I64, stmt::Type::I64];
+                tys.extend(
+                    action
+                        .output
+                        .ty
+                        .clone()
+                        .expect("conditional write with RETURNING has output columns"),
+                );
+                Some(tys)
+            }
+            ConditionalOutput::None if mysql_insert_returning.is_some() => {
+                // For MySQL INSERT with RETURNING, we don't send RETURNING to the database
+                // (it doesn't support it). The driver will fetch auto-increment IDs using LAST_INSERT_ID().
+                None
+            }
+            ConditionalOutput::None if mysql_update_returning.is_some() => {
+                // The UPDATE has had its RETURNING stripped; the driver runs
+                // a plain UPDATE that returns no rows. The follow-up SELECT
+                // below produces the returning values.
+                None
+            }
+            ConditionalOutput::None => action.output.ty.clone(),
+        };
+
         let op = operation::QuerySql {
             stmt,
             params,
-            ret: match action.conditional {
-                // A conditional write prefixes its result with two `I64` probe
-                // counts; the `Returning` variant follows them with the changed
-                // rows' columns.
-                ConditionalOutput::Count => Some(vec![stmt::Type::I64, stmt::Type::I64]),
-                ConditionalOutput::Returning => {
-                    let mut tys = vec![stmt::Type::I64, stmt::Type::I64];
-                    tys.extend(
-                        action
-                            .output
-                            .ty
-                            .clone()
-                            .expect("conditional write with RETURNING has output columns"),
-                    );
-                    Some(tys)
-                }
-                ConditionalOutput::None if mysql_insert_returning.is_some() => {
-                    // For MySQL INSERT with RETURNING, we don't send RETURNING to the database
-                    // (it doesn't support it). The driver will fetch auto-increment IDs using LAST_INSERT_ID().
-                    None
-                }
-                ConditionalOutput::None if mysql_update_returning.is_some() => {
-                    // The UPDATE has had its RETURNING stripped; the driver runs
-                    // a plain UPDATE that returns no rows. The follow-up SELECT
-                    // below produces the returning values.
-                    None
-                }
-                ConditionalOutput::None => action.output.ty.clone(),
-            },
+            // The driver-facing result types: document positions
+            // (`Type::Model`) lower to the structural `Type::Object` the
+            // driver decodes shape-directed; the engine raises the returned
+            // objects back when the rows are stored.
+            ret: ret.map(|tys| tys.into_iter().map(document::lower_ty).collect()),
             last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 
-        let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
+        let mut res = self
+            .connection
+            .exec(&self.engine.db_schema, op.into())
+            .await?;
 
         match action.conditional {
             ConditionalOutput::None => {
@@ -362,16 +375,19 @@ impl Exec<'_> {
         ret_ty: Option<Vec<stmt::Type>>,
     ) -> Result<toasty_core::driver::ExecResponse> {
         let mut select_stmt = mysql_update.select_stmt;
+        self.engine.lower_documents(&mut select_stmt);
         let select_params = self.engine.extract_params(&mut select_stmt);
 
         let op = operation::QuerySql {
             stmt: select_stmt,
             params: select_params,
-            ret: ret_ty,
+            ret: ret_ty.map(|tys| tys.into_iter().map(document::lower_ty).collect()),
             last_insert_id_hack: None,
         };
 
-        self.connection.exec(&self.engine.schema, op.into()).await
+        self.connection
+            .exec(&self.engine.db_schema, op.into())
+            .await
     }
 
     /// Processes INSERT statements with RETURNING on MySQL, which doesn't support RETURNING.

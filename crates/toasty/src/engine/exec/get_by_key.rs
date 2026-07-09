@@ -49,7 +49,10 @@ impl Exec<'_> {
                 keys,
             };
 
-            let res = self.connection.exec(&self.engine.schema, op.into()).await?;
+            let res = self
+                .connection
+                .exec(&self.engine.db_schema, op.into())
+                .await?;
             res.values
         };
 
