@@ -97,12 +97,7 @@ impl Exec<'_> {
         let ty = Some(vec![stmt::Type::Bool]);
 
         let mut read_stmt: stmt::Statement = action.read.clone().into();
-        self.engine.lower_document_paths(&mut read_stmt);
-        let read_params = if self.engine.capability().sql {
-            self.engine.extract_params(&mut read_stmt)
-        } else {
-            vec![]
-        };
+        let read_params = self.engine.prepare_for_driver(&mut read_stmt);
 
         let res = self
             .connection
@@ -171,12 +166,7 @@ impl Exec<'_> {
         let mysql_update = self.process_stmt_update_with_returning_on_mysql(&mut write_stmt);
         let native_returning = write_stmt.returning().is_some();
 
-        self.engine.lower_document_paths(&mut write_stmt);
-        let write_params = if self.engine.capability().sql {
-            self.engine.extract_params(&mut write_stmt)
-        } else {
-            vec![]
-        };
+        let write_params = self.engine.prepare_for_driver(&mut write_stmt);
 
         let res = self
             .connection

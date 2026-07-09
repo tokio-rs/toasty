@@ -15,8 +15,8 @@
 //!
 //! `#[document]` values are named into their `Value::Object` form before this
 //! runs: the mapping's lowering casts convert them during statement
-//! lowering/simplification, and document *paths* are resolved by
-//! [`super::document`] immediately before `Engine::extract_params`.
+//! lowering/simplification, and document *paths* are resolved by legalization
+//! ([`super::legalize`]) — `Engine::prepare_for_driver` runs both in order.
 
 use toasty_core::{
     driver::{Capability, operation::TypedValue},
@@ -34,10 +34,10 @@ mod tests;
 /// `Expr::Arg(n)` placeholders and infer a precise `db::Type` for each. The
 /// returned `Vec<TypedValue>` is indexed by the `n` in each placeholder.
 ///
-/// `#[document]` values must already be named (the mapping's lowering casts,
-/// folded by the simplifier) and document paths resolved (see
-/// [`super::document::lower_paths`]); this is the final engine step before a
-/// driver serializes the statement.
+/// The statement must already be legalized ([`super::legalize`]): document
+/// values named, document paths resolved. Runs via
+/// `Engine::prepare_for_driver`, as the final engine step before a driver
+/// serializes the statement.
 pub(crate) fn run(
     stmt: &mut stmt::Statement,
     db_schema: &db::Schema,

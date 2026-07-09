@@ -1,5 +1,5 @@
-//! Lower `#[document]` path reads into the shape drivers consume, at the
-//! engine/driver boundary.
+//! Legalization rule: rewrite `#[document]` path reads into the shape
+//! drivers consume.
 //!
 //! The engine views a document column at the app level: the mapping's raising
 //! cast (`Cast(column, Type::Model)`) turns the driver's named `Value::Object`
@@ -18,10 +18,10 @@
 //! folding, `mir::Project` evaluation) converts values wherever the casts
 //! land. What cannot be expressed as a cast is the *path read*: turning a
 //! positional projection into a JSON key path is a per-backend expression
-//! rewrite (the leaf's comparison form depends on driver capabilities), so it
-//! runs here — the last engine-side step before a driver serializes the
-//! statement, rather than in the shared simplifier (which runs for every
-//! backend) or in the serializer (which is the driver's job).
+//! rewrite (the leaf's comparison form depends on driver capabilities). That
+//! makes it a legalization rule rather than a simplifier rewrite (the
+//! simplifier runs identically for every backend) or a serializer concern
+//! (the statement must already be representable when the driver receives it).
 
 use toasty_core::{
     driver::Capability,
@@ -32,43 +32,43 @@ use toasty_core::{
 /// Rewrite every projection into a `#[document]` column into the
 /// [`FuncJsonExtract`](stmt::FuncJsonExtract) node the SQL serializer
 /// renders, and strip any residual raising cast (meaningless driver-side).
-pub(crate) fn lower_paths(schema: &Schema, capability: &Capability, stmt: &mut stmt::Statement) {
-    LowerDocumentPaths {
+pub(super) fn statement(schema: &Schema, capability: &Capability, stmt: &mut stmt::Statement) {
+    LegalizeDocumentPaths {
         cx: stmt::ExprContext::new(schema),
         capability,
     }
     .visit_mut(stmt);
 }
 
-/// Lower a driver-bound expression that references `table`'s columns — a
+/// Rewrite a driver-bound expression that references `table`'s columns — a
 /// key-value operation's filter or condition — into its driver-consumable
 /// shape: document paths become [`stmt::FuncJsonExtract`] name paths, and
 /// text-compared document leaves get text operands, exactly as
-/// [`lower_paths`] does for full statements.
-pub(crate) fn lower_table_expr(
+/// [`statement`] does for full statements.
+pub(super) fn table_expr(
     schema: &Schema,
     capability: &Capability,
     table: &db::Table,
     expr: &mut stmt::Expr,
 ) {
-    LowerDocumentPaths {
+    LegalizeDocumentPaths {
         cx: stmt::ExprContext::new_with_target(schema, table),
         capability,
     }
     .visit_expr_mut(expr);
 }
 
-/// Scoped traversal backing [`lower_paths`]. Mirrors the simplifier's scope
+/// Scoped traversal backing [`statement`]. Mirrors the simplifier's scope
 /// handling — holding a query's source in scope while mutating its sibling
 /// clauses — so column references resolve against the right table.
-struct LowerDocumentPaths<'a> {
+struct LegalizeDocumentPaths<'a> {
     cx: stmt::ExprContext<'a>,
     capability: &'a Capability,
 }
 
-impl LowerDocumentPaths<'_> {
-    fn scope<'s>(&'s self, target: impl IntoExprTarget<'s>) -> LowerDocumentPaths<'s> {
-        LowerDocumentPaths {
+impl LegalizeDocumentPaths<'_> {
+    fn scope<'s>(&'s self, target: impl IntoExprTarget<'s>) -> LegalizeDocumentPaths<'s> {
+        LegalizeDocumentPaths {
             cx: self.cx.scope(target),
             capability: self.capability,
         }
@@ -152,7 +152,7 @@ impl LowerDocumentPaths<'_> {
     }
 }
 
-impl VisitMut for LowerDocumentPaths<'_> {
+impl VisitMut for LegalizeDocumentPaths<'_> {
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         // A document path must be lowered before descending into its base:
         // the base is the raising cast that names the embed, which the

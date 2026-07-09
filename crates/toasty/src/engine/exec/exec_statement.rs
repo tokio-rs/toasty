@@ -155,17 +155,10 @@ impl Exec<'_> {
             return Ok(());
         }
 
-        // Lower `#[document]` path reads into their driver-consumable shape
-        // (resolved `FuncJsonExtract` name paths), for every backend.
-        self.engine.lower_document_paths(&mut stmt);
-
-        // Only extract bind parameters for SQL drivers. Key-value drivers
-        // (e.g., DynamoDB) read values directly from the statement.
-        let params = if self.engine.capability().sql {
-            self.engine.extract_params(&mut stmt)
-        } else {
-            vec![]
-        };
+        // Legalize the statement for the target backend and extract bind
+        // parameters (SQL drivers only; key-value drivers read values
+        // directly from the statement).
+        let params = self.engine.prepare_for_driver(&mut stmt);
 
         let ret = match action.conditional {
             // A conditional write prefixes its result with two `I64` probe
@@ -368,8 +361,7 @@ impl Exec<'_> {
         ret_ty: Option<Vec<stmt::Type>>,
     ) -> Result<toasty_core::driver::ExecResponse> {
         let mut select_stmt = mysql_update.select_stmt;
-        self.engine.lower_document_paths(&mut select_stmt);
-        let select_params = self.engine.extract_params(&mut select_stmt);
+        let select_params = self.engine.prepare_for_driver(&mut select_stmt);
 
         let op = operation::QuerySql {
             stmt: select_stmt,
