@@ -720,10 +720,13 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
 /// - PostgreSQL: `col || $1` — `text[] || text[]` concatenates arrays.
 /// - MySQL: `JSON_MERGE_PRESERVE(col, $1)` — preserves duplicates and
 ///   appends every element of the right-hand array to the left-hand one.
-/// - SQLite: `(SELECT json_group_array(value) FROM (SELECT value FROM
-///   json_each(col) UNION ALL SELECT value FROM json_each($1)))` — a
-///   subquery that concatenates the two JSON arrays while preserving
-///   element order and types.
+/// - SQLite: a `json_group_array` subquery over the `json_each` rows of both
+///   arrays, concatenating them while preserving element order and types.
+///   `json_each.value` returns object and array elements as plain TEXT, which
+///   `json_group_array` would re-encode as JSON strings, so those elements
+///   pass through `json()` to keep their structure (a document collection's
+///   elements are objects); scalar elements pass through `json_quote`, since
+///   `json()` rejects a bare string like `a`.
 fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
     match f.serializer.flavor {
         Flavor::Postgresql => fmt!(f, Ident(column_name) " || " expr),
@@ -732,8 +735,10 @@ fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt
         }
         Flavor::Sqlite => fmt!(
             f,
-            "(SELECT json_group_array(value) FROM (SELECT value FROM json_each("
-            Ident(column_name) ") UNION ALL SELECT value FROM json_each(" expr ")))"
+            "(SELECT json_group_array(json(CASE WHEN type IN ('object', 'array') \
+             THEN value ELSE json_quote(value) END)) \
+             FROM (SELECT type, value FROM json_each("
+            Ident(column_name) ") UNION ALL SELECT type, value FROM json_each(" expr ")))"
         ),
     }
 }

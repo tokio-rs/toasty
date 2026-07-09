@@ -3,8 +3,9 @@
 //! as a JSON array of objects (`jsonb` on PostgreSQL, JSON1 text on SQLite).
 //! Each struct is encoded as a JSON object keyed by the embed's field names.
 //!
-//! This increment covers storage, encoding, whole-value CRUD, and nested-path
-//! filtering on bare struct embeds. `#[document]` on a `Vec` element predicate
+//! This increment covers storage, encoding, whole-value CRUD, `stmt::push`
+//! onto a document collection, and nested-path filtering on bare struct
+//! embeds. `#[document]` on a `Vec` element predicate
 //! (`.any()` / `.all()`), `partial!` containment, and per-element mutation are
 //! not yet implemented. Backends without document support are gated out via
 //! `requires(document_collections)`; the negative schema-build path has a
@@ -232,6 +233,69 @@ pub async fn vec_struct_update_replace(t: &mut Test) -> Result<(), BoxError> {
 
     let reloaded = Order::get_by_id(&mut db, &order.id).await?;
     assert_eq!(reloaded.items, replacement);
+
+    Ok(())
+}
+
+/// `stmt::push(value)` appends one element to a document collection in
+/// place. The append operand takes the same document encoding the
+/// whole-value path uses (the lowering casts it through the column's
+/// document type), so the element lands as a JSON object at the end of the
+/// stored array.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn vec_struct_push(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct LineItem {
+        sku: String,
+        qty: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Order {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        items: Vec<LineItem>,
+    }
+
+    let mut db = t.setup_db(models!(Order)).await;
+
+    let mut order = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+
+    order
+        .update()
+        .items(toasty::stmt::push(LineItem {
+            sku: "SKU-2".into(),
+            qty: 1,
+        }))
+        .exec(&mut db)
+        .await?;
+
+    let expected = vec![
+        LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        },
+        LineItem {
+            sku: "SKU-2".into(),
+            qty: 1,
+        },
+    ];
+
+    // In-memory model reflects the post-update value.
+    assert_eq!(order.items, expected);
+
+    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
+    assert_eq!(reloaded.items, expected);
 
     Ok(())
 }
