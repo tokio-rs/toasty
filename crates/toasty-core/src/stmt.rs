@@ -49,9 +49,7 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
-#[cfg(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal"))]
 mod document_storage_text;
-#[cfg(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal"))]
 pub use document_storage_text::DocumentStorageText;
 
 mod entry;

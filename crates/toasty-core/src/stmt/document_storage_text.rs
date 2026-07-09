@@ -49,6 +49,12 @@ impl Value {
 pub struct DocumentStorageText<'a>(&'a Value);
 
 impl fmt::Display for DocumentStorageText<'_> {
+    // With none of the temporal or decimal features enabled, every arm below
+    // is compiled out except the unreachable one, leaving `f` unused.
+    #[cfg_attr(
+        not(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal")),
+        allow(unused_variables)
+    )]
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self.0 {
             #[cfg(feature = "jiff")]
