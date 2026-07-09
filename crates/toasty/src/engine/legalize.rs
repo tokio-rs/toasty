@@ -25,7 +25,7 @@
 use super::Engine;
 use toasty_core::{
     driver::{Capability, operation::TypedValue},
-    schema::{Schema, db},
+    schema::Schema,
     stmt,
 };
 
@@ -57,14 +57,8 @@ fn statement(schema: &Schema, capability: &Capability, stmt: &mut stmt::Statemen
     document::statement(schema, capability, stmt);
 }
 
-/// Legalize a driver-bound expression that references `table`'s columns — a
-/// key-value operation's filter or condition, which the driver compiles
-/// without an enclosing statement.
-pub(crate) fn table_expr(
-    schema: &Schema,
-    capability: &Capability,
-    table: &db::Table,
-    expr: &mut stmt::Expr,
-) {
-    document::table_expr(schema, capability, table, expr);
+/// Legalize a driver-bound expression — a key-value operation's filter or
+/// condition, which the driver compiles without an enclosing statement.
+pub(crate) fn table_expr(schema: &Schema, capability: &Capability, expr: &mut stmt::Expr) {
+    document::table_expr(schema, capability, expr);
 }

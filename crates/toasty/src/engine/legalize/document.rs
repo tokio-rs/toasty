@@ -25,55 +25,41 @@
 
 use toasty_core::{
     driver::Capability,
-    schema::{Schema, app, db},
-    stmt::{self, IntoExprTarget, VisitMut},
+    schema::{Schema, app},
+    stmt::{self, VisitMut},
 };
 
 /// Rewrite every projection into a `#[document]` column into the
 /// [`FuncJsonExtract`](stmt::FuncJsonExtract) node the SQL serializer
 /// renders, and strip any residual raising cast (meaningless driver-side).
 pub(super) fn statement(schema: &Schema, capability: &Capability, stmt: &mut stmt::Statement) {
-    LegalizeDocumentPaths {
-        cx: stmt::ExprContext::new(schema),
-        capability,
-    }
-    .visit_mut(stmt);
+    LegalizeDocumentPaths { schema, capability }.visit_mut(stmt);
 }
 
-/// Rewrite a driver-bound expression that references `table`'s columns — a
-/// key-value operation's filter or condition — into its driver-consumable
-/// shape: document paths become [`stmt::FuncJsonExtract`] name paths, and
-/// text-compared document leaves get text operands, exactly as
-/// [`statement`] does for full statements.
-pub(super) fn table_expr(
-    schema: &Schema,
-    capability: &Capability,
-    table: &db::Table,
-    expr: &mut stmt::Expr,
-) {
-    LegalizeDocumentPaths {
-        cx: stmt::ExprContext::new_with_target(schema, table),
-        capability,
-    }
-    .visit_expr_mut(expr);
+/// Rewrite a driver-bound expression — a key-value operation's filter or
+/// condition — into its driver-consumable shape: document paths become
+/// [`stmt::FuncJsonExtract`] name paths, and text-compared document leaves
+/// get text operands, exactly as [`statement`] does for full statements.
+pub(super) fn table_expr(schema: &Schema, capability: &Capability, expr: &mut stmt::Expr) {
+    LegalizeDocumentPaths { schema, capability }.visit_expr_mut(expr);
 }
 
-/// Scoped traversal backing [`statement`]. Mirrors the simplifier's scope
-/// handling — holding a query's source in scope while mutating its sibling
-/// clauses — so column references resolve against the right table.
+/// Traversal backing [`statement`]. Needs no scope tracking: the rewrite
+/// matches the document-path shape structurally and takes the embed identity
+/// from the raising cast's type — it never resolves a column reference
+/// against the enclosing query's source.
 struct LegalizeDocumentPaths<'a> {
-    cx: stmt::ExprContext<'a>,
+    schema: &'a Schema,
+    // Read only by `leaf_compares_as_text`, whose non-trivial arms are gated
+    // on the features below.
+    #[cfg_attr(
+        not(any(feature = "jiff", feature = "rust_decimal", feature = "bigdecimal")),
+        allow(dead_code)
+    )]
     capability: &'a Capability,
 }
 
 impl LegalizeDocumentPaths<'_> {
-    fn scope<'s>(&'s self, target: impl IntoExprTarget<'s>) -> LegalizeDocumentPaths<'s> {
-        LegalizeDocumentPaths {
-            cx: self.cx.scope(target),
-            capability: self.capability,
-        }
-    }
-
     /// Rewrite a projection rooted at a `#[document]` column into the
     /// [`FuncJsonExtract`](stmt::FuncJsonExtract) the SQL serializer renders.
     ///
@@ -98,7 +84,7 @@ impl LegalizeDocumentPaths<'_> {
             return;
         }
         let Some((path, ty)) =
-            build_json_path(self.cx.schema(), embed_id, project.projection.as_slice())
+            build_json_path(self.schema, embed_id, project.projection.as_slice())
         else {
             return;
         };
@@ -206,44 +192,6 @@ impl VisitMut for LegalizeDocumentPaths<'_> {
                 func.ty = stmt::Type::String;
             }
             _ => {}
-        }
-    }
-
-    fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
-        self.visit_source_mut(&mut stmt.source);
-        let mut s = self.scope(&stmt.source);
-        s.visit_filter_mut(&mut stmt.filter);
-        s.visit_returning_mut(&mut stmt.returning);
-    }
-
-    fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
-        self.visit_source_mut(&mut stmt.from);
-        let mut s = self.scope(&stmt.from);
-        s.visit_filter_mut(&mut stmt.filter);
-        if let Some(returning) = &mut stmt.returning {
-            s.visit_returning_mut(returning);
-        }
-    }
-
-    fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
-        self.visit_update_target_mut(&mut stmt.target);
-        let mut s = self.scope(&stmt.target);
-        s.visit_assignments_mut(&mut stmt.assignments);
-        s.visit_filter_mut(&mut stmt.filter);
-        if let Some(expr) = &mut stmt.condition.expr {
-            s.visit_expr_mut(expr);
-        }
-        if let Some(returning) = &mut stmt.returning {
-            s.visit_returning_mut(returning);
-        }
-    }
-
-    fn visit_stmt_insert_mut(&mut self, stmt: &mut stmt::Insert) {
-        self.visit_insert_target_mut(&mut stmt.target);
-        let mut s = self.scope(&stmt.target);
-        s.visit_stmt_query_mut(&mut stmt.source);
-        if let Some(returning) = &mut stmt.returning {
-            s.visit_returning_mut(returning);
         }
     }
 }

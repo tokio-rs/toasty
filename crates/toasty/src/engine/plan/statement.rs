@@ -1341,7 +1341,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let f = stmt.filter_expr_unwrap();
             if f.is_true() { None } else { Some(f.clone()) }
         };
-        self.legalize_kv_expr(table_id, &mut row_filter);
+        self.legalize_kv_expr(&mut row_filter);
 
         let limit = extract_pagination(&stmt);
 
@@ -1383,7 +1383,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let order = extract_query_pk_order(&stmt);
 
                 let mut row_filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(index_plan.table_id(), &mut row_filter);
+                self.legalize_kv_expr(&mut row_filter);
 
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
@@ -1416,7 +1416,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
 
                 let mut row_filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(index_plan.table_id(), &mut row_filter);
+                self.legalize_kv_expr(&mut row_filter);
 
                 let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
                     input,
@@ -1463,7 +1463,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let order = extract_query_pk_order(&stmt);
 
             let mut row_filter = index_plan.result_filter.take();
-            self.legalize_kv_expr(index_plan.index.on, &mut row_filter);
+            self.legalize_kv_expr(&mut row_filter);
 
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
@@ -1588,19 +1588,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     /// statements at the SQL boundary. In-memory expressions (post filters,
     /// guards) are deliberately *not* legalized — the interpreter wants the
     /// positional form.
-    fn legalize_kv_expr(
-        &self,
-        table: toasty_core::schema::db::TableId,
-        expr: &mut Option<stmt::Expr>,
-    ) {
+    fn legalize_kv_expr(&self, expr: &mut Option<stmt::Expr>) {
         if let Some(expr) = expr {
             let engine = &self.planner.engine;
-            legalize::table_expr(
-                &engine.schema,
-                engine.capability(),
-                engine.schema.db.table(table),
-                expr,
-            );
+            legalize::table_expr(&engine.schema, engine.capability(), expr);
         }
     }
 
@@ -1623,9 +1614,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
             stmt::Statement::Delete(delete_stmt) => {
                 let mut filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(index_plan.table_id(), &mut filter);
+                self.legalize_kv_expr(&mut filter);
                 let mut condition = delete_stmt.condition.expr.clone();
-                self.legalize_kv_expr(index_plan.table_id(), &mut condition);
+                self.legalize_kv_expr(&mut condition);
 
                 self.insert_mir_with_deps(mir::DeleteByKey {
                     input: get_by_key_input,
@@ -1642,9 +1633,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let guarded_input = self.apply_guard(get_by_key_input, index_plan);
 
                 let mut filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(index_plan.table_id(), &mut filter);
+                self.legalize_kv_expr(&mut filter);
                 let mut condition = update_stmt.condition.expr.clone();
-                self.legalize_kv_expr(index_plan.table_id(), &mut condition);
+                self.legalize_kv_expr(&mut condition);
 
                 self.insert_mir_with_deps(mir::UpdateByKey {
                     input: guarded_input,
