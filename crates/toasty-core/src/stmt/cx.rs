@@ -169,21 +169,30 @@ pub enum ExprTarget<'a> {
 /// and `()` (which resolves nothing).
 pub trait Resolve {
     /// Returns the database table that stores the given model, if any.
-    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
+    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table> {
+        let _ = model;
+        None
+    }
 
     /// Returns a reference to the application Model with the specified ID.
     ///
     /// Used during high-level query building to access model metadata such as
     /// field definitions, relationships, and validation rules. Returns None if
     /// the model ID is not found in the application schema.
-    fn model(&self, id: ModelId) -> Option<&Model>;
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        let _ = id;
+        None
+    }
 
     /// Returns a reference to the database Table with the specified ID.
     ///
     /// Used during SQL generation and query execution to access table metadata
     /// including column definitions, constraints, and indexes. Returns None if
     /// the table ID is not found in the database schema.
-    fn table(&self, id: TableId) -> Option<&Table>;
+    fn table(&self, id: TableId) -> Option<&Table> {
+        let _ = id;
+        None
+    }
 }
 
 /// Conversion trait for producing an [`ExprTarget`] from a statement or
@@ -702,43 +711,15 @@ impl Resolve for crate::schema::app::Schema {
     fn model(&self, id: ModelId) -> Option<&Model> {
         self.get_model(id)
     }
-
-    fn table(&self, _id: TableId) -> Option<&Table> {
-        None
-    }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
-    }
 }
 
 impl Resolve for db::Schema {
-    fn model(&self, _id: ModelId) -> Option<&Model> {
-        None
-    }
-
     fn table(&self, id: TableId) -> Option<&Table> {
         Some(db::Schema::table(self, id))
     }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
-    }
 }
 
-impl Resolve for () {
-    fn model(&self, _id: ModelId) -> Option<&Model> {
-        None
-    }
-
-    fn table(&self, _id: TableId) -> Option<&Table> {
-        None
-    }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
-    }
-}
+impl Resolve for () {}
 
 impl<'a> ExprTarget<'a> {
     /// Returns the model if this target is [`ExprTarget::Model`], or `None`.

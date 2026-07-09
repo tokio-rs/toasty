@@ -1,9 +1,6 @@
 use crate::{
     Schema,
-    schema::{
-        app::{Model, ModelId, ModelRoot},
-        db::{Table, TableId},
-    },
+    schema::app::{Model, ModelId},
     stmt::{Expr, ExprArg, ExprContext, ExprReference, Project, Projection, Resolve, Type, Value},
 };
 
@@ -67,14 +64,6 @@ pub(crate) struct InputResolve<'a, I: ?Sized>(pub(crate) &'a I);
 impl<I: Input + ?Sized> Resolve for InputResolve<'_, I> {
     fn model(&self, id: ModelId) -> Option<&Model> {
         self.0.resolve_model(id)
-    }
-
-    fn table(&self, _id: TableId) -> Option<&Table> {
-        None
-    }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
     }
 }
 
