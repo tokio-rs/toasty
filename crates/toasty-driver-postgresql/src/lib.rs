@@ -423,34 +423,28 @@ impl Connection {
 
         log.rows(rows.len() as u64);
 
-        // Collect eagerly so the per-row decode (which borrows `schema`) runs
-        // within this method rather than escaping into the lazy stream.
-        let results = rows
-            .into_iter()
-            .map(|row| {
-                let mut results = Vec::new();
+        let results = rows.into_iter().map(move |row| {
+            let mut results = Vec::new();
 
-                match &ret {
-                    SqlReturn::Count => unreachable!(),
-                    SqlReturn::Infer => {
-                        for (i, column) in row.columns().iter().enumerate() {
-                            results.push(Value::from_sql_infer(i, &row, column).into_inner());
-                        }
-                    }
-                    SqlReturn::Types(ret_tys) => {
-                        for (i, column) in row.columns().iter().enumerate() {
-                            results
-                                .push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
-                        }
+            match &ret {
+                SqlReturn::Count => unreachable!(),
+                SqlReturn::Infer => {
+                    for (i, column) in row.columns().iter().enumerate() {
+                        results.push(Value::from_sql_infer(i, &row, column).into_inner());
                     }
                 }
+                SqlReturn::Types(ret_tys) => {
+                    for (i, column) in row.columns().iter().enumerate() {
+                        results.push(Value::from_sql(i, &row, column, &ret_tys[i]).into_inner());
+                    }
+                }
+            }
 
-                Ok(ValueRecord::from_vec(results))
-            })
-            .collect::<Vec<_>>();
+            Ok(ValueRecord::from_vec(results))
+        });
 
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-            results.into_iter(),
+            results,
         )))
     }
 

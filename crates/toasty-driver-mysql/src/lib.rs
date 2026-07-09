@@ -309,12 +309,8 @@ impl Connection {
             Ok(ValueRecord::from_vec(results))
         });
 
-        // Collect eagerly so the per-row decode (which borrows `schema`) runs
-        // within this method rather than escaping into the lazy stream.
-        let results = results.collect::<Vec<_>>();
-
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-            results.into_iter(),
+            results,
         )))
     }
 
