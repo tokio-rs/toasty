@@ -16,18 +16,15 @@
 //! One rule module exists today: [`document`], which rewrites `#[document]`
 //! path reads into the resolved [`FuncJsonExtract`](stmt::FuncJsonExtract)
 //! name paths drivers consume. Future per-backend rewrites join it as sibling
-//! modules, invoked from [`statement`].
+//! modules, invoked from [`Engine::legalize_statement`].
 //!
 //! Entry points: [`Engine::prepare_for_driver`] legalizes a full statement
-//! and extracts its bind parameters; [`table_expr`] legalizes a bare table
-//! expression that crosses the boundary inside a key-value operation.
+//! and extracts its bind parameters; [`Engine::legalize_table_expr`]
+//! legalizes a bare table expression that crosses the boundary inside a
+//! key-value operation.
 
 use super::Engine;
-use toasty_core::{
-    driver::{Capability, operation::TypedValue},
-    schema::Schema,
-    stmt,
-};
+use toasty_core::{driver::operation::TypedValue, stmt};
 
 mod document;
 
@@ -42,7 +39,7 @@ impl Engine {
     /// last engine-side mutation (e.g. the MySQL `RETURNING` rewrites) and
     /// immediately before the driver serializes it.
     pub(crate) fn prepare_for_driver(&self, stmt: &mut stmt::Statement) -> Vec<TypedValue> {
-        statement(&self.schema, self.capability(), stmt);
+        self.legalize_statement(stmt);
 
         if self.capability().sql {
             super::bind::run(stmt, &self.schema.db, self.capability())
@@ -50,15 +47,15 @@ impl Engine {
             vec![]
         }
     }
-}
 
-/// Legalize a full statement: run every rule module over it.
-fn statement(schema: &Schema, capability: &Capability, stmt: &mut stmt::Statement) {
-    document::statement(schema, capability, stmt);
-}
+    /// Legalize a full statement: run every rule module over it.
+    fn legalize_statement(&self, stmt: &mut stmt::Statement) {
+        document::statement(&self.schema, self.capability(), stmt);
+    }
 
-/// Legalize a driver-bound expression — a key-value operation's filter or
-/// condition, which the driver compiles without an enclosing statement.
-pub(crate) fn table_expr(schema: &Schema, capability: &Capability, expr: &mut stmt::Expr) {
-    document::table_expr(schema, capability, expr);
+    /// Legalize a driver-bound expression — a key-value operation's filter or
+    /// condition, which the driver compiles without an enclosing statement.
+    pub(crate) fn legalize_table_expr(&self, expr: &mut stmt::Expr) {
+        document::table_expr(&self.schema, self.capability(), expr);
+    }
 }

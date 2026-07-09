@@ -100,7 +100,7 @@ use crate::{
         SelectItem, SelectItems, eval, exec,
         hir::{self},
         index::{self, IndexPlan},
-        legalize, mir,
+        mir,
         plan::HirPlanner,
     },
 };
@@ -1590,8 +1590,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     /// positional form.
     fn legalize_kv_expr(&self, expr: &mut Option<stmt::Expr>) {
         if let Some(expr) = expr {
-            let engine = &self.planner.engine;
-            legalize::table_expr(&engine.schema, engine.capability(), expr);
+            self.planner.engine.legalize_table_expr(expr);
         }
     }
 
