@@ -1,20 +1,20 @@
 use super::{
-    Connection, Delete, ExprAttrs, Result, ReturnValuesOnConditionCheckFailure, Schema, SdkError,
-    TransactWriteItem, ddb_expression, ddb_key, item_to_record, operation,
+    Connection, Delete, ExprAttrs, Result, ReturnValuesOnConditionCheckFailure, SdkError,
+    TransactWriteItem, db, ddb_expression, ddb_key, item_to_record, operation,
 };
-use std::{collections::HashMap, sync::Arc};
+use std::collections::HashMap;
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
 impl Connection {
     pub(crate) async fn exec_delete_by_key(
         &mut self,
-        schema: &Arc<Schema>,
+        schema: &db::Schema,
         op: operation::DeleteByKey,
     ) -> Result<ExecResponse> {
         use aws_sdk_dynamodb::operation::delete_item::DeleteItemError;
 
-        let table = schema.db.table(op.table);
-        let cx = ExprContext::new_with_target(&schema.db, table);
+        let table = schema.table(op.table);
+        let cx = ExprContext::new_with_target(schema, table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -133,7 +133,7 @@ impl Connection {
             .columns
             .iter()
             .map(|index_column| {
-                let column = schema.db.column(index_column.column);
+                let column = schema.column(index_column.column);
                 column.name.clone()
             })
             .collect();

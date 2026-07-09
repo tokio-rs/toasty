@@ -218,8 +218,8 @@ impl Connection {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
-            Operation::DeleteByKey(op) => self.exec_delete_by_key(schema, op).await,
-            Operation::UpdateByKey(op) => self.exec_update_by_key(schema, op).await,
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(

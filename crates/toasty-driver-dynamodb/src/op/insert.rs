@@ -1,6 +1,8 @@
-use super::{Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest, stmt};
+use super::{
+    Connection, Put, PutRequest, Result, TransactWriteItem, Value, WriteRequest, db, stmt,
+};
 use std::collections::HashMap;
-use toasty_core::{driver::ExecResponse, schema::db};
+use toasty_core::driver::ExecResponse;
 
 impl Connection {
     pub(crate) async fn exec_insert(
