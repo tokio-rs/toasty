@@ -1565,7 +1565,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         index_key_ty: stmt::Type,
     ) -> mir::NodeId {
         if keys.is_const() {
-            self.insert_const(keys.eval_const(), index_key_ty)
+            let keys = keys.eval_const(&self.planner.engine.schema);
+            self.insert_const(keys, index_key_ty)
         } else if keys.is_identity() {
             debug_assert_eq!(1, self.load_data.inputs.len(), "TODO");
             self.load_data.inputs[0]
@@ -1645,23 +1646,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let mut condition = update_stmt.condition.expr.clone();
                 self.lower_kv_expr(index_plan.table_id(), &mut condition);
 
-                // Name the document values in the assignments (positional
-                // records become named objects), the same conversion the SQL
-                // boundary applies to UPDATE statements.
-                let mut assignments = update_stmt.assignments.clone();
-                {
-                    let engine = &self.planner.engine;
-                    document::name_assignment_values(
-                        &engine.schema,
-                        engine.schema.db.table(index_plan.table_id()),
-                        &mut assignments,
-                    );
-                }
-
                 self.insert_mir_with_deps(mir::UpdateByKey {
                     input: guarded_input,
                     table: index_plan.table_id(),
-                    assignments,
+                    // Document values in the assignments are already named:
+                    // the mapping's lowering casts converted them during
+                    // statement lowering/simplification.
+                    assignments: update_stmt.assignments.clone(),
                     filter,
                     condition,
                     columns: self.load_data.select_items.extract_expr_references(),

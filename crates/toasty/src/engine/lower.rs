@@ -28,7 +28,7 @@ use toasty_core::{
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
 
 /// Wrap a nullable single-relation subquery so a missing row passes through as
 /// `Null`, while a present row is transformed by `present`. Used when lowering
@@ -333,7 +333,20 @@ impl LowerStatement<'_, '_> {
         match op {
             CollectionOp::Append(expr) => {
                 self.visit_expr_mut(expr);
-                out.append(prim.column, expr.take());
+                let mut value = expr.take();
+
+                // A document collection's append operand (a list of elements,
+                // matching the column's document type) lowers through the
+                // same schema-directed cast a `Set` picks up from
+                // `model_to_table`; `Append` bypasses that template, so the
+                // cast is applied here.
+                let schema = self.expr_cx.schema();
+                if let Some(doc_ty) = schema.mapping.document_column_ty(prim.column) {
+                    let column_ty = &schema.db.column(prim.column).ty;
+                    value = stmt::Expr::cast_from(value, doc_ty, column_ty);
+                }
+
+                out.append(prim.column, value);
             }
             CollectionOp::Remove(expr) => {
                 self.visit_expr_mut(expr);
@@ -894,10 +907,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                // Cheap canonicalization is enough here: the parent statement's
-                // post-lowering simplify will recursively visit this embedded
-                // sub-statement and apply the heavyweight rules.
-                fold::fold_stmt(&mut *expr_stmt.stmt);
+                // Post-lower simplify. The sub-statement detaches into its own
+                // HIR entry (`new_sub_statement`), so the parent statement's
+                // post-lowering simplify never sees it — the heavyweight rules
+                // (e.g. the schema-directed `#[document]` cast folding) must
+                // run here.
+                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
@@ -918,10 +933,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 });
 
                 let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
-                // Cheap canonicalization is enough here: the parent statement's
-                // post-lowering simplify will recursively visit this embedded
-                // sub-statement and apply the heavyweight rules.
-                fold::fold_stmt(&mut stmt);
+                // Post-lower simplify. The sub-statement detaches into its own
+                // HIR entry (`new_sub_statement`), so the parent statement's
+                // post-lowering simplify never sees it — the heavyweight rules
+                // must run here.
+                self.state.engine.simplify_stmt(&mut stmt);
 
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
@@ -1439,7 +1455,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     }
                     stmt::Expr::Value(stmt::Value::List(items)) => {
                         for item in items {
-                            *item = target_ty.cast(item.take()).expect("failed to cast value");
+                            *item = target_ty
+                                .cast(self.expr_cx.schema(), item.take())
+                                .expect("failed to cast value");
                         }
                     }
                     stmt::Expr::Arg(_) => {
@@ -1851,7 +1869,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             stmt::Expr::Value(value) => {
                 // Cast the value to target_ty using existing cast method
-                let casted = target_ty.cast(value.take()).expect("failed to cast value");
+                let casted = target_ty
+                    .cast(self.expr_cx.schema(), value.take())
+                    .expect("failed to cast value");
                 *value = casted;
             }
             stmt::Expr::Project(_) => {

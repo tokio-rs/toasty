@@ -59,10 +59,11 @@ pub struct Mapping {
     ///
     /// A document column's [`db::Column`](crate::schema::db::Column) is typed
     /// by the structural [`stmt::Type::Object`] — the column does not know
-    /// which embedded model it stores. This index carries that knowledge on
-    /// the engine's behalf: it maps the column to the `Type::Model` (or
-    /// `List(Model)`) view the engine uses to name document writes, raise
-    /// document reads, and type column references at the app level.
+    /// which embedded model it stores. That knowledge normally travels inside
+    /// the mapping's cast expressions (`model_to_table` carries the lowering
+    /// cast, `table_to_model` the raising cast); this index covers the
+    /// operations that bypass those templates — an `Append` assignment's
+    /// operand cast during statement lowering.
     pub document_columns: IndexMap<ColumnId, stmt::Type>,
 }
 

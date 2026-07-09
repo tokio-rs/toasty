@@ -1,4 +1,4 @@
-use super::{PathFieldSet, TypeUnion, Value};
+use super::{PathFieldSet, Resolve, TypeUnion, Value, ValueObject, ValueRecord};
 use crate::{
     Result,
     schema::app::{FieldId, ModelId},
@@ -328,22 +328,66 @@ impl Type {
         )
     }
 
+    /// Whether this type has a document position (`Type::Model`).
+    ///
+    /// Values at a document position convert between the engine's positional
+    /// records and the named objects drivers consume; such conversions are
+    /// schema-directed and cannot run in a schema-free context.
+    pub fn contains_model(&self) -> bool {
+        match self {
+            Self::Model(_) => true,
+            Self::List(elem) => elem.contains_model(),
+            Self::Record(fields) => fields.iter().any(Self::contains_model),
+            Self::Union(union) => union.iter().any(|ty| ty.contains_model()),
+            _ => false,
+        }
+    }
+
     /// Casts `value` to this type, returning the converted value.
     ///
     /// Null values pass through unchanged. Supported conversions include
     /// identity casts, string/UUID interchange, string/decimal interchange,
-    /// record-to-sparse-record, and integer width conversions.
+    /// record-to-sparse-record, integer width conversions, and — directed by
+    /// `resolve` — raising a `#[document]` position's named wire object into
+    /// the embedded model's positional record.
     ///
     /// # Errors
     ///
-    /// Returns an error if the conversion is not supported or if the value
-    /// is out of range for the target type.
-    pub fn cast(&self, value: Value) -> Result<Value> {
+    /// Returns an error if the conversion is not supported, if the value
+    /// is out of range for the target type, or if a schema-directed
+    /// conversion cannot resolve its model through `resolve`.
+    pub fn cast(&self, resolve: &impl Resolve, value: Value) -> Result<Value> {
+        self.cast_from(resolve, None, value)
+    }
+
+    /// Casts `value` to this type, additionally directed by the source type
+    /// when one is known (see [`super::ExprCast::from`]).
+    ///
+    /// A model-level `from` type triggers the document *lowering* conversion:
+    /// the engine's positional record becomes the named object drivers
+    /// consume. Every other conversion is directed by the target type alone,
+    /// exactly as [`Self::cast`].
+    pub fn cast_from(
+        &self,
+        resolve: &impl Resolve,
+        from: Option<&Type>,
+        value: Value,
+    ) -> Result<Value> {
         use stmt::Value;
 
         // Null values are passed through
         if value.is_null() {
             return Ok(value);
+        }
+
+        // Lowering: a `#[document]` position converts from the engine's
+        // positional form to the named object drivers consume, directed by
+        // the *source* type — the structural target does not name the embed
+        // and a positional record is not self-describing.
+        if let Some(from) = from
+            && from.contains_model()
+        {
+            return Self::lower_document(resolve, from, value);
         }
 
         #[cfg(feature = "jiff")]
@@ -424,7 +468,132 @@ impl Type {
             }
             (Value::F32(v), Self::F64) => Value::F64(v as f64),
             (Value::F64(v), Self::F64) => Value::F64(v),
+            // Raising: a named wire object at a document position becomes the
+            // embedded model's positional record; engine-computed values
+            // already in positional form pass through.
+            (value, Self::Model(_)) => return self.raise_document(resolve, value),
+            (Value::List(items), Self::List(elem)) => Value::List(
+                items
+                    .into_iter()
+                    .map(|item| elem.cast(resolve, item))
+                    .collect::<Result<_>>()?,
+            ),
+            (Value::Record(record), Self::Record(fields)) if fields.len() == record.len() => {
+                Value::Record(ValueRecord::from_vec(
+                    fields
+                        .iter()
+                        .zip(record)
+                        .map(|(ty, value)| ty.cast(resolve, value))
+                        .collect::<Result<_>>()?,
+                ))
+            }
+            // A union member is picked by shape: cast with the first member
+            // the value satisfies (a wire object satisfies its `Type::Model`
+            // member via the named field check).
+            (value, Self::Union(union)) => match union.iter().find(|ty| value.is_a(resolve, ty)) {
+                Some(ty) => return ty.cast(resolve, value),
+                None => value,
+            },
             (value, _) => todo!("value={value:#?}; ty={self:#?}"),
+        })
+    }
+
+    /// Raise a value at a document position: a named wire object (the form a
+    /// driver decodes shape-directed) becomes the embedded model's positional
+    /// record, in schema field order. A key the writer omitted decodes to
+    /// `Null`; a key unknown to the schema (written by an external client) is
+    /// dropped. A value already in engine form (an engine-computed positional
+    /// record) passes through, so the conversion is idempotent.
+    fn raise_document(&self, resolve: &impl Resolve, value: Value) -> Result<Value> {
+        let Self::Model(embed_id) = self else {
+            panic!("raise_document on non-model type; ty={self:#?}")
+        };
+
+        // Already in engine form — idempotence for engine-computed values.
+        let Value::Object(object) = value else {
+            return Ok(value);
+        };
+
+        let Some(model) = resolve.model(*embed_id) else {
+            return Err(crate::Error::expression_evaluation_failed(format!(
+                "cannot cast to {self:?}: the model is not resolvable in this context"
+            )));
+        };
+
+        let mut entries = object.entries;
+        Ok(Value::Record(ValueRecord::from_vec(
+            model
+                .fields()
+                .iter()
+                .map(|field| {
+                    let name = field.name().app_unwrap();
+                    match entries.iter().position(|(key, _)| key == name) {
+                        Some(index) => field
+                            .expr_ty()
+                            .cast_document_leaf(resolve, entries.swap_remove(index).1),
+                        None => Ok(Value::Null),
+                    }
+                })
+                .collect::<Result<_>>()?,
+        )))
+    }
+
+    /// Raise one document-interior value: descend document structure, pass
+    /// through leaves already of the field's type, and cast the rest — the
+    /// wire shapes a shape-directed decode produces (integers by fit,
+    /// temporals / decimals / uuids as text) back to the field's type.
+    fn cast_document_leaf(&self, resolve: &impl Resolve, value: Value) -> Result<Value> {
+        match (self, value) {
+            (Self::Model(_), value @ Value::Object(_)) => self.raise_document(resolve, value),
+            (Self::List(elem), Value::List(items)) => Ok(Value::List(
+                items
+                    .into_iter()
+                    .map(|item| elem.cast_document_leaf(resolve, item))
+                    .collect::<Result<_>>()?,
+            )),
+            (_, Value::Null) => Ok(Value::Null),
+            (ty, value) if value.is_a(resolve, ty) => Ok(value),
+            (ty, value) => ty.cast(resolve, value),
+        }
+    }
+
+    /// Lower a document value from the engine's positional form to the named
+    /// object a driver serializes, directed by the model-level source type —
+    /// the inverse of [`Self::raise_document`]. A `Type::Model` position turns
+    /// its `Value::Record` into a `Value::Object`, resolving the embed's field
+    /// names from the schema and recursing; `List` maps elementwise; anything
+    /// else — including an already-named `Value::Object` — passes through, so
+    /// the conversion is idempotent.
+    fn lower_document(resolve: &impl Resolve, from: &Type, value: Value) -> Result<Value> {
+        Ok(match (from, value) {
+            (Type::Model(embed_id), Value::Record(record)) => {
+                let Some(model) = resolve.model(*embed_id) else {
+                    return Err(crate::Error::expression_evaluation_failed(format!(
+                        "cannot cast from {from:?}: the model is not resolvable in this context"
+                    )));
+                };
+
+                Value::Object(ValueObject::from_vec(
+                    model
+                        .fields()
+                        .iter()
+                        .zip(record)
+                        .map(|(field, value)| {
+                            Ok((
+                                field.name().app_unwrap().to_owned(),
+                                Self::lower_document(resolve, field.expr_ty(), value)?,
+                            ))
+                        })
+                        .collect::<Result<_>>()?,
+                ))
+            }
+            (Type::List(elem), Value::List(items)) => Value::List(
+                items
+                    .into_iter()
+                    .map(|item| Self::lower_document(resolve, elem, item))
+                    .collect::<Result<_>>()?,
+            ),
+            (_, value) => value,
         })
     }
 }

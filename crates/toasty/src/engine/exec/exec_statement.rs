@@ -6,7 +6,7 @@ use toasty_core::{
 use crate::{
     Result,
     engine::{
-        document, eval,
+        eval,
         exec::{Action, Exec, Output, VarId},
     },
 };
@@ -155,9 +155,9 @@ impl Exec<'_> {
             return Ok(());
         }
 
-        // Lower `#[document]` columns into their driver-consumable shape —
-        // named objects and resolved document paths — for every backend.
-        self.engine.lower_documents(&mut stmt);
+        // Lower `#[document]` path reads into their driver-consumable shape
+        // (resolved `FuncJsonExtract` name paths), for every backend.
+        self.engine.lower_document_paths(&mut stmt);
 
         // Only extract bind parameters for SQL drivers. Key-value drivers
         // (e.g., DynamoDB) read values directly from the statement.
@@ -200,11 +200,7 @@ impl Exec<'_> {
         let op = operation::QuerySql {
             stmt,
             params,
-            // The driver-facing result types: document positions
-            // (`Type::Model`) lower to the structural `Type::Object` the
-            // driver decodes shape-directed; the engine raises the returned
-            // objects back when the rows are stored.
-            ret: ret.map(|tys| tys.into_iter().map(document::lower_ty).collect()),
+            ret,
             last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 
@@ -301,7 +297,7 @@ impl Exec<'_> {
         // Extract cursors for potential next/prev pages
         res.next_cursor = if row_vec.len() == page_size {
             let cursor_row = &row_vec[page_size - 1];
-            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
+            Some(extract_cursor.eval(&self.engine.schema, std::slice::from_ref(cursor_row))?)
         } else {
             // Got fewer than page_size rows, no more data
             None
@@ -310,7 +306,7 @@ impl Exec<'_> {
         // Extract prev cursor from first row only when the driver supports backward pagination
         res.prev_cursor = if !row_vec.is_empty() && self.engine.capability().backward_pagination {
             let cursor_row = &row_vec[0];
-            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
+            Some(extract_cursor.eval(&self.engine.schema, std::slice::from_ref(cursor_row))?)
         } else {
             None
         };
@@ -372,13 +368,13 @@ impl Exec<'_> {
         ret_ty: Option<Vec<stmt::Type>>,
     ) -> Result<toasty_core::driver::ExecResponse> {
         let mut select_stmt = mysql_update.select_stmt;
-        self.engine.lower_documents(&mut select_stmt);
+        self.engine.lower_document_paths(&mut select_stmt);
         let select_params = self.engine.extract_params(&mut select_stmt);
 
         let op = operation::QuerySql {
             stmt: select_stmt,
             params: select_params,
-            ret: ret_ty.map(|tys| tys.into_iter().map(document::lower_ty).collect()),
+            ret: ret_ty,
             last_insert_id_hack: None,
         };
 
@@ -565,8 +561,9 @@ impl MySQLInsertReturning {
                 "Expected record with one field from driver"
             );
 
-            // Cast the ID to the correct type for the auto-increment column
-            let id_value = self.auto_column_type.cast(record.fields[0].clone())?;
+            // Cast the ID to the correct type for the auto-increment column.
+            // An auto-increment ID is a scalar, so the cast is schema-free.
+            let id_value = self.auto_column_type.cast(&(), record.fields[0].clone())?;
             let input = vec![id_value];
 
             // Evaluate the returning expression with the auto-increment ID

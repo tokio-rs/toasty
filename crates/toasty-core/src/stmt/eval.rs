@@ -19,7 +19,8 @@
 use crate::{
     Result,
     stmt::{
-        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Projection, Statement, Value,
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, InputResolve, Limit, Projection,
+        Statement, Value,
     },
 };
 use std::cmp::Ordering;
@@ -213,7 +214,12 @@ impl Expr {
                     }),
                 }
             }
-            Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
+            Expr::Cast(expr_cast) => {
+                let value = expr_cast.expr.eval_ref(scope, input)?;
+                expr_cast
+                    .ty
+                    .cast_from(&InputResolve(&*input), expr_cast.from.as_ref(), value)
+            }
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
             )),
@@ -431,7 +437,7 @@ impl Expr {
                         }
                     };
                 }
-                func.ty.cast(value)
+                func.ty.cast(&InputResolve(&*input), value)
             }
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",

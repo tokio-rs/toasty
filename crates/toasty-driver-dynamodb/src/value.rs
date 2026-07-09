@@ -61,7 +61,7 @@ impl Value {
             // (temporals, decimals): recover the typed value through the same
             // `Type::cast` conversions the engine uses for scalar columns.
             (ty, AV::S(val)) => ty
-                .cast(stmt::Value::String(val.clone()))
+                .cast(&(), stmt::Value::String(val.clone()))
                 .expect("string attribute does not convert to the column type"),
             _ => todo!("ty={:#?}; value={:#?}", ty, val),
         };
@@ -175,7 +175,7 @@ impl Value {
             // sub-second precision keeps lexicographic string order
             // chronological, so range filters on these attributes compare
             // correctly.
-            value => match stmt::Type::String.cast(value.clone()) {
+            value => match stmt::Type::String.cast(&(), value.clone()) {
                 Ok(stmt::Value::String(s)) => AV::S(s),
                 _ => todo!("{:#?}", self.0),
             },

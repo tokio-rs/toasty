@@ -190,6 +190,7 @@ mod insert_target;
 pub use insert_target::InsertTarget;
 
 mod input;
+pub(crate) use input::InputResolve;
 pub use input::{ConstInput, Input, TypedInput};
 
 mod join;

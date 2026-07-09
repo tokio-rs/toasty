@@ -1,5 +1,9 @@
 use crate::{
     Schema,
+    schema::{
+        app::{Model, ModelId, ModelRoot},
+        db::{Table, TableId},
+    },
     stmt::{Expr, ExprArg, ExprContext, ExprReference, Project, Projection, Resolve, Type, Value},
 };
 
@@ -39,6 +43,37 @@ pub trait Input {
         projection: &Projection,
     ) -> Option<Expr> {
         let _ = (expr_reference, projection);
+        None
+    }
+
+    /// Resolves the application model with the given ID, for casts whose
+    /// conversion is schema-directed (a `#[document]` embed's record ↔
+    /// object conversions).
+    ///
+    /// Defaults to `None`: inputs without schema access evaluate only
+    /// schema-free casts, and a schema-directed cast reaching one fails
+    /// loudly at evaluation.
+    fn resolve_model(&self, id: ModelId) -> Option<&Model> {
+        let _ = id;
+        None
+    }
+}
+
+/// Adapts an [`Input`]'s model resolution to the [`Resolve`] trait, so
+/// expression evaluation can hand it to schema-directed casts
+/// ([`Type::cast`](crate::stmt::Type::cast)).
+pub(crate) struct InputResolve<'a, I: ?Sized>(pub(crate) &'a I);
+
+impl<I: Input + ?Sized> Resolve for InputResolve<'_, I> {
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        self.0.resolve_model(id)
+    }
+
+    fn table(&self, _id: TableId) -> Option<&Table> {
+        None
+    }
+
+    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
         None
     }
 }
@@ -109,6 +144,10 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
         );
 
         Some(expr)
+    }
+
+    fn resolve_model(&self, id: ModelId) -> Option<&Model> {
+        self.cx.schema().model(id)
     }
 }
 

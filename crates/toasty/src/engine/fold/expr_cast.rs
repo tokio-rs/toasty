@@ -3,15 +3,20 @@ use toasty_core::stmt::{self, Expr};
 /// Cheap canonicalization for `CAST`: constant-fold the cast at compile
 /// time when the operand is a literal value.
 ///
-/// Heavyweight rewrites (redundant-cast elimination on field references,
-/// which needs schema lookup for the field's type) live in
-/// `simplify/expr_cast.rs` and run after this fold pass on canonical
-/// input.
+/// Schema-directed casts — a `#[document]` embed's record ↔ object
+/// conversions, marked by a source type or a model-typed target — are
+/// skipped: fold is schema-free, so they constant-fold in the simplifier
+/// instead (`simplify/expr_cast.rs`), which also owns the other heavyweight
+/// rewrites (redundant-cast elimination on field references).
 pub(super) fn fold_expr_cast(expr: &mut stmt::ExprCast) -> Option<Expr> {
+    if expr.from.is_some() || expr.ty.contains_model() {
+        return None;
+    }
+
     let stmt::Expr::Value(value) = &mut *expr.expr else {
         return None;
     };
 
-    let cast = expr.ty.cast(value.take()).unwrap();
+    let cast = expr.ty.cast(&(), value.take()).unwrap();
     Some(cast.into())
 }

@@ -844,15 +844,22 @@ used regardless.
   type-level mirror of `Value::Object`) and `stmt::Type::List(Object)`.
   A document column is typed the way a `jsonb` column is: it records
   *that* the column holds a document, not which embedded model it
-  stores — the model identity stays engine-side, in the schema mapping.
-  A document crosses the driver boundary as a named `Value::Object` in
-  both directions: the engine names the positional `Value::Record` into
-  an object just before the driver serializes it, and raises a
-  driver-decoded object back to the typed positional record as rows
+  stores — the model identity stays engine-side, in the schema mapping's
+  cast expressions. A document crosses the driver boundary as a named
+  `Value::Object` in both directions, converted by the same mapping
+  machinery that bridges scalar storage types (a `Uuid` in a string
+  column): the schema builder plants a lowering cast (`Model` → `Object`,
+  carrying the model-level source type in `ExprCast::from`) in
+  `model_to_table` and a raising cast (`Object` → `Model`) in
+  `table_to_model`. The lowering cast constant-folds in the simplifier
+  (schema-directed, so the schema-free `fold` pass skips it), naming the
+  positional `Value::Record` into an object before the statement is
+  planned; the raising cast rides the returning eval program and turns a
+  driver-decoded object back into the typed positional record as rows
   return. Drivers encode and decode documents shape-directed — interior
   leaves take their wire forms (numbers by integer fit, temporals and
-  decimals as text), and the engine casts them to their field types
-  during the raise — so a driver never consults the application schema.
+  decimals as text), and the raising cast converts them to their field
+  types — so a driver never consults the application schema.
 
 **New operations.** SQL drivers gain new statement nodes for collection
 predicates, collection mutations, and document-specific path operations.

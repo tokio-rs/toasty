@@ -439,4 +439,11 @@ impl stmt::Input for ConstantizeReturning<'_> {
             }
         }
     }
+
+    fn resolve_model(
+        &self,
+        id: toasty_core::schema::app::ModelId,
+    ) -> Option<&toasty_core::schema::app::Model> {
+        stmt::Resolve::model(self.cx.schema(), id)
+    }
 }
