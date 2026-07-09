@@ -110,7 +110,7 @@ impl Engine {
 
         if plan.needs_transaction {
             tracing::trace!("beginning plan transaction");
-            exec.connection.exec(&self.db_schema, begin.into()).await?;
+            exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
         }
 
@@ -124,7 +124,7 @@ impl Engine {
                 if plan.needs_transaction {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
-                    let _ = exec.connection.exec(&self.db_schema, rollback.into()).await;
+                    let _ = exec.connection.exec(&self.schema, rollback.into()).await;
                 }
                 return Err(e);
             }
@@ -132,7 +132,7 @@ impl Engine {
 
         if plan.needs_transaction {
             tracing::trace!("committing plan transaction");
-            exec.connection.exec(&self.db_schema, commit.into()).await?;
+            exec.connection.exec(&self.schema, commit.into()).await?;
         }
 
         let result = if let Some(returning) = plan.returning {

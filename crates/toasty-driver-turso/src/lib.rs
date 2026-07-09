@@ -44,7 +44,7 @@ use std::{
     sync::Arc,
 };
 use toasty_core::{
-    Result,
+    Result, Schema,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
@@ -528,7 +528,7 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "turso", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret_tys) = match op {
@@ -560,7 +560,7 @@ impl toasty_core::driver::Connection for Connection {
                 // and the serializer maps the other `TransactionMode`s to
                 // standard SQLite SQL.
                 let sql_str =
-                    sql::Serializer::sqlite_with_default_begin(schema, self.default_begin_sql)
+                    sql::Serializer::sqlite_with_default_begin(&schema.db, self.default_begin_sql)
                         .serialize_transaction(&op);
                 self.conn
                     .execute(&sql_str, ())
@@ -577,14 +577,14 @@ impl toasty_core::driver::Connection for Connection {
             SqlReturn::Count
         };
 
-        let sql_str = sql::Serializer::sqlite(schema).serialize(&sql);
+        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
         self.exec_sql(&sql_str, typed_params, ret).await
     }
 
-    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
-        for table in &schema.tables {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
-            for sql in create_table_stmts(schema, table) {
+            for sql in create_table_stmts(&schema.db, table) {
                 self.conn
                     .execute(&sql, ())
                     .await

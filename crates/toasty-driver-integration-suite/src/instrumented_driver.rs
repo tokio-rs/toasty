@@ -9,10 +9,10 @@ use std::{
     },
 };
 use toasty_core::{
-    Result,
+    Result, Schema,
     driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation, Rows},
     schema::{
-        db::{self, AppliedMigration, Migration},
+        db::{AppliedMigration, Migration},
         diff,
     },
 };
@@ -174,11 +174,7 @@ pub struct InstrumentedConnection {
 
 #[async_trait]
 impl Connection for InstrumentedConnection {
-    async fn exec(
-        &mut self,
-        schema: &Arc<db::Schema>,
-        operation: Operation,
-    ) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<Schema>, operation: Operation) -> Result<ExecResponse> {
         // Pop a queued fault, if any, and short-circuit before reaching
         // the underlying driver.
         let fault = self
@@ -224,7 +220,7 @@ impl Connection for InstrumentedConnection {
         Ok(response)
     }
 
-    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         self.inner.push_schema(schema).await
     }
 

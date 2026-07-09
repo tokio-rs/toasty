@@ -19,10 +19,10 @@ use std::{
 use async_trait::async_trait;
 use tempfile::TempDir;
 use toasty_core::{
-    Result,
+    Result, Schema,
     driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation},
     schema::{
-        db::{self, AppliedMigration, Migration},
+        db::{AppliedMigration, Migration},
         diff,
     },
 };
@@ -107,7 +107,7 @@ struct MockConnection {
 
 #[async_trait]
 impl Connection for MockConnection {
-    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         if self.state.exec_fail_tokens.load(Ordering::Relaxed) > 0 {
             self.state.exec_fail_tokens.fetch_sub(1, Ordering::Relaxed);
             self.valid = false;
@@ -134,7 +134,7 @@ impl Connection for MockConnection {
         self.inner.ping().await
     }
 
-    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         self.inner.push_schema(schema).await
     }
 

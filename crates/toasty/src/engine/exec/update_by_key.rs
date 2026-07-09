@@ -87,10 +87,7 @@ impl Exec<'_> {
             returning: action.returning.clone(),
         };
 
-        let res = self
-            .connection
-            .exec(&self.engine.db_schema, op.into())
-            .await?;
+        let res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
         debug_assert_eq!(!res.values.is_count(), action.returning.is_some());
 

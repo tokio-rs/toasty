@@ -51,10 +51,7 @@ impl Exec<'_> {
                     condition: action.condition.clone(),
                 };
 
-                let res = self
-                    .connection
-                    .exec(&self.engine.db_schema, op.into())
-                    .await?;
+                let res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
                 match res.values {
                     Rows::Count(n) => total_count += n,

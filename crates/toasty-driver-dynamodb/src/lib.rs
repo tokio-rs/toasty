@@ -23,7 +23,7 @@ pub(crate) use value::Value;
 
 use async_trait::async_trait;
 use toasty_core::{
-    Error, Result,
+    Error, Result, Schema,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig, log::QueryLog,
         operation::Operation,
@@ -162,7 +162,7 @@ impl Connection {
 }
 
 /// Resolves the table an operation targets, for the per-query event.
-fn op_table_name<'a>(schema: &'a db::Schema, op: &Operation) -> Option<&'a str> {
+fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
     let table_id = match op {
         Operation::GetByKey(op) => op.table,
         Operation::QueryPk(op) => op.table,
@@ -172,12 +172,12 @@ fn op_table_name<'a>(schema: &'a db::Schema, op: &Operation) -> Option<&'a str> 
         Operation::Scan(op) => op.table,
         _ => return None,
     };
-    Some(&schema.table(table_id).name)
+    Some(&schema.db.table(table_id).name)
 }
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         let log = QueryLog::operation(
             &self.query_log,
             "dynamodb",
@@ -189,10 +189,10 @@ impl toasty_core::driver::Connection for Connection {
         result
     }
 
-    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
-        for table in &schema.tables {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
-            self.create_table(schema, table, true).await?;
+            self.create_table(&schema.db, table, true).await?;
         }
         Ok(())
     }
@@ -214,7 +214,7 @@ impl toasty_core::driver::Connection for Connection {
 }
 
 impl Connection {
-    async fn exec2(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec2(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         match op {
             Operation::GetByKey(op) => self.exec_get_by_key(schema, op).await,
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
@@ -227,7 +227,7 @@ impl Connection {
                     "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
                 );
                 match op.stmt {
-                    stmt::Statement::Insert(insert) => self.exec_insert(schema, insert).await,
+                    stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
                     _ => todo!("op={:#?}", op.stmt),
                 }
             }

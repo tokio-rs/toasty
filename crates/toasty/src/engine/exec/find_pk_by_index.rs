@@ -45,7 +45,7 @@ impl Exec<'_> {
             let res = self
                 .connection
                 .exec(
-                    &self.engine.db_schema,
+                    &self.engine.schema,
                     operation::FindPkByIndex {
                         table: action.table,
                         index: action.index,

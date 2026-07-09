@@ -56,7 +56,7 @@ impl Exec<'_> {
         };
 
         self.connection
-            .exec(&self.engine.db_schema, begin.into())
+            .exec(&self.engine.schema, begin.into())
             .await?;
 
         let rows = match self.rmw_exec(action).await {
@@ -65,14 +65,14 @@ impl Exec<'_> {
                 // Best effort: ignore rollback errors so the original error is returned
                 let _ = self
                     .connection
-                    .exec(&self.engine.db_schema, rollback.into())
+                    .exec(&self.engine.schema, rollback.into())
                     .await;
                 return Err(e);
             }
         };
 
         self.connection
-            .exec(&self.engine.db_schema, commit.into())
+            .exec(&self.engine.schema, commit.into())
             .await?;
 
         self.vars.store(
@@ -107,7 +107,7 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.db_schema,
+                &self.engine.schema,
                 operation::QuerySql {
                     stmt: read_stmt,
                     params: read_params,
@@ -181,7 +181,7 @@ impl Exec<'_> {
         let res = self
             .connection
             .exec(
-                &self.engine.db_schema,
+                &self.engine.schema,
                 operation::QuerySql {
                     stmt: write_stmt,
                     params: write_params,

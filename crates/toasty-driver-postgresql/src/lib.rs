@@ -24,7 +24,7 @@ use async_trait::async_trait;
 use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
-    Result,
+    Result, Schema,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
@@ -493,7 +493,7 @@ impl From<Client> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "postgresql", op = %op.name(), "driver exec");
 
         if let Operation::Transaction(ref t) = op {
@@ -509,7 +509,7 @@ impl toasty_core::driver::Connection for Connection {
                     "PostgreSQL does not support TransactionMode::{mode:?}"
                 )));
             }
-            let sql = sql::Serializer::postgresql(schema).serialize_transaction(t);
+            let sql = sql::Serializer::postgresql(&schema.db).serialize_transaction(t);
             self.client
                 .batch_execute(&sql)
                 .await
@@ -537,7 +537,7 @@ impl toasty_core::driver::Connection for Connection {
             op => todo!("op={:#?}", op),
         };
 
-        let sql_as_str = sql::Serializer::postgresql(schema).serialize(&sql);
+        let sql_as_str = sql::Serializer::postgresql(&schema.db).serialize(&sql);
 
         let ret = if sql.returning_len().is_some() {
             SqlReturn::Types(ret_tys.unwrap())
@@ -548,13 +548,13 @@ impl toasty_core::driver::Connection for Connection {
         self.exec_sql(&sql_as_str, typed_params, ret).await
     }
 
-    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
-        let serializer = sql::Serializer::postgresql(schema);
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        let serializer = sql::Serializer::postgresql(&schema.db);
 
         // Create PostgreSQL enum types before creating tables.
         // Collect unique enum types across all columns.
         let mut created_enum_types = hashbrown::HashSet::new();
-        for table in &schema.tables {
+        for table in &schema.db.tables {
             for column in &table.columns {
                 if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
                     && created_enum_types.insert(type_enum.name.clone())
@@ -570,9 +570,9 @@ impl toasty_core::driver::Connection for Connection {
             }
         }
 
-        for table in &schema.tables {
+        for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
-            self.create_table(schema, table).await?;
+            self.create_table(&schema.db, table).await?;
         }
         Ok(())
     }

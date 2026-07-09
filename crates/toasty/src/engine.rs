@@ -47,11 +47,6 @@ pub(crate) struct Engine {
     /// The schema being managed by this database instance.
     pub(crate) schema: Arc<Schema>,
 
-    /// The database-level half of the schema, shared with drivers. Drivers
-    /// receive only this view — the application schema (models, fields,
-    /// mappings) never crosses the driver boundary.
-    pub(crate) db_schema: Arc<toasty_core::schema::db::Schema>,
-
     /// Driver capabilities, used during planning.
     pub(crate) capability: &'static Capability,
 }
@@ -59,12 +54,7 @@ pub(crate) struct Engine {
 impl Engine {
     /// Creates a new [`Engine`] with the given schema and capability.
     pub(crate) fn new(schema: Arc<Schema>, capability: &'static Capability) -> Engine {
-        let db_schema = Arc::new(schema.db.clone());
-        Engine {
-            schema,
-            db_schema,
-            capability,
-        }
+        Engine { schema, capability }
     }
 
     /// Returns the driver's capabilities.
@@ -114,7 +104,7 @@ impl Engine {
             ));
         }
 
-        connection.exec(&self.db_schema, raw.into()).await
+        connection.exec(&self.schema, raw.into()).await
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.

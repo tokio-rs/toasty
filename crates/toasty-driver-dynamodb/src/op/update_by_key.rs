@@ -1,7 +1,7 @@
 use super::{
-    Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
-    TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
-    ddb_key, item_to_record, operation, stmt,
+    Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, Schema,
+    SdkError, TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db,
+    ddb_expression, ddb_key, item_to_record, operation, stmt,
 };
 use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write, sync::Arc};
@@ -117,11 +117,11 @@ fn on_transaction_cancelled(
 impl Connection {
     pub(crate) async fn exec_update_by_key(
         &mut self,
-        schema: &Arc<db::Schema>,
+        schema: &Arc<Schema>,
         op: operation::UpdateByKey,
     ) -> Result<ExecResponse> {
-        let table = schema.table(op.table);
-        let cx = ExprContext::new_with_target(schema.as_ref(), table);
+        let table = schema.db.table(op.table);
+        let cx = ExprContext::new_with_target(&schema.db, table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -131,7 +131,7 @@ impl Connection {
             .filter(|index| {
                 if !index.primary_key && index.unique {
                     index.columns.iter().any(|index_column| {
-                        let column = index_column.table_column(schema);
+                        let column = index_column.table_column(&schema.db);
                         op.assignments
                             .keys()
                             .any(|projection| *projection == column.id.index)
@@ -283,7 +283,7 @@ impl Connection {
 
         if let Some(columns) = &op.returning {
             for column_id in columns {
-                let column = schema.column(*column_id);
+                let column = schema.db.column(*column_id);
                 let placeholder = bound_values
                     .get(&column_id.index)
                     .map(|value| (*value).clone())
@@ -395,7 +395,7 @@ impl Connection {
                 let attributes_to_get = index
                     .columns
                     .iter()
-                    .map(|index_column| index_column.table_column(schema).name.clone())
+                    .map(|index_column| index_column.table_column(&schema.db).name.clone())
                     .collect();
 
                 // Records that have had their unique values set initially
@@ -435,7 +435,7 @@ impl Connection {
                 // written.
                 let mut resolved_unique_values = HashMap::new();
                 for index_column in &index.columns {
-                    let column = index_column.table_column(schema);
+                    let column = index_column.table_column(&schema.db);
                     for (projection, assignment) in op.assignments.iter() {
                         if *projection != column.id.index {
                             continue;
@@ -476,7 +476,7 @@ impl Connection {
                 }
 
                 for index_column in &index.columns {
-                    let column = index_column.table_column(schema);
+                    let column = index_column.table_column(&schema.db);
 
                     for (projection, _) in op.assignments.iter() {
                         if *projection != column.id.index {
@@ -539,12 +539,12 @@ impl Connection {
                     let mut condition_expression = String::new();
 
                     for column_id in set_unique_attrs.keys() {
-                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
+                        let column = expr_attrs.column(schema.db.column(*column_id)).to_string();
                         condition_expression = format!("attribute_not_exists({column})");
                     }
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let column = expr_attrs.column(schema.column(*column_id)).to_string();
+                        let column = expr_attrs.column(schema.db.column(*column_id)).to_string();
                         let value = expr_attrs.ddb_value(prev.clone());
 
                         condition_expression = format!("{column} = {value}");
@@ -572,7 +572,7 @@ impl Connection {
                     );
 
                     for (column_id, prev) in &updated_unique_attrs {
-                        let name = &schema.column(*column_id).name;
+                        let name = &schema.db.column(*column_id).name;
                         transact_items.push(
                             TransactWriteItem::builder()
                                 .delete(
@@ -587,12 +587,12 @@ impl Connection {
                     }
 
                     for column_id in updated_unique_attrs.keys().chain(set_unique_attrs.keys()) {
-                        let name = &schema.column(*column_id).name;
+                        let name = &schema.db.column(*column_id).name;
 
                         let mut index_insert_items = HashMap::new();
 
                         for index_column in &index.columns {
-                            let column = index_column.table_column(schema);
+                            let column = index_column.table_column(&schema.db);
                             let value = &resolved_unique_values[column_id];
                             if !value.is_null() {
                                 index_insert_items.insert(

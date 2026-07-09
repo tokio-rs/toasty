@@ -22,7 +22,7 @@ use mysql_async::{
 };
 use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
-    Result,
+    Result, Schema,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
@@ -354,7 +354,7 @@ impl From<Conn> for Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret, last_insert_id_hack) = match op {
@@ -401,7 +401,7 @@ impl toasty_core::driver::Connection for Connection {
                         "MySQL does not support TransactionMode::{mode:?}"
                     )));
                 }
-                let sql = sql::Serializer::mysql(schema).serialize_transaction(&op);
+                let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
                 self.conn
                     .query_drop(sql)
                     .await
@@ -411,7 +411,8 @@ impl toasty_core::driver::Connection for Connection {
             op => todo!("op={:#?}", op),
         };
 
-        let (sql_as_str, arg_order) = sql::Serializer::mysql(schema).serialize_with_arg_order(&sql);
+        let (sql_as_str, arg_order) =
+            sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
 
         // MySQL uses positional `?` without indices, so params must be reordered
         // to match the order `Expr::Arg(n)` placeholders appear in the SQL.
@@ -443,10 +444,10 @@ impl toasty_core::driver::Connection for Connection {
         result
     }
 
-    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
-        for table in &schema.tables {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
-            self.create_table(schema, table).await?;
+            self.create_table(&schema.db, table).await?;
         }
         Ok(())
     }

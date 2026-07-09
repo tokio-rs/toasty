@@ -1,5 +1,5 @@
 use super::{
-    Connection, ExprAttrs, Result, db, ddb_expression, deserialize_ddb_cursor, item_to_record,
+    Connection, ExprAttrs, Result, Schema, ddb_expression, deserialize_ddb_cursor, item_to_record,
     operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
@@ -12,11 +12,11 @@ use toasty_core::{
 impl Connection {
     pub(crate) async fn exec_scan(
         &mut self,
-        schema: &Arc<db::Schema>,
+        schema: &Arc<Schema>,
         op: operation::Scan,
     ) -> Result<ExecResponse> {
-        let table = schema.table(op.table);
-        let cx = ExprContext::new_with_target(schema.as_ref(), table);
+        let table = schema.db.table(op.table);
+        let cx = ExprContext::new_with_target(&schema.db, table);
 
         let mut expr_attrs = ExprAttrs::default();
 
@@ -43,7 +43,7 @@ impl Connection {
         let col_indices = op.columns;
         let cols = || {
             col_indices.iter().map(|&idx| {
-                schema.column(ColumnId {
+                schema.db.column(ColumnId {
                     table: table_id,
                     index: idx,
                 })

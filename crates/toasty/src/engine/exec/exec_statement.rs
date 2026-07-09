@@ -208,10 +208,7 @@ impl Exec<'_> {
             last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 
-        let mut res = self
-            .connection
-            .exec(&self.engine.db_schema, op.into())
-            .await?;
+        let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
         match action.conditional {
             ConditionalOutput::None => {
@@ -385,9 +382,7 @@ impl Exec<'_> {
             last_insert_id_hack: None,
         };
 
-        self.connection
-            .exec(&self.engine.db_schema, op.into())
-            .await
+        self.connection.exec(&self.engine.schema, op.into()).await
     }
 
     /// Processes INSERT statements with RETURNING on MySQL, which doesn't support RETURNING.

@@ -28,7 +28,7 @@ use std::{
     sync::Arc,
 };
 use toasty_core::{
-    Result,
+    Result, Schema,
     driver::{
         Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
@@ -271,7 +271,7 @@ impl Connection {
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
-    async fn exec(&mut self, schema: &Arc<db::Schema>, op: Operation) -> Result<ExecResponse> {
+    async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret_tys) = match op {
@@ -300,7 +300,7 @@ impl toasty_core::driver::Connection for Connection {
                     }
                     *isolation = None;
                 }
-                let sql = sql::Serializer::sqlite(schema).serialize_transaction(&op);
+                let sql = sql::Serializer::sqlite(&schema.db).serialize_transaction(&op);
                 self.connection
                     .execute(&sql, [])
                     .map_err(toasty_core::Error::driver_operation_failed)?;
@@ -334,14 +334,14 @@ impl toasty_core::driver::Connection for Connection {
             _ => SqlReturn::Count,
         };
 
-        let sql_str = sql::Serializer::sqlite(schema).serialize(&sql);
+        let sql_str = sql::Serializer::sqlite(&schema.db).serialize(&sql);
         self.exec_sql(&sql_str, typed_params, ret)
     }
 
-    async fn push_schema(&mut self, schema: &db::Schema) -> Result<()> {
-        for table in &schema.tables {
+    async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
+        for table in &schema.db.tables {
             tracing::debug!(table = %table.name, "creating table");
-            self.create_table(schema, table)?;
+            self.create_table(&schema.db, table)?;
         }
 
         Ok(())
