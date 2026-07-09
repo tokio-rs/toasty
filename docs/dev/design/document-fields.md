@@ -4,119 +4,101 @@ Subsumes the [JSON field queries roadmap entry](../roadmap.md#query-engine).
 
 ## Summary
 
-Toasty stores `#[derive(Embed)]` types by column-expanding them — one
-column per leaf field on SQL backends, one top-level attribute per leaf
-on DynamoDB — and stores scalar collections (`Vec<scalar>`) using each
-backend's best representation: `text[]` on PostgreSQL, a List on
-DynamoDB, JSON elsewhere. Those scalar collections already expose
-`contains` / `is_superset` / `intersects` / `len` / `is_empty`
-predicates and `push` / `extend` / `clear` mutations, with atomic
-`pop` / `remove` / `remove_at` on PostgreSQL.
-
-Everything that needs *document* storage is still missing. There is no
-way to store a `Vec<struct>`, a `HashMap`, a `HashSet`, or an
-`#[derive(Embed)]` value as a single document, and none of the query or
-mutation operators that only make sense once a field is a document —
-sub-document containment, map key/value predicates, per-element array
-predicates, and in-place patch into a nested path. This design adds an
-explicit `#[document]` storage override, the remaining collection and
-map field types, the document-only query and mutation surface, indexing
-for collection and document fields, and brings MySQL and DynamoDB
-document storage up to the level PostgreSQL and SQLite already reach for
-scalar collections — with an API an eventual MongoDB driver can adopt
+Toasty stores `#[derive(Embed)]` structs as single document columns under
+the `#[document]` attribute, stores `Vec` collections of embeds as
+document arrays, and filters on scalar leaves inside those documents on
+all four target backends. This design covers what remains: equality
+filters over whole document values, map and set field types, sub-document
+containment, per-element predicates, in-place document mutations, the
+`#[document]` shapes still rejected today, and indexing for collection
+and document fields — with an API an eventual MongoDB driver can adopt
 without new user-facing concepts.
+
+## Current state
+
+What ships today, as context; the rest of the document designs only what
+is missing.
+
+- Embeds column-expand by default (one column per leaf field; one
+  top-level attribute on DynamoDB). `#[document]` collapses an embed
+  struct into one document column — `jsonb` on PostgreSQL, `JSON` on
+  MySQL, JSON text on SQLite, a Map `M` attribute on DynamoDB — at the
+  model root or on a field nested inside a column-expanded embed. A
+  `Vec` of embeds stores as a document array (`L` of `M` on DynamoDB)
+  with or without the attribute. `Capability::document_collections`
+  gates document storage; all four in-tree backends set it.
+- Filters reach scalar leaves inside a document at any depth — equality,
+  ordering, `is_none()` — and temporal and decimal leaves compare
+  exactly through the document codec's canonical text forms. Document
+  fields compose with create, whole-value update, and `include`.
+- `Vec<scalar>` model fields store as `text[]` on PostgreSQL, JSON on
+  MySQL and SQLite, and a List on DynamoDB. They expose the `contains` /
+  `is_superset` / `intersects` / `len` / `is_empty` predicates and the
+  `stmt::push` / `stmt::extend` / `stmt::clear` mutations on every
+  backend (`stmt::push` also appends to document collections);
+  `stmt::pop` / `stmt::remove` / `stmt::remove_at` ship for PostgreSQL
+  native arrays only and are rejected at lowering elsewhere. The
+  rejection gates per backend, not per storage: on PostgreSQL a document
+  collection currently reaches the `text[]` renderings, which do not
+  apply to `jsonb`. Completing the mutations includes gating them per
+  storage.
+- Documents cross the driver boundary as named `Value::Object` values in
+  `db::Type::Document { binary }` columns. Drivers encode and decode
+  documents shape-directed — interior leaves take their wire forms — and
+  never consult the application schema.
+- The gaps hold explicit rejections rather than misbehavior: comparing a
+  document path to a whole value fails with `unsupported_feature`;
+  `#[document(text)]` and `#[index]` / `#[unique]` / `#[column]` on a
+  `#[document]` field are compile errors; `#[document]` on anything
+  other than an embed struct or a `Vec` of them fails the `Document`
+  trait bound; enum embeds, `Zoned`, and `Vec<u8>` leaves inside a
+  document are schema-build errors.
 
 ## Motivation
 
-Toasty can store a `Vec<scalar>` on a model, but it has no story for
-`Vec<struct>`, `HashMap<String, T>`, `HashSet<T>`, or storing an
-`#[derive(Embed)]` value as a single document. All four come up
-constantly:
+Four gaps remain, and all four come up constantly:
 
-- Open-ended attributes — user preferences, feature flags per row,
-  request metadata, audit context.
-- Tag-like collections with set semantics — labels, capabilities, role
-  lists.
-- Heterogeneous shapes that vary across rows and don't fit an enum.
-- Lists of small structured items where one column per item is
-  impossible (line items, change-log entries).
-
-The existing `#[serialize(json)]` attribute stores any serde type as
-opaque JSON text. It works, but Toasty cannot query into it, index
-sub-paths, or patch a single field — every change is a read-modify-
-write of the full value. PostgreSQL's `jsonb`, MongoDB's BSON, and
-DynamoDB's Map / List / typed-Set attributes all expose rich operators
-that should be reachable from Toasty's typed query API.
-
-This design gives one user-facing query API spanning native and
-document storage and across SQL, document, and key-value backends.
-MongoDB support is aspirational — Toasty has no MongoDB driver yet —
-but the API is designed so adding one does not require new
-user-facing concepts. DynamoDB has stronger native document support
-than the SQL backends in some places (atomic patch and atomic
-increment at any depth) and weaker in others (no sub-document
-containment, no element predicate, indexing only on top-level
-attributes).
+- **No whole-value comparison.** `.preferences().theme().eq("dark")`
+  works, but comparing an embed or a `Vec` as a unit is rejected. The
+  user has to spell out one leaf comparison per field by hand — and has
+  no recourse at all for a `Vec` field, whose length and contents the
+  leaf API cannot express.
+- **No map or set field types.** `HashMap<String, T>`, `HashSet<T>`, and
+  their `BTree` forms are not accepted as model fields. Open-ended
+  attributes (user preferences, feature flags, audit context) and
+  tag-like collections with set semantics have no home.
+- **Every document mutation is whole-value replacement.** Changing one
+  field inside a `#[document]` embed means writing the entire document
+  back. PostgreSQL's `jsonb_set`, DynamoDB's `SET path = :v`, and
+  MySQL / SQLite's `JSON_SET` all support in-place patching that Toasty
+  cannot reach.
+- **No containment, element predicates, or indexes.** "Does this
+  document contain this shape," "does any element match this predicate,"
+  and "make filtering on this document leaf fast" are all inexpressible.
 
 ## User-facing API
 
-Toasty already column-expands `#[derive(Embed)]` types (flat-expanding
-them on DynamoDB) and stores `Vec<scalar>` fields with the predicates
-and mutations named in the summary. The surface below extends that
-foundation in three directions: new field shapes that need document
-storage, an explicit `#[document]` override, and the query and mutation
-operators that apply once a field is a document.
+### Comparing a document value
 
-### Storage selection at a glance
+No new methods. The typed path API gains `.eq()` at every document
+position, not just scalar leaves.
 
-Toasty chooses storage per (backend, field type) at schema build time.
-The query API is identical across choices. Column-expanded embeds and
-`Vec<scalar>` already follow this table; the rows that still need
-implementing are `Vec<struct>`, `HashSet`, `HashMap` / `BTreeMap`, and
-any field carrying `#[document]`.
+#### Comparing an embed
 
-| Field type | PostgreSQL | MySQL | SQLite | MongoDB | DynamoDB |
-|---|---|---|---|---|---|
-| `#[derive(Embed)]` struct/enum | column-expanded | column-expanded | column-expanded | sub-document | flat-expanded |
-| `Vec<scalar>` | `T[]` (e.g. `text[]`) | `JSON` | JSON1 | BSON array | List `L` |
-| `Vec<struct>` | `jsonb` | `JSON` | JSON1 | BSON array | List `L` |
-| `HashSet<scalar>` | `T[]` | `JSON` | JSON1 | BSON array | typed Set `SS`/`NS`/`BS` |
-| `HashMap<String, T>` | `jsonb` | `JSON` | JSON1 | BSON sub-document | Map `M` |
-
-DynamoDB defaults embeds to flat-expansion — one top-level attribute
-per leaf field, named `preferences_theme` and so on, the same shape
-as SQL columns. The reason: DynamoDB items are structurally closer to
-SQL rows than to MongoDB documents (flat dictionaries, arbitrary
-attribute names, GSI / LSI keys must be top-level scalars).
-Flat-expansion makes any embed leaf indexable as a GSI / LSI key
-directly. MongoDB defaults to sub-documents because its idiom,
-tooling, and index model favor nesting; DynamoDB shares neither of
-those traits.
-
-`#[document]` overrides the default to document storage on backends
-where there is a meaningful distinction. MongoDB stores everything
-as BSON, so the override is a no-op there. On DynamoDB it forces a
-Map (`M`) attribute over flat-expansion, or a Map / List over a typed
-Set, making `#[document]` meaningful again. See
-[Forcing document storage](#forcing-document-storage).
-
-DynamoDB typed Sets (`SS`, `NS`, `BS`) only support string, numeric, and
-binary element types respectively. `HashSet<bool>`, `HashSet<struct>`,
-and other element types fall back to List `L` storage on DynamoDB.
-
-### Embedded types as documents
-
-An `#[derive(Embed)]` field column-expands by default. `#[document]`
-collapses it into a single document column instead. The path API is
-identical either way; the difference is column count, indexability of
-individual leaves, and storage layout.
+Pass a value of the embed's type. The filter matches rows whose stored
+embed has every field equal:
 
 ```rust
 #[derive(toasty::Embed)]
-struct UserPreferences {
-    theme: String,
-    notifications: NotificationSettings,
-    locale: Option<String>,
+struct PhoneNumber {
+    area_code: String,
+    number: String,
+}
+
+#[derive(toasty::Embed)]
+struct ContactInfo {
+    phone: PhoneNumber,
+    emails: Vec<String>,
 }
 
 #[derive(toasty::Model)]
@@ -125,112 +107,90 @@ struct User {
     id: u64,
 
     #[document]
-    preferences: UserPreferences,        // single jsonb column on PostgreSQL
+    contact_info: ContactInfo,
 }
+
+let matches = User::all()
+    .filter(User::fields().contact_info().phone().eq(PhoneNumber {
+        area_code: "555".into(),
+        number: "8675309".into(),
+    }))
+    .collect(&mut db)
+    .await?;
 ```
 
-#### Collections inside an embed
+This works at any depth — the root document
+(`contact_info().eq(...)`), a nested embed
+(`contact_info().phone().eq(...)`), or an embed inside a `#[document]`
+field of a column-expanded embed. `Option` fields follow the usual
+rule: a `None` in the comparison value matches a stored `None`.
 
-Storage selection applies recursively. Column-expansion continues
-through nested embeds; a collection field stops the expansion at the
-collection itself, which becomes one column with the same backend-
-chosen storage it would have at the model root:
+#### Comparing a collection
 
-```rust
-#[derive(toasty::Embed)]
-struct UserPreferences {
-    theme: String,                          // -> preferences_theme: TEXT
-    tags: Vec<String>,                      // -> preferences_tags: text[] (PG) / JSON (else)
-    feature_flags: HashMap<String, bool>,   // -> preferences_feature_flags: jsonb
-}
-```
-
-The path API works through the boundary unchanged:
+A `Vec` field inside a document (or a `Vec` document collection)
+compares by value: same length, same elements, same order.
 
 ```rust
 User::all().filter(
-    User::FIELDS.preferences().tags().contains("beta")
+    User::fields().contact_info().emails().eq(vec![
+        "a@example.com".to_string(),
+        "b@example.com".to_string(),
+    ])
+);
+
+Order::all().filter(
+    Order::fields().items().eq(vec![
+        LineItem { sku: "SKU-1".into(), qty: 3 },
+    ])
 );
 ```
 
-The collection's column inherits the native operators it would have at
-the root — `text[]` for `Vec<scalar>` is GIN-indexable on PostgreSQL,
-supports `= ANY(col)` and `@>`, and so on — so the only difference
-between a root-level and an embed-nested collection is the column name.
+This complements the element predicates: `.contains(...)` asks "is this
+element present"; `.eq(...)` asks "is this the exact list."
 
-#### Override: document storage for a single nested field
+### Sub-document containment
 
-`#[document]` on a field inside an embed forces that one field to
-document storage while the rest of the embed stays column-expanded.
-Useful when most fields should live in their own columns (for
-indexing, sort, or schema clarity) but one nested embed is large or
-irregular enough that exploding it into per-leaf columns is
-unhelpful:
+Containment asks "does the document contain this shape?" Build a
+partial value of the embed's type with the `partial!` macro:
 
 ```rust
-#[derive(toasty::Embed)]
-struct Profile {
-    name: String,                            // column: profile_name
-    age: u32,                                // column: profile_age
-
-    #[document]
-    layout: LayoutPreferences,               // single jsonb column: profile_layout
-}
-
-#[derive(toasty::Embed)]
-struct LayoutPreferences {
-    sidebar_width: u32,
-    panel_order: Vec<String>,
-    pinned_widgets: Vec<WidgetConfig>,
-    // ...many more fields the user doesn't query individually
-}
+User::all().filter(
+    User::fields().preferences().contains(toasty::partial!({
+        theme: "dark",
+    }))
+);
 ```
 
-Without the override, `LayoutPreferences` would expand to
-`profile_layout_sidebar_width`, `profile_layout_panel_order`, and so
-on. With `#[document]` the whole sub-tree becomes one `jsonb` column on
-PostgreSQL. The path API still works
-(`User::FIELDS.profile().layout().sidebar_width()` filters the same
-way); the difference is column count, indexability of individual
-leaves, and storage layout.
-
-#### Recursive embed types
-
-An embed that contains itself, directly or through another embed,
-cannot be column-expanded — the schema would be infinite.
-`#[document]` on the recursive field collapses the cycle into one
-document slot, with the recursion absorbed into the document
-encoding:
+The signature is `.contains(impl Into<Expr<Partial<T>>>) -> Expr<bool>`,
+where `T` is the embed type. `Partial<T>` is a thin wrapper carrying the
+type parameter for type-checking; the `partial!` macro produces one from
+struct-literal syntax. Field names not in `{ ... }` are absent from the
+predicate, so `partial!({ theme: "dark" })` matches any row whose
+`preferences.theme` is `"dark"`, regardless of other fields. Nested
+partial values work the same way:
 
 ```rust
-#[derive(toasty::Embed)]
-struct Node {
-    value: i64,
-
-    #[document]
-    parent: Option<Box<Node>>,
-}
+User::all().filter(
+    User::fields().preferences().contains(toasty::partial!({
+        notifications: { email: true },
+    }))
+);
 ```
 
-The user must write `#[document]` explicitly — Toasty does not infer
-it. Implicit auto-switching would silently change the storage shape;
-making the attribute explicit keeps the user in control of where in the
-type the cycle is broken (which matters for mutually recursive types
-where multiple cycle points are possible).
+Internally, the literal lowers to a nested `stmt::Record` carrying only
+the named field-value pairs. `partial!` validates field names against
+the schema at runtime; a compile-time check is a DX nicety that can
+follow.
 
-On SQL backends and DynamoDB the attribute is required: schema build
-errors without it, naming the recursive field and suggesting
-`#[document]`. On MongoDB the recursion is natural — sub-documents nest
-as deep as the data requires — and `#[document]` is a no-op, so the
-same source compiles on every backend.
+Containment is a document-storage feature; the query engine rejects
+`.contains(...)` on a column-expanded embed with an error pointing at
+`#[document]`.
 
 ### Map and set fields
 
 `HashMap<String, T>`, `BTreeMap<String, T>`, `HashSet<T>`, and
 `BTreeSet<T>` become model and embed fields with no attribute, storage
-backend-chosen per the table above. `Vec<struct>` joins them: a `Vec`
-whose element is an `#[derive(Embed)]` type stores as a document array
-rather than rejecting.
+backend-chosen per the table in [Behavior](#behavior):
 
 ```rust
 #[derive(toasty::Model)]
@@ -239,12 +199,11 @@ struct User {
     id: u64,
 
     permissions: HashSet<String>,        // text[] on PG, typed Set on DynamoDB
-    metadata: HashMap<String, String>,   // jsonb on PG, BSON sub-doc on Mongo
-    line_items: Vec<LineItem>,           // jsonb array on PG, List on DynamoDB
+    metadata: HashMap<String, String>,   // jsonb on PG, JSON elsewhere
 }
 ```
 
-`User::FIELDS.metadata()` is a typed path of key type `String` and
+`User::fields().metadata()` is a typed path of key type `String` and
 value type `String`:
 
 - `.contains_key(impl Into<Expr<K>>) -> Expr<bool>` — the map has this
@@ -252,225 +211,122 @@ value type `String`:
 - `.keys()` — a set view exposing the same set methods as collection
   paths (`.contains`, `.is_superset`, `.intersects`).
 - `.values()` — an iterable view supporting `.any(|v| …)` and
-  `.all(|v| …)` (Tier 2 below).
+  `.all(|v| …)` (see [Element predicates](#element-predicates)).
 - `.len()`, `.is_empty()`.
 
 The collection predicates and mutations that `Vec<scalar>` already
-exposes carry over to `HashSet` and to document-stored `Vec`
-unchanged; the only new piece on the set side is the marker type that
-types their right-hand sides.
+exposes carry over to `HashSet` unchanged; the new piece on the set side
+is the marker type that types their right-hand sides.
 
 #### The `Set<T>` marker
 
 `Set<T>` marks set-shaped expressions, analogous to the existing
 `List<T>` marker for ordered collections. The set predicates
 (`.is_superset`, `.intersects`) and set mutations take `Set<T>` on the
-right-hand side; common Rust types implement the relevant `Into` impl
-so values pass through directly. `Vec<T>`, `&[T]`, `[T; N]`,
-`HashSet<T>`, and `BTreeSet<T>` all satisfy `Into<Set<T>>` and
-`Into<List<T>>` where applicable.
+right-hand side; common Rust types implement the relevant `Into` impl so
+values pass through directly. `Vec<T>`, `&[T]`, `[T; N]`, `HashSet<T>`,
+and `BTreeSet<T>` all satisfy `Into<Set<T>>` and `Into<List<T>>` where
+applicable.
 
-### Forcing document storage
+### Remaining `#[document]` shapes
 
-`#[document]` forces a field to document storage. Use it for:
+`#[document]` accepts an embed struct or a `Vec` of them today. This
+design extends it to:
 
-- An embed type that should be one column instead of column-expanded.
-- A collection that needs document encoding even on a backend with a
-  native specialized type — useful when the same model is shared across
-  backends and you want uniform query semantics, or when the element
-  shape is heterogeneous.
+- **`Option<T>`** of any accepted shape — an optional document column
+  (SQL `NULL` when `None`).
+- **`Vec<scalar>`, `HashSet<T>`, and map types** — forces document
+  encoding over the backend's native representation. Useful when the
+  same model is shared across backends and needs uniform query
+  semantics, or on DynamoDB to force a List over a typed Set.
+- **Bare scalars** — one document column that accepts multiple value
+  types.
+- **Enum embeds** — encoded with an internal discriminator; see
+  [Behavior](#behavior).
+- **Recursive embeds.** An embed that contains itself, directly or
+  through another embed, cannot be column-expanded — the schema would be
+  infinite. `#[document]` on the recursive field collapses the cycle
+  into one document slot:
 
-```rust
-#[derive(toasty::Model)]
-struct User {
-    #[key] #[auto]
-    id: u64,
+  ```rust
+  #[derive(toasty::Embed)]
+  struct Node {
+      value: i64,
 
-    #[document]
-    preferences: UserPreferences,        // single jsonb column
+      #[document]
+      parent: Option<Box<Node>>,
+  }
+  ```
 
-    #[document]
-    tags: Vec<String>,                   // jsonb on PG (forced), JSON elsewhere
-}
-```
+  The user must write `#[document]` explicitly — Toasty does not infer
+  it. Implicit auto-switching would silently change the storage shape;
+  the explicit attribute keeps the user in control of where the cycle is
+  broken, which matters for mutually recursive types with multiple
+  possible cycle points.
+- **`#[document(text)]`** — selects PostgreSQL's text `json` over
+  `jsonb`; other backends ignore the modifier. Reach for it only when
+  exact-byte preservation matters — audit trails, third-party JSON
+  re-emitted verbatim. The attribute parses today and is rejected until
+  the text-encoding path is wired up.
 
-Accepted field types:
-
-- Any `#[derive(Embed)]` struct or enum.
-- `Vec<T>`, `HashSet<T>`, `BTreeSet<T>` of an encodable `T`.
-- `HashMap<String, T>`, `BTreeMap<String, T>`.
-- `Option<T>` of any of the above.
-- Bare scalars (`i64`, `String`, `bool`, etc.) — useful when the column
-  must accept multiple value types.
-
-#### Storage modifiers
-
-```rust
-#[document]            // jsonb on PG, BSON sub-doc on Mongo, JSON on MySQL/SQLite, M on DynamoDB
-preferences: UserPreferences,
-
-#[document(text)]      // PostgreSQL `json` (text). Other backends ignore the modifier.
-audit_blob: AuditBlob,
-```
-
-Reach for `#[document(text)]` only when exact-byte preservation
-matters — audit trails, JSON received from a third party that you
-re-emit verbatim. The attribute parses today but is rejected during
-schema validation until the text-encoding path is wired up.
-
-### Querying document-stored fields
-
-#### Equality, range, and null on a nested field
-
-Path access already works for column-expanded embeds. Under document
-storage the same path expression resolves into the document instead of
-a column:
-
-```rust
-User::all().filter(
-    User::FIELDS.preferences().theme().eq("dark")
-);
-
-User::all().filter(
-    User::FIELDS.preferences().notifications().email().eq(true)
-);
-
-User::all().filter(
-    User::FIELDS.preferences().locale().is_none()
-);
-```
-
-The work is in lowering: a path into a `#[document]` embed compiles to
-a JSON extraction (`col->'a'->>'b'` on PostgreSQL `jsonb`) rather than a
-column reference. `is_none()` matches both an absent key and an
-explicit JSON null; see [Behavior](#behavior) for the distinction.
-
-#### Sub-document containment
-
-Containment asks "does the document contain this shape, anywhere it
-matches?" Build a partial value of the embed's type with the `partial!`
-macro:
-
-```rust
-User::all().filter(
-    User::FIELDS.preferences().contains(toasty::partial!({
-        theme: "dark",
-    }))
-);
-```
-
-The signature is `.contains(impl Into<Expr<Partial<T>>>) -> Expr<bool>`,
-where `T` is the embed type. `Partial<T>` is a thin wrapper carrying
-the type parameter for type-checking; the `partial!` macro produces one
-from struct-literal syntax. Field names not in `{ ... }` are absent
-from the predicate, so `partial!({ theme: "dark" })` matches any row
-whose `preferences.theme` is `"dark"`, regardless of other fields.
-
-Nested partial values work the same way:
-
-```rust
-User::all().filter(
-    User::FIELDS.preferences().contains(toasty::partial!({
-        notifications: { email: true },
-    }))
-);
-```
-
-Internally, the literal lowers to a nested `stmt::Record` carrying only
-the named field-value pairs. `partial!` validates field names against
-the schema at runtime; a compile-time check that rejects unknown field
-names is a DX nicety that can follow.
-
-Containment is a document-storage feature; the query engine rejects
-`.contains(...)` on a column-expanded embed with a clear error pointing
-at `#[document]`.
-
-#### Collection predicates on documents, sets, and maps
-
-The collection methods `Vec<scalar>` already exposes —
-`.contains`, `.is_superset`, `.intersects`, `.len`, `.is_empty` —
-extend unchanged to document-stored collections, to `HashSet`, and (via
-`.keys()`) to maps:
-
-```rust
-User::all().filter(User::FIELDS.permissions().contains("admin"));
-User::all().filter(User::FIELDS.permissions().is_superset(["admin", "verified"]));
-User::all().filter(User::FIELDS.tags().intersects(["admin", "moderator"]));
-
-User::all().filter(User::FIELDS.metadata().contains_key("source"));
-User::all().filter(
-    User::FIELDS.metadata().keys().is_superset(["source", "version"])
-);
-```
-
-The new lowering picks the right operator per storage: against a
-`jsonb`-stored document collection, `contains("x")` becomes
-`col @> '["x"]'::jsonb`; against a DynamoDB typed Set it becomes
-`contains(path, :v)`; `contains_key` becomes the `?` operator on
-PostgreSQL `jsonb` and `attribute_exists(path)` on DynamoDB.
-
-#### Tier 2: array element predicates
+### Element predicates
 
 `any` and `all` already evaluate predicates over the children of a
 `has_many` relation. The same surface extends to the elements of a
 document-stored or embedded array:
 
 ```rust
-Order::all().filter(Order::FIELDS.line_items().any(|i|
+Order::all().filter(Order::fields().line_items().any(|i|
     i.product_id().eq(123).and(i.quantity().gt(0))
 ));
 
-Order::all().filter(Order::FIELDS.line_items().all(|i|
+Order::all().filter(Order::fields().line_items().all(|i|
     i.in_stock().eq(true)
 ));
 ```
 
-`any` is supported by every SQL target backend (PG `jsonpath`
-predicate or `EXISTS` over `jsonb_array_elements`, or `unnest` over
-`T[]`; Mongo `$elemMatch`). `all` is supported on Mongo natively and
-via `NOT any(NOT pred)` on PG. DynamoDB falls back to client-side
-filtering.
-
-#### Tier 2: predicates over keys and values
-
-For richer predicates over the entries of a map:
+And to the keys and values of a map:
 
 ```rust
 User::all().filter(
-    User::FIELDS.metadata().keys().any(|k| k.starts_with("internal_"))
+    User::fields().metadata().keys().any(|k| k.starts_with("internal_"))
 );
 User::all().filter(
-    User::FIELDS.metadata().values().any(|v| v.eq("ok"))
+    User::fields().metadata().values().any(|v| v.eq("ok"))
 );
 ```
+
+`any` runs server-side on every SQL backend (`EXISTS` over
+`jsonb_array_elements` or `unnest` on PostgreSQL, `json_each` on SQLite,
+`JSON_TABLE` on MySQL); `all` compiles to `NOT any(NOT pred)`. DynamoDB
+has no per-element predicate in its expression language and falls back
+to client-side filtering.
+
+### Distinguishing absent from null
+
+`is_none()` matches both an absent key and an explicit JSON null.
+Toasty's writer never produces explicit nulls, so the distinction only
+arises with externally written rows. Two new predicates split the cases:
+`is_absent()` matches only absent keys; `is_null()` matches only
+explicit nulls.
 
 ### Updating document-stored fields
 
-#### Full-value replacement
-
-```rust
-user.update()
-    .preferences(new_preferences)
-    .exec(&mut db)
-    .await?;
-```
-
-Whole-value writes need no special operator support. They already work
-for column-expanded embeds and `Vec<scalar>`; they extend to the new
-field types as their storage lands.
+Whole-value replacement already works. The remaining surface mutates a
+document in place.
 
 #### Nested patch via `stmt::patch`
 
-`stmt::patch(path: Path<T>, value: impl Into<Expr<T>>)` updates one
-field inside a value and leaves the rest unchanged. It already applies
-to column-expanded embeds, where it translates to a column-level
-update. The remaining work is the document-stored case, where it must
-compile to an in-place document mutation:
+`stmt::patch(path, value)` updates one field inside a value and leaves
+the rest unchanged. It already applies to column-expanded embeds, where
+it translates to a column-level update. The remaining work is the
+document-stored case, where it compiles to an in-place document
+mutation:
 
 ```rust
 user.update()
     .preferences(stmt::patch(
-        UserPreferences::FIELDS.theme(),
+        UserPreferences::fields().theme(),
         "light",
     ))
     .exec(&mut db)
@@ -478,27 +334,15 @@ user.update()
 ```
 
 On PostgreSQL `jsonb` this lowers to `jsonb_set`; on DynamoDB to
-`SET path = :v`; on MySQL / SQLite to `JSON_SET` / `json_set`.
+`SET path = :v`; on MySQL and SQLite to `JSON_SET` / `json_set`.
 
 #### Numeric increment
 
-`stmt::increment(path: Path<T>, by: impl Into<Expr<T>>)` where `T` is a
-numeric type already increments scalar and column-expanded fields. The
-remaining work is incrementing a numeric leaf inside a document:
-
-```rust
-user.update()
-    .stats(stmt::increment(
-        UserStats::FIELDS.login_count(),
-        1,
-    ))
-    .exec(&mut db)
-    .await?;
-```
-
-Atomic on backends that support it (PostgreSQL `jsonb_set` with a
-computed expression for document fields, MongoDB `$inc`, DynamoDB
-`ADD`); falls back to read-modify-write otherwise.
+`stmt::increment` already increments scalar and column-expanded fields.
+The remaining work is incrementing a numeric leaf inside a document:
+atomic on backends with a server-side form (PostgreSQL `jsonb_set` with
+a computed expression, DynamoDB `ADD`, MongoDB `$inc`), read-modify-write
+otherwise.
 
 #### Set mutations
 
@@ -506,11 +350,9 @@ computed expression for document fields, MongoDB `$inc`, DynamoDB
 `std::HashSet`:
 
 - `stmt::insert(impl Into<Expr<T>>)` — add one element.
-  (`HashSet::insert`.)
-- `stmt::extend(impl Into<Set<T>>)` — add many. (`HashSet::extend`.)
+- `stmt::extend(impl Into<Set<T>>)` — add many.
 - `stmt::remove(impl Into<Expr<T>>)` — remove the matching element.
-  (`HashSet::remove`.)
-- `stmt::clear()` — remove all elements. (`HashSet::clear`.)
+- `stmt::clear()` — remove all elements.
 
 ```rust
 user.update().permissions(stmt::insert("admin")).exec(&mut db).await?;
@@ -519,351 +361,285 @@ user.update().permissions(stmt::remove("guest")).exec(&mut db).await?;
 
 Each function is typed to its collection: `stmt::push` on a `HashSet`
 path is a compile error (use `stmt::insert`), and `stmt::insert` on a
-`Vec` path is a compile error (use `stmt::push`). Introducing the
-`Set<T>` marker is what makes that split possible; today the
-`insert` / `remove` / `extend` / `clear` functions are typed to
-`List<T>`, so they need re-typing per collection kind.
+`Vec` path is a compile error (use `stmt::push`). Today the `insert` /
+`remove` / `extend` / `clear` functions are typed to `List<T>`;
+introducing the `Set<T>` marker is what makes the split possible. The
+lowering uses the backend's native operation where one exists
+(`array_append`, `||`, DynamoDB typed-Set `ADD` / `DELETE`) and falls
+back to read-modify-write where it does not.
 
-The lowering uses the backend's native operation when available
-(`array_append`, `array_remove`, `||`, BSON `$addToSet`, DDB typed-Set
-`ADD` / `DELETE`) and falls back to read-modify-write where it is not.
+#### Completing the `Vec` mutations
 
-#### Collection mutations on the remaining backends
+`stmt::pop`, `stmt::remove`, and `stmt::remove_at` work atomically on
+PostgreSQL native arrays only; the other backends reject them at
+lowering. Completing this design brings them to the rest: PostgreSQL
+document collections get `jsonb` forms, MySQL and SQLite compile them to
+a whole-document rewrite (atomic per row; cost scales with document
+size), DynamoDB to native update expressions (`REMOVE path[i]`,
+typed-Set `DELETE`), with a read-modify-write fallback where no native
+operator exists (value removal on a DynamoDB List).
 
-The ordered-collection mutations `stmt::push`, `stmt::extend`, and
-`stmt::clear` already work on every backend. `stmt::pop`,
-`stmt::remove`, and `stmt::remove_at` work atomically on PostgreSQL
-only; the other backends reject them at lowering today. Completing this
-design brings them to the rest:
+#### Removing a key
 
-- `stmt::pop()` — remove the last element. (`Vec::pop`.)
-- `stmt::remove(impl Into<Expr<T>>)` — remove every element equal to
-  the value. (Toasty extension over `std::Vec`, backed by the same
-  server-side ops as `Set::remove`; for `std`'s `Vec::retain(|x| x !=
-  val)` spelling see Tier 2.)
-- `stmt::remove_at(impl Into<Expr<usize>>)` — remove the element at the
-  given index. (`Vec::remove(idx)` in `std`; the `_at` suffix
-  disambiguates from value-based `remove`.)
-
-On MySQL and SQLite these compile to a whole-document rewrite; on
-DynamoDB to native update expressions (`REMOVE path[i]`, typed-Set
-`DELETE`), with a read-modify-write fallback where no native operator
-exists (value removal on a DynamoDB List).
-
-#### Tier 2: removing a key or array element
-
-```rust
-user.update()
-    .preferences(stmt::unset(UserPreferences::FIELDS.locale()))
-    .exec(&mut db)
-    .await?;
-
-user.update()
-    .tags(stmt::remove_at(2))
-    .exec(&mut db)
-    .await?;
-```
-
-`stmt::unset` removes a key from a document; it is not yet exposed in
-the public `stmt` surface. Out-of-bounds `remove_at` is a no-op rather
-than an error, since per-row failure semantics on a bulk update are
-rarely useful.
+`stmt::unset(path)` removes a key from a document (`-` on PostgreSQL
+`jsonb`, `JSON_REMOVE` / `json_remove` on MySQL / SQLite,
+`REMOVE path.key` on DynamoDB). It is not yet exposed in the public
+`stmt` surface.
 
 ### Indexes
 
-The existing `#[index]` attribute extends to cover collection and
-document fields. The user-facing rule is unchanged: `#[index]` on a
-field means "filtering on this field is fast." Toasty picks the index
-kind per backend based on the field's type and storage. The attribute
-is **storage-independent**: an `#[index]` on a scalar leaf of an embed
-means the same thing whether the parent embed is column-expanded or
-stored as a document — only the lowering changes.
-
-```rust
-#[derive(toasty::Embed)]
-struct Preferences {
-    #[index]
-    theme: String,
-    locale: Option<String>,
-}
-
-#[derive(toasty::Model)]
-struct User {
-    #[key] #[auto]
-    id: u64,
-
-    #[index]
-    tags: Vec<String>,
-
-    preferences: Preferences,
-}
-```
-
-The per-backend lowering depends on where `#[index]` sits and how the
-parent is stored:
+The existing `#[index]` attribute extends to collection and document
+fields. The user-facing rule is unchanged: `#[index]` on a field means
+"filtering on this field is fast." Toasty picks the index kind per
+backend from the field's type and storage. The attribute is
+storage-independent: `#[index]` on a scalar leaf of an embed means the
+same thing whether the parent is column-expanded or document-stored —
+only the lowering changes.
 
 | Where `#[index]` sits | Per-backend lowering |
 |---|---|
-| Scalar at the model root | B-tree (PG/MySQL/SQLite); B-tree on the path (Mongo); top-level GSI/LSI key (DDB) |
-| Scalar inside a column-expanded embed | B-tree on the flattened column (existing behavior) |
-| Scalar inside a `#[document]` embed | B-tree expression index on the extracted path (PG/MySQL/SQLite); single-field path index (Mongo); schema-build error on DDB unless denormalized |
-| `Vec<T>` or `HashSet<T>` field | GIN with `array_ops` on `text[]` / `jsonb_ops` on `jsonb` (PG); multi-valued (MySQL 8.0+); multikey (Mongo); schema-build error (SQLite, DDB) |
-| `HashMap<String, T>` field | GIN with `jsonb_ops` (PG); wildcard (Mongo); schema-build error (MySQL, SQLite, DDB) |
+| Scalar inside a `#[document]` embed | B-tree expression index on the extracted path (PG/MySQL/SQLite); path index (Mongo); schema-build error on DynamoDB unless denormalized |
+| `Vec<T>` or `HashSet<T>` field | GIN with `array_ops` on `text[]` / `jsonb_ops` on `jsonb` (PG); multi-valued (MySQL 8.0+); multikey (Mongo); schema-build error (SQLite, DynamoDB) |
+| `HashMap<String, T>` field | GIN with `jsonb_ops` (PG); wildcard (Mongo); schema-build error (MySQL, SQLite, DynamoDB) |
 | Whole `#[document]` embed | GIN with `jsonb_ops` for containment (PG); wildcard (Mongo); schema-build error elsewhere |
 
-Three notes follow from the table:
+Three notes:
 
-- **Method generation.** `#[index]` on a root field generates
-  `filter_by_<field>` on the model. `#[index]` on a leaf inside an embed
-  type does not generate a method on the parent model — the embed macro
-  cannot see the parent's identifier. The index DDL emits regardless;
-  the user filters via the path API
-  (`User::FIELDS.preferences().theme().eq(...)`), which the engine
-  routes through the index.
+- **Method generation.** `#[index]` on a leaf inside an embed type does
+  not generate a `filter_by_*` method on the parent model — the embed
+  macro cannot see the parent's identifier. The index DDL emits
+  regardless; the user filters via the path API, which the engine routes
+  through the index.
 - **Schema-build errors.** When a backend has no viable index type for a
-  field shape (SQLite + collection, DDB + nested path), Toasty rejects
-  the schema with a message naming the field, the backend, and the
-  constraint. Silent degradation is worse than an error here because the
-  user wrote `#[index]` expecting the index to exist.
+  field shape, Toasty rejects the schema with a message naming the
+  field, the backend, and the constraint. Silent degradation is worse
+  than an error here because the user wrote `#[index]` expecting the
+  index to exist.
 - **Backend-specific tuning** (GIN opclass selection, partial-index
-  conditions, custom collation, wildcard projection) is out of scope. A
-  future modifier syntax — something like `#[index(opclass =
-  "jsonb_path_ops")]` or `#[index(partial = "...")]` — covers the long
-  tail without affecting this surface.
+  conditions, wildcard projection) is out of scope; a future modifier
+  syntax like `#[index(opclass = "jsonb_path_ops")]` covers the long
+  tail.
 
-Compound and unique forms — `#[index(fields(a, b))]`, `#[unique]` —
-keep their existing semantics. `#[unique]` on a `Vec<T>` is a
-schema-build error (use `HashSet<T>` if uniqueness is the intent; the
-HashSet-on-PG enforcement question is tracked in
-[Open questions](#open-questions)).
+`#[unique]` on a `Vec<T>` is a schema-build error (use `HashSet<T>` if
+uniqueness is the intent; PG-side enforcement is an open question).
 
 ## Behavior
 
-**Storage selection.** Toasty resolves the storage representation per
-(backend, field type) at schema build time. The choice is observable
-through the column type but not through the query API:
+**Document value equality is two-tiered.** An embed comparison is
+schema-shaped: it holds when every field declared on the embed compares
+equal, recursively through nested embeds. Keys present in stored data
+but absent from the schema (written by an external client) are ignored —
+the same closed-schema rule the decoder applies. A `None` field matches
+both an absent key and an explicit null, mirroring `is_none()`. A
+collection comparison is structural: it holds when both sides have the
+same length and equal elements at each index. Inside a list there is no
+schema-anchored way to ignore unknown keys server-side, so an
+externally-added key inside a stored list element makes the comparison
+fail. This is the one semantic seam between the two tiers, and it is
+deliberate; see [Edge cases](#edge-cases).
 
-- Embed types column-expand on SQL backends, flat-expand to top-level
-  attributes on DynamoDB, and become sub-documents on MongoDB.
-- `Vec<scalar>` uses the backend's native array type if one exists
-  (`text[]`, `int[]`, etc. on PostgreSQL; BSON array on MongoDB; List
-  `L` on DynamoDB) and JSON otherwise.
-- `HashSet<scalar>` uses a typed Set on DynamoDB (`SS` / `NS` / `BS` per
-  element type) and otherwise the same representation as `Vec<scalar>`.
-- `Vec<struct>` and all map types use document storage (JSON on SQL
-  backends, BSON / Map / sub-document on document backends).
-- **Recursion through embeds.** Storage selection walks the field tree
-  from the top. An expanded embed recurses through its own fields. The
-  recursion stops at scalars (each becomes one column or attribute) and
-  at collections (each becomes one column or attribute, with storage
-  chosen by the same rules as if the collection were at the root).
+**Where equality runs.** On backends that support it (all four in-tree
+backends), the whole filter executes server-side in one round trip. A
+driver that does not advertise the capability still works: the engine
+loads candidate rows and applies the comparison in memory — same
+results, more data over the wire. Equality is never rejected with
+`unsupported_feature`; rejection is reserved for operators whose
+semantics differ across backends (the `.ilike()` rule), and value
+equality has one semantics everywhere. The filter composes with
+`filter`, `include`, pagination, and updates-with-filter like any other
+predicate; no new error cases for in-tree backends.
 
-  Example: a `tags: Vec<String>` field inside an expanded `Preferences`
-  embed becomes one slot using the rule for `Vec<scalar>` at the root —
-  `text[]` on PG, JSON elsewhere. Its name reflects the path:
-  `preferences_tags` on SQL backends and DynamoDB, `preferences.tags` on
-  MongoDB (where the embed is a sub-document).
-- `#[document]` overrides the default to document storage for any
-  field — at the root or anywhere inside an expanded embed. Marking one
-  nested field forces that field alone; marking the parent embed forces
-  the whole sub-tree. On MongoDB the override is a no-op since BSON is
-  the only encoding; on DynamoDB it forces a Map (`M`) over
-  flat-expansion, or a Map / List over a typed Set.
-- `#[document(text)]` further selects PG text `json` over `jsonb`;
-  ignored on other backends.
+**Storage selection for the new field types.** Chosen per (backend,
+field type) at schema build time, observable through the column type but
+not through the query API:
 
-**Encoding.** Toasty serializes to the document encoding (JSON on SQL
-and SQLite, BSON on MongoDB, DynamoDB attribute trees on DynamoDB)
-using the same field-by-field representation it would use for
-column-expanded embeds, packed into one document. JSON elements are
-keyed objects (`{"theme": …, "locale": …}`), serde-idiomatic, with
-`None` fields omitted from the object. Numeric types preserve Rust
-width where the backend supports it (Mongo Int32/Int64; PG `jsonb`
-numeric). Floating-point NaN and infinity are rejected at encode
-time — JSON has no representation for them.
+| Field type | PostgreSQL | MySQL | SQLite | MongoDB | DynamoDB |
+|---|---|---|---|---|---|
+| `HashSet<scalar>` | `T[]` | `JSON` | JSON1 | BSON array | typed Set `SS`/`NS`/`BS` |
+| `HashMap<String, T>` / `BTreeMap` | `jsonb` | `JSON` | JSON1 | BSON sub-document | Map `M` |
 
-**Collection element encoding.** A `Vec<T>`, `HashSet<T>`, or other
-collection that lands in a backend's document container — JSON on MySQL
-and SQLite, BSON array on MongoDB, List `L` or typed Set on DynamoDB —
-encodes each element using the same representation Toasty uses for a
-standalone column of type `T`. For JSON-backed containers: elements
-with a JSON-native form (`i64`, `f64`, `bool`, `String`) become JSON
-numbers, booleans, and strings; elements whose column-level encoding is
-text (`Uuid`, `Decimal`, `jiff::Timestamp`, etc.) become JSON strings
-carrying that same text form; `Vec<u8>` elements are rejected —
-`Vec<Vec<u8>>` requires a backend-specific binary encoding decision and
-is out of scope. For DynamoDB List `L` and typed Sets: each element is
-an `AttributeValue` of the type the column-level encoding would emit
-(`S` for strings / UUIDs / decimals / timestamps, `N` for integers and
-floats, `BOOL` for booleans, `B` for bytes). Round-tripping a value
-through a collection field yields the same Rust value the column-level
-path would yield for `T`.
+DynamoDB typed Sets support string, numeric, and binary element types
+only. `HashSet<bool>`, `HashSet<struct>`, and other element types fall
+back to List `L` storage on DynamoDB and lose the atomic `ADD` /
+`DELETE` path. The fallback is silent; users who need atomicity should
+pick a scalar element type.
 
-**Enum discriminators.** Toasty uses **internal tagging** with the key
-`type` — the canonical serde convention (`#[serde(tag = "type")]` is the
-example in serde's own docs). Internal tagging is preferred over
-serde's default external tagging because external adds a nesting level
-per variant, and DynamoDB caps Map/List nesting at 32 levels — a hard
-budget that deeply nested embeds with enums at multiple levels can
-exhaust. Users who also `#[derive(Serialize, Deserialize)]` on the same
-enum need to add `#[serde(tag = "type")]` to round-trip with Toasty's
-encoding.
+**Encoding.** Map and set values encode each element or entry with the
+same representation Toasty uses for a standalone column of that type,
+packed into the backend's document container — the rule document
+collections already follow.
 
-A field on a variant whose name resolves to `type` (via Rust's
-`r#type` raw identifier or a `#[column("type")]` rename inside the
-embed) collides with the discriminator and is rejected at schema build
-time.
-
-**Column-rename attributes on document-stored embeds.** A
-`#[column("name")]` annotation on a field of an embed type used as
-`#[document]` is an error at schema build time. The annotation renames a
-SQL column suffix in the column-expanded case; under `#[document]` there
-is no column to rename, and document keys come from the Rust field name.
-Renaming document keys is a future feature (likely
-`#[document(rename = "...")]`).
+**Enum discriminators.** Enum embeds inside documents use internal
+tagging with the key `type` — the canonical serde convention
+(`#[serde(tag = "type")]`). Internal tagging beats serde's default
+external tagging because external adds a nesting level per variant, and
+DynamoDB caps Map/List nesting at 32 levels — a budget that nested
+embeds with enums at multiple levels can exhaust. A variant field whose
+name resolves to `type` collides with the discriminator and is rejected
+at schema build time.
 
 **Null vs missing key.** `Option<T>` writes nothing for `None` and a
 document value for `Some`. On read, both an absent key and an explicit
-JSON `null` deserialize to `None` — Toasty's writer never produces
-explicit nulls, so the distinction only arises with externally-written
-data.
+JSON `null` deserialize to `None`. `is_none()` matches both;
+`is_absent()` and `is_null()` split the cases.
 
-Users who need to distinguish the two cases use the path-level
-predicates: `is_none()` matches both, `is_absent()` matches only absent
-keys, `is_null()` matches only explicit nulls.
-
-**Patch semantics.** A `stmt::patch(path, value)` writes `value` at
+**Patch semantics.** `stmt::patch(path, value)` writes `value` at
 `path`, creating intermediate objects as needed. A patch that walks
-through a field whose current type is incompatible (e.g. patching
+through a field whose current type is incompatible (patching
 `notifications.email` when `notifications` is currently a JSON array)
-returns a runtime error on the affected row.
+returns a runtime error on the affected row. Toasty does not validate
+the existing document before patching, so a patch onto a row written by
+an older or external writer can produce surprising shapes.
 
-**Collection writes.** `stmt::push` (Vec) and `stmt::insert` (Set)
-append / add an element, creating the collection if absent.
-`stmt::extend` adds many. `stmt::remove(value)` removes every element
-equal to the value (Vec) or the matching element (Set); absent is a
-no-op. `stmt::remove_at(idx)` removes a Vec element by index;
-out-of-bounds is a no-op. `stmt::pop` removes the last Vec element; on
-an empty Vec it is a no-op. `stmt::clear` empties the collection.
+**Collection writes.** `stmt::insert` adds an element, creating the set
+if absent. `stmt::remove(value)` removes every element equal to the
+value (Vec) or the matching element (Set); absent is a no-op.
+`stmt::remove_at(idx)` removes a Vec element by index; out-of-bounds is
+a no-op, since per-row failure semantics on a bulk update are rarely
+useful. `stmt::pop` removes the last Vec element; empty is a no-op.
 
 **Concurrent updates.** A single Toasty operation against one row is
-atomic on every backend — the row write lock (SQL) or document write
-lock (Mongo, DDB) serializes concurrent operations, and on SQL backends
-`READ COMMITTED` makes the second writer's UPDATE re-read the column at
-execution time. Two writers patching disjoint paths on the same row
-both land.
-
-The exception is the read-modify-write (RMW) fallback marked in the
-[Capability matrix](#capability-matrix). RMW splits the operation into a
+atomic on every backend — the row write lock serializes concurrent
+operations, and on SQL backends `READ COMMITTED` makes the second
+writer's UPDATE re-read the column at execution time. Two writers
+patching disjoint paths on the same row both land. The exception is the
+read-modify-write fallback marked in the
+[Capability matrix](#capability-matrix): RMW splits the operation into a
 SELECT and an UPDATE, so a concurrent writer can interleave between them
 and the second commit overwrites a value computed from a stale read. RMW
 operations need an explicit transaction with row locking (e.g.
-`SELECT … FOR UPDATE` on PG) when concurrent correctness matters.
+`SELECT … FOR UPDATE`) when concurrent correctness matters.
 
 ## Edge cases
 
-- **Mixed-type values at a path.** Filtering
-  `User::FIELDS.metadata().get("count").eq(5)` matches when the value at
-  `count` is the JSON number 5; it does not coerce the JSON string
-  `"5"`. Strict typing is the default.
+- **Empty collections.** `.eq(vec![])` matches a stored empty list and
+  nothing else, on every backend.
+- **`Option` leaves under equality.** `Some(x)` requires the stored key
+  present and equal; `None` matches absent-or-null. Toasty's writer
+  never produces explicit nulls, so the distinction only arises with
+  externally written rows.
+- **Temporal and decimal leaves.** Both sides of a comparison encode
+  through the same canonical text forms the document codec already uses
+  (fixed sub-second precision), so equality on these leaves is exact and
+  consistent with the scalar-leaf filters that ship today.
+- **String comparison inside collections on MySQL.** A record-tier
+  string leaf compares under the connection's collation, like a plain
+  column (case-insensitive under MySQL's default). A string *inside a
+  list* compares as a JSON value — exact, case-sensitive. This follows
+  the per-backend pass-through rule: each tier uses that backend's
+  native operator for that shape, and the two operators disagree on
+  MySQL.
+- **Unknown stored keys.** Tolerated at the record tier (schema-shaped
+  comparison), not inside collections (structural comparison). Both
+  facts are documented; data written exclusively by Toasty never hits
+  the difference.
+- **SQLite collection-equality cost.** Structural collection equality on
+  SQLite walks both JSON trees per candidate row. Correctness matches
+  the other backends; the cost does not. Rows are filtered server-side,
+  but there is no index assist.
+- **DynamoDB expression size.** Collection comparisons bind the whole
+  value as one expression attribute value, so a large literal does not
+  inflate the condition expression itself. DynamoDB's own item and
+  expression limits still apply and surface as DynamoDB errors.
+- **Mixed-type values at a path.** Filtering a map value with `.eq(5)`
+  matches the JSON number 5; it does not coerce the JSON string `"5"`.
+  Strict typing is the default.
 - **Empty PG arrays.** `array_length(col, 1)` returns `NULL` for an
-  empty array; `.len()` lowers to `cardinality(col)` instead, which
-  returns 0.
-- **Empty document vs missing column.** `NOT NULL` document-stored
-  fields default to `{}` (objects), `[]` (arrays), or the embed's
-  default; `Option<T>` allows SQL `NULL`. Native-array fields default to
-  `'{}'` (an empty array literal in PG).
-- **Document size limits.** PostgreSQL TOAST caps individual values near
-  1 GB; MongoDB caps documents at 16 MB; DynamoDB caps items at 400 KB.
-  Toasty does not enforce a smaller limit. Inserts exceeding the backend
-  limit surface a driver error.
-- **DynamoDB typed-Set element types.** Typed Sets only support string,
-  numeric, and binary element types. A model field of `HashSet<bool>` or
-  `HashSet<MyEnum>` falls back to List `L` storage on DynamoDB and loses
-  the atomic `ADD` / `DELETE` path. The fallback is silent; users who
-  care about atomicity should pick a scalar element type.
-- **Floating-point edge values.** NaN and infinity are rejected at
-  encode time. Negative zero round-trips as zero on PostgreSQL `jsonb`
-  (it stores `numeric`).
-- **Reading legacy data.** A row whose document does not match the
-  current schema (extra keys, missing keys, wrong type at a path)
-  deserializes field-by-field; missing required fields surface as decode
-  errors, extra keys are dropped silently. A future
-  `#[document(strict)]` modifier could opt into rejecting extra keys.
-- **Schema drift between writes.** A patch onto a row whose document was
-  written by an older or external writer may produce surprising shapes
-  (e.g. a key that was a string is now an object). Toasty does not
-  validate the existing document before patching.
+  empty array; `.len()` on `text[]`-stored sets lowers to
+  `cardinality(col)`, which returns 0.
+- **Document size limits.** PostgreSQL TOAST caps values near 1 GB;
+  MongoDB caps documents at 16 MB; DynamoDB caps items at 400 KB. Toasty
+  does not enforce a smaller limit; oversized writes surface a driver
+  error.
 
 ## Driver integration
 
-The query engine emits different operators depending on storage. This
-table is the per-dialect contract for the operators the design adds;
-backends without a column for a given storage imply the document form is
-used regardless.
+### Document value equality
 
-| Operation | PG native (`T[]`) | PG `jsonb` | MongoDB | SQLite (JSON1) | MySQL | DynamoDB |
-|---|---|---|---|---|---|---|
-| Path equality | n/a | `col->'a'->>'b' = …` | `{"a.b": …}` | `json_extract` | `JSON_EXTRACT` | `path = :v` |
-| Containment | n/a | `@>` | structural match | `json_each` + filter | `JSON_CONTAINS` | AND of path equalities |
-| `contains_key` | n/a | `?` | `$exists` | `json_extract IS NOT NULL` | `JSON_CONTAINS_PATH` | `attribute_exists(path)` |
-| `contains` (array) | `= ANY(col)` | `@>` | `{arr: v}` | `json_each` | `JSON_CONTAINS` | `contains(path, :v)` |
-| `is_superset` | `@>` | `@>` | `$all` | `json_each` | `JSON_CONTAINS` | AND of `contains()` |
-| `intersects` | `&&` | `?\|` | `$in` (per-element) | `json_each` | `JSON_OVERLAPS` | OR of `contains()` |
-| `len` | `cardinality` | `jsonb_array_length` | `$size` | `json_array_length` | `JSON_LENGTH` | `size(path)` |
-| `any` predicate | `EXISTS unnest` | `EXISTS jsonb_array_elements` | `$elemMatch` | `EXISTS json_each` | `JSON_TABLE` | client-side filter |
-| Patch one path | column update | `jsonb_set` | `$set` | `json_set` | `JSON_SET` | `SET path = :v` |
-| Increment | column update | `jsonb_set` with cast | `$inc` | `json_set` arith | `JSON_SET` arith | `ADD path :n` |
-| `push` / `insert` | `array_append` / `\|\|` | `\|\|` | `$push` / `$addToSet` | `json_insert` | `JSON_ARRAY_APPEND` | `list_append` (List) / `ADD` (typed Set) |
-| `extend` | `\|\|` | `\|\|` | `$push` w/ `$each` / `$addToSet` w/ `$each` | rewrite | `JSON_ARRAY_APPEND` (per-elem) | `list_append` (List) / `ADD` (typed Set) |
-| `pop` | array slicing | `jsonb_set` w/ length-1 | `$pop` | rewrite | rewrite | `REMOVE path[size-1]` |
-| `remove` (by value) | `array_remove` | `jsonb_set` minus filter | `$pull` | rewrite | rewrite | `DELETE path :s` (typed Set) / RMW (List) |
-| `remove_at` (Vec, by index) | array slicing | `jsonb_path` minus | `$unset` + `$pull` | rewrite | `JSON_REMOVE` | `REMOVE path[i]` |
-| `clear` | `'{}'::T[]` | `'[]'::jsonb` | `$set: []` | `'[]'` | `'[]'` | `SET path = :empty` |
-| `unset` (key) | n/a | `-` | `$unset` | `json_remove` | `JSON_REMOVE` | `REMOVE path.key` |
+#### Capability
 
-**New schema artifacts.** Drivers see two new column-type families:
+One new flag:
 
-- `db::Type::List(elem)` — a typed homogeneous array column, already
-  emitted for `Vec<scalar>` on backends that advertise
-  `Capability::native_array` (today: PostgreSQL, mapping to `elem[]`).
-  On backends without `native_array`, schema build picks the document
-  fallback below for the same field type instead.
-- `db::Type::Document { binary: bool }` — the dialect's document type.
-  `binary: true` maps to `jsonb` / `JSON` / JSON1 / BSON / `M` as
-  appropriate; `binary: false` selects PG text `json` and is ignored
-  elsewhere. The same column type carries `Vec<scalar>`, `Vec<struct>`,
-  and map payloads on backends that fall back to it (MySQL `JSON`,
-  SQLite JSON1) and is the natural representation on MongoDB. DynamoDB
-  does not surface this as a `db::Type` since its schema is
-  per-attribute rather than per-column; the equivalent routing happens
-  inside the DynamoDB driver, which picks `L` / typed-Set / `M` for
-  collection and map fields directly.
+```rust
+/// Whether the driver can evaluate equality between a document-typed
+/// path and a document value server-side (an embed compared as one
+/// value, or a collection compared structurally).
+pub document_value_eq: bool,
+```
 
-  The carrier types are the structural `stmt::Type::Object` (the
-  type-level mirror of `Value::Object`) and `stmt::Type::List(Object)`.
-  A document column is typed the way a `jsonb` column is: it records
-  *that* the column holds a document, not which embedded model it
-  stores — the model identity stays engine-side, in the schema mapping's
-  cast expressions. A document crosses the driver boundary as a named
-  `Value::Object` in both directions, converted by the same mapping
-  machinery that bridges scalar storage types (a `Uuid` in a string
-  column): the schema builder plants a lowering cast (`Model` → `Object`,
-  carrying the model-level source type in `ExprCast::from`) in
-  `model_to_table` and a raising cast (`Object` → `Model`) in
-  `table_to_model`. The lowering cast constant-folds in the simplifier
-  (schema-directed, so the schema-free `fold` pass skips it), naming the
-  positional `Value::Record` into an object before the statement is
-  planned; the raising cast rides the returning eval program and turns a
-  driver-decoded object back into the typed positional record as rows
-  return. Drivers encode and decode documents shape-directed — interior
-  leaves take their wire forms (numbers by integer fit, temporals and
-  decimals as text), and the raising cast converts them to their field
-  types — so a driver never consults the application schema.
+All four in-tree backends set it `true` (SQLite via emulation; see
+below). A driver that leaves it `false` keeps working: the planner
+routes document-value comparisons to the in-memory filter that already
+backs post-filtering, and the driver never sees them. Out-of-tree
+drivers are therefore unaffected until they opt in.
 
-**New operations.** SQL drivers gain new statement nodes for collection
-predicates, collection mutations, and document-specific path operations.
-Operations that exist in both array-storage and document-storage forms
+#### What reaches the driver
+
+The engine splits every document comparison into two tiers before any
+driver-specific work happens, in the backend-agnostic simplifier:
+
+- **Record tier.** A comparison against an embed decomposes into one
+  scalar comparison per schema field, recursively, with `None` fields
+  becoming the existing `is_none` form. Drivers see only the scalar-leaf
+  shapes they already support — a conjunction of path extractions
+  compared to scalar parameters. **No new driver work.** This tier is
+  also why decomposition is the default: each leaf can use the backend's
+  scalar operators (collation, casts) and any future per-path index, and
+  the closed-schema semantics fall out for free.
+- **Collection tier.** Decomposition stops at the first `Vec` boundary.
+  The residual comparison reaches the driver as an equality between a
+  document path and a single document-typed value, named and encoded by
+  the engine (the same named form document writes use).
+
+#### SQL serialization contract
+
+The collection-tier comparison renders per dialect:
+
+| Dialect | Rendering |
+|---|---|
+| PostgreSQL | `(col->'a'->'emails') = $1::jsonb` — native structural equality |
+| MySQL | `JSON_EXTRACT(col, '$.a.emails') = CAST(? AS JSON)` — native structural equality |
+| SQLite | `json_tree` set comparison (below) — emulated structural equality |
+
+SQLite has no structural JSON equality (text comparison is key-order
+sensitive), but its `json_tree` table-valued function makes the
+emulation exact: two values are equal iff their node sets match.
+
+```sql
+NOT EXISTS (
+  SELECT fullkey, type, atom FROM json_tree(json_extract(col, '$.emails'))
+  EXCEPT
+  SELECT fullkey, type, atom FROM json_tree(?)
+)
+AND NOT EXISTS (
+  SELECT fullkey, type, atom FROM json_tree(?)
+  EXCEPT
+  SELECT fullkey, type, atom FROM json_tree(json_extract(col, '$.emails'))
+)
+```
+
+`fullkey` carries array indices, so element order matters; object key
+order does not. This matches PostgreSQL / MySQL semantics exactly — the
+emulation trades cost, not correctness.
+
+#### DynamoDB contract
+
+DynamoDB equality is defined for every attribute type, so both tiers are
+native: the record tier is the nested-path comparisons the driver
+already compiles (`#col.#phone.#area_code = :v0 AND ...`), and the
+collection tier is one comparison against a Map / List attribute value
+(`#col.#emails = :v` with `:v` an `L`).
+
+No new `Operation` variants: SQL drivers see new expression shapes only
+in statements they already serialize; DynamoDB sees them in the filter
+expressions it already compiles.
+
+### New operations for containment, predicates, and mutations
+
+The rest of the surface adds statement nodes for sub-document
+containment, key existence, element predicates, and the document
+mutations (`patch` into a document path, `unset`, set operations).
+Operations that exist in both native-array and document-storage forms
 share one variant carrying a storage-kind hint:
 
 ```rust
@@ -872,151 +648,105 @@ struct ExprContains {
     rhs: Box<Expr>,
     kind: CollectionKind,   // NativeArray or Document
 }
-
-enum CollectionKind {
-    NativeArray,
-    Document,
-}
 ```
 
-The eval interpreter ignores `kind` — by the time data reaches eval it
-is decoded Rust values, so `Contains` is one operation regardless of how
-it was stored. The SQL serializer dispatches on `kind` to emit the right
-operator (`'x' = ANY(col)` / `col @> ARRAY[...]` for native arrays;
-`col @> '...'::jsonb` for document storage). Lowering sets `kind` from
-the column's storage.
-
-The same hint covers every collection operation that splits along
-storage lines: `IsSuperset`, `Intersects`, `Length`, `Any`, `All`,
-push, pop, remove-by-value, remove-at, clear. Document-specific
-operations — path traversal into a sub-tree, sub-document containment
-via `partial!`, key-existence — stay as their own variants since they
-have no array equivalent.
+Today each SQL flavor serializes a collection operator for the one
+storage its `Vec<scalar>` columns use, so no hint is needed. Once
+`#[document]` can force JSON storage on PostgreSQL, the same flavor must
+render both forms (`'x' = ANY(col)` vs `col @> '["x"]'::jsonb`), and the
+lowering sets `kind` from the column's storage. The eval interpreter
+ignores `kind` — by the time data reaches eval it is decoded Rust
+values.
 
 Each operation is gated behind a capability flag. The planner reads
 capabilities to decide whether to push the operator to the driver or
 fall back to an in-memory implementation. Drivers that implement none of
 the new capabilities still work — every predicate compiles to
-load-and-filter, every update compiles to read-modify-write — they just
-lose the per-operator optimizations.
+load-and-filter, every update compiles to read-modify-write.
 
-**MySQL driver.** Collections store as `JSON`. Document storage for
-`Vec<struct>`, `HashSet`, and map fields uses the same `JSON` column
-type; the work is the document-form lowering of every operator in the
-table above and the rewrite fallbacks for `pop` / `remove` /
-`remove_at`, gated behind the `document_collections` capability the
-design introduces.
+Per-dialect contract for the operators this design adds:
 
-**DynamoDB driver.** The existing driver gains:
+| Operation | PG `text[]` | PG `jsonb` | SQLite (JSON1) | MySQL | DynamoDB |
+|---|---|---|---|---|---|
+| Containment (`partial!`) | n/a | `@>` | `json_each` + filter | `JSON_CONTAINS` | AND of path equalities |
+| `contains_key` | n/a | `?` | `json_extract IS NOT NULL` | `JSON_CONTAINS_PATH` | `attribute_exists(path)` |
+| `any` element predicate | `EXISTS unnest` | `EXISTS jsonb_array_elements` | `EXISTS json_each` | `JSON_TABLE` | client-side filter |
+| Patch one path | column update | `jsonb_set` | `json_set` | `JSON_SET` | `SET path = :v` |
+| Increment (nested) | column update | `jsonb_set` with cast | `json_set` arith | `JSON_SET` arith | `ADD path :n` |
+| `insert` (set) | conditional `array_append` | `\|\|` | rewrite | rewrite | `ADD` (typed Set) |
+| `pop` | array slicing | `jsonb_set` w/ length-1 | rewrite | rewrite | `REMOVE path[size-1]` |
+| `remove` (by value) | `array_remove` | RMW | rewrite | rewrite | `DELETE path :s` (typed Set) / RMW (List) |
+| `remove_at` | array slicing | `jsonb_path` minus | rewrite | `JSON_REMOVE` | `REMOVE path[i]` |
+| `unset` (key) | n/a | `-` | `json_remove` | `JSON_REMOVE` | `REMOVE path.key` |
 
-- A schema-build pass that picks flat-expansion, `M`, `L`, or typed-Set
-  storage per field type as described in the storage selection table.
-  Embeds default to flat-expansion (top-level attributes); `#[document]`
-  opts into Map.
-- Compilation from `stmt::Expr` nodes to DynamoDB condition expressions,
-  including AND-of-`contains` for `is_superset` and OR-of-`contains` for
-  `intersects`.
-- Compilation from `stmt::Assign` nodes to update expressions
-  (`SET path = …`, `ADD path :n`, `REMOVE path[i]`, etc.).
-- Capability flags advertise native support for all writes except
-  `DocumentContainment`, `DocumentAnyPredicate`, and
-  `DocumentRemoveEqOnList`, which fall back to load-and-filter or
-  read-modify-write.
+("rewrite" = whole-document rewrite in one statement, atomic per row;
+"RMW" = read-modify-write, two round trips, not atomic across writers.)
 
-**MongoDB driver (future).** The driver compiles statement nodes
-directly to its query and update document forms; SQL serialization does
-not apply. A `Capability::DocumentInPlaceAtomic` flag exposes whether
-disjoint-path patches are independent. Items the future driver will need
-to work through:
+### MySQL driver
+
+Map and set fields store as `JSON`, the column type document storage
+already uses. The work is the document-form lowering of the operators
+above and the rewrite fallbacks for `pop` / `remove` / `remove_at`.
+
+### DynamoDB driver
+
+- Storage routing for the new field types: typed Set (`SS`/`NS`/`BS`)
+  for eligible `HashSet` element types, List otherwise, Map `M` for
+  maps.
+- Compilation of the new condition-expression forms (AND-of-`contains`
+  for `is_superset` over sets, `attribute_exists` for `contains_key`).
+- Compilation of `stmt::Assign` nodes to update expressions (`SET`,
+  `ADD`, `DELETE`, `REMOVE`).
+- Known gaps, all documented: no sub-document containment operator
+  (containment lowers to an AND of path equalities, which does not match
+  "any matching shape anywhere"); no per-element predicate (`any` /
+  `all` fall back to client-side filtering); no value removal on Lists
+  (RMW); GSI / LSI keys must be top-level scalars, so document paths are
+  not indexable without denormalization; filter expressions do not
+  reduce consumed read capacity.
+
+### MongoDB driver (future)
+
+Toasty has no MongoDB driver yet; the API here is designed so adding one
+requires no new user-facing concepts. The driver compiles statement
+nodes directly to query and update documents; SQL serialization does not
+apply. Items a future driver must work through:
 
 - **BSON-only types in `#[document]` embeds.** `ObjectId`, `Date`,
-  `Decimal128`, and `UUID` have no JSON representation. A Mongo-backed
-  model must be able to declare these types in an embed (e.g.
-  `created_at: bson::DateTime`) and have them encoded as BSON natively.
-  Until then, `#[document]` embeds containing such types are rejected at
-  schema build time.
-- **Positional array operators.** Mongo's `$[<id>]` and `arrayFilters`
-  let `$set` target specific elements within nested arrays atomically.
-  `stmt::patch` over an array path needs to compile to those operators
-  on Mongo to retain atomicity; on PG it falls back to whole-document
-  rewrite anyway.
-- **Wildcard / multikey index DDL.** The index forms in the table cover
-  the common cases, but Mongo's compound multikey rules and wildcard
-  projection do not have a one-line DDL today.
-- **Sharding by document-path key.** Mongo shard keys can be document
-  paths. Toasty's key model is single-field; this is out of scope and
-  may need a broader composite-key story.
-- **Map keys containing `.`.** Mongo path notation uses `.` as a key
-  separator; map keys containing literal dots need escaping or
-  rejection. Decided per the open question below.
+  `Decimal128` have no JSON representation and need native BSON
+  encoding; until then, embeds containing them are rejected at schema
+  build.
+- **Positional array operators.** `stmt::patch` over an array path needs
+  `$[<id>]` / `arrayFilters` to stay atomic.
+- **Map keys containing `.`.** Mongo path notation uses `.` as a
+  separator; arbitrary string keys need escaping or rejection.
+- **Wildcard / multikey index DDL** for the index table above.
 
-**DynamoDB constraints.** DynamoDB has stronger native document support
-than the SQL backends in several places (atomic patch, atomic increment,
-atomic push, atomic remove-at), but a few gaps stand out:
+### Out-of-tree drivers
 
-- **No sub-document containment.** DynamoDB has no `@>`-equivalent.
-  `.contains(partial)` lowers to an AND of explicit path equalities,
-  which works but does not match the semantics of "any matching shape
-  anywhere in the document." Documented and consistent; users who need
-  deep structural match fall back to load-and-filter.
-- **No element predicate.** `.any(|i| ...)` and `.all(|i| ...)` over a
-  list cannot be evaluated server-side — DynamoDB's filter expression
-  language has no per-element predicate. Toasty falls back to
-  client-side filtering after the read.
-- **`remove(value)` on Lists.** Atomic value-based removal works for
-  typed Sets via `DELETE path :s`. For Lists (the default for `Vec<T>`
-  and for `HashSet` element types that don't fit a typed Set), Toasty
-  falls back to read-modify-write since DynamoDB's update-expression
-  language has no value-removal operator on Lists. `HashSet<scalar>`
-  over a typed-Set-eligible element type gets the atomic path
-  automatically.
-- **Indexing nested paths.** GSI / LSI keys must be top-level scalar
-  attributes. Flat-expanded embed leaves are top-level attributes and
-  can be GSI / LSI keys directly. Document-stored fields
-  (`#[document]`-marked, Vec, Map, typed Set) are not indexable except
-  by denormalizing the value to a separate top-level attribute. Out of
-  scope here; a `#[index(extract(...))]` form could automate the
-  denormalization case later.
-- **Item size cap.** 400 KB per item, smaller than PG TOAST and
-  MongoDB's 16 MB. Tighter constraint on what fits in one document.
-- **Filter expressions don't reduce IO.** DynamoDB filters apply after
-  `Query` / `Scan` reads; capacity is consumed for everything matched by
-  the key conditions. Document-path predicates that lower to filter
-  expressions still cost the full scan.
-
-**Out-of-tree drivers.** Existing drivers compile unchanged. New
-operations are gated behind capability flags; absent flags fall back to
-load-and-rewrite paths through the existing `QuerySql` and `Insert`
+Existing drivers compile unchanged. Every new operation is gated behind
+a capability flag; absent flags fall back to load-and-filter or
+read-modify-write through the existing `QuerySql` and `Insert`
 operations.
 
 ## Capability matrix
 
-The target end-state per backend: what each supports natively, what
-Toasty emulates by composing native primitives, and what falls back to
-client-side handling. The user-facing API is the same in every column;
-the matrix captures only the cost and atomicity differences. Rows above
-the index group are the operators the design adds for document, set, and
-map storage (the same operators already back `Vec<scalar>` on PostgreSQL
-and SQLite).
+The target end-state per backend for the operators this design adds. The
+user-facing API is the same in every column; the matrix captures cost
+and atomicity differences only.
 
 | Capability | PostgreSQL | MySQL | SQLite | MongoDB | DynamoDB |
 |---|---|---|---|---|---|
-| Path equality | native | native | native | native | native |
+| Whole-value equality | native | native | emulated (`json_tree`) | native | native |
 | Sub-document containment | native (`@>`) | native (`JSON_CONTAINS`) | compound | native | compound |
 | Key existence | native | native | native | native | native |
-| Array `contains` | native | native | native | native | native |
-| Array `is_superset` | native | native | compound | native | compound |
-| Array `intersects` | native | native | compound | native | compound |
-| `len`, `is_empty` | native | native | native | native | native |
 | `any` / `all` element predicate | native | native | native | native | client-side |
-| Whole-value replace | native | native | native | native | native |
 | `stmt::patch` (nested) | native | native | native (rewrite) | native (atomic) | native (atomic) |
 | `stmt::increment` (nested) | native | native | native (rewrite) | native (atomic) | native (atomic) |
-| `stmt::push` / `insert` / `extend` | native | native | native (rewrite) | native (atomic) | native (atomic) |
-| `stmt::pop` | native | native | native (rewrite) | native (atomic) | native (atomic) |
-| `stmt::remove` (by value) | native (`text[]`) / RMW (`jsonb`) | RMW | RMW | native (atomic) | native on typed Set / RMW on List |
-| `stmt::remove_at` (Vec, by index) | native | native | native (rewrite) | native (atomic) | native (atomic) |
-| `stmt::clear` | native | native | native | native | native |
+| `stmt::insert` / `extend` (set) | native | native | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::pop` | native (`text[]` ships; `jsonb` remains) | native (rewrite) | native (rewrite) | native (atomic) | native (atomic) |
+| `stmt::remove` (by value) | native (`text[]` ships) / RMW (`jsonb`) | RMW | RMW | native (atomic) | native on typed Set / RMW on List |
+| `stmt::remove_at` | native (`text[]` ships; `jsonb` remains) | native (rewrite) | native (rewrite) | native (atomic) | native (atomic) |
 | `stmt::unset` | native | native | native (rewrite) | native (atomic) | native (atomic) |
 | GIN / wildcard index | ✓ | — | — | ✓ | — |
 | Path expression index | ✓ (B-tree) | partial | — | ✓ | denormalize to top-level attr |
@@ -1025,195 +755,168 @@ and SQLite).
 Legend:
 
 - **native** — direct server-side operator, one round trip.
-- **compound** — Toasty composes from native primitives, server-side,
-  one round trip but more expressions evaluated.
-- **RMW** — read-modify-write. Toasty does this transparently but it
-  takes two round trips and is not atomic across concurrent writers
-  unless the user wraps it in a transaction or condition.
-- **client-side** — Toasty fetches and filters in process. Same number
-  of round trips as a normal read but with more data over the wire.
-- **rewrite** — operation rewrites the whole document column in one
-  statement rather than mutating a path in place. Atomic per row (same
-  as `native`); the cost scales with the document size, not the modified
-  path.
+- **compound** — composed from native primitives, server-side, one round
+  trip but more expressions evaluated.
+- **emulated** — server-side, exact semantics, no native operator (see
+  the SQLite `json_tree` form).
+- **rewrite** — rewrites the whole document column in one statement.
+  Atomic per row; cost scales with document size.
+- **RMW** — read-modify-write, two round trips, not atomic across
+  concurrent writers without a transaction.
+- **client-side** — Toasty fetches and filters in process.
+
+## Implementation plan
+
+Ordered so each milestone ships working, tested behavior on all four
+backends:
+
+1. **Equality, record tier.** The simplifier decomposition plus the
+   path-API surface check. Ships embed equality (root and nested)
+   everywhere, riding the scalar-leaf machinery that already exists —
+   zero driver changes. Integration tests: nested eq, `Option` field as
+   `Some` and `None`, near-miss negative.
+2. **Equality, collection tier on native backends.** The
+   `document_value_eq` capability, planner routing (capability off →
+   in-memory filter), engine-side naming of comparison literals,
+   PostgreSQL / MySQL serialization, DynamoDB Map / List equality.
+   SQLite ships this milestone with the capability off — correct via the
+   in-memory path.
+3. **SQLite structural rendering.** The `json_tree` form; flip SQLite's
+   capability. A cross-backend invariant test asserts the collection-
+   tier comparison agrees with an equivalent decomposed comparison on
+   every backend (the `struct_embed_filter_matches_column_case_sensitivity`
+   pattern).
+4. **Map and set field types.** Storage selection, encoding, the
+   `Set<T>` marker, and the basic predicates (`contains_key`, set views).
+5. **Containment and element predicates.** `partial!` / `Partial<T>`,
+   `any` / `all`, `is_absent` / `is_null`.
+6. **Mutations.** `stmt::patch` and `stmt::increment` into documents,
+   set mutations, `pop` / `remove` / `remove_at` beyond PostgreSQL
+   `text[]` (including the `jsonb` forms and per-storage capability
+   gating), `stmt::unset`.
+7. **Indexing.** The `#[index]` lowering table and its schema-build
+   errors.
+
+Follow-ons after milestone 3: `ne()` as the negation of the equality
+conjunction, and two-sided comparisons (`a.phone == b.phone`) — the
+decomposition is shape-directed rather than value-directed, so it
+already applies; the work is the query surface and parameter plumbing.
 
 ## Composition with `Deferred<T>`
 
-`Deferred<T>` marks a field as not loaded by default; callers opt in
-with `.include()`. The semantic is "load everything except deferred
-fields." It composes cleanly with the storage choices in this design,
-but the lowering depends on where the deferred field lives.
-
-**Column-expanded fields.** The driver omits the deferred column from
-the `SELECT` list. The existing column-projection path covers this;
-nothing new is needed for document storage.
-
-**Document-stored fields with deferred siblings.** When a deferred field
-lives inside a document-stored embed — or when the document column
-itself contains a deferred sub-path — the driver emits a path-exclusion
-expression on the document column:
-
-| Backend | Exclusion form |
-|---|---|
-| PostgreSQL `jsonb` | `col - 'deferred_key'` (top level) or `col #- '{a,deferred_key}'` (nested) |
-| MySQL JSON | `JSON_REMOVE(col, '$.deferred_key')` |
-| SQLite JSON1 | `json_remove(col, '$.deferred_key')` |
-| MongoDB | exclusion projection: `find({}, { "path.to.deferred": 0 })` |
-| DynamoDB | no native exclusion; driver emits `ProjectionExpression` listing every non-deferred path |
-
-DynamoDB is the only backend that requires the driver to enumerate the
-inclusion set rather than the exclusion set. Toasty knows the schema, so
-this is a code-generation concern, not user-facing.
-
-**Cost notes.** Deferred loading saves bandwidth in every case but the
-per-backend cost reductions differ:
-
-- PostgreSQL `jsonb` exclusion does not skip TOAST decompression; the
-  row read cost is unchanged. The wire saving still matters when the
-  deferred field is the reason the document is large.
-- MongoDB exclusion projection saves wire bytes; the server still loads
-  the full BSON document into memory.
-- DynamoDB read capacity is charged per the full item size regardless of
-  `ProjectionExpression`. Deferred loading saves parsing and bandwidth,
-  not RCU.
-
-The full design for deferred loading lives with the partial-loading
-work; this document only commits to the storage representations being
-deferred-loadable.
+`Deferred<T>` composes with document storage, but the lowering differs
+from the column-expanded case (where the driver omits the column from
+the `SELECT` list). When the deferred field lives inside a document
+column, the driver emits a path-exclusion expression instead:
+`col - 'key'` / `col #- '{a,key}'` on PostgreSQL, `JSON_REMOVE` /
+`json_remove` on MySQL / SQLite, an exclusion projection on MongoDB.
+DynamoDB has no exclusion form; the driver enumerates the non-deferred
+paths in a `ProjectionExpression`. Exclusion saves wire bytes, not
+server-side read cost (PostgreSQL still detoasts the value; DynamoDB
+still charges read capacity for the full item). The full deferred-loading
+design lives with the partial-loading work; this document only commits
+to the storage representations being deferred-loadable.
 
 ## Alternatives considered
 
-**Naming the attribute after the encoding (`#[json]`).** The first draft
-used `#[json]`, the most-recognized term across backends, matching the
-original "JSON field queries" roadmap framing. Rejected once the design
-grew to cover non-JSON storage (PostgreSQL native arrays, DynamoDB Map /
-List / typed Sets): `#[document]` is encoding-neutral and accurately
-describes the user intent ("store as one document") on every backend,
-including those where the encoding is not JSON.
+**Whole-value equality at every tier (no decomposition).** Compare an
+embed as one JSON / Map value everywhere. Rejected: it silently changes
+semantics from the decoder's closed-schema rule (an unknown stored key
+would break equality), it can never use a per-leaf index, record-tier
+string leaves would stop following column collation on MySQL, and on
+SQLite it would force the expensive `json_tree` form onto the common
+case.
 
-**DynamoDB embeds default to Map (`M`).** An earlier draft defaulted
-DynamoDB embeds to Map storage, mirroring MongoDB sub-documents under the
-assumption that "document backends" should treat embeds as documents.
-Rejected: DynamoDB items are structurally closer to SQL rows than to
-MongoDB documents — flat dictionaries with arbitrary attribute names,
-where GSI / LSI keys must be top-level scalars. The same reasoning that
-justifies column-expansion on SQL (indexability, simpler filter
-expressions, no idiom mismatch) applies to DynamoDB. Mongo really is
-different because its tooling, BSON encoding, and index model favor
-sub-documents; DynamoDB shares none of those traits.
+**Flattening collection comparisons (length guard plus per-index
+leaves).** A constant list fixes its own length, so
+`emails == ["a","b"]` *could* decompose into
+`len = 2 AND emails[0] = 'a' AND emails[1] = 'b'`. Rejected: the
+conjunction grows with the literal (a hard failure against DynamoDB's
+4 KB condition-expression cap), it duplicates semantics the whole-value
+form must implement anyway for non-constant comparisons, and native
+structural equality already exists on three of four backends.
 
-**Always force document storage; no native arrays.** Skip the
-backend-dependent default and require `#[document]` for any collection.
-Rejected: backend-dependent storage matches Toasty's existing pattern
-for embedded enums (where the discriminator column type is also
-backend-chosen), keeps PostgreSQL users on native arrays where they're
-faster and smaller, and avoids forcing an attribute that does nothing on
-backends without an alternative.
+**SQLite text equality for the collection tier.**
+`json_extract(...) = json(?)` is exact for Toasty-written rows (one
+canonical encoder on both sides) but key-order sensitive for externally
+written ones. Rejected as the shipping form because it would make SQLite
+the one backend with divergent semantics; kept in mind as a fast path if
+the `json_tree` form proves too slow, at which point the divergence
+would need to be a documented capability, not a silent one.
 
-**Two attributes, `#[array]` and `#[document]`.** Surface explicit
-storage choice for both. Rejected: native arrays are the natural default
-for the field types where they apply; an explicit `#[array]` would only
-exist to mean "the default." `#[document]` is the only choice that needs
-its own attribute because it's the override.
+**Rejecting unsupported drivers instead of in-memory fallback.** The
+`.ilike()` precedent rejects, but that rule exists because backends
+*disagree* on ilike's semantics. Value equality has one semantics, and
+the in-memory evaluator implements it exactly, so transparent fallback
+is the established pattern (it already backs post-filters on key-fetch
+paths).
 
-**Keep `#[serialize(json)]` and add no new attribute.** Reuse the
-existing opaque-blob attribute for the queryable case as well,
-distinguishing by type (Embed vs serde). Rejected because the storage
-and query capabilities differ enough that two attributes are clearer
-than one overloaded one. `#[serialize(json)]` remains for cases where the
-user wants a serde-only escape hatch with no querying.
-
-**Always store embeds as documents; no flag.** Removes the choice.
-Rejected: column-expanded embeds give per-field indexes, smaller rows,
-and existing SQL-tuning techniques that document storage forecloses. The
-choice is load-bearing.
-
-**`#[column(type = json)]` instead of `#[document]`.** Reuse the existing
-`#[column(type = ...)]` mechanism. Rejected: `#[column]` sets a column's
-database type — a per-column knob with no structural consequences.
-`#[document]` does much more: it collapses an entire embed sub-tree into
-one storage slot, terminates recursion in self-referential embeds,
-switches a collection field from native to document encoding, and on
-DynamoDB switches an embed from flat-expansion to a Map. None of those
-are column-type choices; they are decisions about how the field's tree
-of values maps onto the backend's storage primitives. A future
-`#[column(type = jsonb)]` for explicit PG-specific column typing stays
-available alongside `#[document]` for the narrower case of choosing
-between `jsonb` and `json`.
-
-**Document-collection API distinct from Embed.** A separate,
-Mongo-flavored "collection of documents" surface alongside the
-relational one. Rejected: two parallel modeling APIs is more surface
-than the value warrants when embed already covers nested data.
-
-**Naming after Mongo (`has`, `has_all`, `has_any`).** Rejected for Rust
-idiom: `Vec::contains`, `HashSet::is_superset`, and the `intersects`
-form (negation of `is_disjoint`) read more naturally to Rust users.
+**External or adjacent enum tagging.** Serde's default external tagging
+adds a nesting level per variant; DynamoDB's 32-level nesting cap makes
+that a real budget. Internal tagging with `type` matches the most
+common serde convention and keeps nesting flat.
 
 ## Open questions
 
 - **Default `create_if_missing` for `stmt::patch`.** PostgreSQL's
   `jsonb_set` takes a flag; Mongo's `$set` always creates. True is more
   forgiving; false catches typos. Blocking acceptance.
-- **`Vec<struct>` storage on PostgreSQL.** PG composite types and
-  arrays-of-composites work but the operators are weak and the encoding
-  is awkward. The default in the storage table is `jsonb`; confirm or
-  revisit. Deferrable.
-- **Set semantics for `HashSet<scalar>` on PostgreSQL.** PG `text[]` has
-  no uniqueness guarantee, and atomic in-place operations
-  (`stmt::insert`, `stmt::extend`) modify the array server-side without
-  loading the row, so they can introduce duplicates that violate
-  `HashSet`'s invariant. Options include a CHECK constraint emitted per
-  HashSet field, a DOMAIN type, or compiling each set-modifying
-  operation to its set-aware equivalent (conditional append, or an
-  `array_agg(DISTINCT …)` rewrite). Affects every write path that
-  touches a HashSet field. Blocking implementation.
+- **Set semantics for `HashSet<scalar>` on PostgreSQL.** `text[]` has no
+  uniqueness guarantee, and atomic in-place operations (`stmt::insert`,
+  `stmt::extend`) modify the array server-side without loading the row,
+  so they can introduce duplicates that violate `HashSet`'s invariant.
+  Options: a CHECK constraint per HashSet field, a DOMAIN type, or
+  compiling each set mutation to a set-aware form (conditional append).
+  Blocking implementation of milestone 4.
+- **`Set<T>` marker layout.** Confirm the trait layout (`Into<Set<T>>`
+  blanket impls) and whether `Set<T>` carries uniqueness as a runtime
+  invariant or a name-only convention. Blocking implementation of
+  milestone 4.
+- **`Partial<T>` representation and `partial!` mechanics.** The natural
+  shape is `struct Partial<T> { expr: stmt::Expr, _p: PhantomData<T> }`,
+  with `partial!` lowering struct-literal syntax to an `stmt::Record` of
+  named values. Open: how much of the create-builder machinery it can
+  reuse for field-name validation. Blocking implementation of
+  milestone 5.
+- **`json_tree` rendering under negation and disjunction.** The
+  EXCEPT-pair is a pair of scalar subqueries; nesting it inside `OR` /
+  `NOT` duplicates it. If that proves unacceptable, milestone 3 narrows
+  to top-level conjuncts and other positions stay on the in-memory path.
+  Blocking milestone 3 implementation, not acceptance.
+- **`ne()` null semantics.** Whether `ne` over an embed with `Option`
+  fields means strict negation of `eq` (absent counts as "not equal") on
+  every backend, given SQL's three-valued logic. Blocking the follow-on,
+  not this design.
+- **Equality capability granularity.** One `document_value_eq` flag, or
+  split per shape (embed vs. list vs. future map)? Start with one; split
+  when a real driver needs the distinction. Deferrable.
 - **Map keys containing `.`.** Mongo path notation uses `.` as a key
-  separator; allowing arbitrary string keys requires escaping on encode
-  or rejection. Blocking implementation for the Mongo driver; deferrable
+  separator. Blocking implementation for the Mongo driver; deferrable
   for the SQL-only case.
 - **`HashMap` ordering.** PG `jsonb` sorts keys; SQLite preserves input
-  order; Mongo preserves input order. Document the lack of ordering
-  guarantee or normalize on encode? Deferrable.
-- **Backend-specific index modifiers.** The unified `#[index]` rule
-  covers the abstract intent. Tuning levers — PG opclass selection
-  (`jsonb_ops` vs `jsonb_path_ops`), partial-index conditions, Mongo
-  wildcard-projection paths, and DynamoDB GSI projection attributes —
-  need a modifier syntax. Deferrable.
+  order. Document the lack of ordering guarantee or normalize on
+  encode? Deferrable.
 - **Renaming document keys.** `#[document(rename = "...")]` on an embed
-  field is the natural form. Deferrable.
-- **`Set<T>` marker type.** This design assumes a `Set<T>` marker
-  alongside the existing `List<T>` to type the right-hand side of set
-  predicates (`.is_superset`, `.intersects`) and to split the set
-  mutations from the Vec mutations. Confirm the trait layout
-  (`Into<Set<T>>` blanket impls for `Vec<T>`, `&[T]`, `[T; N]`,
-  `HashSet<T>`, `BTreeSet<T>`) and whether `Set<T>` should carry
-  uniqueness as a runtime invariant or a name-only convention. Blocking
-  implementation.
-- **`Partial<T>` representation and `partial!` mechanics.** The natural
-  shape is something like `struct Partial<T> { expr: stmt::Expr, _p:
-  PhantomData<T> }`, with `partial!` lowering struct-literal syntax to an
-  `stmt::Record` of named values (recursively, for nested partials).
-  Open: how much of the create-builder type machinery `partial!` can
-  reuse to validate field names and types. The two are similar (both
-  name-and-value bags) but differ in semantics — a create value is
-  complete, a partial one is not. Blocking implementation.
+  field is the natural form (a `#[column]` rename is already rejected
+  under document storage). Deferrable.
+- **Backend-specific index modifiers.** PG opclass selection,
+  partial-index conditions, Mongo wildcard projection, DynamoDB GSI
+  projection attributes need a modifier syntax. Deferrable.
 
 ## Out of scope
 
+- **Ordering comparisons on document values.** `lt` / `gt` on an embed
+  or collection have no meaningful cross-backend semantics and are not
+  planned.
 - **Raw document path expressions.** A `path_match("$.a[*] ? (@.b > 1)")`
-  escape hatch for queries the typed accessors cannot express. Postpone
-  until the typed surface proves insufficient.
-- **DynamoDB nested-path indexing.** Indexing a value buried in a Map
-  requires denormalizing it to a top-level attribute. A
-  `#[index(extract(path))]` form could automate this; out of scope.
-- **Schema migrations for nested document shape changes.** Migrating a
-  field from string to object across all rows is a bulk
-  read-modify-write; no special migration primitives in this design.
-- **Full-text search over documents.** Tracked as a separate roadmap
-  item.
-- **Server-side aggregation pipelines.** Mongo's `$group` / `$lookup` and
-  PG's `jsonb_agg` are aggregation features; covered by the broader
+  escape hatch; postponed until the typed surface proves insufficient.
+- **DynamoDB nested-path indexing.** Requires denormalizing to a
+  top-level attribute; a `#[index(extract(...))]` form could automate it
+  later.
+- **Schema migrations for document shape changes.** Bulk
+  read-modify-write; no special migration primitives here.
+- **Full-text search over documents.** Separate roadmap item.
+- **Server-side aggregation pipelines.** Covered by the broader
   aggregation design.
-- **JSON Schema validation.** Per-field structural validation is a
-  separate feature; check constraints already exist as a roadmap item.
+- **JSON Schema validation.** Separate feature; check constraints are
+  already a roadmap item.
