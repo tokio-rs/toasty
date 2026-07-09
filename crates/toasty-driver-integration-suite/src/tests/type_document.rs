@@ -322,6 +322,61 @@ pub async fn struct_embed_update_replace(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// An instance update that sets a `#[document]` field needs nothing back
+/// from the database: the returning is computed client-side from the
+/// assignments, so the driver receives a plain UPDATE with no result
+/// columns — exactly as for a scalar field. The constantization itself is
+/// unit-tested in `engine::lower::tests::constantize`.
+#[driver_test(id(ID), requires(and(document_collections, sql)))]
+pub async fn struct_embed_update_returning_constantized(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Profile {
+        name: String,
+        age: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Account {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        profile: Profile,
+    }
+
+    let mut db = t.setup_db(models!(Account)).await;
+
+    let mut account = toasty::create!(Account {
+        profile: Profile {
+            name: "old".into(),
+            age: 1,
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+    account
+        .update()
+        .profile(Profile {
+            name: "new".into(),
+            age: 99,
+        })
+        .exec(&mut db)
+        .await?;
+
+    let (op, _resp) = t.log().pop();
+    assert_struct!(op, toasty_core::driver::Operation::QuerySql({
+        stmt: toasty_core::stmt::Statement::Update(_),
+        ret: None,
+        ..
+    }));
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
 /// Filtering on scalar fields inside a bare `#[document]` embed. Each path
 /// access lowers to a JSON extraction in the WHERE clause: equality on a
 /// string leaf, range on a numeric leaf, and `is_none` on an optional leaf

@@ -346,28 +346,39 @@ impl LowerStatement<'_, '_> {
 
         expr.substitute(Input(columns, values));
     }
+}
 
-    pub(super) fn constantize_update_returning(
-        &self,
-        returning: &mut stmt::Returning,
-        assignments: &stmt::Assignments,
-    ) {
-        let input = ConstantizeReturning {
-            cx: self.expr_cx,
-            source: ConstantizeSource::UpdateAssignments { assignments },
-        };
+/// Constantize an update's returning clause from its lowered, column-indexed
+/// assignments: column references whose assignment is a constant `Set` are
+/// inlined, and a fully-constant projection is evaluated now, sparing the
+/// runtime returning path. A projection that still needs data (an unassigned
+/// column, a relative mutation) is left for runtime.
+pub(super) fn constantize_update_returning(
+    cx: stmt::ExprContext<'_>,
+    returning: &mut stmt::Returning,
+    assignments: &stmt::Assignments,
+) {
+    let stmt::Returning::Project(project) = returning else {
+        // Already a constant value (e.g., empty record for batch
+        // unit-returning); nothing to constantize.
+        return;
+    };
 
-        let stmt::Returning::Project(project) = returning else {
-            // Already a constant value (e.g., empty record for batch
-            // unit-returning); nothing to constantize.
-            return;
-        };
+    project.substitute(ConstantizeReturning {
+        cx,
+        source: ConstantizeSource::UpdateAssignments { assignments },
+    });
 
-        project.substitute(input);
-
-        if let Ok(row) = project.eval_const() {
-            *returning = stmt::Returning::Project(row.into());
-        }
+    // Evaluate through the schema-bound input, not `eval_const`: a document
+    // column's projection is the raising cast over the assignment's lowering
+    // cast, and both conversions resolve the embed through the schema
+    // (`Input::resolve_model`).
+    let input = ConstantizeReturning {
+        cx,
+        source: ConstantizeSource::UpdateAssignments { assignments },
+    };
+    if let Ok(row) = project.eval(input) {
+        *returning = stmt::Returning::Project(row.into());
     }
 }
 

@@ -1195,7 +1195,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
             // Use the lowered assignments (which are now column-indexed)
-            lower.constantize_update_returning(returning, &stmt.assignments);
+            returning::constantize_update_returning(lower.expr_cx, returning, &stmt.assignments);
         }
 
         self.visit_update_target_mut(&mut stmt.target);
