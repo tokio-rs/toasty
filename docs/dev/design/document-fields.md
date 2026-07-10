@@ -37,11 +37,8 @@ is missing.
   `stmt::push` / `stmt::extend` / `stmt::clear` mutations on every
   backend (`stmt::push` also appends to document collections);
   `stmt::pop` / `stmt::remove` / `stmt::remove_at` ship for PostgreSQL
-  native arrays only and are rejected at lowering elsewhere. The
-  rejection gates per backend, not per storage: on PostgreSQL a document
-  collection currently reaches the `text[]` renderings, which do not
-  apply to `jsonb`. Completing the mutations includes gating them per
-  storage.
+  native arrays only; every other combination — other backends, and
+  document collections everywhere — is rejected at lowering.
 - Documents cross the driver boundary as named `Value::Object` values in
   `db::Type::Document { binary }` columns. Drivers encode and decode
   documents shape-directed — interior leaves take their wire forms — and
@@ -371,8 +368,9 @@ back to read-modify-write where it does not.
 #### Completing the `Vec` mutations
 
 `stmt::pop`, `stmt::remove`, and `stmt::remove_at` work atomically on
-PostgreSQL native arrays only; the other backends reject them at
-lowering. Completing this design brings them to the rest: PostgreSQL
+PostgreSQL native arrays only; other backends and document collections
+reject them at lowering. Completing this design brings them to the
+rest: PostgreSQL
 document collections get `jsonb` forms, MySQL and SQLite compile them to
 a whole-document rewrite (atomic per row; cost scales with document
 size), DynamoDB to native update expressions (`REMOVE path[i]`,
@@ -792,8 +790,8 @@ backends:
    `any` / `all`, `is_absent` / `is_null`.
 6. **Mutations.** `stmt::patch` and `stmt::increment` into documents,
    set mutations, `pop` / `remove` / `remove_at` beyond PostgreSQL
-   `text[]` (including the `jsonb` forms and per-storage capability
-   gating), `stmt::unset`.
+   `text[]` (lifting the lowering's rejection on document collections
+   as each form lands), `stmt::unset`.
 7. **Indexing.** The `#[index]` lowering table and its schema-build
    errors.
 

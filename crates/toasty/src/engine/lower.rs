@@ -284,7 +284,9 @@ impl LowerStatement<'_, '_> {
     ///
     /// `Append` is supported on every backend; the removal operators are
     /// gated by per-backend capability flags and emit a clear error where
-    /// the native form is not available.
+    /// the native form is not available. On document collections the
+    /// removal operators are rejected outright: the per-backend renderings
+    /// are native-array forms that do not apply to a document column.
     fn lower_collection_op(
         &mut self,
         out: &mut stmt::Assignments,
@@ -311,21 +313,35 @@ impl LowerStatement<'_, '_> {
         };
 
         // `Append` is universally supported; the removal operators are
-        // gated per backend.
+        // gated per backend and rejected on document collections, where
+        // the capability flags speak for the native-array renderings only.
         let cap = self.capability();
+        let is_document = self
+            .expr_cx
+            .schema()
+            .mapping
+            .document_column_ty(prim.column)
+            .is_some();
         let unsupported = match &op {
             CollectionOp::Append(_) => None,
-            CollectionOp::Remove(_) if !cap.vec_remove => Some("stmt::remove"),
-            CollectionOp::Pop if !cap.vec_pop => Some("stmt::pop"),
-            CollectionOp::RemoveAt(_) if !cap.vec_remove_at => Some("stmt::remove_at"),
+            CollectionOp::Remove(_) if is_document || !cap.vec_remove => Some("stmt::remove"),
+            CollectionOp::Pop if is_document || !cap.vec_pop => Some("stmt::pop"),
+            CollectionOp::RemoveAt(_) if is_document || !cap.vec_remove_at => {
+                Some("stmt::remove_at")
+            }
             _ => None,
         };
 
         if let Some(op_name) = unsupported {
+            let target = if is_document {
+                "document collections"
+            } else {
+                "this backend"
+            };
             self.state
                 .errors
                 .push(crate::Error::invalid_statement(format!(
-                    "{op_name} is not yet supported on this backend"
+                    "{op_name} is not yet supported on {target}"
                 )));
             return;
         }

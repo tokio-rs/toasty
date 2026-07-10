@@ -300,6 +300,57 @@ pub async fn vec_struct_push(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// The removal operators (`stmt::pop` / `stmt::remove` / `stmt::remove_at`)
+/// are not yet implemented on document collections — the per-backend
+/// renderings the `vec_*` capability flags advertise are native-array forms.
+/// The lowering rejects them with a clear error on every backend instead of
+/// emitting SQL that does not apply to a document column. They share one
+/// gate; `stmt::pop` stands in for all three.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn vec_struct_pop_rejected(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct LineItem {
+        sku: String,
+        qty: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Order {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        items: Vec<LineItem>,
+    }
+
+    let mut db = t.setup_db(models!(Order)).await;
+
+    let mut order = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+
+    let err = assert_err!(
+        order
+            .update()
+            .items(toasty::stmt::pop())
+            .exec(&mut db)
+            .await
+    );
+    let msg = err.to_string();
+    assert!(
+        msg.contains("stmt::pop") && msg.contains("document collections"),
+        "expected a clear rejection, got: {msg}"
+    );
+
+    Ok(())
+}
+
 /// A bare `#[document]` struct embed round-trips through INSERT and a fresh
 /// fetch: the engine encodes the embed as one JSON object on the way in and
 /// decodes it back to the struct on the way out.
