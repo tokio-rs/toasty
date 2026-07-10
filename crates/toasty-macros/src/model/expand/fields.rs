@@ -38,6 +38,12 @@ impl Expand<'_> {
 
                 match &field.ty {
                     Primitive(ty) => {
+                        // The accessor resolves its path through the field
+                        // type's `Field` impl, so the type decides its own path
+                        // shape: a struct embed (column-expanded or
+                        // `#[document]`) yields a chainable Fields handle
+                        // (`profile().name()`), a `Vec<_>` collection yields a
+                        // list leaf.
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
                     BelongsTo(rel) => {
@@ -178,6 +184,7 @@ impl Expand<'_> {
                 let field_offset = util::int(offset);
 
                 match &field.ty {
+                    Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),
                     Primitive(ty) => {
                         self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
                     }

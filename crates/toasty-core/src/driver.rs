@@ -166,6 +166,14 @@ pub trait Connection: Debug + Send + 'static {
     /// query engine compiles user queries into [`Operation`] values and
     /// dispatches them here. The driver translates each operation into
     /// backend-specific calls and returns an [`ExecResponse`].
+    ///
+    /// Drivers use only the database-level half of the schema (`schema.db`:
+    /// tables, columns, indices). The application schema (models, fields,
+    /// mappings) is an engine concept that a driver never consults.
+    /// Everything in the operation is already expressed in database terms:
+    /// `#[document]` values arrive as named `Value::Object`s, document paths
+    /// as resolved `FuncJsonExtract` name paths, and document columns are
+    /// typed by the structural `Type::Object`.
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
 
     /// Cheap, synchronous, local check that the driver's client object

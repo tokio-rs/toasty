@@ -1,5 +1,7 @@
+use std::sync::Arc;
 use toasty_core::{
     driver::{ExecResponse, Rows},
+    schema::Schema,
     stmt,
 };
 
@@ -25,6 +27,8 @@ impl VarDecls {
 pub(crate) struct VarStore {
     slots: Vec<Option<Entry>>,
     tys: Vec<stmt::Type>,
+    /// Resolves `Type::Model` (`#[document]`) layouts for the value type-checks.
+    schema: Arc<Schema>,
 }
 
 /// Identifies a pipeline variable slot
@@ -38,10 +42,11 @@ struct Entry {
 }
 
 impl VarStore {
-    pub(crate) fn new(decls: VarDecls) -> Self {
+    pub(crate) fn new(decls: VarDecls, schema: Arc<Schema>) -> Self {
         Self {
             slots: vec![],
             tys: decls.vars,
+            schema,
         }
     }
 
@@ -74,10 +79,10 @@ impl VarStore {
                 response.values
             }
             Rows::Value(value) => {
+                let ty = &self.tys[var.0];
                 assert!(
-                    value.is_a(&self.tys[var.0]),
-                    "type mismatch: {value:?} is not a {:?}",
-                    self.tys[var.0]
+                    value.is_a(&self.schema.app, ty),
+                    "type mismatch: {value:?} is not a {ty:?}",
                 );
                 Rows::Value(value)
             }
@@ -85,8 +90,9 @@ impl VarStore {
                 let stmt::Type::List(item_tys) = &self.tys[var.0] else {
                     todo!("ty={:#?}", self.tys[var.0])
                 };
+                let item_ty = (**item_tys).clone();
 
-                Rows::Stream(value_stream.typed((**item_tys).clone()))
+                Rows::Stream(value_stream.typed(self.schema.clone(), item_ty))
             }
         };
         let response = ExecResponse {

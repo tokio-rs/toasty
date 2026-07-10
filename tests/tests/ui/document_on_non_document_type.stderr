@@ -1,0 +1,46 @@
+error[E0277]: `Role` cannot use `#[document]` storage
+  --> tests/ui/document_on_non_document_type.rs:18:11
+   |
+18 |     role: Role,
+   |           ^^^^ `#[document]` requires a `#[derive(Embed)]` struct or a `Vec` of them
+   |
+help: the trait `toasty::schema::Document` is not implemented for `Role`
+  --> tests/ui/document_on_non_document_type.rs:6:1
+   |
+ 6 | enum Role {
+   | ^^^^^^^^^
+   = note: enum embeds and scalar collections do not yet support document storage; remove the `#[document]` attribute
+help: the trait `toasty::schema::Document` is implemented for `Vec<T>`
+  --> $WORKSPACE/crates/toasty/src/schema/field.rs
+   |
+   | impl<T> Document for Vec<T> where T: Document + Embed + Field {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+error[E0277]: `std::string::String` cannot use `#[document]` storage
+  --> tests/ui/document_on_non_document_type.rs:21:11
+   |
+21 |     tags: Vec<String>,
+   |           ^^^^^^^^^^^ `#[document]` requires a `#[derive(Embed)]` struct or a `Vec` of them
+   |
+   = help: the trait `toasty::schema::Document` is not implemented for `std::string::String`
+   = note: enum embeds and scalar collections do not yet support document storage; remove the `#[document]` attribute
+help: the trait `toasty::schema::Document` is implemented for `Vec<T>`
+  --> $WORKSPACE/crates/toasty/src/schema/field.rs
+   |
+   | impl<T> Document for Vec<T> where T: Document + Embed + Field {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = note: required for `Vec<std::string::String>` to implement `toasty::schema::Document`
+
+error[E0277]: the trait bound `std::string::String: Embed` is not satisfied
+  --> tests/ui/document_on_non_document_type.rs:21:11
+   |
+21 |     tags: Vec<String>,
+   |           ^^^^^^^^^^^ the trait `Embed` is not implemented for `std::string::String`
+   |
+help: the trait `Embed` is implemented for `Role`
+  --> tests/ui/document_on_non_document_type.rs:5:17
+   |
+ 5 | #[derive(Debug, toasty::Embed)]
+   |                 ^^^^^^^^^^^^^
+   = note: required for `Vec<std::string::String>` to implement `toasty::schema::Document`
+   = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)

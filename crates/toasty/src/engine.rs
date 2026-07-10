@@ -1,7 +1,7 @@
 pub(crate) mod eval;
 pub(crate) mod exec;
 
-mod extract_params;
+mod bind;
 #[cfg(test)]
 pub(crate) mod test_util;
 
@@ -10,6 +10,7 @@ mod hir;
 use hir::HirStatement;
 
 mod index;
+mod legalize;
 mod lower;
 mod mir;
 mod plan;
@@ -40,7 +41,10 @@ use toasty_core::{
 ///    the driver does not support.
 /// 2. **Lowering.** Convert to HIR with dependency tracking.
 /// 3. **Planning.** Build MIR operation graph.
-/// 4. **Execution.** Run actions against the database driver.
+/// 4. **Execution.** Run actions against the database driver. Each
+///    driver-bound statement is legalized for the target backend and its
+///    bind parameters extracted ([`prepare_for_driver`](Self::prepare_for_driver))
+///    immediately before it crosses to the driver.
 #[derive(Debug, Clone)]
 pub(crate) struct Engine {
     /// The schema being managed by this database instance.
