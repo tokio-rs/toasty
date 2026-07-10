@@ -157,6 +157,7 @@ fn doc_field(model: app::ModelId, index: usize, name: &str, ty: Type) -> app::Fi
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 

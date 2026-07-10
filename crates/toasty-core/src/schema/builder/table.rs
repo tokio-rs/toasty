@@ -1089,9 +1089,8 @@ impl<'a, 'b> MapField<'a, 'b> {
         // A nested enum's discriminant column lives in the parent enum's
         // column namespace; record it so a later variant field of the parent
         // resolving to the same name is caught as a duplicate.
-        if self.build.enum_columns.is_some() {
+        if let Some(columns) = self.build.enum_columns.as_mut() {
             let column_name = self.build.table.column(column_id).name.clone();
-            let columns = self.build.enum_columns.as_mut().unwrap();
             if !columns.names.insert(column_name.clone()) {
                 return Err(Error::invalid_schema(format!(
                     "two enum variant fields map to the column `{column_name}` \
