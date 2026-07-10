@@ -3,16 +3,21 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="doccomment">/// Cheap canonicalization for `CAST`: constant-fold the cast at compile
 <a href=#4 id=4 data-nosnippet>4</a>/// time when the operand is a literal value.
 <a href=#5 id=5 data-nosnippet>5</a>///
-<a href=#6 id=6 data-nosnippet>6</a>/// Heavyweight rewrites (redundant-cast elimination on field references,
-<a href=#7 id=7 data-nosnippet>7</a>/// which needs schema lookup for the field's type) live in
-<a href=#8 id=8 data-nosnippet>8</a>/// `simplify/expr_cast.rs` and run after this fold pass on canonical
-<a href=#9 id=9 data-nosnippet>9</a>/// input.
-<a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>fold_expr_cast(expr: <span class="kw-2">&amp;mut </span>stmt::ExprCast) -&gt; <span class="prelude-ty">Option</span>&lt;Expr&gt; {
-<a href=#11 id=11 data-nosnippet>11</a>    <span class="kw">let </span>stmt::Expr::Value(value) = <span class="kw-2">&amp;mut *</span>expr.expr <span class="kw">else </span>{
-<a href=#12 id=12 data-nosnippet>12</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
-<a href=#13 id=13 data-nosnippet>13</a>    };
-<a href=#14 id=14 data-nosnippet>14</a>
-<a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">let </span>cast = expr.ty.cast(value.take()).unwrap();
-<a href=#16 id=16 data-nosnippet>16</a>    <span class="prelude-val">Some</span>(cast.into())
-<a href=#17 id=17 data-nosnippet>17</a>}
+<a href=#6 id=6 data-nosnippet>6</a>/// Schema-directed casts — a `#[document]` embed's record ↔ object
+<a href=#7 id=7 data-nosnippet>7</a>/// conversions, marked by a source type or a model-typed target — are
+<a href=#8 id=8 data-nosnippet>8</a>/// skipped: fold is schema-free, so they constant-fold in the simplifier
+<a href=#9 id=9 data-nosnippet>9</a>/// instead (`simplify/expr_cast.rs`), which also owns the other heavyweight
+<a href=#10 id=10 data-nosnippet>10</a>/// rewrites (redundant-cast elimination on field references).
+<a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>fold_expr_cast(expr: <span class="kw-2">&amp;mut </span>stmt::ExprCast) -&gt; <span class="prelude-ty">Option</span>&lt;Expr&gt; {
+<a href=#12 id=12 data-nosnippet>12</a>    <span class="kw">if </span>expr.from.is_some() || expr.ty.contains_model() {
+<a href=#13 id=13 data-nosnippet>13</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#14 id=14 data-nosnippet>14</a>    }
+<a href=#15 id=15 data-nosnippet>15</a>
+<a href=#16 id=16 data-nosnippet>16</a>    <span class="kw">let </span>stmt::Expr::Value(value) = <span class="kw-2">&amp;mut *</span>expr.expr <span class="kw">else </span>{
+<a href=#17 id=17 data-nosnippet>17</a>        <span class="kw">return </span><span class="prelude-val">None</span>;
+<a href=#18 id=18 data-nosnippet>18</a>    };
+<a href=#19 id=19 data-nosnippet>19</a>
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="kw">let </span>cast = expr.ty.cast(<span class="kw-2">&amp;</span>(), value.take()).unwrap();
+<a href=#21 id=21 data-nosnippet>21</a>    <span class="prelude-val">Some</span>(cast.into())
+<a href=#22 id=22 data-nosnippet>22</a>}
 </code></pre></div></section></main></body></html>

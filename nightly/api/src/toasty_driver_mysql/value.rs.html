@@ -232,227 +232,247 @@
 <a href=#232 id=232 data-nosnippet>232</a>            stmt::Type::List(elem) =&gt; convert_or_null(value, |bytes: Vec&lt;u8&gt;| {
 <a href=#233 id=233 data-nosnippet>233</a>                json_bytes_to_value_list(<span class="kw-2">&amp;</span>bytes, elem)
 <a href=#234 id=234 data-nosnippet>234</a>            }),
-<a href=#235 id=235 data-nosnippet>235</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"MySQL JSON column with stmt::Type {ty:#?}"</span>),
-<a href=#236 id=236 data-nosnippet>236</a>        },
-<a href=#237 id=237 data-nosnippet>237</a>
-<a href=#238 id=238 data-nosnippet>238</a>        CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL =&gt; <span class="kw">match </span>ty {
-<a href=#239 id=239 data-nosnippet>239</a>            stmt::Type::String =&gt; convert_or_null(value, stmt::Value::String),
-<a href=#240 id=240 data-nosnippet>240</a>            <span class="attr">#[cfg(feature = <span class="string">"rust_decimal"</span>)]
-<a href=#241 id=241 data-nosnippet>241</a>            </span>stmt::Type::Decimal =&gt; convert_or_null(value, |s: String| {
-<a href=#242 id=242 data-nosnippet>242</a>                stmt::Value::Decimal(s.parse().expect(<span class="string">"failed to parse Decimal from MySQL"</span>))
-<a href=#243 id=243 data-nosnippet>243</a>            }),
-<a href=#244 id=244 data-nosnippet>244</a>            <span class="attr">#[cfg(feature = <span class="string">"bigdecimal"</span>)]
-<a href=#245 id=245 data-nosnippet>245</a>            </span>stmt::Type::BigDecimal =&gt; convert_or_null(value, |s: String| {
-<a href=#246 id=246 data-nosnippet>246</a>                stmt::Value::BigDecimal(s.parse().expect(<span class="string">"failed to parse BigDecimal from MySQL"</span>))
-<a href=#247 id=247 data-nosnippet>247</a>            }),
-<a href=#248 id=248 data-nosnippet>248</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"unexpected type for DECIMAL: {ty:#?}"</span>),
-<a href=#249 id=249 data-nosnippet>249</a>        },
-<a href=#250 id=250 data-nosnippet>250</a>
-<a href=#251 id=251 data-nosnippet>251</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(
-<a href=#252 id=252 data-nosnippet>252</a>            <span class="string">"implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}"</span>,
-<a href=#253 id=253 data-nosnippet>253</a>            column.column_type(),
-<a href=#254 id=254 data-nosnippet>254</a>            value,
-<a href=#255 id=255 data-nosnippet>255</a>            ty
-<a href=#256 id=256 data-nosnippet>256</a>        ),
-<a href=#257 id=257 data-nosnippet>257</a>    }
-<a href=#258 id=258 data-nosnippet>258</a>}
-<a href=#259 id=259 data-nosnippet>259</a>
-<a href=#260 id=260 data-nosnippet>260</a><span class="kw">fn </span>bytes_to_string_value(value: mysql_async::Value) -&gt; stmt::Value {
-<a href=#261 id=261 data-nosnippet>261</a>    <span class="kw">match </span>value {
-<a href=#262 id=262 data-nosnippet>262</a>        mysql_async::Value::Bytes(bytes) =&gt; stmt::Value::String(
-<a href=#263 id=263 data-nosnippet>263</a>            String::from_utf8(bytes).expect(<span class="string">"invalid UTF-8 in MySQL string value"</span>),
-<a href=#264 id=264 data-nosnippet>264</a>        ),
-<a href=#265 id=265 data-nosnippet>265</a>        mysql_async::Value::NULL =&gt; stmt::Value::Null,
-<a href=#266 id=266 data-nosnippet>266</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL value for string: {value:#?}"</span>),
-<a href=#267 id=267 data-nosnippet>267</a>    }
-<a href=#268 id=268 data-nosnippet>268</a>}
-<a href=#269 id=269 data-nosnippet>269</a>
-<a href=#270 id=270 data-nosnippet>270</a><span class="kw">fn </span>bytes_to_uuid_value(value: mysql_async::Value) -&gt; stmt::Value {
-<a href=#271 id=271 data-nosnippet>271</a>    <span class="kw">match </span>value {
-<a href=#272 id=272 data-nosnippet>272</a>        mysql_async::Value::Bytes(bytes) =&gt; {
-<a href=#273 id=273 data-nosnippet>273</a>            <span class="kw">let </span>uuid = uuid::Uuid::from_slice(<span class="kw-2">&amp;</span>bytes).or_else(|<span class="kw">_</span>| {
-<a href=#274 id=274 data-nosnippet>274</a>                <span class="kw">let </span>s = std::str::from_utf8(<span class="kw-2">&amp;</span>bytes).expect(<span class="string">"invalid UTF-8 in MySQL UUID value"</span>);
-<a href=#275 id=275 data-nosnippet>275</a>                uuid::Uuid::parse_str(s)
-<a href=#276 id=276 data-nosnippet>276</a>            });
-<a href=#277 id=277 data-nosnippet>277</a>
-<a href=#278 id=278 data-nosnippet>278</a>            stmt::Value::Uuid(uuid.expect(<span class="string">"failed to parse UUID from MySQL value"</span>))
-<a href=#279 id=279 data-nosnippet>279</a>        }
-<a href=#280 id=280 data-nosnippet>280</a>        mysql_async::Value::NULL =&gt; stmt::Value::Null,
-<a href=#281 id=281 data-nosnippet>281</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL value for UUID: {value:#?}"</span>),
-<a href=#282 id=282 data-nosnippet>282</a>    }
-<a href=#283 id=283 data-nosnippet>283</a>}
-<a href=#284 id=284 data-nosnippet>284</a>
-<a href=#285 id=285 data-nosnippet>285</a><span class="kw">fn </span>bytes_to_bytes_value(value: mysql_async::Value) -&gt; stmt::Value {
-<a href=#286 id=286 data-nosnippet>286</a>    <span class="kw">match </span>value {
-<a href=#287 id=287 data-nosnippet>287</a>        mysql_async::Value::Bytes(bytes) =&gt; stmt::Value::Bytes(bytes),
-<a href=#288 id=288 data-nosnippet>288</a>        mysql_async::Value::NULL =&gt; stmt::Value::Null,
-<a href=#289 id=289 data-nosnippet>289</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL value for bytes: {value:#?}"</span>),
-<a href=#290 id=290 data-nosnippet>290</a>    }
-<a href=#291 id=291 data-nosnippet>291</a>}
-<a href=#292 id=292 data-nosnippet>292</a>
-<a href=#293 id=293 data-nosnippet>293</a><span class="kw">fn </span>integer_to_bool_value(value: mysql_async::Value) -&gt; stmt::Value {
-<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">match </span>integer_to_u128(value) {
-<a href=#295 id=295 data-nosnippet>295</a>        <span class="prelude-val">Some</span>(value) =&gt; stmt::Value::Bool(value != <span class="number">0</span>),
-<a href=#296 id=296 data-nosnippet>296</a>        <span class="prelude-val">None </span>=&gt; stmt::Value::Null,
-<a href=#297 id=297 data-nosnippet>297</a>    }
-<a href=#298 id=298 data-nosnippet>298</a>}
-<a href=#299 id=299 data-nosnippet>299</a>
-<a href=#300 id=300 data-nosnippet>300</a><span class="kw">fn </span>integer_to_signed_value&lt;T&gt;(
-<a href=#301 id=301 data-nosnippet>301</a>    value: mysql_async::Value,
-<a href=#302 id=302 data-nosnippet>302</a>    constructor: <span class="kw">impl </span>FnOnce(T) -&gt; stmt::Value,
-<a href=#303 id=303 data-nosnippet>303</a>    ty: <span class="kw-2">&amp;</span>str,
-<a href=#304 id=304 data-nosnippet>304</a>) -&gt; stmt::Value
-<a href=#305 id=305 data-nosnippet>305</a><span class="kw">where
-<a href=#306 id=306 data-nosnippet>306</a>    </span>T: TryFrom&lt;i128&gt;,
-<a href=#307 id=307 data-nosnippet>307</a>    T::Error: fmt::Debug,
-<a href=#308 id=308 data-nosnippet>308</a>{
-<a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">match </span>integer_to_i128(value) {
-<a href=#310 id=310 data-nosnippet>310</a>        <span class="prelude-val">Some</span>(value) =&gt; constructor(
-<a href=#311 id=311 data-nosnippet>311</a>            value
-<a href=#312 id=312 data-nosnippet>312</a>                .try_into()
-<a href=#313 id=313 data-nosnippet>313</a>                .unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"MySQL {ty} value out of range"</span>)),
-<a href=#314 id=314 data-nosnippet>314</a>        ),
-<a href=#315 id=315 data-nosnippet>315</a>        <span class="prelude-val">None </span>=&gt; stmt::Value::Null,
-<a href=#316 id=316 data-nosnippet>316</a>    }
-<a href=#317 id=317 data-nosnippet>317</a>}
-<a href=#318 id=318 data-nosnippet>318</a>
-<a href=#319 id=319 data-nosnippet>319</a><span class="kw">fn </span>integer_to_unsigned_value&lt;T&gt;(
-<a href=#320 id=320 data-nosnippet>320</a>    value: mysql_async::Value,
-<a href=#321 id=321 data-nosnippet>321</a>    constructor: <span class="kw">impl </span>FnOnce(T) -&gt; stmt::Value,
-<a href=#322 id=322 data-nosnippet>322</a>    ty: <span class="kw-2">&amp;</span>str,
-<a href=#323 id=323 data-nosnippet>323</a>) -&gt; stmt::Value
-<a href=#324 id=324 data-nosnippet>324</a><span class="kw">where
-<a href=#325 id=325 data-nosnippet>325</a>    </span>T: TryFrom&lt;u128&gt;,
-<a href=#326 id=326 data-nosnippet>326</a>    T::Error: fmt::Debug,
-<a href=#327 id=327 data-nosnippet>327</a>{
-<a href=#328 id=328 data-nosnippet>328</a>    <span class="kw">match </span>integer_to_u128(value) {
-<a href=#329 id=329 data-nosnippet>329</a>        <span class="prelude-val">Some</span>(value) =&gt; constructor(
-<a href=#330 id=330 data-nosnippet>330</a>            value
-<a href=#331 id=331 data-nosnippet>331</a>                .try_into()
-<a href=#332 id=332 data-nosnippet>332</a>                .unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"MySQL {ty} value out of range"</span>)),
-<a href=#333 id=333 data-nosnippet>333</a>        ),
-<a href=#334 id=334 data-nosnippet>334</a>        <span class="prelude-val">None </span>=&gt; stmt::Value::Null,
-<a href=#335 id=335 data-nosnippet>335</a>    }
-<a href=#336 id=336 data-nosnippet>336</a>}
-<a href=#337 id=337 data-nosnippet>337</a>
-<a href=#338 id=338 data-nosnippet>338</a><span class="kw">fn </span>integer_to_i128(value: mysql_async::Value) -&gt; <span class="prelude-ty">Option</span>&lt;i128&gt; {
-<a href=#339 id=339 data-nosnippet>339</a>    <span class="kw">match </span>value {
-<a href=#340 id=340 data-nosnippet>340</a>        mysql_async::Value::Int(value) =&gt; <span class="prelude-val">Some</span>(value <span class="kw">as </span>i128),
-<a href=#341 id=341 data-nosnippet>341</a>        mysql_async::Value::UInt(value) =&gt; <span class="prelude-val">Some</span>(value <span class="kw">as </span>i128),
-<a href=#342 id=342 data-nosnippet>342</a>        mysql_async::Value::NULL =&gt; <span class="prelude-val">None</span>,
-<a href=#343 id=343 data-nosnippet>343</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL integer value: {value:#?}"</span>),
-<a href=#344 id=344 data-nosnippet>344</a>    }
-<a href=#345 id=345 data-nosnippet>345</a>}
-<a href=#346 id=346 data-nosnippet>346</a>
-<a href=#347 id=347 data-nosnippet>347</a><span class="kw">fn </span>integer_to_u128(value: mysql_async::Value) -&gt; <span class="prelude-ty">Option</span>&lt;u128&gt; {
-<a href=#348 id=348 data-nosnippet>348</a>    <span class="kw">match </span>value {
-<a href=#349 id=349 data-nosnippet>349</a>        mysql_async::Value::Int(value) =&gt; <span class="prelude-val">Some</span>(value.try_into().expect(<span class="string">"negative MySQL integer"</span>)),
-<a href=#350 id=350 data-nosnippet>350</a>        mysql_async::Value::UInt(value) =&gt; <span class="prelude-val">Some</span>(value <span class="kw">as </span>u128),
-<a href=#351 id=351 data-nosnippet>351</a>        mysql_async::Value::NULL =&gt; <span class="prelude-val">None</span>,
-<a href=#352 id=352 data-nosnippet>352</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL integer value: {value:#?}"</span>),
-<a href=#353 id=353 data-nosnippet>353</a>    }
-<a href=#354 id=354 data-nosnippet>354</a>}
-<a href=#355 id=355 data-nosnippet>355</a>
-<a href=#356 id=356 data-nosnippet>356</a><span class="kw">fn </span>convert_or_null&lt;T, F&gt;(value: mysql_async::Value, constructor: F) -&gt; stmt::Value
-<a href=#357 id=357 data-nosnippet>357</a><span class="kw">where
-<a href=#358 id=358 data-nosnippet>358</a>    </span>T: mysql_async::prelude::FromValue,
-<a href=#359 id=359 data-nosnippet>359</a>    F: FnOnce(T) -&gt; stmt::Value,
-<a href=#360 id=360 data-nosnippet>360</a>{
-<a href=#361 id=361 data-nosnippet>361</a>    <span class="kw">match </span>mysql_async::from_value_opt::&lt;T&gt;(value) {
-<a href=#362 id=362 data-nosnippet>362</a>        <span class="prelude-val">Ok</span>(v) =&gt; constructor(v),
-<a href=#363 id=363 data-nosnippet>363</a>        <span class="prelude-val">Err</span>(e) =&gt; {
-<a href=#364 id=364 data-nosnippet>364</a>            <span class="macro">assert!</span>(<span class="macro">matches!</span>(e.<span class="number">0</span>, mysql_async::Value::NULL));
-<a href=#365 id=365 data-nosnippet>365</a>            stmt::Value::Null
-<a href=#366 id=366 data-nosnippet>366</a>        }
-<a href=#367 id=367 data-nosnippet>367</a>    }
-<a href=#368 id=368 data-nosnippet>368</a>}
-<a href=#369 id=369 data-nosnippet>369</a>
-<a href=#370 id=370 data-nosnippet>370</a><span class="kw">impl </span>ToValue <span class="kw">for </span>Value {
-<a href=#371 id=371 data-nosnippet>371</a>    <span class="kw">fn </span>to_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; mysql_async::Value {
-<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>{
-<a href=#373 id=373 data-nosnippet>373</a>            CoreValue::Bool(value) =&gt; value.to_value(),
-<a href=#374 id=374 data-nosnippet>374</a>            CoreValue::I8(value) =&gt; value.to_value(),
-<a href=#375 id=375 data-nosnippet>375</a>            CoreValue::I16(value) =&gt; value.to_value(),
-<a href=#376 id=376 data-nosnippet>376</a>            CoreValue::I32(value) =&gt; value.to_value(),
-<a href=#377 id=377 data-nosnippet>377</a>            CoreValue::I64(value) =&gt; value.to_value(),
-<a href=#378 id=378 data-nosnippet>378</a>            CoreValue::U8(value) =&gt; value.to_value(),
-<a href=#379 id=379 data-nosnippet>379</a>            CoreValue::U16(value) =&gt; value.to_value(),
-<a href=#380 id=380 data-nosnippet>380</a>            CoreValue::U32(value) =&gt; value.to_value(),
-<a href=#381 id=381 data-nosnippet>381</a>            CoreValue::U64(value) =&gt; value.to_value(),
-<a href=#382 id=382 data-nosnippet>382</a>            CoreValue::F32(value) =&gt; value.to_value(),
-<a href=#383 id=383 data-nosnippet>383</a>            CoreValue::F64(value) =&gt; value.to_value(),
-<a href=#384 id=384 data-nosnippet>384</a>            CoreValue::Null =&gt; mysql_async::Value::NULL,
-<a href=#385 id=385 data-nosnippet>385</a>            CoreValue::String(value) =&gt; value.to_value(),
-<a href=#386 id=386 data-nosnippet>386</a>            CoreValue::Bytes(value) =&gt; value.to_value(),
-<a href=#387 id=387 data-nosnippet>387</a>            CoreValue::Uuid(value) =&gt; value.to_value(),
-<a href=#388 id=388 data-nosnippet>388</a>            <span class="attr">#[cfg(feature = <span class="string">"rust_decimal"</span>)]
-<a href=#389 id=389 data-nosnippet>389</a>            </span>CoreValue::Decimal(value) =&gt; value.to_string().to_value(),
-<a href=#390 id=390 data-nosnippet>390</a>            <span class="attr">#[cfg(feature = <span class="string">"bigdecimal"</span>)]
-<a href=#391 id=391 data-nosnippet>391</a>            </span>CoreValue::BigDecimal(value) =&gt; value.to_string().to_value(),
-<a href=#392 id=392 data-nosnippet>392</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
-<a href=#393 id=393 data-nosnippet>393</a>            </span>CoreValue::Timestamp(value) =&gt; {
-<a href=#394 id=394 data-nosnippet>394</a>                <span class="comment">// Convert jiff::Timestamp to MySQL TIMESTAMP
-<a href=#395 id=395 data-nosnippet>395</a>                </span><span class="kw">let </span>dt = value.to_zoned(jiff::tz::TimeZone::UTC).datetime();
-<a href=#396 id=396 data-nosnippet>396</a>                mysql_async::Value::Date(
-<a href=#397 id=397 data-nosnippet>397</a>                    dt.year() <span class="kw">as </span>u16,
-<a href=#398 id=398 data-nosnippet>398</a>                    dt.month() <span class="kw">as </span>u8,
-<a href=#399 id=399 data-nosnippet>399</a>                    dt.day() <span class="kw">as </span>u8,
-<a href=#400 id=400 data-nosnippet>400</a>                    dt.hour() <span class="kw">as </span>u8,
-<a href=#401 id=401 data-nosnippet>401</a>                    dt.minute() <span class="kw">as </span>u8,
-<a href=#402 id=402 data-nosnippet>402</a>                    dt.second() <span class="kw">as </span>u8,
-<a href=#403 id=403 data-nosnippet>403</a>                    (dt.subsec_nanosecond() / <span class="number">1000</span>) <span class="kw">as </span>u32, <span class="comment">// Convert nanoseconds to microseconds
-<a href=#404 id=404 data-nosnippet>404</a>                </span>)
-<a href=#405 id=405 data-nosnippet>405</a>            }
-<a href=#406 id=406 data-nosnippet>406</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
-<a href=#407 id=407 data-nosnippet>407</a>            </span>CoreValue::Date(value) =&gt; mysql_async::Value::Date(
-<a href=#408 id=408 data-nosnippet>408</a>                value.year() <span class="kw">as </span>u16,
-<a href=#409 id=409 data-nosnippet>409</a>                value.month() <span class="kw">as </span>u8,
-<a href=#410 id=410 data-nosnippet>410</a>                value.day() <span class="kw">as </span>u8,
-<a href=#411 id=411 data-nosnippet>411</a>                <span class="number">0</span>,
-<a href=#412 id=412 data-nosnippet>412</a>                <span class="number">0</span>,
-<a href=#413 id=413 data-nosnippet>413</a>                <span class="number">0</span>,
-<a href=#414 id=414 data-nosnippet>414</a>                <span class="number">0</span>,
-<a href=#415 id=415 data-nosnippet>415</a>            ),
-<a href=#416 id=416 data-nosnippet>416</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
-<a href=#417 id=417 data-nosnippet>417</a>            </span>CoreValue::Time(value) =&gt; {
-<a href=#418 id=418 data-nosnippet>418</a>                mysql_async::Value::Time(
-<a href=#419 id=419 data-nosnippet>419</a>                    <span class="bool-val">false</span>, <span class="comment">// is_negative
-<a href=#420 id=420 data-nosnippet>420</a>                    </span><span class="number">0</span>,     <span class="comment">// days
-<a href=#421 id=421 data-nosnippet>421</a>                    </span>value.hour() <span class="kw">as </span>u8,
-<a href=#422 id=422 data-nosnippet>422</a>                    value.minute() <span class="kw">as </span>u8,
-<a href=#423 id=423 data-nosnippet>423</a>                    value.second() <span class="kw">as </span>u8,
-<a href=#424 id=424 data-nosnippet>424</a>                    (value.subsec_nanosecond() / <span class="number">1000</span>) <span class="kw">as </span>u32, <span class="comment">// Convert nanoseconds to microseconds
-<a href=#425 id=425 data-nosnippet>425</a>                </span>)
-<a href=#426 id=426 data-nosnippet>426</a>            }
-<a href=#427 id=427 data-nosnippet>427</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
-<a href=#428 id=428 data-nosnippet>428</a>            </span>CoreValue::DateTime(value) =&gt; {
-<a href=#429 id=429 data-nosnippet>429</a>                mysql_async::Value::Date(
-<a href=#430 id=430 data-nosnippet>430</a>                    value.year() <span class="kw">as </span>u16,
-<a href=#431 id=431 data-nosnippet>431</a>                    value.month() <span class="kw">as </span>u8,
-<a href=#432 id=432 data-nosnippet>432</a>                    value.day() <span class="kw">as </span>u8,
-<a href=#433 id=433 data-nosnippet>433</a>                    value.hour() <span class="kw">as </span>u8,
-<a href=#434 id=434 data-nosnippet>434</a>                    value.minute() <span class="kw">as </span>u8,
-<a href=#435 id=435 data-nosnippet>435</a>                    value.second() <span class="kw">as </span>u8,
-<a href=#436 id=436 data-nosnippet>436</a>                    (value.subsec_nanosecond() / <span class="number">1000</span>) <span class="kw">as </span>u32, <span class="comment">// Convert nanoseconds to microseconds
-<a href=#437 id=437 data-nosnippet>437</a>                </span>)
-<a href=#438 id=438 data-nosnippet>438</a>            }
-<a href=#439 id=439 data-nosnippet>439</a>            CoreValue::List(<span class="kw">_</span>) =&gt; {
-<a href=#440 id=440 data-nosnippet>440</a>                <span class="comment">// Bound to a MySQL `JSON` column — serialize the list to a
-<a href=#441 id=441 data-nosnippet>441</a>                // JSON document and send it as text. MySQL accepts JSON as
-<a href=#442 id=442 data-nosnippet>442</a>                // string or bytes; bytes avoids any utf8 round-trip.
-<a href=#443 id=443 data-nosnippet>443</a>                </span><span class="kw">let </span>json = toasty_sql::value_json::value_list_to_json(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>);
-<a href=#444 id=444 data-nosnippet>444</a>                mysql_async::Value::Bytes(
-<a href=#445 id=445 data-nosnippet>445</a>                    serde_json::to_vec(<span class="kw-2">&amp;</span>json).expect(<span class="string">"serialize Vec&lt;scalar&gt; to JSON"</span>),
-<a href=#446 id=446 data-nosnippet>446</a>                )
-<a href=#447 id=447 data-nosnippet>447</a>            }
-<a href=#448 id=448 data-nosnippet>448</a>            value =&gt; <span class="macro">todo!</span>(<span class="string">"{:#?}"</span>, value),
-<a href=#449 id=449 data-nosnippet>449</a>        }
-<a href=#450 id=450 data-nosnippet>450</a>    }
-<a href=#451 id=451 data-nosnippet>451</a>}
-<a href=#452 id=452 data-nosnippet>452</a>
-<a href=#453 id=453 data-nosnippet>453</a><span class="kw">fn </span>json_bytes_to_value_list(bytes: <span class="kw-2">&amp;</span>[u8], elem_ty: <span class="kw-2">&amp;</span>stmt::Type) -&gt; CoreValue {
-<a href=#454 id=454 data-nosnippet>454</a>    <span class="kw">let </span>json: serde_json::Value =
-<a href=#455 id=455 data-nosnippet>455</a>        serde_json::from_slice(bytes).expect(<span class="string">"MySQL returned non-JSON for a JSON column"</span>);
-<a href=#456 id=456 data-nosnippet>456</a>    toasty_sql::value_json::value_list_from_json(json, elem_ty)
-<a href=#457 id=457 data-nosnippet>457</a>}
+<a href=#235 id=235 data-nosnippet>235</a>            <span class="comment">// A `#[document]` column (`Type::Object`): decode the JSON object
+<a href=#236 id=236 data-nosnippet>236</a>            // shape-directed to the named `Value::Object` wire form; the
+<a href=#237 id=237 data-nosnippet>237</a>            // engine raises it to the embed's positional record.
+<a href=#238 id=238 data-nosnippet>238</a>            </span>stmt::Type::Object =&gt; {
+<a href=#239 id=239 data-nosnippet>239</a>                convert_or_null(value, |bytes: Vec&lt;u8&gt;| json_bytes_to_value(<span class="kw-2">&amp;</span>bytes, ty))
+<a href=#240 id=240 data-nosnippet>240</a>            }
+<a href=#241 id=241 data-nosnippet>241</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"MySQL JSON column with stmt::Type {ty:#?}"</span>),
+<a href=#242 id=242 data-nosnippet>242</a>        },
+<a href=#243 id=243 data-nosnippet>243</a>
+<a href=#244 id=244 data-nosnippet>244</a>        CT::MYSQL_TYPE_NEWDECIMAL | CT::MYSQL_TYPE_DECIMAL =&gt; <span class="kw">match </span>ty {
+<a href=#245 id=245 data-nosnippet>245</a>            stmt::Type::String =&gt; convert_or_null(value, stmt::Value::String),
+<a href=#246 id=246 data-nosnippet>246</a>            <span class="attr">#[cfg(feature = <span class="string">"rust_decimal"</span>)]
+<a href=#247 id=247 data-nosnippet>247</a>            </span>stmt::Type::Decimal =&gt; convert_or_null(value, |s: String| {
+<a href=#248 id=248 data-nosnippet>248</a>                stmt::Value::Decimal(s.parse().expect(<span class="string">"failed to parse Decimal from MySQL"</span>))
+<a href=#249 id=249 data-nosnippet>249</a>            }),
+<a href=#250 id=250 data-nosnippet>250</a>            <span class="attr">#[cfg(feature = <span class="string">"bigdecimal"</span>)]
+<a href=#251 id=251 data-nosnippet>251</a>            </span>stmt::Type::BigDecimal =&gt; convert_or_null(value, |s: String| {
+<a href=#252 id=252 data-nosnippet>252</a>                stmt::Value::BigDecimal(s.parse().expect(<span class="string">"failed to parse BigDecimal from MySQL"</span>))
+<a href=#253 id=253 data-nosnippet>253</a>            }),
+<a href=#254 id=254 data-nosnippet>254</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"unexpected type for DECIMAL: {ty:#?}"</span>),
+<a href=#255 id=255 data-nosnippet>255</a>        },
+<a href=#256 id=256 data-nosnippet>256</a>
+<a href=#257 id=257 data-nosnippet>257</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(
+<a href=#258 id=258 data-nosnippet>258</a>            <span class="string">"implement MySQL to toasty conversion for `{:#?}`; {:#?}; ty={:#?}"</span>,
+<a href=#259 id=259 data-nosnippet>259</a>            column.column_type(),
+<a href=#260 id=260 data-nosnippet>260</a>            value,
+<a href=#261 id=261 data-nosnippet>261</a>            ty
+<a href=#262 id=262 data-nosnippet>262</a>        ),
+<a href=#263 id=263 data-nosnippet>263</a>    }
+<a href=#264 id=264 data-nosnippet>264</a>}
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a><span class="kw">fn </span>bytes_to_string_value(value: mysql_async::Value) -&gt; stmt::Value {
+<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">match </span>value {
+<a href=#268 id=268 data-nosnippet>268</a>        mysql_async::Value::Bytes(bytes) =&gt; stmt::Value::String(
+<a href=#269 id=269 data-nosnippet>269</a>            String::from_utf8(bytes).expect(<span class="string">"invalid UTF-8 in MySQL string value"</span>),
+<a href=#270 id=270 data-nosnippet>270</a>        ),
+<a href=#271 id=271 data-nosnippet>271</a>        mysql_async::Value::NULL =&gt; stmt::Value::Null,
+<a href=#272 id=272 data-nosnippet>272</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL value for string: {value:#?}"</span>),
+<a href=#273 id=273 data-nosnippet>273</a>    }
+<a href=#274 id=274 data-nosnippet>274</a>}
+<a href=#275 id=275 data-nosnippet>275</a>
+<a href=#276 id=276 data-nosnippet>276</a><span class="kw">fn </span>bytes_to_uuid_value(value: mysql_async::Value) -&gt; stmt::Value {
+<a href=#277 id=277 data-nosnippet>277</a>    <span class="kw">match </span>value {
+<a href=#278 id=278 data-nosnippet>278</a>        mysql_async::Value::Bytes(bytes) =&gt; {
+<a href=#279 id=279 data-nosnippet>279</a>            <span class="kw">let </span>uuid = uuid::Uuid::from_slice(<span class="kw-2">&amp;</span>bytes).or_else(|<span class="kw">_</span>| {
+<a href=#280 id=280 data-nosnippet>280</a>                <span class="kw">let </span>s = std::str::from_utf8(<span class="kw-2">&amp;</span>bytes).expect(<span class="string">"invalid UTF-8 in MySQL UUID value"</span>);
+<a href=#281 id=281 data-nosnippet>281</a>                uuid::Uuid::parse_str(s)
+<a href=#282 id=282 data-nosnippet>282</a>            });
+<a href=#283 id=283 data-nosnippet>283</a>
+<a href=#284 id=284 data-nosnippet>284</a>            stmt::Value::Uuid(uuid.expect(<span class="string">"failed to parse UUID from MySQL value"</span>))
+<a href=#285 id=285 data-nosnippet>285</a>        }
+<a href=#286 id=286 data-nosnippet>286</a>        mysql_async::Value::NULL =&gt; stmt::Value::Null,
+<a href=#287 id=287 data-nosnippet>287</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL value for UUID: {value:#?}"</span>),
+<a href=#288 id=288 data-nosnippet>288</a>    }
+<a href=#289 id=289 data-nosnippet>289</a>}
+<a href=#290 id=290 data-nosnippet>290</a>
+<a href=#291 id=291 data-nosnippet>291</a><span class="kw">fn </span>bytes_to_bytes_value(value: mysql_async::Value) -&gt; stmt::Value {
+<a href=#292 id=292 data-nosnippet>292</a>    <span class="kw">match </span>value {
+<a href=#293 id=293 data-nosnippet>293</a>        mysql_async::Value::Bytes(bytes) =&gt; stmt::Value::Bytes(bytes),
+<a href=#294 id=294 data-nosnippet>294</a>        mysql_async::Value::NULL =&gt; stmt::Value::Null,
+<a href=#295 id=295 data-nosnippet>295</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL value for bytes: {value:#?}"</span>),
+<a href=#296 id=296 data-nosnippet>296</a>    }
+<a href=#297 id=297 data-nosnippet>297</a>}
+<a href=#298 id=298 data-nosnippet>298</a>
+<a href=#299 id=299 data-nosnippet>299</a><span class="kw">fn </span>integer_to_bool_value(value: mysql_async::Value) -&gt; stmt::Value {
+<a href=#300 id=300 data-nosnippet>300</a>    <span class="kw">match </span>integer_to_u128(value) {
+<a href=#301 id=301 data-nosnippet>301</a>        <span class="prelude-val">Some</span>(value) =&gt; stmt::Value::Bool(value != <span class="number">0</span>),
+<a href=#302 id=302 data-nosnippet>302</a>        <span class="prelude-val">None </span>=&gt; stmt::Value::Null,
+<a href=#303 id=303 data-nosnippet>303</a>    }
+<a href=#304 id=304 data-nosnippet>304</a>}
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a><span class="kw">fn </span>integer_to_signed_value&lt;T&gt;(
+<a href=#307 id=307 data-nosnippet>307</a>    value: mysql_async::Value,
+<a href=#308 id=308 data-nosnippet>308</a>    constructor: <span class="kw">impl </span>FnOnce(T) -&gt; stmt::Value,
+<a href=#309 id=309 data-nosnippet>309</a>    ty: <span class="kw-2">&amp;</span>str,
+<a href=#310 id=310 data-nosnippet>310</a>) -&gt; stmt::Value
+<a href=#311 id=311 data-nosnippet>311</a><span class="kw">where
+<a href=#312 id=312 data-nosnippet>312</a>    </span>T: TryFrom&lt;i128&gt;,
+<a href=#313 id=313 data-nosnippet>313</a>    T::Error: fmt::Debug,
+<a href=#314 id=314 data-nosnippet>314</a>{
+<a href=#315 id=315 data-nosnippet>315</a>    <span class="kw">match </span>integer_to_i128(value) {
+<a href=#316 id=316 data-nosnippet>316</a>        <span class="prelude-val">Some</span>(value) =&gt; constructor(
+<a href=#317 id=317 data-nosnippet>317</a>            value
+<a href=#318 id=318 data-nosnippet>318</a>                .try_into()
+<a href=#319 id=319 data-nosnippet>319</a>                .unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"MySQL {ty} value out of range"</span>)),
+<a href=#320 id=320 data-nosnippet>320</a>        ),
+<a href=#321 id=321 data-nosnippet>321</a>        <span class="prelude-val">None </span>=&gt; stmt::Value::Null,
+<a href=#322 id=322 data-nosnippet>322</a>    }
+<a href=#323 id=323 data-nosnippet>323</a>}
+<a href=#324 id=324 data-nosnippet>324</a>
+<a href=#325 id=325 data-nosnippet>325</a><span class="kw">fn </span>integer_to_unsigned_value&lt;T&gt;(
+<a href=#326 id=326 data-nosnippet>326</a>    value: mysql_async::Value,
+<a href=#327 id=327 data-nosnippet>327</a>    constructor: <span class="kw">impl </span>FnOnce(T) -&gt; stmt::Value,
+<a href=#328 id=328 data-nosnippet>328</a>    ty: <span class="kw-2">&amp;</span>str,
+<a href=#329 id=329 data-nosnippet>329</a>) -&gt; stmt::Value
+<a href=#330 id=330 data-nosnippet>330</a><span class="kw">where
+<a href=#331 id=331 data-nosnippet>331</a>    </span>T: TryFrom&lt;u128&gt;,
+<a href=#332 id=332 data-nosnippet>332</a>    T::Error: fmt::Debug,
+<a href=#333 id=333 data-nosnippet>333</a>{
+<a href=#334 id=334 data-nosnippet>334</a>    <span class="kw">match </span>integer_to_u128(value) {
+<a href=#335 id=335 data-nosnippet>335</a>        <span class="prelude-val">Some</span>(value) =&gt; constructor(
+<a href=#336 id=336 data-nosnippet>336</a>            value
+<a href=#337 id=337 data-nosnippet>337</a>                .try_into()
+<a href=#338 id=338 data-nosnippet>338</a>                .unwrap_or_else(|<span class="kw">_</span>| <span class="macro">panic!</span>(<span class="string">"MySQL {ty} value out of range"</span>)),
+<a href=#339 id=339 data-nosnippet>339</a>        ),
+<a href=#340 id=340 data-nosnippet>340</a>        <span class="prelude-val">None </span>=&gt; stmt::Value::Null,
+<a href=#341 id=341 data-nosnippet>341</a>    }
+<a href=#342 id=342 data-nosnippet>342</a>}
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a><span class="kw">fn </span>integer_to_i128(value: mysql_async::Value) -&gt; <span class="prelude-ty">Option</span>&lt;i128&gt; {
+<a href=#345 id=345 data-nosnippet>345</a>    <span class="kw">match </span>value {
+<a href=#346 id=346 data-nosnippet>346</a>        mysql_async::Value::Int(value) =&gt; <span class="prelude-val">Some</span>(value <span class="kw">as </span>i128),
+<a href=#347 id=347 data-nosnippet>347</a>        mysql_async::Value::UInt(value) =&gt; <span class="prelude-val">Some</span>(value <span class="kw">as </span>i128),
+<a href=#348 id=348 data-nosnippet>348</a>        mysql_async::Value::NULL =&gt; <span class="prelude-val">None</span>,
+<a href=#349 id=349 data-nosnippet>349</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL integer value: {value:#?}"</span>),
+<a href=#350 id=350 data-nosnippet>350</a>    }
+<a href=#351 id=351 data-nosnippet>351</a>}
+<a href=#352 id=352 data-nosnippet>352</a>
+<a href=#353 id=353 data-nosnippet>353</a><span class="kw">fn </span>integer_to_u128(value: mysql_async::Value) -&gt; <span class="prelude-ty">Option</span>&lt;u128&gt; {
+<a href=#354 id=354 data-nosnippet>354</a>    <span class="kw">match </span>value {
+<a href=#355 id=355 data-nosnippet>355</a>        mysql_async::Value::Int(value) =&gt; <span class="prelude-val">Some</span>(value.try_into().expect(<span class="string">"negative MySQL integer"</span>)),
+<a href=#356 id=356 data-nosnippet>356</a>        mysql_async::Value::UInt(value) =&gt; <span class="prelude-val">Some</span>(value <span class="kw">as </span>u128),
+<a href=#357 id=357 data-nosnippet>357</a>        mysql_async::Value::NULL =&gt; <span class="prelude-val">None</span>,
+<a href=#358 id=358 data-nosnippet>358</a>        value =&gt; <span class="macro">panic!</span>(<span class="string">"unexpected MySQL integer value: {value:#?}"</span>),
+<a href=#359 id=359 data-nosnippet>359</a>    }
+<a href=#360 id=360 data-nosnippet>360</a>}
+<a href=#361 id=361 data-nosnippet>361</a>
+<a href=#362 id=362 data-nosnippet>362</a><span class="kw">fn </span>convert_or_null&lt;T, F&gt;(value: mysql_async::Value, constructor: F) -&gt; stmt::Value
+<a href=#363 id=363 data-nosnippet>363</a><span class="kw">where
+<a href=#364 id=364 data-nosnippet>364</a>    </span>T: mysql_async::prelude::FromValue,
+<a href=#365 id=365 data-nosnippet>365</a>    F: FnOnce(T) -&gt; stmt::Value,
+<a href=#366 id=366 data-nosnippet>366</a>{
+<a href=#367 id=367 data-nosnippet>367</a>    <span class="kw">match </span>mysql_async::from_value_opt::&lt;T&gt;(value) {
+<a href=#368 id=368 data-nosnippet>368</a>        <span class="prelude-val">Ok</span>(v) =&gt; constructor(v),
+<a href=#369 id=369 data-nosnippet>369</a>        <span class="prelude-val">Err</span>(e) =&gt; {
+<a href=#370 id=370 data-nosnippet>370</a>            <span class="macro">assert!</span>(<span class="macro">matches!</span>(e.<span class="number">0</span>, mysql_async::Value::NULL));
+<a href=#371 id=371 data-nosnippet>371</a>            stmt::Value::Null
+<a href=#372 id=372 data-nosnippet>372</a>        }
+<a href=#373 id=373 data-nosnippet>373</a>    }
+<a href=#374 id=374 data-nosnippet>374</a>}
+<a href=#375 id=375 data-nosnippet>375</a>
+<a href=#376 id=376 data-nosnippet>376</a><span class="kw">impl </span>ToValue <span class="kw">for </span>Value {
+<a href=#377 id=377 data-nosnippet>377</a>    <span class="kw">fn </span>to_value(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; mysql_async::Value {
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">match </span><span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0 </span>{
+<a href=#379 id=379 data-nosnippet>379</a>            CoreValue::Bool(value) =&gt; value.to_value(),
+<a href=#380 id=380 data-nosnippet>380</a>            CoreValue::I8(value) =&gt; value.to_value(),
+<a href=#381 id=381 data-nosnippet>381</a>            CoreValue::I16(value) =&gt; value.to_value(),
+<a href=#382 id=382 data-nosnippet>382</a>            CoreValue::I32(value) =&gt; value.to_value(),
+<a href=#383 id=383 data-nosnippet>383</a>            CoreValue::I64(value) =&gt; value.to_value(),
+<a href=#384 id=384 data-nosnippet>384</a>            CoreValue::U8(value) =&gt; value.to_value(),
+<a href=#385 id=385 data-nosnippet>385</a>            CoreValue::U16(value) =&gt; value.to_value(),
+<a href=#386 id=386 data-nosnippet>386</a>            CoreValue::U32(value) =&gt; value.to_value(),
+<a href=#387 id=387 data-nosnippet>387</a>            CoreValue::U64(value) =&gt; value.to_value(),
+<a href=#388 id=388 data-nosnippet>388</a>            CoreValue::F32(value) =&gt; value.to_value(),
+<a href=#389 id=389 data-nosnippet>389</a>            CoreValue::F64(value) =&gt; value.to_value(),
+<a href=#390 id=390 data-nosnippet>390</a>            CoreValue::Null =&gt; mysql_async::Value::NULL,
+<a href=#391 id=391 data-nosnippet>391</a>            CoreValue::String(value) =&gt; value.to_value(),
+<a href=#392 id=392 data-nosnippet>392</a>            CoreValue::Bytes(value) =&gt; value.to_value(),
+<a href=#393 id=393 data-nosnippet>393</a>            CoreValue::Uuid(value) =&gt; value.to_value(),
+<a href=#394 id=394 data-nosnippet>394</a>            <span class="attr">#[cfg(feature = <span class="string">"rust_decimal"</span>)]
+<a href=#395 id=395 data-nosnippet>395</a>            </span>CoreValue::Decimal(value) =&gt; value.to_string().to_value(),
+<a href=#396 id=396 data-nosnippet>396</a>            <span class="attr">#[cfg(feature = <span class="string">"bigdecimal"</span>)]
+<a href=#397 id=397 data-nosnippet>397</a>            </span>CoreValue::BigDecimal(value) =&gt; value.to_string().to_value(),
+<a href=#398 id=398 data-nosnippet>398</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
+<a href=#399 id=399 data-nosnippet>399</a>            </span>CoreValue::Timestamp(value) =&gt; {
+<a href=#400 id=400 data-nosnippet>400</a>                <span class="comment">// Convert jiff::Timestamp to MySQL TIMESTAMP
+<a href=#401 id=401 data-nosnippet>401</a>                </span><span class="kw">let </span>dt = value.to_zoned(jiff::tz::TimeZone::UTC).datetime();
+<a href=#402 id=402 data-nosnippet>402</a>                mysql_async::Value::Date(
+<a href=#403 id=403 data-nosnippet>403</a>                    dt.year() <span class="kw">as </span>u16,
+<a href=#404 id=404 data-nosnippet>404</a>                    dt.month() <span class="kw">as </span>u8,
+<a href=#405 id=405 data-nosnippet>405</a>                    dt.day() <span class="kw">as </span>u8,
+<a href=#406 id=406 data-nosnippet>406</a>                    dt.hour() <span class="kw">as </span>u8,
+<a href=#407 id=407 data-nosnippet>407</a>                    dt.minute() <span class="kw">as </span>u8,
+<a href=#408 id=408 data-nosnippet>408</a>                    dt.second() <span class="kw">as </span>u8,
+<a href=#409 id=409 data-nosnippet>409</a>                    (dt.subsec_nanosecond() / <span class="number">1000</span>) <span class="kw">as </span>u32, <span class="comment">// Convert nanoseconds to microseconds
+<a href=#410 id=410 data-nosnippet>410</a>                </span>)
+<a href=#411 id=411 data-nosnippet>411</a>            }
+<a href=#412 id=412 data-nosnippet>412</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
+<a href=#413 id=413 data-nosnippet>413</a>            </span>CoreValue::Date(value) =&gt; mysql_async::Value::Date(
+<a href=#414 id=414 data-nosnippet>414</a>                value.year() <span class="kw">as </span>u16,
+<a href=#415 id=415 data-nosnippet>415</a>                value.month() <span class="kw">as </span>u8,
+<a href=#416 id=416 data-nosnippet>416</a>                value.day() <span class="kw">as </span>u8,
+<a href=#417 id=417 data-nosnippet>417</a>                <span class="number">0</span>,
+<a href=#418 id=418 data-nosnippet>418</a>                <span class="number">0</span>,
+<a href=#419 id=419 data-nosnippet>419</a>                <span class="number">0</span>,
+<a href=#420 id=420 data-nosnippet>420</a>                <span class="number">0</span>,
+<a href=#421 id=421 data-nosnippet>421</a>            ),
+<a href=#422 id=422 data-nosnippet>422</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
+<a href=#423 id=423 data-nosnippet>423</a>            </span>CoreValue::Time(value) =&gt; {
+<a href=#424 id=424 data-nosnippet>424</a>                mysql_async::Value::Time(
+<a href=#425 id=425 data-nosnippet>425</a>                    <span class="bool-val">false</span>, <span class="comment">// is_negative
+<a href=#426 id=426 data-nosnippet>426</a>                    </span><span class="number">0</span>,     <span class="comment">// days
+<a href=#427 id=427 data-nosnippet>427</a>                    </span>value.hour() <span class="kw">as </span>u8,
+<a href=#428 id=428 data-nosnippet>428</a>                    value.minute() <span class="kw">as </span>u8,
+<a href=#429 id=429 data-nosnippet>429</a>                    value.second() <span class="kw">as </span>u8,
+<a href=#430 id=430 data-nosnippet>430</a>                    (value.subsec_nanosecond() / <span class="number">1000</span>) <span class="kw">as </span>u32, <span class="comment">// Convert nanoseconds to microseconds
+<a href=#431 id=431 data-nosnippet>431</a>                </span>)
+<a href=#432 id=432 data-nosnippet>432</a>            }
+<a href=#433 id=433 data-nosnippet>433</a>            <span class="attr">#[cfg(feature = <span class="string">"jiff"</span>)]
+<a href=#434 id=434 data-nosnippet>434</a>            </span>CoreValue::DateTime(value) =&gt; {
+<a href=#435 id=435 data-nosnippet>435</a>                mysql_async::Value::Date(
+<a href=#436 id=436 data-nosnippet>436</a>                    value.year() <span class="kw">as </span>u16,
+<a href=#437 id=437 data-nosnippet>437</a>                    value.month() <span class="kw">as </span>u8,
+<a href=#438 id=438 data-nosnippet>438</a>                    value.day() <span class="kw">as </span>u8,
+<a href=#439 id=439 data-nosnippet>439</a>                    value.hour() <span class="kw">as </span>u8,
+<a href=#440 id=440 data-nosnippet>440</a>                    value.minute() <span class="kw">as </span>u8,
+<a href=#441 id=441 data-nosnippet>441</a>                    value.second() <span class="kw">as </span>u8,
+<a href=#442 id=442 data-nosnippet>442</a>                    (value.subsec_nanosecond() / <span class="number">1000</span>) <span class="kw">as </span>u32, <span class="comment">// Convert nanoseconds to microseconds
+<a href=#443 id=443 data-nosnippet>443</a>                </span>)
+<a href=#444 id=444 data-nosnippet>444</a>            }
+<a href=#445 id=445 data-nosnippet>445</a>            CoreValue::List(<span class="kw">_</span>) =&gt; {
+<a href=#446 id=446 data-nosnippet>446</a>                <span class="comment">// Bound to a MySQL `JSON` column — a `Vec&lt;scalar&gt;` field or a
+<a href=#447 id=447 data-nosnippet>447</a>                // `#[document]` collection. Serialize the list to a JSON
+<a href=#448 id=448 data-nosnippet>448</a>                // document and send it as bytes. MySQL accepts JSON as string
+<a href=#449 id=449 data-nosnippet>449</a>                // or bytes; bytes avoids any utf8 round-trip.
+<a href=#450 id=450 data-nosnippet>450</a>                </span>mysql_async::Value::Bytes(
+<a href=#451 id=451 data-nosnippet>451</a>                    toasty_sql::json::to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">"serialize JSON list column"</span>),
+<a href=#452 id=452 data-nosnippet>452</a>                )
+<a href=#453 id=453 data-nosnippet>453</a>            }
+<a href=#454 id=454 data-nosnippet>454</a>            CoreValue::Object(<span class="kw">_</span>) =&gt; {
+<a href=#455 id=455 data-nosnippet>455</a>                <span class="comment">// Bound to a MySQL `JSON` column — a bare `#[document]` embed
+<a href=#456 id=456 data-nosnippet>456</a>                // (`Value::Object`). Serialize the named object to JSON bytes,
+<a href=#457 id=457 data-nosnippet>457</a>                // the same way the list arm handles a document collection.
+<a href=#458 id=458 data-nosnippet>458</a>                </span>mysql_async::Value::Bytes(
+<a href=#459 id=459 data-nosnippet>459</a>                    toasty_sql::json::to_vec(<span class="kw-2">&amp;</span><span class="self">self</span>.<span class="number">0</span>).expect(<span class="string">"serialize JSON document column"</span>),
+<a href=#460 id=460 data-nosnippet>460</a>                )
+<a href=#461 id=461 data-nosnippet>461</a>            }
+<a href=#462 id=462 data-nosnippet>462</a>            value =&gt; <span class="macro">todo!</span>(<span class="string">"{:#?}"</span>, value),
+<a href=#463 id=463 data-nosnippet>463</a>        }
+<a href=#464 id=464 data-nosnippet>464</a>    }
+<a href=#465 id=465 data-nosnippet>465</a>}
+<a href=#466 id=466 data-nosnippet>466</a>
+<a href=#467 id=467 data-nosnippet>467</a><span class="kw">fn </span>json_bytes_to_value_list(bytes: <span class="kw-2">&amp;</span>[u8], elem_ty: <span class="kw-2">&amp;</span>stmt::Type) -&gt; CoreValue {
+<a href=#468 id=468 data-nosnippet>468</a>    toasty_sql::json::list_from_slice(bytes, elem_ty)
+<a href=#469 id=469 data-nosnippet>469</a>        .expect(<span class="string">"MySQL returned non-JSON for a JSON column"</span>)
+<a href=#470 id=470 data-nosnippet>470</a>}
+<a href=#471 id=471 data-nosnippet>471</a>
+<a href=#472 id=472 data-nosnippet>472</a><span class="doccomment">/// Decode the JSON bytes of a `#[document]` column (`Type::Object`) into the
+<a href=#473 id=473 data-nosnippet>473</a>/// named `Value::Object` wire form the engine raises.
+<a href=#474 id=474 data-nosnippet>474</a></span><span class="kw">fn </span>json_bytes_to_value(bytes: <span class="kw-2">&amp;</span>[u8], ty: <span class="kw-2">&amp;</span>stmt::Type) -&gt; CoreValue {
+<a href=#475 id=475 data-nosnippet>475</a>    toasty_sql::json::from_slice(bytes, ty)
+<a href=#476 id=476 data-nosnippet>476</a>        .expect(<span class="string">"MySQL returned non-JSON for a JSON document column"</span>)
+<a href=#477 id=477 data-nosnippet>477</a>}
 </code></pre></div></section></main></body></html>

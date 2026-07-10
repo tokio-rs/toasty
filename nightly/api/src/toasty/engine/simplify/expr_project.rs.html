@@ -52,7 +52,13 @@
 <a href=#52 id=52 data-nosnippet>52</a>            <span class="kw">return </span><span class="prelude-val">Some</span>(expr.base.take());
 <a href=#53 id=53 data-nosnippet>53</a>        }
 <a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a>        <span class="prelude-val">None
-<a href=#56 id=56 data-nosnippet>56</a>    </span>}
-<a href=#57 id=57 data-nosnippet>57</a>}
+<a href=#55 id=55 data-nosnippet>55</a>        <span class="comment">// A path into a `#[document]` column lowers to a plain `ExprProject`
+<a href=#56 id=56 data-nosnippet>56</a>        // and stays one — positional projection over a structured value, the
+<a href=#57 id=57 data-nosnippet>57</a>        // same shape a column-expanded embed uses. The SQL serializer renders
+<a href=#58 id=58 data-nosnippet>58</a>        // it to a JSON path extraction at the edge; the in-memory interpreter
+<a href=#59 id=59 data-nosnippet>59</a>        // evaluates it directly via `Value::entry`. The engine itself never
+<a href=#60 id=60 data-nosnippet>60</a>        // deals in JSON.
+<a href=#61 id=61 data-nosnippet>61</a>        </span><span class="prelude-val">None
+<a href=#62 id=62 data-nosnippet>62</a>    </span>}
+<a href=#63 id=63 data-nosnippet>63</a>}
 </code></pre></div></section></main></body></html>

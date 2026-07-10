@@ -37,7 +37,7 @@
 <a href=#37 id=37 data-nosnippet>37</a>                    stmt::Value::List(items) =&gt; {
 <a href=#38 id=38 data-nosnippet>38</a>                        <span class="kw">for </span>value <span class="kw">in </span>items {
 <a href=#39 id=39 data-nosnippet>39</a>                            <span class="comment">// Apply the projection
-<a href=#40 id=40 data-nosnippet>40</a>                            </span><span class="kw">let </span>row = action.projection.eval(<span class="kw-2">&amp;</span>[value])<span class="question-mark">?</span>;
+<a href=#40 id=40 data-nosnippet>40</a>                            </span><span class="kw">let </span>row = action.projection.eval(<span class="kw-2">&amp;</span><span class="self">self</span>.engine.schema, <span class="kw-2">&amp;</span>[value])<span class="question-mark">?</span>;
 <a href=#41 id=41 data-nosnippet>41</a>                            projected_rows.push(row);
 <a href=#42 id=42 data-nosnippet>42</a>                        }
 <a href=#43 id=43 data-nosnippet>43</a>                    }
@@ -49,13 +49,13 @@
 <a href=#49 id=49 data-nosnippet>49</a>                    <span class="kw">let </span>value = res<span class="question-mark">?</span>;
 <a href=#50 id=50 data-nosnippet>50</a>
 <a href=#51 id=51 data-nosnippet>51</a>                    <span class="comment">// Apply the projection
-<a href=#52 id=52 data-nosnippet>52</a>                    </span><span class="kw">let </span>row = action.projection.eval(<span class="kw-2">&amp;</span>[value])<span class="question-mark">?</span>;
+<a href=#52 id=52 data-nosnippet>52</a>                    </span><span class="kw">let </span>row = action.projection.eval(<span class="kw-2">&amp;</span><span class="self">self</span>.engine.schema, <span class="kw-2">&amp;</span>[value])<span class="question-mark">?</span>;
 <a href=#53 id=53 data-nosnippet>53</a>                    projected_rows.push(row);
 <a href=#54 id=54 data-nosnippet>54</a>                }
 <a href=#55 id=55 data-nosnippet>55</a>            }
 <a href=#56 id=56 data-nosnippet>56</a>            Rows::Count(count) =&gt; {
 <a href=#57 id=57 data-nosnippet>57</a>                <span class="kw">for _ in </span><span class="number">0</span>..count {
-<a href=#58 id=58 data-nosnippet>58</a>                    <span class="kw">let </span>row = action.projection.eval_const();
+<a href=#58 id=58 data-nosnippet>58</a>                    <span class="kw">let </span>row = action.projection.eval_const(<span class="kw-2">&amp;</span><span class="self">self</span>.engine.schema);
 <a href=#59 id=59 data-nosnippet>59</a>                    projected_rows.push(row);
 <a href=#60 id=60 data-nosnippet>60</a>                }
 <a href=#61 id=61 data-nosnippet>61</a>            }

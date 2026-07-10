@@ -136,8 +136,16 @@
 <a href=#136 id=136 data-nosnippet>136</a>                </span>Flavor::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
 <a href=#137 id=137 data-nosnippet>137</a>                Flavor::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
 <a href=#138 id=138 data-nosnippet>138</a>            },
-<a href=#139 id=139 data-nosnippet>139</a>            db::Type::Custom(custom) =&gt; <span class="macro">fmt!</span>(f, custom.as_str()),
-<a href=#140 id=140 data-nosnippet>140</a>        }
-<a href=#141 id=141 data-nosnippet>141</a>    }
-<a href=#142 id=142 data-nosnippet>142</a>}
+<a href=#139 id=139 data-nosnippet>139</a>            db::Type::Document { binary } =&gt; <span class="kw">match </span>f.serializer.flavor {
+<a href=#140 id=140 data-nosnippet>140</a>                <span class="comment">// `binary` selects `jsonb` over `json` on PostgreSQL; the text
+<a href=#141 id=141 data-nosnippet>141</a>                // encoding (`#[document(text)]`) is not yet wired up.
+<a href=#142 id=142 data-nosnippet>142</a>                </span>Flavor::Postgresql <span class="kw">if </span><span class="kw-2">*</span>binary =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSONB"</span>),
+<a href=#143 id=143 data-nosnippet>143</a>                Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
+<a href=#144 id=144 data-nosnippet>144</a>                Flavor::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
+<a href=#145 id=145 data-nosnippet>145</a>                Flavor::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
+<a href=#146 id=146 data-nosnippet>146</a>            },
+<a href=#147 id=147 data-nosnippet>147</a>            db::Type::Custom(custom) =&gt; <span class="macro">fmt!</span>(f, custom.as_str()),
+<a href=#148 id=148 data-nosnippet>148</a>        }
+<a href=#149 id=149 data-nosnippet>149</a>    }
+<a href=#150 id=150 data-nosnippet>150</a>}
 </code></pre></div></section></main></body></html>

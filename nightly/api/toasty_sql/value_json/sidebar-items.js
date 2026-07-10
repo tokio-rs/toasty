@@ -1,1 +1,0 @@
-window.SIDEBAR_ITEMS = {"fn":["value_from_json","value_list_from_json","value_list_to_json","value_to_json"]};

@@ -720,136 +720,141 @@
 <a href=#720 id=720 data-nosnippet>720</a>/// - PostgreSQL: `col || $1` — `text[] || text[]` concatenates arrays.
 <a href=#721 id=721 data-nosnippet>721</a>/// - MySQL: `JSON_MERGE_PRESERVE(col, $1)` — preserves duplicates and
 <a href=#722 id=722 data-nosnippet>722</a>///   appends every element of the right-hand array to the left-hand one.
-<a href=#723 id=723 data-nosnippet>723</a>/// - SQLite: `(SELECT json_group_array(value) FROM (SELECT value FROM
-<a href=#724 id=724 data-nosnippet>724</a>///   json_each(col) UNION ALL SELECT value FROM json_each($1)))` — a
-<a href=#725 id=725 data-nosnippet>725</a>///   subquery that concatenates the two JSON arrays while preserving
-<a href=#726 id=726 data-nosnippet>726</a>///   element order and types.
-<a href=#727 id=727 data-nosnippet>727</a></span><span class="kw">fn </span>serialize_append(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
-<a href=#728 id=728 data-nosnippet>728</a>    <span class="kw">match </span>f.serializer.flavor {
-<a href=#729 id=729 data-nosnippet>729</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(f, Ident(column_name) <span class="string">" || " </span>expr),
-<a href=#730 id=730 data-nosnippet>730</a>        Flavor::Mysql =&gt; {
-<a href=#731 id=731 data-nosnippet>731</a>            <span class="macro">fmt!</span>(f, <span class="string">"JSON_MERGE_PRESERVE(" </span>Ident(column_name) <span class="string">", " </span>expr <span class="string">")"</span>)
-<a href=#732 id=732 data-nosnippet>732</a>        }
-<a href=#733 id=733 data-nosnippet>733</a>        Flavor::Sqlite =&gt; <span class="macro">fmt!</span>(
-<a href=#734 id=734 data-nosnippet>734</a>            f,
-<a href=#735 id=735 data-nosnippet>735</a>            <span class="string">"(SELECT json_group_array(value) FROM (SELECT value FROM json_each("
-<a href=#736 id=736 data-nosnippet>736</a>            </span>Ident(column_name) <span class="string">") UNION ALL SELECT value FROM json_each(" </span>expr <span class="string">")))"
-<a href=#737 id=737 data-nosnippet>737</a>        </span>),
-<a href=#738 id=738 data-nosnippet>738</a>    }
-<a href=#739 id=739 data-nosnippet>739</a>}
-<a href=#740 id=740 data-nosnippet>740</a>
-<a href=#741 id=741 data-nosnippet>741</a><span class="doccomment">/// Emit `stmt::remove(value)` against a `Vec&lt;scalar&gt;` column.
-<a href=#742 id=742 data-nosnippet>742</a>///
-<a href=#743 id=743 data-nosnippet>743</a>/// - PostgreSQL: `array_remove(col, $value)` — removes every element equal
-<a href=#744 id=744 data-nosnippet>744</a>///   to `$value` from a `T[]` column. Atomic.
-<a href=#745 id=745 data-nosnippet>745</a>/// - MySQL / SQLite: not yet supported — `vec_remove` is gated off and the
-<a href=#746 id=746 data-nosnippet>746</a>///   lowering rejects these backends before reaching here.
-<a href=#747 id=747 data-nosnippet>747</a></span><span class="kw">fn </span>serialize_remove(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
-<a href=#748 id=748 data-nosnippet>748</a>    <span class="kw">match </span>f.serializer.flavor {
-<a href=#749 id=749 data-nosnippet>749</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"array_remove(" </span>Ident(column_name) <span class="string">", " </span>expr <span class="string">")"</span>),
-<a href=#750 id=750 data-nosnippet>750</a>        Flavor::Mysql | Flavor::Sqlite =&gt; <span class="macro">panic!</span>(
-<a href=#751 id=751 data-nosnippet>751</a>            <span class="string">"stmt::remove on a Vec&lt;scalar&gt; field is not yet implemented for this SQL flavor; \
-<a href=#752 id=752 data-nosnippet>752</a>             the lowering should have rejected this before reaching the serializer"</span>,
-<a href=#753 id=753 data-nosnippet>753</a>        ),
-<a href=#754 id=754 data-nosnippet>754</a>    }
-<a href=#755 id=755 data-nosnippet>755</a>}
-<a href=#756 id=756 data-nosnippet>756</a>
-<a href=#757 id=757 data-nosnippet>757</a><span class="doccomment">/// Emit `stmt::pop()` against a `Vec&lt;scalar&gt;` column.
-<a href=#758 id=758 data-nosnippet>758</a>///
-<a href=#759 id=759 data-nosnippet>759</a>/// - PostgreSQL: `col[1:cardinality(col) - 1]` — slices off the last
-<a href=#760 id=760 data-nosnippet>760</a>///   element via 1-based PG array slicing. Atomic.
-<a href=#761 id=761 data-nosnippet>761</a>/// - MySQL / SQLite: not yet supported — `vec_pop` is gated off and the
-<a href=#762 id=762 data-nosnippet>762</a>///   lowering rejects these backends before reaching here.
-<a href=#763 id=763 data-nosnippet>763</a></span><span class="kw">fn </span>serialize_pop(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str) {
-<a href=#764 id=764 data-nosnippet>764</a>    <span class="kw">match </span>f.serializer.flavor {
-<a href=#765 id=765 data-nosnippet>765</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(
-<a href=#766 id=766 data-nosnippet>766</a>            f,
-<a href=#767 id=767 data-nosnippet>767</a>            Ident(column_name) <span class="string">"[1:cardinality(" </span>Ident(column_name) <span class="string">") - 1]"
-<a href=#768 id=768 data-nosnippet>768</a>        </span>),
-<a href=#769 id=769 data-nosnippet>769</a>        Flavor::Mysql | Flavor::Sqlite =&gt; <span class="macro">panic!</span>(
-<a href=#770 id=770 data-nosnippet>770</a>            <span class="string">"stmt::pop on a Vec&lt;scalar&gt; field is not yet implemented for this SQL flavor; \
-<a href=#771 id=771 data-nosnippet>771</a>             the lowering should have rejected this before reaching the serializer"</span>,
-<a href=#772 id=772 data-nosnippet>772</a>        ),
-<a href=#773 id=773 data-nosnippet>773</a>    }
-<a href=#774 id=774 data-nosnippet>774</a>}
-<a href=#775 id=775 data-nosnippet>775</a>
-<a href=#776 id=776 data-nosnippet>776</a><span class="doccomment">/// Emit `stmt::remove_at(idx)` against a `Vec&lt;scalar&gt;` column.
-<a href=#777 id=777 data-nosnippet>777</a>///
-<a href=#778 id=778 data-nosnippet>778</a>/// `idx` is a 0-based `usize`. PostgreSQL arrays are 1-based, so the
-<a href=#779 id=779 data-nosnippet>779</a>/// element at user-facing index `i` lives at PG position `i + 1`. The
-<a href=#780 id=780 data-nosnippet>780</a>/// expression `col[1:i] || col[i + 2:cardinality(col)]` keeps the prefix
-<a href=#781 id=781 data-nosnippet>781</a>/// up to (1-based) position `i` and the suffix from position `i + 2`,
-<a href=#782 id=782 data-nosnippet>782</a>/// dropping the element at position `i + 1` (user index `i`).
-<a href=#783 id=783 data-nosnippet>783</a>///
-<a href=#784 id=784 data-nosnippet>784</a>/// Out-of-bounds indices are a no-op: when `i &gt;= cardinality(col)`, the
-<a href=#785 id=785 data-nosnippet>785</a>/// first slice yields the entire array and the second yields the empty
-<a href=#786 id=786 data-nosnippet>786</a>/// slice, so the concatenation reproduces the input.
-<a href=#787 id=787 data-nosnippet>787</a>///
-<a href=#788 id=788 data-nosnippet>788</a>/// - MySQL / SQLite: not yet supported — `vec_remove_at` is gated off
-<a href=#789 id=789 data-nosnippet>789</a>///   and the lowering rejects these backends before reaching here.
-<a href=#790 id=790 data-nosnippet>790</a></span><span class="kw">fn </span>serialize_remove_at(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
-<a href=#791 id=791 data-nosnippet>791</a>    <span class="kw">match </span>f.serializer.flavor {
-<a href=#792 id=792 data-nosnippet>792</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(
-<a href=#793 id=793 data-nosnippet>793</a>            f,
-<a href=#794 id=794 data-nosnippet>794</a>            Ident(column_name) <span class="string">"[1:" </span>expr <span class="string">"] || " </span>Ident(column_name) <span class="string">"[" </span>expr <span class="string">" + 2:cardinality(" </span>Ident(column_name) <span class="string">")]"
-<a href=#795 id=795 data-nosnippet>795</a>        </span>),
-<a href=#796 id=796 data-nosnippet>796</a>        Flavor::Mysql | Flavor::Sqlite =&gt; <span class="macro">panic!</span>(
-<a href=#797 id=797 data-nosnippet>797</a>            <span class="string">"stmt::remove_at on a Vec&lt;scalar&gt; field is not yet implemented for this SQL flavor; \
-<a href=#798 id=798 data-nosnippet>798</a>             the lowering should have rejected this before reaching the serializer"</span>,
-<a href=#799 id=799 data-nosnippet>799</a>        ),
-<a href=#800 id=800 data-nosnippet>800</a>    }
-<a href=#801 id=801 data-nosnippet>801</a>}
-<a href=#802 id=802 data-nosnippet>802</a>
-<a href=#803 id=803 data-nosnippet>803</a><span class="kw">impl </span>ToSql <span class="kw">for </span><span class="kw-2">&amp;</span>stmt::UpdateTarget {
-<a href=#804 id=804 data-nosnippet>804</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
-<a href=#805 id=805 data-nosnippet>805</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#806 id=806 data-nosnippet>806</a>            stmt::UpdateTarget::Table(table_id) =&gt; {
-<a href=#807 id=807 data-nosnippet>807</a>                <span class="kw">let </span>table_name = f.serializer.table_name(<span class="kw-2">*</span>table_id);
-<a href=#808 id=808 data-nosnippet>808</a>                <span class="kw">let </span>alias = TableAlias {
-<a href=#809 id=809 data-nosnippet>809</a>                    depth: f.depth,
-<a href=#810 id=810 data-nosnippet>810</a>                    table: SourceTableId(<span class="number">0</span>),
-<a href=#811 id=811 data-nosnippet>811</a>                };
-<a href=#812 id=812 data-nosnippet>812</a>
-<a href=#813 id=813 data-nosnippet>813</a>                <span class="macro">fmt!</span>(f, table_name <span class="string">" AS " </span>alias);
-<a href=#814 id=814 data-nosnippet>814</a>            }
-<a href=#815 id=815 data-nosnippet>815</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(),
-<a href=#816 id=816 data-nosnippet>816</a>        }
-<a href=#817 id=817 data-nosnippet>817</a>    }
-<a href=#818 id=818 data-nosnippet>818</a>}
-<a href=#819 id=819 data-nosnippet>819</a>
-<a href=#820 id=820 data-nosnippet>820</a><span class="kw">impl </span>ToSql <span class="kw">for </span><span class="kw-2">&amp;</span>stmt::Values {
-<a href=#821 id=821 data-nosnippet>821</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
-<a href=#822 id=822 data-nosnippet>822</a>        <span class="comment">// MySQL requires the `ROW(...)` keyword for table value constructors
-<a href=#823 id=823 data-nosnippet>823</a>        // when used in subqueries, but NOT in INSERT statements.
-<a href=#824 id=824 data-nosnippet>824</a>        //
-<a href=#825 id=825 data-nosnippet>825</a>        // Rows are `Expr::Record`s, which serialize with their own `(...)`.
-<a href=#826 id=826 data-nosnippet>826</a>        // Inside `ROW(...)` we need the fields comma-separated *without*
-<a href=#827 id=827 data-nosnippet>827</a>        // those parens — otherwise MySQL parses `ROW((1, 'a'))` as a single
-<a href=#828 id=828 data-nosnippet>828</a>        // row-expression operand and rejects it with "Operand should contain
-<a href=#829 id=829 data-nosnippet>829</a>        // 1 column(s)".
-<a href=#830 id=830 data-nosnippet>830</a>        </span><span class="kw">if </span>f.serializer.is_mysql() &amp;&amp; !f.in_insert {
-<a href=#831 id=831 data-nosnippet>831</a>            <span class="comment">// `Expr::Record` serializes with its own `(...)`; render its
-<a href=#832 id=832 data-nosnippet>832</a>            // fields directly inside `ROW(...)` so we don't end up with
-<a href=#833 id=833 data-nosnippet>833</a>            // `ROW((a, b))` (which MySQL parses as a single row-typed
-<a href=#834 id=834 data-nosnippet>834</a>            // operand and rejects). Other expression shapes are wrapped
-<a href=#835 id=835 data-nosnippet>835</a>            // as-is — a single-scalar row `ROW(x)` is well-formed.
-<a href=#836 id=836 data-nosnippet>836</a>            </span><span class="kw">for </span>(i, row) <span class="kw">in </span><span class="self">self</span>.rows.iter().enumerate() {
-<a href=#837 id=837 data-nosnippet>837</a>                <span class="kw">if </span>i == <span class="number">0 </span>{
-<a href=#838 id=838 data-nosnippet>838</a>                    <span class="macro">fmt!</span>(f, <span class="string">"VALUES "</span>);
-<a href=#839 id=839 data-nosnippet>839</a>                } <span class="kw">else </span>{
-<a href=#840 id=840 data-nosnippet>840</a>                    <span class="macro">fmt!</span>(f, <span class="string">", "</span>);
-<a href=#841 id=841 data-nosnippet>841</a>                }
-<a href=#842 id=842 data-nosnippet>842</a>                <span class="kw">match </span>row {
-<a href=#843 id=843 data-nosnippet>843</a>                    stmt::Expr::Record(record) =&gt; {
-<a href=#844 id=844 data-nosnippet>844</a>                        <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>Comma(record.fields.iter()) <span class="string">")"</span>)
-<a href=#845 id=845 data-nosnippet>845</a>                    }
-<a href=#846 id=846 data-nosnippet>846</a>                    <span class="kw">_ </span>=&gt; <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>row <span class="string">")"</span>),
-<a href=#847 id=847 data-nosnippet>847</a>                }
-<a href=#848 id=848 data-nosnippet>848</a>            }
-<a href=#849 id=849 data-nosnippet>849</a>        } <span class="kw">else </span>{
-<a href=#850 id=850 data-nosnippet>850</a>            <span class="kw">let </span>rows = Comma(<span class="self">self</span>.rows.iter());
-<a href=#851 id=851 data-nosnippet>851</a>            <span class="macro">fmt!</span>(f, <span class="string">"VALUES " </span>rows)
-<a href=#852 id=852 data-nosnippet>852</a>        }
-<a href=#853 id=853 data-nosnippet>853</a>    }
-<a href=#854 id=854 data-nosnippet>854</a>}
+<a href=#723 id=723 data-nosnippet>723</a>/// - SQLite: a `json_group_array` subquery over the `json_each` rows of both
+<a href=#724 id=724 data-nosnippet>724</a>///   arrays, concatenating them while preserving element order and types.
+<a href=#725 id=725 data-nosnippet>725</a>///   `json_each.value` returns object and array elements as plain TEXT, which
+<a href=#726 id=726 data-nosnippet>726</a>///   `json_group_array` would re-encode as JSON strings, so those elements
+<a href=#727 id=727 data-nosnippet>727</a>///   pass through `json()` to keep their structure (a document collection's
+<a href=#728 id=728 data-nosnippet>728</a>///   elements are objects); scalar elements pass through `json_quote`, since
+<a href=#729 id=729 data-nosnippet>729</a>///   `json()` rejects a bare string like `a`.
+<a href=#730 id=730 data-nosnippet>730</a></span><span class="kw">fn </span>serialize_append(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
+<a href=#731 id=731 data-nosnippet>731</a>    <span class="kw">match </span>f.serializer.flavor {
+<a href=#732 id=732 data-nosnippet>732</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(f, Ident(column_name) <span class="string">" || " </span>expr),
+<a href=#733 id=733 data-nosnippet>733</a>        Flavor::Mysql =&gt; {
+<a href=#734 id=734 data-nosnippet>734</a>            <span class="macro">fmt!</span>(f, <span class="string">"JSON_MERGE_PRESERVE(" </span>Ident(column_name) <span class="string">", " </span>expr <span class="string">")"</span>)
+<a href=#735 id=735 data-nosnippet>735</a>        }
+<a href=#736 id=736 data-nosnippet>736</a>        Flavor::Sqlite =&gt; <span class="macro">fmt!</span>(
+<a href=#737 id=737 data-nosnippet>737</a>            f,
+<a href=#738 id=738 data-nosnippet>738</a>            <span class="string">"(SELECT json_group_array(json(CASE WHEN type IN ('object', 'array') \
+<a href=#739 id=739 data-nosnippet>739</a>             THEN value ELSE json_quote(value) END)) \
+<a href=#740 id=740 data-nosnippet>740</a>             FROM (SELECT type, value FROM json_each("
+<a href=#741 id=741 data-nosnippet>741</a>            </span>Ident(column_name) <span class="string">") UNION ALL SELECT type, value FROM json_each(" </span>expr <span class="string">")))"
+<a href=#742 id=742 data-nosnippet>742</a>        </span>),
+<a href=#743 id=743 data-nosnippet>743</a>    }
+<a href=#744 id=744 data-nosnippet>744</a>}
+<a href=#745 id=745 data-nosnippet>745</a>
+<a href=#746 id=746 data-nosnippet>746</a><span class="doccomment">/// Emit `stmt::remove(value)` against a `Vec&lt;scalar&gt;` column.
+<a href=#747 id=747 data-nosnippet>747</a>///
+<a href=#748 id=748 data-nosnippet>748</a>/// - PostgreSQL: `array_remove(col, $value)` — removes every element equal
+<a href=#749 id=749 data-nosnippet>749</a>///   to `$value` from a `T[]` column. Atomic.
+<a href=#750 id=750 data-nosnippet>750</a>/// - MySQL / SQLite: not yet supported — `vec_remove` is gated off and the
+<a href=#751 id=751 data-nosnippet>751</a>///   lowering rejects these backends before reaching here.
+<a href=#752 id=752 data-nosnippet>752</a></span><span class="kw">fn </span>serialize_remove(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
+<a href=#753 id=753 data-nosnippet>753</a>    <span class="kw">match </span>f.serializer.flavor {
+<a href=#754 id=754 data-nosnippet>754</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"array_remove(" </span>Ident(column_name) <span class="string">", " </span>expr <span class="string">")"</span>),
+<a href=#755 id=755 data-nosnippet>755</a>        Flavor::Mysql | Flavor::Sqlite =&gt; <span class="macro">panic!</span>(
+<a href=#756 id=756 data-nosnippet>756</a>            <span class="string">"stmt::remove on a Vec&lt;scalar&gt; field is not yet implemented for this SQL flavor; \
+<a href=#757 id=757 data-nosnippet>757</a>             the lowering should have rejected this before reaching the serializer"</span>,
+<a href=#758 id=758 data-nosnippet>758</a>        ),
+<a href=#759 id=759 data-nosnippet>759</a>    }
+<a href=#760 id=760 data-nosnippet>760</a>}
+<a href=#761 id=761 data-nosnippet>761</a>
+<a href=#762 id=762 data-nosnippet>762</a><span class="doccomment">/// Emit `stmt::pop()` against a `Vec&lt;scalar&gt;` column.
+<a href=#763 id=763 data-nosnippet>763</a>///
+<a href=#764 id=764 data-nosnippet>764</a>/// - PostgreSQL: `col[1:cardinality(col) - 1]` — slices off the last
+<a href=#765 id=765 data-nosnippet>765</a>///   element via 1-based PG array slicing. Atomic.
+<a href=#766 id=766 data-nosnippet>766</a>/// - MySQL / SQLite: not yet supported — `vec_pop` is gated off and the
+<a href=#767 id=767 data-nosnippet>767</a>///   lowering rejects these backends before reaching here.
+<a href=#768 id=768 data-nosnippet>768</a></span><span class="kw">fn </span>serialize_pop(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str) {
+<a href=#769 id=769 data-nosnippet>769</a>    <span class="kw">match </span>f.serializer.flavor {
+<a href=#770 id=770 data-nosnippet>770</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(
+<a href=#771 id=771 data-nosnippet>771</a>            f,
+<a href=#772 id=772 data-nosnippet>772</a>            Ident(column_name) <span class="string">"[1:cardinality(" </span>Ident(column_name) <span class="string">") - 1]"
+<a href=#773 id=773 data-nosnippet>773</a>        </span>),
+<a href=#774 id=774 data-nosnippet>774</a>        Flavor::Mysql | Flavor::Sqlite =&gt; <span class="macro">panic!</span>(
+<a href=#775 id=775 data-nosnippet>775</a>            <span class="string">"stmt::pop on a Vec&lt;scalar&gt; field is not yet implemented for this SQL flavor; \
+<a href=#776 id=776 data-nosnippet>776</a>             the lowering should have rejected this before reaching the serializer"</span>,
+<a href=#777 id=777 data-nosnippet>777</a>        ),
+<a href=#778 id=778 data-nosnippet>778</a>    }
+<a href=#779 id=779 data-nosnippet>779</a>}
+<a href=#780 id=780 data-nosnippet>780</a>
+<a href=#781 id=781 data-nosnippet>781</a><span class="doccomment">/// Emit `stmt::remove_at(idx)` against a `Vec&lt;scalar&gt;` column.
+<a href=#782 id=782 data-nosnippet>782</a>///
+<a href=#783 id=783 data-nosnippet>783</a>/// `idx` is a 0-based `usize`. PostgreSQL arrays are 1-based, so the
+<a href=#784 id=784 data-nosnippet>784</a>/// element at user-facing index `i` lives at PG position `i + 1`. The
+<a href=#785 id=785 data-nosnippet>785</a>/// expression `col[1:i] || col[i + 2:cardinality(col)]` keeps the prefix
+<a href=#786 id=786 data-nosnippet>786</a>/// up to (1-based) position `i` and the suffix from position `i + 2`,
+<a href=#787 id=787 data-nosnippet>787</a>/// dropping the element at position `i + 1` (user index `i`).
+<a href=#788 id=788 data-nosnippet>788</a>///
+<a href=#789 id=789 data-nosnippet>789</a>/// Out-of-bounds indices are a no-op: when `i &gt;= cardinality(col)`, the
+<a href=#790 id=790 data-nosnippet>790</a>/// first slice yields the entire array and the second yields the empty
+<a href=#791 id=791 data-nosnippet>791</a>/// slice, so the concatenation reproduces the input.
+<a href=#792 id=792 data-nosnippet>792</a>///
+<a href=#793 id=793 data-nosnippet>793</a>/// - MySQL / SQLite: not yet supported — `vec_remove_at` is gated off
+<a href=#794 id=794 data-nosnippet>794</a>///   and the lowering rejects these backends before reaching here.
+<a href=#795 id=795 data-nosnippet>795</a></span><span class="kw">fn </span>serialize_remove_at(f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;, column_name: <span class="kw-2">&amp;</span>str, expr: <span class="kw-2">&amp;</span>stmt::Expr) {
+<a href=#796 id=796 data-nosnippet>796</a>    <span class="kw">match </span>f.serializer.flavor {
+<a href=#797 id=797 data-nosnippet>797</a>        Flavor::Postgresql =&gt; <span class="macro">fmt!</span>(
+<a href=#798 id=798 data-nosnippet>798</a>            f,
+<a href=#799 id=799 data-nosnippet>799</a>            Ident(column_name) <span class="string">"[1:" </span>expr <span class="string">"] || " </span>Ident(column_name) <span class="string">"[" </span>expr <span class="string">" + 2:cardinality(" </span>Ident(column_name) <span class="string">")]"
+<a href=#800 id=800 data-nosnippet>800</a>        </span>),
+<a href=#801 id=801 data-nosnippet>801</a>        Flavor::Mysql | Flavor::Sqlite =&gt; <span class="macro">panic!</span>(
+<a href=#802 id=802 data-nosnippet>802</a>            <span class="string">"stmt::remove_at on a Vec&lt;scalar&gt; field is not yet implemented for this SQL flavor; \
+<a href=#803 id=803 data-nosnippet>803</a>             the lowering should have rejected this before reaching the serializer"</span>,
+<a href=#804 id=804 data-nosnippet>804</a>        ),
+<a href=#805 id=805 data-nosnippet>805</a>    }
+<a href=#806 id=806 data-nosnippet>806</a>}
+<a href=#807 id=807 data-nosnippet>807</a>
+<a href=#808 id=808 data-nosnippet>808</a><span class="kw">impl </span>ToSql <span class="kw">for </span><span class="kw-2">&amp;</span>stmt::UpdateTarget {
+<a href=#809 id=809 data-nosnippet>809</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
+<a href=#810 id=810 data-nosnippet>810</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#811 id=811 data-nosnippet>811</a>            stmt::UpdateTarget::Table(table_id) =&gt; {
+<a href=#812 id=812 data-nosnippet>812</a>                <span class="kw">let </span>table_name = f.serializer.table_name(<span class="kw-2">*</span>table_id);
+<a href=#813 id=813 data-nosnippet>813</a>                <span class="kw">let </span>alias = TableAlias {
+<a href=#814 id=814 data-nosnippet>814</a>                    depth: f.depth,
+<a href=#815 id=815 data-nosnippet>815</a>                    table: SourceTableId(<span class="number">0</span>),
+<a href=#816 id=816 data-nosnippet>816</a>                };
+<a href=#817 id=817 data-nosnippet>817</a>
+<a href=#818 id=818 data-nosnippet>818</a>                <span class="macro">fmt!</span>(f, table_name <span class="string">" AS " </span>alias);
+<a href=#819 id=819 data-nosnippet>819</a>            }
+<a href=#820 id=820 data-nosnippet>820</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(),
+<a href=#821 id=821 data-nosnippet>821</a>        }
+<a href=#822 id=822 data-nosnippet>822</a>    }
+<a href=#823 id=823 data-nosnippet>823</a>}
+<a href=#824 id=824 data-nosnippet>824</a>
+<a href=#825 id=825 data-nosnippet>825</a><span class="kw">impl </span>ToSql <span class="kw">for </span><span class="kw-2">&amp;</span>stmt::Values {
+<a href=#826 id=826 data-nosnippet>826</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
+<a href=#827 id=827 data-nosnippet>827</a>        <span class="comment">// MySQL requires the `ROW(...)` keyword for table value constructors
+<a href=#828 id=828 data-nosnippet>828</a>        // when used in subqueries, but NOT in INSERT statements.
+<a href=#829 id=829 data-nosnippet>829</a>        //
+<a href=#830 id=830 data-nosnippet>830</a>        // Rows are `Expr::Record`s, which serialize with their own `(...)`.
+<a href=#831 id=831 data-nosnippet>831</a>        // Inside `ROW(...)` we need the fields comma-separated *without*
+<a href=#832 id=832 data-nosnippet>832</a>        // those parens — otherwise MySQL parses `ROW((1, 'a'))` as a single
+<a href=#833 id=833 data-nosnippet>833</a>        // row-expression operand and rejects it with "Operand should contain
+<a href=#834 id=834 data-nosnippet>834</a>        // 1 column(s)".
+<a href=#835 id=835 data-nosnippet>835</a>        </span><span class="kw">if </span>f.serializer.is_mysql() &amp;&amp; !f.in_insert {
+<a href=#836 id=836 data-nosnippet>836</a>            <span class="comment">// `Expr::Record` serializes with its own `(...)`; render its
+<a href=#837 id=837 data-nosnippet>837</a>            // fields directly inside `ROW(...)` so we don't end up with
+<a href=#838 id=838 data-nosnippet>838</a>            // `ROW((a, b))` (which MySQL parses as a single row-typed
+<a href=#839 id=839 data-nosnippet>839</a>            // operand and rejects). Other expression shapes are wrapped
+<a href=#840 id=840 data-nosnippet>840</a>            // as-is — a single-scalar row `ROW(x)` is well-formed.
+<a href=#841 id=841 data-nosnippet>841</a>            </span><span class="kw">for </span>(i, row) <span class="kw">in </span><span class="self">self</span>.rows.iter().enumerate() {
+<a href=#842 id=842 data-nosnippet>842</a>                <span class="kw">if </span>i == <span class="number">0 </span>{
+<a href=#843 id=843 data-nosnippet>843</a>                    <span class="macro">fmt!</span>(f, <span class="string">"VALUES "</span>);
+<a href=#844 id=844 data-nosnippet>844</a>                } <span class="kw">else </span>{
+<a href=#845 id=845 data-nosnippet>845</a>                    <span class="macro">fmt!</span>(f, <span class="string">", "</span>);
+<a href=#846 id=846 data-nosnippet>846</a>                }
+<a href=#847 id=847 data-nosnippet>847</a>                <span class="kw">match </span>row {
+<a href=#848 id=848 data-nosnippet>848</a>                    stmt::Expr::Record(record) =&gt; {
+<a href=#849 id=849 data-nosnippet>849</a>                        <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>Comma(record.fields.iter()) <span class="string">")"</span>)
+<a href=#850 id=850 data-nosnippet>850</a>                    }
+<a href=#851 id=851 data-nosnippet>851</a>                    <span class="kw">_ </span>=&gt; <span class="macro">fmt!</span>(f, <span class="string">"ROW(" </span>row <span class="string">")"</span>),
+<a href=#852 id=852 data-nosnippet>852</a>                }
+<a href=#853 id=853 data-nosnippet>853</a>            }
+<a href=#854 id=854 data-nosnippet>854</a>        } <span class="kw">else </span>{
+<a href=#855 id=855 data-nosnippet>855</a>            <span class="kw">let </span>rows = Comma(<span class="self">self</span>.rows.iter());
+<a href=#856 id=856 data-nosnippet>856</a>            <span class="macro">fmt!</span>(f, <span class="string">"VALUES " </span>rows)
+<a href=#857 id=857 data-nosnippet>857</a>        }
+<a href=#858 id=858 data-nosnippet>858</a>    }
+<a href=#859 id=859 data-nosnippet>859</a>}
 </code></pre></div></section></main></body></html>

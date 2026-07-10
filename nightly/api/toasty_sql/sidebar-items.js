@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["migration","serializer","stmt","value_json"]};
+window.SIDEBAR_ITEMS = {"mod":["json","migration","serializer","stmt"]};
