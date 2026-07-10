@@ -342,6 +342,53 @@ pub async fn nested_enum_column_collision_rejected(test: &mut Test) -> Result<()
     Ok(())
 }
 
+/// Same collision as above, opposite order: the plain variant field comes
+/// first and the nested enum second, so the nested enum's variant fields must
+/// be checked against column names the outer enum already created.
+#[driver_test]
+pub async fn nested_enum_column_collision_rejected_reverse_order(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Inner {
+        #[column(variant = 1)]
+        A {
+            #[allow(dead_code)]
+            x: String,
+        },
+    }
+
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Outer {
+        // Flattens to the same column as `Inner::A::x` below
+        // (`{field}_inner_x`).
+        #[column(variant = 1)]
+        V1 {
+            #[allow(dead_code)]
+            inner_x: String,
+        },
+        #[column(variant = 2)]
+        V2 {
+            #[allow(dead_code)]
+            inner: Inner,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Holder {
+        #[key]
+        id: String,
+        #[allow(dead_code)]
+        value: Outer,
+    }
+
+    let err = assert_err!(test.try_setup_db(models!(Holder)).await);
+    assert!(
+        err.to_string().contains("without declaring a shared field"),
+        "unexpected error: {err}"
+    );
+
+    Ok(())
+}
+
 /// Embedded-struct variant fields sharing a `#[column("...")]` *prefix* are
 /// not a collision: the string prefixes each flattened leaf, so differently
 /// shaped embeds produce disjoint columns.

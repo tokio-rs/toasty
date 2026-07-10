@@ -1120,8 +1120,20 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         // Activate a fresh column-sharing registry for this enum's variant
         // fields. A nested enum installs (and restores) its own, so sharing
-        // never crosses enum boundaries. Restored after the variants are mapped.
-        let mut saved_shared = self.build.enum_columns.replace(EnumColumns::default());
+        // never crosses enum boundaries — but the physical `names` are seeded
+        // from the outer registry, since a nested enum's columns live in the
+        // parent's namespace and must collide against columns the outer enum
+        // already created. Restored after the variants are mapped.
+        let inner = EnumColumns {
+            shared: Default::default(),
+            names: self
+                .build
+                .enum_columns
+                .as_ref()
+                .map(|outer| outer.names.clone())
+                .unwrap_or_default(),
+        };
+        let mut saved_shared = self.build.enum_columns.replace(inner);
 
         let variants: Result<Vec<mapping::EnumVariant>> = embedded_enum
             .variants
