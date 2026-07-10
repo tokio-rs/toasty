@@ -60,6 +60,12 @@ use crate::{Executor, schema::Load};
 mod query;
 pub use query::Query;
 
+mod relation_insert;
+pub use relation_insert::RelationInsert;
+
+mod relation_remove;
+pub use relation_remove::RelationRemove;
+
 mod scope;
 pub use scope::IntoScope;
 

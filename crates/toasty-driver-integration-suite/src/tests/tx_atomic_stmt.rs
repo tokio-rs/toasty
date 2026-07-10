@@ -304,7 +304,7 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
     let todos: Vec<_> = user.todos().exec(&mut db).await?;
 
     t.log().clear();
-    user.todos().remove(&mut db, &todos[0]).await?;
+    user.todos().remove(&todos[0]).exec(&mut db).await?;
 
     if t.capability().cte_with_update {
         // PostgreSQL: single CTE bundles the condition + update
@@ -351,7 +351,7 @@ pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) ->
 
     t.log().clear();
     // Remove u2's todo via user1 — condition (user_id = user1.id) won't match
-    assert_err!(user1.todos().remove(&mut db, &u2_todos[0]).await);
+    assert_err!(user1.todos().remove(&u2_todos[0]).exec(&mut db).await);
 
     if t.capability().cte_with_update {
         // PostgreSQL: a single QuerySql; condition handled inside the CTE

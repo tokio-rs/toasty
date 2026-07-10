@@ -576,7 +576,7 @@ pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut T
     let todos: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(2, todos.len());
 
-    user.todos().remove(&mut db, &todos[0]).await?;
+    user.todos().remove(&todos[0]).exec(&mut db).await?;
 
     let todos_reloaded: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(1, todos_reloaded.len());
@@ -587,7 +587,7 @@ pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut T
     let todo = Todo::get_by_id(&mut db, todos[0].id).await?;
     assert_none!(todo.user_id);
 
-    user.todos().insert(&mut db, &todos[0]).await?;
+    user.todos().insert(&todos[0]).exec(&mut db).await?;
 
     let todos_reloaded: Vec<_> = user.todos().exec(&mut db).await?;
     assert!(todos_reloaded.iter().any(|t| t.id == todos[0].id));
@@ -617,7 +617,10 @@ pub async fn composite_add_remove_single_relation_required_belongs_to(
     }
 
     // Unlinking a required belongs_to is a delete
-    user.todos().remove(&mut db, &todos_reloaded[0]).await?;
+    user.todos()
+        .remove(&todos_reloaded[0])
+        .exec(&mut db)
+        .await?;
 
     assert_err!(Todo::get_by_user_id_and_id(&mut db, &user.id, &todos_reloaded[0].id).await);
 
@@ -643,7 +646,7 @@ pub async fn composite_reassign_relation_required_belongs_to(test: &mut Test) ->
 
     let t1 = u1.todos().create().title("a todo").exec(&mut db).await?;
 
-    u2.todos().insert(&mut db, &t1).await?;
+    u2.todos().insert(&t1).exec(&mut db).await?;
 
     assert!(u1.todos().exec(&mut db).await?.is_empty());
 
@@ -667,9 +670,9 @@ pub async fn composite_add_remove_multiple_relation_option_belongs_to(
 
     let ids = vec![t1.id, t2.id, t3.id];
 
-    user.todos().insert(&mut db, &t1).await?;
-    user.todos().insert(&mut db, &t2).await?;
-    user.todos().insert(&mut db, &t3).await?;
+    user.todos().insert(&t1).exec(&mut db).await?;
+    user.todos().insert(&t2).exec(&mut db).await?;
+    user.todos().insert(&t3).exec(&mut db).await?;
 
     let todos_reloaded: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(todos_reloaded.len(), 3);

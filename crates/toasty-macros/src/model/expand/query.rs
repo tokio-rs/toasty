@@ -174,28 +174,22 @@ impl Expand<'_> {
                     }
                 }
 
-                /// Add an item to the relation this query was scoped from.
-                ///
-                /// Returns an error at exec time if the query is not scoped to
-                /// a single-step relation traversal.
-                #vis async fn insert(
+                /// Returns a builder that will add an item to the relation this query was scoped
+                /// from only on execution.
+                #vis fn insert(
                     self,
-                    executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
-                ) -> #toasty::Result<()> {
-                    #toasty::relation_insert(self.stmt, executor, item).await
+                ) -> #toasty::stmt::RelationInsert<#model_ident> {
+                    self.stmt.insert(item)
                 }
 
-                /// Remove an item from the relation this query was scoped from.
-                ///
-                /// Returns an error at exec time if the query is not scoped to
-                /// a single-step relation traversal.
-                #vis async fn remove(
+                /// Returns a builder that will remove an item from the relation this query was scoped
+                /// from only on execution.
+                #vis fn remove(
                     self,
-                    executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
-                ) -> #toasty::Result<()> {
-                    #toasty::relation_remove(self.stmt, executor, item).await
+                ) -> #toasty::stmt::RelationRemove<#model_ident> {
+                    self.stmt.remove(item)
                 }
 
                 #relation_methods
