@@ -1,6 +1,7 @@
 use super::{Expand, schema, util};
 use crate::model::schema::{EnumStorageStrategy, FieldTy, VariantValue};
 
+use hashbrown::HashMap;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
@@ -297,7 +298,7 @@ impl Expand<'_> {
         // the override on one sharing field suffices, so propagate it to every
         // member. Disagreeing overrides are rejected by
         // `expand_shared_column_checks`; here the first one wins.
-        let mut shared_overrides: Vec<(String, &syn::LitStr)> = Vec::new();
+        let mut shared_overrides: HashMap<String, &syn::LitStr> = HashMap::new();
         for field in &self.model.fields {
             let Some(ident) = &field.attrs.shared else {
                 continue;
@@ -305,13 +306,7 @@ impl Expand<'_> {
             let Some(lit) = field.attrs.column.as_ref().and_then(|c| c.name.as_ref()) else {
                 continue;
             };
-            let name = ident.to_string();
-            if !shared_overrides
-                .iter()
-                .any(|(existing, _)| *existing == name)
-            {
-                shared_overrides.push((name, lit));
-            }
+            shared_overrides.entry(ident.to_string()).or_insert(lit);
         }
 
         self.model
@@ -330,10 +325,7 @@ impl Expand<'_> {
                     .and_then(|column| column.name.as_ref())
                     .or_else(|| {
                         let ident = field.attrs.shared.as_ref()?.to_string();
-                        shared_overrides
-                            .iter()
-                            .find(|(existing, _)| *existing == ident)
-                            .map(|(_, lit)| *lit)
+                        shared_overrides.get(&ident).copied()
                     });
                 let storage_name = match storage_override {
                     Some(name) => quote! { Some(#name.to_string()) },
