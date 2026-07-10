@@ -1,4 +1,4 @@
-use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId, VariantId};
+use super::{EnumVariant, Field, FieldId, FieldPrimitive, FieldTy, Model, ModelId, VariantId};
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
@@ -72,12 +72,10 @@ impl Schema {
     ///
     /// Panics if the model or field index is invalid.
     pub fn field(&self, id: FieldId) -> &Field {
-        let fields = match self.model(id.model) {
-            Model::Root(root) => &root.fields,
-            Model::EmbeddedStruct(embedded) => &embedded.fields,
-            Model::EmbeddedEnum(e) => &e.fields,
-        };
-        fields.get(id.index).expect("invalid field ID")
+        self.model(id.model)
+            .fields()
+            .get(id.index)
+            .expect("invalid field ID")
     }
 
     /// Returns a reference to the [`EnumVariant`] identified by `id`.
@@ -112,6 +110,55 @@ impl Schema {
         self.models.get(&id.into()).expect("invalid model ID")
     }
 
+    /// The fields of the model `id`, in declaration order.
+    ///
+    /// An embedded struct backs a `#[document]` column, so this doubles as a
+    /// document column's field layout — the embed is the single source of
+    /// truth for its shape. Callers map each [`Field`] to what they need (its
+    /// [`name`](Field::name), its [`expr_ty`](Field::expr_ty)); a field typed
+    /// `Type::Model` (or `List(Model)`) signals a nested document to recurse
+    /// into.
+    ///
+    /// Panics if no model has the given ID.
+    pub fn fields(&self, id: impl Into<ModelId>) -> &[Field] {
+        self.model(id).fields()
+    }
+
+    /// Walks a positional `projection` through `model`'s fields, descending
+    /// into the nested model whenever a step lands on a model-typed field
+    /// (`Type::Model`). Yields the [`Field`] at each step, in order — the last
+    /// one is the projection's leaf. The caller takes whatever it needs from
+    /// each field (its name, its type).
+    ///
+    /// Iteration stops short of `projection.len()` when a step cannot be
+    /// taken: its index is out of range, or it descends past a field that is
+    /// not model-typed. A projection therefore resolves fully iff the iterator
+    /// yields exactly `projection.len()` fields. Callers that read the leaf
+    /// (the engine's JSON-path lowering, the DynamoDB driver's document-path
+    /// rendering) work from projections already validated by
+    /// [`resolve`](Self::resolve).
+    ///
+    /// Nothing constrains `model` to a `#[document]` embed — the walk follows
+    /// any model-typed field — though document paths are its only use today.
+    pub fn project_fields<'s>(
+        &'s self,
+        model: ModelId,
+        projection: &[usize],
+    ) -> impl Iterator<Item = &'s Field> {
+        let mut current = Some(model);
+        let mut steps = projection.iter();
+
+        std::iter::from_fn(move || {
+            let &index = steps.next()?;
+            let field = self.get_model(current?)?.fields().get(index)?;
+            current = match field.expr_ty() {
+                stmt::Type::Model(nested) => Some(*nested),
+                _ => None,
+            };
+            Some(field)
+        })
+    }
+
     /// Resolve a projection through the schema, returning either a field or
     /// an enum variant.
     ///
@@ -140,6 +187,25 @@ impl Schema {
         let mut steps = rest.iter();
         while let Some(step) = steps.next() {
             match &current_field.ty {
+                // A `#[document]` embed stores as one column whose sub-fields
+                // live in the document type rather than as `app::Field`s. The
+                // remaining steps index into the document; validate them and
+                // resolve to the document field itself (the leaf has no
+                // `app::Field`). The path was already type-checked by the
+                // generated accessors.
+                FieldTy::Primitive(FieldPrimitive {
+                    ty: stmt::Type::Model(embed_id),
+                    ..
+                }) => {
+                    // `step` and the remaining `steps` are a contiguous tail
+                    // of `rest`; the steps consumed so far (including `step`)
+                    // place `step` at index `consumed - 1`. The document path
+                    // is that tail, valid iff every step resolves to a field.
+                    let consumed = rest.len() - steps.as_slice().len();
+                    let doc_path = &rest[consumed - 1..];
+                    return (self.project_fields(*embed_id, doc_path).count() == doc_path.len())
+                        .then_some(Resolved::Field(current_field));
+                }
                 FieldTy::Primitive(..) => {
                     // Cannot project through primitive fields
                     return None;

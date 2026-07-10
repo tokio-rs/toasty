@@ -1,4 +1,4 @@
-use super::Load;
+use super::{Embed, Load};
 use crate::stmt::{self, Expr, List};
 use toasty_core::schema::app::ModelSet;
 
@@ -195,24 +195,23 @@ impl Field for Vec<u8> {
     }
 }
 
-/// `Vec<T>` of a non-byte element type is a collection model field. The
-/// bounds on `T` correspond to what the trait machinery does with elements:
+/// A `Vec<T>` of embedded structs (`T: Embed`) is a `#[document]` collection —
+/// stored as a single JSON array of objects. There is no override for
+/// `field_ty`: the default returns `Primitive(<Self as Load>::ty())`, which is
+/// `List(Model(T::id()))`, which the schema builder stores as a single JSON
+/// document column.
 ///
-/// - [`Field`] — the schema layer describes each element via
-///   [`Load::ty()`](super::Load::ty). `Field` guarantees
-///   `Load<Output = T>`, matching the load-side `Vec<T>: Load` impl.
-/// - [`Scalar`] — opts the element type into the collection path. Keeps
-///   `Vec<u8>` (bytes, not a collection) on the byte-array specialization
-///   above and prevents nested collections like `Vec<Vec<U>>` until we
-///   support them.
+/// This is the only *blanket* `Field for Vec<_>` impl. A blanket
+/// `impl<T: Scalar> Field for Vec<T>` cannot coexist with it: the compiler
+/// can't prove `Scalar` and `Embed` are disjoint (`Scalar` is public, so a
+/// downstream embed type could implement it), so the two would overlap. The
+/// scalar element types therefore get *concrete* `Vec<$t>` impls (via
+/// [`impl_scalar!`] below), which the orphan rule proves disjoint from this
+/// blanket — exactly as the concrete [`Vec<u8>`] impl above already is.
 impl<T> Field for Vec<T>
 where
-    T: Field + Scalar,
+    T: Embed + Field,
 {
-    // Use the `List<T>` marker as the expression target so the field's
-    // path is `Path<_, List<T>>` (giving `contains`, `is_superset`, `len`,
-    // …) and the create/update setters bind through `IntoExpr<List<T>>`
-    // (Vec, slice, array literal). `new_path` stays identity.
     type ExprTarget = List<T>;
     type Path<Origin> = stmt::Path<Origin, List<T>>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -236,11 +235,11 @@ where
     }
 
     fn key_constraint<Origin>(&self, _target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
-        // A foreign key cannot reference a `Vec<scalar>` field — collections
-        // aren't valid key types. The trait method exists for every `Field`
-        // impl, so we satisfy it with an explicit panic rather than wiring
-        // up an `IntoExpr<Vec<T>>` bound that has no real use.
         unreachable!("Vec<T> fields cannot be used as foreign-key targets");
+    }
+
+    fn register(model_set: &mut ModelSet) {
+        <T as Field>::register(model_set);
     }
 }
 
@@ -251,9 +250,83 @@ where
 /// get re-routed through the collection-field path.
 pub trait Scalar {}
 
+/// Marks types that `#[document]` storage accepts: a `#[derive(Embed)]`
+/// struct, or a `Vec` of them.
+///
+/// The `#[document]` attribute resolves the field's app-level type through
+/// this trait, so applying it to anything else — a scalar, an enum embed, a
+/// `Vec<scalar>` — is a compile error rather than a silently ignored
+/// attribute. The schema builder re-validates the resolved shape at build
+/// time, but only a trait bound can catch the mistake at compile time.
+#[diagnostic::on_unimplemented(
+    message = "`{Self}` cannot use `#[document]` storage",
+    label = "`#[document]` requires a `#[derive(Embed)]` struct or a `Vec` of them",
+    note = "enum embeds and scalar collections do not yet support document storage; \
+            remove the `#[document]` attribute"
+)]
+pub trait Document: Field {
+    /// The app-level type of the document column: `Model(id)` for a bare
+    /// embed, `List(Model(id))` for a collection.
+    fn document_ty() -> toasty_core::stmt::Type {
+        <Self as Load>::ty()
+    }
+}
+
+/// A `Vec` of document-capable embeds is itself document-capable — the
+/// collection is stored as one JSON array of objects. Mirrors the blanket
+/// `Field for Vec<T>` impl above.
+impl<T> Document for Vec<T> where T: Document + Embed + Field {}
+
+/// Registers a scalar collection element type. For each `$t` this generates
+/// both `impl Scalar for $t` (opting it into the collection-path operators)
+/// and a concrete `impl Field for Vec<$t>` (the collection field impl). The
+/// `Vec` impl is per-type rather than a blanket `impl<T: Scalar>` so it stays
+/// coherent with the blanket `impl<T: Embed> Field for Vec<T>` above — see that
+/// impl's docs. A single list keeps the two in sync.
 macro_rules! impl_scalar {
     ( $( $t:ty ),* $(,)? ) => {
-        $( impl Scalar for $t {} )*
+        $(
+            impl Scalar for $t {}
+
+            impl Field for Vec<$t> {
+                // The `List<T>` marker is the expression target so the field's
+                // path is `Path<_, List<T>>` (giving `contains`, `is_superset`,
+                // `len`, …) and create/update setters bind through
+                // `IntoExpr<List<T>>` (Vec, slice, array literal). `new_path`
+                // stays identity; `field_ty` uses the default
+                // `Primitive(<Self as Load>::ty())` = `Primitive(List($t))`.
+                type ExprTarget = List<$t>;
+                type Path<Origin> = stmt::Path<Origin, List<$t>>;
+                type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
+                type Update<'a> = ();
+                type Inner = Self;
+
+                fn new_path<Origin>(path: stmt::Path<Origin, List<$t>>) -> Self::Path<Origin> {
+                    path
+                }
+
+                fn new_list_path<Origin>(
+                    path: stmt::Path<Origin, List<Self::ExprTarget>>,
+                ) -> Self::ListPath<Origin> {
+                    path
+                }
+
+                fn new_update<'a>(
+                    _assignments: &'a mut toasty_core::stmt::Assignments,
+                    _projection: toasty_core::stmt::Projection,
+                ) -> Self::Update<'a> {
+                }
+
+                fn key_constraint<Origin>(
+                    &self,
+                    _target: stmt::Path<Origin, Self::Inner>,
+                ) -> Expr<bool> {
+                    // A foreign key cannot reference a `Vec<scalar>` field —
+                    // collections aren't valid key types.
+                    unreachable!("Vec<T> fields cannot be used as foreign-key targets");
+                }
+            }
+        )*
     };
 }
 
@@ -275,10 +348,10 @@ impl_scalar!(
 );
 
 #[cfg(feature = "rust_decimal")]
-impl Scalar for rust_decimal::Decimal {}
+impl_scalar!(rust_decimal::Decimal);
 
 #[cfg(feature = "bigdecimal")]
-impl Scalar for bigdecimal::BigDecimal {}
+impl_scalar!(bigdecimal::BigDecimal);
 
 impl<T: Field> Field for Option<T> {
     type ExprTarget = Self;

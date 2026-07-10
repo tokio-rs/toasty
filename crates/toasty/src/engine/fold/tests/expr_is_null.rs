@@ -7,6 +7,7 @@ fn cast_is_stripped_from_is_null() {
     // Nullity is type-independent, so the cast is stripped.
     let mut expr = ExprIsNull {
         expr: Box::new(Expr::Cast(ExprCast {
+            from: None,
             expr: Box::new(Expr::arg(0)),
             ty: Type::String,
         })),

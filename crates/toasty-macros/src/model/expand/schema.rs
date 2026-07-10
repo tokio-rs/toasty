@@ -130,7 +130,31 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
                     deferred = quote!(<#ty as #toasty::Field>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
+
+                    // A `#[document]` field is stored as a single JSON column.
+                    // Its app type resolves through the `Document` trait —
+                    // `Model(id)` for a struct embed, `List(Model(id))` for a
+                    // `Vec<embed>` collection — which the schema builder later
+                    // resolves to a `Document` once every embed is registered.
+                    // The trait bound also rejects `#[document]` on any type
+                    // that cannot use document storage (a scalar, an enum
+                    // embed, a `Vec<scalar>`) at compile time. A non-document
+                    // field uses `Field::field_ty`, which column-expands a
+                    // struct embed (`Embedded`) and leaves scalars /
+                    // `Vec<scalar>` as a `Primitive`.
+                    field_ty = if field.attrs.document.is_some() {
+                        quote! {
+                            #toasty::core::schema::app::FieldTy::Primitive(
+                                #toasty::core::schema::app::FieldPrimitive {
+                                    ty: <#ty as #toasty::Document>::document_ty(),
+                                    storage_ty: #storage_ty,
+                                    serialize: None,
+                                }
+                            )
+                        }
+                    } else {
+                        quote!(<#ty as #toasty::Field>::field_ty(#storage_ty))
+                    };
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
@@ -514,8 +538,9 @@ impl Expand<'_> {
             .iter()
             .map(|field| match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    // Primitives use Field::register which delegates to inner
-                    // type if it's an embedded type (via the Field impl).
+                    // Both column-expanded embeds and `#[document]` fields
+                    // register their embedded types through `Field::register`
+                    // (a no-op for scalars).
                     quote! {
                         <#ty as #toasty::Field>::register(model_set);
                     }

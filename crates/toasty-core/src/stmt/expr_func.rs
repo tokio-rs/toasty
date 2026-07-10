@@ -1,4 +1,4 @@
-use super::{Expr, FuncCount, FuncLastInsertId};
+use super::{Expr, FuncCount, FuncJsonExtract, FuncLastInsertId};
 
 /// A function call expression.
 ///
@@ -21,6 +21,11 @@ pub enum ExprFunc {
     /// Returns the first auto-increment ID that was generated for an INSERT statement.
     /// When multiple rows are inserted, this returns the ID of the first row.
     LastInsertId(FuncLastInsertId),
+
+    /// Extracts a value at a key path from a document-stored value (a JSON
+    /// extraction on the SQL backends). Produced when filtering on a field
+    /// inside a `#[document]` embed.
+    JsonExtract(FuncJsonExtract),
 }
 
 impl From<ExprFunc> for Expr {

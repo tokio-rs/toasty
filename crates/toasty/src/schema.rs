@@ -8,7 +8,7 @@ mod embed;
 pub use embed::Embed;
 
 mod field;
-pub use field::{Field, Scalar};
+pub use field::{Document, Field, Scalar};
 
 #[cfg(feature = "jiff")]
 mod jiff;

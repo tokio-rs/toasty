@@ -52,6 +52,12 @@ impl Simplify<'_> {
             return Some(expr.base.take());
         }
 
+        // A path into a `#[document]` column lowers to a plain `ExprProject`
+        // and stays one — positional projection over a structured value, the
+        // same shape a column-expanded embed uses. The SQL serializer renders
+        // it to a JSON path extraction at the edge; the in-memory interpreter
+        // evaluates it directly via `Value::entry`. The engine itself never
+        // deals in JSON.
         None
     }
 }

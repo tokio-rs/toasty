@@ -429,6 +429,16 @@ impl Model {
         }
     }
 
+    /// The model's fields. For an [`EmbeddedEnum`] these are the flattened
+    /// variant fields ([`EmbeddedEnum::fields`]), not the variants themselves.
+    pub fn fields(&self) -> &[Field] {
+        match self {
+            Model::Root(root) => &root.fields,
+            Model::EmbeddedStruct(embedded) => &embedded.fields,
+            Model::EmbeddedEnum(e) => &e.fields,
+        }
+    }
+
     /// Returns a reference to the root model data.
     ///
     /// # Panics

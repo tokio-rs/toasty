@@ -713,7 +713,7 @@ use proc_macro::TokenStream;
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        version, shared
+        version, shared, document
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
@@ -1140,7 +1140,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
-#[proc_macro_derive(Embed, attributes(column, index, unique, shared))]
+#[proc_macro_derive(Embed, attributes(column, document, index, unique, shared))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
