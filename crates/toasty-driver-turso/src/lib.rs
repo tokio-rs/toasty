@@ -185,6 +185,9 @@ impl LocalBuilderOptions {
 }
 
 #[cfg(feature = "sync")]
+/// Sync configuration for a remote Turso database. Each field mirrors a
+/// `turso::sync::Builder` method and is applied in [`BuilderOptions::apply`]
+/// when the driver opens a [`turso::sync::Database`].
 #[derive(Default, Clone)]
 struct SyncBuilderOptions {
     remote_url: Option<String>,
@@ -347,14 +350,23 @@ impl Turso {
         }
     }
 
-    /// Set remote_url for HTTP requests.
+    /// Set the remote base URL for sync HTTP requests. Mirrors
+    /// `turso::sync::Builder::with_remote_url`.
+    ///
+    /// Accepts `https://`, `http://`, and `libsql://` URLs (`libsql://` is
+    /// translated to `https://`). If omitted on a file-backed database that
+    /// was previously synced, Turso loads the URL from on-disk metadata.
     #[cfg(feature = "sync")]
     pub fn with_remote_url(mut self, remote_url: impl Into<String>) -> Self {
         self.options.sync_options.remote_url = Some(remote_url.into());
         self
     }
 
-    /// Set optional authorization token for HTTP requests.
+    /// Set a static authorization token for sync HTTP requests. Mirrors
+    /// `turso::sync::Builder::with_auth_token`.
+    ///
+    /// The token is sent as a `Bearer` header (without the prefix in this
+    /// argument). Overridden by [`Self::with_auth_token_fn`] if called later.
     #[cfg(feature = "sync")]
     pub fn with_auth_token(mut self, token: impl Into<String>) -> Self {
         let token = token.into();
@@ -365,14 +377,16 @@ impl Turso {
         self
     }
 
-    /// Set an async callback that produces an auth token on demand.
+    /// Set an async callback that produces an auth token on demand. Mirrors
+    /// `turso::sync::Builder::with_auth_token_fn`.
     ///
-    /// The callback is invoked before every HTTP request, so it can return a
-    /// freshly rotated token (e.g. fetched from a secrets manager or refreshed
-    /// via OAuth). If the callback returns an error, the in-flight sync
-    /// operation fails with that error.
+    /// The callback runs before every HTTP request, so it can return a freshly
+    /// rotated token (for example from a secrets manager or OAuth refresh). If
+    /// the callback returns an error, the in-flight sync operation fails with
+    /// that error.
     ///
-    /// Calling this overrides any previously configured static token.
+    /// Overrides any previously configured static token from
+    /// [`Self::with_auth_token`].
     #[cfg(feature = "sync")]
     pub fn with_auth_token_fn<F, Fut>(mut self, f: F) -> Self
     where
@@ -383,22 +397,28 @@ impl Turso {
         self
     }
 
-    /// Set custom client name (defaults to 'turso-sync-rust').
+    /// Set the client name reported to the sync engine. Mirrors
+    /// `turso::sync::Builder::with_client_name`.
+    ///
+    /// Defaults to `turso-sync-rust` when unset.
     #[cfg(feature = "sync")]
     pub fn with_client_name(mut self, name: impl Into<String>) -> Self {
         self.options.sync_options.client_name = Some(name.into());
         self
     }
 
-    /// Set long poll timeout for waiting remote changes.
+    /// Set how long to wait on the remote when polling for changes. Mirrors
+    /// `turso::sync::Builder::with_long_poll_timeout`.
     #[cfg(feature = "sync")]
     pub fn with_long_poll_timeout(mut self, timeout: Duration) -> Self {
         self.options.sync_options.long_poll_timeout = Some(timeout);
         self
     }
 
-    /// Set encryption key (base64-encoded) and cipher for the Turso Cloud database.
-    /// The cipher is used to calculate the correct reserved_bytes for the database.
+    /// Set a base64-encoded encryption key and cipher for the remote Turso
+    /// Cloud database. Mirrors `turso::sync::Builder::with_remote_encryption`.
+    ///
+    /// The cipher determines `reserved_bytes` for page layout during bootstrap.
     #[cfg(feature = "sync")]
     pub fn with_remote_encryption(
         mut self,
@@ -411,31 +431,45 @@ impl Turso {
         self
     }
 
-    /// Set encryption key (base64-encoded) for the Turso Cloud database.
-    /// The key will be sent as x-turso-encryption-key header with sync HTTP requests.
-    /// Note: For deferred sync (no initial bootstrap), use with_remote_encryption() instead
-    /// to also specify the cipher for correct reserved_bytes calculation.
+    /// Set a base64-encoded encryption key for the remote Turso Cloud database.
+    /// Mirrors `turso::sync::Builder::with_remote_encryption_key`.
+    ///
+    /// The key is sent as the `x-turso-encryption-key` header on sync HTTP
+    /// requests. For deferred sync without an initial bootstrap, prefer
+    /// [`Self::with_remote_encryption`] so the cipher is set for correct
+    /// `reserved_bytes` calculation.
     #[cfg(feature = "sync")]
     pub fn with_remote_encryption_key(mut self, base64_key: impl Into<String>) -> Self {
         self.options.sync_options.remote_encryption_key = Some(base64_key.into());
         self
     }
 
-    /// Configure bootstrap behavior for empty databases.
+    /// Enable or disable bootstrapping an empty local database from the remote.
+    /// Mirrors `turso::sync::Builder::bootstrap_if_empty`.
+    ///
+    /// When enabled and the local database is empty, the driver downloads
+    /// schema and initial data from the remote on first open. Upstream defaults
+    /// to enabled; call with `false` to skip bootstrap (for example when
+    /// attaching to an existing local file).
     #[cfg(feature = "sync")]
     pub fn bootstrap_if_empty(mut self, enable: bool) -> Self {
         self.options.sync_options.bootstrap_if_empty = enable;
         self
     }
 
-    /// Set experimental partial sync configuration.
+    /// Set experimental partial-sync options. Mirrors
+    /// `turso::sync::Builder::with_partial_sync_opts_experimental`.
     #[cfg(feature = "sync")]
     pub fn experimental_with_partial_sync_opts(mut self, opts: PartialSyncOpts) -> Self {
         self.options.sync_options.partial_sync_config_experimental = Some(opts);
         self
     }
 
-    /// Push local changes to the remote.
+    /// Push local changes to the remote. Mirrors
+    /// [`turso::sync::Database::push`].
+    ///
+    /// Operates on the shared [`turso::sync::Database`] cached by this driver,
+    /// so all connections in the pool see the same pending changes.
     #[cfg(feature = "sync")]
     pub async fn push(&self) -> Result<()> {
         self.database()
@@ -445,7 +479,11 @@ impl Turso {
             .map_err(classify_turso_error)
     }
 
-    /// Pull remote changes; returns true if any changes were applied.
+    /// Pull remote changes and apply them locally. Mirrors
+    /// [`turso::sync::Database::pull`].
+    ///
+    /// Waits for remote changes, then applies them if any exist. Returns `true`
+    /// when changes were applied, `false` when the remote had nothing new.
     #[cfg(feature = "sync")]
     pub async fn pull(&self) -> Result<bool> {
         self.database()
@@ -455,7 +493,8 @@ impl Turso {
             .map_err(classify_turso_error)
     }
 
-    /// Force WAL checkpoint for the main database.
+    /// Force a WAL checkpoint on the main database. Mirrors
+    /// [`turso::sync::Database::checkpoint`].
     #[cfg(feature = "sync")]
     pub async fn checkpoint(&self) -> Result<()> {
         self.database()
@@ -465,7 +504,8 @@ impl Turso {
             .map_err(classify_turso_error)
     }
 
-    /// Retrieve sync statistics for the database.
+    /// Return sync statistics for this database. Mirrors
+    /// [`turso::sync::Database::stats`].
     #[cfg(feature = "sync")]
     pub async fn stats(&self) -> Result<DatabaseSyncStats> {
         self.database()
@@ -529,8 +569,9 @@ impl Turso {
         self
     }
 
-    /// Enable Turso's experimental index methods. Mirrors
-    /// `turso::Builder::experimental_index_method`.
+    /// Enable Turso's experimental index methods. With the `sync` feature,
+    /// mirrors `turso::sync::Builder::experimental_index_method`; otherwise
+    /// mirrors `turso::Builder::experimental_index_method`.
     pub fn experimental_index_method(mut self, on: bool) -> Self {
         self.options.index_method = on;
         self
