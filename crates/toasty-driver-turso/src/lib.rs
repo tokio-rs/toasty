@@ -275,20 +275,16 @@ impl BuilderOptions {
 /// ```
 /// use toasty_driver_turso::Turso;
 ///
-/// // In-memory database
 /// let driver = Turso::in_memory();
-///
-/// // File-backed database
 /// let driver = Turso::file("path/to/db");
 ///
-/// // With experimental features
-/// use toasty_driver_turso::EncryptionOpts;
+/// // Sync (enabled by default)
 /// let driver = Turso::file("path/to/db")
-///     .experimental_encryption(EncryptionOpts {
-///         cipher: "aes256gcm".into(),
-///         hexkey: "<64-hex-character-key>".into(),
-///     })
-///     .experimental_attach(true);
+///     .with_remote_url("http://127.0.0.1:8080")
+///     .bootstrap_if_empty(true);
+///
+/// // Concurrent writes
+/// let driver = Turso::file("path/to/db").concurrent_writes();
 /// ```
 #[derive(Clone)]
 pub struct Turso {
@@ -961,7 +957,19 @@ impl toasty_core::driver::Connection for Connection {
 #[cfg(test)]
 mod tests {
     use super::{Turso, TursoPath};
+    #[cfg(feature = "sync")]
+    use anyhow::{Result, bail};
+    #[cfg(feature = "sync")]
+    use reqwest::Client;
+    #[cfg(feature = "sync")]
+    use serde_json::{Value, json};
+#[cfg(feature = "sync")]
+use toasty_core::driver::Driver;
     use std::path::PathBuf;
+    #[cfg(feature = "sync")]
+    use std::time::Duration;
+    #[cfg(feature = "sync")]
+    use tokio::time::{Instant, sleep};
 
     /// The file path `Turso::new` resolves out of a `turso:` URL.
     fn file_path(url: &str) -> PathBuf {
@@ -1001,10 +1009,113 @@ mod tests {
         ));
     }
 
-    #[tokio::test]
-    async fn test_sync_push() -> toasty_core::Result<()> {
-        let driver = crate::Turso::in_memory().with_remote_url("http://127.0.0.1:8080");
+    #[cfg(feature = "sync")]
+    struct TursoTestServer {
+        client: Client,
+        db_url: String,
+    }
 
+    #[cfg(feature = "sync")]
+    impl TursoTestServer {
+        pub async fn new() -> Result<Self> {
+            let client = Client::new();
+            let db_url = std::env::var("TOASTY_TEST_TURSO_SYNC_URL")
+                .unwrap_or("http://127.0.0.1:8080".to_string());
+
+            let deadline = Instant::now() + Duration::from_secs(30);
+            loop {
+                if client.get(&db_url).send().await.is_ok() {
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    bail!("Turso sync server did not become ready within 30s; url={db_url}");
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+
+            Ok(Self { client, db_url })
+        }
+
+        async fn run_sql(&self, sql: &str) -> Result<Vec<Value>> {
+            let resp: Value = self
+                .client
+                .post(format!("{}/v2/pipeline", self.db_url))
+                .json(&json!({
+                    "requests": [{
+                        "type": "execute",
+                        "stmt": { "sql": sql }
+                    }]
+                }))
+                .send()
+                .await?
+                .error_for_status()?
+                .json()
+                .await?;
+
+            let result = &resp["results"][0];
+            if result["type"] != "ok" {
+                bail!("pipeline failed: {resp}");
+            }
+            Ok(result["response"]["result"]["rows"]
+                .as_array()
+                .unwrap()
+                .clone())
+        }
+    }
+
+    #[cfg(feature = "sync")]
+    #[tokio::test]
+    async fn test_sync_pull() -> Result<()> {
+        let server = TursoTestServer::new().await?;
+
+        server.run_sql("DROP TABLE IF EXISTS t").await?;
+        server.run_sql("CREATE TABLE t (x TEXT)").await?;
+        server
+            .run_sql("INSERT INTO t VALUES ('test'), ('test2')")
+            .await?;
+
+        let driver = Turso::in_memory().with_remote_url(&server.db_url);
+
+        driver.pull().await?;
+
+        let mut rows = driver
+            .database()
+            .await?
+            .connect()
+            .await?
+            .query("SELECT x FROM t ORDER BY x", ())
+            .await?;
+
+        let mut count = 0;
+        while rows.next().await?.is_some() {
+            count += 1;
+        }
+        assert_eq!(count, 2);
+
+        driver.reset_db().await?;
+
+        Ok(())
+    }
+
+    #[cfg(feature = "sync")]
+    #[tokio::test]
+    async fn test_sync_push() -> Result<()> {
+        let server = TursoTestServer::new().await?;
+        
+        server.run_sql("DROP TABLE IF EXISTS t").await?;
+        
+        let driver = Turso::in_memory().with_remote_url(&server.db_url);
+        let conn = driver.database().await?.connect().await?;
+        
+        conn.execute("DROP TABLE IF EXISTS t", ()).await?;
+        conn.execute("CREATE TABLE t (x TEXT)", ()).await?;
+        conn.execute("INSERT INTO t VALUES ('test'), ('test-2')", ()).await?;
+        
+        driver.push().await?;
+        
+        let rows = server.run_sql("SELECT x FROM t ORDER BY x").await?;
+        assert_eq!(rows.len(), 2);
+        
         Ok(())
     }
 }
