@@ -31,7 +31,6 @@ uuid.workspace = true
 percent-encoding.workspace = true
 
 [dev-dependencies]
-anyhow = "1.0.103"
 reqwest = { version = "0.13.4", features = ["json"] }
 
 [lints]
