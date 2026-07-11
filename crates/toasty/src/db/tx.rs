@@ -238,6 +238,7 @@ impl Drop for Transaction<'_> {
                 .in_tx
                 .send(ConnectionOperation::ExecOperation {
                     operation: Box::new(op.into()),
+                    span: tracing::Span::current(),
                     tx,
                 });
         }

@@ -756,6 +756,12 @@ impl BuildMapping<'_> {
 
         match &column.ty {
             column_ty if column_ty == ty => expr,
+            // A `#[document]` column lowers through a schema-directed cast.
+            // The structural target (`Object`) does not name the embedded
+            // model and a positional record is not self-describing, so the
+            // cast carries the model-level source type (see
+            // `stmt::ExprCast::from`).
+            _ if column.is_document() => stmt::Expr::cast_from(expr, ty, &column.ty),
             // If the types do not match, attempt casting as a fallback.
             _ => stmt::Expr::cast(expr, &column.ty),
         }
@@ -783,7 +789,10 @@ impl BuildMapping<'_> {
 
         match &column.ty {
             c_ty if *c_ty == primitive.ty => expr_column,
-            // If the types do not match, attempt casting as a fallback.
+            // If the types do not match, attempt casting as a fallback. A
+            // `#[document]` column takes this path too: the raising cast
+            // (`Object` → `Model`) turns the driver's named wire object into
+            // the embed's positional record when the engine evaluates it.
             _ => stmt::Expr::cast(expr_column, &primitive.ty),
         }
     }

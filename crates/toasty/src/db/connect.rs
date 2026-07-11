@@ -2,7 +2,7 @@ use crate::Result;
 
 use async_trait::async_trait;
 use std::borrow::Cow;
-use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, ConnectContext, Driver};
 use toasty_core::{
     driver::Connection,
     schema::{db::Migration, diff},
@@ -128,8 +128,8 @@ impl Driver for Connect {
         self.driver.capability()
     }
 
-    async fn connect(&self) -> Result<Box<dyn Connection>> {
-        self.driver.connect().await
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
+        self.driver.connect(cx).await
     }
 
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {

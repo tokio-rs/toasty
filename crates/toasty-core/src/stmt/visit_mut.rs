@@ -6,10 +6,10 @@ use super::{
     ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
     ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
     ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
-    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
-    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
-    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    FuncCount, FuncJsonExtract, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
+    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Mutable visitor trait for the statement AST.
@@ -175,6 +175,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_func_count_mut`].
     fn visit_expr_func_count_mut(&mut self, i: &mut FuncCount) {
         visit_expr_func_count_mut(self, i);
+    }
+
+    /// Visits a [`FuncJsonExtract`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_func_json_extract_mut`].
+    fn visit_expr_func_json_extract_mut(&mut self, i: &mut FuncJsonExtract) {
+        visit_expr_func_json_extract_mut(self, i);
     }
 
     /// Visits a [`FuncLastInsertId`] node mutably.
@@ -629,6 +636,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_func_count_mut(&mut **self, i);
     }
 
+    fn visit_expr_func_json_extract_mut(&mut self, i: &mut FuncJsonExtract) {
+        VisitMut::visit_expr_func_json_extract_mut(&mut **self, i);
+    }
+
     fn visit_expr_in_list_mut(&mut self, i: &mut ExprInList) {
         VisitMut::visit_expr_in_list_mut(&mut **self, i);
     }
@@ -1032,8 +1043,17 @@ where
 {
     match node {
         ExprFunc::Count(func) => v.visit_expr_func_count_mut(func),
+        ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract_mut(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id_mut(func),
     }
+}
+
+/// Default mutable traversal for [`FuncJsonExtract`] nodes. Visits the base expression.
+pub fn visit_expr_func_json_extract_mut<V>(v: &mut V, node: &mut FuncJsonExtract)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.base);
 }
 
 /// Default mutable traversal for [`FuncCount`] nodes. Visits the optional argument and optional filter expressions.

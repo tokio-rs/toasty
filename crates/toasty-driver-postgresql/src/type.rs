@@ -27,6 +27,10 @@ pub(crate) fn to_postgres_type(ty: &db::Type) -> &'static Type {
         // fall back to TEXT if we reach here (shouldn't happen in practice).
         db::Type::Enum(_) => &Type::TEXT,
         db::Type::List(elem) => array_type_of(to_postgres_type(elem)),
+        // `#[document]` columns: `jsonb` for the binary encoding. The text
+        // encoding (`#[document(text)]`) is not yet wired up.
+        db::Type::Document { binary: true } => &Type::JSONB,
+        db::Type::Document { binary: false } => &Type::JSON,
         _ => todo!("to_postgres_type; db_ty={ty:#?}"),
     }
 }

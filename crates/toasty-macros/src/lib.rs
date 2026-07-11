@@ -713,7 +713,7 @@ use proc_macro::TokenStream;
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        version
+        version, document
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
@@ -1062,7 +1062,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
-#[proc_macro_derive(Embed, attributes(column, index, unique))]
+#[proc_macro_derive(Embed, attributes(column, document, index, unique))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
@@ -1946,6 +1946,23 @@ pub fn create(input: TokenStream) -> TokenStream {
 /// Instance targets do not consume the binding — the macro expands to
 /// `user.update()`, which auto-borrows `&mut user` the same way the
 /// chain form does. `user` stays owned after the macro returns.
+///
+/// Value expressions are evaluated before the target is borrowed, so
+/// they may read the target's own fields:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     done: bool,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut todo: Todo) -> toasty::Result<()> {
+/// toasty::update!(todo { done: !todo.done }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Field shapes
 ///

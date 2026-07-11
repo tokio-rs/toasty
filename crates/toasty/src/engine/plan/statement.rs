@@ -1337,10 +1337,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ));
         }
 
-        let row_filter = {
+        let mut row_filter = {
             let f = stmt.filter_expr_unwrap();
             if f.is_true() { None } else { Some(f.clone()) }
         };
+        self.legalize_kv_expr(&mut row_filter);
 
         let limit = extract_pagination(&stmt);
 
@@ -1381,6 +1382,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let limit = extract_pagination(&stmt);
                 let order = extract_query_pk_order(&stmt);
 
+                let mut row_filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut row_filter);
+
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
                     input,
@@ -1388,7 +1392,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     index: None, // Querying primary key
                     columns: self.load_data.select_items.extract_expr_references(),
                     pk_filter: index_plan.index_filter.take(),
-                    row_filter: index_plan.result_filter.take(),
+                    row_filter,
                     ty: ty.clone(),
                     limit,
                     order,
@@ -1411,13 +1415,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     }));
                 }
 
+                let mut row_filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut row_filter);
+
                 let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
                     input,
                     table: index_plan.table_id(),
                     index: None, // Querying primary key
                     columns,
                     pk_filter: index_plan.index_filter.take(),
-                    row_filter: index_plan.result_filter.take(),
+                    row_filter,
                     ty: index_key_ty,
                     limit: None,
                     order: None,
@@ -1455,6 +1462,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let limit = extract_pagination(&stmt);
             let order = extract_query_pk_order(&stmt);
 
+            let mut row_filter = index_plan.result_filter.take();
+            self.legalize_kv_expr(&mut row_filter);
+
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
             return self.insert_mir_with_deps(mir::QueryPk {
@@ -1463,7 +1473,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 index: Some(index_plan.index.id), // Query the secondary index
                 columns: self.load_data.select_items.extract_expr_references(), // Return full records
                 pk_filter: index_plan.index_filter.take(),
-                row_filter: index_plan.result_filter.take(),
+                row_filter,
                 ty: ty.clone(), // Full record type, not just PKs
                 limit,
                 order,
@@ -1555,7 +1565,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         index_key_ty: stmt::Type,
     ) -> mir::NodeId {
         if keys.is_const() {
-            self.insert_const(keys.eval_const(), index_key_ty)
+            let keys = keys.eval_const(&self.planner.engine.schema);
+            self.insert_const(keys, index_key_ty)
         } else if keys.is_identity() {
             debug_assert_eq!(1, self.load_data.inputs.len(), "TODO");
             self.load_data.inputs[0]
@@ -1567,6 +1578,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 projection: keys,
                 ty,
             })
+        }
+    }
+
+    /// Legalize a driver-bound key-value operation expression (a filter or
+    /// condition the driver compiles, e.g. into a DynamoDB expression):
+    /// projections into `#[document]` columns become resolved
+    /// `FuncJsonExtract` name paths, mirroring what legalization does to full
+    /// statements at the SQL boundary. In-memory expressions (post filters,
+    /// guards) are deliberately *not* legalized — the interpreter wants the
+    /// positional form.
+    fn legalize_kv_expr(&self, expr: &mut Option<stmt::Expr>) {
+        if let Some(expr) = expr {
+            self.planner.engine.legalize_table_expr(expr);
         }
     }
 
@@ -1587,25 +1611,40 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     ty: ty.clone(),
                 })
             }
-            stmt::Statement::Delete(delete_stmt) => self.insert_mir_with_deps(mir::DeleteByKey {
-                input: get_by_key_input,
-                table: index_plan.table_id(),
-                filter: index_plan.result_filter.take(),
-                condition: delete_stmt.condition.expr.clone(),
-                ty: stmt::Type::Unit,
-            }),
+            stmt::Statement::Delete(delete_stmt) => {
+                let mut filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut filter);
+                let mut condition = delete_stmt.condition.expr.clone();
+                self.legalize_kv_expr(&mut condition);
+
+                self.insert_mir_with_deps(mir::DeleteByKey {
+                    input: get_by_key_input,
+                    table: index_plan.table_id(),
+                    filter,
+                    condition,
+                    ty: stmt::Type::Unit,
+                })
+            }
             stmt::Statement::Update(update_stmt) => {
                 // If there is a pre-filter, wrap the key input in a Guard
                 // node that produces an empty list when the guard is false,
                 // causing UpdateByKey to naturally no-op.
                 let guarded_input = self.apply_guard(get_by_key_input, index_plan);
 
+                let mut filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut filter);
+                let mut condition = update_stmt.condition.expr.clone();
+                self.legalize_kv_expr(&mut condition);
+
                 self.insert_mir_with_deps(mir::UpdateByKey {
                     input: guarded_input,
                     table: index_plan.table_id(),
+                    // Document values in the assignments are already named:
+                    // the mapping's lowering casts converted them during
+                    // statement lowering/simplification.
                     assignments: update_stmt.assignments.clone(),
-                    filter: index_plan.result_filter.take(),
-                    condition: update_stmt.condition.expr.clone(),
+                    filter,
+                    condition,
                     columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })
@@ -1832,7 +1871,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             "const types must be of type `stmt::Type::List`"
         );
         debug_assert!(
-            value.is_a(&ty),
+            value.is_a(&self.planner.engine.schema.app, &ty),
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.7.0...toasty-sql-v0.8.0) - 2026-07-06
+
+### Added
+
+- Support #[version] attribute for optimistic concurrency on SQL drivers ([#1065])
+- Automatically infer key and references in #[belongs_to] relationships ([#1063])
+- Add escape support for LIKE expressions ([#1039])
+- Add BETWEEN operator to query DSL ([#1029])
+
+### Fixed
+
+- Fix incorrect results in OR'd variant filters when decoding enums ([#1067])
+
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1039]: https://github.com/tokio-rs/toasty/pull/1039
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1065]: https://github.com/tokio-rs/toasty/pull/1065
+[#1067]: https://github.com/tokio-rs/toasty/pull/1067
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.6.1...toasty-sql-v0.7.0) - 2026-05-29
 
 ### Added

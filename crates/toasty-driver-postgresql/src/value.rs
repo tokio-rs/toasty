@@ -167,6 +167,23 @@ impl Value {
                 Some(EnumString(v)) => stmt::Value::String(v),
                 None => return Self(stmt::Value::Null),
             }
+        } else if column.type_() == &Type::JSONB || column.type_() == &Type::JSON {
+            // `#[document]` columns. Decode the raw JSON wire bytes
+            // shape-directed to the named `Value::Object` wire form; the
+            // engine raises it to the embed's positional record.
+            let raw = match row.get::<usize, Option<RawBytes<'_>>>(index) {
+                Some(RawBytes(raw)) => raw,
+                None => return Self(stmt::Value::Null),
+            };
+            // `jsonb` wire format: a 1-byte version header, then UTF-8 JSON
+            // text. `json` is plain UTF-8 text.
+            let json_bytes = if column.type_() == &Type::JSONB {
+                &raw[1..]
+            } else {
+                raw
+            };
+            toasty_sql::json::from_slice(json_bytes, expected_ty)
+                .expect("invalid JSON in document column")
         } else if let Kind::Array(_) = column.type_().kind() {
             // Native array column (e.g. `text[]`, `int8[]`) — decoded
             // directly into `Vec<stmt::Value>` via `array_from_sql`. The
@@ -484,6 +501,8 @@ impl ToSql for Value {
                 | Type::TIMESTAMPTZ
                 | Type::DATE
                 | Type::TIME
+                | Type::JSONB
+                | Type::JSON
         ) || matches!(ty.kind(), Kind::Enum(_) | Kind::Array(_))
     }
     to_sql_checked!();
@@ -552,6 +571,24 @@ fn value_to_sql(
         (stmt::Value::Time(value), _) => value.to_sql(ty, out),
         #[cfg(feature = "jiff")]
         (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
+        // `#[document]` columns: serialize the structural value (a
+        // `Value::List` of `Value::Object`s) to JSON and bind it. The engine
+        // has already converted positional records to named objects, so this
+        // is a plain structural encode.
+        (value, &Type::JSONB) => {
+            let bytes = toasty_sql::json::to_vec(value)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)?;
+            // `jsonb` wire format: a 1-byte version header, then UTF-8 text.
+            out.extend_from_slice(&[1]);
+            out.extend_from_slice(&bytes);
+            Ok(IsNull::No)
+        }
+        (value, &Type::JSON) => {
+            let bytes = toasty_sql::json::to_vec(value)
+                .map_err(|e| Box::new(e) as Box<dyn std::error::Error + Sync + Send>)?;
+            out.extend_from_slice(&bytes);
+            Ok(IsNull::No)
+        }
         // List → bind as a PostgreSQL array via the streaming `array_to_sql`
         // primitive: the closure runs per element and writes directly into
         // `out`, so there's no intermediate `Vec<Option<T>>`. The element PG

@@ -115,9 +115,11 @@ impl Expand<'_> {
                 }
             }
             FieldTy::Primitive(ty) => {
-                // Bind through `Field::ExprTarget` so each field's setter
-                // accepts whatever its expression-level type permits —
-                // `Self` for scalars, `List<T>` for `Vec<T: Scalar>`.
+                // Bind through `<Ty as Field>::ExprTarget` so each field's
+                // setter accepts whatever its expression-level type permits —
+                // `Self` for scalars, `List<T>` for `Vec<T>` collections, and
+                // so on. A `#[document]` field uses the same `Field` impl as
+                // its column-expanded form; only the schema `field_ty` differs.
                 quote! {
                     #vis fn #field_ident(mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> Self {
                         self.#set_field_ident(#field_ident);

@@ -56,7 +56,10 @@ pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
     }
 
     // Get a connection to check which migrations have been applied
-    let mut conn = db.driver().connect().await?;
+    let mut conn = db
+        .driver()
+        .connect(&toasty::db::ConnectContext::default())
+        .await?;
 
     // Get list of already applied migrations
     let applied_migrations = conn.applied_migrations().await?;

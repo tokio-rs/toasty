@@ -184,6 +184,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
+        // A struct embed can be stored as a `#[document]` column (an enum
+        // embed cannot, yet — its document encoding is undefined). The
+        // `#[document]` attribute resolves the field's type through this
+        // trait, so the bound is what rejects the attribute on
+        // non-document-capable types at compile time.
+        impl #toasty::Document for #model_ident {}
+
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
             fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
                 #into_expr_body_val
@@ -454,8 +461,12 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates a field accessor method for a primitive field using the
-    /// `Field::new_path` trait.
+    /// Generates a field accessor method for a primitive field, resolving the
+    /// path shape through the field type's [`Field`] impl — its `Path` /
+    /// `new_path` / `ExprTarget`. The type itself decides its path shape (a
+    /// struct embed's Fields handle, a `Vec<scalar>` / `Vec<Embed>` list leaf)
+    /// without the macro inspecting the Rust type. A `#[document]` field uses
+    /// the same `Field` impl as its column-expanded form.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -470,8 +481,8 @@ impl Expand<'_> {
 
         // Construct the chained path with the field's `ExprTarget` as the
         // tag, so `new_path` receives exactly the type it expects. For
-        // `Vec<scalar>` this is
-        // `List<T>`; for everything else it is the field's Rust type.
+        // `Vec<_>` this is `List<T>`; for everything else it is the field's
+        // Rust type.
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
