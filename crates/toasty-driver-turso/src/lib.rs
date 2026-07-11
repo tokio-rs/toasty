@@ -350,6 +350,100 @@ impl Turso {
         }
     }
 
+    /// Allow transactions to run concurrently instead of serializing on a
+    /// single writer.
+    ///
+    /// When enabled, each new connection switches to Turso's MVCC journal
+    /// (`PRAGMA journal_mode = 'mvcc'`) and a transaction started with
+    /// [`TransactionMode::Default`](toasty_core::driver::operation::TransactionMode::Default)
+    /// — i.e. an unspecified mode — issues `BEGIN CONCURRENT`. Conflicting
+    /// transactions can then fail to commit and must be retried by the
+    /// caller.
+    ///
+    /// Callers can opt out of MVCC concurrency on a per-transaction basis by
+    /// requesting a different
+    /// [`TransactionMode`](toasty_core::driver::operation::TransactionMode):
+    /// `Deferred` falls back to plain `BEGIN`, while `Immediate` and
+    /// `Exclusive` issue `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE` respectively.
+    pub fn concurrent_writes(mut self) -> Self {
+        self.concurrent_writes = true;
+        self
+    }
+
+    /// Enable Turso's experimental index methods. With the `sync` feature,
+    /// mirrors `turso::sync::Builder::experimental_index_method`; otherwise
+    /// mirrors `turso::Builder::experimental_index_method`.
+    pub fn experimental_index_method(mut self, on: bool) -> Self {
+        self.options.index_method = on;
+        self
+    }
+
+    /// Enable Turso's experimental encryption with the given cipher and
+    /// key. Bundles `turso::Builder::experimental_encryption(true)` with
+    /// `turso::Builder::with_encryption(opts)` so callers cannot enable
+    /// encryption without supplying a key.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
+        self.options.local_options.encryption = Some(opts);
+        self
+    }
+
+    /// Enable Turso's experimental `ATTACH DATABASE` support. Mirrors
+    /// `turso::Builder::experimental_attach`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_attach(mut self, on: bool) -> Self {
+        self.options.local_options.attach = on;
+        self
+    }
+
+    /// Enable Turso's experimental custom types. Mirrors
+    /// `turso::Builder::experimental_custom_types`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_custom_types(mut self, on: bool) -> Self {
+        self.options.local_options.custom_types = on;
+        self
+    }
+
+    /// Enable Turso's experimental generated columns. Mirrors
+    /// `turso::Builder::experimental_generated_columns`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_generated_columns(mut self, on: bool) -> Self {
+        self.options.local_options.generated_columns = on;
+        self
+    }
+
+    /// Enable Turso's experimental materialized views. Mirrors
+    /// `turso::Builder::experimental_materialized_views`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_materialized_views(mut self, on: bool) -> Self {
+        self.options.local_options.materialized_views = on;
+        self
+    }
+
+    /// Enable Turso's experimental `VACUUM`. Mirrors
+    /// `turso::Builder::experimental_vacuum`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_vacuum(mut self, on: bool) -> Self {
+        self.options.local_options.vacuum = on;
+        self
+    }
+
+    /// Enable Turso's experimental multi-process WAL. Mirrors
+    /// `turso::Builder::experimental_multiprocess_wal`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_multiprocess_wal(mut self, on: bool) -> Self {
+        self.options.local_options.multiprocess_wal = on;
+        self
+    }
+
+    /// Enable Turso's experimental `WITHOUT ROWID` support. Mirrors
+    /// `turso::Builder::experimental_without_rowid`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_without_rowid(mut self, on: bool) -> Self {
+        self.options.local_options.without_rowid = on;
+        self
+    }
+
     /// Set the remote base URL for sync HTTP requests. Mirrors
     /// `turso::sync::Builder::with_remote_url`.
     ///
@@ -513,100 +607,6 @@ impl Turso {
             .stats()
             .await
             .map_err(classify_turso_error)
-    }
-
-    /// Allow transactions to run concurrently instead of serializing on a
-    /// single writer.
-    ///
-    /// When enabled, each new connection switches to Turso's MVCC journal
-    /// (`PRAGMA journal_mode = 'mvcc'`) and a transaction started with
-    /// [`TransactionMode::Default`](toasty_core::driver::operation::TransactionMode::Default)
-    /// — i.e. an unspecified mode — issues `BEGIN CONCURRENT`. Conflicting
-    /// transactions can then fail to commit and must be retried by the
-    /// caller.
-    ///
-    /// Callers can opt out of MVCC concurrency on a per-transaction basis by
-    /// requesting a different
-    /// [`TransactionMode`](toasty_core::driver::operation::TransactionMode):
-    /// `Deferred` falls back to plain `BEGIN`, while `Immediate` and
-    /// `Exclusive` issue `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE` respectively.
-    pub fn concurrent_writes(mut self) -> Self {
-        self.concurrent_writes = true;
-        self
-    }
-
-    /// Enable Turso's experimental encryption with the given cipher and
-    /// key. Bundles `turso::Builder::experimental_encryption(true)` with
-    /// `turso::Builder::with_encryption(opts)` so callers cannot enable
-    /// encryption without supplying a key.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
-        self.options.local_options.encryption = Some(opts);
-        self
-    }
-
-    /// Enable Turso's experimental `ATTACH DATABASE` support. Mirrors
-    /// `turso::Builder::experimental_attach`.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_attach(mut self, on: bool) -> Self {
-        self.options.local_options.attach = on;
-        self
-    }
-
-    /// Enable Turso's experimental custom types. Mirrors
-    /// `turso::Builder::experimental_custom_types`.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_custom_types(mut self, on: bool) -> Self {
-        self.options.local_options.custom_types = on;
-        self
-    }
-
-    /// Enable Turso's experimental generated columns. Mirrors
-    /// `turso::Builder::experimental_generated_columns`.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_generated_columns(mut self, on: bool) -> Self {
-        self.options.local_options.generated_columns = on;
-        self
-    }
-
-    /// Enable Turso's experimental index methods. With the `sync` feature,
-    /// mirrors `turso::sync::Builder::experimental_index_method`; otherwise
-    /// mirrors `turso::Builder::experimental_index_method`.
-    pub fn experimental_index_method(mut self, on: bool) -> Self {
-        self.options.index_method = on;
-        self
-    }
-
-    /// Enable Turso's experimental materialized views. Mirrors
-    /// `turso::Builder::experimental_materialized_views`.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_materialized_views(mut self, on: bool) -> Self {
-        self.options.local_options.materialized_views = on;
-        self
-    }
-
-    /// Enable Turso's experimental `VACUUM`. Mirrors
-    /// `turso::Builder::experimental_vacuum`.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_vacuum(mut self, on: bool) -> Self {
-        self.options.local_options.vacuum = on;
-        self
-    }
-
-    /// Enable Turso's experimental multi-process WAL. Mirrors
-    /// `turso::Builder::experimental_multiprocess_wal`.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_multiprocess_wal(mut self, on: bool) -> Self {
-        self.options.local_options.multiprocess_wal = on;
-        self
-    }
-
-    /// Enable Turso's experimental `WITHOUT ROWID` support. Mirrors
-    /// `turso::Builder::experimental_without_rowid`.
-    #[cfg(not(feature = "sync"))]
-    pub fn experimental_without_rowid(mut self, on: bool) -> Self {
-        self.options.local_options.without_rowid = on;
-        self
     }
 
     fn path_str(&self) -> &str {
