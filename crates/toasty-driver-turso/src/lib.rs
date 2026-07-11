@@ -979,17 +979,7 @@ impl toasty_core::driver::Connection for Connection {
 #[cfg(test)]
 mod tests {
     use super::{Turso, TursoPath};
-    #[cfg(feature = "sync")]
-    use reqwest::Client;
-    #[cfg(feature = "sync")]
-    use serde_json::{Value, json};
     use std::path::PathBuf;
-    #[cfg(feature = "sync")]
-    use std::time::Duration;
-    #[cfg(feature = "sync")]
-    use toasty_core::driver::Driver;
-    #[cfg(feature = "sync")]
-    use tokio::time::{Instant, sleep};
 
     /// The file path `Turso::new` resolves out of a `turso:` URL.
     fn file_path(url: &str) -> PathBuf {
@@ -1028,14 +1018,21 @@ mod tests {
             TursoPath::InMemory
         ));
     }
+}
 
-    #[cfg(feature = "sync")]
+#[cfg(all(test, feature = "sync"))]
+mod sync_tests {
+    use super::{Turso, TursoValue};
+    use reqwest::Client;
+    use serde_json::{Value, json};
+    use std::time::Duration;
+    use tokio::time::{Instant, sleep};
+
     struct TursoTestServer {
         client: Client,
         db_url: String,
     }
 
-    #[cfg(feature = "sync")]
     impl TursoTestServer {
         pub async fn new() -> Self {
             let client = Client::new();
@@ -1086,46 +1083,9 @@ mod tests {
         }
     }
 
-    #[cfg(feature = "sync")]
     #[tokio::test]
-    async fn test_sync_pull() {
+    async fn test_sync_push_and_pull() {
         let server = TursoTestServer::new().await;
-
-        server.run_sql("DROP TABLE IF EXISTS t").await;
-        server.run_sql("CREATE TABLE t (x TEXT)").await;
-        server
-            .run_sql("INSERT INTO t VALUES ('test'), ('test2')")
-            .await;
-
-        let driver = Turso::in_memory().with_remote_url(&server.db_url);
-
-        driver.pull().await.unwrap();
-
-        let mut rows = driver
-            .database()
-            .await
-            .unwrap()
-            .connect()
-            .await
-            .unwrap()
-            .query("SELECT x FROM t ORDER BY x", ())
-            .await
-            .unwrap();
-
-        let mut count = 0;
-        while rows.next().await.unwrap().is_some() {
-            count += 1;
-        }
-        assert_eq!(count, 2);
-
-        driver.reset_db().await.unwrap();
-    }
-
-    #[cfg(feature = "sync")]
-    #[tokio::test]
-    async fn test_sync_push() {
-        let server = TursoTestServer::new().await;
-
         server.run_sql("DROP TABLE IF EXISTS t").await;
 
         let driver = Turso::in_memory().with_remote_url(&server.db_url);
@@ -1140,6 +1100,26 @@ mod tests {
         driver.push().await.unwrap();
 
         let rows = server.run_sql("SELECT x FROM t ORDER BY x").await;
-        assert_eq!(rows.len(), 2);
+        assert_eq!(
+            rows,
+            vec![
+                json!([{"type": "text", "value": "test"}]),
+                json!([{"type": "text", "value": "test-2"}]),
+            ]
+        );
+
+        server.run_sql("INSERT INTO t VALUES ('test-3')").await;
+
+        driver.pull().await.unwrap();
+
+        let mut local_rows = conn.query("SELECT x FROM t ORDER BY x", ()).await.unwrap();
+
+        let mut values = vec![];
+        while let Some(row) = local_rows.next().await.unwrap() {
+            if let TursoValue::Text(s) = row.get_value(0).unwrap() {
+                values.push(s);
+            }
+        }
+        assert_eq!(values, vec!["test", "test-2", "test-3"]);
     }
 }
