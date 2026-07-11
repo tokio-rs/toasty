@@ -14,7 +14,7 @@ runs:
       run: |
         curl --proto '=https' --tlsv1.2 -LsSf \
           https://github.com/tursodatabase/turso/releases/download/v0.6.1/turso_cli-installer.sh | sh
-        echo "$HOME/.turso" >> "$GITHUB_PATH"   # adjust to installer's actual path
+        echo "$HOME/.turso" >> "$GITHUB_PATH"
 
     - name: Start sync server
       id: start

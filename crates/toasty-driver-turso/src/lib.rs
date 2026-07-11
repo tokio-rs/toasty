@@ -1042,7 +1042,7 @@ mod tests {
             let db_url = std::env::var("TOASTY_TEST_TURSO_SYNC_URL")
                 .unwrap_or("http://127.0.0.1:8080".to_string());
 
-            let deadline = Instant::now() + Duration::from_secs(30);
+            let deadline = Instant::now() + Duration::from_secs(5);
             loop {
                 if client.get(&db_url).send().await.is_ok() {
                     break;
