@@ -1,4 +1,4 @@
-use super::Expand;
+use super::{Expand, util};
 use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 
 use proc_macro2::TokenStream;
@@ -14,11 +14,22 @@ struct PairBelongsToCheck<'a> {
     label: &'static str,
 }
 
+const MODEL_RESERVED_METHODS: &[&str] = &[
+    "fields",
+    "create",
+    "create_many",
+    "update",
+    "all",
+    "filter",
+    "delete",
+];
+
 impl Expand<'_> {
     pub(super) fn expand_model_relation_methods(&self) -> TokenStream {
         self.model
             .fields
             .iter()
+            .filter(|field| !util::ident_is_reserved(&field.name.ident, MODEL_RESERVED_METHODS))
             .filter_map(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => {
                     Some(self.expand_model_relation_belongs_to_method(rel, field))
