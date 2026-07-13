@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3e830acd.js";
+            window.path_to_searchindex_js = "searchindex-76d46bd7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -535,7 +535,7 @@ generates:</p>
 </thead>
 <tbody>
 <tr><td><code>user.profile()</code></td><td>Relation accessor</td><td>Accessor for the associated profile</td></tr>
-<tr><td><code>.get(&amp;mut db)</code></td><td><code>Result&lt;Option&lt;Profile&gt;&gt;</code></td><td>Load the associated profile</td></tr>
+<tr><td><code>.exec(&amp;mut db)</code></td><td><code>Result&lt;Option&lt;Profile&gt;&gt;</code></td><td>Load the associated profile</td></tr>
 <tr><td><code>.create()</code></td><td>Create builder</td><td>Create a profile with the foreign key pre-filled</td></tr>
 <tr><td><code>toasty::create!(User { profile: { ... } })</code></td><td>Create builder</td><td>Associate a profile on creation</td></tr>
 <tr><td><code>user.update().profile(...)</code></td><td>Update builder</td><td>Replace or associate a profile</td></tr>

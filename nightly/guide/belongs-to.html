@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-3e830acd.js";
+            window.path_to_searchindex_js = "searchindex-76d46bd7.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -473,7 +473,7 @@ parent specifies <code>pair = owner</code> to establish the connection.</p>
 </thead>
 <tbody>
 <tr><td><code>post.user()</code></td><td>Relation accessor</td><td>Returns an accessor for the associated user</td></tr>
-<tr><td><code>.get(&amp;mut db)</code></td><td><code>Result&lt;User&gt;</code></td><td>Loads the associated user from the database</td></tr>
+<tr><td><code>.exec(&amp;mut db)</code></td><td><code>Result&lt;User&gt;</code></td><td>Loads the associated user from the database</td></tr>
 <tr><td><code>toasty::create!(Post { user: &amp;user })</code></td><td>Create builder</td><td>Sets the foreign key from a parent reference</td></tr>
 <tr><td><code>toasty::create!(Post { user_id: id })</code></td><td>Create builder</td><td>Sets the foreign key directly</td></tr>
 <tr><td><code>Post::fields().user()</code></td><td>Field path</td><td>Used with <code>.include()</code> for preloading</td></tr>
