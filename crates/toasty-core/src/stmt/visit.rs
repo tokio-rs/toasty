@@ -1424,19 +1424,17 @@ where
     }
 }
 
-/// Default traversal for [`Include`] nodes.
-///
-/// Only the path is visited. The optional filter expression is left
-/// untouched because it is written in the relation target's scope, not
-/// the enclosing statement's scope — visitors that would resolve field
-/// references (e.g. the simplifier) would mis-resolve them. The engine
-/// re-runs simplification on the filter inside the include subquery
-/// during lowering, where the scope is correct.
+/// Default traversal for [`Include`] nodes. Visits the path and the optional
+/// filter query.
 pub fn visit_include<V>(v: &mut V, node: &Include)
 where
     V: Visit + ?Sized,
 {
     v.visit_path(&node.path);
+
+    if let Some(filter) = &node.filter {
+        v.visit_stmt_query(filter);
+    }
 }
 
 /// Default traversal for [`Source`] nodes. Dispatches to model or table source visitor.

@@ -1426,15 +1426,17 @@ where
     }
 }
 
-/// Default mutable traversal for [`Include`] nodes.
-///
-/// Only the path is visited; the optional filter expression is left
-/// untouched. See [`visit_include`] for why.
+/// Default mutable traversal for [`Include`] nodes. Visits the path and the
+/// optional filter query.
 pub fn visit_include_mut<V>(v: &mut V, node: &mut Include)
 where
     V: VisitMut + ?Sized,
 {
     v.visit_path_mut(&mut node.path);
+
+    if let Some(filter) = &mut node.filter {
+        v.visit_stmt_query_mut(filter);
+    }
 }
 
 /// Default mutable traversal for [`Source`] nodes. Dispatches to the model or table source visitor.

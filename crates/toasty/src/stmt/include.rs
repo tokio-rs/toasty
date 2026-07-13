@@ -2,27 +2,21 @@ use std::marker::PhantomData;
 
 use toasty_core::stmt;
 
-use super::{Expr, Path};
+use super::{Path, Query};
 
 /// A typed wrapper around an untyped [`stmt::Include`] that carries the
 /// origin model and the relation target type.
 ///
-/// You rarely build an `Include` directly — pass a relation path
-/// (`User::fields().posts()`) to `.include(...)` and it is converted
-/// automatically. Adding a per-relation predicate is what produces an
-/// `Include` explicitly: `User::fields().posts().filter(...)`.
+/// Produced by passing a relation path — optionally with a `.filter(...)`
+/// predicate — to `.include(...)`.
 pub struct Include<Origin, T> {
     pub(crate) untyped: stmt::Include,
     _p: PhantomData<fn() -> (Origin, T)>,
 }
 
 impl<Origin, T> Include<Origin, T> {
-    /// Build a typed `Include` from a typed path and predicate.
-    ///
-    /// The predicate is evaluated in the relation target's scope (the
-    /// fields of `T` when `T` is a model, or the element type of `T`
-    /// when `T` is a list).
-    pub fn from_path_and_filter(path: Path<Origin, T>, filter: Expr<bool>) -> Self {
+    #[doc(hidden)]
+    pub fn from_path_and_filter<U>(path: Path<Origin, T>, filter: Query<U>) -> Self {
         Self {
             untyped: stmt::Include::with_filter(path.untyped, filter.untyped),
             _p: PhantomData,

@@ -1,18 +1,18 @@
-use super::{Expr, Node, Path, Visit, VisitMut};
+use super::{Node, Path, Query, Visit, VisitMut};
 
 /// An association preload entry on a `Returning::Model` clause.
 ///
-/// Pairs the path to a relation with an optional predicate that restricts
-/// which related rows load. A bare `Path` converts in via `From` with no
-/// filter, so existing call sites that pass a path keep working unchanged.
+/// The filter is stored as a bare `SELECT` over the relation target rather
+/// than an `Expr` so the predicate's scope travels with it (the same
+/// mechanism `Path::any` relies on); lowering extracts the `WHERE` clause
+/// and ignores everything else.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Include {
     /// The relation path to preload.
     pub path: Path,
 
-    /// Optional predicate, evaluated in the relation target's scope.
-    /// `None` means "load all matching rows".
-    pub filter: Option<Expr>,
+    /// Optional filter restricting which related rows load.
+    pub filter: Option<Query>,
 }
 
 impl Include {
@@ -21,8 +21,8 @@ impl Include {
         Self { path, filter: None }
     }
 
-    /// Creates an `Include` with the given filter.
-    pub fn with_filter(path: Path, filter: Expr) -> Self {
+    /// Creates an `Include` with the given filter query.
+    pub fn with_filter(path: Path, filter: Query) -> Self {
         Self {
             path,
             filter: Some(filter),

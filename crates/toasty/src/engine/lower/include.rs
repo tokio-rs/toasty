@@ -13,7 +13,8 @@
 //! the masked `Null` lives inside a `Match` expression, not a `Record`.
 //!
 //! Include entries arrive as [`stmt::Include`] values (path + optional
-//! filter). The first thing we do is flatten any `PathRoot::Variant` chain
+//! filter query over the relation target). The first thing we do is flatten
+//! any `PathRoot::Variant` chain
 //! into a plain projection of the form `[…parent_steps, variant_idx,
 //! …local_var_field_steps]`. This LOCAL form mirrors the IR's `Match` arm
 //! record (where each arm is `[disc, field_0, field_1, …]`), so descent
@@ -46,10 +47,11 @@ use crate::engine::lower::LowerStatement;
 use crate::schema::lazy_slot;
 
 /// A flattened include: the projection (with variant roots folded in) plus
-/// the optional per-relation filter carried from the user's `.filter(...)`.
+/// the optional per-relation filter. The filter stays in its scope-carrying
+/// `Query` form until it is AND-ed onto the subquery at its own level.
 struct FlatInclude {
     projection: stmt::Projection,
-    filter: Option<stmt::Expr>,
+    filter: Option<stmt::Query>,
 }
 
 /// The include entries that target a single field, partitioned by whether
@@ -310,28 +312,12 @@ impl LowerStatement<'_, '_> {
 
     /// Build a subquery that loads the related model(s) for a
     /// `BelongsTo`/`HasOne`/`HasMany` field, run the canonical lowering
-    /// pipeline on it, and return it stitched onto the parent statement
-    /// as an `Expr::Arg`. Used both by `.include(...)` (which wraps the
-    /// result as a loaded lazy slot before splicing it into a record slot)
-    /// and by `.select(rel_field)` (which uses the raw result as the entire
-    /// projection expression).
-    ///
-    /// The `.select(...)` path carries no per-relation filter, so it enters
-    /// through this thin wrapper; `.include(...)` goes through
-    /// [`build_relation_subquery_inner`] directly to pass any filter down.
-    pub(super) fn build_relation_subquery(
-        &mut self,
-        field_index: usize,
-        nested: &[stmt::Projection],
-    ) -> stmt::Expr {
-        let flat: Vec<FlatInclude> = nested
-            .iter()
-            .map(|p| FlatInclude {
-                projection: p.clone(),
-                filter: None,
-            })
-            .collect();
-        self.build_relation_subquery_inner(field_index, &flat, None)
+    /// pipeline on it, and return it stitched onto the parent statement as an
+    /// `Expr::Arg`. This is the `.select(rel_field)` entry point;
+    /// `.include(...)` goes through [`build_relation_subquery_inner`] so it
+    /// can pass its nested includes and filter down.
+    pub(super) fn build_relation_subquery(&mut self, field_index: usize) -> stmt::Expr {
+        self.build_relation_subquery_inner(field_index, &[], None)
     }
 
     fn build_relation_subquery_inner(
@@ -358,6 +344,11 @@ impl LowerStatement<'_, '_> {
                     "`.include()` / `.select()` of a multi-step `via` relation is only \
                      supported on SQL backends; query the relation directly instead"
                 );
+            }
+            // `via` lowering does not thread per-relation filters through its
+            // JOIN chain yet; reject rather than silently drop them.
+            if top_filter.is_some() || nested.iter().any(|fi| fi.filter.is_some()) {
+                todo!("`.filter(...)` on a multi-step `via` relation include is not yet supported");
             }
             let nested_projections: Vec<stmt::Projection> =
                 nested.iter().map(|fi| fi.projection.clone()).collect();
@@ -412,10 +403,8 @@ impl LowerStatement<'_, '_> {
             _ => unreachable!("build_include_subquery called on non-relation field"),
         };
 
-        // AND the user-supplied filter (if any) onto the join predicate. The
-        // filter is written in the relation target's scope (e.g. fields of
-        // `Todo`), so the canonical lowering pipeline below resolves any field
-        // references just like a top-level filter.
+        // AND the user-supplied filter (if any) onto the join predicate; the
+        // pipeline below lowers it like any other filter on the target.
         if let Some(filter) = top_filter {
             stmt.add_filter(filter);
         }
@@ -465,10 +454,10 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
         {
             if rest.is_empty() {
                 include_self = true;
-                if let Some(f) = &fi.filter {
+                if let Some(f) = fi.filter.as_ref().and_then(query_filter_expr) {
                     top_filter = Some(match top_filter.take() {
-                        Some(prev) => stmt::Expr::and(prev, f.clone()),
-                        None => f.clone(),
+                        Some(prev) => stmt::Expr::and(prev, f),
+                        None => f,
                     });
                 }
             } else {
@@ -487,12 +476,19 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
 }
 
 /// Flatten an [`stmt::Include`] into a [`FlatInclude`], folding any
-/// `PathRoot::Variant` chain into discriminant-index steps and carrying the
-/// per-relation filter through unchanged.
+/// `PathRoot::Variant` chain into discriminant-index steps.
 fn flatten_include(include: &stmt::Include) -> FlatInclude {
     FlatInclude {
         projection: flatten_path(&include.path),
         filter: include.filter.clone(),
+    }
+}
+
+/// Extract the `WHERE` predicate from an include filter query.
+fn query_filter_expr(query: &stmt::Query) -> Option<stmt::Expr> {
+    match &query.body {
+        stmt::ExprSet::Select(select) => select.filter.expr.clone(),
+        _ => None,
     }
 }
 

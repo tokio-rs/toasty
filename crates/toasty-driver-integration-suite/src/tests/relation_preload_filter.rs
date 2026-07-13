@@ -171,3 +171,387 @@ pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+/// Filtering a `BelongsTo` include: the predicate is evaluated against the
+/// parent row. When it excludes the parent the relation loads as `None`;
+/// when it matches, as `Some`.
+#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+pub async fn preload_belongs_to_with_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let _user = toasty::create!(User {
+        name: "alice",
+        profile: { bio: "public bio" }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut profiles: Vec<Profile> = Profile::all().exec(&mut db).await?;
+    let profile = profiles.remove(0);
+
+    // Filter excludes the parent → loaded None.
+    let loaded = Profile::filter_by_id(profile.id)
+        .include(
+            Profile::fields()
+                .user()
+                .filter(User::fields().name().eq("bob")),
+        )
+        .get(&mut db)
+        .await?;
+    assert!(loaded.user.get().is_none());
+
+    // Filter matches → loaded Some.
+    let loaded = Profile::filter_by_id(profile.id)
+        .include(
+            Profile::fields()
+                .user()
+                .filter(User::fields().name().eq("alice")),
+        )
+        .get(&mut db)
+        .await?;
+    assert_eq!("alice", loaded.user.get().as_ref().unwrap().name);
+
+    Ok(())
+}
+
+/// A filter on a nested include applies to the innermost relation only. The
+/// intermediate relation still loads in full; only its children are filtered.
+#[driver_test]
+pub async fn preload_nested_relation_with_filter(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        #[has_many]
+        posts: toasty::Deferred<Vec<Post>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        user_id: uuid::Uuid,
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+        title: String,
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Comment {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        post_id: uuid::Uuid,
+        #[belongs_to(key = post_id, references = id)]
+        post: toasty::Deferred<Post>,
+        body: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Post, Comment)).await;
+
+    let user = toasty::create!(User { name: "alice" })
+        .exec(&mut db)
+        .await?;
+    let post = toasty::create!(Post {
+        title: "p1",
+        user: &user
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Comment {
+        body: "keep",
+        post: &post
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Comment {
+        body: "drop",
+        post: &post
+    })
+    .exec(&mut db)
+    .await?;
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .posts()
+                .comments()
+                .filter(Comment::fields().body().eq("keep")),
+        )
+        .get(&mut db)
+        .await?;
+
+    // The post loads regardless of the filter; only its comments are filtered.
+    let posts = loaded.posts.get();
+    assert_eq!(1, posts.len());
+    let bodies: Vec<&str> = posts[0]
+        .comments
+        .get()
+        .iter()
+        .map(|c| c.body.as_str())
+        .collect();
+    assert_eq!(bodies, vec!["keep"]);
+
+    Ok(())
+}
+
+/// A bare `.include(todos())` (load all) combined with a filtered
+/// `.include(todos().filter(...))` on the same relation loads the filtered
+/// set: the predicate wins. An unfiltered include contributes no predicate,
+/// so it does not broaden the result back to all.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn preload_has_many_bare_and_filtered_uses_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }, { title: "b" }, { title: "c" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    let alice_loaded = User::filter_by_id(alice.id)
+        .include(User::fields().todos())
+        .include(
+            User::fields()
+                .todos()
+                .filter(Todo::fields().title().eq("b")),
+        )
+        .get(&mut db)
+        .await?;
+
+    let titles: Vec<&str> = alice_loaded
+        .todos
+        .get()
+        .iter()
+        .map(|t| t.title.as_str())
+        .collect();
+    assert_eq!(titles, vec!["b"]);
+
+    Ok(())
+}
+
+/// Filters at both levels of a nested include apply to their own relation:
+/// the intermediate filter selects which posts load, and the innermost filter
+/// selects which comments travel with each loaded post.
+#[driver_test]
+pub async fn preload_nested_relation_filters_at_both_levels(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        #[has_many]
+        posts: toasty::Deferred<Vec<Post>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        user_id: uuid::Uuid,
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+        title: String,
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Comment {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        post_id: uuid::Uuid,
+        #[belongs_to(key = post_id, references = id)]
+        post: toasty::Deferred<Post>,
+        body: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Post, Comment)).await;
+
+    let user = toasty::create!(User { name: "alice" })
+        .exec(&mut db)
+        .await?;
+    let keep_post = toasty::create!(Post {
+        title: "keep",
+        user: &user
+    })
+    .exec(&mut db)
+    .await?;
+    let drop_post = toasty::create!(Post {
+        title: "drop",
+        user: &user
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Comment::[
+        { body: "keep", post: &keep_post },
+        { body: "drop", post: &keep_post },
+        { body: "keep", post: &drop_post },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .posts()
+                .filter(Post::fields().title().eq("keep")),
+        )
+        .include(
+            User::fields()
+                .posts()
+                .comments()
+                .filter(Comment::fields().body().eq("keep")),
+        )
+        .get(&mut db)
+        .await?;
+
+    // The intermediate filter drops the `drop` post entirely; the innermost
+    // filter drops the `drop` comment from the surviving post.
+    let posts = loaded.posts.get();
+    assert_eq!(1, posts.len());
+    assert_eq!("keep", posts[0].title);
+    let bodies: Vec<&str> = posts[0]
+        .comments
+        .get()
+        .iter()
+        .map(|c| c.body.as_str())
+        .collect();
+    assert_eq!(bodies, vec!["keep"]);
+
+    Ok(())
+}
+
+/// An eager (non-deferred) relation is an implicit bare include, so a
+/// filtered `.include(...)` of it restricts what loads — the implicit
+/// include contributes no predicate and does not broaden the result.
+#[driver_test]
+pub async fn preload_eager_has_many_with_filter(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        #[has_many]
+        todos: Vec<Todo>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Todo {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        user_id: uuid::Uuid,
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+        title: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Todo)).await;
+
+    let alice = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }, { title: "b" }, { title: "c" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Eager baseline: no include, all todos load.
+    let loaded = User::filter_by_id(alice.id).get(&mut db).await?;
+    assert_eq!(3, loaded.todos.len());
+
+    let loaded = User::filter_by_id(alice.id)
+        .include(
+            User::fields()
+                .todos()
+                .filter(Todo::fields().title().eq("b")),
+        )
+        .get(&mut db)
+        .await?;
+    let titles: Vec<&str> = loaded.todos.iter().map(|t| t.title.as_str()).collect();
+    assert_eq!(titles, vec!["b"]);
+
+    Ok(())
+}
+
+/// Filtering a non-optional 1-1 relation: there is no `None` to load into,
+/// so a predicate that excludes the row fails the whole query with
+/// `RecordNotFound` — the same error as a genuinely missing row.
+#[driver_test]
+pub async fn preload_required_has_one_filter_miss_is_record_not_found(
+    test: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+        #[has_one]
+        profile: Profile,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Profile {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[unique]
+        user_id: uuid::Uuid,
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+        bio: String,
+    }
+
+    let mut db = test.setup_db(models!(User, Profile)).await;
+
+    let user = toasty::create!(User {
+        name: "alice",
+        profile: { bio: "real bio" }
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Filter matches → loads normally.
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .profile()
+                .filter(Profile::fields().bio().eq("real bio")),
+        )
+        .get(&mut db)
+        .await?;
+    assert_eq!("real bio", loaded.profile.bio);
+
+    // Filter misses → the parent cannot be represented; the query errors.
+    let err = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .profile()
+                .filter(Profile::fields().bio().eq("nope")),
+        )
+        .get(&mut db)
+        .await
+        .unwrap_err();
+    assert!(
+        err.is_record_not_found(),
+        "expected record_not_found error, got: {err:?}"
+    );
+
+    Ok(())
+}
