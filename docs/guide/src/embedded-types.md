@@ -263,7 +263,7 @@ A unit enum (all variants have no fields) maps to a single column:
 #[derive(Debug, PartialEq, toasty::Embed)]
 enum Status {
     Pending,
-    InProgress,
+    Active,
     Done,
 }
 
@@ -278,8 +278,8 @@ struct Task {
 }
 ```
 
-The `status` column stores `pending`, `in_progress`, or `done`. PostgreSQL uses
-a named enum type, MySQL uses `ENUM`, and SQLite uses `TEXT` with a check
+The `status` column stores `pending`, `active`, or `done`. PostgreSQL uses a
+named enum type, MySQL uses `ENUM`, and SQLite uses `TEXT` with a check
 constraint. DynamoDB stores the label as a string attribute.
 
 Use it like any other field:
@@ -342,7 +342,7 @@ An enum can have both unit variants and data-carrying variants:
 
 ```rust,ignore
 #[derive(Debug, PartialEq, toasty::Embed)]
-enum Status {
+enum ImportStatus {
     Pending,
     Failed { reason: String },
     Done,
@@ -464,7 +464,7 @@ let tasks = Task::filter(Task::fields().status().is_active())
     .await?;
 ```
 
-This compiles to `WHERE status = 2`.
+This filters on the stored `active` label (`WHERE status = 'active'` in SQL).
 
 For unit enums, you can also use `.eq()` directly:
 
