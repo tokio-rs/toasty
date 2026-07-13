@@ -45,24 +45,30 @@ impl Expand<'_> {
         let primary_key_ty = self.expand_primary_key_ty();
         let find_by_primary_key_body = self.expand_find_by_primary_key_body();
 
+        let doc_create = self.doc_create();
+        let doc_create_many = self.doc_create_many();
+        let doc_update = self.doc_update();
+        let doc_all = self.doc_all();
+        let doc_filter = self.doc_filter();
+        let doc_delete = self.doc_delete();
+
         quote! {
-            // Generated CRUD, filter, and relation methods carry no doc
-            // comments; suppress `missing_docs` so models in crates that
-            // `#![deny(missing_docs)]` still compile.
-            #[allow(missing_docs)]
             impl #model_ident {
                 #model_fields
                 #filter_methods
                 #relation_methods
 
+                #[doc = #doc_create]
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
 
+                #[doc = #doc_create_many]
                 #vis fn create_many() -> #toasty::stmt::CreateMany<#model_ident> {
                     #toasty::stmt::CreateMany::default()
                 }
 
+                #[doc = #doc_update]
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
@@ -74,14 +80,17 @@ impl Expand<'_> {
                     s
                 }
 
+                #[doc = #doc_all]
                 #vis fn all() -> #query_struct_ident {
                     #query_struct_ident::default()
                 }
 
+                #[doc = #doc_filter]
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
                     #query_struct_ident::from_stmt(#toasty::stmt::Query::all().filter(expr))
                 }
 
+                #[doc = #doc_delete]
                 #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     #into_delete_body
                 }
@@ -249,7 +258,6 @@ impl Expand<'_> {
         let model_fields = self.expand_model_field_struct_init();
 
         quote! {
-            #[allow(missing_docs)]
             impl #model_ident {
                 #model_fields
             }

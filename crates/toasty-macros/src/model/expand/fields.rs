@@ -322,9 +322,12 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let schema_trait = self.schema_trait();
 
+        let doc_fields = self.doc_fields();
+
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
         quote!(
+            #[doc = #doc_fields]
             #vis fn fields() -> #field_struct_ident<#model_ident> {
                 #field_struct_ident {
                     path: <#model_ident as #schema_trait>::path_root(),

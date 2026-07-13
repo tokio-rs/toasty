@@ -3,9 +3,8 @@
 //! A crate that enforces `#![deny(missing_docs)]` must still be able to derive
 //! `toasty::Model`. The derive emits public inherent methods (`create`, `all`,
 //! `filter`, `fields`, `update`, `delete`, per-field filter methods, relation
-//! accessors, …) that carry no doc comments; they are marked
-//! `#[allow(missing_docs)]` so they do not trip the lint. If this file fails to
-//! compile, that suppression regressed.
+//! accessors, …); each carries a generated doc comment so it does not trip the
+//! lint. If this file fails to compile, a generated method lost its docs.
 #![deny(missing_docs)]
 
 /// A user, exercising key, unique, indexed, and `has_many` fields so every
