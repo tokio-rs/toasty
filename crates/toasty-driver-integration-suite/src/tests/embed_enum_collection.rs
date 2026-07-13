@@ -31,7 +31,7 @@ pub async fn vec_enum_create_get(t: &mut Test) -> Result<(), BoxError> {
     let mut db = t.setup_db(models!(Palette)).await;
 
     let colors = [Color::Red, Color::Blue];
-    let palette = toasty::create!(Palette { colors: &colors })
+    let palette = toasty::create!(Palette { colors })
         .exec(&mut db)
         .await?;
 
@@ -49,9 +49,9 @@ pub async fn vec_enum_contains_and_len(t: &mut Test) -> Result<(), BoxError> {
     let mut db = t.setup_db(models!(Palette)).await;
 
     toasty::create!(Palette::[
-        { colors: &[Color::Red, Color::Green] },
-        { colors: &[Color::Blue] },
-        { colors: &[Color::Red, Color::Green, Color::Blue] },
+        { colors: [Color::Red, Color::Green] },
+        { colors: [Color::Blue] },
+        { colors: [Color::Red, Color::Green, Color::Blue] },
     ])
     .exec(&mut db)
     .await?;
