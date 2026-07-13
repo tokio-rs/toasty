@@ -46,6 +46,10 @@ impl Expand<'_> {
         let find_by_primary_key_body = self.expand_find_by_primary_key_body();
 
         quote! {
+            // Generated CRUD, filter, and relation methods carry no doc
+            // comments; suppress `missing_docs` so models in crates that
+            // `#![deny(missing_docs)]` still compile.
+            #[allow(missing_docs)]
             impl #model_ident {
                 #model_fields
                 #filter_methods
@@ -245,6 +249,7 @@ impl Expand<'_> {
         let model_fields = self.expand_model_field_struct_init();
 
         quote! {
+            #[allow(missing_docs)]
             impl #model_ident {
                 #model_fields
             }
