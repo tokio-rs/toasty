@@ -49,6 +49,7 @@ pub mod field_default_and_update;
 pub mod field_version;
 pub mod field_version_newtype;
 pub mod filter_between;
+pub mod filter_embedded_in_list;
 pub mod filter_ilike;
 pub mod filter_like;
 pub mod float_fields;
