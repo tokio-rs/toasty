@@ -25,6 +25,7 @@ pub mod crud_update_macro;
 pub mod deferred_embed;
 pub mod deferred_field;
 pub mod dynamodb_update_batch_filter;
+pub mod embed_enum_collection;
 pub mod embed_enum_data;
 pub mod embed_enum_filter;
 pub mod embed_enum_filter_comparison;
