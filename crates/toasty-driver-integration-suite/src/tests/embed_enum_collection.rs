@@ -31,9 +31,7 @@ pub async fn vec_enum_create_get(t: &mut Test) -> Result<(), BoxError> {
     let mut db = t.setup_db(models!(Palette)).await;
 
     let colors = [Color::Red, Color::Blue];
-    let palette = toasty::create!(Palette { colors })
-        .exec(&mut db)
-        .await?;
+    let palette = toasty::create!(Palette { colors }).exec(&mut db).await?;
 
     let reloaded = Palette::get_by_id(&mut db, &palette.id).await?;
     assert_eq!(reloaded.colors, colors);
