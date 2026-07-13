@@ -519,7 +519,8 @@ impl Value {
 
         let cannot_infer = || {
             crate::Error::unsupported_feature(format!(
-                "cannot infer a database storage type for {self:?}"
+                "cannot infer a database storage type for {:?}",
+                self.infer_ty()
             ))
         };
 
@@ -560,10 +561,9 @@ impl Value {
             // SQLite) and a heterogeneous list would slip through. Inferring
             // through the `TypeUnion` also rejects empty and all-`NULL` lists,
             // which have no element type.
-            Value::List(_) => {
-                DbType::from_app(&self.infer_ty(), None, storage).map_err(|_| cannot_infer())?
-            }
-            Value::Null | Value::Record(_) | Value::SparseRecord(_) => {
+            Value::List(_) => DbType::from_app(&self.infer_ty(), None, storage)
+                .map_err(|err| err.context(cannot_infer()))?,
+            Value::Null | Value::Record(_) | Value::Object(_) | Value::SparseRecord(_) => {
                 return Err(cannot_infer());
             }
         })

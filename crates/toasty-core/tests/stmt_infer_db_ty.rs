@@ -1,6 +1,6 @@
 use toasty_core::driver::StorageTypes;
 use toasty_core::schema::db;
-use toasty_core::stmt::{Value, ValueRecord};
+use toasty_core::stmt::{Value, ValueObject, ValueRecord};
 
 // `infer_db_ty` maps a `Value` straight to its storage type, resolving
 // string/uuid/bytes/decimal/temporal variants through the driver's defaults.
@@ -60,7 +60,12 @@ fn mixed_list_is_rejected() {
     // I64 and String never share a storage type.
     let st = &StorageTypes::SQLITE;
     let v = Value::List(vec![Value::I64(1), Value::String("x".into())]);
-    assert!(v.infer_db_ty(st).is_err());
+    let err = v.infer_db_ty(st).unwrap_err();
+    assert!(
+        err.to_string()
+            .contains("is not supported by this database"),
+        "got: {err}"
+    );
 }
 
 #[test]
@@ -99,10 +104,23 @@ fn empty_list_is_rejected() {
 // ---------------------------------------------------------------------------
 
 #[test]
-fn null_and_record_are_rejected() {
+fn null_record_and_object_are_rejected() {
     let st = &StorageTypes::SQLITE;
     assert!(Value::Null.infer_db_ty(st).is_err());
 
     let record = Value::Record(ValueRecord::from_vec(vec![Value::I64(1)]));
     assert!(record.infer_db_ty(st).is_err());
+
+    let object = Value::Object(ValueObject::from_vec(vec![("field".into(), Value::I64(1))]));
+    assert!(object.infer_db_ty(st).is_err());
+}
+
+#[test]
+fn inference_errors_do_not_include_value_data() {
+    let value = Value::Record(ValueRecord::from_vec(vec![Value::String(
+        "sensitive bind value".into(),
+    )]));
+    let err = value.infer_db_ty(&StorageTypes::SQLITE).unwrap_err();
+
+    assert!(!err.to_string().contains("sensitive bind value"));
 }
