@@ -356,7 +356,7 @@ impl LowerStatement<'_, '_> {
 
                     for fk_field in &rel.foreign_key.fields {
                         source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+                        target_pk_fields.push(stmt::Expr::ref_self_field(fk_field.target));
                     }
 
                     source_fk = stmt::Expr::record_from_vec(source_fk_fields);
