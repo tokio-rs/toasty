@@ -14,7 +14,7 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty-driver-turso"
 
 [features]
-default = ["sync"]
+default = []
 sync = ["turso/sync"]
 rust_decimal = ["toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
 bigdecimal = ["toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
