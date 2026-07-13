@@ -34,4 +34,15 @@
 <a href=#34 id=34 data-nosnippet>34</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>ident(name: <span class="kw-2">&amp;</span>str) -&gt; syn::Ident {
 <a href=#35 id=35 data-nosnippet>35</a>    <span class="macro">quote::format_ident!</span>(<span class="string">"__toasty_{name}"</span>)
 <a href=#36 id=36 data-nosnippet>36</a>}
+<a href=#37 id=37 data-nosnippet>37</a>
+<a href=#38 id=38 data-nosnippet>38</a><span class="doccomment">/// Return the Rust method name an identifier occupies, without raw-ident syntax.
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>bare_ident_name(ident: <span class="kw-2">&amp;</span>syn::Ident) -&gt; String {
+<a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">let </span>name = ident.to_string();
+<a href=#41 id=41 data-nosnippet>41</a>    name.strip_prefix(<span class="string">"r#"</span>).unwrap_or(<span class="kw-2">&amp;</span>name).to_string()
+<a href=#42 id=42 data-nosnippet>42</a>}
+<a href=#43 id=43 data-nosnippet>43</a>
+<a href=#44 id=44 data-nosnippet>44</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>ident_is_reserved(ident: <span class="kw-2">&amp;</span>syn::Ident, reserved: <span class="kw-2">&amp;</span>[<span class="kw-2">&amp;</span>str]) -&gt; bool {
+<a href=#45 id=45 data-nosnippet>45</a>    <span class="kw">let </span>name = bare_ident_name(ident);
+<a href=#46 id=46 data-nosnippet>46</a>    reserved.contains(<span class="kw-2">&amp;</span>name.as_str())
+<a href=#47 id=47 data-nosnippet>47</a>}
 </code></pre></div></section></main></body></html>
