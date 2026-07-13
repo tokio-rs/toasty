@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["any_with_or_over_embedded_field","or_over_embedded_field_folds_to_in_list"]};
