@@ -130,7 +130,31 @@ impl Expand<'_> {
 
                     nullable = quote!(<#ty as #toasty::Field>::NULLABLE);
                     deferred = quote!(<#ty as #toasty::Field>::DEFERRED);
-                    field_ty = quote!(<#ty as #toasty::Field>::field_ty(#storage_ty));
+
+                    // A `#[document]` field is stored as a single JSON column.
+                    // Its app type resolves through the `Document` trait —
+                    // `Model(id)` for a struct embed, `List(Model(id))` for a
+                    // `Vec<embed>` collection — which the schema builder later
+                    // resolves to a `Document` once every embed is registered.
+                    // The trait bound also rejects `#[document]` on any type
+                    // that cannot use document storage (a scalar, an enum
+                    // embed, a `Vec<scalar>`) at compile time. A non-document
+                    // field uses `Field::field_ty`, which column-expands a
+                    // struct embed (`Embedded`) and leaves scalars /
+                    // `Vec<scalar>` as a `Primitive`.
+                    field_ty = if field.attrs.document.is_some() {
+                        quote! {
+                            #toasty::core::schema::app::FieldTy::Primitive(
+                                #toasty::core::schema::app::FieldPrimitive {
+                                    ty: <#ty as #toasty::Document>::document_ty(),
+                                    storage_ty: #storage_ty,
+                                    serialize: None,
+                                }
+                            )
+                        }
+                    } else {
+                        quote!(<#ty as #toasty::Field>::field_ty(#storage_ty))
+                    };
                 }
                 FieldTy::BelongsTo(rel) => {
                     let ty = &rel.ty;
@@ -353,12 +377,16 @@ impl Expand<'_> {
     }
 
     fn expand_table_name(&self) -> TokenStream {
-        if let Some(table_name) = &self.model.table {
-            let table_name = table_name.value();
-            quote! { Some(#table_name.to_string()) }
-        } else {
-            quote! { None }
-        }
+        let table_name = match &self.model.table {
+            Some(table_name) => table_name.value(),
+            // Derive the default table name at compile time so building the
+            // schema at runtime never pays the cost of the `pluralizer` crate's
+            // lazy regex compilation: snake_case the model name, then pluralize.
+            // The table-name prefix, if any, is applied at runtime by the builder.
+            None => pluralizer::pluralize(&self.model.name.snake_case, 2, false),
+        };
+
+        quote! { #table_name.to_string() }
     }
 }
 
@@ -447,6 +475,54 @@ impl Expand<'_> {
         quote! { #( #checks )* }
     }
 
+    /// Emit one obligation per field that participates in a secondary index or
+    /// unique constraint (`#[index]`, `#[unique]`, or a model-level
+    /// `#[index(...)]` / `#[unique(...)]`) that the field's Rust type implements
+    /// `codegen_support::index::IndexableField`.
+    ///
+    /// Scalars satisfy the bound directly; newtype embeds via the `NewtypeOf`
+    /// blanket; unit (data-less) enums via the impl emitted by
+    /// `#[derive(Embed)]`. Data-carrying enums and multi-field embedded structs
+    /// span multiple columns and do not implement it, so naming one in an index
+    /// is a compile error instead of a runtime panic.
+    ///
+    /// The primary key is excluded: keys are validated through their own paths.
+    pub(super) fn expand_indexable_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let mut seen = std::collections::BTreeSet::new();
+        let checks = self
+            .model
+            .indices
+            .iter()
+            .filter(|index| !index.primary_key)
+            .flat_map(|index| index.fields.iter())
+            .filter_map(|index_field| {
+                if !seen.insert(index_field.field) {
+                    return None;
+                }
+
+                let FieldTy::Primitive(ty) = &self.model.fields[index_field.field].ty else {
+                    return None;
+                };
+
+                // Pin the diagnostic at the field type's span so the error
+                // lands on the user's declaration, not the derive call site.
+                Some(quote_spanned! { ty.span()=>
+                    const _: () = {
+                        fn _check<__T>()
+                        where
+                            __T: #toasty::index::IndexableField,
+                        {}
+                        let _ = _check::<#ty>;
+                    };
+                })
+            })
+            .collect::<Vec<_>>();
+
+        quote! { #( #checks )* }
+    }
+
     /// Generate calls to register all models reachable from this model's fields.
     ///
     /// For primitive fields, no call is emitted (the default `Field::register`
@@ -461,8 +537,9 @@ impl Expand<'_> {
             .iter()
             .map(|field| match &field.ty {
                 FieldTy::Primitive(ty) => {
-                    // Primitives use Field::register which delegates to inner
-                    // type if it's an embedded type (via the Field impl).
+                    // Both column-expanded embeds and `#[document]` fields
+                    // register their embedded types through `Field::register`
+                    // (a no-op for scalars).
                     quote! {
                         <#ty as #toasty::Field>::register(model_set);
                     }

@@ -191,7 +191,7 @@ fn append_assignment_sqlite() {
     let mut assignments = Assignments::default();
     assignments.append(2usize, Expr::list([Expr::from(7i64)]));
 
-    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = (SELECT json_group_array(value) FROM (SELECT value FROM json_each("tags") UNION ALL SELECT value FROM json_each((7))));"#]].assert_eq(&render(Flavor::Sqlite, &schema, update_with(assignments)));
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = (SELECT json_group_array(json(CASE WHEN type IN ('object', 'array') THEN value ELSE json_quote(value) END)) FROM (SELECT type, value FROM json_each("tags") UNION ALL SELECT type, value FROM json_each((7))));"#]].assert_eq(&render(Flavor::Sqlite, &schema, update_with(assignments)));
 }
 
 // -----------------------------------------------------------------------------

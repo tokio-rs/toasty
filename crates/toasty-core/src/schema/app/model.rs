@@ -156,9 +156,11 @@ pub struct ModelRoot {
     /// The primary key definition. Root models always have a primary key.
     pub primary_key: PrimaryKey,
 
-    /// Optional explicit table name. When `None`, a name is derived from the
-    /// model name.
-    pub table_name: Option<String>,
+    /// The table this model maps to, before any builder-level prefix is
+    /// applied. Always set by the caller constructing the schema: `#[derive(Model)]`
+    /// derives the default (snake_case + pluralized) name at compile time, or
+    /// uses the explicit `#[table = "..."]` override.
+    pub table_name: String,
 
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
@@ -424,6 +426,16 @@ impl Model {
         match self {
             Model::Root(root) => Some(root),
             _ => None,
+        }
+    }
+
+    /// The model's fields. For an [`EmbeddedEnum`] these are the flattened
+    /// variant fields ([`EmbeddedEnum::fields`]), not the variants themselves.
+    pub fn fields(&self) -> &[Field] {
+        match self {
+            Model::Root(root) => &root.fields,
+            Model::EmbeddedStruct(embedded) => &embedded.fields,
+            Model::EmbeddedEnum(e) => &e.fields,
         }
     }
 

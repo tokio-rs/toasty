@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.7.0...toasty-driver-mysql-v0.8.0) - 2026-07-06
+
+### Added
+
+- Emit one `toasty::query` event per statement and propagate caller spans ([#1071])
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1071]: https://github.com/tokio-rs/toasty/pull/1071
+
 ## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.6.1...toasty-driver-mysql-v0.7.0) - 2026-05-29
 
 ### Added

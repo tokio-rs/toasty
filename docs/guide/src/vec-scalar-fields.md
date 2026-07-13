@@ -354,3 +354,7 @@ The element-removal builders are narrower:
 they lower to `array_remove` and array slicing. On the other drivers
 they return an error. See the per-database pages for the storage and
 operator details specific to each backend.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields

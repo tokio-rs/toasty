@@ -30,6 +30,9 @@ The method name matches the key field name. A model with `#[key] code: String`
 generates `get_by_code()`. Composite keys generate combined names like
 `get_by_student_id_and_course_id()`.
 
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+
 ## Get all records
 
 `<YourModel>::all()` returns a query for all records of that model.
@@ -325,3 +328,8 @@ Query builders support these terminal methods:
 | `.exec(&mut db)` | `Result<Vec<User>>` |
 | `.first().exec(&mut db)` | `Result<Option<User>>` |
 | `.get(&mut db)` | `Result<User>` |
+
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog

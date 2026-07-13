@@ -1,11 +1,11 @@
 use crate::stmt::{ExprExists, Input};
 
 use super::{
-    Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp,
-    ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull,
-    ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
-    ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node, Projection,
-    Substitute, Value, Visit, VisitMut, expr_reference::ExprReference,
+    Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBetween,
+    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects,
+    ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap,
+    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node,
+    Projection, Resolve, Substitute, Type, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -46,6 +46,9 @@ pub enum Expr {
 
     /// `lhs <op> ANY(rhs)` predicate against an array-valued operand. See [`ExprAnyOp`].
     AnyOp(ExprAnyOp),
+
+    /// `expr BETWEEN low AND high` inclusive range test. See [`ExprBetween`].
+    Between(ExprBetween),
 
     /// Positional argument placeholder. See [`ExprArg`].
     Arg(ExprArg),
@@ -199,6 +202,88 @@ impl Expr {
         matches!(self, Self::Stmt(..))
     }
 
+    /// Returns `true` if this expression can evaluate to a value compatible
+    /// with `ty`.
+    ///
+    /// Mirrors [`Value::is_a`]: a value expression is checked directly, record
+    /// and list expressions are checked structurally, and expressions with a
+    /// statically known result type (boolean predicates, `COUNT`, ...) check
+    /// that result type against `ty`.
+    ///
+    /// # Panics
+    ///
+    /// Panics with `todo!` on expression variants whose result type cannot be
+    /// determined without evaluation context (arguments, references, casts,
+    /// ...). Support is added as callers need it.
+    pub fn is_a(&self, resolve: &impl Resolve, ty: &Type) -> bool {
+        if let Type::Union(types) = ty {
+            return types.iter().any(|t| self.is_a(resolve, t));
+        }
+        match self {
+            Self::Value(value) => value.is_a(resolve, ty),
+            Self::Record(expr_record) => match ty {
+                Type::Record(field_tys) if expr_record.fields.len() == field_tys.len() => {
+                    expr_record
+                        .fields
+                        .iter()
+                        .zip(field_tys)
+                        .all(|(expr, ty)| expr.is_a(resolve, ty))
+                }
+                // A record expression can evaluate to a document value (a
+                // `#[document]` embed): check each field against the embedded
+                // model's layout, as `Value::is_a` does. Unresolvable in a
+                // schema-free context, in which case there is no layout to
+                // check against.
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => {
+                        let fields = model.fields();
+                        expr_record.fields.len() == fields.len()
+                            && expr_record
+                                .fields
+                                .iter()
+                                .zip(fields)
+                                .all(|(expr, field)| expr.is_a(resolve, field.expr_ty()))
+                    }
+                    None => true,
+                },
+                _ => false,
+            },
+            Self::List(expr_list) => match ty {
+                Type::List(item_ty) => expr_list
+                    .items
+                    .iter()
+                    .all(|item| item.is_a(resolve, item_ty)),
+                _ => false,
+            },
+            // Expressions that always evaluate to a boolean.
+            Self::And(_)
+            | Self::Or(_)
+            | Self::Not(_)
+            | Self::Any(_)
+            | Self::AnyOp(_)
+            | Self::AllOp(_)
+            | Self::Between(_)
+            | Self::Exists(_)
+            | Self::InList(_)
+            | Self::InSubquery(_)
+            | Self::Intersects(_)
+            | Self::IsNull(_)
+            | Self::IsSuperset(_)
+            | Self::IsVariant(_)
+            | Self::Like(_)
+            | Self::StartsWith(_) => ty.is_bool(),
+            Self::BinaryOp(e) if !e.op.is_arithmetic() => ty.is_bool(),
+            Self::Func(ExprFunc::Count(_)) => ty.is_u64(),
+            Self::Func(ExprFunc::LastInsertId(_)) => ty.is_i64(),
+            // A match can produce the value of any of its arms.
+            Self::Match(expr_match) => {
+                expr_match.arms.iter().any(|arm| arm.expr.is_a(resolve, ty))
+                    || expr_match.else_expr.is_a(resolve, ty)
+            }
+            _ => todo!("Expr::is_a: expr={self:#?}; ty={ty:#?}"),
+        }
+    }
+
     /// Returns true if the expression is a binary operation
     pub fn is_binary_op(&self) -> bool {
         matches!(self, Self::BinaryOp(..))
@@ -223,6 +308,8 @@ impl Expr {
             Self::Any(_) => true,
             // ANY/ALL array predicates always evaluate to true or false.
             Self::AnyOp(_) | Self::AllOp(_) => true,
+            // BETWEEN always evaluates to true or false.
+            Self::Between(_) => true,
             // Comparisons always evaluate to true or false.
             Self::BinaryOp(_) => true,
             // IS NULL checks always evaluate to true or false.
@@ -289,6 +376,11 @@ impl Expr {
             Self::Cast(expr_cast) => expr_cast.expr.is_stable(),
             Self::StartsWith(e) => e.expr.is_stable() && e.prefix.is_stable(),
             Self::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
+            Self::Between(expr_between) => {
+                expr_between.expr.is_stable()
+                    && expr_between.low.is_stable()
+                    && expr_between.high.is_stable()
+            }
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_stable() && expr_binary.rhs.is_stable()
             }
@@ -397,6 +489,11 @@ impl Expr {
             Self::Like(e) => {
                 e.expr.is_const_at_depth(map_depth) && e.pattern.is_const_at_depth(map_depth)
             }
+            Self::Between(expr_between) => {
+                expr_between.expr.is_const_at_depth(map_depth)
+                    && expr_between.low.is_const_at_depth(map_depth)
+                    && expr_between.high.is_const_at_depth(map_depth)
+            }
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_const_at_depth(map_depth)
                     && expr_binary.rhs.is_const_at_depth(map_depth)
@@ -487,6 +584,11 @@ impl Expr {
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_eval()),
             Self::Cast(expr_cast) => expr_cast.expr.is_eval(),
+            Self::Between(expr_between) => {
+                expr_between.expr.is_eval()
+                    && expr_between.low.is_eval()
+                    && expr_between.high.is_eval()
+            }
             Self::BinaryOp(expr_binary) => expr_binary.lhs.is_eval() && expr_binary.rhs.is_eval(),
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_eval()),
             Self::Any(expr_any) => expr_any.expr.is_eval(),
@@ -534,20 +636,23 @@ impl Expr {
     /// Navigates into a nested record or list expression by `path` and returns
     /// a read-only [`Entry`] reference.
     ///
-    /// Returns `None` if the path cannot be followed (e.g., the expression is
-    /// not a record or list at the expected depth).
+    /// Returns `None` if the path cannot be followed: the expression is not a
+    /// record or list at the expected depth, or a step indexes past the end of
+    /// a record or list.
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Option<Entry<'_>> {
         let mut ret = Entry::Expr(self);
 
         for step in path.step_iter() {
             ret = match ret {
-                Entry::Expr(Self::Record(expr)) => Entry::Expr(&expr[step]),
-                Entry::Expr(Self::List(expr)) => Entry::Expr(&expr.items[step]),
+                Entry::Expr(Self::Record(expr)) => Entry::Expr(expr.get(step)?),
+                Entry::Expr(Self::List(expr)) => Entry::Expr(expr.items.get(step)?),
                 Entry::Value(Value::Record(record))
-                | Entry::Expr(Self::Value(Value::Record(record))) => Entry::Value(&record[step]),
+                | Entry::Expr(Self::Value(Value::Record(record))) => {
+                    Entry::Value(record.get(step)?)
+                }
                 Entry::Value(Value::List(items)) | Entry::Expr(Self::Value(Value::List(items))) => {
-                    Entry::Value(&items[step])
+                    Entry::Value(items.get(step)?)
                 }
                 _ => return None,
             }
@@ -665,6 +770,7 @@ impl fmt::Debug for Expr {
             Self::Any(e) => e.fmt(f),
             Self::AnyOp(e) => e.fmt(f),
             Self::Arg(e) => e.fmt(f),
+            Self::Between(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),

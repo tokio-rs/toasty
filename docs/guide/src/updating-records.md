@@ -231,6 +231,9 @@ toasty::update!(doc {
 .exec(&mut db).await?;
 ```
 
+> **Runnable example:** [`crm-embedded`] flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.
+
+
 ## Inserting has-many children
 
 A bracket-of-braces literal on a [has-many](./has-many.md) field
@@ -310,6 +313,9 @@ toasty::update!(User::filter_by_id(user_id) { name: "Bob" })
 Scoped queries like `user.todos().filter_by_done(false)` are query
 builders too. The query runs as part of the `UPDATE` statement; no
 records are loaded first.
+
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
 
 ## Update by indexed field
 
@@ -425,3 +431,9 @@ the derive generates:
 
 The update builder has a setter for each field. The `UPDATE`
 statement includes only the fields you set.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields
+[`crm-embedded`]: https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

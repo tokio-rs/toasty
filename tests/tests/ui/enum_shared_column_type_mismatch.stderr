@@ -1,0 +1,17 @@
+error[E0277]: enum variant fields mapped to the same column must have the same type
+  --> tests/ui/enum_shared_column_type_mismatch.rs:15:17
+   |
+15 |         number: i64,
+   |                 ^^^ `i64` does not match `std::string::String`, the type another variant maps to this column
+   |
+   = help: the trait `toasty::codegen_support::shared_column::SameColumnType<std::string::String>` is not implemented for `i64`
+   = note: give both variants' fields the same type, or use distinct `#[column("...")]` names so they map to separate columns
+note: required by a bound in `check`
+  --> tests/ui/enum_shared_column_type_mismatch.rs:5:17
+   |
+ 5 | #[derive(Debug, toasty::Embed)]
+   |                 ^^^^^^^^^^^^^ required by this bound in `check`
+...
+15 |         number: i64,
+   |                 --- required by a bound in this function
+   = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)

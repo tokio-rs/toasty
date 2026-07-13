@@ -113,7 +113,7 @@ fn left_join_renders_left_join_with_on_clause() {
     };
 
     let on = Expr::eq(col(1, 1), col(0, 0));
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 LEFT JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id";"#]].assert_eq(&render_sqlite(&schema, select_with_join(JoinOp::Left(on))));
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 LEFT JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id";"#]].assert_eq(&render_sqlite(&schema, select_with_join(JoinOp::Left(on))));
 }
 
 #[test]
@@ -126,7 +126,7 @@ fn inner_join_renders_inner_join_with_on_clause() {
     };
 
     let on = Expr::eq(col(1, 1), col(0, 0));
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 INNER JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id";"#]].assert_eq(&render_sqlite(&schema, select_with_join(JoinOp::Inner(on))));
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 INNER JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id";"#]].assert_eq(&render_sqlite(&schema, select_with_join(JoinOp::Inner(on))));
 }
 
 /// Multi-step join: `users LEFT JOIN posts ON ... LEFT JOIN comments ON ...`.
@@ -169,7 +169,7 @@ fn multi_step_left_join_chain() {
         distinct: false,
     };
     let stmt = stmt::Statement::Query(stmt::Query::builder(select).build());
-    expect![[r#"SELECT tbl_0_0."id", tbl_0_1."id", tbl_0_2."id" FROM "users" AS tbl_0_0 LEFT JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id" LEFT JOIN "comments" AS tbl_0_2 ON tbl_0_2."post_id" = tbl_0_1."id";"#]].assert_eq(&render_sqlite(&schema, stmt));
+    expect![[r#"SELECT tbl_0_0."id" AS column1, tbl_0_1."id" AS column2, tbl_0_2."id" AS column3 FROM "users" AS tbl_0_0 LEFT JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id" LEFT JOIN "comments" AS tbl_0_2 ON tbl_0_2."post_id" = tbl_0_1."id";"#]].assert_eq(&render_sqlite(&schema, stmt));
 }
 
 /// Mixed-kind chain: `users INNER JOIN posts ON ... LEFT JOIN comments ON ...`.
@@ -212,5 +212,5 @@ fn mixed_inner_then_left_join() {
         distinct: false,
     };
     let stmt = stmt::Statement::Query(stmt::Query::builder(select).build());
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0 INNER JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id" LEFT JOIN "comments" AS tbl_0_2 ON tbl_0_2."post_id" = tbl_0_1."id";"#]].assert_eq(&render_sqlite(&schema, stmt));
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0 INNER JOIN "posts" AS tbl_0_1 ON tbl_0_1."user_id" = tbl_0_0."id" LEFT JOIN "comments" AS tbl_0_2 ON tbl_0_2."post_id" = tbl_0_1."id";"#]].assert_eq(&render_sqlite(&schema, stmt));
 }

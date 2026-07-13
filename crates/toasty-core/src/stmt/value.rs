@@ -1,4 +1,6 @@
-use super::{Entry, EntryPath, Type, TypeUnion, ValueRecord, sparse_record::SparseRecord};
+use super::{
+    Entry, EntryPath, Type, TypeUnion, ValueObject, ValueRecord, sparse_record::SparseRecord,
+};
 use std::cmp::Ordering;
 
 /// A dynamically typed value used throughout Toasty's query engine.
@@ -74,6 +76,11 @@ pub enum Value {
 
     /// Record value, either borrowed or owned
     Record(ValueRecord),
+
+    /// A document value: a named, ordered set of fields. The named counterpart
+    /// to [`Value::Record`]. Produced by the engine at the driver boundary for
+    /// document-stored fields, and consumed structurally by drivers.
+    Object(ValueObject),
 
     /// A list of values of the same type
     List(Vec<Value>),
@@ -293,10 +300,14 @@ impl Value {
     /// Returns `true` if this value is compatible with the given [`Type`].
     ///
     /// Null values are compatible with any type. For union types, the value
-    /// must be compatible with at least one member type.
-    pub fn is_a(&self, ty: &Type) -> bool {
+    /// must be compatible with at least one member type. A `Type::Model`
+    /// (a `#[document]` embed) is checked field-by-field against the embedded
+    /// model's layout, resolved via `resolve`. When `resolve` cannot resolve
+    /// the model (a schema-free context such as `()`), there is no layout to
+    /// check against and the document pairing is accepted without inspection.
+    pub fn is_a(&self, resolve: &impl super::Resolve, ty: &Type) -> bool {
         if let Type::Union(types) = ty {
-            return types.iter().any(|t| self.is_a(t));
+            return types.iter().any(|t| self.is_a(resolve, t));
         }
         match self {
             Self::Null => true,
@@ -316,17 +327,52 @@ impl Value {
                     if value.is_empty() {
                         true
                     } else {
-                        value[0].is_a(ty)
+                        value[0].is_a(resolve, ty)
                     }
                 }
                 _ => false,
             },
             Self::Record(value) => match ty {
-                Type::Record(fields) if value.len() == fields.len() => value
-                    .fields
-                    .iter()
-                    .zip(fields.iter())
-                    .all(|(value, ty)| value.is_a(ty)),
+                Type::Record(field_tys) if value.len() == field_tys.len() => {
+                    Self::fields_match(resolve, &value.fields, field_tys.iter())
+                }
+                // A positional `Value::Record` is the engine's load form for a
+                // document value (an embedded model, field names dropped).
+                // Resolve the embed's field types from the schema and check each
+                // positionally.
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => {
+                        let fields = model.fields();
+                        value.len() == fields.len()
+                            && Self::fields_match(
+                                resolve,
+                                &value.fields,
+                                fields.iter().map(|field| field.expr_ty()),
+                            )
+                    }
+                    None => true,
+                },
+                _ => false,
+            },
+            // A named `Value::Object` is the driver-boundary form of a
+            // document value. Against the structural `Type::Object` (how the
+            // database schema types a `#[document]` column) any object is
+            // compatible — the type carries no field layout. Against
+            // `Type::Model` (the engine's view) check each embed field against
+            // the entry of the same name (an absent key is `None`, compatible
+            // with any field type).
+            Self::Object(object) => match ty {
+                Type::Object => true,
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => model.fields().iter().all(|field| {
+                        let name = field.name().app_unwrap();
+                        object
+                            .iter()
+                            .find(|(key, _)| key == name)
+                            .is_none_or(|(_, v)| v.is_a(resolve, field.expr_ty()))
+                    }),
+                    None => true,
+                },
                 _ => false,
             },
             Self::SparseRecord(value) => match ty {
@@ -353,6 +399,19 @@ impl Value {
         }
     }
 
+    /// Whether each value `is_a` the type at the same position. Callers guard
+    /// the lengths first — `zip` would otherwise accept a short prefix.
+    fn fields_match<'a>(
+        resolve: &impl super::Resolve,
+        values: &[Value],
+        tys: impl Iterator<Item = &'a Type>,
+    ) -> bool {
+        values
+            .iter()
+            .zip(tys)
+            .all(|(value, ty)| value.is_a(resolve, ty))
+    }
+
     /// Infers and returns the [`Type`] of this value.
     ///
     /// # Examples
@@ -373,6 +432,14 @@ impl Value {
             Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
+            // An object's inferred type, names dropped, is a positional record;
+            // the named document type is only known from the schema.
+            Value::Object(v) => Type::Record(
+                v.entries
+                    .iter()
+                    .map(|(_, value)| value.infer_ty())
+                    .collect(),
+            ),
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => {

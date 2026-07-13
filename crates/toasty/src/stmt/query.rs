@@ -139,6 +139,27 @@ impl<T> Query<T> {
         self
     }
 
+    /// Sets the filter, combined with AND, for this query overwriting existing ones.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let mut q = Query::<List<User>>::all();
+    /// q.set_filter(User::fields().name().eq("Alice"));
+    /// ```
+    pub fn set_filter(&mut self, filter: Expr<bool>) -> &mut Self {
+        self.untyped.set_filter(filter);
+        self
+    }
+
     /// Eagerly load a related association when this query executes.
     ///
     /// `path` identifies the relation to include (e.g., a has-many or
@@ -200,6 +221,35 @@ impl<T> Query<T> {
             Some(existing) => existing.exprs.extend(order_by.exprs),
             None => self.untyped.order_by = Some(order_by),
         }
+        self
+    }
+
+    /// Sets the sort order for this query overwriting existing ones.
+    ///
+    /// Pass an [`OrderByExpr`](toasty_core::stmt::OrderByExpr) obtained from
+    /// [`Path::asc`] or [`Path::desc`], or a tuple of them to sort by several
+    /// fields at once. Calling `order_by` multiple times appends each
+    /// expression to the existing order, so later calls act as tie-breakers
+    /// for earlier ones.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     age: i64
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let mut q = Query::<List<User>>::all();
+    /// q.set_order_by(User::fields().name().desc());
+    /// ```
+    pub fn set_order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
+        let order_by = order_by.into();
+        self.untyped.order_by = Some(order_by);
         self
     }
 

@@ -63,12 +63,22 @@ impl<'stmt> IndexMatch<'stmt> {
                 }
                 _ => false,
             },
+            Between(e) => match &*e.expr {
+                stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
+                    // between is a range condition: valid on sort key, not partition key
+                    self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Ge)
+                }
+                _ => false,
+            },
             InList(e) => self.match_expr_in_list(cx, &e.expr, expr),
             IsNull(e) => match &*e.expr {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
                     self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)
                 }
-                _ => todo!("expr={:#?}", expr),
+                // Not a bare column reference (e.g. a projection into a
+                // `#[document]` column). Not an index match — return false
+                // rather than failing.
+                _ => false,
             },
             And(and_exprs) => {
                 let matched = self.match_all_restrictions(cx, and_exprs);
@@ -295,7 +305,7 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            StartsWith(_) | InList(_) | IsNull(_) | Like(_) | Not(_) => {
+            StartsWith(_) | Between(_) | InList(_) | IsNull(_) | Like(_) | Not(_) => {
                 if self
                     .columns
                     .iter()

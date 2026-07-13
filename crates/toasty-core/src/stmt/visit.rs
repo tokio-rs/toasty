@@ -2,14 +2,14 @@
 
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
-    ExprAny, ExprAnyOp, ExprArg, ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists,
-    ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
+    ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
+    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
     ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
     ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
-    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
-    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
-    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    FuncCount, FuncJsonExtract, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
+    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -112,6 +112,13 @@ pub trait Visit {
         visit_expr_all_op(self, i);
     }
 
+    /// Visits an [`ExprBetween`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_between`].
+    fn visit_expr_between(&mut self, i: &ExprBetween) {
+        visit_expr_between(self, i);
+    }
+
     /// Visits an [`ExprBinaryOp`] node.
     ///
     /// The default implementation delegates to [`visit_expr_binary_op`].
@@ -166,6 +173,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_func_count`].
     fn visit_expr_func_count(&mut self, i: &FuncCount) {
         visit_expr_func_count(self, i);
+    }
+
+    /// Visits a [`FuncJsonExtract`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_func_json_extract`].
+    fn visit_expr_func_json_extract(&mut self, i: &FuncJsonExtract) {
+        visit_expr_func_json_extract(self, i);
     }
 
     /// Visits a [`FuncLastInsertId`] node.
@@ -584,6 +598,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_all_op(&mut **self, i);
     }
 
+    fn visit_expr_between(&mut self, i: &ExprBetween) {
+        Visit::visit_expr_between(&mut **self, i);
+    }
+
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         Visit::visit_expr_binary_op(&mut **self, i);
     }
@@ -614,6 +632,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_expr_func_count(&mut self, i: &FuncCount) {
         Visit::visit_expr_func_count(&mut **self, i);
+    }
+
+    fn visit_expr_func_json_extract(&mut self, i: &FuncJsonExtract) {
+        Visit::visit_expr_func_json_extract(&mut **self, i);
     }
 
     fn visit_expr_in_list(&mut self, i: &ExprInList) {
@@ -890,6 +912,7 @@ where
         Expr::Any(expr) => v.visit_expr_any(expr),
         Expr::AnyOp(expr) => v.visit_expr_any_op(expr),
         Expr::Arg(expr) => v.visit_expr_arg(expr),
+        Expr::Between(expr) => v.visit_expr_between(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
         Expr::Default => v.visit_expr_default(),
@@ -1018,8 +1041,17 @@ where
 {
     match node {
         ExprFunc::Count(func) => v.visit_expr_func_count(func),
+        ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id(func),
     }
+}
+
+/// Default traversal for [`FuncJsonExtract`] nodes. Visits the base expression.
+pub fn visit_expr_func_json_extract<V>(v: &mut V, node: &FuncJsonExtract)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.base);
 }
 
 /// Default traversal for [`FuncCount`] nodes. Visits the optional argument and filter expressions.
@@ -1042,6 +1074,16 @@ where
     V: Visit + ?Sized,
 {
     // FuncLastInsertId has no fields to visit
+}
+
+/// Default traversal for [`ExprBetween`] nodes. Visits the expression, low, and high bounds.
+pub fn visit_expr_between<V>(v: &mut V, node: &ExprBetween)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+    v.visit_expr(&node.low);
+    v.visit_expr(&node.high);
 }
 
 /// Default traversal for [`ExprInList`] nodes. Visits the expression and list.
@@ -1204,6 +1246,7 @@ where
         ExprSet::Select(expr) => v.visit_stmt_select(expr),
         ExprSet::SetOp(expr) => v.visit_expr_set_op(expr),
         ExprSet::Update(expr) => v.visit_stmt_update(expr),
+        ExprSet::Delete(expr) => v.visit_stmt_delete(expr),
         ExprSet::Values(expr) => v.visit_values(expr),
         ExprSet::Insert(expr) => v.visit_stmt_insert(expr),
     }

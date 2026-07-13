@@ -4,6 +4,11 @@ use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
+const FIELD_STRUCT_RESERVED_METHODS: &[&str] =
+    &["from_path", "path", "eq", "in_query", "into_root", "create"];
+
+const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["from_path", "path", "any", "all", "create"];
+
 impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -32,12 +37,21 @@ impl Expand<'_> {
             .fields
             .iter()
             .enumerate()
+            .filter(|(_, field)| {
+                !util::ident_is_reserved(&field.name.ident, FIELD_STRUCT_RESERVED_METHODS)
+            })
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
 
                 match &field.ty {
                     Primitive(ty) => {
+                        // The accessor resolves its path through the field
+                        // type's `Field` impl, so the type decides its own path
+                        // shape: a struct embed (column-expanded or
+                        // `#[document]`) yields a chainable Fields handle
+                        // (`profile().name()`), a `Vec<_>` collection yields a
+                        // list leaf.
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
                     BelongsTo(rel) => {
@@ -159,17 +173,32 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let is_root = matches!(self.model.kind, ModelKind::Root(_));
 
-        // Generate methods that return list field paths
+        // Generate methods that return list field paths.
+        //
+        // An embedded enum flattens every variant's fields into one list, so two
+        // variants may declare the same field name — e.g. a column shared across
+        // variants via `#[column("name")]`. Emit each accessor name only once to
+        // avoid duplicate method definitions. Root models and embedded structs
+        // can never have duplicate field names, so this dedup is a no-op there.
+        let mut seen_names = std::collections::HashSet::new();
         let methods = self
             .model
             .fields
             .iter()
             .enumerate()
+            .filter(move |(_, field)| {
+                seen_names.insert(field.name.as_str().to_string())
+                    && !util::ident_is_reserved(
+                        &field.name.ident,
+                        FIELD_LIST_STRUCT_RESERVED_METHODS,
+                    )
+            })
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
 
                 match &field.ty {
+                    Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),
                     Primitive(ty) => {
                         self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
                     }
@@ -307,9 +336,12 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let schema_trait = self.schema_trait();
 
+        let doc_fields = self.doc_fields();
+
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
         quote!(
+            #[doc = #doc_fields]
             #vis fn fields() -> #field_struct_ident<#model_ident> {
                 #field_struct_ident {
                     path: <#model_ident as #schema_trait>::path_root(),

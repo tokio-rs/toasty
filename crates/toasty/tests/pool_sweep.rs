@@ -20,7 +20,7 @@ use async_trait::async_trait;
 use tempfile::TempDir;
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Connection, Driver, ExecResponse, Operation},
+    driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation},
     schema::{
         db::{AppliedMigration, Migration},
         diff,
@@ -79,8 +79,8 @@ impl Driver for MockDriver {
         self.inner.capability()
     }
 
-    async fn connect(&self) -> Result<Box<dyn Connection>> {
-        let inner = self.inner.connect().await?;
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
+        let inner = self.inner.connect(cx).await?;
         self.state.connects.fetch_add(1, Ordering::Relaxed);
         Ok(Box::new(MockConnection {
             inner,

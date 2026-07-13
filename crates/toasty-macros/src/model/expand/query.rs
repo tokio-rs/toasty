@@ -4,6 +4,28 @@ use crate::model::schema::{BelongsTo, Field, FieldTy, HasMany, HasOne};
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote};
 
+const QUERY_LIST_RESERVED_METHODS: &[&str] = &[
+    "from_assoc_many",
+    "first",
+    "one",
+    "get",
+    "update",
+    "count",
+    "select",
+    "delete",
+    "paginate",
+    "filter",
+    "order_by",
+    "latest_by",
+    "limit",
+    "offset",
+    "insert",
+    "remove",
+    "include",
+    "exec",
+    "create",
+];
+
 impl Expand<'_> {
     pub(super) fn expand_query_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -316,6 +338,9 @@ impl Expand<'_> {
         self.model
             .fields
             .iter()
+            .filter(|field| {
+                !util::ident_is_reserved(&field.name.ident, QUERY_LIST_RESERVED_METHODS)
+            })
             .filter_map(|field| match &field.ty {
                 FieldTy::BelongsTo(rel) => Some(self.expand_belongs_to_method(field, rel)),
                 FieldTy::HasMany(rel) if rel.via.is_some() => {

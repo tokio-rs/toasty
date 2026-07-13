@@ -263,6 +263,32 @@ pub async fn order_by_multiple_columns_composes(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn set_order_by_overwrites(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob",   age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // `set_order_by` replaces the existing sort rather than appending to it.
+    // Overwriting an ascending sort with a descending one must produce a
+    // descending result, not an asc-then-desc tie-break.
+    use toasty::stmt::{List, Query};
+    let mut q = Query::<List<User>>::all().order_by(User::fields().age().asc());
+    q.set_order_by(User::fields().age().desc());
+
+    let users = q.exec(&mut db).await?;
+
+    let ages: Vec<i64> = users.iter().map(|u| u.age).collect();
+    assert_eq!(ages, [40, 30, 20]);
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn order_by_tuple(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

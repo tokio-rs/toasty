@@ -221,19 +221,55 @@ impl Simplify<'_> {
     }
 }
 
-/// A distributed-comparison term is dead — it can never be `true`, so it
-/// contributes nothing to the surrounding `OR` — when it is `false`, a bare
-/// `NULL`, or an `AND` with a `NULL` conjunct. The last case arises when an arm
-/// compares against a decode `Match`'s `null` else branch (e.g.
-/// `eq(option_embed, Some(..))` evaluated against a `None` row): `x AND NULL`
-/// never holds in three-valued filter logic, and DynamoDB rejects the bare
-/// value placeholder the `NULL` would otherwise serialize to.
+/// Returns `true` when a distributed-comparison term can never be `true`, so it
+/// adds nothing to the surrounding `OR` and can be dropped.
+///
+/// Three shapes qualify:
+///
+/// 1. The term is `false` or a bare `NULL`.
+///
+/// 2. The term is an `AND` with a `NULL` conjunct, such as `x AND NULL`. This
+///    comes from comparing against a decode `Match`'s `null` else branch — for
+///    example `eq(option_embed, Some(..))` on a `None` row. `x AND NULL` never
+///    holds in three-valued logic, and DynamoDB rejects the bare `NULL`
+///    placeholder it would otherwise serialize to.
+///
+/// 3. The term compares against an `Expr::Error`, the placeholder a total enum
+///    decode puts in its unreachable else branch. For a two-variant enum,
+///    distributing `field == "x"` over the decode produces a term like
+///    `disc != 1 AND disc != 2 AND Error == "x"`. A surrounding variant gate
+///    usually contradicts the `disc != k` guards and folds this away, but
+///    factoring a shared predicate out from under its gates removes that gate
+///    (issue #1061). Since `Error` marks a branch that never runs, the
+///    comparison can never hold. Dropping the term also keeps `Error` out of
+///    the SQL serializer, which cannot render it.
 fn is_dead_filter_term(term: &Expr) -> bool {
     if term.is_unsatisfiable() {
+        return true;
+    }
+    if contains_error(term) {
         return true;
     }
     matches!(
         term,
         Expr::And(and) if and.operands.iter().any(Expr::is_value_null)
     )
+}
+
+/// Returns `true` if `expr` contains an `Expr::Error` node anywhere in its
+/// subtree — the unreachable-branch placeholder produced by enum decode.
+fn contains_error(expr: &Expr) -> bool {
+    use toasty_core::stmt::Visit;
+
+    struct FindError(bool);
+
+    impl Visit for FindError {
+        fn visit_expr_error(&mut self, _: &stmt::ExprError) {
+            self.0 = true;
+        }
+    }
+
+    let mut find = FindError(false);
+    find.visit_expr(expr);
+    find.0
 }

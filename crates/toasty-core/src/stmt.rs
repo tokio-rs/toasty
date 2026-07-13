@@ -49,6 +49,9 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
+mod document_storage_text;
+pub use document_storage_text::DocumentStorageText;
+
 mod entry;
 pub use entry::Entry;
 
@@ -68,6 +71,9 @@ pub use expr_all_op::ExprAllOp;
 
 mod expr_and;
 pub use expr_and::ExprAnd;
+
+mod expr_between;
+pub use expr_between::ExprBetween;
 
 mod expr_any;
 pub use expr_any::ExprAny;
@@ -168,6 +174,9 @@ pub use sorted_index::SortedIndex;
 mod func_count;
 pub use func_count::FuncCount;
 
+mod func_json_extract;
+pub use func_json_extract::FuncJsonExtract;
+
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
@@ -181,6 +190,7 @@ mod insert_target;
 pub use insert_target::InsertTarget;
 
 mod input;
+pub(crate) use input::InputResolve;
 pub use input::{ConstInput, Input, TypedInput};
 
 mod join;
@@ -276,6 +286,9 @@ pub use values::Values;
 
 #[cfg(feature = "jiff")]
 mod value_jiff;
+
+mod value_object;
+pub use value_object::ValueObject;
 
 mod value_record;
 pub use value_record::ValueRecord;

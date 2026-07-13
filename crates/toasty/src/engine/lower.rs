@@ -28,7 +28,7 @@ use toasty_core::{
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
 
 /// Wrap a nullable single-relation subquery so a missing row passes through as
 /// `Null`, while a present row is transformed by `present`. Used when lowering
@@ -284,7 +284,9 @@ impl LowerStatement<'_, '_> {
     ///
     /// `Append` is supported on every backend; the removal operators are
     /// gated by per-backend capability flags and emit a clear error where
-    /// the native form is not available.
+    /// the native form is not available. On document collections the
+    /// removal operators are rejected outright: the per-backend renderings
+    /// are native-array forms that do not apply to a document column.
     fn lower_collection_op(
         &mut self,
         out: &mut stmt::Assignments,
@@ -311,21 +313,35 @@ impl LowerStatement<'_, '_> {
         };
 
         // `Append` is universally supported; the removal operators are
-        // gated per backend.
+        // gated per backend and rejected on document collections, where
+        // the capability flags speak for the native-array renderings only.
         let cap = self.capability();
+        let is_document = self
+            .expr_cx
+            .schema()
+            .mapping
+            .document_column_ty(prim.column)
+            .is_some();
         let unsupported = match &op {
             CollectionOp::Append(_) => None,
-            CollectionOp::Remove(_) if !cap.vec_remove => Some("stmt::remove"),
-            CollectionOp::Pop if !cap.vec_pop => Some("stmt::pop"),
-            CollectionOp::RemoveAt(_) if !cap.vec_remove_at => Some("stmt::remove_at"),
+            CollectionOp::Remove(_) if is_document || !cap.vec_remove => Some("stmt::remove"),
+            CollectionOp::Pop if is_document || !cap.vec_pop => Some("stmt::pop"),
+            CollectionOp::RemoveAt(_) if is_document || !cap.vec_remove_at => {
+                Some("stmt::remove_at")
+            }
             _ => None,
         };
 
         if let Some(op_name) = unsupported {
+            let target = if is_document {
+                "document collections"
+            } else {
+                "this backend"
+            };
             self.state
                 .errors
                 .push(crate::Error::invalid_statement(format!(
-                    "{op_name} is not yet supported on this backend"
+                    "{op_name} is not yet supported on {target}"
                 )));
             return;
         }
@@ -333,7 +349,20 @@ impl LowerStatement<'_, '_> {
         match op {
             CollectionOp::Append(expr) => {
                 self.visit_expr_mut(expr);
-                out.append(prim.column, expr.take());
+                let mut value = expr.take();
+
+                // A document collection's append operand (a list of elements,
+                // matching the column's document type) lowers through the
+                // same schema-directed cast a `Set` picks up from
+                // `model_to_table`; `Append` bypasses that template, so the
+                // cast is applied here.
+                let schema = self.expr_cx.schema();
+                if let Some(doc_ty) = schema.mapping.document_column_ty(prim.column) {
+                    let column_ty = &schema.db.column(prim.column).ty;
+                    value = stmt::Expr::cast_from(value, doc_ty, column_ty);
+                }
+
+                out.append(prim.column, value);
             }
             CollectionOp::Remove(expr) => {
                 self.visit_expr_mut(expr);
@@ -488,10 +517,7 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 
         // Two literal-list `Append`s concatenate. Non-literal Append
         // shapes fall through to a residual `Batch`.
-        (Append(a), Append(b)) => match try_concat_list_literals(a, b) {
-            Ok(merged) => Append(merged),
-            Err((a, b)) => Batch(vec![Append(a), Append(b)]),
-        },
+        (Append(a), Append(b)) => try_concat_list_literals_to_assignment(a, b),
 
         // A `Batch` accumulator absorbs the next entry as a tail. Arises
         // when a previous compose failed to reduce a pair; collecting the
@@ -509,16 +535,14 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 /// Concatenate two list-shaped expressions if both are literals (either
 /// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
 /// on failure so the caller can preserve the un-folded shape.
-fn try_concat_list_literals(
-    a: stmt::Expr,
-    b: stmt::Expr,
-) -> Result<stmt::Expr, (stmt::Expr, stmt::Expr)> {
+fn try_concat_list_literals_to_assignment(a: stmt::Expr, b: stmt::Expr) -> stmt::Assignment {
+    use stmt::Assignment::{Append, Batch};
     if !is_list_literal(&a) || !is_list_literal(&b) {
-        return Err((a, b));
+        return Batch(vec![Append(a), Append(b)]);
     }
     let mut items = take_list_items(a).expect("checked is_list_literal");
     items.extend(take_list_items(b).expect("checked is_list_literal"));
-    Ok(stmt::Expr::list_from_vec(items))
+    Append(stmt::Expr::list_from_vec(items))
 }
 
 fn is_list_literal(e: &stmt::Expr) -> bool {
@@ -899,10 +923,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                // Cheap canonicalization is enough here: the parent statement's
-                // post-lowering simplify will recursively visit this embedded
-                // sub-statement and apply the heavyweight rules.
-                fold::fold_stmt(&mut *expr_stmt.stmt);
+                // Post-lower simplify. The sub-statement detaches into its own
+                // HIR entry (`new_sub_statement`), so the parent statement's
+                // post-lowering simplify never sees it — the heavyweight rules
+                // (e.g. the schema-directed `#[document]` cast folding) must
+                // run here.
+                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
@@ -923,10 +949,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 });
 
                 let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
-                // Cheap canonicalization is enough here: the parent statement's
-                // post-lowering simplify will recursively visit this embedded
-                // sub-statement and apply the heavyweight rules.
-                fold::fold_stmt(&mut stmt);
+                // Post-lower simplify. The sub-statement detaches into its own
+                // HIR entry (`new_sub_statement`), so the parent statement's
+                // post-lowering simplify never sees it — the heavyweight rules
+                // must run here.
+                self.state.engine.simplify_stmt(&mut stmt);
 
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
@@ -1184,7 +1211,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
             // Use the lowered assignments (which are now column-indexed)
-            lower.constantize_update_returning(returning, &stmt.assignments);
+            returning::constantize_update_returning(lower.expr_cx, returning, &stmt.assignments);
         }
 
         self.visit_update_target_mut(&mut stmt.target);
@@ -1289,7 +1316,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             (nesting, *pk_field_id)
         };
 
-        let pk = self.expr_cx.schema().app.field(pk_field_id);
+        let schema = self.expr_cx.schema();
+        let pk = schema.app.field(pk_field_id);
 
         // Sanity-check the RHS shape against the PK type.
         match &mut *expr.list {
@@ -1297,7 +1325,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 for item in &mut expr_list.items {
                     match item {
                         stmt::Expr::Value(value) => {
-                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                            assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                         }
                         _ => todo!("{item:#?}"),
                     }
@@ -1305,7 +1333,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             stmt::Expr::Value(stmt::Value::List(values)) => {
                 for value in values {
-                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                    assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                 }
             }
             _ => todo!("expr={expr:#?}"),
@@ -1443,7 +1471,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     }
                     stmt::Expr::Value(stmt::Value::List(items)) => {
                         for item in items {
-                            *item = target_ty.cast(item.take()).expect("failed to cast value");
+                            *item = target_ty
+                                .cast(self.expr_cx.schema(), item.take())
+                                .expect("failed to cast value");
                         }
                     }
                     stmt::Expr::Arg(_) => {
@@ -1477,6 +1507,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             (stmt::Expr::Reference(expr_reference), list) => {
                 assert!(expr_reference.is_column());
 
+                match list {
+                    stmt::Expr::Value(stmt::Value::List(_)) => {}
+                    stmt::Expr::List(list) => {
+                        for item in &list.items {
+                            assert!(item.is_value());
+                        }
+                    }
+                    _ => panic!("invalid; should have been caught earlier"),
+                }
+
+                None
+            }
+            (stmt::Expr::Project(_), list) => {
                 match list {
                     stmt::Expr::Value(stmt::Value::List(_)) => {}
                     stmt::Expr::List(list) => {
@@ -1855,7 +1898,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             stmt::Expr::Value(value) => {
                 // Cast the value to target_ty using existing cast method
-                let casted = target_ty.cast(value.take()).expect("failed to cast value");
+                let casted = target_ty
+                    .cast(self.expr_cx.schema(), value.take())
+                    .expect("failed to cast value");
                 *value = casted;
             }
             stmt::Expr::Project(_) => {
@@ -1935,7 +1980,20 @@ impl stmt::Input for AssignmentInput<'_> {
         if expr_projection.as_slice() == remaining_steps {
             Some(self.value.clone())
         } else {
-            self.value.entry(expr_projection).map(|e| e.to_expr())
+            // The column's encode template projects into variant-field
+            // positions of the assignment value. When a mixed enum is updated
+            // to a unit (or otherwise shorter) variant, the value record is
+            // narrower than a sibling variant's column expects, so the
+            // projection falls out of bounds and `entry` returns `None`. Those
+            // references live inside a discriminant-guarded match arm that is
+            // unreachable for this value, so resolving them to `null` is safe —
+            // the simplifier drops the dead arm.
+            Some(
+                self.value
+                    .entry(expr_projection)
+                    .map(|e| e.to_expr())
+                    .unwrap_or_else(stmt::Expr::null),
+            )
         }
     }
 }

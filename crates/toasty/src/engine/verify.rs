@@ -3,7 +3,10 @@ use crate::engine::Engine;
 use toasty_core::Error;
 use toasty_core::driver::Capability;
 use toasty_core::{
-    schema::{Schema, app::ModelId},
+    schema::{
+        Schema,
+        app::{self, ModelId},
+    },
     stmt::{self, Statement, Visit},
 };
 
@@ -199,6 +202,36 @@ impl VerifyExpr<'_, '_> {
         }
     }
 
+    /// Whether `expr` references a whole document-stored field of the current
+    /// model: a `#[document]` embed (`Type::Model`) or an embed collection
+    /// (`List(Model)`).
+    fn is_document_field(&self, expr: &stmt::Expr) -> bool {
+        let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = expr else {
+            return false;
+        };
+        let Some(root) = self.schema.app.model(self.model).as_root() else {
+            return false;
+        };
+        let Some(field) = root.fields.get(*index) else {
+            return false;
+        };
+        let app::FieldTy::Primitive(primitive) = &field.ty else {
+            return false;
+        };
+        let embed_id = match &primitive.ty {
+            stmt::Type::Model(id) => *id,
+            stmt::Type::List(elem) => match &**elem {
+                stmt::Type::Model(id) => *id,
+                _ => return false,
+            },
+            _ => return false,
+        };
+        matches!(
+            self.schema.app.model(embed_id),
+            app::Model::EmbeddedStruct(_)
+        )
+    }
+
     fn assert_bool_expr(&self, expr: &stmt::Expr) {
         use stmt::Expr::*;
 
@@ -206,6 +239,7 @@ impl VerifyExpr<'_, '_> {
             And(_)
             | AllOp(_)
             | AnyOp(_)
+            | Between(_)
             | BinaryOp(_)
             | Like(_)
             | InList(_)
@@ -277,6 +311,18 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
 
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         stmt::visit::visit_expr_binary_op(self, i);
+
+        // Comparing a `#[document]` field against a whole embed value is not
+        // yet supported (document value equality is planned — see the design
+        // doc). Reject it here with a clear error instead of letting it reach
+        // the engine's type inference, which cannot merge a document column
+        // with a record value.
+        if self.is_document_field(&i.lhs) || self.is_document_field(&i.rhs) {
+            self.record(Error::unsupported_feature(
+                "comparing a #[document] field to a whole value is not yet supported; \
+                 filter on individual fields inside the document instead",
+            ));
+        }
     }
 
     fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery) {

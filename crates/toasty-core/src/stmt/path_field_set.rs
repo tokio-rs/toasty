@@ -26,12 +26,16 @@ pub struct PathFieldSet {
 }
 
 /// An iterator over the field indices in a [`PathFieldSet`].
-pub struct PathFieldSetIter<'a> {
-    inner: bit_set::Iter<'a, u32>,
+///
+/// Generic over the underlying `bit-set` iterator rather than naming it: as of
+/// `bit-set` 0.10.1 the concrete `Iter` type lives in a private module and can
+/// no longer be referred to directly.
+pub struct PathFieldSetIter<I> {
+    inner: I,
     len: usize,
 }
 
-impl<'a> Iterator for PathFieldSetIter<'a> {
+impl<I: Iterator<Item = usize>> Iterator for PathFieldSetIter<I> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -47,7 +51,7 @@ impl<'a> Iterator for PathFieldSetIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for PathFieldSetIter<'a> {}
+impl<I: Iterator<Item = usize>> ExactSizeIterator for PathFieldSetIter<I> {}
 
 impl PathFieldSet {
     /// Creates an empty field set.
@@ -71,7 +75,7 @@ impl PathFieldSet {
     }
 
     /// Returns an iterator over the field indices in ascending order.
-    pub fn iter(&self) -> PathFieldSetIter<'_> {
+    pub fn iter(&self) -> PathFieldSetIter<impl Iterator<Item = usize> + '_> {
         PathFieldSetIter {
             inner: self.container.iter(),
             len: self.container.count(),

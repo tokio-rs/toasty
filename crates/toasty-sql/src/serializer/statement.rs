@@ -265,6 +265,16 @@ impl ToSql for &stmt::Delete {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         assert!(self.returning.is_none());
 
+        // Conditions never reach the serializer: the planner rewrites a
+        // conditional DELETE into a CTE or read-modify-write plan (see
+        // `plan_conditional_sql_query_as_*`), stripping the condition and
+        // folding its check into a filter predicate.
+        debug_assert!(
+            self.condition.is_none(),
+            "SQL DELETE condition should have been lowered by the planner; condition={:#?}",
+            self.condition
+        );
+
         // Create a new expression scope to serialize the statement
         let mut f = f.scope(self);
         f.alias = true;
@@ -337,7 +347,7 @@ impl ToSql for &stmt::Insert {
         let returning = self
             .returning
             .as_ref()
-            .map(|returning| ("RETURNING ", returning));
+            .map(|returning| (" RETURNING ", returning));
 
         if returning.is_some() && f.serializer.is_mysql() {
             panic!(
@@ -418,6 +428,7 @@ impl ToSql for &stmt::ExprSet {
             stmt::ExprSet::Select(expr) => expr.to_sql(f),
             stmt::ExprSet::Values(expr) => expr.to_sql(f),
             stmt::ExprSet::Update(expr) => expr.to_sql(f),
+            stmt::ExprSet::Delete(expr) => expr.to_sql(f),
             _ => todo!("self={self:?}"),
         }
     }
@@ -445,16 +456,17 @@ impl ToSql for &stmt::Returning {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Returning::Project(stmt::Expr::Record(expr_record)) => {
+                // Alias every projected field positionally (`AS column1`, ...).
+                // A nested SELECT/RETURNING referenced from an outer query (e.g.
+                // a data-modifying CTE joined for its returned rows) is read by
+                // that alias — `ColumnAlias` — so a bare column reference must
+                // carry it too, not just computed expressions. Drivers read
+                // top-level results positionally, so the alias is harmless there.
                 let fields = expr_record
                     .fields
                     .iter()
                     .enumerate()
-                    .map(|(i, expr)| match expr {
-                        stmt::Expr::Reference(stmt::ExprReference::Column { .. }) => {
-                            (expr, None, None)
-                        }
-                        _ => (expr, Some(" AS "), Some(ColumnAlias(i))),
-                    });
+                    .map(|(i, expr)| (expr, Some(" AS "), Some(ColumnAlias(i))));
 
                 fmt!(f, Comma(fields));
             }
@@ -641,9 +653,14 @@ impl ToSql for &stmt::Update {
             );
         }
 
-        assert!(
+        // Conditions never reach the serializer: the planner rewrites a
+        // conditional UPDATE into a CTE or read-modify-write plan (see
+        // `plan_conditional_sql_query_as_*`), stripping the condition and
+        // folding its check into a filter predicate.
+        debug_assert!(
             self.condition.is_none(),
-            "SQL does not support update conditions"
+            "SQL UPDATE condition should have been lowered by the planner; condition={:#?}",
+            self.condition
         );
 
         fmt!(&mut f, "UPDATE " self.target " SET " assignments self.filter returning);
@@ -703,10 +720,13 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
 /// - PostgreSQL: `col || $1` — `text[] || text[]` concatenates arrays.
 /// - MySQL: `JSON_MERGE_PRESERVE(col, $1)` — preserves duplicates and
 ///   appends every element of the right-hand array to the left-hand one.
-/// - SQLite: `(SELECT json_group_array(value) FROM (SELECT value FROM
-///   json_each(col) UNION ALL SELECT value FROM json_each($1)))` — a
-///   subquery that concatenates the two JSON arrays while preserving
-///   element order and types.
+/// - SQLite: a `json_group_array` subquery over the `json_each` rows of both
+///   arrays, concatenating them while preserving element order and types.
+///   `json_each.value` returns object and array elements as plain TEXT, which
+///   `json_group_array` would re-encode as JSON strings, so those elements
+///   pass through `json()` to keep their structure (a document collection's
+///   elements are objects); scalar elements pass through `json_quote`, since
+///   `json()` rejects a bare string like `a`.
 fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
     match f.serializer.flavor {
         Flavor::Postgresql => fmt!(f, Ident(column_name) " || " expr),
@@ -715,8 +735,10 @@ fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt
         }
         Flavor::Sqlite => fmt!(
             f,
-            "(SELECT json_group_array(value) FROM (SELECT value FROM json_each("
-            Ident(column_name) ") UNION ALL SELECT value FROM json_each(" expr ")))"
+            "(SELECT json_group_array(json(CASE WHEN type IN ('object', 'array') \
+             THEN value ELSE json_quote(value) END)) \
+             FROM (SELECT type, value FROM json_each("
+            Ident(column_name) ") UNION ALL SELECT type, value FROM json_each(" expr ")))"
         ),
     }
 }

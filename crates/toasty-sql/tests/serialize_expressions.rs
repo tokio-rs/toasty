@@ -97,6 +97,47 @@ fn or_chain_joins_operands_with_or_keyword() {
     expect!["VALUES ($1 = $2 OR $3 = $4 OR $5 = $6);"].assert_eq(&render_pg(expr));
 }
 
+/// An `OR` nested inside an `AND` must be parenthesized: `OR` binds looser than
+/// `AND`, so `a AND (b OR c)` would otherwise serialize to `a AND b OR c`, which
+/// SQL parses as `(a AND b) OR c` — a different query (issue #1061).
+#[test]
+fn and_parenthesizes_nested_or_operand() {
+    let expr: Expr = ExprAnd {
+        operands: vec![
+            Expr::eq(Expr::arg(0), Expr::arg(1)),
+            ExprOr {
+                operands: vec![
+                    Expr::eq(Expr::arg(2), Expr::arg(3)),
+                    Expr::eq(Expr::arg(4), Expr::arg(5)),
+                ],
+            }
+            .into(),
+        ],
+    }
+    .into();
+    expect!["VALUES ($1 = $2 AND ($3 = $4 OR $5 = $6));"].assert_eq(&render_pg(expr));
+}
+
+/// The mirror case needs no parens: `AND` binds tighter than `OR`, so
+/// `(a AND b) OR c` renders correctly without them.
+#[test]
+fn or_does_not_parenthesize_nested_and_operand() {
+    let expr: Expr = ExprOr {
+        operands: vec![
+            ExprAnd {
+                operands: vec![
+                    Expr::eq(Expr::arg(0), Expr::arg(1)),
+                    Expr::eq(Expr::arg(2), Expr::arg(3)),
+                ],
+            }
+            .into(),
+            Expr::eq(Expr::arg(4), Expr::arg(5)),
+        ],
+    }
+    .into();
+    expect!["VALUES ($1 = $2 AND $3 = $4 OR $5 = $6);"].assert_eq(&render_pg(expr));
+}
+
 // ---------- LIKE family ----------
 
 #[test]
@@ -282,4 +323,61 @@ fn default_renders_default_on_postgresql_and_mysql_and_null_on_sqlite() {
     expect!["VALUES (DEFAULT);"].assert_eq(&render_pg(Expr::Default));
     expect!["VALUES ROW(DEFAULT);"].assert_eq(&render_mysql(Expr::Default));
     expect!["VALUES (NULL);"].assert_eq(&render_sqlite(Expr::Default));
+}
+
+// ---------- JsonExtract (document path reads) ----------
+
+/// A `FuncJsonExtract` over a placeholder base, rendering the document path read
+/// of a leaf of type `ty`.
+fn json_extract(path: &[&str], ty: stmt::Type) -> Expr {
+    Expr::from(stmt::FuncJsonExtract {
+        base: Box::new(Expr::arg(0)),
+        path: path.iter().map(|s| (*s).to_owned()).collect(),
+        ty,
+    })
+}
+
+/// A document path read renders differently per dialect: SQLite's `json_extract`
+/// returns SQL-native scalars directly; MySQL must unwrap the JSON value to text
+/// with `JSON_UNQUOTE`; PostgreSQL descends with `->`/`->>`. The MySQL `String`
+/// leaf casts to `CHAR` so it inherits the connection collation and compares
+/// with the same case sensitivity as a `VARCHAR` column (a bare `JSON_UNQUOTE`
+/// would be `utf8mb4_bin`, i.e. case-sensitive).
+#[test]
+fn json_extract_string_leaf_diverges_by_dialect() {
+    expect!["VALUES (($1->>'name'));"]
+        .assert_eq(&render_pg(json_extract(&["name"], stmt::Type::String)));
+    expect!["VALUES (json_extract(?1, '$.name'));"]
+        .assert_eq(&render_sqlite(json_extract(&["name"], stmt::Type::String)));
+    expect!["VALUES ROW(CAST(JSON_UNQUOTE(JSON_EXTRACT(?, '$.name')) AS CHAR));"]
+        .assert_eq(&render_mysql(json_extract(&["name"], stmt::Type::String)));
+}
+
+/// On MySQL, `JSON_EXTRACT` yields a JSON-typed value, so each leaf is unwrapped
+/// and cast to compare against a bound parameter — integers to `SIGNED`, strings
+/// to `CHAR` (for a `VARCHAR`-matching collation), booleans to `UNSIGNED` (from
+/// the *bare* JSON boolean, since `'true'`/`'false'` text would cast to `0`). A
+/// nested path descends with dotted keys.
+#[test]
+fn json_extract_mysql_casts_by_leaf_type() {
+    expect!["VALUES ROW(CAST(JSON_UNQUOTE(JSON_EXTRACT(?, '$.age')) AS SIGNED));"]
+        .assert_eq(&render_mysql(json_extract(&["age"], stmt::Type::I64)));
+    expect!["VALUES ROW(CAST(JSON_EXTRACT(?, '$.flag') AS UNSIGNED));"]
+        .assert_eq(&render_mysql(json_extract(&["flag"], stmt::Type::Bool)));
+    expect!["VALUES ROW(CAST(JSON_UNQUOTE(JSON_EXTRACT(?, '$.a.b')) AS CHAR));"]
+        .assert_eq(&render_mysql(json_extract(&["a", "b"], stmt::Type::String)));
+}
+
+/// A temporal leaf on MySQL casts to a `(6)`-precision type so the microseconds
+/// the JSON codec writes survive the comparison (a bare `AS DATETIME` would
+/// truncate to whole seconds).
+#[cfg(feature = "jiff")]
+#[test]
+fn json_extract_mysql_temporal_casts_preserve_micros() {
+    expect!["VALUES ROW(CAST(JSON_UNQUOTE(JSON_EXTRACT(?, '$.t')) AS DATETIME(6)));"]
+        .assert_eq(&render_mysql(json_extract(&["t"], stmt::Type::Timestamp)));
+    expect!["VALUES ROW(CAST(JSON_UNQUOTE(JSON_EXTRACT(?, '$.d')) AS DATE));"]
+        .assert_eq(&render_mysql(json_extract(&["d"], stmt::Type::Date)));
+    expect!["VALUES ROW(CAST(JSON_UNQUOTE(JSON_EXTRACT(?, '$.clock')) AS TIME(6)));"]
+        .assert_eq(&render_mysql(json_extract(&["clock"], stmt::Type::Time)));
 }

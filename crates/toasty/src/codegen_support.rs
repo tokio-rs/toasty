@@ -5,7 +5,9 @@
 #![doc(hidden)]
 
 pub mod auto;
+pub mod index;
 pub mod newtype;
+pub mod shared_column;
 pub mod storage;
 pub mod version;
 pub mod via;
@@ -14,9 +16,9 @@ pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
-        Auto, Deferred, DiscoverItem, Embed, Field, Load, Model, QueryMany, QueryOne,
-        QueryOptionOne, RelationManyField, RelationOneField, Scope, ViaMany, ViaManyField, ViaPath,
-        ViaTarget, generate_unique_id,
+        Auto, Deferred, DiscoverItem, Document, Embed, Field, Load, Model, QueryMany, QueryOne,
+        QueryOptionOne, RelationManyField, RelationOneField, Scalar, Scope, ViaMany, ViaManyField,
+        ViaPath, ViaTarget, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},

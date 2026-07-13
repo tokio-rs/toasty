@@ -368,3 +368,7 @@ for user in &users {
 | `model.relation` | Access an eager `Vec<T>`, `T`, or `Option<T>` relation field |
 | `model.relation.try_get()` | Non-panicking access; returns `None` if not preloaded |
 | `model.relation.is_unloaded()` | Check whether a `Deferred<_>` relation was preloaded |
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

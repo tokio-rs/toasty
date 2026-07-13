@@ -34,3 +34,14 @@ pub(crate) fn respan(tokens: TokenStream, span: Span) -> TokenStream {
 pub(crate) fn ident(name: &str) -> syn::Ident {
     quote::format_ident!("__toasty_{name}")
 }
+
+/// Return the Rust method name an identifier occupies, without raw-ident syntax.
+pub(crate) fn bare_ident_name(ident: &syn::Ident) -> String {
+    let name = ident.to_string();
+    name.strip_prefix("r#").unwrap_or(&name).to_string()
+}
+
+pub(crate) fn ident_is_reserved(ident: &syn::Ident, reserved: &[&str]) -> bool {
+    let name = bare_ident_name(ident);
+    reserved.contains(&name.as_str())
+}

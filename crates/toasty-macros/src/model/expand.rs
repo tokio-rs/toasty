@@ -1,4 +1,5 @@
 mod create;
+mod docs;
 mod embedded_enum;
 mod fields;
 mod filters;
@@ -38,6 +39,7 @@ impl Expand<'_> {
         let storage_compat_checks = self.expand_storage_compat_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
         let version_compat_checks = self.expand_version_compat_checks();
+        let indexable_checks = self.expand_indexable_checks();
 
         wrap_in_const(quote! {
             #model_impls
@@ -49,6 +51,7 @@ impl Expand<'_> {
             #storage_compat_checks
             #auto_compat_checks
             #version_compat_checks
+            #indexable_checks
         })
     }
 }
@@ -89,11 +92,14 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let storage_compat_checks = expand.expand_storage_compat_checks();
+    let indexable_checks = expand.expand_indexable_checks();
     let newtype_marker = expand.expand_embedded_newtype_marker();
+    let newtype_indexable_impl = expand.expand_embedded_indexable_impl();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
 
     wrap_in_const(quote! {
         #newtype_marker
+        #newtype_indexable_impl
 
         #embedded_field_struct
         #embedded_field_list_struct
@@ -103,6 +109,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #embedded_model_impls
 
         #storage_compat_checks
+        #indexable_checks
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -178,6 +185,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
         }
 
+        // A struct embed can be stored as a `#[document]` column (an enum
+        // embed cannot, yet — its document encoding is undefined). The
+        // `#[document]` attribute resolves the field's type through this
+        // trait, so the bound is what rejects the attribute on
+        // non-document-capable types at compile time.
+        impl #toasty::Document for #model_ident {}
+
         impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
             fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
                 #into_expr_body_val
@@ -231,12 +245,29 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
+    let shared_column_checks = e.expand_shared_column_checks();
+    let indexable_checks = e.expand_indexable_checks();
+
+    // A unit (data-less) enum is a single scalar discriminant: indexable, and a
+    // valid `Vec<Enum>` element (`Scalar` unlocks the container operators).
+    // Data-carrying enums span multiple columns and get neither.
+    let unit_enum_impls = if model.fields.is_empty() {
+        quote! {
+            impl #toasty::index::IndexableField for #model_ident {}
+            impl #toasty::Scalar for #model_ident {}
+        }
+    } else {
+        quote! {}
+    };
 
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
 
         #storage_compat_checks
+        #shared_column_checks
+        #indexable_checks
+        #unit_enum_impls
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -377,6 +408,37 @@ impl Expand<'_> {
         }
     }
 
+    /// For tuple-newtype `#[derive(Embed)]` structs, emit an `IndexableField`
+    /// impl that forwards to the inner type, so a newtype wrapping an indexable
+    /// scalar can itself serve as an index column. Multi-field and named
+    /// single-field structs are opaque wrappers and stay non-indexable.
+    ///
+    /// This is a per-type impl rather than a `NewtypeOf` blanket: a blanket
+    /// would conflict with the `Box<T>` forwarding impl in
+    /// `codegen_support::index`, because `Box` is `#[fundamental]`.
+    fn expand_embedded_indexable_impl(&self) -> TokenStream {
+        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
+            return quote! {};
+        };
+        if embedded.fields_named || self.model.fields.len() != 1 {
+            return quote! {};
+        }
+
+        let FieldTy::Primitive(inner_ty) = &self.model.fields[0].ty else {
+            return quote! {};
+        };
+
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            impl #toasty::index::IndexableField for #model_ident
+            where
+                #inner_ty: #toasty::index::IndexableField,
+            {}
+        }
+    }
+
     /// Generates a field accessor method for a `BelongsTo` or `HasOne`
     /// relation using the target model's `Model::OneField`.
     fn expand_one_relation_field_method(
@@ -403,8 +465,12 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates a field accessor method for a primitive field using the
-    /// `Field::new_path` trait.
+    /// Generates a field accessor method for a primitive field, resolving the
+    /// path shape through the field type's [`Field`] impl — its `Path` /
+    /// `new_path` / `ExprTarget`. The type itself decides its path shape (a
+    /// struct embed's Fields handle, a `Vec<scalar>` / `Vec<Embed>` list leaf)
+    /// without the macro inspecting the Rust type. A `#[document]` field uses
+    /// the same `Field` impl as its column-expanded form.
     fn expand_primitive_field_method(
         &self,
         field_ident: &syn::Ident,
@@ -419,8 +485,8 @@ impl Expand<'_> {
 
         // Construct the chained path with the field's `ExprTarget` as the
         // tag, so `new_path` receives exactly the type it expects. For
-        // `Vec<scalar>` this is
-        // `List<T>`; for everything else it is the field's Rust type.
+        // `Vec<_>` this is `List<T>`; for everything else it is the field's
+        // Rust type.
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(

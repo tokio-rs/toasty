@@ -9,7 +9,7 @@ use quote::quote;
 #[derive(Debug)]
 pub(super) struct Filter {
     /// Fields to filter by
-    fields: Vec<usize>,
+    pub(super) fields: Vec<usize>,
 
     /// When true, only include the filter on relation structs
     only_relation: bool,
@@ -61,6 +61,10 @@ impl Expand<'_> {
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(filter).collect();
         let update_query_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
 
+        let doc_get = self.doc_filter_get(filter);
+        let doc_update = self.doc_filter_update(filter);
+        let doc_delete = self.doc_filter_delete(filter);
+
         let self_arg;
         let base;
 
@@ -73,16 +77,19 @@ impl Expand<'_> {
         }
 
         quote! {
+            #[doc = #doc_get]
             #vis async fn #get_method_ident(#self_arg executor: &mut dyn #toasty::Executor, #( #args ),* ) -> #toasty::Result<#model_ident> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .get(executor)
                     .await
             }
 
+            #[doc = #doc_update]
             #vis fn #update_method_ident(#self_arg #( #args ),* ) -> #update_query_struct_ident {
                 #base #filter_method_ident( #( #arg_idents ),* ).update()
             }
 
+            #[doc = #doc_delete]
             #vis async fn #delete_method_ident(#self_arg executor: &mut dyn #toasty::Executor, #( #args ),* ) -> #toasty::Result<()> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .delete()
@@ -99,6 +106,9 @@ impl Expand<'_> {
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let arg_idents = self.expand_filter_arg_idents(filter);
+
+        let doc_filter = self.doc_filter_query(filter);
+
         let self_arg;
         let body;
 
@@ -118,6 +128,7 @@ impl Expand<'_> {
         }
 
         quote! {
+            #[doc = #doc_filter]
             #vis fn #filter_method_ident( #self_arg #( #args ),* ) -> #query_struct_ident {
                 #body
             }

@@ -330,32 +330,43 @@ present → condition failed → `condition_failed`.
 
 ### SQL
 
-SQL drivers consume the same `condition` through the existing conditional-
-update plans. Two strategies, chosen per-backend based on capability:
+SQL drivers consume the same `condition` through two conditional-write
+strategies, chosen per-capability. Both apply to `UPDATE` and `DELETE`:
 
-1. **CTE plan** (PostgreSQL). Compiles to a single statement with two
-   CTEs: a `SELECT` that counts matching rows and rows matching both the
-   filter and the condition, followed by an `UPDATE` / `DELETE` whose
-   filter is `original_filter AND (matched_count = conditioned_count)`.
-   The planner inspects the CTE counts to decide between `Ok`,
-   `record_not_found`, and `condition_failed`.
+1. **CTE plan** (PostgreSQL). Compiles to a single statement with three
+   CTEs: a `found` `SELECT` that projects the condition once per matching
+   row and locks those rows with `FOR UPDATE`, a `counts` aggregate over
+   `found` producing `[matched, conditioned]`, and a `changed`
+   `UPDATE`/`DELETE` whose filter is `original_filter AND (matched =
+   conditioned)`. The outer query reads the counts (and, when an update
+   reads columns back, the changed rows). Locking the probed rows makes
+   the condition authoritative under READ COMMITTED: `FOR UPDATE`
+   evaluates it against the latest committed row version, and the rows
+   cannot change before the write applies. A count mismatch raises
+   `condition_failed`; zero matched rows raise `record_not_found`. A
+   data-modifying `DELETE` sits in the CTE via the `ExprSet::Delete`
+   statement variant.
 
-2. **Read-modify-write plan** (SQLite, MySQL). Opens a transaction, issues
-   `SELECT … FOR UPDATE` (or the backend's best equivalent) returning the
-   matched and conditioned counts, then issues the `UPDATE` / `DELETE`
-   with the filter only if the counts permit. The engine raises the same
-   three-way outcome from the counts.
+2. **Read-modify-write plan** (SQLite, MySQL). Opens a transaction, probes
+   the target rows with the same per-row `SELECT <condition> FROM … WHERE
+   <filter>` query, then applies the write (filter only, no condition)
+   when every matched row satisfied the condition. A mismatch raises
+   `condition_failed` and rolls back; zero matched rows raise
+   `record_not_found`.
 
-The update path already goes through `plan_conditional_sql_query_as_cte`
-and `plan_conditional_sql_query_as_rmw`. The delete path reuses the same
-two planners — this is where the SQL work for `#[version]` concentrates,
-since conditional delete is new.
+Both strategies read the condition per matched row rather than as an
+aggregate count so the probe can carry `FOR UPDATE` and lock exactly
+those rows — `SELECT count(*) … FOR UPDATE` is not universally accepted
+(PostgreSQL rejects it outright). The counts come from the `counts` CTE
+on the CTE plan and from the returned rows on the read-modify-write
+plan. `FOR UPDATE` is emitted where the backend supports it
+(`Capability::select_for_update`); SQLite serializes writers at the
+database level instead.
 
-The SQL serializer currently asserts `update.condition.is_none()` — a
-leftover from before the conditional-update plans were introduced. Both
-the update and delete serializers leave conditions to the planner, which
-rewrites them into filter predicates before the statement reaches the
-serializer. No SQL dialect receives a `CONDITION` clause.
+The SQL `UPDATE` and `DELETE` serializers assert `condition.is_none()`:
+the planner strips the condition and folds its check into a filter
+predicate before the statement reaches the serializer, so no SQL dialect
+receives a `CONDITION` clause.
 
 ### Expression-valued assignments
 

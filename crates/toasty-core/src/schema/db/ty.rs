@@ -114,11 +114,36 @@ pub enum Type {
     /// parameters that the engine sends as a single PG array operand.
     List(Box<Type>),
 
+    /// A document column storing a structured value as a single unit:
+    /// `jsonb` / `json` on PostgreSQL, `JSON` on MySQL, JSON1 text on SQLite,
+    /// BSON on MongoDB, a Map attribute on DynamoDB. `binary` selects the
+    /// binary encoding (`jsonb`) over the text encoding (`json`) where the
+    /// backend distinguishes them.
+    Document {
+        /// Selects the binary document encoding (`jsonb`) over the text
+        /// encoding (`json`) where the backend distinguishes them.
+        binary: bool,
+    },
+
     /// User-specified unrecognized type
     Custom(String),
 }
 
 impl Type {
+    /// Construct a list storage type, collapsing a list of documents into a
+    /// single document.
+    ///
+    /// A `#[document]` collection (`Vec<embed>`) is stored as one JSON blob,
+    /// never a native array, so `db::Type` must never nest a [`Type::Document`]
+    /// inside a [`Type::List`]. Routing list construction through here makes
+    /// that invariant hold by construction: the list *is* the document.
+    pub fn list(elem: Type) -> Type {
+        match elem {
+            Type::Document { binary } => Type::Document { binary },
+            elem => Type::List(Box::new(elem)),
+        }
+    }
+
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,
@@ -160,7 +185,13 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
-                stmt::Type::List(elem) => Ok(Type::List(Box::new(Self::from_app(elem, None, db)?))),
+                // An embedded model column is stored as a single document
+                // (`jsonb` on PG, `JSON` elsewhere) — never a native array.
+                // `Type::list` collapses a list-of-documents back to one
+                // document, so a `#[document]` collection (`List(Model)`) lands
+                // here as a plain `Document`.
+                stmt::Type::Model(_) => Ok(Type::Document { binary: true }),
+                stmt::Type::List(elem) => Ok(Type::list(Self::from_app(elem, None, db)?)),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty
@@ -204,6 +235,18 @@ impl Type {
             // The engine casts Bool <-> I8 transparently via encode_column /
             // map_table_column_to_model; the driver handles them as plain numbers.
             (Self::Integer(1), stmt::Type::Bool) => stmt::Type::I8,
+            // A `#[document]` column stores a structural document: the column
+            // is typed by `Type::Object` (mirroring `Value::Object`), not by
+            // the embedded model. The model identity stays an app/engine
+            // concept, carried by `mapping::Mapping::document_columns`. A
+            // document collection (`List(Model)`, whose storage collapses to
+            // one document) keeps its list shape with `Object` elements.
+            (Self::Document { .. }, stmt::Type::Model(_)) => stmt::Type::Object,
+            (Self::Document { .. }, stmt::Type::List(elem))
+                if matches!(**elem, stmt::Type::Model(_)) =>
+            {
+                stmt::Type::List(Box::new(stmt::Type::Object))
+            }
             _ => ty.clone(),
         }
     }

@@ -124,6 +124,8 @@ pub use db::{
 
 mod engine;
 
+mod instrument;
+
 /// Schema migration types: history files, snapshots, and generation helpers.
 #[cfg(feature = "migration")]
 pub mod migration;
