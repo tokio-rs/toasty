@@ -67,6 +67,7 @@ pub mod record_not_found;
 pub mod relation_belongs_to_configured;
 pub mod relation_belongs_to_embed_key;
 pub mod relation_belongs_to_inferred;
+pub mod relation_belongs_to_null_fk;
 pub mod relation_belongs_to_one_way;
 pub mod relation_belongs_to_self_referential;
 pub mod relation_chain;

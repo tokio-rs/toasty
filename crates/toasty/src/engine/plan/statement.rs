@@ -191,13 +191,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // For single VALUES queries (e.g., batch queries), the VALUES body is
         // the output expression. Extract it as a returning value so the planner
-        // can wire up sub-statement dependencies.
+        // can wire up sub-statement dependencies. An empty VALUES body (e.g. an
+        // optional `belongs_to` whose foreign key is NULL, so simplification
+        // proved the filter false) has no output expression; leave `returning`
+        // empty so the query plans as an empty constant and produces zero
+        // rows, the same shape as any other query that matches nothing.
         if returning.is_none()
             && let stmt::Statement::Query(query) = &mut stmt
             && let stmt::ExprSet::Values(values) = &mut query.body
+            && !values.rows.is_empty()
         {
             returning = Some(stmt::Returning::Expr(if query.single {
-                assert_eq!(1, values.rows.len());
+                assert_eq!(1, values.rows.len(), "single query has more than one row");
                 values.rows.drain(..).next().unwrap()
             } else {
                 stmt::Expr::list(std::mem::take(&mut values.rows))
