@@ -251,8 +251,7 @@ user.delete();
   ```
 
 - The **query builder** returned by `User::all()` or `User::filter()` has
-  methods like `.exec()`, `.first()`, `.get()`, and `.collect::<Vec<_>>()` to
-  execute the query.
+  methods like `.exec()`, `.get()`, and `.first()` to execute the query.
 
 ### What types can you pass to setters?
 

@@ -394,7 +394,7 @@ generates:
 | Method | Returns | Description |
 |---|---|---|
 | `user.profile()` | Relation accessor | Accessor for the associated profile |
-| `.get(&mut db)` | `Result<Option<Profile>>` | Load the associated profile |
+| `.exec(&mut db)` | `Result<Option<Profile>>` | Load the associated profile |
 | `.create()` | Create builder | Create a profile with the foreign key pre-filled |
 | `toasty::create!(User { profile: { ... } })` | Create builder | Associate a profile on creation |
 | `user.update().profile(...)` | Update builder | Replace or associate a profile |
