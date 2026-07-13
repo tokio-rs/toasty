@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["vec_enum_contains_and_len","vec_enum_create_get"]};
