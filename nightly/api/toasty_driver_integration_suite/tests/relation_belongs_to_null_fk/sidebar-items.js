@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["optional_belongs_to_null_fk"]};
