@@ -92,7 +92,10 @@ impl Expand<'_> {
             field_ident.span(),
         );
 
+        let doc = self.doc_belongs_to(field_ident);
+
         quote! {
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::One {
                 // Suppress the unused field warning
                 if false {
@@ -124,12 +127,15 @@ impl Expand<'_> {
         // the rich `QueryMany<M>` builder — or a scalar field, where it yields
         // a plain `Query<List<scalar>>` projecting that field.
         if rel.via.is_some() {
+            let doc = self.doc_has_many_via(field_ident);
+
             // The association references the via field; its target and (for a
             // scalar terminal) terminal projection are resolved during lowering
             // from the schema, so nothing here needs the path's shape. The
             // declared element type is validated against the path by the typed
             // accessor and by the `schema()` expansion's terminal pin.
             return quote! {
+                #[doc = #doc]
                 #vis fn #field_ident(&self) -> #toasty::ViaMany<#ty> {
                     // Suppress the unused field warning
                     if false {
@@ -169,7 +175,10 @@ impl Expand<'_> {
             label: "Has many associations require the target to include a back-reference",
         });
 
+        let doc = self.doc_has_many(field_ident);
+
         quote! {
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> #toasty::QueryMany<#target> {
                 // Suppress the unused field warning
                 if false {
@@ -219,7 +228,10 @@ impl Expand<'_> {
             })
         };
 
+        let doc = self.doc_has_one(field_ident);
+
         quote! {
+            #[doc = #doc]
             #vis fn #field_ident(&self) -> <#ty as #toasty::RelationOneField>::One {
                 // Suppress the unused field warning
                 if false {

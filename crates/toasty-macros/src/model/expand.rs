@@ -1,4 +1,5 @@
 mod create;
+mod docs;
 mod embedded_enum;
 mod fields;
 mod filters;
