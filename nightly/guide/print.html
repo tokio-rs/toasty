@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-76d46bd7.js";
+            window.path_to_searchindex_js = "searchindex-eeb7c739.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-ecb82dcc.js"></script>
@@ -6298,20 +6298,17 @@ struct Address {
 <code>address_city</code>, <code>address_coords_lat</code>, <code>address_coords_lng</code>.</p>
 <h2 id="embedded-enums"><a class="header" href="#embedded-enums">Embedded enums</a></h2>
 <p>Enums annotated with <code>#[derive(toasty::Embed)]</code> store a variant discriminant in
-the database. Each variant must have an explicit <code>#[column(variant = N)]</code>
-attribute specifying its integer discriminant value.</p>
+the database. By default, Toasty derives a string label for each variant by
+converting its Rust name to <code>snake_case</code>.</p>
 <h3 id="unit-enums"><a class="header" href="#unit-enums">Unit enums</a></h3>
-<p>A unit enum (all variants have no fields) maps to a single integer column:</p>
+<p>A unit enum (all variants have no fields) maps to a single column:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
 </span>#[derive(Debug, PartialEq, toasty::Embed)]
 enum Status {
-    #[column(variant = 1)]
     Pending,
-    #[column(variant = 2)]
     Active,
-    #[column(variant = 3)]
     Done,
 }
 
@@ -6325,13 +6322,9 @@ struct Task {
     status: Status,
 }
 <span class="boring">}</span></code></pre>
-<p>The <code>status</code> column stores the discriminant as an integer:</p>
-<pre><code class="language-sql">CREATE TABLE tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    status INTEGER NOT NULL   -- 1 = Pending, 2 = Active, 3 = Done
-);
-</code></pre>
+<p>The <code>status</code> column stores <code>pending</code>, <code>active</code>, or <code>done</code>. PostgreSQL uses a
+named enum type, MySQL uses <code>ENUM</code>, and SQLite uses <code>TEXT</code> with a check
+constraint. DynamoDB stores the label as a string attribute.</p>
 <p>Use it like any other field:</p>
 <pre><code class="language-rust ignore">let task = toasty::create!(Task {
     title: "Write docs",
@@ -6349,9 +6342,7 @@ the parent table. Only the active variant’s columns are non-null for a given r
 </span><span class="boring">use toasty::Model;
 </span>#[derive(Debug, PartialEq, toasty::Embed)]
 enum ContactInfo {
-    #[column(variant = 1)]
     Email { address: String },
-    #[column(variant = 2)]
     Phone { number: String },
 }
 
@@ -6365,16 +6356,9 @@ struct User {
     contact: ContactInfo,
 }
 <span class="boring">}</span></code></pre>
-<p>This produces three columns — one discriminant column plus one nullable column
-per variant field:</p>
-<pre><code class="language-sql">CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    contact INTEGER NOT NULL,         -- discriminant: 1 = Email, 2 = Phone
-    contact_address TEXT,             -- non-null when contact = 1
-    contact_number TEXT               -- non-null when contact = 2
-);
-</code></pre>
+<p>This produces three columns: one discriminant column containing <code>email</code> or
+<code>phone</code>, plus nullable <code>contact_address</code> and <code>contact_number</code> columns. Only the
+field for the active variant contains a value.</p>
 <p>Create records by passing enum values:</p>
 <pre><code class="language-rust ignore">let user = toasty::create!(User {
     name: "Alice",
@@ -6387,23 +6371,66 @@ per variant field:</p>
 <h3 id="mixed-enums"><a class="header" href="#mixed-enums">Mixed enums</a></h3>
 <p>An enum can have both unit variants and data-carrying variants:</p>
 <pre><code class="language-rust ignore">#[derive(Debug, PartialEq, toasty::Embed)]
-enum Status {
-    #[column(variant = 1)]
+enum ImportStatus {
     Pending,
-    #[column(variant = 2)]
     Failed { reason: String },
-    #[column(variant = 3)]
     Done,
 }</code></pre>
 <p>Unit variants (<code>Pending</code>, <code>Done</code>) store only the discriminant. The <code>Failed</code>
 variant also stores its <code>reason</code> in a nullable column.</p>
-<h3 id="the-columnvariant--n-attribute"><a class="header" href="#the-columnvariant--n-attribute">The <code>#[column(variant = N)]</code> attribute</a></h3>
-<p>Every variant in an embedded enum must have <code>#[column(variant = N)]</code> where <code>N</code>
-is the integer stored in the database. This is required — Toasty does not
-auto-assign discriminant values.</p>
-<p>The discriminant values do not need to be sequential. You can choose any <code>i64</code>
-values, which is useful when adding new variants to an existing schema without
-renumbering:</p>
+<h3 id="changing-stored-discriminants"><a class="header" href="#changing-stored-discriminants">Changing stored discriminants</a></h3>
+<p>Without additional attributes, Toasty converts each variant name to
+<code>snake_case</code>. For example, <code>PreferredSupplier</code> uses the label
+<code>preferred_supplier</code>.</p>
+<p>Add <code>#[column(rename_all = "...")]</code> to the enum to select another naming rule:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(toasty::Embed)]
+#[column(rename_all = "SCREAMING_SNAKE_CASE")]
+enum PartyKind {
+    Customer,
+    PreferredSupplier,
+}
+<span class="boring">}</span></code></pre>
+<p>This enum uses <code>CUSTOMER</code> and <code>PREFERRED_SUPPLIER</code>. Toasty accepts the following
+rules:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Rule</th><th><code>PreferredSupplier</code> label</th></tr>
+</thead>
+<tbody>
+<tr><td><code>lowercase</code></td><td><code>preferredsupplier</code></td></tr>
+<tr><td><code>UPPERCASE</code></td><td><code>PREFERREDSUPPLIER</code></td></tr>
+<tr><td><code>PascalCase</code></td><td><code>PreferredSupplier</code></td></tr>
+<tr><td><code>camelCase</code></td><td><code>preferredSupplier</code></td></tr>
+<tr><td><code>snake_case</code></td><td><code>preferred_supplier</code></td></tr>
+<tr><td><code>SCREAMING_SNAKE_CASE</code></td><td><code>PREFERRED_SUPPLIER</code></td></tr>
+<tr><td><code>kebab-case</code></td><td><code>preferred-supplier</code></td></tr>
+<tr><td><code>SCREAMING-KEBAB-CASE</code></td><td><code>PREFERRED-SUPPLIER</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Set individual labels with <code>#[column(variant = "...")]</code>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(toasty::Embed)]
+enum PartyKind {
+    #[column(variant = "customer")]
+    Customer,
+    #[column(variant = "preferred-supplier")]
+    PreferredSupplier,
+}
+<span class="boring">}</span></code></pre>
+<p>An explicit variant label takes precedence over <code>rename_all</code> when an enum uses
+both attributes. <code>rename_all</code> changes variant labels only; it does not change
+the database enum type name. It applies whether the labels use native enum
+storage or a plain <code>text</code> or <code>varchar</code> column.</p>
+<h4 id="integer-discriminants"><a class="header" href="#integer-discriminants">Integer discriminants</a></h4>
+<p>To store integer discriminants, set <code>#[column(variant = N)]</code> on every variant.
+Toasty does not auto-assign integers. The values do not need to be sequential;
+you can choose any <code>i64</code> values. This lets you add variants to an existing
+schema without renumbering:</p>
 <pre><code class="language-rust ignore">#[derive(toasty::Embed)]
 enum Priority {
     #[column(variant = 10)]
@@ -6413,6 +6440,8 @@ enum Priority {
     #[column(variant = 30)]
     High,
 }</code></pre>
+<p>An enum cannot mix string and integer discriminants. Integer-discriminant enums
+do not support <code>rename_all</code>.</p>
 <h2 id="filtering-on-embedded-fields"><a class="header" href="#filtering-on-embedded-fields">Filtering on embedded fields</a></h2>
 <h3 id="struct-fields"><a class="header" href="#struct-fields">Struct fields</a></h3>
 <p>Use chained field accessors to filter on embedded struct fields:</p>
@@ -6439,7 +6468,7 @@ operators (<code>.eq()</code>, <code>.ne()</code>, <code>.gt()</code>, etc.) wor
 let tasks = Task::filter(Task::fields().status().is_active())
     .exec(&amp;mut db)
     .await?;</code></pre>
-<p>This compiles to <code>WHERE status = 2</code>.</p>
+<p>This filters on the stored <code>active</code> label (<code>WHERE status = 'active'</code> in SQL).</p>
 <p>For unit enums, you can also use <code>.eq()</code> directly:</p>
 <pre><code class="language-rust ignore">let tasks = Task::filter(Task::fields().status().eq(Status::Active))
     .exec(&amp;mut db)

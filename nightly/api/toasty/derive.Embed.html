@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro that turns a struct or enum into an embedded type stored inline in a parent model’s table."><title>Embed in toasty - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Embed</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty/index.html">toasty</a><span class="version">0.8.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Embed</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#structs" title="Structs">Structs</a><ul><li><a href="#nesting" title="Nesting">Nesting</a></li></ul></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#newtype-auto-proxying" title="Newtype `Auto` proxying">Newtype <code>Auto</code> proxying</a></li><li><a href="#field-level-attributes" title="Field-level attributes">Field-level attributes</a><ul><li><a href="#column--customize-the-database-column" title="`#[column(...)]` — customize the database column"><code>#[column(...)]</code> — customize the database column</a></li><li><a href="#index--add-a-database-index" title="`#[index]` — add a database index"><code>#[index]</code> — add a database index</a></li><li><a href="#unique--add-a-unique-constraint" title="`#[unique]` — add a unique constraint"><code>#[unique]</code> — add a unique constraint</a></li></ul></li><li><a href="#using-embedded-types-in-a-model" title="Using embedded types in a model">Using embedded types in a model</a></li><li><a href="#constraints" title="Constraints">Constraints</a></li><li><a href="#full-example" title="Full example">Full example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate toasty</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">toasty</a></div><h1>Derive Macro <span class="derive">Embed</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty_macros/lib.rs.html#1066">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(Embed)]
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Derive macro that turns a struct or enum into an embedded type stored inline in a parent model’s table."><title>Embed in toasty - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../static.files/rustdoc-b7b9f40b.css"><meta name="rustdoc-vars" data-root-path="../" data-static-root-path="../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.95.0 (59807616e 2026-04-14)" data-channel="1.95.0" data-search-js="search-63369b7b.js" data-stringdex-js="stringdex-b897f86f.js" data-settings-js="settings-170eb4bf.js" ><script src="../static.files/storage-41dd4d93.js"></script><script defer src="sidebar-items.js"></script><script defer src="../static.files/main-5013f961.js"></script><noscript><link rel="stylesheet" href="../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../static.files/favicon-044be391.svg"></head><body class="rustdoc derive"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Embed</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../toasty/index.html">toasty</a><span class="version">0.8.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Embed</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#structs" title="Structs">Structs</a><ul><li><a href="#nesting" title="Nesting">Nesting</a></li></ul></li><li><a href="#enums" title="Enums">Enums</a></li><li><a href="#newtype-auto-proxying" title="Newtype `Auto` proxying">Newtype <code>Auto</code> proxying</a></li><li><a href="#attributes" title="Attributes">Attributes</a><ul><li><a href="#column--customize-the-database-column" title="`#[column(...)]` — customize the database column"><code>#[column(...)]</code> — customize the database column</a></li><li><a href="#index--add-a-database-index" title="`#[index]` — add a database index"><code>#[index]</code> — add a database index</a></li><li><a href="#unique--add-a-unique-constraint" title="`#[unique]` — add a unique constraint"><code>#[unique]</code> — add a unique constraint</a></li></ul></li><li><a href="#using-embedded-types-in-a-model" title="Using embedded types in a model">Using embedded types in a model</a></li><li><a href="#constraints" title="Constraints">Constraints</a></li><li><a href="#full-example" title="Full example">Full example</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="index.html">In crate toasty</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="index.html">toasty</a></div><h1>Derive Macro <span class="derive">Embed</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../src/toasty_macros/lib.rs.html#1111">Source</a> </span></div><pre class="rust item-decl"><code>#[derive(Embed)]
 {
     <span class="comment">// Attributes available to this derive:</span>
     #[column]
@@ -60,29 +60,26 @@ produces columns <code>address_street</code>, <code>address_city_lat</code>, and
 <code>address_city_lon</code>.</p>
 <h2 id="enums"><a class="doc-anchor" href="#enums">§</a>Enums</h2>
 <p>An embedded enum stores a discriminant value identifying the active
-variant. Each variant must have a <code>#[column(variant = N)]</code> attribute
-assigning a stable integer discriminant.</p>
+variant. By default, Toasty derives a string label for each variant by
+converting its Rust name to <code>snake_case</code>. Use
+<code>#[column(rename_all = "...")]</code> on the enum to select another naming
+convention, or <code>#[column(variant = "...")]</code> on a variant to set one label.</p>
 <p><strong>Unit-only enum:</strong></p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
 </span><span class="kw">enum </span>Status {
-    <span class="attr">#[column(variant = <span class="number">1</span>)]
-    </span>Pending,
-    <span class="attr">#[column(variant = <span class="number">2</span>)]
-    </span>Active,
-    <span class="attr">#[column(variant = <span class="number">3</span>)]
-    </span>Archived,
+    Pending,
+    InProgress,
+    Archived,
 }</code></pre></div>
 <p>A unit-only enum occupies a single column in the parent table. The
-column stores the discriminant as an integer.</p>
+example stores the labels <code>pending</code>, <code>in_progress</code>, and <code>archived</code>.</p>
 <p><strong>Data-carrying enum:</strong></p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
 </span><span class="kw">enum </span>ContactInfo {
-    <span class="attr">#[column(variant = <span class="number">1</span>)]
-    </span>Email { address: String },
-    <span class="attr">#[column(variant = <span class="number">2</span>)]
-    </span>Phone { number: String },
+    Email { address: String },
+    Phone { number: String },
 }</code></pre></div>
 <p>A data-carrying enum stores the discriminant column plus one nullable
 column per variant field. For example, a <code>contact: ContactInfo</code> field
@@ -93,12 +90,9 @@ contain values; the rest are <code>NULL</code>.</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
 </span><span class="kw">enum </span>Status {
-    <span class="attr">#[column(variant = <span class="number">1</span>)]
-    </span>Pending,
-    <span class="attr">#[column(variant = <span class="number">2</span>)]
-    </span>Failed { reason: String },
-    <span class="attr">#[column(variant = <span class="number">3</span>)]
-    </span>Done,
+    Pending,
+    Failed { reason: String },
+    Done,
 }</code></pre></div>
 <p>Applying <code>#[derive(Embed)]</code> to an enum generates:</p>
 <ul>
@@ -126,7 +120,7 @@ and a blanket <code>Auto</code> impl resolves through it:</p>
 }</code></pre></div>
 <p>Newtypes wrapping non-<code>Auto</code> types stay non-<code>Auto</code>; nesting works
 transparently (<code>Outer(Inner(u64))</code> proxies through both layers).</p>
-<h2 id="field-level-attributes"><a class="doc-anchor" href="#field-level-attributes">§</a>Field-level attributes</h2><h3 id="column--customize-the-database-column"><a class="doc-anchor" href="#column--customize-the-database-column">§</a><code>#[column(...)]</code> — customize the database column</h3>
+<h2 id="attributes"><a class="doc-anchor" href="#attributes">§</a>Attributes</h2><h3 id="column--customize-the-database-column"><a class="doc-anchor" href="#column--customize-the-database-column">§</a><code>#[column(...)]</code> — customize the database column</h3>
 <p><strong>On struct fields</strong>, overrides the column name and/or type:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
@@ -139,13 +133,58 @@ transparently (<code>Outer(Inner(u64))</code> proxies through both layers).</p>
 }</code></pre></div>
 <p>See <a href="derive.Model.html" title="derive toasty::Model"><code>Model</code></a> for the full list of supported column
 types.</p>
-<p><strong>On enum variants</strong>, <code>#[column(variant = N)]</code> is <strong>required</strong> and
-assigns the integer discriminant stored in the database:</p>
+<p><strong>Changing stored enum discriminants.</strong> On an enum,
+<code>#[column(rename_all = "...")]</code> changes how Toasty derives string labels
+for variants without an explicit label:</p>
 
-<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[column(variant = <span class="number">1</span>)]
-</span>Pending,</code></pre></div>
-<p>Discriminant values must be unique across all variants of the enum.
-They are stored as <code>i64</code>.</p>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+#[column(rename_all = <span class="string">"SCREAMING_SNAKE_CASE"</span>)]
+</span><span class="kw">enum </span>PartyKind {
+    Customer,
+    PreferredSupplier,
+}</code></pre></div>
+<p>This example uses the labels <code>CUSTOMER</code> and <code>PREFERRED_SUPPLIER</code>. Without
+<code>rename_all</code>, Toasty uses <code>snake_case</code>.</p>
+<p>The supported rules and their result for <code>PreferredSupplier</code> are:</p>
+<div><table><thead><tr><th>Rule</th><th>Label</th></tr></thead><tbody>
+<tr><td><code>lowercase</code></td><td><code>preferredsupplier</code></td></tr>
+<tr><td><code>UPPERCASE</code></td><td><code>PREFERREDSUPPLIER</code></td></tr>
+<tr><td><code>PascalCase</code></td><td><code>PreferredSupplier</code></td></tr>
+<tr><td><code>camelCase</code></td><td><code>preferredSupplier</code></td></tr>
+<tr><td><code>snake_case</code></td><td><code>preferred_supplier</code></td></tr>
+<tr><td><code>SCREAMING_SNAKE_CASE</code></td><td><code>PREFERRED_SUPPLIER</code></td></tr>
+<tr><td><code>kebab-case</code></td><td><code>preferred-supplier</code></td></tr>
+<tr><td><code>SCREAMING-KEBAB-CASE</code></td><td><code>PREFERRED-SUPPLIER</code></td></tr>
+</tbody></table>
+</div>
+<p>Use <code>#[column(variant = "...")]</code> to set individual labels:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">enum </span>PartyKind {
+    <span class="attr">#[column(variant = <span class="string">"customer"</span>)]
+    </span>Customer,
+    <span class="attr">#[column(variant = <span class="string">"preferred-supplier"</span>)]
+    </span>PreferredSupplier,
+}</code></pre></div>
+<p>An explicit variant label takes precedence over <code>rename_all</code> when an enum
+uses both attributes.</p>
+<p>String-label enums use Toasty’s enum storage by default. Use
+<code>#[column(type = enum("type_name"))]</code> to set the database enum type name,
+or <code>#[column(type = text)]</code> or <code>#[column(type = varchar(N))]</code> to use a
+plain string column. <code>rename_all</code> changes variant labels only; it does not
+change the enum type name.</p>
+<p>To store integers instead, assign an integer to every variant:</p>
+
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
+</span><span class="kw">enum </span>Priority {
+    <span class="attr">#[column(variant = <span class="number">10</span>)]
+    </span>Low,
+    <span class="attr">#[column(variant = <span class="number">20</span>)]
+    </span>High,
+}</code></pre></div>
+<p>An enum cannot mix string and integer discriminants. Integer discriminants
+are stored as <code>i64</code> and do not support <code>rename_all</code>. All discriminant values
+must be unique. String labels may contain at most 63 bytes.</p>
 <h3 id="index--add-a-database-index"><a class="doc-anchor" href="#index--add-a-database-index">§</a><code>#[index]</code> — add a database index</h3>
 <p>Creates a non-unique index on the field’s flattened column.</p>
 
@@ -187,8 +226,9 @@ the embedded field. Partial updates of individual sub-fields use
 <li>Embedded structs must have named fields (tuple structs are not
 supported).</li>
 <li>Generic parameters are not supported.</li>
-<li>Every enum variant must have a <code>#[column(variant = N)]</code> attribute
-with a unique discriminant value.</li>
+<li>Enum discriminants must all be strings or all be integers. Integer
+discriminants must be specified on every variant.</li>
+<li><code>#[column(rename_all = "...")]</code> applies only to string labels.</li>
 <li>Enum variants may be unit variants or have named fields. Tuple
 variants are not supported.</li>
 <li>Embedded types cannot have primary keys, relations, <code>#[auto]</code>,
@@ -196,13 +236,11 @@ variants are not supported.</li>
 </ul>
 <h2 id="full-example"><a class="doc-anchor" href="#full-example">§</a>Full example</h2>
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(Debug, PartialEq, toasty::Embed)]
+#[column(rename_all = <span class="string">"SCREAMING_SNAKE_CASE"</span>)]
 </span><span class="kw">enum </span>Priority {
-    <span class="attr">#[column(variant = <span class="number">1</span>)]
-    </span>Low,
-    <span class="attr">#[column(variant = <span class="number">2</span>)]
-    </span>Normal,
-    <span class="attr">#[column(variant = <span class="number">3</span>)]
-    </span>High,
+    Low,
+    Normal,
+    High,
 }
 
 <span class="attr">#[derive(Debug, toasty::Embed)]
