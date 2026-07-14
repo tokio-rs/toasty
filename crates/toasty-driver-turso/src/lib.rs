@@ -295,7 +295,7 @@ impl BuilderOptions {
 /// // Syncing with remote server
 /// let driver = Turso::file("path/to/db")
 ///     .with_remote_url("<remote-url>")
-///     .with_auth_key("<auth-key>");
+///     .with_auth_token("<auth-token>");
 /// 
 /// driver.push().await?;
 /// ```
