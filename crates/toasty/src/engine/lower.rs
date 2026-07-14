@@ -1519,6 +1519,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
                 None
             }
+            (stmt::Expr::Project(_), list) => {
+                match list {
+                    stmt::Expr::Value(stmt::Value::List(_)) => {}
+                    stmt::Expr::List(list) => {
+                        for item in &list.items {
+                            assert!(item.is_value());
+                        }
+                    }
+                    _ => panic!("invalid; should have been caught earlier"),
+                }
+
+                None
+            }
             (expr, list) => todo!("expr={expr:#?}; list={list:#?}"),
         }
     }

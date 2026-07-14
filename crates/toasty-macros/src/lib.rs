@@ -789,34 +789,31 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// # Enums
 ///
 /// An embedded enum stores a discriminant value identifying the active
-/// variant. Each variant must have a `#[column(variant = N)]` attribute
-/// assigning a stable integer discriminant.
+/// variant. By default, Toasty derives a string label for each variant by
+/// converting its Rust name to `snake_case`. Use
+/// `#[column(rename_all = "...")]` on the enum to select another naming
+/// convention, or `#[column(variant = "...")]` on a variant to set one label.
 ///
 /// **Unit-only enum:**
 ///
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
-///     #[column(variant = 1)]
 ///     Pending,
-///     #[column(variant = 2)]
-///     Active,
-///     #[column(variant = 3)]
+///     InProgress,
 ///     Archived,
 /// }
 /// ```
 ///
 /// A unit-only enum occupies a single column in the parent table. The
-/// column stores the discriminant as an integer.
+/// example stores the labels `pending`, `in_progress`, and `archived`.
 ///
 /// **Data-carrying enum:**
 ///
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum ContactInfo {
-///     #[column(variant = 1)]
 ///     Email { address: String },
-///     #[column(variant = 2)]
 ///     Phone { number: String },
 /// }
 /// ```
@@ -832,11 +829,8 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
-///     #[column(variant = 1)]
 ///     Pending,
-///     #[column(variant = 2)]
 ///     Failed { reason: String },
-///     #[column(variant = 3)]
 ///     Done,
 /// }
 /// ```
@@ -872,7 +866,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// Newtypes wrapping non-`Auto` types stay non-`Auto`; nesting works
 /// transparently (`Outer(Inner(u64))` proxies through both layers).
 ///
-/// # Field-level attributes
+/// # Attributes
 ///
 /// ## `#[column(...)]` — customize the database column
 ///
@@ -892,19 +886,71 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// See [`Model`][`derive@Model`] for the full list of supported column
 /// types.
 ///
-/// **On enum variants**, `#[column(variant = N)]` is **required** and
-/// assigns the integer discriminant stored in the database:
+/// **Changing stored enum discriminants.** On an enum,
+/// `#[column(rename_all = "...")]` changes how Toasty derives string labels
+/// for variants without an explicit label:
 ///
 /// ```
-/// # #[derive(toasty::Embed)]
-/// # enum Example {
-/// #[column(variant = 1)]
-/// Pending,
-/// # }
+/// #[derive(toasty::Embed)]
+/// #[column(rename_all = "SCREAMING_SNAKE_CASE")]
+/// enum PartyKind {
+///     Customer,
+///     PreferredSupplier,
+/// }
 /// ```
 ///
-/// Discriminant values must be unique across all variants of the enum.
-/// They are stored as `i64`.
+/// This example uses the labels `CUSTOMER` and `PREFERRED_SUPPLIER`. Without
+/// `rename_all`, Toasty uses `snake_case`.
+///
+/// The supported rules and their result for `PreferredSupplier` are:
+///
+/// | Rule | Label |
+/// | --- | --- |
+/// | `lowercase` | `preferredsupplier` |
+/// | `UPPERCASE` | `PREFERREDSUPPLIER` |
+/// | `PascalCase` | `PreferredSupplier` |
+/// | `camelCase` | `preferredSupplier` |
+/// | `snake_case` | `preferred_supplier` |
+/// | `SCREAMING_SNAKE_CASE` | `PREFERRED_SUPPLIER` |
+/// | `kebab-case` | `preferred-supplier` |
+/// | `SCREAMING-KEBAB-CASE` | `PREFERRED-SUPPLIER` |
+///
+/// Use `#[column(variant = "...")]` to set individual labels:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum PartyKind {
+///     #[column(variant = "customer")]
+///     Customer,
+///     #[column(variant = "preferred-supplier")]
+///     PreferredSupplier,
+/// }
+/// ```
+///
+/// An explicit variant label takes precedence over `rename_all` when an enum
+/// uses both attributes.
+///
+/// String-label enums use Toasty's enum storage by default. Use
+/// `#[column(type = enum("type_name"))]` to set the database enum type name,
+/// or `#[column(type = text)]` or `#[column(type = varchar(N))]` to use a
+/// plain string column. `rename_all` changes variant labels only; it does not
+/// change the enum type name.
+///
+/// To store integers instead, assign an integer to every variant:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum Priority {
+///     #[column(variant = 10)]
+///     Low,
+///     #[column(variant = 20)]
+///     High,
+/// }
+/// ```
+///
+/// An enum cannot mix string and integer discriminants. Integer discriminants
+/// are stored as `i64` and do not support `rename_all`. All discriminant values
+/// must be unique. String labels may contain at most 63 bytes.
 ///
 /// ## `#[index]` — add a database index
 ///
@@ -991,8 +1037,9 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - Embedded structs must have named fields (tuple structs are not
 ///   supported).
 /// - Generic parameters are not supported.
-/// - Every enum variant must have a `#[column(variant = N)]` attribute
-///   with a unique discriminant value.
+/// - Enum discriminants must all be strings or all be integers. Integer
+///   discriminants must be specified on every variant.
+/// - `#[column(rename_all = "...")]` applies only to string labels.
 /// - Enum variants may be unit variants or have named fields. Tuple
 ///   variants are not supported.
 /// - Embedded types cannot have primary keys, relations, `#[auto]`,
@@ -1003,12 +1050,10 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```no_run
 /// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// #[derive(Debug, PartialEq, toasty::Embed)]
+/// #[column(rename_all = "SCREAMING_SNAKE_CASE")]
 /// enum Priority {
-///     #[column(variant = 1)]
 ///     Low,
-///     #[column(variant = 2)]
 ///     Normal,
-///     #[column(variant = 3)]
 ///     High,
 /// }
 ///

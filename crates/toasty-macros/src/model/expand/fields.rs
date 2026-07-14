@@ -4,6 +4,11 @@ use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
+const FIELD_STRUCT_RESERVED_METHODS: &[&str] =
+    &["from_path", "path", "eq", "in_query", "into_root", "create"];
+
+const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["from_path", "path", "any", "all", "create"];
+
 impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -32,6 +37,9 @@ impl Expand<'_> {
             .fields
             .iter()
             .enumerate()
+            .filter(|(_, field)| {
+                !util::ident_is_reserved(&field.name.ident, FIELD_STRUCT_RESERVED_METHODS)
+            })
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
@@ -178,7 +186,13 @@ impl Expand<'_> {
             .fields
             .iter()
             .enumerate()
-            .filter(move |(_, field)| seen_names.insert(field.name.as_str().to_string()))
+            .filter(move |(_, field)| {
+                seen_names.insert(field.name.as_str().to_string())
+                    && !util::ident_is_reserved(
+                        &field.name.ident,
+                        FIELD_LIST_STRUCT_RESERVED_METHODS,
+                    )
+            })
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
@@ -322,9 +336,12 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let schema_trait = self.schema_trait();
 
+        let doc_fields = self.doc_fields();
+
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
         quote!(
+            #[doc = #doc_fields]
             #vis fn fields() -> #field_struct_ident<#model_ident> {
                 #field_struct_ident {
                     path: <#model_ident as #schema_trait>::path_root(),

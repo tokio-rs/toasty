@@ -717,6 +717,42 @@ pub async fn composite_basic_has_many_and_belongs_to_preload(test: &mut Test) ->
     Ok(())
 }
 
+/// Preload a `belongs_to` whose foreign key spans two columns. Seeds two
+/// users so a filter that doesn't actually compare child FK columns against
+/// parent key columns (e.g. one comparing the child's own columns to
+/// themselves, which matches every user) is caught by the assertions.
+#[driver_test(scenario(crate::scenarios::composite_fk_has_many_belongs_to))]
+pub async fn composite_fk_belongs_to_preload(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let u1 = toasty::create!(User {
+        revision: 1,
+        name: "User 1"
+    })
+    .exec(&mut db)
+    .await?;
+    let u2 = toasty::create!(User {
+        revision: 1,
+        name: "User 2"
+    })
+    .exec(&mut db)
+    .await?;
+
+    for user in [&u1, &u2] {
+        let todo = toasty::create!(in user.todos() { title: "a todo" })
+            .exec(&mut db)
+            .await?;
+
+        let todo = Todo::filter_by_id(todo.id)
+            .include(Todo::fields().user())
+            .get(&mut db)
+            .await?;
+
+        assert_struct!(todo.user.get(), _ { id: == user.id, name: == user.name, .. });
+    }
+    Ok(())
+}
+
 #[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
 pub async fn composite_preload_on_empty_query(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;

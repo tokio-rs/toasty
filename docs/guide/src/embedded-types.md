@@ -251,22 +251,19 @@ A `User` model with an `address: Address` field produces columns: `address_stree
 ## Embedded enums
 
 Enums annotated with `#[derive(toasty::Embed)]` store a variant discriminant in
-the database. Each variant must have an explicit `#[column(variant = N)]`
-attribute specifying its integer discriminant value.
+the database. By default, Toasty derives a string label for each variant by
+converting its Rust name to `snake_case`.
 
 ### Unit enums
 
-A unit enum (all variants have no fields) maps to a single integer column:
+A unit enum (all variants have no fields) maps to a single column:
 
 ```rust
 # use toasty::Model;
 #[derive(Debug, PartialEq, toasty::Embed)]
 enum Status {
-    #[column(variant = 1)]
     Pending,
-    #[column(variant = 2)]
     Active,
-    #[column(variant = 3)]
     Done,
 }
 
@@ -281,15 +278,9 @@ struct Task {
 }
 ```
 
-The `status` column stores the discriminant as an integer:
-
-```sql
-CREATE TABLE tasks (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    title TEXT NOT NULL,
-    status INTEGER NOT NULL   -- 1 = Pending, 2 = Active, 3 = Done
-);
-```
+The `status` column stores `pending`, `active`, or `done`. PostgreSQL uses a
+named enum type, MySQL uses `ENUM`, and SQLite uses `TEXT` with a check
+constraint. DynamoDB stores the label as a string attribute.
 
 Use it like any other field:
 
@@ -313,9 +304,7 @@ the parent table. Only the active variant's columns are non-null for a given row
 # use toasty::Model;
 #[derive(Debug, PartialEq, toasty::Embed)]
 enum ContactInfo {
-    #[column(variant = 1)]
     Email { address: String },
-    #[column(variant = 2)]
     Phone { number: String },
 }
 
@@ -330,18 +319,9 @@ struct User {
 }
 ```
 
-This produces three columns — one discriminant column plus one nullable column
-per variant field:
-
-```sql
-CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    contact INTEGER NOT NULL,         -- discriminant: 1 = Email, 2 = Phone
-    contact_address TEXT,             -- non-null when contact = 1
-    contact_number TEXT               -- non-null when contact = 2
-);
-```
+This produces three columns: one discriminant column containing `email` or
+`phone`, plus nullable `contact_address` and `contact_number` columns. Only the
+field for the active variant contains a value.
 
 Create records by passing enum values:
 
@@ -362,12 +342,9 @@ An enum can have both unit variants and data-carrying variants:
 
 ```rust,ignore
 #[derive(Debug, PartialEq, toasty::Embed)]
-enum Status {
-    #[column(variant = 1)]
+enum ImportStatus {
     Pending,
-    #[column(variant = 2)]
     Failed { reason: String },
-    #[column(variant = 3)]
     Done,
 }
 ```
@@ -375,15 +352,60 @@ enum Status {
 Unit variants (`Pending`, `Done`) store only the discriminant. The `Failed`
 variant also stores its `reason` in a nullable column.
 
-### The `#[column(variant = N)]` attribute
+### Changing stored discriminants
 
-Every variant in an embedded enum must have `#[column(variant = N)]` where `N`
-is the integer stored in the database. This is required — Toasty does not
-auto-assign discriminant values.
+Without additional attributes, Toasty converts each variant name to
+`snake_case`. For example, `PreferredSupplier` uses the label
+`preferred_supplier`.
 
-The discriminant values do not need to be sequential. You can choose any `i64`
-values, which is useful when adding new variants to an existing schema without
-renumbering:
+Add `#[column(rename_all = "...")]` to the enum to select another naming rule:
+
+```rust
+#[derive(toasty::Embed)]
+#[column(rename_all = "SCREAMING_SNAKE_CASE")]
+enum PartyKind {
+    Customer,
+    PreferredSupplier,
+}
+```
+
+This enum uses `CUSTOMER` and `PREFERRED_SUPPLIER`. Toasty accepts the following
+rules:
+
+| Rule | `PreferredSupplier` label |
+| --- | --- |
+| `lowercase` | `preferredsupplier` |
+| `UPPERCASE` | `PREFERREDSUPPLIER` |
+| `PascalCase` | `PreferredSupplier` |
+| `camelCase` | `preferredSupplier` |
+| `snake_case` | `preferred_supplier` |
+| `SCREAMING_SNAKE_CASE` | `PREFERRED_SUPPLIER` |
+| `kebab-case` | `preferred-supplier` |
+| `SCREAMING-KEBAB-CASE` | `PREFERRED-SUPPLIER` |
+
+Set individual labels with `#[column(variant = "...")]`:
+
+```rust
+#[derive(toasty::Embed)]
+enum PartyKind {
+    #[column(variant = "customer")]
+    Customer,
+    #[column(variant = "preferred-supplier")]
+    PreferredSupplier,
+}
+```
+
+An explicit variant label takes precedence over `rename_all` when an enum uses
+both attributes. `rename_all` changes variant labels only; it does not change
+the database enum type name. It applies whether the labels use native enum
+storage or a plain `text` or `varchar` column.
+
+#### Integer discriminants
+
+To store integer discriminants, set `#[column(variant = N)]` on every variant.
+Toasty does not auto-assign integers. The values do not need to be sequential;
+you can choose any `i64` values. This lets you add variants to an existing
+schema without renumbering:
 
 ```rust,ignore
 #[derive(toasty::Embed)]
@@ -396,6 +418,9 @@ enum Priority {
     High,
 }
 ```
+
+An enum cannot mix string and integer discriminants. Integer-discriminant enums
+do not support `rename_all`.
 
 ## Filtering on embedded fields
 
@@ -439,7 +464,7 @@ let tasks = Task::filter(Task::fields().status().is_active())
     .await?;
 ```
 
-This compiles to `WHERE status = 2`.
+This filters on the stored `active` label (`WHERE status = 'active'` in SQL).
 
 For unit enums, you can also use `.eq()` directly:
 

@@ -341,7 +341,7 @@ For a `Post` model with `#[belongs_to] user: Deferred<User>`, Toasty generates:
 | Method | Returns | Description |
 |---|---|---|
 | `post.user()` | Relation accessor | Returns an accessor for the associated user |
-| `.get(&mut db)` | `Result<User>` | Loads the associated user from the database |
+| `.exec(&mut db)` | `Result<User>` | Loads the associated user from the database |
 | `toasty::create!(Post { user: &user })` | Create builder | Sets the foreign key from a parent reference |
 | `toasty::create!(Post { user_id: id })` | Create builder | Sets the foreign key directly |
 | `Post::fields().user()` | Field path | Used with `.include()` for preloading |
