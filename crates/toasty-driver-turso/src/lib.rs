@@ -189,17 +189,36 @@ impl LocalBuilderOptions {
 /// Sync configuration for a remote Turso database. Each field mirrors a
 /// `turso::sync::Builder` method and is applied in [`BuilderOptions::apply`]
 /// when the driver opens a [`turso::sync::Database`].
-#[derive(Default, Clone)]
+#[derive(Clone)]
 struct SyncBuilderOptions {
     remote_url: Option<String>,
     auth_token: Option<AuthTokenFn>,
     client_name: Option<String>,
     long_poll_timeout: Option<Duration>,
+    /// Matches `turso::sync::Builder::new_remote`, which defaults this to
+    /// `true`.
     bootstrap_if_empty: bool,
     partial_sync_config_experimental: Option<PartialSyncOpts>,
     remote_encryption: bool,
     remote_encryption_key: Option<String>,
     remote_encryption_cipher: Option<RemoteEncryptionCipher>,
+}
+
+#[cfg(feature = "sync")]
+impl Default for SyncBuilderOptions {
+    fn default() -> Self {
+        Self {
+            remote_url: None,
+            auth_token: None,
+            client_name: None,
+            long_poll_timeout: None,
+            bootstrap_if_empty: true,
+            partial_sync_config_experimental: None,
+            remote_encryption: false,
+            remote_encryption_key: None,
+            remote_encryption_cipher: None,
+        }
+    }
 }
 
 #[cfg(feature = "sync")]
@@ -246,6 +265,7 @@ impl BuilderOptions {
         if self.sync_options.bootstrap_if_empty {
             b = b.bootstrap_if_empty(true);
         }
+        b = b.bootstrap_if_empty(self.sync_options.bootstrap_if_empty);
         if let Some(opts) = &self.sync_options.partial_sync_config_experimental {
             b = b.with_partial_sync_opts_experimental(opts.clone())
         }
