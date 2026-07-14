@@ -265,7 +265,6 @@ impl BuilderOptions {
         if self.sync_options.bootstrap_if_empty {
             b = b.bootstrap_if_empty(true);
         }
-        b = b.bootstrap_if_empty(self.sync_options.bootstrap_if_empty);
         if let Some(opts) = &self.sync_options.partial_sync_config_experimental {
             b = b.with_partial_sync_opts_experimental(opts.clone())
         }
@@ -282,6 +281,7 @@ impl BuilderOptions {
         if self.index_method {
             b = b.experimental_index_method(true);
         }
+        b = b.bootstrap_if_empty(self.sync_options.bootstrap_if_empty);
         b
     }
 }
@@ -308,15 +308,15 @@ impl BuilderOptions {
 ///         hexkey: "<64-hex-character-key>".into(),
 ///     })
 ///     .experimental_attach(true);
-/// 
+///
 /// // Concurrent writes
 /// let driver = Turso::file("path/to/db").concurrent_writes();
-/// 
+///
 /// // Syncing with remote server
 /// let driver = Turso::file("path/to/db")
 ///     .with_remote_url("<remote-url>")
 ///     .with_auth_token("<auth-token>");
-/// 
+///
 /// driver.push().await?;
 /// ```
 #[derive(Clone)]
