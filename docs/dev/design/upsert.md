@@ -5,8 +5,8 @@
 Toasty generates `upsert_by_*` builders for primary keys and unique
 constraints. An upsert atomically creates a record when its conflict target is
 absent or updates the matching record when it is present. Ordinary setters
-apply to both branches, while `on_create` and `on_update` express values that
-apply to only one branch.
+apply to both branches. On drivers that support branch-specific assignments,
+`on_create` and `on_update` express values that apply to only one branch.
 
 ## Motivation
 
@@ -97,7 +97,7 @@ overrides an ordinary setter for the same field.
 
 The update builder exposes `incoming()` for expressions that combine stored
 and proposed values. Toasty uses `incoming` rather than PostgreSQL's
-`EXCLUDED` name because the same expression can target non-SQL backends.
+`EXCLUDED` name so the API does not expose SQL-specific terminology.
 Ordinary setters create incoming-value assignments automatically; users reach
 for `incoming()` only when an update expression combines stored and proposed
 fields.
@@ -125,6 +125,10 @@ increments `login_count`; it preserves the existing `name` and `status`.
 
 Ordinary setters remain the concise form for values shared by both branches.
 `on_create` and `on_update` are needed only for fields whose behavior differs.
+PostgreSQL and SQLite support these closures. The initial DynamoDB driver
+reports `unsupported_feature` when either closure is present because
+`UpdateItem` applies one update expression whether it creates or updates the
+item.
 
 ### Inserting or ignoring
 
@@ -184,9 +188,8 @@ atomic database operation.
 ## Edge cases
 
 The database resolves concurrent upserts against the same target. Toasty does
-not lower an upsert into a read followed by a create or update, even on a
-backend that lacks native support, because that would violate the atomicity
-contract.
+not lower an upsert into a read followed by a create or update. Each supporting
+driver uses one atomic database operation.
 
 An auto-generated primary key can still have an `upsert_by_<key>` method, but
 the caller must supply the key value. The database cannot select a conflict on
@@ -202,21 +205,19 @@ when an ordinary setter would otherwise assign the same proposed value.
 ## Driver integration
 
 Drivers receive a new `Operation::Upsert` containing the create values, the
-selected conflict target, update assignments, the ignore policy, and the
-returning model projection. A driver must execute it as one atomic database
-operation. It must not implement upsert by reading and then writing.
+selected conflict target, shared and branch-specific assignments, the ignore
+policy, and the returning model projection. A driver must execute the operation
+atomically without selecting a branch in application code.
 
-The capability contract describes which conflict targets and branch forms a
-driver supports:
+The capability contract describes which upsert forms a driver supports:
 
 - exact unique targets or primary-key targets only;
-- shared create/update assignments or distinct branch assignments;
-- targeted insert-or-ignore.
+- targeted insert-or-ignore;
+- `on_create` and `on_update` assignments.
 
 The verifier returns `unsupported_feature` before dispatch when the operation
-exceeds the driver's capability. This allows DynamoDB to accept primary-key
-forms while rejecting non-primary-key targets or branch combinations it cannot
-encode exactly.
+exceeds the driver's capability. Assignment kinds on the update branch continue
+to use the existing per-assignment capability flags.
 
 PostgreSQL and SQLite serialize an upsert as `INSERT ... ON CONFLICT` with the
 selected columns, `DO UPDATE SET` or `DO NOTHING`, and `RETURNING`. Both
@@ -231,13 +232,43 @@ for `Operation::Upsert`. Toasty does not use `INSERT IGNORE`, which suppresses
 errors beyond the selected uniqueness conflict. A separate API for MySQL's
 any-unique-key behavior can be designed later.
 
-DynamoDB accepts only primary-key targets. Shared assignments map to one
-`UpdateItem` with `ReturnValues=ALL_NEW`; insert-or-ignore maps to an
-`UpdateItem` guarded by `attribute_not_exists` so a successful insert can also
-return the stored item. Distinct `on_create` and `on_update` assignments are
-accepted only when the driver can express their exact result in one DynamoDB
-write. Other forms return `unsupported_feature` rather than approximating SQL
-semantics.
+DynamoDB accepts only primary-key targets. The driver serializes a regular
+upsert as one `UpdateItem` request without an item-existence condition.
+DynamoDB applies the update expression to an existing item or creates a missing
+item with the supplied key. The driver requests `ALL_NEW` to return the stored
+model.
+
+The initial driver supports assignments whose DynamoDB action has defined
+behavior for both a present and missing item:
+
+| Toasty assignment | DynamoDB update action |
+|---|---|
+| Replace with a value | `SET field = :value` |
+| Replace with `None` | `REMOVE field` |
+| Append | `SET field = list_append(if_not_exists(field, :empty), :value)` |
+| Add or subtract | `ADD field :delta`, using a negative delta for subtraction |
+| Required create default | `SET field = if_not_exists(field, :default)` |
+
+A required create default is safe because every valid existing item already
+contains the field. The verifier rejects a create default on a nullable field
+and a field that combines `#[default]` with `#[update]`, because attribute
+absence cannot distinguish a new item from an existing item with no value.
+
+The initial DynamoDB driver reports `unsupported_feature` when an upsert uses
+`on_create` or `on_update`. An `UpdateExpression` cannot generally select an
+expression based on whether the item existed before the request;
+`if_not_exists` tests the presence of one attribute instead.
+
+`or_ignore` uses `PutItem` with `attribute_not_exists(pk)`. It uses
+`TransactWriteItems` when the create must also populate Toasty-managed unique
+secondary-index tables. A failed base-item condition maps to `None`; a conflict
+on another unique constraint remains an error.
+
+The initial DynamoDB driver also rejects a regular upsert that assigns a
+Toasty-managed unique secondary-index field. Maintaining that index may require
+different writes depending on whether the base item was created or updated,
+which one `UpdateItem` cannot express. `or_ignore` does not have this
+restriction because it only has a create branch.
 
 Adding `Operation::Upsert` requires out-of-tree drivers to handle the new
 variant. A driver may return `unsupported_feature` without implementing it.
@@ -281,16 +312,30 @@ removing branch control.
 Adding another constraint would then make existing code ambiguous or change
 its meaning. Generated `upsert_by_*` methods keep the target explicit.
 
+### Emulate branch-specific DynamoDB assignments
+
+[`UpdateItem`] is DynamoDB's native upsert operation. It creates a missing item
+or applies the same update expression to an existing item, which directly
+implements ordinary shared assignments. `if_not_exists` can also initialize a
+missing attribute.
+
+It cannot implement arbitrary `on_create` and `on_update` closures because
+`if_not_exists` tests whether one attribute is present, not whether the item
+existed before the request. Toasty could emulate the two branches with
+conditional retries, but that adds multiple requests and retry behavior to an
+operation DynamoDB otherwise handles with one request. The initial driver
+instead reports `unsupported_feature` for the branch-specific API.
+
+[`UpdateItem`]: https://docs.aws.amazon.com/amazondynamodb/latest/APIReference/API_UpdateItem.html
+
 ### Read, then create or update
 
-This works on every backend but is not atomic. Toasty does not call a
-multi-operation fallback an upsert.
+A check followed by a write is not atomic. Supporting drivers use one native
+database operation instead. Backends that cannot express the requested upsert
+report `unsupported_feature`.
 
 ## Open questions
 
-- **Blocking implementation:** Define the exact DynamoDB assignment forms that
-  one `UpdateItem` can implement while preserving the create and update branch
-  results.
 - **Deferrable:** Decide whether nullable unique fields receive generated
   `upsert_by_*` methods or remain unsupported because SQL unique constraints
   commonly permit multiple `NULL` values.
@@ -308,4 +353,8 @@ multi-operation fallback an upsert.
 - A `toasty::upsert!` macro is deferred; the generated builder is already
   concise, and macro syntax can be added without changing its semantics.
 - MySQL's any-unique-key update behavior is separate from targeted upsert.
+- DynamoDB `on_create` and `on_update` support is deferred because its native
+  upsert applies one update expression to new and existing items.
+- Assigning a DynamoDB unique secondary-index field during a regular upsert is
+  deferred because maintaining its index requires branch-specific writes.
 - MongoDB query-filter upsert is outside the current driver set.
