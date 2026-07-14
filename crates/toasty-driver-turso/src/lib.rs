@@ -276,16 +276,28 @@ impl BuilderOptions {
 /// ```
 /// use toasty_driver_turso::Turso;
 ///
-/// let driver = Turso::in_memory();
+/// // File-backed database
 /// let driver = Turso::file("path/to/db");
 ///
-/// // Sync (enabled by default)
-/// let driver = Turso::file("path/to/db")
-///     .with_remote_url("http://127.0.0.1:8080")
-///     .bootstrap_if_empty(true);
+/// // With experimental features
+/// use toasty_driver_turso::EncryptionOpts;
 ///
+/// let driver = Turso::file("path/to/db")
+///     .experimental_encryption(EncryptionOpts {
+///         cipher: "aes256gcm".into(),
+///         hexkey: "<64-hex-character-key>".into(),
+///     })
+///     .experimental_attach(true);
+/// 
 /// // Concurrent writes
 /// let driver = Turso::file("path/to/db").concurrent_writes();
+/// 
+/// // Syncing with remote server
+/// let driver = Turso::file("path/to/db")
+///     .with_remote_url("<remote-url>")
+///     .with_auth_key("<auth-key>");
+/// 
+/// driver.push().await?;
 /// ```
 #[derive(Clone)]
 pub struct Turso {
