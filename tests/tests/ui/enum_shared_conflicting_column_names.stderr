@@ -1,0 +1,5 @@
+error: fields sharing `name` declare conflicting column names `a` and `b`; a shared field maps to one column
+  --> tests/ui/enum_shared_conflicting_column_names.rs:16:18
+   |
+16 |         #[column("b")]
+   |                  ^^^

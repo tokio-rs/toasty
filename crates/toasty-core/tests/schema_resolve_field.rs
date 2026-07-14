@@ -26,6 +26,7 @@ fn id_field(model: ModelId) -> Field {
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -48,6 +49,7 @@ fn prim_field(model: ModelId, index: usize, name: &str) -> Field {
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -73,6 +75,7 @@ fn variant_field(model: ModelId, index: usize, name: &str, variant_index: usize)
             model,
             index: variant_index,
         }),
+        shared: None,
     }
 }
 
@@ -94,6 +97,7 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 

@@ -190,6 +190,14 @@ impl Model {
                         ));
                     }
 
+                    if let Some(shared) = &field.attrs.shared {
+                        errs.push(syn::Error::new_spanned(
+                            shared,
+                            "#[shared] is only supported on enum variant fields; \
+                             it declares a logical field shared across variants",
+                        ));
+                    }
+
                     fields.push(field);
                 }
                 Err(err) => errs.push(err),
@@ -503,6 +511,49 @@ impl Model {
             }
         }
 
+        // Reject field-level #[index] / #[unique] on shared fields. The
+        // attribute on one variant would constrain the shared column — and
+        // therefore rows of every sharing variant — while reading as
+        // variant-scoped. The enum-level form is the explicit equivalent.
+        for field in &all_fields {
+            if let Some(shared) = &field.attrs.shared
+                && field.attrs.is_indexed()
+            {
+                let attr_name = if field.attrs.unique {
+                    "unique"
+                } else {
+                    "index"
+                };
+                errs.push(syn::Error::new_spanned(
+                    &field.name.ident,
+                    format!(
+                        "#[{attr_name}] on a field declaring #[shared({shared})] would \
+                         constrain rows of every variant sharing the column; declare \
+                         the index on the enum instead: #[{attr_name}({shared})]"
+                    ),
+                ));
+            }
+        }
+
+        // Parse enum-level #[index(...)] / #[unique(...)] attributes. Each
+        // reference is a shared logical-field identifier or a `variant::field`
+        // path.
+        let mut indices = vec![];
+        for attr in &ast.attrs {
+            let unique = if attr.path().is_ident("index") {
+                false
+            } else if attr.path().is_ident("unique") {
+                true
+            } else {
+                continue;
+            };
+
+            match parse_enum_index_attr(attr, unique, &all_fields, &variants) {
+                Ok(index) => indices.push(index),
+                Err(e) => errs.push(e),
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
@@ -552,7 +603,6 @@ impl Model {
             None
         };
 
-        let mut indices = vec![];
         collect_field_indices(&all_fields, &mut indices);
 
         Ok(Self {
@@ -587,6 +637,160 @@ fn collect_ast_fields(ast: &syn::Fields) -> syn::Result<Vec<&syn::Field>> {
         }
         _ => vec![],
     })
+}
+
+/// Parses an enum-level `#[index(...)]` / `#[unique(...)]` attribute on a
+/// `#[derive(Embed)]` enum.
+///
+/// Each reference is either a shared logical-field identifier (declared by
+/// `#[shared(<ident>)]` on variant fields) or a `variant::field` path naming a
+/// variant field that owns its column. As with model-level `#[index(a, b)]`,
+/// the first reference is the partition (hash) key and the rest are local
+/// (sort) keys, and `name = "..."` overrides the generated index name.
+fn parse_enum_index_attr(
+    attr: &syn::Attribute,
+    unique: bool,
+    fields: &[Field],
+    variants: &[Variant],
+) -> syn::Result<Index> {
+    let mut index_fields = vec![];
+    let mut name: Option<String> = None;
+
+    attr.parse_nested_meta(|meta| {
+        // `name = "..."` — explicit override for the generated index name.
+        // Disambiguates from a shared field literally called `name` by
+        // requiring the `=` token; bare `name` still parses as a field ref.
+        if meta.path.is_ident("name") && meta.input.peek(syn::Token![=]) {
+            if name.is_some() {
+                return Err(syn::Error::new_spanned(
+                    &meta.path,
+                    "`name` specified more than once",
+                ));
+            }
+
+            let value: syn::LitStr = meta.value()?.parse()?;
+            let value_str = value.value();
+
+            if value_str.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    &value,
+                    "`name` must be a non-empty string",
+                ));
+            }
+
+            name = Some(value_str);
+            return Ok(());
+        }
+
+        let field = resolve_enum_index_field(&meta.path, fields, variants)?;
+
+        let scope = if index_fields.is_empty() {
+            IndexScope::Partition
+        } else {
+            IndexScope::Local
+        };
+        index_fields.push(IndexField { field, scope });
+
+        Ok(())
+    })?;
+
+    if index_fields.is_empty() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "expected at least one field reference",
+        ));
+    }
+
+    Ok(Index {
+        fields: index_fields,
+        unique,
+        primary_key: false,
+        name,
+    })
+}
+
+/// Resolves one reference inside an enum-level `#[index(...)]` / `#[unique(...)]`
+/// to a global field offset.
+///
+/// A single identifier names a shared logical field and resolves to the first
+/// variant field declaring it (every member of the group maps to the same
+/// column, so any representative works). A two-segment `variant::field` path
+/// names a variant field that owns its column.
+fn resolve_enum_index_field(
+    path: &syn::Path,
+    fields: &[Field],
+    variants: &[Variant],
+) -> syn::Result<usize> {
+    match path.segments.len() {
+        1 => {
+            let ident = &path.segments[0].ident;
+
+            if let Some(offset) = fields
+                .iter()
+                .position(|f| f.attrs.shared.as_ref() == Some(ident))
+            {
+                return Ok(offset);
+            }
+
+            // Point a reference to a non-shared variant field at the qualified
+            // form rather than a bare "unknown field".
+            if let Some(field) = fields.iter().find(|f| f.name.ident == *ident) {
+                let variant = &variants[field.variant.expect("enum field must have variant")];
+                let variant_name = variant.name.as_str();
+                return Err(syn::Error::new_spanned(
+                    path,
+                    format!(
+                        "`{ident}` is not a shared field; reference the variant field \
+                         as `{variant_name}::{ident}`"
+                    ),
+                ));
+            }
+
+            Err(syn::Error::new_spanned(
+                path,
+                format!("unknown shared field `{ident}`"),
+            ))
+        }
+        2 => {
+            let variant_ident = &path.segments[0].ident;
+            let field_ident = &path.segments[1].ident;
+
+            let Some(variant_index) = variants.iter().position(|v| v.name.ident == *variant_ident)
+            else {
+                return Err(syn::Error::new_spanned(
+                    variant_ident,
+                    format!("unknown variant `{variant_ident}`"),
+                ));
+            };
+
+            let Some((offset, field)) = fields
+                .iter()
+                .enumerate()
+                .find(|(_, f)| f.variant == Some(variant_index) && f.name.ident == *field_ident)
+            else {
+                return Err(syn::Error::new_spanned(
+                    field_ident,
+                    format!("variant `{variant_ident}` has no field `{field_ident}`"),
+                ));
+            };
+
+            if let Some(shared) = &field.attrs.shared {
+                return Err(syn::Error::new_spanned(
+                    path,
+                    format!(
+                        "`{variant_ident}::{field_ident}` declares #[shared({shared})]; \
+                         reference the shared field instead: `{shared}`"
+                    ),
+                ));
+            }
+
+            Ok(offset)
+        }
+        _ => Err(syn::Error::new_spanned(
+            path,
+            "expected a shared field identifier or a `variant::field` path",
+        )),
+    }
 }
 
 fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
