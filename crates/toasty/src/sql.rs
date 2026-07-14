@@ -275,12 +275,13 @@ impl Param {
 }
 
 fn infer_typed_value(value: Value, capability: &Capability) -> Result<TypedValue> {
-    let ty = value.infer_ty();
-    let ty = db::Type::from_app(&ty, None, &capability.storage_types).map_err(|err| {
-        err.context(Error::invalid_statement(format!(
-            "cannot infer raw SQL bind type for {value:?}; use bind_typed"
-        )))
-    })?;
+    let ty = value
+        .infer_db_ty(&capability.storage_types)
+        .map_err(|err| {
+            err.context(Error::invalid_statement(
+                "cannot infer raw SQL bind type; use bind_typed",
+            ))
+        })?;
 
     Ok(TypedValue { value, ty })
 }

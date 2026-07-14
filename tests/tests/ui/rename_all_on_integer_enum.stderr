@@ -1,0 +1,11 @@
+error: #[column(rename_all = ...)] is not supported for integer-discriminant enums
+  --> tests/ui/rename_all_on_integer_enum.rs:5:1
+   |
+ 5 | / #[column(rename_all = "PascalCase")]
+ 6 | | enum Priority {
+ 7 | |     #[column(variant = 1)]
+ 8 | |     Low,
+ 9 | |     #[column(variant = 2)]
+10 | |     High,
+11 | | }
+   | |_^

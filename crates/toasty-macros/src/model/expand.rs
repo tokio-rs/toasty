@@ -1,4 +1,5 @@
 mod create;
+mod docs;
 mod embedded_enum;
 mod fields;
 mod filters;
@@ -247,11 +248,14 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
 
-    // A unit (data-less) enum maps to a single discriminant column, so it can
-    // serve as an index column. Data-carrying enums span multiple columns and
-    // therefore do not implement `IndexableField`.
-    let indexable_impl = if model.fields.is_empty() {
-        quote! { impl #toasty::index::IndexableField for #model_ident {} }
+    // A unit (data-less) enum is a single scalar discriminant: indexable, and a
+    // valid `Vec<Enum>` element (`Scalar` unlocks the container operators).
+    // Data-carrying enums span multiple columns and get neither.
+    let unit_enum_impls = if model.fields.is_empty() {
+        quote! {
+            impl #toasty::index::IndexableField for #model_ident {}
+            impl #toasty::Scalar for #model_ident {}
+        }
     } else {
         quote! {}
     };
@@ -263,7 +267,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #storage_compat_checks
         #shared_column_checks
         #indexable_checks
-        #indexable_impl
+        #unit_enum_impls
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {

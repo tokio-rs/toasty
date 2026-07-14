@@ -383,8 +383,10 @@ impl Model {
             ));
         }
 
-        // Parse enum-level #[column(type = ...)] attribute to determine storage strategy.
+        // Parse enum-level #[column(type = ...)] attribute to determine storage
+        // strategy, and #[column(rename_all = ...)] to derive default labels.
         let mut enum_column_type: Option<ColumnType> = None;
+        let mut rename_all: Option<super::column::RenameRule> = None;
         for attr in &ast.attrs {
             if attr.path().is_ident("column") {
                 let col = Column::from_ast(attr)?;
@@ -396,6 +398,15 @@ impl Model {
                         ));
                     }
                     enum_column_type = Some(ty);
+                }
+                if let Some(rule) = col.rename_all {
+                    if rename_all.is_some() {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "duplicate #[column(rename_all = ...)] attribute on enum",
+                        ));
+                    }
+                    rename_all = Some(rule);
                 }
             }
         }
@@ -420,12 +431,21 @@ impl Model {
                 }
             };
 
-            // Resolve discriminant: explicit value or default to variant name in snake_case
+            // Resolve discriminant: explicit value, or default to the variant
+            // name converted by the enum-level rename_all rule (snake_case if
+            // no rule was given).
             let attr = match explicit_attr {
                 Some(a) => a,
-                None => VariantAttr {
-                    discriminant: VariantValue::String(variant.ident.to_string().to_snake_case()),
-                },
+                None => {
+                    let ident = variant.ident.to_string();
+                    let label = match rename_all {
+                        Some(rule) => rule.apply(&ident),
+                        None => ident.to_snake_case(),
+                    };
+                    VariantAttr {
+                        discriminant: VariantValue::String(label),
+                    }
+                }
             };
 
             let ast_fields = collect_ast_fields(&variant.fields)?;
@@ -570,6 +590,14 @@ impl Model {
                 return Err(syn::Error::new_spanned(
                     ast,
                     "#[column(type = ...)] is not supported for integer-discriminant enums",
+                ));
+            }
+            // `rename_all` derives string labels, so it is meaningless when the
+            // enum stores integer discriminants.
+            if rename_all.is_some() {
+                return Err(syn::Error::new_spanned(
+                    ast,
+                    "#[column(rename_all = ...)] is not supported for integer-discriminant enums",
                 ));
             }
             None
