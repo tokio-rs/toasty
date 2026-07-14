@@ -177,7 +177,7 @@
 <a href=#177 id=177 data-nosnippet>177</a>        //
 <a href=#178 id=178 data-nosnippet>178</a>        // An embedded enum flattens every variant's fields into one list, so two
 <a href=#179 id=179 data-nosnippet>179</a>        // variants may declare the same field name — e.g. a column shared across
-<a href=#180 id=180 data-nosnippet>180</a>        // variants via `#[column("name")]`. Emit each accessor name only once to
+<a href=#180 id=180 data-nosnippet>180</a>        // variants via `#[shared(name)]`. Emit each accessor name only once to
 <a href=#181 id=181 data-nosnippet>181</a>        // avoid duplicate method definitions. Root models and embedded structs
 <a href=#182 id=182 data-nosnippet>182</a>        // can never have duplicate field names, so this dedup is a no-op there.
 <a href=#183 id=183 data-nosnippet>183</a>        </span><span class="kw">let </span><span class="kw-2">mut </span>seen_names = std::collections::HashSet::new();

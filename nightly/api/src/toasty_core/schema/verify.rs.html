@@ -181,19 +181,19 @@
 <a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">fn </span>verify_table_indices_and_nullable(<span class="kw-2">&amp;</span><span class="self">self</span>) {
 <a href=#182 id=182 data-nosnippet>182</a>        <span class="kw">for </span>table <span class="kw">in </span><span class="kw-2">&amp;</span><span class="self">self</span>.schema.db.tables {
 <a href=#183 id=183 data-nosnippet>183</a>            <span class="kw">for </span>index <span class="kw">in </span><span class="kw-2">&amp;</span>table.indices {
-<a href=#184 id=184 data-nosnippet>184</a>                <span class="kw">let </span>nullable = index
-<a href=#185 id=185 data-nosnippet>185</a>                    .columns
-<a href=#186 id=186 data-nosnippet>186</a>                    .iter()
-<a href=#187 id=187 data-nosnippet>187</a>                    .any(|index_column| table.column(index_column.column).nullable);
-<a href=#188 id=188 data-nosnippet>188</a>
-<a href=#189 id=189 data-nosnippet>189</a>                <span class="kw">if </span>nullable {
-<a href=#190 id=190 data-nosnippet>190</a>                    <span class="comment">// If there are nullable columns, then (for now) the index
-<a href=#191 id=191 data-nosnippet>191</a>                    // should only have one column
-<a href=#192 id=192 data-nosnippet>192</a>                    </span><span class="macro">assert_eq!</span>(
-<a href=#193 id=193 data-nosnippet>193</a>                        index.columns.len(),
-<a href=#194 id=194 data-nosnippet>194</a>                        <span class="number">1</span>,
-<a href=#195 id=195 data-nosnippet>195</a>                        <span class="string">"table index with multiple columns includes a nullable column"
-<a href=#196 id=196 data-nosnippet>196</a>                    </span>);
+<a href=#184 id=184 data-nosnippet>184</a>                <span class="comment">// A nullable column is permitted in any index, including
+<a href=#185 id=185 data-nosnippet>185</a>                // composite ones (e.g. an embedded enum's variant columns,
+<a href=#186 id=186 data-nosnippet>186</a>                // which are nullable by construction). SQL treats NULLs as
+<a href=#187 id=187 data-nosnippet>187</a>                // distinct in unique indices, so rows lacking a value never
+<a href=#188 id=188 data-nosnippet>188</a>                // conflict. The primary key is the exception: its columns
+<a href=#189 id=189 data-nosnippet>189</a>                // must be non-nullable.
+<a href=#190 id=190 data-nosnippet>190</a>                </span><span class="kw">if </span>index.primary_key {
+<a href=#191 id=191 data-nosnippet>191</a>                    <span class="kw">for </span>index_column <span class="kw">in </span><span class="kw-2">&amp;</span>index.columns {
+<a href=#192 id=192 data-nosnippet>192</a>                        <span class="macro">assert!</span>(
+<a href=#193 id=193 data-nosnippet>193</a>                            !table.column(index_column.column).nullable,
+<a href=#194 id=194 data-nosnippet>194</a>                            <span class="string">"primary key includes a nullable column"
+<a href=#195 id=195 data-nosnippet>195</a>                        </span>);
+<a href=#196 id=196 data-nosnippet>196</a>                    }
 <a href=#197 id=197 data-nosnippet>197</a>                }
 <a href=#198 id=198 data-nosnippet>198</a>            }
 <a href=#199 id=199 data-nosnippet>199</a>        }
