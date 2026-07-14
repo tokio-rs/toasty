@@ -35,12 +35,52 @@ pub async fn shared_column_schema_fields(t: &mut Test) {
     let creature = &schema.app.models[&Creature::id()];
     assert_struct!(creature, toasty::schema::app::Model::EmbeddedEnum({
         fields: [
-            { name.app: Some("name"), shared: Some("name") },
+            { name.app: Some("name"), shared: Some(_ { parts: ["name"] }) },
             { name.app: Some("profession"), shared: None },
-            { name.app: Some("name"), shared: Some("name") },
+            { name.app: Some("name"), shared: Some(_ { parts: ["name"] }) },
             { name.app: Some("species"), shared: None },
         ],
     }));
+}
+
+#[driver_test]
+pub async fn raw_shared_identifier_uses_bare_name(t: &mut Test) {
+    #[derive(Debug, toasty::Embed)]
+    enum Value {
+        Text {
+            #[shared(r#type)]
+            kind: String,
+        },
+        Number {
+            #[shared(r#type)]
+            kind: String,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Record {
+        #[key]
+        id: String,
+        value: Value,
+    }
+
+    let db = t.setup_db(models!(Record)).await;
+    let schema = db.schema();
+
+    assert_struct!(schema.app.models[&Value::id()], toasty::schema::app::Model::EmbeddedEnum({
+        fields: [
+            { shared: Some(_ { parts: ["type"] }), .. },
+            { shared: Some(_ { parts: ["type"] }), .. },
+        ],
+    }));
+    assert_struct!(schema.db.tables, [{
+        columns: [
+            { name: "id" },
+            { name: "value" },
+            { name: "value_type" },
+        ],
+        ..
+    }]);
 }
 
 /// Both variants write and read the shared column, while their variant-specific

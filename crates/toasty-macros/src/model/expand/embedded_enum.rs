@@ -1,5 +1,5 @@
 use super::{Expand, schema, util};
-use crate::model::schema::{EnumStorageStrategy, FieldTy, VariantValue};
+use crate::model::schema::{EnumStorageStrategy, FieldTy, Name, VariantValue};
 
 use hashbrown::HashMap;
 use proc_macro2::TokenStream;
@@ -337,8 +337,9 @@ impl Expand<'_> {
                 // (see `BuildMapping::map_field_primitive`).
                 let shared = match &field.attrs.shared {
                     Some(ident) => {
-                        let name = ident.to_string();
-                        quote! { Some(#name.to_string()) }
+                        let name = Name::from_ident(ident);
+                        let name = schema::expand_name(toasty, &name);
+                        quote! { Some(#name) }
                     }
                     None => quote! { None },
                 };

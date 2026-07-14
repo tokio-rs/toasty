@@ -2,6 +2,7 @@ use super::BuildSchema;
 use crate::{
     Error, Result, driver,
     schema::{
+        Name,
         app::{self, Model, ModelId, ModelRoot},
         db::{self, ColumnId, IndexId, Table, TableId},
         mapping::{self, Mapping, TableToModel},
@@ -68,7 +69,7 @@ struct EnumColumns {
     /// column an earlier variant already created for it, so later variants
     /// declaring the same identifier share that column instead of producing a
     /// duplicate.
-    shared: std::collections::HashMap<String, SharedColumn>,
+    shared: std::collections::HashMap<Name, SharedColumn>,
 
     /// Every flattened column name created so far for this enum's variant
     /// fields. Sharing is always explicit: two fields resolving to the same
@@ -981,7 +982,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         });
 
         let (column_id, lowering_index) = if let Some(shared) = shared {
-            let ident = field.shared.as_deref().unwrap();
+            let ident = field.shared.as_ref().unwrap().snake_case();
 
             // Reuse is only sound across *different* variants — the merged encode
             // dispatches on the discriminant, and at most one variant is active
@@ -1381,13 +1382,13 @@ impl<'a, 'b> MapField<'a, 'b> {
         let name = field
             .name
             .storage
-            .as_deref()
-            .or(field.shared.as_deref())
-            .or(field.name.app.as_deref());
+            .clone()
+            .or_else(|| field.shared.as_ref().map(Name::snake_case))
+            .or_else(|| field.name.app.clone());
         let embed = match name {
             Some(field_name) => {
                 if self.prefix.is_empty() {
-                    field_name.to_owned()
+                    field_name
                 } else {
                     format!("{}_{field_name}", self.prefix.join("_"))
                 }
