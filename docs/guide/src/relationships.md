@@ -61,7 +61,7 @@ struct User {
 
     // User's table has no FK — declares has_many
     #[has_many]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::Deferred<Vec<Post>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -75,7 +75,7 @@ struct Post {
     user_id: u64,
 
     #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -93,7 +93,7 @@ a model with two `BelongsTo` relations pointing to the same parent type), use
 ```rust,ignore
 // On User: the child's relation field is named "owner", not "user"
 #[has_many(pair = owner)]
-posts: toasty::HasMany<Post>,
+posts: toasty::Deferred<Vec<Post>>,
 ```
 
 You can define one-sided relationships with only `#[belongs_to]` on the child
@@ -102,6 +102,45 @@ when you need to navigate from child to parent but not the reverse. The opposite
 is not allowed — a `#[has_many]` or `#[has_one]` field always requires a
 matching `#[belongs_to]` on the target model, because Toasty needs the foreign
 key definition to know how the models connect.
+
+### Lazy and eager relation fields
+
+The relation field type controls when Toasty loads the related records.
+
+Use `Deferred<_>` for a lazy relation. A normal query leaves the field unloaded.
+Load it by calling the generated relation accessor, or preload it with
+`.include(...)`:
+
+```rust,ignore
+#[has_many]
+posts: toasty::Deferred<Vec<Post>>,
+
+let posts = user.posts().exec(&mut db).await?;
+```
+
+Use the relation value directly for an eager relation. Toasty loads the relation
+with every query that returns the model, as if the query had an implicit
+`.include(...)`:
+
+```rust,ignore
+#[has_many]
+posts: Vec<Post>,
+
+let user = User::filter_by_id(user_id).get(&mut db).await?;
+let post_count = user.posts.len();
+```
+
+The accepted eager field types are:
+
+| Attribute | Lazy field type | Eager field type |
+|---|---|---|
+| `#[has_many]` | `Deferred<Vec<T>>` | `Vec<T>` |
+| `#[has_one]` | `Deferred<T>` or `Deferred<Option<T>>` | `T` or `Option<T>` |
+| `#[belongs_to]` | `Deferred<T>` or `Deferred<Option<T>>` | `T` or `Option<T>` |
+
+Eager relations can load other eager relations. Toasty rejects schemas with an
+eager-load cycle, such as `User.posts: Vec<Post>` and `Post.user: User`. Wrap at
+least one relation in `Deferred<_>` to break the cycle.
 
 ## Required vs optional relationships
 
@@ -115,7 +154,7 @@ required or optional.
 user_id: u64,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::BelongsTo<User>,
+user: toasty::Deferred<User>,
 ```
 
 Every post must have a user. The `user_id` column is `NOT NULL` in the database.
@@ -127,7 +166,7 @@ Every post must have a user. The `user_id` column is `NOT NULL` in the database.
 user_id: Option<u64>,
 
 #[belongs_to(key = user_id, references = id)]
-user: toasty::BelongsTo<Option<User>>,
+user: toasty::Deferred<Option<User>>,
 ```
 
 A post can exist without a user. The `user_id` column allows `NULL`.
@@ -160,7 +199,7 @@ the child in place.
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -170,7 +209,7 @@ the child in place.
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -203,9 +242,9 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 
 | You want to express… | Use | FK goes on |
 |---|---|---|
-| A post has one author | `Post` → `BelongsTo<User>` + `User` → `HasMany<Post>` | `posts.user_id` |
-| A user has one profile | `User` → `HasOne<Profile>` + `Profile` → `BelongsTo<User>` | `profiles.user_id` |
-| A comment belongs to a post | `Comment` → `BelongsTo<Post>` + `Post` → `HasMany<Comment>` | `comments.post_id` |
+| A post has one author | `Post` → `Deferred<User>` or `User` + `User` → `Deferred<Vec<Post>>` or `Vec<Post>` | `posts.user_id` |
+| A user has one profile | `User` → `Deferred<Profile>` or `Profile` + `Profile` → `Deferred<User>` or `User` | `profiles.user_id` |
+| A comment belongs to a post | `Comment` → `Deferred<Post>` or `Post` + `Post` → `Deferred<Vec<Comment>>` or `Vec<Comment>` | `comments.post_id` |
 
 When deciding between `HasOne` and `HasMany`, ask: "Can the parent have more
 than one?" If yes, use `HasMany`. If exactly one (or zero), use `HasOne`. The
@@ -218,58 +257,47 @@ the other?" Put the FK on the dependent model with `BelongsTo`, and declare
 
 ## Composite foreign keys
 
-When a parent model has a composite primary key, the `#[belongs_to]` attribute
-accepts multiple `key`/`references` pairs — one for each column in the composite
-key:
+When a parent model has a composite primary key, the foreign key on the child
+spans the same set of columns. Pass arrays to `key` and `references` to list
+each column:
 
 ```rust
 # use toasty::Model;
 #[derive(Debug, toasty::Model)]
-struct User {
+#[key(org_id, id)]
+struct Team {
+    org_id: u64,
+    id: u64,
+
+    #[has_many]
+    members: toasty::Deferred<Vec<Member>>,
+}
+
+#[derive(Debug, toasty::Model)]
+#[index(org_id, team_id)]
+struct Member {
     #[key]
     #[auto]
     id: u64,
 
-    #[has_many]
-    todos: toasty::HasMany<Todo>,
-}
+    org_id: u64,
+    team_id: u64,
 
-#[derive(Debug, toasty::Model)]
-#[key(partition = user_id, local = id)]
-struct Todo {
-    #[auto]
-    id: uuid::Uuid,
-
-    user_id: u64,
-
-    #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
-
-    title: String,
+    #[belongs_to(key = [org_id, team_id], references = [org_id, id])]
+    team: toasty::Deferred<Team>,
 }
 ```
 
-In this example, `Todo` uses a composite primary key (`user_id` + `id`). The
-`user_id` field serves double duty: it is part of the Todo's own primary key
-*and* the foreign key pointing to `User`.
+The first field in `key` pairs with the first field in `references`, the second
+with the second, and so on, so the two arrays must have the same length. With
+a single-column foreign key, the arrays can be omitted: `key = user_id,
+references = id` is equivalent to `key = [user_id], references = [id]`.
 
-When the parent itself has a composite primary key, list each column pair:
-
-```rust,ignore
-#[belongs_to(key = org_id, references = org_id, key = team_id, references = id)]
-team: toasty::BelongsTo<Team>,
-```
-
-The number of `key` entries must match the number of `references` entries. Toasty
-pairs them positionally: the first `key` maps to the first `references`, the
-second to the second, and so on.
-
-Composite foreign key fields should be indexed together so that Toasty can query
-efficiently:
-
-```rust,ignore
-#[index(fields(org_id, team_id))]
-```
+The foreign key fields need a model-level composite index that covers them in
+order — `#[index(org_id, team_id)]` on the struct, not a separate `#[index]`
+on each field. Two single-column indexes don't compose into a covering index
+for a composite foreign key. Without one, schema verification rejects the
+model and suggests the exact attribute to add.
 
 ## What the following chapters cover
 
@@ -284,3 +312,7 @@ querying, creating, and updating:
   child, replace and unset behavior
 - [**Preloading Associations**](./preloading-associations.md) — avoiding extra
   queries by loading relations upfront with `.include()`
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

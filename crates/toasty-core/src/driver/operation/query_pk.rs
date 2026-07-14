@@ -1,4 +1,4 @@
-use super::Operation;
+use super::{Operation, Pagination};
 use crate::{
     schema::db::{ColumnId, IndexId, TableId},
     stmt,
@@ -22,9 +22,8 @@ use crate::{
 ///     select: vec![col_a, col_b],
 ///     pk_filter: pk_expr,
 ///     filter: None,
-///     limit: Some(10),
+///     limit: None,
 ///     order: None,
-///     cursor: None,
 /// };
 /// let operation: Operation = op.into();
 /// ```
@@ -47,16 +46,12 @@ pub struct QueryPk {
     /// returning results to the caller.
     pub filter: Option<stmt::Expr>,
 
-    /// Maximum number of rows to return. `None` means no limit.
-    pub limit: Option<i64>,
+    /// Limit and pagination bounds for this query. `None` means unbounded.
+    pub limit: Option<Pagination>,
 
     /// Sort key ordering direction for tables with a composite primary key.
     /// `None` uses the driver's default ordering.
     pub order: Option<stmt::Direction>,
-
-    /// Pagination cursor. Contains the serialized key of the last item from a
-    /// previous page of results. When set, the query resumes after this key.
-    pub cursor: Option<stmt::Value>,
 }
 
 impl From<QueryPk> for Operation {

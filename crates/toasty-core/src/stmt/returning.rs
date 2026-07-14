@@ -1,5 +1,5 @@
 use super::{Expr, Path};
-use crate::stmt::{self, ExprSet, Node, Query, Statement, Value};
+use crate::stmt::{self, ExprSet, Node, Query, Statement};
 
 /// Specifies what data a statement returns.
 ///
@@ -26,20 +26,20 @@ pub enum Returning {
     Changed,
 
     /// Return the result of evaluating an expression against the source rows.
-    Expr(Expr),
+    Project(Expr),
 
-    /// Return a fixed value, independent of the statement source.
-    Value(Expr),
+    /// Return a fixed expression, independent of the statement source.
+    Expr(Expr),
 }
 
 impl Returning {
-    /// Creates a `Returning::Expr` from an iterator of expressions, combining
+    /// Creates a `Returning::Project` from an iterator of expressions, combining
     /// them into a record expression.
-    pub fn from_expr_iter<T>(items: impl IntoIterator<Item = T>) -> Self
+    pub fn from_project_iter<T>(items: impl IntoIterator<Item = T>) -> Self
     where
         T: Into<Expr>,
     {
-        Returning::Expr(Expr::record(items))
+        Returning::Project(Expr::record(items))
     }
 
     /// Returns `true` if this is the `Model` variant.
@@ -74,16 +74,16 @@ impl Returning {
         matches!(self, Self::Changed)
     }
 
-    /// Returns `true` if this is the `Expr` variant.
-    pub fn is_expr(&self) -> bool {
-        matches!(self, Self::Expr(_))
+    /// Returns `true` if this is the `Project` variant.
+    pub fn is_project(&self) -> bool {
+        matches!(self, Self::Project(_))
     }
 
-    /// Returns a reference to the inner expression if this is the `Expr`
+    /// Returns a reference to the inner expression if this is the `Project`
     /// variant.
-    pub fn as_expr(&self) -> Option<&Expr> {
+    pub fn as_project(&self) -> Option<&Expr> {
         match self {
-            Self::Expr(expr) => Some(expr),
+            Self::Project(expr) => Some(expr),
             _ => None,
         }
     }
@@ -92,18 +92,18 @@ impl Returning {
     ///
     /// # Panics
     ///
-    /// Panics if this is not the `Expr` variant.
+    /// Panics if this is not the `Project` variant.
     #[track_caller]
-    pub fn as_expr_unwrap(&self) -> &Expr {
-        self.as_expr()
-            .unwrap_or_else(|| panic!("expected stmt::Returning::Expr; actual={self:#?}"))
+    pub fn as_project_unwrap(&self) -> &Expr {
+        self.as_project()
+            .unwrap_or_else(|| panic!("expected stmt::Returning::Project; actual={self:#?}"))
     }
 
     /// Returns a mutable reference to the inner expression if this is the
-    /// `Expr` variant.
-    pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
+    /// `Project` variant.
+    pub fn as_project_mut(&mut self) -> Option<&mut Expr> {
         match self {
-            Self::Expr(expr) => Some(expr),
+            Self::Project(expr) => Some(expr),
             _ => None,
         }
     }
@@ -112,30 +112,30 @@ impl Returning {
     ///
     /// # Panics
     ///
-    /// Panics if this is not the `Expr` variant.
+    /// Panics if this is not the `Project` variant.
     #[track_caller]
-    pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
+    pub fn as_project_mut_unwrap(&mut self) -> &mut Expr {
         match self {
-            Self::Expr(expr) => expr,
-            _ => panic!("expected stmt::Returning::Expr; actual={self:#?}"),
+            Self::Project(expr) => expr,
+            _ => panic!("expected stmt::Returning::Project; actual={self:#?}"),
         }
     }
 
-    /// Replaces this returning clause with `Returning::Expr` containing the
+    /// Replaces this returning clause with `Returning::Project` containing the
     /// given expression.
-    pub fn set_expr(&mut self, expr: impl Into<Expr>) {
-        *self = Returning::Expr(expr.into());
+    pub fn set_project(&mut self, expr: impl Into<Expr>) {
+        *self = Returning::Project(expr.into());
     }
 
-    /// Returns `true` if this is the `Value` variant.
-    pub fn is_value(&self) -> bool {
-        matches!(self, Self::Value(..))
+    /// Returns `true` if this is the `Expr` variant.
+    pub fn is_expr(&self) -> bool {
+        matches!(self, Self::Expr(..))
     }
 
-    /// Takes this returning clause, replacing it with `Returning::Expr(null)`,
+    /// Takes this returning clause, replacing it with `Returning::Project(null)`,
     /// and returns the original value.
     pub fn take(&mut self) -> Returning {
-        std::mem::replace(self, Returning::Expr(stmt::Expr::null()))
+        std::mem::replace(self, Returning::Project(stmt::Expr::null()))
     }
 }
 
@@ -175,6 +175,18 @@ impl Statement {
             Statement::Query(query) => *query.returning_mut_unwrap() = returning,
             Statement::Update(update) => update.returning = Some(returning),
         }
+    }
+
+    /// Set the `Returning` clause to `Returning::Project` containing the given
+    /// expression.
+    pub fn set_returning_project(&mut self, expr: impl Into<Expr>) {
+        self.set_returning(Returning::Project(expr.into()));
+    }
+
+    /// Set the `Returning` clause to `Returning::Expr` containing the given
+    /// expression.
+    pub fn set_returning_expr(&mut self, expr: impl Into<Expr>) {
+        self.set_returning(Returning::Expr(expr.into()));
     }
 
     /// Returns a reference to this statement's `RETURNING` clause.
@@ -265,27 +277,6 @@ impl Query {
             stmt::ExprSet::Select(select) => &mut select.returning,
             body => panic!("expected query to have RETURNING clause; actual={body:#?}"),
         }
-    }
-}
-
-impl<T> From<T> for Returning
-where
-    Value: From<T>,
-{
-    fn from(value: T) -> Self {
-        Returning::Expr(Value::from(value).into())
-    }
-}
-
-impl From<Expr> for Returning {
-    fn from(value: Expr) -> Self {
-        Self::Expr(value)
-    }
-}
-
-impl From<Vec<Expr>> for Returning {
-    fn from(value: Vec<Expr>) -> Self {
-        stmt::Returning::Expr(stmt::Expr::record_from_vec(value))
     }
 }
 

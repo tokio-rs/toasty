@@ -1,38 +1,20 @@
 use super::Simplify;
-use bit_set::BitSet;
 use std::mem;
 use toasty_core::stmt;
 
 impl Simplify<'_> {
+    /// Heavyweight OR rewrites. Cheap canonicalization (flatten, true
+    /// short-circuit, drop false, null propagation) runs in `fold::expr_or`
+    /// before this is reached.
     pub(super) fn simplify_expr_or(&mut self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
-        // Flatten any nested ors
-        for i in 0..expr.operands.len() {
-            if let stmt::Expr::Or(or) = &mut expr.operands[i] {
-                let mut nested = mem::take(&mut or.operands);
-                expr.operands[i] = false.into();
-                expr.operands.append(&mut nested);
-            }
-        }
-
-        // `or(..., true, ...) → true`
-        if expr.operands.iter().any(|e| e.is_true()) {
-            return Some(true.into());
-        }
-
-        // `or(..., false, ...) → or(..., ...)`
-        expr.operands.retain(|expr| !expr.is_false());
-
-        // Null propagation, `null or null` → `null`
-        // After removing false values, if all operands are null, return null.
-        if !expr.operands.is_empty() && expr.operands.iter().all(|e| e.is_value_null()) {
-            return Some(stmt::Expr::null());
-        }
-
         // Idempotent law, `a or a` → `a`
         // Note: O(n) lookups are acceptable here since operand lists are typically small.
-        let mut seen = Vec::new();
+        // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic
+        // operands like `LAST_INSERT_ID()` — two syntactically identical calls may
+        // return different values, so the second occurrence must survive.
+        let mut seen: Vec<stmt::Expr> = Vec::new();
         expr.operands.retain(|operand| {
-            if seen.contains(operand) {
+            if seen.iter().any(|e| e.is_equivalent_to(operand)) {
                 false
             } else {
                 seen.push(operand.clone());
@@ -55,7 +37,7 @@ impl Simplify<'_> {
                 !and_expr
                     .operands
                     .iter()
-                    .any(|op| non_and_operands.contains(op))
+                    .any(|op| non_and_operands.iter().any(|e| e.is_equivalent_to(op)))
             } else {
                 true
             }
@@ -72,11 +54,9 @@ impl Simplify<'_> {
             return Some(true.into());
         }
 
-        // Variant tautology: `is_variant(x, 0) or is_variant(x, 1)` covering all
-        // variants of the enum → `true`
-        if self.try_variant_tautology_or(expr) {
-            return Some(true.into());
-        }
+        // The variant-tautology rewrite (`is_variant(x, 0) or is_variant(x, 1)`
+        // covering all variants → `true`) fires in the pre-lowering
+        // `LowerStatement::visit_expr_mut` `Expr::Or` arm, not here.
 
         // OR-to-IN conversion, `a = 1 or a = 2 or a = 3` → `a in (1, 2, 3)`
         if let Some(in_list) = self.try_or_to_in_list(expr) {
@@ -122,7 +102,7 @@ impl Simplify<'_> {
             .filter(|op| {
                 expr.operands[1..].iter().all(|other| {
                     if let stmt::Expr::And(other_and) = other {
-                        other_and.operands.contains(op)
+                        other_and.operands.iter().any(|e| e.is_equivalent_to(op))
                     } else {
                         false
                     }
@@ -138,7 +118,8 @@ impl Simplify<'_> {
         // Remove all common factors from each AND
         for operand in &mut expr.operands {
             if let stmt::Expr::And(and) = operand {
-                and.operands.retain(|op| !common.contains(op));
+                and.operands
+                    .retain(|op| !common.iter().any(|c| c.is_equivalent_to(op)));
                 // If only one operand left, unwrap the AND
                 if and.operands.len() == 1 {
                     *operand = and.operands.pop().unwrap();
@@ -182,52 +163,14 @@ impl Simplify<'_> {
             }
 
             // Check if not(operand) exists and operand is non-nullable
-            if negated.contains(&operand) && operand.is_always_non_nullable() {
+            if negated.iter().any(|n| n.is_equivalent_to(operand))
+                && operand.is_always_non_nullable()
+            {
                 return true;
             }
         }
 
         false
-    }
-
-    /// Checks for variant tautology: when all variants of an enum are tested
-    /// via `IsVariant` on the same expression, the OR is always true.
-    ///
-    /// `is_variant(x, 0) or is_variant(x, 1)` over `{0, 1}` → `true`
-    fn try_variant_tautology_or(&self, expr: &stmt::ExprOr) -> bool {
-        // Find the first IsVariant to use as anchor
-        let Some(first) = expr.operands.iter().find_map(|op| match op {
-            stmt::Expr::IsVariant(iv) => Some(iv),
-            _ => None,
-        }) else {
-            return false;
-        };
-
-        let anchor_expr = &first.expr;
-        let model_id = first.variant.model;
-        let num_variants = self
-            .schema()
-            .app
-            .model(model_id)
-            .as_embedded_enum_unwrap()
-            .variants
-            .len();
-
-        let mut seen = BitSet::with_capacity(num_variants);
-
-        for operand in &expr.operands {
-            let stmt::Expr::IsVariant(iv) = operand else {
-                continue;
-            };
-
-            if iv.expr != *anchor_expr || iv.variant.model != model_id {
-                return false;
-            }
-
-            seen.insert(iv.variant.index);
-        }
-
-        seen.count() == num_variants
     }
 
     /// Converts disjunctive equality chains to IN lists.
@@ -238,7 +181,7 @@ impl Simplify<'_> {
     /// Groups equality comparisons by their LHS and converts groups with 2+
     /// values into IN lists. Non-equality operands are preserved.
     fn try_or_to_in_list(&self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
-        use std::collections::HashMap;
+        use hashbrown::HashMap;
 
         // Group equalities by their LHS expression
         // Key: index into `lhs_exprs`, Value: list of RHS constant values
@@ -254,10 +197,16 @@ impl Simplify<'_> {
                 && bin_op.op.is_eq()
                 && let stmt::Expr::Value(value) = bin_op.rhs.as_ref()
             {
-                // Find or create index for this LHS
+                // Find or create index for this LHS. `is_equivalent_to` is
+                // crucial here: if the lhs is non-deterministic (e.g. `RAND()`),
+                // it is never equivalent to another occurrence of itself, so
+                // each instance falls into its own singleton group and no IN
+                // list is produced. Rewriting `RAND() = 1 OR RAND() = 2` into
+                // `RAND() IN (1, 2)` would collapse two independent draws into
+                // one, which is unsound.
                 let lhs_idx = lhs_exprs
                     .iter()
-                    .position(|e| e == bin_op.lhs.as_ref())
+                    .position(|e| e.is_equivalent_to(bin_op.lhs.as_ref()))
                     .unwrap_or_else(|| {
                         lhs_exprs.push(bin_op.lhs.as_ref().clone());
                         lhs_exprs.len() - 1

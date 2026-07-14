@@ -38,6 +38,45 @@ let items = Item::all()
 `Item::fields().order()` returns a field path. Calling `.asc()` or `.desc()` on
 it produces an ordering expression that `.order_by()` accepts.
 
+### Sorting by multiple fields
+
+Pass a tuple of ordering expressions to sort by several fields at once. Each
+field beyond the first acts as a tie-breaker for the ones before it:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     age: i64,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// Sort by age ascending; users with the same age are ordered by name descending
+let users = User::all()
+    .order_by((
+        User::fields().age().asc(),
+        User::fields().name().desc(),
+    ))
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Chained `.order_by()` calls behave the same way — each call appends its
+expressions to the existing order rather than replacing them, so the two forms
+below are equivalent:
+
+```rust,ignore
+q.order_by((User::fields().age().asc(), User::fields().name().desc()));
+
+q.order_by(User::fields().age().asc())
+ .order_by(User::fields().name().desc());
+```
+
 Sorting works with filters too:
 
 ```rust
@@ -83,6 +122,13 @@ let items = Item::all().limit(5).exec(&mut db).await?;
 
 If the query matches fewer records than the limit, all matching records are
 returned.
+
+`.limit(n)` is an upper bound, not a guarantee. Toasty applies the limit to
+the database query, but it may filter the returned rows further before
+producing the final result set. When that happens, a query can return fewer
+than `n` records even if more than `n` rows match the filter expression. Use
+[cursor-based pagination](#cursor-based-pagination) to walk every matching
+record.
 
 Combine `.order_by()` with `.limit()` to get the top or bottom N records:
 
@@ -178,6 +224,13 @@ println!("items: {}", page.len());
 
 A `Page` dereferences to a slice, so you can index into it, iterate over it, and
 call slice methods like `.len()` and `.iter()` directly.
+
+`per_page` is an upper bound on the page size, not a guarantee. Toasty
+applies it to the database query, but it may filter the returned rows further
+before producing the page. A page can therefore contain fewer than `per_page`
+items even when more results exist. Check `.has_next()` (or follow
+`.next()` until it returns `None`) to detect the end of the result set rather
+than relying on the size of any individual page.
 
 ### Navigating pages
 
@@ -298,6 +351,7 @@ Methods available on query builders:
 |---|---|
 | `.order_by(field.asc())` | Sort ascending by field |
 | `.order_by(field.desc())` | Sort descending by field |
+| `.order_by((a.asc(), b.desc()))` | Sort by multiple fields; later fields are tie-breakers |
 | `.limit(n)` | Return at most `n` records |
 | `.offset(n)` | Skip first `n` records (requires `.limit()`) |
 | `.paginate(per_page)` | Cursor-based pagination (requires `.order_by()`) |
@@ -313,3 +367,7 @@ Methods available on `Page`:
 | `.items` | `Vec<M>` | The records in this page |
 | `.len()` | `usize` | Number of items (via `Deref` to slice) |
 | `.iter()` | iterator | Iterate items (via `Deref` to slice) |
+
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search

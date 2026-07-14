@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 use proc_macro::TokenStream;
 use quote::quote;

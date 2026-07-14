@@ -1,6 +1,7 @@
-use super::{Entry, EntryPath, Type, TypeUnion, ValueRecord, sparse_record::SparseRecord};
+use super::{
+    Entry, EntryPath, Type, TypeUnion, ValueObject, ValueRecord, sparse_record::SparseRecord,
+};
 use std::cmp::Ordering;
-use std::hash::Hash;
 
 /// A dynamically typed value used throughout Toasty's query engine.
 ///
@@ -31,7 +32,7 @@ use std::hash::Hash;
 /// let v = Value::from(true);
 /// assert_eq!(v, true);
 /// ```
-#[derive(Debug, Default, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Default, Clone, PartialEq)]
 pub enum Value {
     /// Boolean value
     Bool(bool),
@@ -60,6 +61,12 @@ pub enum Value {
     /// Unsigned 64-bit integer
     U64(u64),
 
+    /// 32-bit floating point number
+    F32(f32),
+
+    /// 64-bit floating point number
+    F64(f64),
+
     /// A typed record
     SparseRecord(SparseRecord),
 
@@ -69,6 +76,11 @@ pub enum Value {
 
     /// Record value, either borrowed or owned
     Record(ValueRecord),
+
+    /// A document value: a named, ordered set of fields. The named counterpart
+    /// to [`Value::Record`]. Produced by the engine at the driver boundary for
+    /// document-stored fields, and consumed structurally by drivers.
+    Object(ValueObject),
 
     /// A list of values of the same type
     List(Vec<Value>),
@@ -130,6 +142,45 @@ impl Value {
     /// ```
     pub const fn null() -> Self {
         Self::Null
+    }
+
+    /// Adds two numeric values of the same type, returning `None` on overflow
+    /// or for non-numeric / mismatched-type combinations. Integer arithmetic
+    /// uses checked semantics; floating-point arithmetic uses IEEE-754.
+    pub fn checked_add(&self, other: &Self) -> Option<Self> {
+        match (self, other) {
+            (Self::I8(a), Self::I8(b)) => a.checked_add(*b).map(Self::I8),
+            (Self::I16(a), Self::I16(b)) => a.checked_add(*b).map(Self::I16),
+            (Self::I32(a), Self::I32(b)) => a.checked_add(*b).map(Self::I32),
+            (Self::I64(a), Self::I64(b)) => a.checked_add(*b).map(Self::I64),
+            (Self::U8(a), Self::U8(b)) => a.checked_add(*b).map(Self::U8),
+            (Self::U16(a), Self::U16(b)) => a.checked_add(*b).map(Self::U16),
+            (Self::U32(a), Self::U32(b)) => a.checked_add(*b).map(Self::U32),
+            (Self::U64(a), Self::U64(b)) => a.checked_add(*b).map(Self::U64),
+            (Self::F32(a), Self::F32(b)) => Some(Self::F32(a + b)),
+            (Self::F64(a), Self::F64(b)) => Some(Self::F64(a + b)),
+            _ => None,
+        }
+    }
+
+    /// Subtracts two numeric values of the same type, returning `None` on
+    /// overflow or for non-numeric / mismatched-type combinations. Integer
+    /// arithmetic uses checked semantics; floating-point arithmetic uses
+    /// IEEE-754.
+    pub fn checked_sub(&self, other: &Self) -> Option<Self> {
+        match (self, other) {
+            (Self::I8(a), Self::I8(b)) => a.checked_sub(*b).map(Self::I8),
+            (Self::I16(a), Self::I16(b)) => a.checked_sub(*b).map(Self::I16),
+            (Self::I32(a), Self::I32(b)) => a.checked_sub(*b).map(Self::I32),
+            (Self::I64(a), Self::I64(b)) => a.checked_sub(*b).map(Self::I64),
+            (Self::U8(a), Self::U8(b)) => a.checked_sub(*b).map(Self::U8),
+            (Self::U16(a), Self::U16(b)) => a.checked_sub(*b).map(Self::U16),
+            (Self::U32(a), Self::U32(b)) => a.checked_sub(*b).map(Self::U32),
+            (Self::U64(a), Self::U64(b)) => a.checked_sub(*b).map(Self::U64),
+            (Self::F32(a), Self::F32(b)) => Some(Self::F32(a - b)),
+            (Self::F64(a), Self::F64(b)) => Some(Self::F64(a - b)),
+            _ => None,
+        }
     }
 
     /// Returns `true` if this value is [`Value::Null`].
@@ -249,10 +300,14 @@ impl Value {
     /// Returns `true` if this value is compatible with the given [`Type`].
     ///
     /// Null values are compatible with any type. For union types, the value
-    /// must be compatible with at least one member type.
-    pub fn is_a(&self, ty: &Type) -> bool {
+    /// must be compatible with at least one member type. A `Type::Model`
+    /// (a `#[document]` embed) is checked field-by-field against the embedded
+    /// model's layout, resolved via `resolve`. When `resolve` cannot resolve
+    /// the model (a schema-free context such as `()`), there is no layout to
+    /// check against and the document pairing is accepted without inspection.
+    pub fn is_a(&self, resolve: &impl super::Resolve, ty: &Type) -> bool {
         if let Type::Union(types) = ty {
-            return types.iter().any(|t| self.is_a(t));
+            return types.iter().any(|t| self.is_a(resolve, t));
         }
         match self {
             Self::Null => true,
@@ -265,22 +320,59 @@ impl Value {
             Self::U16(_) => ty.is_u16(),
             Self::U32(_) => ty.is_u32(),
             Self::U64(_) => ty.is_u64(),
+            Self::F32(_) => ty.is_f32(),
+            Self::F64(_) => ty.is_f64(),
             Self::List(value) => match ty {
                 Type::List(ty) => {
                     if value.is_empty() {
                         true
                     } else {
-                        value[0].is_a(ty)
+                        value[0].is_a(resolve, ty)
                     }
                 }
                 _ => false,
             },
             Self::Record(value) => match ty {
-                Type::Record(fields) if value.len() == fields.len() => value
-                    .fields
-                    .iter()
-                    .zip(fields.iter())
-                    .all(|(value, ty)| value.is_a(ty)),
+                Type::Record(field_tys) if value.len() == field_tys.len() => {
+                    Self::fields_match(resolve, &value.fields, field_tys.iter())
+                }
+                // A positional `Value::Record` is the engine's load form for a
+                // document value (an embedded model, field names dropped).
+                // Resolve the embed's field types from the schema and check each
+                // positionally.
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => {
+                        let fields = model.fields();
+                        value.len() == fields.len()
+                            && Self::fields_match(
+                                resolve,
+                                &value.fields,
+                                fields.iter().map(|field| field.expr_ty()),
+                            )
+                    }
+                    None => true,
+                },
+                _ => false,
+            },
+            // A named `Value::Object` is the driver-boundary form of a
+            // document value. Against the structural `Type::Object` (how the
+            // database schema types a `#[document]` column) any object is
+            // compatible — the type carries no field layout. Against
+            // `Type::Model` (the engine's view) check each embed field against
+            // the entry of the same name (an absent key is `None`, compatible
+            // with any field type).
+            Self::Object(object) => match ty {
+                Type::Object => true,
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => model.fields().iter().all(|field| {
+                        let name = field.name().app_unwrap();
+                        object
+                            .iter()
+                            .find(|(key, _)| key == name)
+                            .is_none_or(|(_, v)| v.is_a(resolve, field.expr_ty()))
+                    }),
+                    None => true,
+                },
                 _ => false,
             },
             Self::SparseRecord(value) => match ty {
@@ -307,6 +399,19 @@ impl Value {
         }
     }
 
+    /// Whether each value `is_a` the type at the same position. Callers guard
+    /// the lengths first — `zip` would otherwise accept a short prefix.
+    fn fields_match<'a>(
+        resolve: &impl super::Resolve,
+        values: &[Value],
+        tys: impl Iterator<Item = &'a Type>,
+    ) -> bool {
+        values
+            .iter()
+            .zip(tys)
+            .all(|(value, ty)| value.is_a(resolve, ty))
+    }
+
     /// Infers and returns the [`Type`] of this value.
     ///
     /// # Examples
@@ -327,6 +432,14 @@ impl Value {
             Value::SparseRecord(v) => Type::SparseRecord(v.fields.clone()),
             Value::Null => Type::Null,
             Value::Record(v) => Type::Record(v.fields.iter().map(Self::infer_ty).collect()),
+            // An object's inferred type, names dropped, is a positional record;
+            // the named document type is only known from the schema.
+            Value::Object(v) => Type::Record(
+                v.entries
+                    .iter()
+                    .map(|(_, value)| value.infer_ty())
+                    .collect(),
+            ),
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => {
@@ -340,6 +453,8 @@ impl Value {
             Value::U16(_) => Type::U16,
             Value::U32(_) => Type::U32,
             Value::U64(_) => Type::U64,
+            Value::F32(_) => Type::F32,
+            Value::F64(_) => Type::F64,
             Value::Bytes(_) => Type::Bytes,
             Value::Uuid(_) => Type::Uuid,
             #[cfg(feature = "rust_decimal")]
@@ -359,6 +474,101 @@ impl Value {
         }
     }
 
+    /// Infers the database storage type ([`db::Type`]) for this value.
+    ///
+    /// This maps each value variant straight to its storage type. It is a
+    /// lighter-weight alternative to going through [`infer_ty`] and
+    /// [`db::Type::from_app`], which first builds the richer [`Type`] only for
+    /// the database layer to immediately collapse it again. String, UUID,
+    /// bytes, decimal, and date/time variants resolve through the driver's
+    /// [`StorageTypes`] defaults; a list maps to the storage type of its
+    /// uniform element type.
+    ///
+    /// Returns an error for values whose storage type cannot be determined from
+    /// the value alone — `NULL`, records, and empty, all-`NULL`, or mixed-type
+    /// lists. Those binds need an explicit type.
+    ///
+    /// [`db::Type`]: crate::schema::db::Type
+    /// [`db::Type::from_app`]: crate::schema::db::Type::from_app
+    /// [`StorageTypes`]: crate::driver::StorageTypes
+    /// [`infer_ty`]: Self::infer_ty
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use toasty_core::stmt::Value;
+    /// # use toasty_core::driver::StorageTypes;
+    /// # use toasty_core::schema::db;
+    /// let storage = &StorageTypes::SQLITE;
+    /// assert_eq!(Value::from(42_i64).infer_db_ty(storage).unwrap(), db::Type::Integer(8));
+    /// assert_eq!(Value::from("hi").infer_db_ty(storage).unwrap(), db::Type::Text);
+    /// assert!(Value::Null.infer_db_ty(storage).is_err());
+    ///
+    /// // A uniform list infers its element's array type; a mixed-type list does not.
+    /// assert_eq!(
+    ///     Value::List(vec![Value::I64(1), Value::I64(2)]).infer_db_ty(storage).unwrap(),
+    ///     db::Type::List(Box::new(db::Type::Integer(8))),
+    /// );
+    /// assert!(Value::List(vec![Value::I64(1), Value::Bool(true)]).infer_db_ty(storage).is_err());
+    /// ```
+    pub fn infer_db_ty(
+        &self,
+        storage: &crate::driver::StorageTypes,
+    ) -> crate::Result<crate::schema::db::Type> {
+        use crate::schema::db::Type as DbType;
+
+        let cannot_infer = || {
+            crate::Error::unsupported_feature(format!(
+                "cannot infer a database storage type for {:?}",
+                self.infer_ty()
+            ))
+        };
+
+        Ok(match self {
+            Value::Bool(_) => DbType::Boolean,
+            Value::I8(_) => DbType::Integer(1),
+            Value::I16(_) => DbType::Integer(2),
+            Value::I32(_) => DbType::Integer(4),
+            Value::I64(_) => DbType::Integer(8),
+            Value::U8(_) => DbType::UnsignedInteger(1),
+            Value::U16(_) => DbType::UnsignedInteger(2),
+            Value::U32(_) => DbType::UnsignedInteger(4),
+            Value::U64(_) => DbType::UnsignedInteger(8),
+            Value::F32(_) => DbType::Float(4),
+            Value::F64(_) => DbType::Float(8),
+            Value::String(_) => storage.default_string_type.clone(),
+            Value::Uuid(_) => storage.default_uuid_type.clone(),
+            Value::Bytes(_) => storage.default_bytes_type.clone(),
+            #[cfg(feature = "rust_decimal")]
+            Value::Decimal(_) => storage.default_decimal_type.clone(),
+            #[cfg(feature = "bigdecimal")]
+            Value::BigDecimal(_) => storage.default_bigdecimal_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Timestamp(_) => storage.default_timestamp_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Zoned(_) => storage.default_zoned_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Date(_) => storage.default_date_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::Time(_) => storage.default_time_type.clone(),
+            #[cfg(feature = "jiff")]
+            Value::DateTime(_) => storage.default_datetime_type.clone(),
+            // A list stores as the array type of its element, but only when the
+            // elements are uniform at the *app-type* level. Reuse the full
+            // inference path to enforce that: comparing storage types alone is
+            // too permissive, because distinct value types can collapse to one
+            // backend type (e.g. `String` and `Date` both map to TEXT on
+            // SQLite) and a heterogeneous list would slip through. Inferring
+            // through the `TypeUnion` also rejects empty and all-`NULL` lists,
+            // which have no element type.
+            Value::List(_) => DbType::from_app(&self.infer_ty(), None, storage)
+                .map_err(|err| err.context(cannot_infer()))?,
+            Value::Null | Value::Record(_) | Value::Object(_) | Value::SparseRecord(_) => {
+                return Err(cannot_infer());
+            }
+        })
+    }
+
     /// Navigates into this value using the given path and returns an [`Entry`]
     /// reference to the nested value.
     ///
@@ -370,17 +580,21 @@ impl Value {
     /// Panics if the path is invalid for the value's structure.
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Entry<'_> {
-        let mut ret = Entry::Value(self);
+        let mut value = self;
 
         for step in path.step_iter() {
-            ret = match ret {
-                Entry::Value(Self::Record(record)) => Entry::Value(&record[step]),
-                Entry::Value(Self::List(items)) => Entry::Value(&items[step]),
-                _ => todo!("ret={ret:#?}; base={self:#?}; step={step:#?}"),
-            }
+            value = match value {
+                Self::Record(record) => &record[step],
+                Self::List(items) => &items[step],
+                // Projecting a field out of a `NULL` composite is `NULL` (e.g.
+                // an `Option<Embed>` whose value is `None`), and stays `NULL`
+                // for the rest of the path — return it directly.
+                Self::Null => return Entry::Value(value),
+                _ => todo!("base={self:#?}; step={step:#?}"),
+            };
         }
 
-        ret
+        Entry::Value(value)
     }
 
     /// Takes the value out, replacing it with [`Value::Null`].
@@ -432,6 +646,10 @@ impl PartialOrd for Value {
             (Value::U16(a), Value::U16(b)) => a.partial_cmp(b),
             (Value::U32(a), Value::U32(b)) => a.partial_cmp(b),
             (Value::U64(a), Value::U64(b)) => a.partial_cmp(b),
+
+            // Floating point.
+            (Value::F32(a), Value::F32(b)) => a.partial_cmp(b),
+            (Value::F64(a), Value::F64(b)) => a.partial_cmp(b),
 
             // Strings: lexicographic ordering.
             (Value::String(a), Value::String(b)) => a.partial_cmp(b),

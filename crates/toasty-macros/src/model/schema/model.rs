@@ -1,7 +1,8 @@
 use super::{
-    ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name, PrimaryKey, Variant,
-    VariantValue,
+    Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name,
+    PrimaryKey, Variant, VariantValue,
 };
+use heck::ToSnakeCase;
 
 #[derive(Debug)]
 pub(crate) enum ModelKind {
@@ -14,6 +15,13 @@ pub(crate) enum ModelKind {
 }
 
 impl ModelKind {
+    pub(crate) fn as_root(&self) -> Option<&ModelRoot> {
+        match self {
+            ModelKind::Root(root) => Some(root),
+            _ => None,
+        }
+    }
+
     pub(crate) fn as_root_unwrap(&self) -> &ModelRoot {
         match self {
             ModelKind::Root(root) => root,
@@ -43,6 +51,9 @@ impl ModelKind {
 pub(crate) struct ModelRoot {
     /// Tracks fields in the primary key
     pub(crate) primary_key: PrimaryKey,
+
+    /// Index of the versionable field, if any
+    pub(crate) version_field: Option<usize>,
 
     /// The field struct identifier (e.g., `UserFields`)
     pub(crate) field_struct_ident: syn::Ident,
@@ -76,6 +87,16 @@ pub(crate) struct ModelEmbeddedStruct {
     pub(crate) fields_named: bool,
 }
 
+/// How the enum discriminant column is stored in the database.
+#[derive(Debug)]
+pub(crate) enum EnumStorageStrategy {
+    /// Native database enum type (default for string-label enums).
+    /// The optional string is a custom PostgreSQL type name.
+    NativeEnum(Option<String>),
+    /// Plain text/varchar column, no database-level enum enforcement.
+    PlainString(ColumnType),
+}
+
 #[derive(Debug)]
 pub(crate) struct ModelEmbeddedEnum {
     /// The field struct identifier (e.g., `ContactInfoFields`)
@@ -86,6 +107,10 @@ pub(crate) struct ModelEmbeddedEnum {
 
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<Variant>,
+
+    /// Storage strategy for string-discriminant enums. `None` means integer
+    /// discriminants (no enum-level storage strategy applies).
+    pub(crate) storage_strategy: Option<EnumStorageStrategy>,
 }
 
 impl ModelEmbeddedEnum {
@@ -165,6 +190,14 @@ impl Model {
                         ));
                     }
 
+                    if let Some(shared) = &field.attrs.shared {
+                        errs.push(syn::Error::new_spanned(
+                            shared,
+                            "#[shared] is only supported on enum variant fields; \
+                             it declares a logical field shared across variants",
+                        ));
+                    }
+
                     fields.push(field);
                 }
                 Err(err) => errs.push(err),
@@ -213,9 +246,9 @@ impl Model {
         // Build ModelKind based on whether this is embedded or root
         let kind = if is_embedded {
             ModelKind::EmbeddedStruct(ModelEmbeddedStruct {
-                field_struct_ident: struct_ident("Fields", ast),
-                field_list_struct_ident: struct_list_ident("ListFields", ast),
-                update_struct_ident: struct_ident("Update", ast),
+                field_struct_ident: suffixed_ident(&ast.ident, "Fields"),
+                field_list_struct_ident: suffixed_ident(&ast.ident, "ListFields"),
+                update_struct_ident: suffixed_ident(&ast.ident, "Update"),
                 fields_named: matches!(ast.fields, syn::Fields::Named(_)),
             })
         } else {
@@ -229,17 +262,90 @@ impl Model {
                 fields: pk_index_fields,
                 unique: true,
                 primary_key: true,
+                name: model_attr.key.as_ref().and_then(|k| k.name.clone()),
             });
+
+            // Iterate all extras rather than bailing on the first so every
+            // offending site surfaces in one compile pass.
+            let mut version_iter = fields
+                .iter()
+                .enumerate()
+                .filter(|(_, f)| f.attrs.versionable);
+            let version_field = version_iter.next().map(|(i, _)| i);
+            let mut extra_err: Option<syn::Error> = None;
+            for (_, extra) in version_iter {
+                let err = syn::Error::new_spanned(
+                    &extra.name.ident,
+                    "only one field may be annotated with #[version]",
+                );
+                match &mut extra_err {
+                    Some(acc) => acc.combine(err),
+                    None => extra_err = Some(err),
+                }
+            }
+            if let Some(err) = extra_err {
+                return Err(err);
+            }
 
             ModelKind::Root(ModelRoot {
                 primary_key: PrimaryKey { fields: pk_fields },
-                field_struct_ident: struct_ident("Fields", ast),
-                field_list_struct_ident: struct_list_ident("ListFields", ast),
-                query_struct_ident: struct_ident("Query", ast),
-                create_struct_ident: struct_ident("Create", ast),
-                update_struct_ident: struct_ident("Update", ast),
+                version_field,
+                field_struct_ident: suffixed_ident(&ast.ident, "Fields"),
+                field_list_struct_ident: suffixed_ident(&ast.ident, "ListFields"),
+                query_struct_ident: suffixed_ident(&ast.ident, "Query"),
+                create_struct_ident: suffixed_ident(&ast.ident, "Create"),
+                update_struct_ident: suffixed_ident(&ast.ident, "Update"),
             })
         };
+
+        // Create indices for model-level #[index(...)] attributes
+        for index_attr in &model_attr.indices {
+            let mut index_fields = vec![];
+
+            if index_attr.local.is_empty() {
+                // Simple mode (e.g. `#[index(a, b, c)]`): all fields land in `partition`.
+                // First field is the partition (hash) key, rest are local (sort) keys.
+                let mut partition_iter = index_attr.partition.iter();
+                if let Some(first) = partition_iter.next() {
+                    let idx = names.iter().position(|n| n == first).unwrap();
+                    index_fields.push(IndexField {
+                        field: idx,
+                        scope: IndexScope::Partition,
+                    });
+                    for field in partition_iter {
+                        let idx = names.iter().position(|n| n == field).unwrap();
+                        index_fields.push(IndexField {
+                            field: idx,
+                            scope: IndexScope::Local,
+                        });
+                    }
+                }
+            } else {
+                // Named mode (e.g. `#[index(partition = a, partition = b, local = c)]`):
+                // all `partition` fields are hash keys, all `local` fields are sort keys.
+                for field in &index_attr.partition {
+                    let idx = names.iter().position(|n| n == field).unwrap();
+                    index_fields.push(IndexField {
+                        field: idx,
+                        scope: IndexScope::Partition,
+                    });
+                }
+                for field in &index_attr.local {
+                    let idx = names.iter().position(|n| n == field).unwrap();
+                    index_fields.push(IndexField {
+                        field: idx,
+                        scope: IndexScope::Local,
+                    });
+                }
+            }
+
+            indices.push(Index {
+                fields: index_fields,
+                unique: index_attr.unique,
+                primary_key: false,
+                name: index_attr.name.clone(),
+            });
+        }
 
         // Create indices for all fields annotated with unique or index
         collect_field_indices(&fields, &mut indices);
@@ -267,10 +373,6 @@ impl Model {
         }
     }
 
-    pub(crate) fn has_associations(&self) -> bool {
-        self.fields.iter().any(|f| f.ty.is_relation())
-    }
-
     pub(crate) fn from_enum_ast(ast: &syn::ItemEnum) -> syn::Result<Self> {
         use super::variant::VariantAttr;
 
@@ -281,6 +383,34 @@ impl Model {
             ));
         }
 
+        // Parse enum-level #[column(type = ...)] attribute to determine storage
+        // strategy, and #[column(rename_all = ...)] to derive default labels.
+        let mut enum_column_type: Option<ColumnType> = None;
+        let mut rename_all: Option<super::column::RenameRule> = None;
+        for attr in &ast.attrs {
+            if attr.path().is_ident("column") {
+                let col = Column::from_ast(attr)?;
+                if let Some(ty) = col.ty {
+                    if enum_column_type.is_some() {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "duplicate #[column(type = ...)] attribute on enum",
+                        ));
+                    }
+                    enum_column_type = Some(ty);
+                }
+                if let Some(rule) = col.rename_all {
+                    if rename_all.is_some() {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "duplicate #[column(rename_all = ...)] attribute on enum",
+                        ));
+                    }
+                    rename_all = Some(rule);
+                }
+            }
+        }
+
         let mut variants = vec![];
         let mut all_fields: Vec<Field> = vec![];
         let mut errs = ErrorSet::new();
@@ -288,7 +418,7 @@ impl Model {
         let model_ident = ast.ident.clone();
 
         // Parse all variants in a single pass, defaulting omitted discriminants
-        // to string labels using the variant identifier.
+        // to string labels using the variant identifier converted to snake_case.
         for (variant_index, variant) in ast.variants.iter().enumerate() {
             let has_fields = !variant.fields.is_empty();
 
@@ -301,12 +431,21 @@ impl Model {
                 }
             };
 
-            // Resolve discriminant: explicit value or default to variant name as string
+            // Resolve discriminant: explicit value, or default to the variant
+            // name converted by the enum-level rename_all rule (snake_case if
+            // no rule was given).
             let attr = match explicit_attr {
                 Some(a) => a,
-                None => VariantAttr {
-                    discriminant: VariantValue::String(variant.ident.to_string()),
-                },
+                None => {
+                    let ident = variant.ident.to_string();
+                    let label = match rename_all {
+                        Some(rule) => rule.apply(&ident),
+                        None => ident.to_snake_case(),
+                    };
+                    VariantAttr {
+                        discriminant: VariantValue::String(label),
+                    }
+                }
             };
 
             let ast_fields = collect_ast_fields(&variant.fields)?;
@@ -356,11 +495,114 @@ impl Model {
             }
         }
 
+        // Validate string label lengths (max 63 bytes).
+        for v in &variants {
+            if let VariantValue::String(s) = &v.attrs.discriminant
+                && s.len() > 63
+            {
+                errs.push(syn::Error::new_spanned(
+                    &v.ident,
+                    format!(
+                        "variant label \"{}\" is {} bytes; maximum is 63",
+                        s,
+                        s.len()
+                    ),
+                ));
+            }
+        }
+
+        // Reject field-level #[index] / #[unique] on shared fields. The
+        // attribute on one variant would constrain the shared column — and
+        // therefore rows of every sharing variant — while reading as
+        // variant-scoped. The enum-level form is the explicit equivalent.
+        for field in &all_fields {
+            if let Some(shared) = &field.attrs.shared
+                && field.attrs.is_indexed()
+            {
+                let attr_name = if field.attrs.unique {
+                    "unique"
+                } else {
+                    "index"
+                };
+                errs.push(syn::Error::new_spanned(
+                    &field.name.ident,
+                    format!(
+                        "#[{attr_name}] on a field declaring #[shared({shared})] would \
+                         constrain rows of every variant sharing the column; declare \
+                         the index on the enum instead: #[{attr_name}({shared})]"
+                    ),
+                ));
+            }
+        }
+
+        // Parse enum-level #[index(...)] / #[unique(...)] attributes. Each
+        // reference is a shared logical-field identifier or a `variant::field`
+        // path.
+        let mut indices = vec![];
+        for attr in &ast.attrs {
+            let unique = if attr.path().is_ident("index") {
+                false
+            } else if attr.path().is_ident("unique") {
+                true
+            } else {
+                continue;
+            };
+
+            match parse_enum_index_attr(attr, unique, &all_fields, &variants) {
+                Ok(index) => indices.push(index),
+                Err(e) => errs.push(e),
+            }
+        }
+
         if let Some(err) = errs.collect() {
             return Err(err);
         }
 
-        let mut indices = vec![];
+        // Determine storage strategy for string-discriminant enums.
+        let uses_strings = variants
+            .first()
+            .map(|v| v.attrs.discriminant.is_string())
+            .unwrap_or(false);
+
+        let storage_strategy = if uses_strings {
+            match enum_column_type {
+                // Explicit `#[column(type = text)]` or `#[column(type = varchar(N))]`
+                // opts out of native enum storage.
+                Some(ty) if ty.is_string_like() => Some(EnumStorageStrategy::PlainString(ty)),
+                // Explicit `#[column(type = enum)]` or `#[column(type = enum("name"))]`
+                Some(ColumnType::Enum(custom_name)) => {
+                    Some(EnumStorageStrategy::NativeEnum(custom_name))
+                }
+                // No explicit type attribute: default to native enum.
+                None => Some(EnumStorageStrategy::NativeEnum(None)),
+                // Any other type override on an enum is an error.
+                Some(_) => {
+                    return Err(syn::Error::new_spanned(
+                        ast,
+                        "unsupported #[column(type = ...)] for enum; \
+                         use `text`, `varchar(N)`, or `enum` / `enum(\"name\")`",
+                    ));
+                }
+            }
+        } else {
+            // Integer discriminants: enum-level type override is not applicable.
+            if enum_column_type.is_some() {
+                return Err(syn::Error::new_spanned(
+                    ast,
+                    "#[column(type = ...)] is not supported for integer-discriminant enums",
+                ));
+            }
+            // `rename_all` derives string labels, so it is meaningless when the
+            // enum stores integer discriminants.
+            if rename_all.is_some() {
+                return Err(syn::Error::new_spanned(
+                    ast,
+                    "#[column(rename_all = ...)] is not supported for integer-discriminant enums",
+                ));
+            }
+            None
+        };
+
         collect_field_indices(&all_fields, &mut indices);
 
         Ok(Self {
@@ -369,9 +611,10 @@ impl Model {
             ident: model_ident,
             fields: all_fields,
             kind: ModelKind::EmbeddedEnum(ModelEmbeddedEnum {
-                field_struct_ident: enum_ident("Fields", ast),
-                field_list_struct_ident: enum_list_ident("ListFields", ast),
+                field_struct_ident: suffixed_ident(&ast.ident, "Fields"),
+                field_list_struct_ident: suffixed_ident(&ast.ident, "ListFields"),
                 variants,
+                storage_strategy,
             }),
             indices,
             table: None,
@@ -396,6 +639,160 @@ fn collect_ast_fields(ast: &syn::Fields) -> syn::Result<Vec<&syn::Field>> {
     })
 }
 
+/// Parses an enum-level `#[index(...)]` / `#[unique(...)]` attribute on a
+/// `#[derive(Embed)]` enum.
+///
+/// Each reference is either a shared logical-field identifier (declared by
+/// `#[shared(<ident>)]` on variant fields) or a `variant::field` path naming a
+/// variant field that owns its column. As with model-level `#[index(a, b)]`,
+/// the first reference is the partition (hash) key and the rest are local
+/// (sort) keys, and `name = "..."` overrides the generated index name.
+fn parse_enum_index_attr(
+    attr: &syn::Attribute,
+    unique: bool,
+    fields: &[Field],
+    variants: &[Variant],
+) -> syn::Result<Index> {
+    let mut index_fields = vec![];
+    let mut name: Option<String> = None;
+
+    attr.parse_nested_meta(|meta| {
+        // `name = "..."` — explicit override for the generated index name.
+        // Disambiguates from a shared field literally called `name` by
+        // requiring the `=` token; bare `name` still parses as a field ref.
+        if meta.path.is_ident("name") && meta.input.peek(syn::Token![=]) {
+            if name.is_some() {
+                return Err(syn::Error::new_spanned(
+                    &meta.path,
+                    "`name` specified more than once",
+                ));
+            }
+
+            let value: syn::LitStr = meta.value()?.parse()?;
+            let value_str = value.value();
+
+            if value_str.is_empty() {
+                return Err(syn::Error::new_spanned(
+                    &value,
+                    "`name` must be a non-empty string",
+                ));
+            }
+
+            name = Some(value_str);
+            return Ok(());
+        }
+
+        let field = resolve_enum_index_field(&meta.path, fields, variants)?;
+
+        let scope = if index_fields.is_empty() {
+            IndexScope::Partition
+        } else {
+            IndexScope::Local
+        };
+        index_fields.push(IndexField { field, scope });
+
+        Ok(())
+    })?;
+
+    if index_fields.is_empty() {
+        return Err(syn::Error::new_spanned(
+            attr,
+            "expected at least one field reference",
+        ));
+    }
+
+    Ok(Index {
+        fields: index_fields,
+        unique,
+        primary_key: false,
+        name,
+    })
+}
+
+/// Resolves one reference inside an enum-level `#[index(...)]` / `#[unique(...)]`
+/// to a global field offset.
+///
+/// A single identifier names a shared logical field and resolves to the first
+/// variant field declaring it (every member of the group maps to the same
+/// column, so any representative works). A two-segment `variant::field` path
+/// names a variant field that owns its column.
+fn resolve_enum_index_field(
+    path: &syn::Path,
+    fields: &[Field],
+    variants: &[Variant],
+) -> syn::Result<usize> {
+    match path.segments.len() {
+        1 => {
+            let ident = &path.segments[0].ident;
+
+            if let Some(offset) = fields
+                .iter()
+                .position(|f| f.attrs.shared.as_ref() == Some(ident))
+            {
+                return Ok(offset);
+            }
+
+            // Point a reference to a non-shared variant field at the qualified
+            // form rather than a bare "unknown field".
+            if let Some(field) = fields.iter().find(|f| f.name.ident == *ident) {
+                let variant = &variants[field.variant.expect("enum field must have variant")];
+                let variant_name = variant.name.as_str();
+                return Err(syn::Error::new_spanned(
+                    path,
+                    format!(
+                        "`{ident}` is not a shared field; reference the variant field \
+                         as `{variant_name}::{ident}`"
+                    ),
+                ));
+            }
+
+            Err(syn::Error::new_spanned(
+                path,
+                format!("unknown shared field `{ident}`"),
+            ))
+        }
+        2 => {
+            let variant_ident = &path.segments[0].ident;
+            let field_ident = &path.segments[1].ident;
+
+            let Some(variant_index) = variants.iter().position(|v| v.name.ident == *variant_ident)
+            else {
+                return Err(syn::Error::new_spanned(
+                    variant_ident,
+                    format!("unknown variant `{variant_ident}`"),
+                ));
+            };
+
+            let Some((offset, field)) = fields
+                .iter()
+                .enumerate()
+                .find(|(_, f)| f.variant == Some(variant_index) && f.name.ident == *field_ident)
+            else {
+                return Err(syn::Error::new_spanned(
+                    field_ident,
+                    format!("variant `{variant_ident}` has no field `{field_ident}`"),
+                ));
+            };
+
+            if let Some(shared) = &field.attrs.shared {
+                return Err(syn::Error::new_spanned(
+                    path,
+                    format!(
+                        "`{variant_ident}::{field_ident}` declares #[shared({shared})]; \
+                         reference the shared field instead: `{shared}`"
+                    ),
+                ));
+            }
+
+            Ok(offset)
+        }
+        _ => Err(syn::Error::new_spanned(
+            path,
+            "expected a shared field identifier or a `variant::field` path",
+        )),
+    }
+}
+
 fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
     for (index, field) in fields.iter().enumerate() {
         if field.attrs.is_indexed() {
@@ -406,24 +803,15 @@ fn collect_field_indices(fields: &[Field], indices: &mut Vec<Index>) {
                 }],
                 unique: field.attrs.unique,
                 primary_key: false,
+                name: None,
             });
         }
     }
 }
 
-fn struct_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
-}
-
-/// Generates an ident like `UserListFields` — injects the suffix after the model name.
-fn struct_list_ident(suffix: &str, model: &syn::ItemStruct) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
-}
-
-fn enum_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
-}
-
-fn enum_list_ident(suffix: &str, model: &syn::ItemEnum) -> syn::Ident {
-    syn::Ident::new(&format!("{}{}", model.ident, suffix), model.ident.span())
+/// Append `suffix` to a model name to derive a builder ident — e.g.
+/// `(User, "ListFields") -> UserListFields` — carrying the base ident's span so
+/// diagnostics point back at the model declaration.
+fn suffixed_ident(base: &syn::Ident, suffix: &str) -> syn::Ident {
+    syn::Ident::new(&format!("{base}{suffix}"), base.span())
 }

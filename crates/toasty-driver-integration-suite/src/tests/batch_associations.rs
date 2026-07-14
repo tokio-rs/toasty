@@ -4,7 +4,11 @@
 use crate::prelude::*;
 
 /// Batch two association-scoped creates on the same relation.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn batch_two_scoped_creates_same_relation(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
@@ -28,7 +32,11 @@ pub async fn batch_two_scoped_creates_same_relation(t: &mut Test) -> Result<()> 
 }
 
 /// Batch two association-scoped queries on the same relation.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -48,7 +56,11 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
 }
 
 /// Batch association-scoped update and delete on the same relation.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
@@ -73,7 +85,11 @@ pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Resul
 }
 
 /// Batch all four CRUD operations through association scope.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
@@ -113,7 +129,11 @@ pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
 }
 
 /// Batch association-scoped statements mixed with root-level statements.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
@@ -136,119 +156,54 @@ pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
 }
 
 /// Batch association statements across different relations of the same parent.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_two_children))]
 pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-        #[has_many]
-        posts: toasty::HasMany<Post>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        body: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo, Post)).await;
-    let user = User::create().exec(&mut db).await?;
+    let mut db = setup(t).await;
+    let user = User::create().name("Alice").exec(&mut db).await?;
 
     // Create across two different relations in one batch
-    let (todo, post): (Todo, Post) = toasty::batch((
-        user.todos().create().title("my todo"),
-        user.posts().create().body("my post"),
+    let (post, comment): (Post, Comment) = toasty::batch((
+        user.posts().create().title("my post"),
+        user.comments().create().text("my comment"),
     ))
     .exec(&mut db)
     .await?;
 
-    assert_eq!(todo.title, "my todo");
-    assert_eq!(todo.user_id, user.id);
-    assert_eq!(post.body, "my post");
+    assert_eq!(post.title, "my post");
     assert_eq!(post.user_id, user.id);
+    assert_eq!(comment.text, "my comment");
+    assert_eq!(comment.user_id, user.id);
 
     Ok(())
 }
 
 /// Batch queries across different relations of the same parent.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_two_children))]
 pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-        #[has_many]
-        posts: toasty::HasMany<Post>,
-    }
+    let mut db = setup(t).await;
+    let user = User::create().name("Alice").exec(&mut db).await?;
+    user.posts().create().title("t1").exec(&mut db).await?;
+    user.posts().create().title("t2").exec(&mut db).await?;
+    user.comments().create().text("p1").exec(&mut db).await?;
 
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        title: String,
-    }
+    let (posts, comments): (Vec<Post>, Vec<Comment>) =
+        toasty::batch((user.posts(), user.comments()))
+            .exec(&mut db)
+            .await?;
 
-    #[derive(Debug, toasty::Model)]
-    struct Post {
-        #[key]
-        #[auto]
-        id: ID,
-        #[index]
-        user_id: ID,
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-        body: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Todo, Post)).await;
-    let user = User::create().exec(&mut db).await?;
-    user.todos().create().title("t1").exec(&mut db).await?;
-    user.todos().create().title("t2").exec(&mut db).await?;
-    user.posts().create().body("p1").exec(&mut db).await?;
-
-    let (todos, posts): (Vec<Todo>, Vec<Post>) = toasty::batch((user.todos(), user.posts()))
-        .exec(&mut db)
-        .await?;
-
-    assert_eq!(todos.len(), 2);
-    assert_eq!(posts.len(), 1);
-    assert_eq!(posts[0].body, "p1");
+    assert_eq!(posts.len(), 2);
+    assert_eq!(comments.len(), 1);
+    assert_eq!(comments[0].text, "p1");
 
     Ok(())
 }
 
 /// Batch scoped operations from different parents.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let alice = User::create().name("Alice").exec(&mut db).await?;
@@ -278,7 +233,11 @@ pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
 }
 
 /// Batch a scoped delete together with a root-level update.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn batch_scoped_delete_with_root_update(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;

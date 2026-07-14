@@ -10,7 +10,10 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
             let span = path.span();
             let fields_path = quote_spanned! { span=> #path::fields() };
             let field_calls = expand_field_set(fields, &fields_path);
-            quote_spanned! { span=> #path::create() #(#field_calls)* }
+
+            quote_spanned! { span=>
+                #path::create() #(#field_calls)*
+            }
         }
         CreateItem::Scoped { expr, fields } => expand_scoped(expr, fields),
         CreateItem::TypedBatch { path, items } => {
@@ -25,19 +28,14 @@ pub(crate) fn expand(item: &CreateItem) -> TokenStream {
 }
 
 /// Expand a scoped creation (`in expr { fields }`).
-///
-/// Uses `toasty::codegen_support::scope_fields` to infer the scope type and
-/// obtain its field struct for nested builders.
 fn expand_scoped(expr: &syn::Expr, fields: &FieldSet) -> TokenStream {
     let span = expr.span();
     let fields_path = quote! { __scope_fields };
     let field_calls = expand_field_set(fields, &fields_path);
 
-    // The `scope_fields` call is spanned to the user's expression so that
-    // a missing `Scope` impl produces an error pointing at that expression.
     let scope_fields_call =
         quote_spanned! { span=> toasty::codegen_support::scope_fields(&__scope) };
-    let create_call = quote_spanned! { span=> __scope.create() };
+    let create_call = quote_spanned! { span=> toasty::codegen_support::create_in_scope(__scope) };
 
     quote! {
         {
@@ -65,11 +63,15 @@ fn expand_as_element(item: &CreateItem) -> TokenStream {
 fn expand_typed_batch(path: &syn::Path, items: &[FieldSet]) -> TokenStream {
     let span = path.span();
     let fields_path = quote_spanned! { span=> #path::fields() };
+
     let builders: Vec<_> = items
         .iter()
         .map(|fields| {
             let field_calls = expand_field_set(fields, &fields_path);
-            quote_spanned! { span=> #path::create() #(#field_calls)* }
+
+            quote_spanned! { span=>
+                #path::create() #(#field_calls)*
+            }
         })
         .collect();
     quote! { [ #( #builders, )* ] }

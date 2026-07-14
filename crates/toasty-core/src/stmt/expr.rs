@@ -1,10 +1,11 @@
 use crate::stmt::{ExprExists, Input};
 
 use super::{
-    Entry, EntryMut, EntryPath, ExprAnd, ExprAny, ExprArg, ExprBinaryOp, ExprCast, ExprError,
-    ExprFunc, ExprInList, ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStmt, Node, Projection, Substitute,
-    Value, Visit, VisitMut, expr_reference::ExprReference,
+    Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBetween,
+    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects,
+    ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap,
+    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node,
+    Projection, Resolve, Substitute, Type, Value, Visit, VisitMut, expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -34,11 +35,20 @@ use std::fmt;
 /// ```
 #[derive(Clone, PartialEq)]
 pub enum Expr {
+    /// `lhs <op> ALL(rhs)` predicate against an array-valued operand. See [`ExprAllOp`].
+    AllOp(ExprAllOp),
+
     /// Logical AND of multiple expressions. See [`ExprAnd`].
     And(ExprAnd),
 
     /// Returns `true` if any item in a collection is truthy. See [`ExprAny`].
     Any(ExprAny),
+
+    /// `lhs <op> ANY(rhs)` predicate against an array-valued operand. See [`ExprAnyOp`].
+    AnyOp(ExprAnyOp),
+
+    /// `expr BETWEEN low AND high` inclusive range test. See [`ExprBetween`].
+    Between(ExprBetween),
 
     /// Positional argument placeholder. See [`ExprArg`].
     Arg(ExprArg),
@@ -62,22 +72,46 @@ pub enum Expr {
     /// Aggregate or scalar function call. See [`ExprFunc`].
     Func(ExprFunc),
 
+    /// An **unresolved** reference to a name (e.g. a column name in a DDL
+    /// context).
+    ///
+    /// Unlike [`Expr::Reference`] / [`ExprReference`], which hold **resolved**
+    /// index-based references into the schema, `Ident` carries only the raw
+    /// name string. It is used in contexts where schema resolution is not
+    /// applicable, such as CHECK constraints in CREATE TABLE statements.
+    Ident(String),
+
     /// `expr IN (list)` membership test. See [`ExprInList`].
     InList(ExprInList),
 
     /// `expr IN (SELECT ...)` membership test. See [`ExprInSubquery`].
     InSubquery(ExprInSubquery),
 
+    /// Boolean: two array operands share at least one element
+    /// (PostgreSQL `&&`). See [`ExprIntersects`].
+    Intersects(ExprIntersects),
+
     /// `IS [NOT] NULL` check. Separate from binary operators because of
     /// three-valued logic semantics in SQL. See [`ExprIsNull`].
     IsNull(ExprIsNull),
 
+    /// Boolean: an array operand contains every element of another
+    /// (PostgreSQL `@>`). See [`ExprIsSuperset`].
+    IsSuperset(ExprIsSuperset),
+
     /// Tests whether a value is a specific enum variant. See [`ExprIsVariant`].
     IsVariant(ExprIsVariant),
+
+    /// Integer: the cardinality of an array (PostgreSQL `cardinality(expr)`).
+    /// See [`ExprLength`].
+    Length(ExprLength),
 
     /// Scoped binding expression (transient -- inlined before planning).
     /// See [`ExprLet`].
     Let(ExprLet),
+
+    /// SQL `LIKE` pattern match: `expr LIKE pattern`. See [`ExprLike`].
+    Like(ExprLike),
 
     /// Applies a transformation to each item in a collection. See [`ExprMap`].
     Map(ExprMap),
@@ -104,6 +138,9 @@ pub enum Expr {
 
     /// Ordered, homogeneous collection of expressions. See [`ExprList`].
     List(ExprList),
+
+    /// String prefix match: `starts_with(expr, prefix)`. See [`ExprStartsWith`].
+    StartsWith(ExprStartsWith),
 
     /// Embedded sub-statement (e.g., a subquery). See [`ExprStmt`].
     Stmt(ExprStmt),
@@ -165,6 +202,88 @@ impl Expr {
         matches!(self, Self::Stmt(..))
     }
 
+    /// Returns `true` if this expression can evaluate to a value compatible
+    /// with `ty`.
+    ///
+    /// Mirrors [`Value::is_a`]: a value expression is checked directly, record
+    /// and list expressions are checked structurally, and expressions with a
+    /// statically known result type (boolean predicates, `COUNT`, ...) check
+    /// that result type against `ty`.
+    ///
+    /// # Panics
+    ///
+    /// Panics with `todo!` on expression variants whose result type cannot be
+    /// determined without evaluation context (arguments, references, casts,
+    /// ...). Support is added as callers need it.
+    pub fn is_a(&self, resolve: &impl Resolve, ty: &Type) -> bool {
+        if let Type::Union(types) = ty {
+            return types.iter().any(|t| self.is_a(resolve, t));
+        }
+        match self {
+            Self::Value(value) => value.is_a(resolve, ty),
+            Self::Record(expr_record) => match ty {
+                Type::Record(field_tys) if expr_record.fields.len() == field_tys.len() => {
+                    expr_record
+                        .fields
+                        .iter()
+                        .zip(field_tys)
+                        .all(|(expr, ty)| expr.is_a(resolve, ty))
+                }
+                // A record expression can evaluate to a document value (a
+                // `#[document]` embed): check each field against the embedded
+                // model's layout, as `Value::is_a` does. Unresolvable in a
+                // schema-free context, in which case there is no layout to
+                // check against.
+                Type::Model(id) => match resolve.model(*id) {
+                    Some(model) => {
+                        let fields = model.fields();
+                        expr_record.fields.len() == fields.len()
+                            && expr_record
+                                .fields
+                                .iter()
+                                .zip(fields)
+                                .all(|(expr, field)| expr.is_a(resolve, field.expr_ty()))
+                    }
+                    None => true,
+                },
+                _ => false,
+            },
+            Self::List(expr_list) => match ty {
+                Type::List(item_ty) => expr_list
+                    .items
+                    .iter()
+                    .all(|item| item.is_a(resolve, item_ty)),
+                _ => false,
+            },
+            // Expressions that always evaluate to a boolean.
+            Self::And(_)
+            | Self::Or(_)
+            | Self::Not(_)
+            | Self::Any(_)
+            | Self::AnyOp(_)
+            | Self::AllOp(_)
+            | Self::Between(_)
+            | Self::Exists(_)
+            | Self::InList(_)
+            | Self::InSubquery(_)
+            | Self::Intersects(_)
+            | Self::IsNull(_)
+            | Self::IsSuperset(_)
+            | Self::IsVariant(_)
+            | Self::Like(_)
+            | Self::StartsWith(_) => ty.is_bool(),
+            Self::BinaryOp(e) if !e.op.is_arithmetic() => ty.is_bool(),
+            Self::Func(ExprFunc::Count(_)) => ty.is_u64(),
+            Self::Func(ExprFunc::LastInsertId(_)) => ty.is_i64(),
+            // A match can produce the value of any of its arms.
+            Self::Match(expr_match) => {
+                expr_match.arms.iter().any(|arm| arm.expr.is_a(resolve, ty))
+                    || expr_match.else_expr.is_a(resolve, ty)
+            }
+            _ => todo!("Expr::is_a: expr={self:#?}; ty={ty:#?}"),
+        }
+    }
+
     /// Returns true if the expression is a binary operation
     pub fn is_binary_op(&self) -> bool {
         matches!(self, Self::BinaryOp(..))
@@ -187,6 +306,10 @@ impl Expr {
             Self::And(_) | Self::Or(_) | Self::Not(_) => true,
             // ANY returns true if any item matches, always boolean.
             Self::Any(_) => true,
+            // ANY/ALL array predicates always evaluate to true or false.
+            Self::AnyOp(_) | Self::AllOp(_) => true,
+            // BETWEEN always evaluates to true or false.
+            Self::Between(_) => true,
             // Comparisons always evaluate to true or false.
             Self::BinaryOp(_) => true,
             // IS NULL checks always evaluate to true or false.
@@ -197,6 +320,10 @@ impl Expr {
             Self::Exists(_) => true,
             // IN expressions always evaluate to true or false.
             Self::InList(_) | Self::InSubquery(_) => true,
+            // Array predicates always evaluate to true or false.
+            Self::IsSuperset(_) | Self::Intersects(_) => true,
+            // Array length is an integer — non-null when the array is non-null.
+            Self::Length(_) => true,
             // For other expressions, we cannot prove non-nullability.
             _ => false,
         }
@@ -234,6 +361,9 @@ impl Expr {
             // Always stable - constant values
             Self::Value(_) => true,
 
+            // Unresolved identifiers refer to external state (e.g. a column)
+            Self::Ident(_) => false,
+
             // Never stable - generates new values each evaluation
             Self::Default => false,
 
@@ -244,11 +374,20 @@ impl Expr {
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_stable()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_stable()),
             Self::Cast(expr_cast) => expr_cast.expr.is_stable(),
+            Self::StartsWith(e) => e.expr.is_stable() && e.prefix.is_stable(),
+            Self::Like(e) => e.expr.is_stable() && e.pattern.is_stable(),
+            Self::Between(expr_between) => {
+                expr_between.expr.is_stable()
+                    && expr_between.low.is_stable()
+                    && expr_between.high.is_stable()
+            }
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_stable() && expr_binary.rhs.is_stable()
             }
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_stable()),
             Self::Any(expr_any) => expr_any.expr.is_stable(),
+            Self::AnyOp(e) => e.lhs.is_stable() && e.rhs.is_stable(),
+            Self::AllOp(e) => e.lhs.is_stable() && e.rhs.is_stable(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_stable(),
@@ -269,10 +408,32 @@ impl Expr {
             // References and statements - stable (they reference existing data)
             Self::Reference(_) | Self::Arg(_) => true,
 
+            // Array predicates and length — stable if all operands are stable.
+            Self::IsSuperset(e) => e.lhs.is_stable() && e.rhs.is_stable(),
+            Self::Intersects(e) => e.lhs.is_stable() && e.rhs.is_stable(),
+            Self::Length(e) => e.expr.is_stable(),
+
             // Subqueries and functions - could be unstable
             // For now, conservatively mark as unstable
             Self::Stmt(_) | Self::Func(_) | Self::InSubquery(_) | Self::Exists(_) => false,
         }
+    }
+
+    /// Returns `true` if `self` and `other` are syntactically identical **and**
+    /// both sides are stable.
+    ///
+    /// This is the soundness-preserving comparison used by simplification
+    /// rules that rewrite on the assumption that two equal sub-expressions
+    /// produce the same value (idempotent, absorption, complement,
+    /// range-to-equality, OR-to-IN, factoring, variant tautology).
+    ///
+    /// Syntactic identity alone is not enough: `LAST_INSERT_ID() =
+    /// LAST_INSERT_ID()` is two independent evaluations and may yield
+    /// different values, so rewriting `a AND a` to `a` would be unsound when
+    /// `a` is non-deterministic. Gating on [`Self::is_stable`] excludes any
+    /// sub-expression whose value may change across evaluations.
+    pub fn is_equivalent_to(&self, other: &Self) -> bool {
+        self == other && self.is_stable()
     }
 
     /// Returns `true` if the expression is a constant expression.
@@ -295,6 +456,9 @@ impl Expr {
         match self {
             // Always constant
             Self::Value(_) => true,
+
+            // Unresolved identifiers reference external data
+            Self::Ident(_) => false,
 
             // Arg: local if nesting is within map_depth, otherwise external
             Self::Arg(arg) => arg.nesting < map_depth,
@@ -319,6 +483,17 @@ impl Expr {
                 .iter()
                 .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Cast(expr_cast) => expr_cast.expr.is_const_at_depth(map_depth),
+            Self::StartsWith(e) => {
+                e.expr.is_const_at_depth(map_depth) && e.prefix.is_const_at_depth(map_depth)
+            }
+            Self::Like(e) => {
+                e.expr.is_const_at_depth(map_depth) && e.pattern.is_const_at_depth(map_depth)
+            }
+            Self::Between(expr_between) => {
+                expr_between.expr.is_const_at_depth(map_depth)
+                    && expr_between.low.is_const_at_depth(map_depth)
+                    && expr_between.high.is_const_at_depth(map_depth)
+            }
             Self::BinaryOp(expr_binary) => {
                 expr_binary.lhs.is_const_at_depth(map_depth)
                     && expr_binary.rhs.is_const_at_depth(map_depth)
@@ -327,6 +502,12 @@ impl Expr {
                 .iter()
                 .all(|expr| expr.is_const_at_depth(map_depth)),
             Self::Any(expr_any) => expr_any.expr.is_const_at_depth(map_depth),
+            Self::AnyOp(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
+            Self::AllOp(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
             Self::Not(expr_not) => expr_not.expr.is_const_at_depth(map_depth),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
@@ -359,6 +540,15 @@ impl Expr {
                         .iter()
                         .all(|arm| arm.expr.is_const_at_depth(map_depth))
             }
+
+            // Array predicates and length: const iff all operands are const.
+            Self::IsSuperset(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
+            Self::Intersects(e) => {
+                e.lhs.is_const_at_depth(map_depth) && e.rhs.is_const_at_depth(map_depth)
+            }
+            Self::Length(e) => e.expr.is_const_at_depth(map_depth),
         }
     }
 
@@ -372,26 +562,38 @@ impl Expr {
             // Always evaluable
             Self::Value(_) => true,
 
+            // Unresolved identifiers cannot be evaluated
+            Self::Ident(_) => false,
+
             // Args are OK for evaluation
             Self::Arg(_) => true,
 
             // Error expressions are evaluable (they produce an error)
             Self::Error(_) => true,
 
-            // Never evaluable - references external data
+            // Never evaluable - references external data or requires a database driver
             Self::Default
             | Self::Reference(_)
             | Self::Stmt(_)
             | Self::InSubquery(_)
-            | Self::Exists(_) => false,
+            | Self::Exists(_)
+            | Self::StartsWith(_)
+            | Self::Like(_) => false,
 
             // Evaluable if all children are evaluable
             Self::Record(expr_record) => expr_record.iter().all(|expr| expr.is_eval()),
             Self::List(expr_list) => expr_list.items.iter().all(|expr| expr.is_eval()),
             Self::Cast(expr_cast) => expr_cast.expr.is_eval(),
+            Self::Between(expr_between) => {
+                expr_between.expr.is_eval()
+                    && expr_between.low.is_eval()
+                    && expr_between.high.is_eval()
+            }
             Self::BinaryOp(expr_binary) => expr_binary.lhs.is_eval() && expr_binary.rhs.is_eval(),
             Self::And(expr_and) => expr_and.iter().all(|expr| expr.is_eval()),
             Self::Any(expr_any) => expr_any.expr.is_eval(),
+            Self::AnyOp(e) => e.lhs.is_eval() && e.rhs.is_eval(),
+            Self::AllOp(e) => e.lhs.is_eval() && e.rhs.is_eval(),
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_eval()),
             Self::Not(expr_not) => expr_not.expr.is_eval(),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
@@ -408,6 +610,10 @@ impl Expr {
                 expr_match.subject.is_eval() && expr_match.arms.iter().all(|arm| arm.expr.is_eval())
             }
             Self::Func(_) => false,
+            // Array predicates and length: evaluable iff all operands are.
+            Self::IsSuperset(e) => e.lhs.is_eval() && e.rhs.is_eval(),
+            Self::Intersects(e) => e.lhs.is_eval() && e.rhs.is_eval(),
+            Self::Length(e) => e.expr.is_eval(),
         }
     }
 
@@ -430,20 +636,23 @@ impl Expr {
     /// Navigates into a nested record or list expression by `path` and returns
     /// a read-only [`Entry`] reference.
     ///
-    /// Returns `None` if the path cannot be followed (e.g., the expression is
-    /// not a record or list at the expected depth).
+    /// Returns `None` if the path cannot be followed: the expression is not a
+    /// record or list at the expected depth, or a step indexes past the end of
+    /// a record or list.
     #[track_caller]
     pub fn entry(&self, path: impl EntryPath) -> Option<Entry<'_>> {
         let mut ret = Entry::Expr(self);
 
         for step in path.step_iter() {
             ret = match ret {
-                Entry::Expr(Self::Record(expr)) => Entry::Expr(&expr[step]),
-                Entry::Expr(Self::List(expr)) => Entry::Expr(&expr.items[step]),
+                Entry::Expr(Self::Record(expr)) => Entry::Expr(expr.get(step)?),
+                Entry::Expr(Self::List(expr)) => Entry::Expr(expr.items.get(step)?),
                 Entry::Value(Value::Record(record))
-                | Entry::Expr(Self::Value(Value::Record(record))) => Entry::Value(&record[step]),
+                | Entry::Expr(Self::Value(Value::Record(record))) => {
+                    Entry::Value(record.get(step)?)
+                }
                 Entry::Value(Value::List(items)) | Entry::Expr(Self::Value(Value::List(items))) => {
-                    Entry::Value(&items[step])
+                    Entry::Value(items.get(step)?)
                 }
                 _ => return None,
             }
@@ -556,20 +765,28 @@ where
 impl fmt::Debug for Expr {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::AllOp(e) => e.fmt(f),
             Self::And(e) => e.fmt(f),
             Self::Any(e) => e.fmt(f),
+            Self::AnyOp(e) => e.fmt(f),
             Self::Arg(e) => e.fmt(f),
+            Self::Between(e) => e.fmt(f),
             Self::BinaryOp(e) => e.fmt(f),
             Self::Cast(e) => e.fmt(f),
             Self::Default => write!(f, "Default"),
             Self::Error(e) => e.fmt(f),
             Self::Exists(e) => e.fmt(f),
             Self::Func(e) => e.fmt(f),
+            Self::Ident(e) => write!(f, "Ident({e:?})"),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
+            Self::Intersects(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
+            Self::IsSuperset(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),
+            Self::Length(e) => e.fmt(f),
             Self::Let(e) => e.fmt(f),
+            Self::Like(e) => e.fmt(f),
             Self::Map(e) => e.fmt(f),
             Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
@@ -578,6 +795,7 @@ impl fmt::Debug for Expr {
             Self::Record(e) => e.fmt(f),
             Self::Reference(e) => e.fmt(f),
             Self::List(e) => e.fmt(f),
+            Self::StartsWith(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
         }

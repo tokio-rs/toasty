@@ -162,9 +162,24 @@ impl Parse for FieldSet {
 impl Parse for FieldEntry {
     fn parse(input: ParseStream) -> syn::Result<Self> {
         let name = input.parse::<syn::Ident>()?;
-        input.parse::<syn::Token![:]>()?;
-        let value = input.parse()?;
-        Ok(FieldEntry { name, value })
+
+        if input.peek(syn::Token![:]) && !input.peek(syn::Token![::]) {
+            // `name: value` — explicit value
+            input.parse::<syn::Token![:]>()?;
+            let value = input.parse()?;
+            Ok(FieldEntry { name, value })
+        } else {
+            // `name` shorthand — equivalent to `name: name`
+            let expr = syn::Expr::Path(syn::ExprPath {
+                attrs: vec![],
+                qself: None,
+                path: name.clone().into(),
+            });
+            Ok(FieldEntry {
+                name,
+                value: FieldValue::Expr(Box::new(expr)),
+            })
+        }
     }
 }
 

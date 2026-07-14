@@ -37,7 +37,7 @@ impl Exec<'_> {
                     stmt::Value::List(items) => {
                         for value in items {
                             // Apply the projection
-                            let row = action.projection.eval(&[value])?;
+                            let row = action.projection.eval(&self.engine.schema, &[value])?;
                             projected_rows.push(row);
                         }
                     }
@@ -49,13 +49,13 @@ impl Exec<'_> {
                     let value = res?;
 
                     // Apply the projection
-                    let row = action.projection.eval(&[value])?;
+                    let row = action.projection.eval(&self.engine.schema, &[value])?;
                     projected_rows.push(row);
                 }
             }
             Rows::Count(count) => {
                 for _ in 0..count {
-                    let row = action.projection.eval_const();
+                    let row = action.projection.eval_const(&self.engine.schema);
                     projected_rows.push(row);
                 }
             }

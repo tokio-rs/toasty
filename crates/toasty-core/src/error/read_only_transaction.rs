@@ -2,8 +2,10 @@ use super::Error;
 
 /// Error when a write operation is attempted inside a read-only transaction.
 ///
-/// This maps to database-specific errors such as PostgreSQL SQLSTATE 25006
-/// or MySQL error 1792.
+/// Drivers should classify the backend's read-only-write-rejected
+/// errors here: PostgreSQL SQLSTATE `25006`, MySQL error `1792`, and
+/// equivalents. User code can branch on
+/// [`is_read_only_transaction`](Error::is_read_only_transaction).
 #[derive(Debug)]
 pub(super) struct ReadOnlyTransaction {
     message: Box<str>,

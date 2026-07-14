@@ -1,5 +1,11 @@
 use indexmap::IndexMap;
-use toasty_core::{schema::db::ColumnId, stmt};
+use toasty_core::{
+    schema::{
+        app::{FieldTy, ModelId},
+        db::ColumnId,
+    },
+    stmt,
+};
 
 use crate::engine::lower::{LowerStatement, LoweringContext};
 
@@ -21,6 +27,51 @@ enum ConstantizeSource<'a> {
 }
 
 impl LowerStatement<'_, '_> {
+    /// Shape `Returning::Model` for the statement kind before include lowering.
+    ///
+    /// Plain relation fields are implicit includes, except local `has_many` /
+    /// `has_one` fields during insert returning. Those slots are filled from
+    /// nested relation inserts later in insert relation planning; building an
+    /// include subquery here would create a second, stale dependency for the
+    /// same returning slot.
+    pub(super) fn prepare_model_returning_for_context(
+        &self,
+        returning: &mut stmt::Expr,
+        include_paths: &mut Vec<stmt::Path>,
+        is_insert: bool,
+    ) {
+        let model = self.model_unwrap();
+        let stmt::Expr::Record(record) = returning else {
+            return;
+        };
+
+        if is_insert {
+            include_paths.retain(|path| {
+                !first_model_field(path, model.id)
+                    .is_some_and(|field| is_insert_local_eager_relation(&model.fields[field].ty))
+            });
+        }
+
+        for field in &model.fields {
+            if !field.ty.is_relation() || field.deferred {
+                continue;
+            }
+
+            if is_insert && is_insert_local_eager_relation(&field.ty) {
+                record[field.id.index] = match field.ty {
+                    FieldTy::Has(ref rel) if rel.is_many() => stmt::Expr::list_from_vec(vec![]),
+                    FieldTy::Has(_) => stmt::Expr::null(),
+                    FieldTy::Via(ref via) if via.is_many() => stmt::Expr::list_from_vec(vec![]),
+                    FieldTy::Via(_) => stmt::Expr::null(),
+                    _ => unreachable!(),
+                };
+                continue;
+            }
+
+            include_paths.push(stmt::Path::field(model.id, field.id.index));
+        }
+    }
+
     /// Attempts to evaluate an INSERT statement's RETURNING clause at compile
     /// time.
     ///
@@ -43,7 +94,7 @@ impl LowerStatement<'_, '_> {
     ///
     /// Can be constantized to:
     /// ```text
-    /// stmt::Returning::Value(vec![
+    /// stmt::Returning::Expr(vec![
     ///     Record { id: '123', name: 'Alice' },
     ///     Record { id: '456', name: 'Bob' },
     /// ])
@@ -67,8 +118,8 @@ impl LowerStatement<'_, '_> {
     ///    - For each INSERT row, evaluate the RETURNING projection
     ///    - This produces a `stmt::Value` for each row
     ///
-    /// 3. **Replace** `stmt::Returning::Expr(projection)` with
-    ///    `stmt::Returning::Value(values)`
+    /// 3. **Replace** `stmt::Returning::Project(projection)` with
+    ///    `stmt::Returning::Expr(values)`
     ///    - Single-row inserts return a single value
     ///    - Multi-row inserts return a list of values
     ///
@@ -89,14 +140,14 @@ impl LowerStatement<'_, '_> {
         source: &stmt::Query,
     ) {
         match returning {
-            stmt::Returning::Expr(project) => {
+            stmt::Returning::Project(project) => {
                 if let Some(xformed_returning) =
                     self.constantize_insert_returning_projection(project, source)
                 {
                     *returning = xformed_returning;
                 }
             }
-            stmt::Returning::Value(expr) => self.constantize_insert_returning_expr(expr, source),
+            stmt::Returning::Expr(expr) => self.constantize_insert_returning_expr(expr, source),
             _ => {}
         }
     }
@@ -215,7 +266,7 @@ impl LowerStatement<'_, '_> {
             }
 
             // Replace the expression-based RETURNING with a constant value
-            Some(stmt::Returning::Value(if source.single {
+            Some(stmt::Returning::Expr(if source.single {
                 // Single row insert: return just the one value
                 constantized
                     .into_iter()
@@ -295,29 +346,52 @@ impl LowerStatement<'_, '_> {
 
         expr.substitute(Input(columns, values));
     }
+}
 
-    pub(super) fn constantize_update_returning(
-        &self,
-        returning: &mut stmt::Returning,
-        assignments: &stmt::Assignments,
-    ) {
-        let input = ConstantizeReturning {
-            cx: self.expr_cx,
-            source: ConstantizeSource::UpdateAssignments { assignments },
-        };
+/// Constantize an update's returning clause from its lowered, column-indexed
+/// assignments: column references whose assignment is a constant `Set` are
+/// inlined, and a fully-constant projection is evaluated now, sparing the
+/// runtime returning path. A projection that still needs data (an unassigned
+/// column, a relative mutation) is left for runtime.
+pub(super) fn constantize_update_returning(
+    cx: stmt::ExprContext<'_>,
+    returning: &mut stmt::Returning,
+    assignments: &stmt::Assignments,
+) {
+    let stmt::Returning::Project(project) = returning else {
+        // Already a constant value (e.g., empty record for batch
+        // unit-returning); nothing to constantize.
+        return;
+    };
 
-        let stmt::Returning::Expr(project) = returning else {
-            // Already a constant value (e.g., empty record for batch
-            // unit-returning); nothing to constantize.
-            return;
-        };
+    project.substitute(ConstantizeReturning {
+        cx,
+        source: ConstantizeSource::UpdateAssignments { assignments },
+    });
 
-        project.substitute(input);
-
-        if let Ok(row) = project.eval_const() {
-            *returning = stmt::Returning::Expr(row.into());
-        }
+    // Evaluate through the schema-bound input, not `eval_const`: a document
+    // column's projection is the raising cast over the assignment's lowering
+    // cast, and both conversions resolve the embed through the schema
+    // (`Input::resolve_model`).
+    let input = ConstantizeReturning {
+        cx,
+        source: ConstantizeSource::UpdateAssignments { assignments },
+    };
+    if let Ok(row) = project.eval(input) {
+        *returning = stmt::Returning::Project(row.into());
     }
+}
+
+fn is_insert_local_eager_relation(field_ty: &FieldTy) -> bool {
+    matches!(field_ty, FieldTy::Has(_) | FieldTy::Via(_))
+}
+
+fn first_model_field(path: &stmt::Path, model_id: ModelId) -> Option<usize> {
+    if path.root.as_model()? != model_id {
+        return None;
+    }
+
+    path.projection.as_slice().first().copied()
 }
 
 impl stmt::Input for ConstantizeReturning<'_> {
@@ -348,16 +422,39 @@ impl stmt::Input for ConstantizeReturning<'_> {
             }
             ConstantizeSource::UpdateAssignments { assignments } => {
                 if let Some(assignment) = assignments.get(&[needle.id.index]) {
-                    let stmt::Assignment::Set(expr) = assignment else {
-                        todo!("only SET supported; got {assignment:#?}");
-                    };
-                    assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
-
-                    Some(expr.clone())
+                    match assignment {
+                        stmt::Assignment::Set(expr) => {
+                            assert!(expr.is_const(), "TODO; assignment={assignment:#?}");
+                            Some(expr.clone())
+                        }
+                        // Relative mutations update a column from its
+                        // current value — not constantizable from the
+                        // input. Leave the reference unresolved so the
+                        // engine fetches the post-update value from the
+                        // driver: native RETURNING on PG/SQLite,
+                        // ReturnValues=UPDATED_NEW on DynamoDB, or a
+                        // follow-up SELECT on MySQL.
+                        stmt::Assignment::Append(_)
+                        | stmt::Assignment::Pop
+                        | stmt::Assignment::RemoveAt(_)
+                        | stmt::Assignment::Remove(_)
+                        | stmt::Assignment::Add(_)
+                        | stmt::Assignment::Subtract(_) => None,
+                        _ => todo!(
+                            "only SET / APPEND / collection / arithmetic mutations supported; got {assignment:#?}"
+                        ),
+                    }
                 } else {
                     None
                 }
             }
         }
+    }
+
+    fn resolve_model(
+        &self,
+        id: toasty_core::schema::app::ModelId,
+    ) -> Option<&toasty_core::schema::app::Model> {
+        stmt::Resolve::model(self.cx.schema(), id)
     }
 }

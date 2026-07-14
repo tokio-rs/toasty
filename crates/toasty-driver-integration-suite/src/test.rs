@@ -1,12 +1,12 @@
 use std::{
     error::Error,
-    sync::{Arc, Mutex, RwLock},
+    sync::{Arc, RwLock},
 };
 
 use toasty::{Db, schema::ModelSet};
 use tokio::runtime::Runtime;
 
-use crate::{ExecLog, Isolate, LoggingDriver, Setup};
+use crate::{Fault, InstrumentedDriver, InstrumentedHandle, Isolate, Setup};
 
 /// Global lock for coordinating serial vs parallel tests.
 /// Normal tests acquire a read lock (allowing parallelism).
@@ -26,7 +26,10 @@ pub struct Test {
     /// Tokio runtime used by the test
     runtime: Option<Runtime>,
 
-    exec_log: ExecLog,
+    /// Single handle controlling the instrumented driver test middleware:
+    /// the operations log and the fault-injection queue. Populated by
+    /// `try_setup_db_with`.
+    handle: InstrumentedHandle,
 
     /// List of all tables created during the test. These will need to be removed later.
     tables: Vec<String>,
@@ -46,7 +49,7 @@ impl Test {
             setup,
             isolate: Isolate::new(),
             runtime: Some(runtime),
-            exec_log: ExecLog::new(Arc::new(Mutex::new(Vec::new()))),
+            handle: InstrumentedHandle::default(),
             tables: vec![],
             serial: false,
         }
@@ -54,19 +57,32 @@ impl Test {
 
     /// Try to setup a database with models, returns Result for error handling
     pub async fn try_setup_db(&mut self, models: ModelSet) -> toasty::Result<Db> {
+        self.try_setup_db_with(models, |_| {}).await
+    }
+
+    /// Try to setup a database with models, allowing the caller to customize
+    /// the [`toasty::db::Builder`] before it is built (e.g., to set pool
+    /// configuration).
+    pub async fn try_setup_db_with(
+        &mut self,
+        models: ModelSet,
+        customize: impl FnOnce(&mut toasty::db::Builder),
+    ) -> toasty::Result<Db> {
         let mut builder = toasty::Db::builder();
         builder.models(models);
 
         // Set the table prefix
         builder.table_name_prefix(&self.isolate.table_prefix());
 
-        // Always wrap with logging
-        let logging_driver = LoggingDriver::new(self.setup.driver());
-        let ops_log = logging_driver.ops_log_handle();
-        self.exec_log = ExecLog::new(ops_log);
+        // Apply caller customizations
+        customize(&mut builder);
 
-        // Build the database with the logging driver
-        let db = builder.build(logging_driver).await?;
+        // Always wrap with the instrumented test driver
+        let instrumented_driver = InstrumentedDriver::new(self.setup.driver());
+        self.handle = instrumented_driver.handle();
+
+        // Build the database with the instrumented driver
+        let db = builder.build(instrumented_driver).await?;
         db.push_schema().await?;
 
         for table in &db.schema().db.tables {
@@ -81,14 +97,32 @@ impl Test {
         self.try_setup_db(models).await.unwrap()
     }
 
+    /// Setup a database, applying the given customization to the
+    /// [`toasty::db::Builder`] before building.
+    pub async fn setup_db_with(
+        &mut self,
+        models: ModelSet,
+        customize: impl FnOnce(&mut toasty::db::Builder),
+    ) -> Db {
+        self.try_setup_db_with(models, customize).await.unwrap()
+    }
+
     /// Get the driver capability
     pub fn capability(&self) -> &'static toasty_core::driver::Capability {
         self.setup.driver().capability()
     }
 
-    /// Get the execution log for assertions
-    pub fn log(&mut self) -> &mut ExecLog {
-        &mut self.exec_log
+    /// Get the instrumented-driver control handle. The handle exposes
+    /// the operation log (for assertions) and fault injection.
+    pub fn log(&self) -> &InstrumentedHandle {
+        &self.handle
+    }
+
+    /// Queue a fault to fire on the next driver `exec` call. Faults
+    /// fire in FIFO order. Only useful after `setup_db` has installed
+    /// the instrumented driver.
+    pub fn inject_fault(&self, fault: Fault) {
+        self.handle.inject_fault(fault);
     }
 
     /// Set whether this test requires exclusive (serial) execution

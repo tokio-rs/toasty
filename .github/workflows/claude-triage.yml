@@ -1,0 +1,140 @@
+name: Claude Triage
+
+# Auto-apply a constrained subset of GitHub labels to new issues and PRs.
+# Only C- (category) and A- (area) labels — plus S-needs-repro for bugs with
+# no reproducer — are applied automatically. Priority, impact, status, and
+# community labels are left for humans. See docs/dev/labels.md.
+
+# SECURITY: the PR job uses `pull_request_target`, which runs in the base
+# repo's context with full secrets. PR title/body/files are UNTRUSTED —
+# a malicious fork could try to use them as a prompt-injection channel
+# to exfiltrate secrets or mutate other PRs.
+#
+# Defenses (see scripts/claude-triage-pr.sh):
+#   1. The base ref is checked out, never the PR head — no fork code
+#      executes (no `cargo build`, no `npm install` of PR deps, no
+#      `build.rs`).
+#   2. Claude runs as a pure classifier: `--allowed-tools ""` (no Bash,
+#      Read, Edit, Write, MCP) under Claude Code's sandbox with a
+#      managed-scope allowlist of only `api.anthropic.com`.
+#   3. Claude's chosen labels are intersected against a hardcoded
+#      allowlist in the script before any `gh pr edit` runs, so
+#      injection-driven label choice is bounded to a known-safe set.
+#   4. `gh` invocations live in the script, not Claude's sandbox: the
+#      PR number is pinned to the triggering event and the verb is
+#      always `--add-label`.
+
+on:
+  issues:
+    types: [opened]
+  pull_request_target:
+    types: [opened, ready_for_review]
+
+# Collapse overlapping runs on the same issue/PR (e.g. a rapid
+# open → ready_for_review sequence, or PR amend/rebase). Issues
+# and PRs share a number space in GitHub, so one key suffices.
+concurrency:
+  group: claude-triage-${{ github.event.issue.number || github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  triage-issue:
+    if: github.event_name == 'issues'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      issues: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Run Claude Code for Issue Triage
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          allowed_non_write_users: "*"
+          prompt: |
+            You are a triage bot for the toasty repository. Apply GitHub labels
+            to issue #${{ github.event.issue.number }} based on its content.
+
+            Steps:
+
+            1. Read the issue:
+               gh issue view ${{ github.event.issue.number }} --json title,body,labels
+
+            2. Choose EXACTLY ONE category label from this allowlist. Skip if
+               nothing clearly fits — do not guess.
+               - C-bug          code behaves incorrectly
+               - C-feature      new feature request or missing use case
+               - C-enhancement  improvement to an existing feature
+               - C-refactor     internal change, no user-visible effect
+               - C-docs         user docs, dev docs, rustdoc
+               - C-chore        CI, release tooling, scripts, lint fixes
+
+            3. Choose zero or more area labels. Apply A-<area> only when
+               the issue is clearly about that area — the body names the
+               crate/path, or describes behavior that obviously lives
+               there. Most issues carry 0 or 1 A- labels; 2 is possible
+               for a genuinely cross-cutting issue. More than 2 is almost
+               never right. When the issue is vague, broad, or doesn't
+               clearly belong to an area, leave A- labels off.
+
+               - A-engine     toasty/src/engine/
+               - A-macros     toasty-macros, create!, models!
+               - A-schema     toasty-core/src/schema/
+               - A-sql        toasty-sql
+               - A-driver     Driver trait, SQLite/PostgreSQL/MySQL/DynamoDB
+               - A-migration  toasty-cli, migration generation
+               - A-tests      toasty-driver-integration-suite, workspace tests
+               - A-docs       docs/ mdbook content
+               - A-ci         .github/workflows, release-plz, scripts/
+
+            4. If (and only if) you chose C-bug AND the body has no clear
+               reproducer — steps to reproduce, a code snippet, or a minimal
+               example — also apply S-needs-repro.
+
+            5. Apply labels, skipping any already present:
+               gh issue edit ${{ github.event.issue.number }} --add-label <label>
+
+            NEVER apply (reserved for humans):
+            C-sketch, C-tracking, C-discussion, all P-*, all I-*,
+            S-needs-design, S-blocked, S-needs-info, S-waiting-on-author,
+            S-waiting-on-review, good first issue, help wanted.
+
+            Do nothing else: no comments, no edits to the issue body, no
+            closing. If the issue is ambiguous, apply fewer labels rather
+            than guessing.
+          claude_args: |
+            --allowed-tools "Bash(gh issue view:*),Bash(gh issue edit:*),Bash(gh label list:*)"
+
+  # Hardened PR triage:
+  #   - Claude runs headless with no tools, under sandbox + managed
+  #     allowlist (only api.anthropic.com reachable).
+  #   - All `gh` calls live in the script, not in Claude's sandbox.
+  #   - Claude's chosen labels are intersected against a hardcoded
+  #     allowlist before being applied.
+  # See scripts/claude-triage-pr.sh for the threat-model write-up.
+  triage-pr:
+    if: github.event_name == 'pull_request_target'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 1
+      - name: Install Claude CLI and sandbox dependencies
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y bubblewrap socat
+          npm install -g @anthropic-ai/claude-code
+      - name: Run triage
+        env:
+          PR: ${{ github.event.pull_request.number }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CLAUDE_CODE_OAUTH_TOKEN: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+        run: ./scripts/claude-triage-pr.sh

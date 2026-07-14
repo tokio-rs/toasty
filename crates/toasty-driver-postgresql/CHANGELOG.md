@@ -7,6 +7,84 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.7.0...toasty-driver-postgresql-v0.8.0) - 2026-07-06
+
+### Added
+
+- Emit one toasty::query event per statement and propagate caller spans ([#1071])
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1071]: https://github.com/tokio-rs/toasty/pull/1071
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.6.1...toasty-driver-postgresql-v0.7.0) - 2026-05-29
+
+### Added
+
+- Raw SQL execution API ([#965])
+- Turso driver with TransactionMode-aware concurrent writes ([#938])
+- TransactionMode for SQLite lock-acquisition control ([#931])
+- tokio-postgres-rustls 0.14 ([#952])
+
+### Fixed
+
+- PostgreSQL now accepts libpq query-param connection options ([#985])
+
+### Changed
+
+- [**breaking**] Require Deferred relation fields ([#954])
+- [**breaking**] Move schema diff types to `schema::diff` ([#929])
+
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#952]: https://github.com/tokio-rs/toasty/pull/952
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#985]: https://github.com/tokio-rs/toasty/pull/985
+
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.6.0...toasty-driver-postgresql-v0.6.1) - 2026-05-16
+
+- Internal improvements only.
+
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.5.0...toasty-driver-postgresql-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add Vec<scalar> model field support to MySQL, SQLite, and DynamoDB ([#872])
+- Add Vec<scalar> support to PostgreSQL using native array storage ([#866])
+- Detect broken pool connections before the next query ([#874])
+- Automatically evict stale connections after backend restart ([#867])
+- Improve PostgreSQL IN-list query performance by using array parameter binding ([#818])
+
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#866]: https://github.com/tokio-rs/toasty/pull/866
+[#867]: https://github.com/tokio-rs/toasty/pull/867
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#874]: https://github.com/tokio-rs/toasty/pull/874
+
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.4.0...toasty-driver-postgresql-v0.5.0) - 2026-04-27
+
+### Added
+
+- Support for floating-point data types ([#687])
+- Native database enum types for embedded enums ([#665])
+- PostgreSQL client application name configuration ([#680])
+
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#680]: https://github.com/tokio-rs/toasty/pull/680
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.3.0...toasty-driver-postgresql-v0.4.0) - 2026-04-11
+
+### Added
+
+- add opinionated support for postgres TLS using rustls ([#663](https://github.com/tokio-rs/toasty/pull/663))
+
+### Fixed
+
+- percent encoding in postgres connection strings ([#671](https://github.com/tokio-rs/toasty/pull/671))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.2.0...toasty-driver-postgresql-v0.3.0) - 2026-04-03
 
 ### Other

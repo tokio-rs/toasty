@@ -1,9 +1,11 @@
+use hashbrown::HashSet;
 use toasty_core::{
     schema::app::{self, Field, FieldId, FieldTy},
     stmt,
 };
 
-use crate::engine::lower::LowerStatement;
+use crate::engine::{hir, lower::LowerStatement};
+use crate::schema::lazy_slot;
 
 #[derive(Debug)]
 enum Mutation {
@@ -38,7 +40,7 @@ trait RelationSource: std::fmt::Debug {
     fn set_source_field(&mut self, field: FieldId, expr: stmt::Expr);
 
     /// Update a returning field expression
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr);
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr);
 
     /// Whether the source might produce zero rows. When true, relation
     /// mutations must be wrapped in a conditional to avoid FK updates when
@@ -142,46 +144,59 @@ impl LowerStatement<'_, '_> {
                 continue;
             };
 
-            let mutation = match assignment {
-                stmt::Assignment::Set(expr) => {
-                    if expr.is_value_null() {
-                        Mutation::DisassociateAll { delete: false }
-                    } else {
-                        Mutation::Associate {
-                            expr,
-                            exclusive: true,
-                        }
-                    }
-                }
-                stmt::Assignment::Insert(expr) => {
+            // A `Batch` carries a sequence of discrete ops on the same
+            // projection, built by the `stmt::apply` surface API. Dispatch
+            // each entry as its own `Mutation`; `Insert` entries are first
+            // folded into one multi-row INSERT because only one Insert can
+            // own the relation's returning slot per update (a second
+            // Insert's `set_returning_slot` call would clobber the first).
+            // `Remove` entries pass through individually — they don't write
+            // to the returning slot.
+            let entries: Vec<stmt::Assignment> = match assignment {
+                stmt::Assignment::Batch(mut entries) => {
                     assert!(field.ty.is_has_many());
-                    debug_assert!(!expr.is_value_null());
-                    Mutation::Associate {
-                        expr,
-                        exclusive: false,
-                    }
+                    flatten_relation_batch(&mut entries);
+                    entries
                 }
-                stmt::Assignment::Remove(expr) => {
-                    assert!(field.ty.is_has_many());
-                    debug_assert!(!expr.is_value_null());
-                    Mutation::Disassociate { expr }
-                }
-                stmt::Assignment::Batch(_) => {
-                    todo!("batch assignments for relations")
-                }
+                other => vec![other],
             };
 
-            self.plan_mut_relation_field(
-                field,
-                mutation,
-                &mut UpdateRelationSource {
-                    model,
-                    filter,
-                    assignments: &mut *assignments,
-                    returning,
-                    returning_changed,
-                },
-            );
+            // Execute the batch's entries in order. Each entry's statements
+            // depend on the previous entry's, so operations that touch the
+            // same target are sequenced deterministically rather than racing
+            // in the dependency graph. This matters when one op constrains a
+            // later one — associating then dissociating the same existing row,
+            // a unique-value swap that must delete before it re-inserts, or a
+            // leading `set`'s exclusive clear that must not wipe freshly
+            // inserted rows. (`flatten_relation_batch` has already placed the
+            // merged create-new Insert last.)
+            let mut source = UpdateRelationSource {
+                model,
+                filter,
+                assignments: &mut *assignments,
+                returning: &mut *returning,
+                returning_changed,
+            };
+
+            let mut prev_deps: HashSet<hir::StmtId> = HashSet::new();
+            for entry in entries {
+                let emitted = self.collect_dependencies(|lower| {
+                    lower.with_dependencies(prev_deps.clone(), |lower| {
+                        lower.plan_mut_relation_field(
+                            field,
+                            relation_mutation(field, entry),
+                            &mut source,
+                        );
+                    });
+                });
+
+                // Chain the next entry onto this one's statements. An entry
+                // that emits nothing leaves the chain pointing at the last
+                // real statement.
+                if !emitted.is_empty() {
+                    prev_deps = emitted;
+                }
+            }
         }
     }
 
@@ -192,10 +207,10 @@ impl LowerStatement<'_, '_> {
         source: &mut dyn RelationSource,
     ) {
         match &field.ty {
-            FieldTy::HasOne(..) => {
+            FieldTy::Has(rel) if rel.is_one() => {
                 self.relation_step(field, |lower| lower.plan_mut_has_one(field, op, source));
             }
-            FieldTy::HasMany(..) => {
+            FieldTy::Has(rel) if rel.is_many() => {
                 self.relation_step(field, |lower| lower.plan_mut_has_many(field, op, source));
             }
             FieldTy::BelongsTo(_) => {
@@ -207,14 +222,16 @@ impl LowerStatement<'_, '_> {
 
     fn plan_mut_has_many(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_many = field.ty.as_has_many_unwrap();
-        let pair = self.field(has_many.pair);
+        let pair = has_many.pair_id;
+        let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
 
     fn plan_mut_has_one(&mut self, field: &Field, op: Mutation, source: &mut dyn RelationSource) {
         let has_one = field.ty.as_has_one_unwrap();
-        let pair = self.field(has_one.pair);
+        let pair = has_one.pair_id;
+        let pair = self.field(pair);
 
         self.plan_mut_has_n(field, pair, op, source);
     }
@@ -301,7 +318,7 @@ impl LowerStatement<'_, '_> {
                 let stmt::ExprSet::Select(select) = &mut query.body else {
                     todo!()
                 };
-                select.returning = stmt::Expr::record([1]).into();
+                select.returning = stmt::Returning::Project(stmt::Expr::record([1]));
                 query
             }));
         }
@@ -394,8 +411,10 @@ impl LowerStatement<'_, '_> {
             stmt.source.single = false;
         }
 
-        self.state.engine.simplify_stmt(&mut stmt);
-        source.set_returning_field(_field.id, stmt.into());
+        // Run the canonical pipeline on the synthesized child insert and
+        // stitch it onto the parent as an `Expr::Arg`.
+        let arg = self.lower_sub_stmt(stmt::Statement::Insert(stmt));
+        source.set_returning_field(_field, arg);
     }
 
     fn plan_mut_belongs_to(
@@ -496,6 +515,19 @@ impl LowerStatement<'_, '_> {
 
                 lower.set_relation_field(field, expr, source);
             }
+            // Composite FK: a record whose fields are each a scalar value or
+            // reference — produced by the tuple `IntoExpr` impl when the
+            // target model has a composite primary key. `set_relation_field`
+            // destructures it via `record_len()` / `into_record_items()` and
+            // assigns each component to the matching FK source column.
+            stmt::Expr::Record(record)
+                if record
+                    .fields
+                    .iter()
+                    .all(|f| f.is_value() || f.is_expr_reference()) =>
+            {
+                lower.set_relation_field(field, stmt::Expr::Record(record), source);
+            }
             stmt::Expr::Stmt(expr_stmt) => {
                 lower.plan_mut_belongs_to_associate_stmt(field, *expr_stmt.stmt, source);
             }
@@ -529,16 +561,13 @@ impl LowerStatement<'_, '_> {
 
                 // Previous value of returning does nothing in this
                 // context
-                insert.returning = Some(
-                    stmt::Expr::record(
-                        belongs_to
-                            .foreign_key
-                            .fields
-                            .iter()
-                            .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
-                    )
-                    .into(),
-                );
+                insert.returning = Some(stmt::Returning::Project(stmt::Expr::record(
+                    belongs_to
+                        .foreign_key
+                        .fields
+                        .iter()
+                        .map(|fk_field| stmt::Expr::ref_self_field(fk_field.target)),
+                )));
 
                 let target_id = self.new_dependency(insert);
                 let stmt_info = &self.state.hir[target_id];
@@ -546,7 +575,7 @@ impl LowerStatement<'_, '_> {
                 let returning = stmt_info.stmt.as_ref().unwrap().returning().expect("bug");
 
                 let expr = match returning {
-                    stmt::Returning::Value(expr) if expr.is_const() => expr.clone(),
+                    stmt::Returning::Expr(expr) if expr.is_const() => expr.clone(),
                     _ => {
                         // Make sure the source statement returns a single record
                         debug_assert!(match &**stmt_info.stmt.as_ref().unwrap() {
@@ -772,7 +801,7 @@ impl RelationSource for &stmt::Delete {
         unimplemented!("delete statements do not need to update field values");
     }
 
-    fn set_returning_field(&mut self, _field: FieldId, _expr: stmt::Expr) {
+    fn set_returning_field(&mut self, _field: &Field, _expr: stmt::Expr) {
         unimplemented!("delete statements do not need to update field values");
     }
 
@@ -792,10 +821,10 @@ impl RelationSource for UpdateRelationSource<'_> {
         self.assignments.set(field, expr);
     }
 
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr) {
         debug_assert!(self.returning_changed, "TODO");
 
-        let Some(stmt::Returning::Expr(stmt::Expr::Cast(expr_cast))) = self.returning else {
+        let Some(stmt::Returning::Project(stmt::Expr::Cast(expr_cast))) = self.returning else {
             todo!("UpdateRelationSource={self:#?}")
         };
 
@@ -805,14 +834,14 @@ impl RelationSource for UpdateRelationSource<'_> {
 
         let position = path_field_set
             .iter()
-            .position(|field_id| field_id == field.index)
+            .position(|field_id| field_id == field.id.index)
             .unwrap();
 
         let stmt::Expr::Record(record) = &mut *expr_cast.expr else {
             todo!()
         };
 
-        set_returning_slot(record, position, expr);
+        set_returning_slot(record, position, expr, field.deferred);
     }
 
     fn needs_existence_check(&self) -> bool {
@@ -844,17 +873,17 @@ impl RelationSource for InsertRelationSource<'_> {
         self.row.as_record_mut_unwrap()[field.index] = expr;
     }
 
-    fn set_returning_field(&mut self, field: FieldId, expr: stmt::Expr) {
+    fn set_returning_field(&mut self, field: &Field, expr: stmt::Expr) {
         let record = match self.returning {
-            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
-            Some(stmt::Returning::Value(stmt::Expr::List(rows))) => {
+            Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
+            Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
                 rows.items[self.index].as_record_mut_unwrap()
             }
-            Some(stmt::Returning::Value(stmt::Expr::Record(record))) => record,
+            Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
             _ => todo!("InsertRelationSource={self:#?}"),
         };
 
-        set_returning_slot(record, field.index, expr);
+        set_returning_slot(record, field.id.index, expr, field.deferred);
     }
 
     fn needs_existence_check(&self) -> bool {
@@ -862,11 +891,109 @@ impl RelationSource for InsertRelationSource<'_> {
     }
 }
 
-fn set_returning_slot(record: &mut stmt::ExprRecord, index: usize, expr: stmt::Expr) {
-    assert!(
-        record.fields[index].is_value_null(),
-        "TODO: probably need to merge instead of overwrite; actual={:#?}",
-        record.fields[index]
-    );
-    record.fields[index] = expr;
+/// Map a single flattened relation assignment to its `Mutation`.
+fn relation_mutation(field: &Field, entry: stmt::Assignment) -> Mutation {
+    match entry {
+        stmt::Assignment::Set(expr) => {
+            if expr.is_value_null() {
+                Mutation::DisassociateAll { delete: false }
+            } else {
+                Mutation::Associate {
+                    expr,
+                    exclusive: true,
+                }
+            }
+        }
+        stmt::Assignment::Insert(expr) => {
+            assert!(field.ty.is_has_many());
+            debug_assert!(!expr.is_value_null());
+            Mutation::Associate {
+                expr,
+                exclusive: false,
+            }
+        }
+        stmt::Assignment::Remove(expr) => {
+            assert!(field.ty.is_has_many());
+            debug_assert!(!expr.is_value_null());
+            Mutation::Disassociate { expr }
+        }
+        // `stmt::push` / `stmt::extend` target `Vec<scalar>` model fields, not
+        // relation fields. The type system does not currently rule out passing
+        // them to a has-many setter, but the engine has no Append-on-relation
+        // lowering.
+        stmt::Assignment::Append(_) => {
+            unreachable!("Append assignment on relation field — use stmt::insert for has-many")
+        }
+        // `stmt::pop` / `stmt::remove_at` target ordered `Vec<scalar>` fields.
+        // They have no relation analogue — has-many removal is by relation key,
+        // not by position.
+        stmt::Assignment::Pop | stmt::Assignment::RemoveAt(_) => {
+            unreachable!(
+                "Pop / RemoveAt assignment on relation field — these only apply to Vec<scalar>"
+            )
+        }
+        // Arithmetic ops only apply to scalar numeric model fields, never to
+        // relations.
+        stmt::Assignment::Add(_) | stmt::Assignment::Subtract(_) => {
+            unreachable!(
+                "Add / Subtract assignment on relation field — these only apply to scalar numerics"
+            )
+        }
+        stmt::Assignment::Batch(_) => unreachable!("Batch entries are flattened above"),
+    }
+}
+
+/// Flatten a has-many `Batch` in place into single-op assignments that
+/// `plan_stmt_update_relations` can dispatch one at a time.
+///
+/// `Insert` entries are folded into one multi-row INSERT via `Insert::merge`
+/// — only one Insert can own the relation's returning slot per update, so
+/// multiple inserts have to share a single sub-statement. The fold is done
+/// in place via `retain_mut` (no extra allocation): non-`Insert` entries
+/// (`Remove`, `Set`, …) keep their relative order, and the merged Insert is
+/// appended last. Insert/Remove ops are independent, so the final
+/// association set does not depend on their relative order.
+fn flatten_relation_batch(entries: &mut Vec<stmt::Assignment>) {
+    let mut merged: Option<stmt::Insert> = None;
+
+    entries.retain_mut(|entry| {
+        // Keep everything that isn't an Insert sub-statement in place.
+        if !matches!(entry, stmt::Assignment::Insert(stmt::Expr::Stmt(_))) {
+            return true;
+        }
+
+        // Move the Insert out, leaving a throwaway placeholder that
+        // `retain_mut` immediately drops since we return `false`.
+        let stmt::Assignment::Insert(stmt::Expr::Stmt(expr_stmt)) =
+            std::mem::replace(entry, stmt::Assignment::Pop)
+        else {
+            unreachable!()
+        };
+        let insert = match *expr_stmt.stmt {
+            stmt::Statement::Insert(insert) => insert,
+            other => todo!("non-Insert sub-statement in has-many Batch: {other:#?}"),
+        };
+        match &mut merged {
+            None => merged = Some(insert),
+            Some(acc) => acc.merge(insert),
+        }
+        false
+    });
+
+    if let Some(insert) = merged {
+        entries.push(stmt::Assignment::Insert(stmt::Expr::from(insert)));
+    }
+}
+
+fn set_returning_slot(
+    record: &mut stmt::ExprRecord,
+    index: usize,
+    expr: stmt::Expr,
+    deferred: bool,
+) {
+    record.fields[index] = if deferred {
+        lazy_slot::loaded_expr(expr)
+    } else {
+        expr
+    };
 }

@@ -27,10 +27,19 @@ pub struct Capability {
     /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
 
+    /// Placeholder syntax accepted by the driver's SQL bind layer.
+    ///
+    /// SQL drivers set this to `Some`. Non-SQL drivers set this to `None`.
+    pub sql_placeholder: Option<SqlPlaceholder>,
+
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
-    /// Schema mutation capabilities supported by the datbase.
+    /// What the database is able to change about its own schema. See
+    /// [`SchemaMutations`] for the individual fields; the migration
+    /// generator branches on them to choose between an in-place
+    /// `ALTER COLUMN` and a table rebuild, and between one combined
+    /// alter statement and several single-property ones.
     pub schema_mutations: SchemaMutations,
 
     /// SQL: supports update statements in CTE queries.
@@ -48,6 +57,28 @@ pub struct Capability {
 
     /// Whether the database has an auto increment modifier for integer columns.
     pub auto_increment: bool,
+
+    /// Maximum storage width, in bytes, for auto-increment integer columns.
+    ///
+    /// Backends that require a particular declared type for auto-increment
+    /// columns use this to cap the storage type selected from the Rust field
+    /// type. SQLite requires the declared type to be `INTEGER` when using
+    /// `AUTOINCREMENT`; Toasty's SQLite serializer emits that spelling for
+    /// `Integer(4)`.
+    pub max_auto_increment_integer_width: Option<u8>,
+
+    /// Maximum byte length for a database identifier (table name, index name,
+    /// column name, etc.).
+    ///
+    /// When `Some(n)`, auto-generated index names that exceed `n` bytes are
+    /// truncated and a short stable hash suffix is appended so names remain
+    /// unique and deterministic across builds. User-supplied `#[index(name =
+    /// "...")]` names are left untouched.
+    ///
+    /// - MySQL: `Some(64)` — hard error on longer names
+    /// - PostgreSQL: `Some(63)` — silently truncates, risking collisions
+    /// - SQLite / DynamoDB: `None` — no enforced limit
+    pub max_identifier_length: Option<usize>,
 
     /// Whether the database supports `VARCHAR(n)` column types natively.
     ///
@@ -68,6 +99,25 @@ pub struct Capability {
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
 
+    /// Whether the database supports native enum types.
+    ///
+    /// - PostgreSQL: `true` — `CREATE TYPE ... AS ENUM`
+    /// - MySQL: `true` — inline `ENUM('a', 'b')` column type
+    /// - SQLite: `false` — uses `TEXT` + `CHECK` constraint
+    /// - DynamoDB: `false` — plain string attribute
+    pub native_enum: bool,
+
+    /// Whether enum types are standalone named objects requiring separate DDL.
+    ///
+    /// When `true`, migrations must emit `CREATE TYPE` / `ALTER TYPE` for enum
+    /// types. When `false`, enum definitions are inline in column types.
+    ///
+    /// - PostgreSQL: `true` — `CREATE TYPE <name> AS ENUM (...)`
+    /// - MySQL: `false` — inline `ENUM('a', 'b')` on the column
+    /// - SQLite: `false`
+    /// - DynamoDB: `false`
+    pub named_enum_types: bool,
+
     /// Whether the database has native support for Decimal types.
     pub native_decimal: bool,
 
@@ -87,9 +137,185 @@ pub struct Capability {
     /// DynamoDB: false. All other backends: true (SQL backends never use index key conditions).
     pub index_or_predicate: bool,
 
+    /// Whether the database has a native prefix-match operator that does not
+    /// require LIKE-style escaping. When `true`, `starts_with` is left in the
+    /// AST and the driver renders it natively (DynamoDB's `begins_with()`,
+    /// PostgreSQL's `^@`, SQLite's `GLOB`, MySQL's `LIKE BINARY`). When
+    /// `false`, the lowering rewrites it to a `LIKE` expression — which
+    /// requires `native_like` to be `true`.
+    pub native_starts_with: bool,
+
+    /// Whether `starts_with` should be rendered as a SQLite `GLOB 'prefix*'`
+    /// expression. When `true`, `extract_params` escapes GLOB metacharacters
+    /// (`*`, `?`, `[`) in the prefix and appends `*`; the serializer emits
+    /// `col GLOB ?`. Implies `native_starts_with`.
+    pub glob_starts_with: bool,
+
+    /// Whether `starts_with` should be rendered as MySQL `BINARY col LIKE ?
+    /// ESCAPE '!'`. When `true`, `extract_params` escapes LIKE metacharacters
+    /// using `!` as the escape char and appends `%`; the serializer emits
+    /// `BINARY col LIKE ? ESCAPE '!'`. Implies `native_starts_with`.
+    pub binary_like_starts_with: bool,
+
+    /// Whether the database has a native `LIKE` expression. When `false`,
+    /// `Expr::Like` cannot be sent to the driver; `starts_with` lowering
+    /// will not produce one.
+    pub native_like: bool,
+
+    /// Whether the database has a native case-insensitive `LIKE` operator
+    /// (`ILIKE`). Only PostgreSQL has one.
+    ///
+    /// Toasty does not emulate `ILIKE` on backends that lack it: `.ilike()`
+    /// is a pass-through to the database's own operator. When `native_ilike`
+    /// is `false`, the query-verify pass rejects a case-insensitive
+    /// `Expr::Like` with an
+    /// [`unsupported_feature`](crate::Error::unsupported_feature) error rather
+    /// than silently degrading to plain `LIKE`, whose case behavior differs.
+    ///
+    /// Implies `native_like`.
+    pub native_ilike: bool,
+
+    /// Whether the driver can answer queries that don't match any primary key
+    /// or index — i.e. supports unindexed full-table reads.
+    ///
+    /// SQL drivers set this to `true`: unindexed queries go through
+    /// [`QuerySql`](super::operation::QuerySql), so the SQL engine handles
+    /// them transparently. DynamoDB also sets this to `true`; the planner
+    /// emits [`Operation::Scan`](super::Operation::Scan) for the unindexed
+    /// case. A hypothetical pure key-value store with no full-scan capability
+    /// would set this to `false`.
+    pub scan: bool,
+
+    /// Whether scan operations support ordering results.
+    ///
+    /// SQL drivers do not use `Operation::Scan`, so this is `true` for them
+    /// (ordering is handled inside `QuerySql`). DynamoDB's `Scan` API returns
+    /// items in an arbitrary order with no server-side sort, so this is `false`
+    /// for DynamoDB. When `false`, the planner rejects queries that combine a
+    /// scan path with `ORDER BY`.
+    pub scan_supports_sort: bool,
+
     /// Whether to test connection pool behavior.
     /// TODO: We only need this for the `connection_per_clone.rs` test, come up with a better way.
     pub test_connection_pool: bool,
+
+    /// Whether the driver honors non-`Default`
+    /// [`TransactionMode`](super::operation::TransactionMode) variants
+    /// (`Immediate`, `Exclusive`). Currently `true` only for SQLite, which
+    /// maps them to `BEGIN IMMEDIATE` / `BEGIN EXCLUSIVE`. Drivers that
+    /// leave this `false` reject non-`Default` modes with
+    /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
+    pub transaction_lock_mode: bool,
+
+    /// Whether the backend can walk a paginated query in reverse from a
+    /// cursor.
+    ///
+    /// Gates the `prev_cursor` field on a `Page` returned to user code.
+    /// When `true`, the executor extracts a previous-page cursor from the
+    /// first row of every page (see `apply_sql_pagination` in
+    /// `toasty/src/engine/exec/exec_statement.rs`). When `false`, the
+    /// executor leaves `prev_cursor` as `None`, so
+    /// `Page::has_prev()` returns `false` and `Page::prev(&db)` resolves
+    /// to `Ok(None)` without issuing a query. `Paginate::before(cursor)`
+    /// itself is not rejected — users who already hold a cursor can walk
+    /// backwards explicitly — but a driver that returns `false` is
+    /// declaring that it has no way to *produce* such a cursor.
+    ///
+    /// Drivers should set this to `true` when the backend can answer a
+    /// query equivalent to "rows ordered by K, descending from K = c,
+    /// limited to N" — i.e. the same `ORDER BY` clause reversed plus a
+    /// strict inequality on the cursor key. SQL backends meet this
+    /// trivially. DynamoDB does not: a `Query` with `ScanIndexForward =
+    /// false` returns rows in the opposite direction but cannot be
+    /// rooted at an arbitrary client-supplied cursor without an extra
+    /// `KeyConditionExpression`, and `Scan` has no order guarantee at
+    /// all.
+    pub backward_pagination: bool,
+
+    /// Whether the backend supports `BOOL` as a key attribute type.
+    ///
+    /// DynamoDB only allows `S`, `N`, or `B` for primary-key and GSI key
+    /// attribute types; `BOOL` is rejected at the API level. SQL backends
+    /// have no such restriction. When `false`, the schema builder overrides
+    /// `storage_ty` for any `Bool` key/index field to `db::Type::Integer(1)`,
+    /// letting the engine cast `Bool ↔ I8` and the driver handle it as a
+    /// plain number — no driver-level bool-to-number special-casing needed.
+    pub bool_key_type: bool,
+
+    /// The driver's bind layer accepts a single parameter whose value is
+    /// `Value::List(items)` and type is `Type::List(elem)`, sending it as
+    /// one protocol-level parameter (not N separate scalars).
+    /// Property of the driver bind impl, not the SQL dialect.
+    pub bind_list_param: bool,
+
+    /// The SQL dialect parses `expr <op> ANY(<array>)` and `expr <op> ALL(<array>)`
+    /// as predicates against an array-valued operand.
+    /// Property of the dialect, not the bind layer.
+    pub predicate_match_any: bool,
+
+    /// Whether the database can store a `Vec<scalar>` model field as a native
+    /// array column (e.g. PostgreSQL `text[]`, `int8[]`).
+    ///
+    /// When `true`, schema build maps `Type::List(elem)` to `db::Type::List(elem)`
+    /// and the driver's bind layer accepts `Value::List(items)` as a single
+    /// array-valued parameter.
+    ///
+    /// When `false`, `Vec<T>` model fields use whatever fallback the backend
+    /// provides (JSON column on MySQL/SQLite, native List `L` on DynamoDB).
+    /// See [`Self::vec_scalar`] for the schema-build gate.
+    pub native_array: bool,
+
+    /// Whether the driver supports `Vec<scalar>` model fields, by whatever
+    /// representation (native typed array column, JSON column, key-value
+    /// list attribute, ...). Used by the schema builder as the gate for
+    /// accepting `stmt::Type::List(_)` fields.
+    pub vec_scalar: bool,
+
+    /// Whether the driver can store a `#[document]` collection field — a
+    /// `Vec<T>` of an embedded struct — as a single document column
+    /// (`jsonb` / `JSON` on the SQL backends). Used by the schema builder as
+    /// the gate for accepting `stmt::Type::List(Document(_))` fields.
+    pub document_collections: bool,
+
+    /// Whether the driver natively renders `IsSuperset` / `Intersects` array
+    /// predicates over an arbitrary right-hand-side expression.
+    ///
+    /// SQL drivers set this to `true`: each dialect has a single operator
+    /// (`@>` on PostgreSQL, `JSON_CONTAINS` on MySQL, a `json_each`
+    /// subquery on SQLite) that takes the rhs as a bound expression
+    /// regardless of its shape.
+    ///
+    /// DynamoDB sets this to `false`: it has no equivalent operator and
+    /// emulates the predicates by emitting one `contains(path, vN)` clause
+    /// per rhs element, which requires the rhs to be a concrete list of
+    /// values at filter-construction time. The capability check rejects
+    /// any other rhs shape before the driver is invoked.
+    pub native_array_set_predicates: bool,
+
+    /// Whether the driver supports atomic in-place removal of every element
+    /// equal to a given value from a `Vec<scalar>` field (`stmt::remove`).
+    ///
+    /// - PostgreSQL `text[]`: `true` — `array_remove(col, v)`.
+    /// - MySQL / SQLite JSON: `false` — no value-removal operator.
+    /// - DynamoDB List: `false` — no value-removal on Lists.
+    pub vec_remove: bool,
+
+    /// Whether the driver supports atomic in-place removal of the last
+    /// element of a `Vec<scalar>` field (`stmt::pop`).
+    ///
+    /// - PostgreSQL: `true` — array slicing.
+    /// - MySQL / SQLite: `false`.
+    /// - DynamoDB: `false` — `UpdateExpression` indices must be literal
+    ///   integers, so the last index cannot be expressed in one statement.
+    pub vec_pop: bool,
+
+    /// Whether the driver supports atomic in-place removal of an element at a
+    /// given index from a `Vec<scalar>` field (`stmt::remove_at`).
+    ///
+    /// - PostgreSQL: `true` — array slicing.
+    /// - MySQL / SQLite: `false`.
+    /// - DynamoDB: `false`.
+    pub vec_remove_at: bool,
 }
 
 /// Maps application-level types to the concrete database column types used for
@@ -156,9 +382,15 @@ pub struct StorageTypes {
 
 /// The database's capabilities to mutate the schema (tables, columns, indices).
 ///
-/// Used by the migration generator to decide how to express schema changes.
-/// For example, SQLite cannot alter column types so migrations must recreate
-/// the table instead.
+/// Used by the migration generator to decide how to express each
+/// column change. `alter_column_type` gates whether an in-place
+/// `ALTER COLUMN` is possible at all — SQLite has it set to `false`,
+/// and a type change there triggers a full table rebuild (create
+/// new table, copy rows, drop old). `alter_column_properties_atomic`
+/// decides whether several column-property changes (rename, retype,
+/// `NOT NULL`, default) collapse into one statement or emit one per
+/// property. MySQL sets both to `true`; PostgreSQL alters in place
+/// but requires one statement per property.
 ///
 /// Pre-built configurations: [`SQLITE`](Self::SQLITE),
 /// [`POSTGRESQL`](Self::POSTGRESQL), [`MYSQL`](Self::MYSQL),
@@ -185,6 +417,24 @@ pub struct SchemaMutations {
     pub alter_column_properties_atomic: bool,
 }
 
+/// SQL bind-parameter placeholder syntax accepted by a driver.
+///
+/// This describes the SQL text users must write when sending raw SQL through
+/// [`RawSql`](super::operation::RawSql). The SQL serializer uses the same
+/// value when rendering Toasty-generated SQL.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum SqlPlaceholder {
+    /// Positional `?` placeholders, where parameter order is the occurrence
+    /// order in the SQL string.
+    QuestionMark,
+
+    /// Numbered `?1`, `?2`, ... placeholders.
+    NumberedQuestionMark,
+
+    /// Numbered `$1`, `$2`, ... placeholders.
+    DollarNumber,
+}
+
 impl Capability {
     /// Validates the consistency of the capability configuration.
     ///
@@ -204,6 +454,44 @@ impl Capability {
         if !self.native_varchar && self.storage_types.varchar.is_some() {
             return Err(crate::Error::invalid_driver_configuration(
                 "native_varchar is false but storage_types.varchar is Some",
+            ));
+        }
+
+        // ILIKE is a case-insensitive LIKE; a backend cannot offer it without
+        // a native LIKE.
+        if self.native_ilike && !self.native_like {
+            return Err(crate::Error::invalid_driver_configuration(
+                "native_ilike is true but native_like is false",
+            ));
+        }
+
+        if self.glob_starts_with && !self.native_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "glob_starts_with is true but native_starts_with is false",
+            ));
+        }
+
+        if self.binary_like_starts_with && !self.native_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "binary_like_starts_with is true but native_starts_with is false",
+            ));
+        }
+
+        if self.glob_starts_with && self.binary_like_starts_with {
+            return Err(crate::Error::invalid_driver_configuration(
+                "glob_starts_with and binary_like_starts_with cannot both be true",
+            ));
+        }
+
+        if self.sql && self.sql_placeholder.is_none() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is true but sql_placeholder is None",
+            ));
+        }
+
+        if !self.sql && self.sql_placeholder.is_some() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is false but sql_placeholder is Some",
             ));
         }
 
@@ -249,6 +537,7 @@ impl Capability {
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
         sql: true,
+        sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
@@ -256,9 +545,16 @@ impl Capability {
         returning_from_mutation: true,
         primary_key_ne_predicate: true,
         auto_increment: true,
+        max_auto_increment_integer_width: Some(4),
         bigdecimal_implemented: false,
+        bool_key_type: true,
+        max_identifier_length: None,
 
         native_varchar: true,
+
+        // SQLite does not have native enum types; uses TEXT + CHECK
+        native_enum: false,
+        named_enum_types: false,
 
         // SQLite does not have native date/time types
         native_timestamp: false,
@@ -272,17 +568,81 @@ impl Capability {
 
         index_or_predicate: true,
 
+        // SQLite's GLOB operator is case-sensitive and is used for starts_with.
+        // LIKE is preserved for user-supplied `.like()` calls.
+        native_starts_with: true,
+        glob_starts_with: true,
+        binary_like_starts_with: false,
+        native_like: true,
+
+        // SQLite's `LIKE` is case-insensitive for ASCII only; it has no
+        // `ILIKE` operator, so `.ilike()` is rejected here.
+        native_ilike: false,
+
+        // SQL drivers handle unindexed queries via QuerySql (see field doc).
+        scan: true,
+        scan_supports_sort: true,
+
         test_connection_pool: false,
+
+        // SQLite exposes `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE` for
+        // lock-acquisition policy.
+        transaction_lock_mode: true,
+
+        backward_pagination: true,
+
+        // `Vec<scalar>` model fields land in a `TEXT` column holding a JSON
+        // document (JSON1 extension). The driver serializes `Value::List`
+        // to a JSON string at bind time, so the extract pass keeps the list
+        // as one `Value::List` parameter; the `InList` branch in
+        // `extract_params` covers the `IN (...)` case so this flag does
+        // not regress IN-list rendering. The predicate-side `ANY` rewrite
+        // is gated on `predicate_match_any`, which stays `false`, so
+        // `Path::contains` lowers to a `json_each` subquery instead.
+        bind_list_param: true,
+        predicate_match_any: false,
+
+        // SQLite has no native typed-array column type; `Vec<scalar>`
+        // model fields are stored as a JSON document in a `TEXT` column.
+        native_array: false,
+        vec_scalar: true,
+        document_collections: true,
+
+        // SQLite renders `IsSuperset` / `Intersects` as `json_each`
+        // subqueries that accept any rhs expression.
+        native_array_set_predicates: true,
+
+        // SQLite JSON1 has no value-removal operator on JSON arrays; pop
+        // and remove_at need a path expression built from
+        // `json_array_length`.
+        vec_remove: false,
+        vec_pop: false,
+        vec_remove_at: false,
     };
 
     /// PostgreSQL capabilities
     pub const POSTGRESQL: Self = Self {
         cte_with_update: true,
+        sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
         schema_mutations: SchemaMutations::POSTGRESQL,
         select_for_update: true,
         auto_increment: true,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
+        max_identifier_length: Some(63),
+
+        // PostgreSQL has the `^@` prefix-match operator.
+        native_starts_with: true,
+        glob_starts_with: false,
+        binary_like_starts_with: false,
+
+        // PostgreSQL is the only backend with a native `ILIKE` operator.
+        native_ilike: true,
+
+        // PostgreSQL has CREATE TYPE ... AS ENUM
+        native_enum: true,
+        named_enum_types: true,
 
         // PostgreSQL has native date/time types
         native_timestamp: true,
@@ -296,18 +656,45 @@ impl Capability {
 
         test_connection_pool: true,
 
+        // PostgreSQL has no SQLite-style lock-mode keyword on BEGIN.
+        transaction_lock_mode: false,
+
+        // PostgreSQL accepts a single array-valued bind param and supports
+        // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
+        bind_list_param: true,
+        predicate_match_any: true,
+
+        // PostgreSQL: native arrays (`text[]`, `int8[]`, …) are the storage
+        // representation for `Vec<scalar>` model fields.
+        native_array: true,
+        vec_scalar: true,
+        document_collections: true,
+
+        // PostgreSQL: all three collection removals are atomic via native
+        // array operators / slicing.
+        vec_remove: true,
+        vec_pop: true,
+        vec_remove_at: true,
+
         ..Self::SQLITE
     };
 
     /// MySQL capabilities
     pub const MYSQL: Self = Self {
         cte_with_update: false,
+        sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
         auto_increment: true,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: true,
+        max_identifier_length: Some(64),
+
+        // MySQL has inline ENUM('a', 'b') column types
+        native_enum: true,
+        named_enum_types: false,
 
         // MySQL has native date/time types
         native_timestamp: true,
@@ -321,12 +708,50 @@ impl Capability {
 
         test_connection_pool: true,
 
+        // MySQL has no SQLite-style lock-mode keyword on START TRANSACTION.
+        transaction_lock_mode: false,
+
+        // `Vec<scalar>` model fields land in a `JSON` column. The driver
+        // serializes `Value::List` to a JSON string at bind time, so the
+        // extract pass keeps the list as one `Value::List` parameter
+        // instead of expanding it (the `InList` branch in
+        // `extract_params` covers the `IN (...)` case so this flag does
+        // not regress the IN-list rendering).
+        bind_list_param: true,
+        vec_scalar: true,
+        document_collections: true,
+
+        // MySQL uses BINARY col LIKE ? ESCAPE '!' for case-sensitive starts_with.
+        glob_starts_with: false,
+        binary_like_starts_with: true,
+
+        ..Self::SQLITE
+    };
+
+    /// Turso capabilities.
+    ///
+    /// Identical to [`SQLITE`](Self::SQLITE) at the flag level. The driver
+    /// extends SQLite's behavior in two ways that don't fit a capability
+    /// bit:
+    ///
+    /// * It opens a real async connection per pool slot (sharing a cached
+    ///   `Database` across `connect()` calls), so the connection-pool test
+    ///   suite applies.
+    /// * When `Turso::concurrent_writes()` is enabled, the driver issues
+    ///   `BEGIN CONCURRENT` for `TransactionMode::Default`, opting the
+    ///   transaction into Turso's MVCC concurrency. The other
+    ///   `TransactionMode` variants pass through to the SQLite serializer
+    ///   unchanged, so callers can still request the classic locking
+    ///   strategies per transaction.
+    pub const TURSO: Self = Self {
+        test_connection_pool: true,
         ..Self::SQLITE
     };
 
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
         sql: false,
+        sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
@@ -334,8 +759,15 @@ impl Capability {
         returning_from_mutation: false,
         primary_key_ne_predicate: false,
         auto_increment: false,
+        max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
+        max_identifier_length: None,
+        // DynamoDB key attributes (primary key and GSI keys) only support
+        // S, N, or B — BOOL is not a valid key attribute type.
+        bool_key_type: false,
         native_varchar: false,
+        native_enum: false,
+        named_enum_types: false,
 
         // DynamoDB does not have native date/time types
         native_timestamp: false,
@@ -349,7 +781,52 @@ impl Capability {
 
         index_or_predicate: false,
 
+        // DynamoDB has `begins_with()` but no LIKE or ILIKE.
+        native_starts_with: true,
+        glob_starts_with: false,
+        binary_like_starts_with: false,
+        native_like: false,
+        native_ilike: false,
+
+        scan: true,
+        scan_supports_sort: false,
+
         test_connection_pool: false,
+
+        // DynamoDB rejects `Operation::Transaction` wholesale.
+        transaction_lock_mode: false,
+
+        backward_pagination: false,
+
+        // DynamoDB: not SQL-based; the array-bind/`ANY`-predicate features do
+        // not apply.
+        bind_list_param: false,
+        predicate_match_any: false,
+
+        // DynamoDB has no SQL-style typed-array column type; the
+        // `db::Type::List(elem)` storage shape doesn't apply. `Vec<scalar>`
+        // model fields land directly on a List `L` attribute via the driver's
+        // `AttributeValue` encoding.
+        native_array: false,
+        vec_scalar: true,
+        // `#[document]` embeds store as a native Map `M` attribute (a
+        // `Vec<embed>` collection as a List `L` of Maps). DynamoDB caps
+        // attribute nesting at 32 levels; documents deeper than that are not
+        // rejected up front — the write surfaces DynamoDB's own error.
+        document_collections: true,
+
+        // DynamoDB emulates `IsSuperset` / `Intersects` by expanding the rhs
+        // into one `contains(path, vN)` clause per element. The expansion
+        // requires the rhs to be a `Value::List` at filter-construction time
+        // — the capability check rejects any other rhs shape.
+        native_array_set_predicates: false,
+
+        // DynamoDB Lists have no atomic value-removal, and pop cannot be
+        // expressed because `UpdateExpression` indices must be literal
+        // integers.
+        vec_remove: false,
+        vec_pop: false,
+        vec_remove_at: false,
     };
 }
 
@@ -539,6 +1016,40 @@ mod tests {
     fn test_validate_dynamodb_capability() {
         // DynamoDB has native_varchar=false and varchar=None, should pass
         assert!(Capability::DYNAMODB.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_fails_when_sql_has_no_placeholder() {
+        let invalid = Capability {
+            sql_placeholder: None,
+            ..Capability::SQLITE
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("sql is true but sql_placeholder is None")
+        );
+    }
+
+    #[test]
+    fn test_validate_fails_when_non_sql_has_placeholder() {
+        let invalid = Capability {
+            sql_placeholder: Some(SqlPlaceholder::QuestionMark),
+            ..Capability::DYNAMODB
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("sql is false but sql_placeholder is Some")
+        );
     }
 
     #[test]

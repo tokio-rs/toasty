@@ -1,0 +1,23 @@
+error[E0277]: field type `uuid::Uuid` is not compatible with the requested auto strategy `toasty::codegen_support::auto::tag::Increment`
+ --> tests/ui/auto_increment_on_uuid.rs:8:9
+  |
+8 |     id: uuid::Uuid,
+  |         ^^^^^^^^^^ incompatible Rust type for `#[auto(...)]`
+  |
+  = note: see `toasty::codegen_support::auto` for the compatibility table
+help: the trait `AutoCompatible<toasty::codegen_support::auto::tag::Increment>` is not implemented for `uuid::Uuid`
+      but trait `AutoCompatible<toasty::codegen_support::auto::tag::Uuid>` is implemented for it
+ --> $WORKSPACE/crates/toasty/src/codegen_support/auto.rs
+  |
+  | impl AutoCompatible<tag::Uuid> for uuid::Uuid {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = help: for that trait implementation, expected `toasty::codegen_support::auto::tag::Uuid`, found `toasty::codegen_support::auto::tag::Increment`
+note: required by a bound in `_check`
+ --> tests/ui/auto_increment_on_uuid.rs:4:17
+  |
+4 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^ required by this bound in `_check`
+...
+8 |     id: uuid::Uuid,
+  |         ---- required by a bound in this function
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

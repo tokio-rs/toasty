@@ -22,8 +22,11 @@ fn id_field(model: ModelId) -> Field {
         nullable: false,
         primary_key: true,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -42,8 +45,11 @@ fn prim_field(model: ModelId, index: usize, name: &str) -> Field {
         nullable: false,
         primary_key: false,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -62,11 +68,14 @@ fn variant_field(model: ModelId, index: usize, name: &str, variant_index: usize)
         nullable: false,
         primary_key: false,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: Some(VariantId {
             model,
             index: variant_index,
         }),
+        shared: None,
     }
 }
 
@@ -84,8 +93,11 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
         nullable: false,
         primary_key: false,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -169,8 +181,9 @@ fn schema() -> Schema {
                 index: 0,
             },
         },
-        table_name: None,
+        table_name: "users".to_string(),
         indices: vec![],
+        version_field: None,
     });
 
     Schema::from_macro([user, status, contact, address]).unwrap()

@@ -18,6 +18,7 @@ use crate::schema::db::{IndexOp, IndexScope};
 ///
 /// let index = Index {
 ///     id: IndexId { model: ModelId(0), index: 0 },
+///     name: None,
 ///     fields: vec![IndexField {
 ///         field: ModelId(0).field(0),
 ///         op: IndexOp::Eq,
@@ -33,6 +34,11 @@ use crate::schema::db::{IndexOp, IndexScope};
 pub struct Index {
     /// Uniquely identifies this index within the schema.
     pub id: IndexId,
+
+    /// User-provided index name from `#[index(name = "...", ...)]` or
+    /// `#[key(name = "...", ...)]`. When `None`, the schema builder generates
+    /// a name automatically.
+    pub name: Option<String>,
 
     /// Fields included in the index, in order.
     pub fields: Vec<IndexField>,

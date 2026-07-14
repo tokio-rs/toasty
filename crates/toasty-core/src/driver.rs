@@ -6,9 +6,15 @@
 //! operations against a live database session).
 //!
 //! The query planner inspects [`Capability`] to decide which [`Operation`]
-//! variants to emit. SQL-based drivers receive [`Operation::QuerySql`] and
-//! [`Operation::Insert`], while key-value drivers (e.g., DynamoDB) receive
-//! [`Operation::GetByKey`], [`Operation::QueryPk`], etc.
+//! variants to emit. SQL-based drivers receive [`Operation::QuerySql`],
+//! [`Operation::RawSql`], and [`Operation::Insert`], while key-value drivers
+//! (e.g., DynamoDB) receive [`Operation::GetByKey`], [`Operation::QueryPk`], etc. The
+//! [`SchemaMutations`] sub-struct (`Capability::schema_mutations`) describes
+//! what the database can do to its own schema — for example, whether
+//! `ALTER COLUMN` can change a column's type — and the migration generator
+//! consults it to decide between an in-place alter and a table rebuild.
+//! [`SqlPlaceholder`] describes the bind placeholder syntax used by SQL
+//! operations and raw SQL.
 //!
 //! # Architecture
 //!
@@ -18,9 +24,39 @@
 //!                        │
 //!               Driver::capability()
 //! ```
+//!
+//! # Error classification
+//!
+//! The pool and the engine branch on the error variant returned from
+//! [`Connection::exec`] and [`Connection::ping`]. Drivers MUST cooperate
+//! with those branches:
+//!
+//! - A connection-level fault (closed socket, broken pipe, protocol
+//!   error, end-of-stream during handshake) MUST be classified as
+//!   [`crate::Error::connection_lost`]. The pool uses that signal to
+//!   evict the slot and to wake the background sweep, which then pings
+//!   the remaining idle connections and drops any that also fail. Any
+//!   other error variant for the same condition leaks a dead connection
+//!   back into the pool.
+//!
+//! - A retryable transaction conflict (PostgreSQL SQLSTATE `40001`,
+//!   MySQL error `1213`) SHOULD be classified as
+//!   [`crate::Error::serialization_failure`]. The engine does not retry
+//!   automatically; the classification is propagated to user code so
+//!   the caller can decide.
+//!
+//! - A write attempted against a read-only session (PostgreSQL
+//!   `25006`, MySQL `1792`) SHOULD be classified as
+//!   [`crate::Error::read_only_transaction`].
+//!
+//! Other backend errors are typically wrapped with
+//! [`crate::Error::driver_operation_failed`].
 
 mod capability;
-pub use capability::{Capability, StorageTypes};
+pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
+
+pub mod log;
+pub use log::QueryLogConfig;
 
 mod response;
 pub use response::{ExecResponse, Rows};
@@ -30,12 +66,32 @@ pub use operation::{IsolationLevel, Operation};
 
 use crate::schema::{
     Schema,
-    db::{AppliedMigration, Migration, SchemaDiff},
+    db::{AppliedMigration, Migration},
+    diff,
 };
 
 use async_trait::async_trait;
 
 use std::{borrow::Cow, fmt::Debug, sync::Arc};
+
+/// Per-connection configuration passed to [`Driver::connect`].
+///
+/// The connection pool builds one from the values set on `Db::builder()` and
+/// hands it to the driver every time a new connection is created, so drivers
+/// can apply configuration at construction time rather than through separate
+/// setters. Callers connecting outside a pool use
+/// [`ConnectContext::default()`].
+///
+/// The struct is non-exhaustive: construct it with `default()` and assign the
+/// fields to override.
+#[derive(Debug, Clone, Default)]
+#[non_exhaustive]
+pub struct ConnectContext {
+    /// Configuration for the per-query `toasty::query` tracing event (see
+    /// [`log`]). Drivers that emit the event store this on the connection
+    /// and consult it on every operation.
+    pub query_log: QueryLogConfig,
+}
 
 /// Factory for database connections and provider of driver-level metadata.
 ///
@@ -55,7 +111,7 @@ use std::{borrow::Cow, fmt::Debug, sync::Arc};
 /// let capability = driver.capability();
 /// assert!(capability.sql);
 ///
-/// let conn = driver.connect().await.unwrap();
+/// let conn = driver.connect(&ConnectContext::default()).await.unwrap();
 /// ```
 #[async_trait]
 pub trait Driver: Debug + Send + Sync + 'static {
@@ -68,8 +124,9 @@ pub trait Driver: Debug + Send + Sync + 'static {
     /// Creates a new connection to the database.
     ///
     /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is
-    /// available and there is room to create a new [`Connection`].
-    async fn connect(&self) -> crate::Result<Box<dyn Connection>>;
+    /// available and there is room to create a new [`Connection`]. The [`ConnectContext`] carries
+    /// per-connection configuration the driver applies at construction time.
+    async fn connect(&self, cx: &ConnectContext) -> crate::Result<Box<dyn Connection>>;
 
     /// Returns the maximum number of simultaneous database connections supported. For example,
     /// this is `Some(1)` for the in-memory SQLite driver which cannot be pooled.
@@ -77,8 +134,8 @@ pub trait Driver: Debug + Send + Sync + 'static {
         None
     }
 
-    /// Generates a migration from a [`SchemaDiff`].
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration;
+    /// Generates a migration from a [`diff::Schema`].
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration;
 
     /// Drops the entire database and recreates an empty one without applying migrations.
     ///
@@ -109,7 +166,74 @@ pub trait Connection: Debug + Send + 'static {
     /// query engine compiles user queries into [`Operation`] values and
     /// dispatches them here. The driver translates each operation into
     /// backend-specific calls and returns an [`ExecResponse`].
+    ///
+    /// Drivers use only the database-level half of the schema (`schema.db`:
+    /// tables, columns, indices). The application schema (models, fields,
+    /// mappings) is an engine concept that a driver never consults.
+    /// Everything in the operation is already expressed in database terms:
+    /// `#[document]` values arrive as named `Value::Object`s, document paths
+    /// as resolved `FuncJsonExtract` name paths, and document columns are
+    /// typed by the structural `Type::Object`.
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
+
+    /// Cheap, synchronous, local check that the driver's client object
+    /// still considers the connection open.
+    ///
+    /// Examples: a flag the driver flips when its background reader
+    /// reports a socket close (the MySQL driver does this), an
+    /// `is_closed()` accessor on the underlying client. Implementations
+    /// must not block and must not perform I/O — the check runs on the
+    /// hot path of every recycle and must complete in nanoseconds.
+    /// Drivers that cannot answer cheaply leave this at the default and
+    /// rely on the pool's [`ping`](Self::ping) sweep or the per-acquire
+    /// pre-ping option to catch a dead connection.
+    ///
+    /// The pool consults `is_valid()` whenever a connection is returned
+    /// to the idle set. A `false` result causes the slot to be dropped
+    /// before another caller can pick it up; the pool then returns
+    /// another idle connection or opens a fresh one. A connection is
+    /// also re-checked immediately after every [`Connection::exec`]; if
+    /// the operation flipped the flag (e.g. the driver classified the
+    /// error as connection-lost and updated its state), the worker task
+    /// exits and the slot is evicted.
+    ///
+    /// The default returns `true`. Drivers without a usable passive
+    /// signal stay on this default and rely on the active path: an
+    /// operation surfaces [`crate::Error::connection_lost`], the pool
+    /// drops the slot, and the background sweep eagerly pings the rest
+    /// of the idle pool.
+    fn is_valid(&self) -> bool {
+        true
+    }
+
+    /// Active liveness probe. The pool's background health-check sweep
+    /// calls this on the longest-idle connection on every tick, and on
+    /// every other idle connection when an escalation is triggered.
+    /// When `pool_pre_ping` is enabled, the pool also calls it on every
+    /// acquire.
+    ///
+    /// Drivers MUST classify a failure here as
+    /// [`crate::Error::connection_lost`] rather than a generic operation
+    /// error. The pool branches on that classification to drop the slot
+    /// (vs. returning it to the idle set after a transient query
+    /// error), and a user-observed `connection_lost` is what wakes the
+    /// pool's sweep to eagerly check the rest of the pool. Returning
+    /// any other error variant from `ping` will leak a dead connection
+    /// back into rotation.
+    ///
+    /// Drivers SHOULD make this the cheapest round-trip the backend
+    /// supports (`SELECT 1`, `COM_PING`, etc.). A ping that runs slower
+    /// than the sweep's per-call timeout (5 seconds, internal) is
+    /// treated as failed.
+    ///
+    /// The default returns `Ok(())` without doing any I/O. That is the
+    /// right answer for drivers whose connection layer cannot fail in
+    /// isolation (the in-process SQLite driver) or whose backend
+    /// manages its own pool beneath this surface (DynamoDB, where each
+    /// `exec` is an HTTP call with its own retry policy).
+    async fn ping(&mut self) -> crate::Result<()> {
+        Ok(())
+    }
 
     /// Creates tables and indices defined in the schema on the database.
     /// TODO: This will probably use database introspection in the future.

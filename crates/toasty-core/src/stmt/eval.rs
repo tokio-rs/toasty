@@ -19,7 +19,8 @@
 use crate::{
     Result,
     stmt::{
-        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Projection, Statement, Value,
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, InputResolve, Limit, Projection,
+        Statement, Value,
     },
 };
 use std::cmp::Ordering;
@@ -201,9 +202,24 @@ impl Expr {
                     BinaryOp::Gt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Greater).into()),
                     BinaryOp::Le => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Greater).into()),
                     BinaryOp::Lt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Less).into()),
+                    BinaryOp::Add => lhs.checked_add(&rhs).ok_or_else(|| {
+                        crate::Error::expression_evaluation_failed(
+                            "arithmetic overflow or type mismatch in `+`",
+                        )
+                    }),
+                    BinaryOp::Sub => lhs.checked_sub(&rhs).ok_or_else(|| {
+                        crate::Error::expression_evaluation_failed(
+                            "arithmetic overflow or type mismatch in `-`",
+                        )
+                    }),
                 }
             }
-            Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
+            Expr::Cast(expr_cast) => {
+                let value = expr_cast.expr.eval_ref(scope, input)?;
+                expr_cast
+                    .ty
+                    .cast_from(&InputResolve(&*input), expr_cast.from.as_ref(), value)
+            }
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
             )),
@@ -346,6 +362,26 @@ impl Expr {
 
                 Ok(items.iter().any(|item| item == &needle).into())
             }
+            Expr::AnyOp(e) => {
+                let lhs = e.lhs.eval_ref(scope, input)?;
+                let rhs = e.rhs.eval_ref(scope, input)?;
+                let Value::List(items) = rhs else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "ANY right-hand side must evaluate to a list",
+                    ));
+                };
+                Ok(any_all_compare(&lhs, &items, e.op, /*all=*/ false)?.into())
+            }
+            Expr::AllOp(e) => {
+                let lhs = e.lhs.eval_ref(scope, input)?;
+                let rhs = e.rhs.eval_ref(scope, input)?;
+                let Value::List(items) = rhs else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "ALL right-hand side must evaluate to a list",
+                    ));
+                };
+                Ok(any_all_compare(&lhs, &items, e.op, /*all=*/ true)?.into())
+            }
             Expr::Match(expr_match) => {
                 let subject = expr_match.subject.eval_ref(scope, input)?;
                 for arm in &expr_match.arms {
@@ -378,6 +414,31 @@ impl Expr {
                 }
             }
             Expr::Value(value) => Ok(value.clone()),
+            // A document path read: navigate the named wire form
+            // (`Value::Object`) by key, then cast the leaf to the extraction's
+            // declared type. This is how a driver-side in-memory check (e.g.
+            // the DynamoDB conditional-write filter probe) evaluates a lowered
+            // document path against a decoded item.
+            Expr::Func(super::ExprFunc::JsonExtract(func)) => {
+                let mut value = func.base.eval_ref(scope, input)?;
+                for key in &func.path {
+                    value = match value {
+                        Value::Object(mut object) => {
+                            match object.entries.iter().position(|(k, _)| k == key) {
+                                Some(index) => object.entries.swap_remove(index).1,
+                                None => return Ok(Value::Null),
+                            }
+                        }
+                        Value::Null => return Ok(Value::Null),
+                        other => {
+                            return Err(crate::Error::expression_evaluation_failed(format!(
+                                "document path step `{key}` into non-object value {other:?}"
+                            )));
+                        }
+                    };
+                }
+                func.ty.cast(&InputResolve(&*input), value)
+            }
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",
             )),
@@ -443,4 +504,31 @@ fn cmp_ordered(lhs: &Value, rhs: &Value) -> Result<Ordering> {
     lhs.partial_cmp(rhs).ok_or_else(|| {
         crate::Error::expression_evaluation_failed("ordered comparison between incompatible types")
     })
+}
+
+fn any_all_compare(lhs: &Value, items: &[Value], op: BinaryOp, all: bool) -> Result<bool> {
+    for item in items {
+        let matches = match op {
+            BinaryOp::Eq => lhs == item,
+            BinaryOp::Ne => lhs != item,
+            BinaryOp::Ge => cmp_ordered(lhs, item)? != Ordering::Less,
+            BinaryOp::Gt => cmp_ordered(lhs, item)? == Ordering::Greater,
+            BinaryOp::Le => cmp_ordered(lhs, item)? != Ordering::Greater,
+            BinaryOp::Lt => cmp_ordered(lhs, item)? == Ordering::Less,
+            BinaryOp::Add | BinaryOp::Sub => {
+                return Err(crate::Error::expression_evaluation_failed(
+                    "ANY/ALL only supports comparison operators",
+                ));
+            }
+        };
+        if all {
+            if !matches {
+                return Ok(false);
+            }
+        } else if matches {
+            return Ok(true);
+        }
+    }
+    // ANY over empty list → false; ALL over empty list → true.
+    Ok(all)
 }

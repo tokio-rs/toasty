@@ -1,7 +1,7 @@
 //! Test scoped queries on has_many associations
 
 use crate::prelude::*;
-use std::collections::HashSet;
+use hashbrown::HashSet;
 
 #[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
 pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
@@ -12,7 +12,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -26,7 +26,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
 
@@ -73,7 +73,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     // Query todos scoped by user 1
     let todos = u1
         .todos()
-        .query(Todo::fields().order().eq(0))
+        .filter(Todo::fields().order().eq(0))
         .exec(&mut db)
         .await?;
 
@@ -85,7 +85,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     // Querying todos scoped by user 2
     let todos = u2
         .todos()
-        .query(Todo::fields().order().eq(0))
+        .filter(Todo::fields().order().eq(0))
         .exec(&mut db)
         .await?;
 
@@ -106,7 +106,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     // Query for order 0 todos again
     let todos = u1
         .todos()
-        .query(Todo::fields().order().eq(0))
+        .filter(Todo::fields().order().eq(0))
         .exec(&mut db)
         .await?;
 
@@ -121,7 +121,7 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     // Query for non-existent TODOs
     let todos = u2
         .todos()
-        .query(Todo::fields().order().eq(1))
+        .filter(Todo::fields().order().eq(1))
         .exec(&mut db)
         .await?;
 
@@ -138,7 +138,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -152,7 +152,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
 
@@ -177,7 +177,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     // Find all != 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::fields().order().ne(2))
+        .filter(Todo::fields().order().ne(2))
         .exec(&mut db)
         .await?;
 
@@ -193,7 +193,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     // Find all greater than 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::fields().order().gt(2))
+        .filter(Todo::fields().order().gt(2))
         .exec(&mut db)
         .await?;
 
@@ -205,7 +205,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     // Find all greater than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::fields().order().ge(2))
+        .filter(Todo::fields().order().ge(2))
         .exec(&mut db)
         .await?;
 
@@ -217,7 +217,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     // Find all less than to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::fields().order().lt(2))
+        .filter(Todo::fields().order().lt(2))
         .exec(&mut db)
         .await?;
 
@@ -229,7 +229,7 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     // Find all less than or equal to 2
     let todos: Vec<_> = user
         .todos()
-        .query(Todo::fields().order().le(2))
+        .filter(Todo::fields().order().le(2))
         .exec(&mut db)
         .await?;
 

@@ -30,6 +30,9 @@ The method name matches the key field name. A model with `#[key] code: String`
 generates `get_by_code()`. Composite keys generate combined names like
 `get_by_student_id_and_course_id()`.
 
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+
 ## Get all records
 
 `<YourModel>::all()` returns a query for all records of that model.
@@ -200,6 +203,111 @@ let users = User::filter_by_name("Alice")
 
 Each `.filter()` call adds an AND condition to the query.
 
+## Projecting columns with `.select()`
+
+By default a query returns full model rows. `.select()` replaces the
+projection so the query returns one or more chosen field values
+instead. The terminal `.exec()` then yields `Vec<T>` where `T` matches
+the projection — a single field path yields `Vec<FieldType>`, a tuple
+yields `Vec<(...)>`.
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+// Just the names.
+let names: Vec<String> = User::all()
+    .select(User::fields().name())
+    .exec(&mut db)
+    .await?;
+
+// A tuple of two fields.
+let pairs: Vec<(u64, String)> = User::all()
+    .select((User::fields().id(), User::fields().name()))
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+`.select()` works on any query — `all()`, `filter()`, and
+`filter_by_*()` — and lets the database skip reading columns the caller
+will not look at. Chain it after a filter to project a subset of
+columns from the matching rows:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let name: Option<String> = User::filter_by_email("alice@example.com")
+    .select(User::fields().name())
+    .first()
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+`.select()` can also project a [multi-step (`via`)
+relation](./has-many.md#multi-step-relations-via), returning the related
+records per row — a `Vec<T>` for a `has_many` `via`, or a single optional
+record for a `has_one` `via`:
+
+```rust,ignore
+// The distinct articles each user has commented on.
+let per_user: Vec<Vec<Article>> = User::all()
+    .select(User::fields().commented_articles())
+    .exec(&mut db)
+    .await?;
+```
+
+Projecting a `via` relation is supported on SQL backends; it is not yet
+available on DynamoDB.
+
+## Sorting by most recent
+
+`.latest_by(field)` sorts the query in descending order of the named
+field — shorthand for `order_by(field.desc())`:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Post {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     title: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let recent = Post::all()
+    .latest_by(Post::fields().id())
+    .limit(10)
+    .exec(&mut db)
+    .await?;
+# Ok(())
+# }
+```
+
+Use it when the natural ordering for a model is "newest first" and the
+sort field doubles as a recency proxy — auto-incrementing keys, UUIDv7
+keys, or a `created_at` timestamp.
+
 ## What gets generated
 
 For a model with `#[key]` on `id` and `#[unique]` on `email`, Toasty generates:
@@ -220,3 +328,8 @@ Query builders support these terminal methods:
 | `.exec(&mut db)` | `Result<Vec<User>>` |
 | `.first().exec(&mut db)` | `Result<Option<User>>` |
 | `.get(&mut db)` | `Result<User>` |
+
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog

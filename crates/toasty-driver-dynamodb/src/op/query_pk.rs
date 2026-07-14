@@ -3,7 +3,10 @@ use super::{
     operation, serialize_ddb_cursor, stmt,
 };
 use std::sync::Arc;
-use toasty_core::{driver::ExecResponse, stmt::ExprContext};
+use toasty_core::{
+    driver::{ExecResponse, operation::Pagination},
+    stmt::ExprContext,
+};
 
 impl Connection {
     pub(crate) async fn exec_query_pk(
@@ -25,91 +28,125 @@ impl Connection {
             .as_ref()
             .map(|expr| ddb_expression(&cx, &mut expr_attrs, false, expr));
 
-        // Build the query based on whether we're querying primary key or an index
-        let result = if let Some(index_id) = op.index {
-            let index = schema.db.index(index_id);
+        // Build base query
+        let mut query = self
+            .client
+            .query()
+            .table_name(&table.name)
+            .key_condition_expression(key_expression)
+            .set_filter_expression(filter_expression)
+            .set_expression_attribute_names(Some(expr_attrs.attr_names))
+            .set_expression_attribute_values(Some(expr_attrs.attr_values));
 
+        if let Some(index_id) = op.index {
+            let index = schema.db.index(index_id);
             if index.unique {
-                use toasty_core::Error;
-                let err = Error::from_args(format_args!(
+                return Err(toasty_core::Error::from_args(format_args!(
                     "Unique index {} doesn't have fields.",
                     index.name
-                ));
-                Err(err)
-            } else {
-                tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
-                let mut query = self
-                    .client
-                    .query()
-                    .table_name(&table.name)
-                    .index_name(&index.name)
-                    .key_condition_expression(key_expression)
-                    .set_filter_expression(filter_expression)
-                    .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                    .set_expression_attribute_values(Some(expr_attrs.attr_values));
-
-                if let Some(limit) = op.limit {
-                    query = query.limit(limit as i32);
-                }
-                if let Some(ref cursor_value) = op.cursor {
-                    query =
-                        query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
-                }
-                if let Some(ref direction) = op.order {
-                    query = query.scan_index_forward(*direction == stmt::Direction::Asc);
-                }
-
-                query
-                    .send()
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)
+                )));
             }
+            tracing::trace!(table_name = %table.name, index_name = %index.name, "querying secondary index");
+            query = query.index_name(&index.name);
         } else {
             tracing::trace!(table_name = %table.name, "querying primary key");
-            let mut query = self
-                .client
-                .query()
-                .table_name(&table.name)
-                .key_condition_expression(key_expression)
-                .set_filter_expression(filter_expression)
-                .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                .set_expression_attribute_values(Some(expr_attrs.attr_values));
+        }
 
-            if let Some(limit) = op.limit {
-                query = query.limit(limit as i32);
+        if let Some(ref direction) = op.order {
+            query = query.scan_index_forward(*direction == stmt::Direction::Asc);
+        }
+
+        let select = op.select;
+        let cols = || select.iter().map(|&id| schema.db.column(id));
+
+        match op.limit {
+            None => {
+                let mut stream = query.into_paginator().items().send();
+
+                let mut rows: Vec<stmt::Value> = Vec::new();
+                while let Some(item) = stream
+                    .next()
+                    .await
+                    .transpose()
+                    .map_err(toasty_core::Error::driver_operation_failed)?
+                {
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                }
+
+                Ok(ExecResponse {
+                    values: toasty_core::driver::Rows::Stream(stmt::ValueStream::from_vec(rows)),
+                    next_cursor: None,
+                    prev_cursor: None,
+                })
             }
-            if let Some(ref cursor_value) = op.cursor {
-                query = query.set_exclusive_start_key(Some(deserialize_ddb_cursor(cursor_value)));
+
+            Some(Pagination::Cursor { page_size, after }) => {
+                query = query.limit(page_size as i32);
+                if let Some(cursor_value) = after {
+                    query =
+                        query.set_exclusive_start_key(Some(deserialize_ddb_cursor(&cursor_value)));
+                }
+
+                let res = query
+                    .send()
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+
+                let cursor = res.last_evaluated_key.as_ref().map(serialize_ddb_cursor);
+
+                let mut rows: Vec<stmt::Value> = Vec::new();
+                for item in res.items.into_iter().flatten() {
+                    rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                }
+
+                Ok(ExecResponse {
+                    values: toasty_core::driver::Rows::Stream(stmt::ValueStream::from_vec(rows)),
+                    next_cursor: cursor,
+                    prev_cursor: None,
+                })
             }
-            if let Some(ref direction) = op.order {
-                query = query.scan_index_forward(*direction == stmt::Direction::Asc);
+
+            Some(Pagination::Offset { limit, offset }) => {
+                let skip = offset.unwrap_or(0) as usize;
+                let need = limit as usize + skip;
+                // DynamoDB Limit applies before filter expressions, so we fetch
+                // skip+limit items and discard the first `skip` client-side.
+                let mut stream = query.into_paginator().page_size(need as i32).items().send();
+
+                let mut skipped = 0;
+                while skipped < skip {
+                    match stream
+                        .next()
+                        .await
+                        .transpose()
+                        .map_err(toasty_core::Error::driver_operation_failed)?
+                    {
+                        Some(_) => skipped += 1,
+                        None => break,
+                    }
+                }
+
+                let mut rows: Vec<stmt::Value> = Vec::with_capacity(limit as usize);
+                while rows.len() < limit as usize {
+                    match stream
+                        .next()
+                        .await
+                        .transpose()
+                        .map_err(toasty_core::Error::driver_operation_failed)?
+                    {
+                        Some(item) => {
+                            rows.push(item_to_record(&item, cols()).map(stmt::Value::from)?);
+                        }
+                        None => break,
+                    }
+                }
+
+                Ok(ExecResponse {
+                    values: toasty_core::driver::Rows::Stream(stmt::ValueStream::from_vec(rows)),
+                    next_cursor: None,
+                    prev_cursor: None,
+                })
             }
-
-            query
-                .send()
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)
-        };
-
-        let schema = schema.clone();
-        let res = result?;
-
-        // Capture LastEvaluatedKey for pagination
-        let cursor = res.last_evaluated_key.as_ref().map(serialize_ddb_cursor);
-
-        let rows = stmt::ValueStream::from_iter(res.items.into_iter().flatten().map(move |item| {
-            item_to_record(
-                &item,
-                op.select
-                    .iter()
-                    .map(|column_id| schema.db.column(*column_id)),
-            )
-        }));
-
-        Ok(ExecResponse {
-            values: toasty_core::driver::Rows::Stream(rows),
-            next_cursor: cursor,
-            prev_cursor: None,
-        })
+        }
     }
 }

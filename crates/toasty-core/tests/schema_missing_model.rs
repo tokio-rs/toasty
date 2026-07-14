@@ -19,8 +19,11 @@ fn make_id_field(model_id: ModelId) -> Field {
         nullable: false,
         primary_key: true,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -38,8 +41,9 @@ fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
                 index: 0,
             },
         },
-        table_name: None,
+        table_name: name.to_string(),
         indices: vec![],
+        version_field: None,
     })
 }
 
@@ -54,8 +58,11 @@ fn make_relation_field(model_id: ModelId, index: usize, name: &str, ty: FieldTy)
         nullable: false,
         primary_key: false,
         auto: None,
+        versionable: false,
+        deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -85,11 +92,13 @@ fn has_many_target_not_registered() {
             model_a,
             1,
             "talks",
-            FieldTy::HasMany(HasMany {
+            FieldTy::Has(Has {
                 target: MISSING,
                 expr_ty: stmt::Type::list(stmt::Type::Unknown),
-                singular: Name::new("talk"),
-                pair: FieldId {
+                cardinality: Cardinality::Many {
+                    singular: Name::new("talk"),
+                },
+                pair_id: FieldId {
                     model: MISSING,
                     index: 0,
                 },
@@ -111,10 +120,11 @@ fn has_one_target_not_registered() {
             model_a,
             1,
             "profile",
-            FieldTy::HasOne(HasOne {
+            FieldTy::Has(Has {
                 target: MISSING,
                 expr_ty: stmt::Type::Unknown,
-                pair: FieldId {
+                cardinality: Cardinality::One,
+                pair_id: FieldId {
                     model: MISSING,
                     index: 0,
                 },

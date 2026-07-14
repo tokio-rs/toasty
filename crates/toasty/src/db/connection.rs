@@ -1,15 +1,20 @@
 use super::Transaction;
-use super::pool::{ConnectionHandle, ConnectionOperation, Manager};
+use super::connection_task::{ConnectionHandle, ConnectionOperation};
+use super::pool::Manager;
 use super::tx::ConnRef;
 
 use async_trait::async_trait;
 use std::sync::Arc;
 use toasty_core::{
     Schema,
-    driver::{ExecResponse, operation::Operation},
+    driver::{
+        Capability, ExecResponse,
+        operation::{Operation, RawSql},
+    },
     stmt,
 };
 use tokio::sync::oneshot;
+use tracing::Instrument;
 
 /// A dedicated database connection retrieved from a pool.
 ///
@@ -39,6 +44,10 @@ impl Connection {
         stmt: stmt::Statement,
         in_transaction: bool,
     ) -> crate::Result<ExecResponse> {
+        // Created on the caller's task so the span parents to the caller's
+        // current span; the worker task enters it while executing.
+        let span = crate::instrument::query_span(&self.shared.engine.schema, &stmt);
+
         let (tx, rx) = oneshot::channel();
 
         self.handle()
@@ -46,11 +55,12 @@ impl Connection {
             .send(ConnectionOperation::ExecStatement {
                 stmt: Box::new(stmt),
                 in_transaction,
+                span: span.clone(),
                 tx,
             })
             .unwrap();
 
-        rx.await.unwrap()
+        rx.instrument(span).await.unwrap()
     }
 
     pub(crate) async fn exec_operation(&self, operation: Operation) -> crate::Result<ExecResponse> {
@@ -60,6 +70,7 @@ impl Connection {
             .in_tx
             .send(ConnectionOperation::ExecOperation {
                 operation: Box::new(operation),
+                span: tracing::Span::current(),
                 tx,
             })
             .unwrap();
@@ -67,13 +78,38 @@ impl Connection {
         rx.await.unwrap()
     }
 
+    pub(crate) async fn exec_raw_sql(&self, raw: RawSql) -> crate::Result<ExecResponse> {
+        let span = crate::instrument::raw_sql_span();
+
+        let (tx, rx) = oneshot::channel();
+
+        self.handle()
+            .in_tx
+            .send(ConnectionOperation::ExecRawSql {
+                raw: Box::new(raw),
+                span: span.clone(),
+                tx,
+            })
+            .unwrap();
+
+        rx.instrument(span).await.unwrap()
+    }
+
     /// Begin a transaction on this connection.
+    ///
+    /// Takes `&mut self` so the `Connection` is exclusively borrowed while
+    /// the transaction is open. This prevents statements from running on the
+    /// connection directly — bypassing the transaction — when they should
+    /// have gone through `&mut tx`.
     pub async fn transaction(&mut self) -> crate::Result<super::Transaction<'_>> {
         <Self as super::Executor>::transaction(self).await
     }
 
     /// Returns a [`TransactionBuilder`](super::TransactionBuilder) that will
     /// use this connection.
+    ///
+    /// Like [`transaction`](Self::transaction), this takes `&mut self` so the
+    /// `Connection` stays locked for the lifetime of the transaction.
     pub fn transaction_builder(&mut self) -> super::TransactionBuilder<'_> {
         super::TransactionBuilder::new(super::tx::TxSource::Connection(self))
     }
@@ -84,7 +120,10 @@ impl Connection {
         let (tx, rx) = oneshot::channel();
         self.handle()
             .in_tx
-            .send(ConnectionOperation::PushSchema { tx })
+            .send(ConnectionOperation::PushSchema {
+                span: tracing::Span::current(),
+                tx,
+            })
             .unwrap();
         rx.await.unwrap()
     }
@@ -101,6 +140,14 @@ impl super::Executor for Connection {
         stmt: toasty_core::stmt::Statement,
     ) -> crate::Result<ExecResponse> {
         self.exec_stmt(stmt, false).await
+    }
+
+    async fn exec_raw_sql(&mut self, raw: RawSql) -> crate::Result<ExecResponse> {
+        Connection::exec_raw_sql(self, raw).await
+    }
+
+    fn capability(&mut self) -> &Capability {
+        self.shared.engine.capability()
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

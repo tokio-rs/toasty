@@ -7,6 +7,100 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.7.0...toasty-driver-dynamodb-v0.8.0) - 2026-07-06
+
+### Added
+
+- Emit one `toasty::query` event per statement and propagate caller spans ([#1071])
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+- Add `between` operator to query DSL ([#1029])
+- Support `Option<EmbeddedType>` model fields ([#1021])
+- Support composite unique indices ([#1018])
+
+### Fixed
+
+- Make multi-key delete and update consistent ([#1053])
+- Encode bool values as N("1"/"0") to match key attribute type ([#945])
+
+### Changed
+
+- [**breaking**] Make UpdateByKey returning columns explicit ([#1024])
+
+[#945]: https://github.com/tokio-rs/toasty/pull/945
+[#1018]: https://github.com/tokio-rs/toasty/pull/1018
+[#1021]: https://github.com/tokio-rs/toasty/pull/1021
+[#1024]: https://github.com/tokio-rs/toasty/pull/1024
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1053]: https://github.com/tokio-rs/toasty/pull/1053
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1071]: https://github.com/tokio-rs/toasty/pull/1071
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.6.1...toasty-driver-dynamodb-v0.7.0) - 2026-05-29
+
+### Added
+
+- [**breaking**] Add increment, decrement, add, and subtract update operators ([#979])
+- Add raw SQL execution API ([#965])
+- *(turso)* Add Turso driver with transaction-mode-aware concurrent writes ([#938])
+
+### Fixed
+
+- *(dynamodb)* Omit empty ExpressionAttributeValues on IS NULL / IS NOT NULL scans ([#940])
+
+### Changed
+
+- [**breaking**] Require Deferred relation fields ([#954])
+- [**breaking**] *(core)* Move schema diff types to `schema::diff` ([#929])
+
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#940]: https://github.com/tokio-rs/toasty/pull/940
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#979]: https://github.com/tokio-rs/toasty/pull/979
+
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.6.0...toasty-driver-dynamodb-v0.6.1) - 2026-05-16
+
+- Internal improvements only.
+
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.5.0...toasty-driver-dynamodb-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add push, pop, extend, clear, remove_at, remove operations for vector scalar fields ([#887], [#880])
+- Add vector scalar field support on MySQL, SQLite, and DynamoDB ([#872])
+- Add full-table scan support for DynamoDB ([#821])
+
+[#821]: https://github.com/tokio-rs/toasty/pull/821
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#880]: https://github.com/tokio-rs/toasty/pull/880
+[#887]: https://github.com/tokio-rs/toasty/pull/887
+
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.4.0...toasty-driver-dynamodb-v0.5.0) - 2026-04-27
+
+### Added
+
+- Add starts_with and LIKE string prefix filter operators ([#745])
+- Add #[version] optimistic concurrency control for DynamoDB ([#694])
+- Add Limit::Offset support to DynamoDB driver ([#674])
+- Add support for floats ([#687])
+- Add native database enum type support for embedded enums ([#665])
+- Add multi-column composite index support ([#664])
+
+[#664]: https://github.com/tokio-rs/toasty/pull/664
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#674]: https://github.com/tokio-rs/toasty/pull/674
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#745]: https://github.com/tokio-rs/toasty/pull/745
+
+## [0.4.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.3.0...toasty-driver-dynamodb-v0.4.0) - 2026-04-11
+
+### Added
+
+- use on-demand billing for DynamoDB table and GSI creation ([#618](https://github.com/tokio-rs/toasty/pull/618))
+- support unsigned integer primary keys in DynamoDB ([#617](https://github.com/tokio-rs/toasty/pull/617))
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.2.0...toasty-driver-dynamodb-v0.3.0) - 2026-04-03
 
 ### Other

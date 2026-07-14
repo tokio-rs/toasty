@@ -1,0 +1,30 @@
+error[E0277]: the trait bound `bool: IntoExpr<std::string::String>` is not satisfied
+  --> tests/ui/update_macro_shorthand_arg_type_mismatch.rs:18:45
+   |
+18 |     let _ = toasty::update!(user { name.set(false) });
+   |                                    -------- ^^^^^ the trait `IntoExpr<std::string::String>` is not implemented for `bool`
+   |                                    |
+   |                                    required by a bound introduced by this call
+   |
+help: the trait `IntoExpr<std::string::String>` is not implemented for `bool`
+      but trait `IntoExpr<bool>` is implemented for it
+  --> $WORKSPACE/crates/toasty/src/stmt/into_expr.rs
+   |
+   |               impl IntoExpr<$t> for $t {
+   |               ^^^^^^^^^^^^^^^^^^^^^^^^
+...
+   | / impl_into_expr_for_copy! {
+   | |     Bool(bool);
+   | |     I8(i8);
+   | |     I16(i16);
+...  |
+   | |     Uuid(uuid::Uuid);
+   | | }
+   | |_- in this macro invocation
+   = help: for that trait implementation, expected `bool`, found `std::string::String`
+note: required by a bound in `set`
+  --> $WORKSPACE/crates/toasty/src/stmt/assignment.rs
+   |
+   | pub fn set<T>(expr: impl IntoExpr<T>) -> Assignment<T> {
+   |                          ^^^^^^^^^^^ required by this bound in `set`
+   = note: this error originates in the macro `impl_into_expr_for_copy` (in Nightly builds, run with -Z macro-backtrace for more info)

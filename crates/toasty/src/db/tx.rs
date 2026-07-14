@@ -7,7 +7,10 @@ use crate::{Result, db::ConnectionOperation, db::Executor};
 use async_trait::async_trait;
 use toasty_core::{
     Schema,
-    driver::operation::{self, IsolationLevel},
+    driver::{
+        Capability,
+        operation::{self, IsolationLevel, RawSql, TransactionMode},
+    },
 };
 use tokio::sync::oneshot;
 
@@ -22,12 +25,13 @@ pub(crate) enum TxSource<'a> {
 ///
 /// Obtain one via [`Db::transaction_builder`](super::Db::transaction_builder)
 /// or [`Connection::transaction_builder`](super::Connection::transaction_builder),
-/// configure isolation level and read-only settings, then call
-/// [`begin`](Self::begin) to start the transaction.
+/// configure isolation level, read-only settings, and lock-acquisition
+/// mode, then call [`begin`](Self::begin) to start the transaction.
 pub struct TransactionBuilder<'a> {
     source: TxSource<'a>,
     isolation: Option<IsolationLevel>,
     read_only: bool,
+    mode: TransactionMode,
 }
 
 impl<'a> TransactionBuilder<'a> {
@@ -36,6 +40,7 @@ impl<'a> TransactionBuilder<'a> {
             source,
             isolation: None,
             read_only: false,
+            mode: TransactionMode::Default,
         }
     }
 
@@ -51,6 +56,14 @@ impl<'a> TransactionBuilder<'a> {
         self
     }
 
+    /// Set the lock-acquisition mode for this transaction. See
+    /// [`TransactionMode`] for the supported modes and which drivers
+    /// implement them.
+    pub fn mode(mut self, mode: TransactionMode) -> Self {
+        self.mode = mode;
+        self
+    }
+
     /// Begin the transaction.
     ///
     /// When built from a [`Db`](super::Db), this acquires a connection from
@@ -61,7 +74,7 @@ impl<'a> TransactionBuilder<'a> {
             TxSource::Db(db) => ConnRef::owned(db.connection().await?),
             TxSource::Connection(conn) => ConnRef::Borrowed(conn),
         };
-        Transaction::begin_with(conn, self.isolation, self.read_only).await
+        Transaction::begin_with(conn, self.isolation, self.read_only, self.mode).await
     }
 }
 
@@ -118,17 +131,19 @@ impl DerefMut for ConnRef<'_> {
 
 impl<'a> Transaction<'a> {
     pub(crate) async fn begin(conn: ConnRef<'a>) -> Result<Transaction<'a>> {
-        Self::begin_with(conn, None, false).await
+        Self::begin_with(conn, None, false, TransactionMode::Default).await
     }
 
     pub(crate) async fn begin_with(
         conn: ConnRef<'a>,
         isolation: Option<IsolationLevel>,
         read_only: bool,
+        mode: TransactionMode,
     ) -> Result<Transaction<'a>> {
         tracing::debug!(
             isolation = ?isolation,
             read_only = read_only,
+            mode = ?mode,
             "beginning transaction"
         );
 
@@ -146,6 +161,7 @@ impl<'a> Transaction<'a> {
                 operation::Transaction::Start {
                     isolation,
                     read_only,
+                    mode,
                 }
                 .into(),
             )
@@ -154,6 +170,11 @@ impl<'a> Transaction<'a> {
     }
 
     /// Create a nested transaction (savepoint).
+    ///
+    /// Takes `&mut self` so the outer transaction is exclusively borrowed
+    /// while the nested one is open. This prevents statements from running
+    /// against the outer transaction — bypassing the savepoint — when they
+    /// should have gone through the nested handle.
     pub async fn transaction(&mut self) -> Result<Transaction<'_>> {
         <Self as Executor>::transaction(self).await
     }
@@ -217,6 +238,7 @@ impl Drop for Transaction<'_> {
                 .in_tx
                 .send(ConnectionOperation::ExecOperation {
                     operation: Box::new(op.into()),
+                    span: tracing::Span::current(),
                     tx,
                 });
         }
@@ -251,6 +273,14 @@ impl<'a> Executor for Transaction<'a> {
         stmt: toasty_core::stmt::Statement,
     ) -> Result<toasty_core::driver::ExecResponse> {
         self.conn.exec_stmt(stmt, true).await
+    }
+
+    async fn exec_raw_sql(&mut self, raw: RawSql) -> Result<toasty_core::driver::ExecResponse> {
+        self.conn.exec_raw_sql(raw).await
+    }
+
+    fn capability(&mut self) -> &Capability {
+        self.conn.shared.engine.capability()
     }
 
     fn schema(&mut self) -> &Arc<Schema> {

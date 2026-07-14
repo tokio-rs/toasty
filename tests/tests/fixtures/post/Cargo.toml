@@ -1,0 +1,11 @@
+[package]
+name = "tests-fixture-post"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+readme.workspace = true
+publish = false
+
+[dependencies]
+toasty = { workspace = true }

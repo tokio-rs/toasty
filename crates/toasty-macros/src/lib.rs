@@ -11,6 +11,7 @@ extern crate proc_macro;
 mod create;
 mod model;
 mod query;
+mod update;
 
 use proc_macro::TokenStream;
 
@@ -28,7 +29,8 @@ use proc_macro::TokenStream;
 /// - A [`Model`] trait implementation, including the associated `Query`,
 ///   `Create`, and `Update` builder types.
 /// - A [`Load`] implementation for deserializing rows from the database.
-/// - A [`Register`] implementation for schema registration at runtime.
+/// - The [`Model`] trait's schema-registration methods (`id`, `schema`,
+///   `register`) used to register the model at runtime.
 /// - Static query methods such as `all()`, `filter(expr)`,
 ///   `filter_by_<field>()`, and `get_by_<key>()`.
 /// - Instance methods `update()` and `delete()`.
@@ -39,7 +41,6 @@ use proc_macro::TokenStream;
 ///
 /// [`Model`]: toasty::schema::Model
 /// [`Load`]: toasty::schema::Load
-/// [`Register`]: toasty::schema::Register
 ///
 /// # Struct-level attributes
 ///
@@ -78,12 +79,12 @@ use proc_macro::TokenStream;
 /// DynamoDB); `local` fields scope within a partition. For SQL databases
 /// both behave as a regular composite primary key.
 ///
-/// Multiple `partition` and `local` entries are allowed:
+/// Multiple `partition` and `local` fields are allowed using bracket syntax:
 ///
 /// ```
 /// # use toasty::Model;
 /// # #[derive(Model)]
-/// #[key(partition = tenant, partition = org, local = id)]
+/// #[key(partition = [tenant, org], local = [id])]
 /// # struct Example { tenant: String, org: String, id: String }
 /// ```
 ///
@@ -298,11 +299,11 @@ use proc_macro::TokenStream;
 ///
 /// Cannot be used on relation fields.
 ///
-/// ## `#[serialize(json)]` — serialize complex types as JSON
+/// ## JSON-encoded fields via [`Json<T>`](toasty::stmt::Json)
 ///
-/// Stores the field as a JSON string in the database. Requires the `serde`
-/// feature and that the field type implements `serde::Serialize` and
-/// `serde::Deserialize`.
+/// Wrap a serde-typed value in [`toasty::Json<T>`](toasty::stmt::Json) to
+/// store it as a JSON string in the database. Requires the `serde` feature
+/// and that `T` implements `serde::Serialize` and `serde::Deserialize`.
 ///
 /// ```
 /// # use toasty::Model;
@@ -311,13 +312,12 @@ use proc_macro::TokenStream;
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
-/// #[serialize(json)]
-/// tags: Vec<String>,
+/// tags: toasty::Json<Vec<String>>,
 /// # }
 /// ```
 ///
-/// For `Option<T>` fields, add `nullable` so that `None` maps to SQL
-/// `NULL` rather than the JSON string `"null"`:
+/// For nullable JSON columns, wrap `Json<T>` in `Option` — `None` maps to
+/// SQL `NULL`:
 ///
 /// ```
 /// # use toasty::Model;
@@ -327,14 +327,29 @@ use proc_macro::TokenStream;
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
-/// #[serialize(json, nullable)]
-/// metadata: Option<HashMap<String, String>>,
+/// metadata: Option<toasty::Json<HashMap<String, String>>>,
 /// # }
 /// ```
 ///
-/// Cannot be used on relation fields.
+/// To instead store `None` as the JSON literal `"null"` (no SQL `NULL`),
+/// wrap the other way: `Json<Option<T>>`.
 ///
 /// # Relation attributes
+///
+/// Relation fields can be lazy or eager. Wrap the relation value in
+/// `toasty::Deferred<_>` for lazy loading; ordinary queries leave the field
+/// unloaded until the generated relation accessor or `.include(...)` loads it.
+/// Use the relation value directly for eager loading; every query that returns
+/// the model loads the relation as if the query included that field.
+///
+/// | Attribute | Lazy field type | Eager field type |
+/// |-----------|-----------------|------------------|
+/// | `#[belongs_to]` | `toasty::Deferred<T>` or `toasty::Deferred<Option<T>>` | `T` or `Option<T>` |
+/// | `#[has_many]` | `toasty::Deferred<Vec<T>>` | `Vec<T>` |
+/// | `#[has_one]` | `toasty::Deferred<T>` or `toasty::Deferred<Option<T>>` | `T` or `Option<T>` |
+///
+/// Toasty rejects schemas with eager-load cycles. If two relation paths point
+/// back to each other, wrap at least one field in `toasty::Deferred<_>`.
 ///
 /// ## `#[belongs_to(...)]` — foreign-key reference
 ///
@@ -356,8 +371,15 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #     user_id: i64,
 /// #[belongs_to(key = user_id, references = id)]
-/// user: toasty::BelongsTo<User>,
+/// user: toasty::Deferred<User>,
 /// # }
+/// ```
+///
+/// To load the relation with every `Example` query, omit `Deferred`:
+///
+/// ```ignore
+/// #[belongs_to(key = user_id, references = id)]
+/// user: User,
 /// ```
 ///
 /// | Parameter | Meaning |
@@ -365,15 +387,14 @@ use proc_macro::TokenStream;
 /// | `key = <field>` | Local field holding the foreign key value |
 /// | `references = <field>` | Field on the target model being referenced |
 ///
-/// For composite foreign keys, repeat `key`/`references` pairs:
+/// For composite foreign keys, pass arrays to `key` and `references`:
 ///
 /// ```
 /// # use toasty::Model;
 /// # #[derive(Model)]
+/// # #[key(id, tenant_id)]
 /// # struct Org {
-/// #     #[key]
 /// #     id: i64,
-/// #     #[key]
 /// #     tenant_id: i64,
 /// # }
 /// # #[derive(Model)]
@@ -383,13 +404,13 @@ use proc_macro::TokenStream;
 /// #     id: i64,
 /// #     org_id: i64,
 /// #     tenant_id: i64,
-/// #[belongs_to(key = org_id, references = id, key = tenant_id, references = tenant_id)]
-/// org: toasty::BelongsTo<Org>,
+/// #[belongs_to(key = [org_id, tenant_id], references = [id, tenant_id])]
+/// org: toasty::Deferred<Org>,
 /// # }
 /// ```
 ///
-/// The number of `key` entries must equal the number of `references`
-/// entries.
+/// The number of fields in `key` must equal the number of fields in
+/// `references`.
 ///
 /// Wrap the target type in `Option` for an optional (nullable) foreign key:
 ///
@@ -410,7 +431,7 @@ use proc_macro::TokenStream;
 /// manager_id: Option<i64>,
 ///
 /// #[belongs_to(key = manager_id, references = id)]
-/// manager: toasty::BelongsTo<Option<User>>,
+/// manager: toasty::Deferred<Option<User>>,
 /// # }
 /// ```
 ///
@@ -429,7 +450,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -437,8 +458,15 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_many]
-/// posts: toasty::HasMany<Post>,
+/// posts: toasty::Deferred<Vec<Post>>,
 /// # }
+/// ```
+///
+/// To load the collection with every `Example` query, use `Vec<Post>`:
+///
+/// ```ignore
+/// #[has_many]
+/// posts: Vec<Post>,
 /// ```
 ///
 /// Toasty generates an accessor method (e.g. `.posts()`) and an insert
@@ -461,11 +489,63 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     parent_id: Option<i64>,
 /// #     #[belongs_to(key = parent_id, references = id)]
-/// #     parent: toasty::BelongsTo<Option<Self>>,
+/// #     parent: toasty::Deferred<Option<Self>>,
 /// #[has_many(pair = parent)]
-/// children: toasty::HasMany<Person>,
+/// children: toasty::Deferred<Vec<Person>>,
 /// # }
 /// ```
+///
+/// ### `via` — multi-step relations
+///
+/// Instead of pairing with a `belongs_to`, a `has_many` can reach its target
+/// through a path of existing relations with `via`. The path is a dotted
+/// chain of relation fields, read left to right starting from this model. A
+/// `via` relation owns no foreign key — it is derived from the relations it
+/// traverses — so it takes no `pair`:
+///
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Comment {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// #     #[index]
+/// #     article_id: i64,
+/// #     #[belongs_to(key = article_id, references = id)]
+/// #     article: toasty::Deferred<Article>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Article {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     comments: toasty::Deferred<Vec<Comment>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     comments: toasty::Deferred<Vec<Comment>>,
+/// // User → comments → article
+/// #[has_many(via = comments.article)]
+/// commented_articles: toasty::Deferred<Vec<Article>>,
+/// # }
+/// ```
+///
+/// The target type is `Article` because the path `comments.article` ends
+/// there. A `via` relation is read-only and yields distinct targets — a target
+/// reached through several intermediates appears once. Query, filter, and order
+/// it like any other relation. Preloading it with `.include()` or projecting it
+/// with `.select()` is supported on SQL backends; both are not yet available on
+/// DynamoDB.
 ///
 /// ## `#[has_one]` — one-to-one association
 ///
@@ -482,7 +562,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -490,8 +570,15 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_one]
-/// profile: toasty::HasOne<Profile>,
+/// profile: toasty::Deferred<Profile>,
 /// # }
+/// ```
+///
+/// To load the relation with every `Example` query, omit `Deferred`:
+///
+/// ```ignore
+/// #[has_one]
+/// profile: Profile,
 /// ```
 ///
 /// Wrap in `Option` for an optional association:
@@ -506,7 +593,7 @@ use proc_macro::TokenStream;
 /// #     #[index]
 /// #     example_id: i64,
 /// #     #[belongs_to(key = example_id, references = id)]
-/// #     example: toasty::BelongsTo<Example>,
+/// #     example: toasty::Deferred<Example>,
 /// # }
 /// # #[derive(Model)]
 /// # struct Example {
@@ -514,7 +601,53 @@ use proc_macro::TokenStream;
 /// #     #[auto]
 /// #     id: i64,
 /// #[has_one]
-/// profile: toasty::HasOne<Option<Profile>>,
+/// profile: toasty::Deferred<Option<Profile>>,
+/// # }
+/// ```
+///
+/// The eager optional form is `Option<Profile>`.
+///
+/// ### `via` — multi-step relations
+///
+/// Like `#[has_many]`, a `#[has_one]` can reach its target through a path of
+/// existing relations with `via` (see the `#[has_many]` `via` section above for
+/// the full rules). Declare it when the path is expected to reach at most one
+/// target:
+///
+/// ```
+/// # use toasty::Model;
+/// # #[derive(Model)]
+/// # struct Subscription {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[unique]
+/// #     account_id: Option<i64>,
+/// #     #[belongs_to(key = account_id, references = id)]
+/// #     account: toasty::Deferred<Option<Account>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct Account {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[unique]
+/// #     user_id: Option<i64>,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<Option<User>>,
+/// #     #[has_one]
+/// #     subscription: toasty::Deferred<Option<Subscription>>,
+/// # }
+/// # #[derive(Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_one]
+/// #     account: toasty::Deferred<Option<Account>>,
+/// // User → account → subscription
+/// #[has_one(via = account.subscription)]
+/// subscription: toasty::Deferred<Option<Subscription>>,
 /// # }
 /// ```
 ///
@@ -527,9 +660,11 @@ use proc_macro::TokenStream;
 ///   attributes, but not both.
 /// - `#[auto]` cannot be combined with `#[default]` or `#[update]` on the
 ///   same field.
-/// - `#[column]`, `#[default]`, `#[update]`, and `#[serialize]` cannot be
-///   used on relation fields (`BelongsTo`, `HasMany`, `HasOne`).
+/// - `#[column]`, `#[default]`, and `#[update]` cannot be used on relation
+///   fields (`BelongsTo`, `HasMany`, `HasOne`).
 /// - A field can have at most one relation attribute.
+/// - Eager relation fields cannot form a cycle. Use `toasty::Deferred<_>` on at
+///   least one edge of a bidirectional relation.
 /// - `Self` can be used as a type in relation fields for self-referential
 ///   models.
 ///
@@ -554,7 +689,7 @@ use proc_macro::TokenStream;
 ///     updated_at: jiff::Timestamp,
 ///
 ///     #[has_many]
-///     posts: toasty::HasMany<Post>,
+///     posts: toasty::Deferred<Vec<Post>>,
 /// }
 ///
 /// #[derive(Debug, toasty::Model)]
@@ -565,21 +700,20 @@ use proc_macro::TokenStream;
 ///
 ///     title: String,
 ///
-///     #[serialize(json)]
-///     tags: Vec<String>,
+///     tags: toasty::Json<Vec<String>>,
 ///
 ///     #[index]
 ///     user_id: i64,
 ///
 ///     #[belongs_to(key = user_id, references = id)]
-///     user: toasty::BelongsTo<User>,
+///     user: toasty::Deferred<User>,
 /// }
 /// ```
 #[proc_macro_derive(
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        serialize
+        version, shared, document
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
@@ -623,7 +757,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// Applying `#[derive(Embed)]` to a struct generates:
 ///
-/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct returned by `<Type>::fields()` for building
 ///   filter expressions on individual fields.
 /// - An `Update` struct used by the parent model's update builder for
@@ -655,34 +789,31 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// # Enums
 ///
 /// An embedded enum stores a discriminant value identifying the active
-/// variant. Each variant must have a `#[column(variant = N)]` attribute
-/// assigning a stable integer discriminant.
+/// variant. By default, Toasty derives a string label for each variant by
+/// converting its Rust name to `snake_case`. Use
+/// `#[column(rename_all = "...")]` on the enum to select another naming
+/// convention, or `#[column(variant = "...")]` on a variant to set one label.
 ///
 /// **Unit-only enum:**
 ///
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
-///     #[column(variant = 1)]
 ///     Pending,
-///     #[column(variant = 2)]
-///     Active,
-///     #[column(variant = 3)]
+///     InProgress,
 ///     Archived,
 /// }
 /// ```
 ///
 /// A unit-only enum occupies a single column in the parent table. The
-/// column stores the discriminant as an integer.
+/// example stores the labels `pending`, `in_progress`, and `archived`.
 ///
 /// **Data-carrying enum:**
 ///
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum ContactInfo {
-///     #[column(variant = 1)]
 ///     Email { address: String },
-///     #[column(variant = 2)]
 ///     Phone { number: String },
 /// }
 /// ```
@@ -698,24 +829,44 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
-///     #[column(variant = 1)]
 ///     Pending,
-///     #[column(variant = 2)]
 ///     Failed { reason: String },
-///     #[column(variant = 3)]
 ///     Done,
 /// }
 /// ```
 ///
 /// Applying `#[derive(Embed)]` to an enum generates:
 ///
-/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct with `is_<variant>()` methods and comparison
 ///   methods (`eq`, `ne`, `in_list`).
 /// - For data-carrying variants, per-variant handle types with a
 ///   `matches(closure)` method for pattern matching and field access.
 ///
-/// # Field-level attributes
+/// # Newtype `Auto` proxying
+///
+/// A tuple-newtype embedded struct (one unnamed field) automatically
+/// implements `Auto` whenever its inner type does — no annotation
+/// required. Toasty emits a `NewtypeOf` marker carrying the inner type
+/// and a blanket `Auto` impl resolves through it:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// struct UserId(uuid::Uuid);
+///
+/// #[derive(toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: UserId,
+///     name: String,
+/// }
+/// ```
+///
+/// Newtypes wrapping non-`Auto` types stay non-`Auto`; nesting works
+/// transparently (`Outer(Inner(u64))` proxies through both layers).
+///
+/// # Attributes
 ///
 /// ## `#[column(...)]` — customize the database column
 ///
@@ -735,19 +886,71 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// See [`Model`][`derive@Model`] for the full list of supported column
 /// types.
 ///
-/// **On enum variants**, `#[column(variant = N)]` is **required** and
-/// assigns the integer discriminant stored in the database:
+/// **Changing stored enum discriminants.** On an enum,
+/// `#[column(rename_all = "...")]` changes how Toasty derives string labels
+/// for variants without an explicit label:
 ///
 /// ```
-/// # #[derive(toasty::Embed)]
-/// # enum Example {
-/// #[column(variant = 1)]
-/// Pending,
-/// # }
+/// #[derive(toasty::Embed)]
+/// #[column(rename_all = "SCREAMING_SNAKE_CASE")]
+/// enum PartyKind {
+///     Customer,
+///     PreferredSupplier,
+/// }
 /// ```
 ///
-/// Discriminant values must be unique across all variants of the enum.
-/// They are stored as `i64`.
+/// This example uses the labels `CUSTOMER` and `PREFERRED_SUPPLIER`. Without
+/// `rename_all`, Toasty uses `snake_case`.
+///
+/// The supported rules and their result for `PreferredSupplier` are:
+///
+/// | Rule | Label |
+/// | --- | --- |
+/// | `lowercase` | `preferredsupplier` |
+/// | `UPPERCASE` | `PREFERREDSUPPLIER` |
+/// | `PascalCase` | `PreferredSupplier` |
+/// | `camelCase` | `preferredSupplier` |
+/// | `snake_case` | `preferred_supplier` |
+/// | `SCREAMING_SNAKE_CASE` | `PREFERRED_SUPPLIER` |
+/// | `kebab-case` | `preferred-supplier` |
+/// | `SCREAMING-KEBAB-CASE` | `PREFERRED-SUPPLIER` |
+///
+/// Use `#[column(variant = "...")]` to set individual labels:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum PartyKind {
+///     #[column(variant = "customer")]
+///     Customer,
+///     #[column(variant = "preferred-supplier")]
+///     PreferredSupplier,
+/// }
+/// ```
+///
+/// An explicit variant label takes precedence over `rename_all` when an enum
+/// uses both attributes.
+///
+/// String-label enums use Toasty's enum storage by default. Use
+/// `#[column(type = enum("type_name"))]` to set the database enum type name,
+/// or `#[column(type = text)]` or `#[column(type = varchar(N))]` to use a
+/// plain string column. `rename_all` changes variant labels only; it does not
+/// change the enum type name.
+///
+/// To store integers instead, assign an integer to every variant:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum Priority {
+///     #[column(variant = 10)]
+///     Low,
+///     #[column(variant = 20)]
+///     High,
+/// }
+/// ```
+///
+/// An enum cannot mix string and integer discriminants. Integer discriminants
+/// are stored as `i64` and do not support `rename_all`. All discriminant values
+/// must be unique. String labels may contain at most 63 bytes.
 ///
 /// ## `#[index]` — add a database index
 ///
@@ -774,12 +977,90 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
+/// ## `#[shared(ident)]` — share a column across enum variants
+///
+/// Declares a shared logical field on the enum. Variant fields declaring
+/// the same identifier are backed by a single nullable column instead of
+/// one column per variant. The identifier — not the Rust field names,
+/// which may differ per variant — names the field: the column name derives
+/// from it (`{enum_field}_{ident}`), and enum-level `#[index]` /
+/// `#[unique]` attributes reference it.
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum Creature {
+///     #[column(variant = 1)]
+///     Human {
+///         #[shared(name)]
+///         full_name: String,
+///         profession: String,
+///     },
+///     #[column(variant = 2)]
+///     Animal {
+///         #[shared(name)]
+///         nickname: String,
+///         species: String,
+///     },
+/// }
+/// // Columns: creature, creature_name (shared), creature_profession,
+/// // creature_species
+/// ```
+///
+/// Fields sharing an identifier must have the same type. To rename the
+/// shared column, add `#[column("...")]` to any one member of the group
+/// (if several declare it, they must agree):
+///
+/// ```
+/// # #[derive(toasty::Embed)]
+/// # enum Example {
+/// # #[column(variant = 1)]
+/// # V {
+/// #[shared(name)]
+/// #[column("legacy_name")]
+/// name: String,
+/// # },
+/// # }
+/// ```
+///
+/// ## Enum-level `#[index(...)]` / `#[unique(...)]`
+///
+/// On the enum itself, `#[index(...)]` and `#[unique(...)]` create an
+/// index over variant-field columns. Each reference is a shared field
+/// identifier or a `variant::field` path naming a variant field that owns
+/// its column; the two forms compose into composite indices.
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// #[unique(name)]
+/// #[index(name, human::profession)]
+/// enum Creature {
+///     #[column(variant = 1)]
+///     Human {
+///         #[shared(name)]
+///         name: String,
+///         profession: String,
+///     },
+///     #[column(variant = 2)]
+///     Animal {
+///         #[shared(name)]
+///         name: String,
+///     },
+/// }
+/// ```
+///
+/// An index on a shared column covers rows of **every** variant: with
+/// `#[unique(name)]` above, a `Human` named "Bob" and an `Animal` named
+/// "Bob" conflict. Rows of variants that do not declare the shared field
+/// store `NULL` and never conflict. For this reason, field-level
+/// `#[index]` / `#[unique]` on a `#[shared]` field is a compile error
+/// pointing at the enum-level form.
+///
 /// # Using embedded types in a model
 ///
 /// Reference an embedded type as a field on a [`Model`][`derive@Model`]
 /// struct. The parent model's create and update builders gain a setter for
-/// the embedded field. For embedded structs, a `with_<field>` method
-/// supports partial updates of individual sub-fields:
+/// the embedded field. Partial updates of individual sub-fields use
+/// `stmt::patch`:
 ///
 /// ```no_run
 /// # #[derive(toasty::Embed)]
@@ -793,14 +1074,16 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// #     address: Address,
 /// # }
 /// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// use toasty::stmt;
+///
 /// // Full replacement
 /// user.update()
 ///     .address(Address { street: "456 Oak Ave".into(), city: "Seattle".into() })
 ///     .exec(&mut db).await?;
 ///
-/// // Partial update (struct only) — updates city, leaves street unchanged
+/// // Partial update — updates city, leaves street unchanged
 /// user.update()
-///     .with_address(|a| { a.city("Portland"); })
+///     .address(stmt::patch(Address::fields().city(), "Portland"))
 ///     .exec(&mut db).await?;
 /// # Ok(())
 /// # }
@@ -832,24 +1115,23 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - Embedded structs must have named fields (tuple structs are not
 ///   supported).
 /// - Generic parameters are not supported.
-/// - Every enum variant must have a `#[column(variant = N)]` attribute
-///   with a unique discriminant value.
+/// - Enum discriminants must all be strings or all be integers. Integer
+///   discriminants must be specified on every variant.
+/// - `#[column(rename_all = "...")]` applies only to string labels.
 /// - Enum variants may be unit variants or have named fields. Tuple
 ///   variants are not supported.
 /// - Embedded types cannot have primary keys, relations, `#[auto]`,
-///   `#[default]`, `#[update]`, or `#[serialize]` attributes.
+///   `#[default]`, or `#[update]` attributes.
 ///
 /// # Full example
 ///
 /// ```no_run
 /// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// #[derive(Debug, PartialEq, toasty::Embed)]
+/// #[column(rename_all = "SCREAMING_SNAKE_CASE")]
 /// enum Priority {
-///     #[column(variant = 1)]
 ///     Low,
-///     #[column(variant = 2)]
 ///     Normal,
-///     #[column(variant = 3)]
 ///     High,
 /// }
 ///
@@ -891,16 +1173,19 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ).exec(&mut db).await?;
 ///
 /// // Partial update
+/// use toasty::stmt;
 /// doc.update()
-///     .with_meta(|m| { m.version(2).status("published"); })
+///     .meta(stmt::apply([
+///         stmt::patch(Metadata::fields().version(), 2),
+///         stmt::patch(Metadata::fields().status(), "published"),
+///     ]))
 ///     .exec(&mut db).await?;
 /// # Ok(())
 /// # }
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
-/// [`Register`]: toasty::Register
-#[proc_macro_derive(Embed, attributes(column, index, unique))]
+#[proc_macro_derive(Embed, attributes(column, document, index, unique, shared))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
@@ -1284,6 +1569,21 @@ pub fn query(input: TokenStream) -> TokenStream {
 ///
 /// # Syntax forms
 ///
+/// ## Field syntax
+///
+/// Fields inside `{ ... }` can use either explicit or shorthand syntax:
+///
+/// - **Explicit:** `field: expr` — sets the field to the given expression.
+/// - **Shorthand:** `field` — equivalent to `field: field`, using a variable
+///   with the same name as the field.
+///
+/// These can be mixed freely, just like Rust struct literals:
+///
+/// ```ignore
+/// let name = "Alice".to_string();
+/// toasty::create!(User { name, email: "alice@example.com" })
+/// ```
+///
 /// ## Single creation
 ///
 /// ```ignore
@@ -1330,7 +1630,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1341,7 +1641,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// # async fn example(mut db: toasty::Db, user: User) -> toasty::Result<()> {
 /// let todo = toasty::create!(in user.todos() { title: "buy milk" })
@@ -1458,7 +1758,8 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// ## Expressions
 ///
 /// Any Rust expression is valid as a field value — literals, variables, and
-/// function calls all work.
+/// function calls all work. When a variable has the same name as the field,
+/// you can use the shorthand syntax (just `name` instead of `name: name`):
 ///
 /// ```
 /// # #[derive(toasty::Model)]
@@ -1470,7 +1771,22 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     email: String,
 /// # }
 /// let name = "Alice";
-/// let _ = toasty::create!(User { name: name, email: format!("{}@example.com", name) });
+/// let _ = toasty::create!(User { name, email: format!("{}@example.com", name) });
+/// ```
+///
+/// When the variable name differs from the field name, use the explicit
+/// `field: expr` form:
+///
+/// ```
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// let user_name = "Alice";
+/// let _ = toasty::create!(User { name: user_name });
 /// ```
 ///
 /// ## Nested struct (BelongsTo / HasOne)
@@ -1496,7 +1812,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(Todo {
 ///     title: "buy milk",
@@ -1525,7 +1841,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1536,7 +1852,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(User {
 ///     name: "Alice",
@@ -1566,7 +1882,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #     name: String,
 /// #     #[has_many]
-/// #     todos: toasty::HasMany<Todo>,
+/// #     todos: toasty::Deferred<Vec<Todo>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Todo {
@@ -1577,9 +1893,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// #     #[has_many]
-/// #     tags: toasty::HasMany<Tag>,
+/// #     tags: toasty::Deferred<Vec<Tag>>,
 /// # }
 /// # #[derive(toasty::Model)]
 /// # struct Tag {
@@ -1590,7 +1906,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     todo_id: i64,
 /// #     #[belongs_to(key = todo_id, references = id)]
-/// #     todo: toasty::BelongsTo<Todo>,
+/// #     todo: toasty::Deferred<Todo>,
 /// # }
 /// let _ = toasty::create!(User {
 ///     name: "Alice",
@@ -1612,9 +1928,9 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// | `Option<T>` | Defaults to `None` (`NULL`) |
 /// | `#[default(expr)]` | Uses the default expression |
 /// | `#[update(expr)]` | Uses the expression as the initial value |
-/// | `HasMany<T>` | No related records created |
-/// | `HasOne<Option<T>>` | No related record created |
-/// | `BelongsTo<Option<T>>` | Foreign key set to `NULL` |
+/// | `#[has_many] Deferred<Vec<T>>` or `#[has_many] Vec<T>` | No related records created |
+/// | `#[has_one] Deferred<Option<T>>` or `#[has_one] Option<T>` | No related record created |
+/// | `#[belongs_to] Deferred<Option<T>>` or `#[belongs_to] Option<T>` | Foreign key set to `NULL` |
 ///
 /// Required fields (`String`, `i64`, non-optional `BelongsTo`, etc.) that are
 /// missing do not cause a compile-time error. The insert fails at runtime with
@@ -1640,7 +1956,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// // Error: remove the type prefix `User` — use `{ ... }` without a type name
 /// toasty::create!(Todo { user: User { name: "Alice" } })
@@ -1664,7 +1980,7 @@ pub fn query(input: TokenStream) -> TokenStream {
 /// #     #[index]
 /// #     user_id: i64,
 /// #     #[belongs_to(key = user_id, references = id)]
-/// #     user: toasty::BelongsTo<User>,
+/// #     user: toasty::Deferred<User>,
 /// # }
 /// let _ = toasty::create!(Todo { user: { name: "Alice" } });
 /// ```
@@ -1712,6 +2028,241 @@ pub fn query(input: TokenStream) -> TokenStream {
 #[proc_macro]
 pub fn create(input: TokenStream) -> TokenStream {
     match create::generate(input.into()) {
+        Ok(output) => output.into(),
+        Err(e) => e.to_compile_error().into(),
+    }
+}
+
+/// Expands struct-literal syntax into update-builder method chains. Returns
+/// the same builder `target.update()` would return — call
+/// `.exec(&mut db).await?` to execute the update.
+///
+/// # Syntax
+///
+/// ```ignore
+/// toasty::update!(target { field: value, ... })
+/// ```
+///
+/// `target` is any expression that has an `.update()` method — a model
+/// instance, a query builder, or a scoped relation accessor.
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User, id: i64) -> toasty::Result<()> {
+/// // Instance target
+/// toasty::update!(user { name: "Alice Smith" })
+///     .exec(&mut db).await?;
+///
+/// // Query target
+/// toasty::update!(User::filter_by_id(id) { name: "Bob" })
+///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Instance targets do not consume the binding — the macro expands to
+/// `user.update()`, which auto-borrows `&mut user` the same way the
+/// chain form does. `user` stays owned after the macro returns.
+///
+/// Value expressions are evaluated before the target is borrowed, so
+/// they may read the target's own fields:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     done: bool,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut todo: Todo) -> toasty::Result<()> {
+/// toasty::update!(todo { done: !todo.done }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Field shapes
+///
+/// ## Explicit
+///
+/// `field: expr` sets the field to `expr`:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     email: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     name: "Alice Smith",
+///     email: "alice.smith@example.com",
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// `expr` is any Rust expression. For collection fields, pass a
+/// `toasty::stmt::*` combinator (e.g. `stmt::push("x")`,
+/// `stmt::apply([...])`) for non-set semantics.
+///
+/// ## Shorthand
+///
+/// `field` alone is equivalent to `field: field`, matching Rust struct
+/// literal shorthand:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// let name = "Alice Smith";
+/// toasty::update!(user { name }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// ## Method shorthand
+///
+/// `field.combinator(args)` is shorthand for
+/// `field: toasty::stmt::combinator(args)`. Any function in `toasty::stmt`
+/// works; missing functions surface as ordinary "no function" errors:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct Article {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     tags: Vec<String>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut article: Article) -> toasty::Result<()> {
+/// // tags.push("rust") expands to tags: stmt::push("rust")
+/// toasty::update!(article { tags.push("rust") })
+///     .exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// The shorthand is one method call deep. For chained expressions, use
+/// the explicit `field: expr` form.
+///
+/// ## Embedded patch
+///
+/// `field: { sub: val, ... }` partially updates an embedded struct
+/// field, leaving sub-fields not listed unchanged. Expands to
+/// `stmt::apply([stmt::patch(...), ...])`:
+///
+/// ```no_run
+/// # #[derive(toasty::Embed)]
+/// # struct Metadata { version: i64, status: String }
+/// # #[derive(toasty::Model)]
+/// # struct Document {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     meta: Metadata,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut doc: Document) -> toasty::Result<()> {
+/// toasty::update!(doc {
+///     meta: { version: 2, status: "published" },
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Sub-fields nest to arbitrary depth. To replace an embedded value
+/// wholesale, pass the typed value directly: `meta: Metadata { ... }`.
+///
+/// ## Has-many insert
+///
+/// `field: [{ ... }, ...]` inserts new children of a has-many relation.
+/// Each `{ ... }` becomes a create builder wrapped in
+/// `stmt::insert(...)`; the whole list is wrapped in
+/// `stmt::apply([...])`:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     name: String,
+/// #     #[has_many]
+/// #     todos: toasty::Deferred<Vec<Todo>>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     todos: [{ title: "buy milk" }, { title: "walk dog" }],
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// Items can also be plain expressions, mixed in with builder
+/// shorthands — useful for combining inserts and removals:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[has_many]
+/// #     todos: toasty::Deferred<Vec<Todo>>,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     title: String,
+/// #     #[index]
+/// #     user_id: i64,
+/// #     #[belongs_to(key = user_id, references = id)]
+/// #     user: toasty::Deferred<User>,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut user: User, old: Todo) -> toasty::Result<()> {
+/// toasty::update!(user {
+///     todos: [{ title: "new" }, toasty::stmt::remove(&old)],
+/// }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
+///
+/// # Field validation
+///
+/// The macro emits a method call per named field on the update builder.
+/// A field name the model does not expose for update fails with the
+/// compiler's standard "no method named …" error at the macro call
+/// site.
+#[proc_macro]
+pub fn update(input: TokenStream) -> TokenStream {
+    match update::generate(input.into()) {
         Ok(output) => output.into(),
         Err(e) => e.to_compile_error().into(),
     }

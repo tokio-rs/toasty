@@ -1,5 +1,5 @@
 use crate::prelude::*;
-use std::collections::HashMap;
+use hashbrown::HashMap;
 
 #[driver_test(id(ID))]
 pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
@@ -15,10 +15,10 @@ pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
         parent_id: Option<ID>,
 
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::BelongsTo<Option<Person>>,
+        parent: toasty::Deferred<Option<Person>>,
 
         #[has_many(pair = parent)]
-        children: toasty::HasMany<Person>,
+        children: toasty::Deferred<Vec<Person>>,
     }
 
     let mut db = t.setup_db(models!(Person)).await;

@@ -49,6 +49,7 @@ impl Node {
             Operation::GetByKey(m) => &m.ty,
             Operation::Guard(m) => &m.ty,
             Operation::QueryPk(m) => &m.ty,
+            Operation::Scan(m) => &m.ty,
             Operation::Project(m) => &m.ty,
             Operation::UpdateByKey(m) => &m.ty,
             Operation::NestedMerge(_m) => todo!(),
@@ -74,6 +75,7 @@ impl Node {
             Operation::Project(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::ReadModifyWrite(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::QueryPk(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::Scan(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::UpdateByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
         }
     }

@@ -1,3 +1,4 @@
+use super::TypeEnum;
 use crate::{Result, driver, stmt};
 
 /// Database-level storage types representing how values are stored in the target database.
@@ -70,6 +71,9 @@ pub enum Type {
     /// An unsigned integer of `n` bytes
     UnsignedInteger(u8),
 
+    /// A floating point number of `n` bytes
+    Float(u8),
+
     /// Unconstrained text type
     Text,
 
@@ -102,11 +106,44 @@ pub enum Type {
     /// A representation of a civil datetime in the Gregorian calendar with fractional seconds precision (0-9 digits).
     DateTime(u8),
 
+    /// A database enum type. See [`TypeEnum`].
+    Enum(TypeEnum),
+
+    /// An array of `T`, e.g. PostgreSQL `INT8[]` or `TEXT[]`. Used both for
+    /// array column storage (where supported) and to type list-shaped bind
+    /// parameters that the engine sends as a single PG array operand.
+    List(Box<Type>),
+
+    /// A document column storing a structured value as a single unit:
+    /// `jsonb` / `json` on PostgreSQL, `JSON` on MySQL, JSON1 text on SQLite,
+    /// BSON on MongoDB, a Map attribute on DynamoDB. `binary` selects the
+    /// binary encoding (`jsonb`) over the text encoding (`json`) where the
+    /// backend distinguishes them.
+    Document {
+        /// Selects the binary document encoding (`jsonb`) over the text
+        /// encoding (`json`) where the backend distinguishes them.
+        binary: bool,
+    },
+
     /// User-specified unrecognized type
     Custom(String),
 }
 
 impl Type {
+    /// Construct a list storage type, collapsing a list of documents into a
+    /// single document.
+    ///
+    /// A `#[document]` collection (`Vec<embed>`) is stored as one JSON blob,
+    /// never a native array, so `db::Type` must never nest a [`Type::Document`]
+    /// inside a [`Type::List`]. Routing list construction through here makes
+    /// that invariant hold by construction: the list *is* the document.
+    pub fn list(elem: Type) -> Type {
+        match elem {
+            Type::Document { binary } => Type::Document { binary },
+            elem => Type::List(Box::new(elem)),
+        }
+    }
+
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,
@@ -126,6 +163,8 @@ impl Type {
                 stmt::Type::U16 => Ok(Type::UnsignedInteger(2)),
                 stmt::Type::U32 => Ok(Type::UnsignedInteger(4)),
                 stmt::Type::U64 => Ok(Type::UnsignedInteger(8)),
+                stmt::Type::F32 => Ok(Type::Float(4)),
+                stmt::Type::F64 => Ok(Type::Float(8)),
                 stmt::Type::String => Ok(db.default_string_type.clone()),
                 stmt::Type::Uuid => Ok(db.default_uuid_type.clone()),
                 stmt::Type::Bytes => Ok(db.default_bytes_type.clone()),
@@ -146,6 +185,13 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
+                // An embedded model column is stored as a single document
+                // (`jsonb` on PG, `JSON` elsewhere) — never a native array.
+                // `Type::list` collapses a list-of-documents back to one
+                // document, so a `#[document]` collection (`List(Model)`) lands
+                // here as a plain `Document`.
+                stmt::Type::Model(_) => Ok(Type::Document { binary: true }),
+                stmt::Type::List(elem) => Ok(Type::list(Self::from_app(elem, None, db)?)),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty
@@ -154,15 +200,53 @@ impl Type {
         }
     }
 
+    pub(crate) fn from_app_column(
+        ty: &stmt::Type,
+        hint: Option<&Type>,
+        db: &driver::Capability,
+        auto_increment: bool,
+    ) -> Result<Type> {
+        let mut storage_ty = Self::from_app(ty, hint, &db.storage_types)?;
+
+        if auto_increment && let Some(max) = db.max_auto_increment_integer_width {
+            match &mut storage_ty {
+                Type::Integer(size) | Type::UnsignedInteger(size) if *size > max => {
+                    *size = max;
+                }
+                _ => {}
+            }
+        }
+
+        Ok(storage_ty)
+    }
+
     /// Determines the [`stmt::Type`] closest to this [`db::Type`] that should be used
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
+            // Enum values are always strings at the application level
+            (Self::Enum(_), _) => stmt::Type::String,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
+            // Bool key/index fields stored as 1-byte integer (e.g. DynamoDB N("1"/"0")).
+            // The engine casts Bool <-> I8 transparently via encode_column /
+            // map_table_column_to_model; the driver handles them as plain numbers.
+            (Self::Integer(1), stmt::Type::Bool) => stmt::Type::I8,
+            // A `#[document]` column stores a structural document: the column
+            // is typed by `Type::Object` (mirroring `Value::Object`), not by
+            // the embedded model. The model identity stays an app/engine
+            // concept, carried by `mapping::Mapping::document_columns`. A
+            // document collection (`List(Model)`, whose storage collapses to
+            // one document) keeps its list shape with `Object` elements.
+            (Self::Document { .. }, stmt::Type::Model(_)) => stmt::Type::Object,
+            (Self::Document { .. }, stmt::Type::List(elem))
+                if matches!(**elem, stmt::Type::Model(_)) =>
+            {
+                stmt::Type::List(Box::new(stmt::Type::Object))
+            }
             _ => ty.clone(),
         }
     }

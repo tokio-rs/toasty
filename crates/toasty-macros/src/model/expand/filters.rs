@@ -1,15 +1,15 @@
 use super::Expand;
 use crate::model::schema::{FieldTy, Index, Model};
 
+use hashbrown::HashMap;
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use std::collections::HashMap;
 
 /// Combination of fields for which filter a method should be generated.
 #[derive(Debug)]
 pub(super) struct Filter {
     /// Fields to filter by
-    fields: Vec<usize>,
+    pub(super) fields: Vec<usize>,
 
     /// When true, only include the filter on relation structs
     only_relation: bool,
@@ -61,6 +61,10 @@ impl Expand<'_> {
         let arg_idents: Vec<_> = self.expand_filter_arg_idents(filter).collect();
         let update_query_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
 
+        let doc_get = self.doc_filter_get(filter);
+        let doc_update = self.doc_filter_update(filter);
+        let doc_delete = self.doc_filter_delete(filter);
+
         let self_arg;
         let base;
 
@@ -73,16 +77,19 @@ impl Expand<'_> {
         }
 
         quote! {
+            #[doc = #doc_get]
             #vis async fn #get_method_ident(#self_arg executor: &mut dyn #toasty::Executor, #( #args ),* ) -> #toasty::Result<#model_ident> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .get(executor)
                     .await
             }
 
+            #[doc = #doc_update]
             #vis fn #update_method_ident(#self_arg #( #args ),* ) -> #update_query_struct_ident {
                 #base #filter_method_ident( #( #arg_idents ),* ).update()
             }
 
+            #[doc = #doc_delete]
             #vis async fn #delete_method_ident(#self_arg executor: &mut dyn #toasty::Executor, #( #args ),* ) -> #toasty::Result<()> {
                 #base #filter_method_ident( #( #arg_idents ),* )
                     .delete()
@@ -99,6 +106,9 @@ impl Expand<'_> {
         let filter_method_ident = &filter.filter_method_ident;
         let args = self.expand_filter_args(filter);
         let arg_idents = self.expand_filter_arg_idents(filter);
+
+        let doc_filter = self.doc_filter_query(filter);
+
         let self_arg;
         let body;
 
@@ -118,26 +128,11 @@ impl Expand<'_> {
         }
 
         quote! {
+            #[doc = #doc_filter]
             #vis fn #filter_method_ident( #self_arg #( #args ),* ) -> #query_struct_ident {
                 #body
             }
         }
-    }
-
-    pub(super) fn expand_query_filter_methods(&self) -> TokenStream {
-        self.filters
-            .iter()
-            // .filter(|f| !f.only_relation)
-            .map(|filter| {
-                let get_method = self.expand_model_get_method(filter, true);
-                let filter_method = self.expand_query_filter_method(filter);
-
-                quote! {
-                    #get_method
-                    #filter_method
-                }
-            })
-            .collect()
     }
 
     pub(super) fn expand_relation_filter_methods(&self) -> TokenStream {
@@ -153,20 +148,6 @@ impl Expand<'_> {
                 )
             })
             .collect()
-    }
-
-    fn expand_query_filter_method(&self, filter: &Filter) -> TokenStream {
-        let vis = &self.model.vis;
-        let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
-        let filter_method_ident = &filter.filter_method_ident;
-        let args = self.expand_filter_args(filter);
-        let expr = self.expand_query_filter_expr(filter);
-
-        quote! {
-            #vis fn #filter_method_ident(self, #( #args ),* ) -> #query_struct_ident {
-                self.filter(#expr)
-            }
-        }
     }
 
     fn expand_query_filter_expr(&self, filter: &Filter) -> TokenStream {
@@ -323,7 +304,7 @@ impl<'a> BuildModelFilters<'a> {
 
         for index in fields {
             name.push_str(prefix);
-            name.push_str(&self.model.fields[*index].name.ident.to_string());
+            name.push_str(self.model.fields[*index].name.as_str());
 
             prefix = "_and_";
         }

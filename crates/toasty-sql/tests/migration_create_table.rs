@@ -1,24 +1,15 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{
-        Column, ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, PrimaryKey,
-        RenameHints, Schema, SchemaDiff, Table, TableId, Type,
+    schema::{
+        db::{
+            Column, ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, PrimaryKey, Schema,
+            Table, TableId, Type,
+        },
+        diff,
     },
     stmt as core_stmt,
 };
-use toasty_sql::{
-    Serializer,
-    migration::MigrationStatement,
-    serializer::{Params, Placeholder},
-};
-
-struct NoParams;
-
-impl Params for NoParams {
-    fn push(&mut self, _: &core_stmt::Value, _: Option<&core_stmt::Type>) -> Placeholder {
-        Placeholder(0)
-    }
-}
+use toasty_sql::{Serializer, migration::MigrationStatement};
 
 fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> Column {
     Column {
@@ -32,6 +23,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
         nullable: false,
         primary_key: index == 0,
         auto_increment: false,
+        versionable: false,
     }
 }
 
@@ -67,7 +59,7 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
                 "mysql" => Serializer::mysql(ms.schema()),
                 _ => panic!("unknown flavor: {flavor}"),
             };
-            serializer.serialize(ms.statement(), &mut NoParams)
+            serializer.serialize(ms.statement())
         })
         .collect()
 }
@@ -87,8 +79,8 @@ fn create_single_table_sqlite() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -114,8 +106,8 @@ fn create_single_table_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -142,8 +134,8 @@ fn create_table_with_nullable_column() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -160,7 +152,7 @@ fn create_table_with_nullable_column() {
 fn create_table_with_auto_increment_sqlite() {
     let from = Schema::default();
 
-    let mut id_col = make_column(0, 0, "id", Type::Integer(8));
+    let mut id_col = make_column(0, 0, "id", Type::Integer(4));
     id_col.auto_increment = true;
 
     let to = Schema {
@@ -172,16 +164,15 @@ fn create_table_with_auto_increment_sqlite() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
     assert_eq!(sql.len(), 1);
-    assert!(
-        sql[0].contains("AUTOINCREMENT") || sql[0].contains("PRIMARY KEY"),
-        "expected auto increment handling, got: {}",
-        sql[0]
+    assert_eq!(
+        sql[0],
+        "CREATE TABLE \"counters\" (\n    \"id\" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,\n    \"value\" INTEGER NOT NULL\n);"
     );
 }
 
@@ -217,8 +208,8 @@ fn create_table_with_index() {
         tables: vec![make_table(0, "users", columns, vec![index])],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -262,8 +253,8 @@ fn create_table_with_unique_index() {
         tables: vec![make_table(0, "users", columns, vec![index])],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -301,8 +292,8 @@ fn create_multiple_tables() {
         ],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -326,11 +317,63 @@ fn create_table_varchar_mysql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
     let sql = serialize_migration(&stmts, "mysql");
 
     assert_eq!(sql.len(), 1);
     assert!(sql[0].contains("VARCHAR(191)"), "got: {}", sql[0]);
+}
+
+/// When the table's `indices` list contains the primary key index (as
+/// #[derive(Model)] produces), migration should NOT emit a separate
+/// CREATE UNIQUE INDEX for it — the PRIMARY KEY in CREATE TABLE is sufficient.
+#[test]
+fn create_table_no_redundant_pk_index() {
+    let from = Schema::default();
+
+    let pk_index = Index {
+        id: IndexId {
+            table: TableId(0),
+            index: 0,
+        },
+        name: "index_users_by_id".to_string(),
+        on: TableId(0),
+        columns: vec![IndexColumn {
+            column: ColumnId {
+                table: TableId(0),
+                index: 0,
+            },
+            op: IndexOp::Eq,
+            scope: IndexScope::Local,
+        }],
+        unique: true,
+        primary_key: true,
+    };
+
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Text),
+                make_column(0, 1, "name", Type::Text),
+            ],
+            vec![pk_index],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
+    let sql = serialize_migration(&stmts, "sqlite");
+
+    assert_eq!(
+        sql.len(),
+        1,
+        "expected only CREATE TABLE, got extra statements: {sql:?}"
+    );
+    assert!(sql[0].starts_with("CREATE TABLE"), "got: {}", sql[0]);
+    assert!(sql[0].contains("PRIMARY KEY"), "got: {}", sql[0]);
 }

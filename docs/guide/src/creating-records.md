@@ -62,6 +62,10 @@ builder to insert the row, or continue working with the builder value (for
 example, to conditionally set additional fields). The returned `User`
 instance has all fields set, including auto-generated ones like `id`.
 
+Like Rust struct literals, the macro supports field shorthand — writing just
+`name` instead of `name: name` when the variable matches the field name. You
+can mix shorthand and explicit fields freely.
+
 The generated SQL looks like:
 
 ```sql
@@ -69,7 +73,9 @@ INSERT INTO users (name, email) VALUES ('Alice', 'alice@example.com');
 ```
 
 Field values in the macro can be any Rust expression — literals, variables, or
-function calls:
+function calls. When a variable has the same name as the field, you can use the
+shorthand syntax (just `name` instead of `name: name`), the same way Rust
+struct literals work:
 
 ```rust
 # use toasty::Model;
@@ -85,8 +91,34 @@ function calls:
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let name = "Bob";
 let user = toasty::create!(User {
-    name: name,
+    name,
     email: format!("{}@example.com", name.to_lowercase()),
+})
+.exec(&mut db)
+.await?;
+# Ok(())
+# }
+```
+
+When the variable name differs from the field name, use the explicit
+`field: expr` form:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct User {
+#     #[key]
+#     #[auto]
+#     id: u64,
+#     name: String,
+#     #[unique]
+#     email: String,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let user_name = "Bob";
+let user = toasty::create!(User {
+    name: user_name,
+    email: format!("{}@example.com", user_name.to_lowercase()),
 })
 .exec(&mut db)
 .await?;
@@ -148,7 +180,7 @@ Toasty sets the foreign key automatically:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -158,7 +190,7 @@ Toasty sets the foreign key automatically:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -199,7 +231,7 @@ BelongsTo/HasOne fields, and `[{ ... }, { ... }]` for HasMany fields:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     todos: toasty::HasMany<Todo>,
+#     todos: toasty::Deferred<Vec<Todo>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Todo {
@@ -209,7 +241,7 @@ BelongsTo/HasOne fields, and `[{ ... }, { ... }]` for HasMany fields:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -314,6 +346,9 @@ let (user, todo) = toasty::create!((
 .await?;
 ```
 
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+
 ### Dynamic batches with `toasty::batch()`
 
 When the number of records is determined at runtime, collect create builders
@@ -325,7 +360,7 @@ let names = get_names_from_csv();
 let mut insertions = vec![];
 for (i, name) in names.iter().enumerate() {
     insertions.push(toasty::create!(User {
-        name: name,
+        name,
         email: format!("user{i}@example.com"),
     }));
 }
@@ -386,3 +421,8 @@ The create builder's setter methods accept flexible input types through the
 `&String`. For numeric fields, you can pass the value directly or by reference.
 See [Defining Models — What types can you pass to setters?](./defining-models.md#what-types-can-you-pass-to-setters)
 for details.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

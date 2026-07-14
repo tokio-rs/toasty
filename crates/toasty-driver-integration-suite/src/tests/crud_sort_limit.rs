@@ -7,35 +7,25 @@ use toasty_core::{
     stmt::{ExprSet, Statement},
 };
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn sort_asc(test: &mut Test) -> Result<()> {
-    #[derive(toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        order: i64,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     for i in 0..100 {
-        Item::create().order(i).exec(&mut db).await?;
+        User::create().name("dummy").age(i).exec(&mut db).await?;
     }
 
     test.log().clear();
 
-    let items_asc: Vec<_> = Item::all()
-        .order_by(Item::fields().order().asc())
+    let items_asc: Vec<_> = User::all()
+        .order_by(User::fields().age().asc())
         .exec(&mut db)
         .await?;
 
     assert_eq!(items_asc.len(), 100);
 
     for i in 0..99 {
-        assert!(items_asc[i].order < items_asc[i + 1].order);
+        assert!(items_asc[i].age < items_asc[i + 1].age);
     }
 
     // Verify the SQL query has an ORDER BY clause
@@ -50,15 +40,15 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
 
     test.log().clear();
 
-    let items_desc: Vec<_> = Item::all()
-        .order_by(Item::fields().order().desc())
+    let items_desc: Vec<_> = User::all()
+        .order_by(User::fields().age().desc())
         .exec(&mut db)
         .await?;
 
     assert_eq!(items_desc.len(), 100);
 
     for i in 0..99 {
-        assert!(items_desc[i].order > items_desc[i + 1].order);
+        assert!(items_desc[i].age > items_desc[i + 1].age);
     }
 
     let (op, resp) = test.log().pop();
@@ -73,35 +63,25 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn paginate(test: &mut Test) -> Result<()> {
-    #[derive(toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        order: i64,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
+    let mut db = setup(test).await;
 
     for i in 0..100 {
-        Item::create().order(i).exec(&mut db).await?;
+        User::create().name("dummy").age(i).exec(&mut db).await?;
     }
 
     test.log().clear();
 
-    let items: Page<_> = Item::all()
-        .order_by(Item::fields().order().desc())
+    let items: Page<_> = User::all()
+        .order_by(User::fields().age().desc())
         .paginate(10)
         .exec(&mut db)
         .await?;
 
     assert_eq!(items.len(), 10);
-    for (i, order) in (90..100).rev().enumerate() {
-        assert_eq!(items[i].order, order);
+    for (i, age) in (90..100).rev().enumerate() {
+        assert_eq!(items[i].age, age);
     }
 
     // First page: SQL query should have ORDER BY and LIMIT
@@ -117,109 +97,219 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
 
     test.log().clear();
 
-    let items: Page<_> = Item::all()
-        .order_by(Item::fields().order().desc())
+    let items: Page<_> = User::all()
+        .order_by(User::fields().age().desc())
         .paginate(10)
         .after(90)
         .exec(&mut db)
         .await?;
 
     assert_eq!(items.len(), 10);
-    for (i, order) in (80..90).rev().enumerate() {
-        assert_eq!(items[i].order, order);
+    for (i, age) in (80..90).rev().enumerate() {
+        assert_eq!(items[i].age, age);
     }
 
     let items: Page<_> = items.next(&mut db).await?.unwrap();
     assert_eq!(items.len(), 10);
-    for (i, order) in (70..80).rev().enumerate() {
-        assert_eq!(items[i].order, order);
+    for (i, age) in (70..80).rev().enumerate() {
+        assert_eq!(items[i].age, age);
     }
 
     let items: Page<_> = items.prev(&mut db).await?.unwrap();
     assert_eq!(items.len(), 10);
-    for (i, order) in (80..90).rev().enumerate() {
-        assert_eq!(items[i].order, order);
+    for (i, age) in (80..90).rev().enumerate() {
+        assert_eq!(items[i].age, age);
     }
 
     let items: Page<_> = items.next(&mut db).await?.unwrap();
     assert_eq!(items.len(), 10);
-    for (i, order) in (70..80).rev().enumerate() {
-        assert_eq!(items[i].order, order);
+    for (i, age) in (70..80).rev().enumerate() {
+        assert_eq!(items[i].age, age);
     }
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn limit_offset(t: &mut Test) -> Result<()> {
-    #[derive(toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        order: i64,
-    }
-
-    let mut db = t.setup_db(models!(Item)).await;
+    let mut db = setup(t).await;
 
     for i in 0..20 {
-        Item::create().order(i).exec(&mut db).await?;
+        User::create().name("dummy").age(i).exec(&mut db).await?;
     }
 
     t.log().clear();
 
     // Basic limit without ordering
-    let items: Vec<_> = Item::all().limit(5).exec(&mut db).await?;
+    let items: Vec<_> = User::all().limit(5).exec(&mut db).await?;
     assert_eq!(items.len(), 5);
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
-            limit: Some(_),
-        }),
-    }));
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({ .. }),
+                limit: Some(_),
+            }),
+        }));
+    } else {
+        assert_struct!(op, Operation::QueryPk({ .. }));
+    }
 
     t.log().clear();
 
     // Limit combined with ordering
-    let items: Vec<_> = Item::all()
-        .order_by(Item::fields().order().desc())
+    let items: Vec<_> = User::all()
+        .order_by(User::fields().age().desc())
         .limit(7)
         .exec(&mut db)
         .await?;
     assert_eq!(items.len(), 7);
     for i in 0..6 {
-        assert!(items[i].order > items[i + 1].order);
+        assert!(items[i].age > items[i + 1].age);
     }
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
-        stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
-            order_by: Some(_),
-            limit: Some(_),
-        }),
-    }));
+    if t.capability().sql {
+        assert_struct!(op, Operation::QuerySql({
+            stmt: Statement::Query({
+                body: ExprSet::Select({ .. }),
+                order_by: Some(_),
+                limit: Some(_),
+            }),
+        }));
+    } else {
+        assert_struct!(op, Operation::QueryPk({ .. }));
+    }
 
     t.log().clear();
 
     // Limit combined with offset
-    let items: Vec<_> = Item::all()
-        .order_by(Item::fields().order().asc())
+    let items: Vec<_> = User::all()
+        .order_by(User::fields().age().asc())
         .limit(7)
         .offset(5)
         .exec(&mut db)
         .await?;
     assert_eq!(items.len(), 7);
     for (i, f) in items.iter().enumerate() {
-        assert_eq!(f.order, i as i64 + 5);
+        assert_eq!(f.age, i as i64 + 5);
     }
 
     // Limit larger than the result set returns all results
-    let items: Vec<_> = Item::all().limit(100).exec(&mut db).await?;
+    let items: Vec<_> = User::all().limit(100).exec(&mut db).await?;
     assert_eq!(items.len(), 20);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Regression for https://github.com/tokio-rs/toasty/issues/692:
+    // `.first()` on a query with multiple matching rows must return the first
+    // row (after any ordering), not panic.
+    let youngest = User::all()
+        .order_by(User::fields().age().asc())
+        .first()
+        .exec(&mut db)
+        .await?;
+    assert_struct!(youngest, Some(_ { name: "Bob", .. }));
+
+    let oldest = User::all()
+        .order_by(User::fields().age().desc())
+        .first()
+        .exec(&mut db)
+        .await?;
+    assert_struct!(oldest, Some(_ { name: "Carol", .. }));
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn order_by_multiple_columns_composes(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Carol", age: 20 },
+        { name: "Bob",   age: 30 },
+        { name: "Dave",  age: 20 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Regression for https://github.com/tokio-rs/toasty/issues/803:
+    // chained `.order_by()` calls must compose into a multi-key sort instead
+    // of the later call silently overwriting the earlier one.
+    let users = User::all()
+        .order_by(User::fields().age().asc())
+        .order_by(User::fields().name().desc())
+        .exec(&mut db)
+        .await?;
+
+    let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(names, ["Dave", "Carol", "Bob", "Alice"]);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn set_order_by_overwrites(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob",   age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // `set_order_by` replaces the existing sort rather than appending to it.
+    // Overwriting an ascending sort with a descending one must produce a
+    // descending result, not an asc-then-desc tie-break.
+    use toasty::stmt::{List, Query};
+    let mut q = Query::<List<User>>::all().order_by(User::fields().age().asc());
+    q.set_order_by(User::fields().age().desc());
+
+    let users = q.exec(&mut db).await?;
+
+    let ages: Vec<i64> = users.iter().map(|u| u.age).collect();
+    assert_eq!(ages, [40, 30, 20]);
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn order_by_tuple(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Carol", age: 20 },
+        { name: "Bob",   age: 30 },
+        { name: "Dave",  age: 20 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // A tuple of OrderByExpr sorts by each field in turn, equivalent to
+    // chaining `.order_by()` calls.
+    let users = User::all()
+        .order_by((User::fields().age().asc(), User::fields().name().desc()))
+        .exec(&mut db)
+        .await?;
+
+    let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
+    assert_eq!(names, ["Dave", "Carol", "Bob", "Alice"]);
 
     Ok(())
 }

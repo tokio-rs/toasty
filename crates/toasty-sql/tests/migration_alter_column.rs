@@ -1,24 +1,12 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{
-        Column, ColumnId, IndexId, PrimaryKey, RenameHints, Schema, SchemaDiff, Table, TableId,
-        Type,
+    schema::{
+        db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type},
+        diff,
     },
     stmt as core_stmt,
 };
-use toasty_sql::{
-    Serializer,
-    migration::MigrationStatement,
-    serializer::{Params, Placeholder},
-};
-
-struct NoParams;
-
-impl Params for NoParams {
-    fn push(&mut self, _: &core_stmt::Value, _: Option<&core_stmt::Type>) -> Placeholder {
-        Placeholder(0)
-    }
-}
+use toasty_sql::{Serializer, migration::MigrationStatement};
 
 fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> Column {
     Column {
@@ -32,6 +20,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
         nullable: false,
         primary_key: index == 0,
         auto_increment: false,
+        versionable: false,
     }
 }
 
@@ -67,7 +56,7 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
                 "mysql" => Serializer::mysql(ms.schema()),
                 _ => panic!("unknown flavor: {flavor}"),
             };
-            serializer.serialize(ms.statement(), &mut NoParams)
+            serializer.serialize(ms.statement())
         })
         .collect()
 }
@@ -100,7 +89,7 @@ fn alter_column_rename_postgresql() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_column_hint(
         ColumnId {
             table: TableId(0),
@@ -112,7 +101,7 @@ fn alter_column_rename_postgresql() {
         },
     );
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -146,7 +135,7 @@ fn alter_column_rename_with_table_rename_postgresql() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_table_hint(TableId(0), TableId(0));
     hints.add_column_hint(
         ColumnId {
@@ -159,7 +148,7 @@ fn alter_column_rename_with_table_rename_postgresql() {
         },
     );
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -195,8 +184,8 @@ fn alter_column_set_not_null_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -230,8 +219,8 @@ fn alter_column_drop_not_null_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -264,8 +253,8 @@ fn alter_column_change_type_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -299,8 +288,8 @@ fn alter_column_multiple_changes_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -309,6 +298,111 @@ fn alter_column_multiple_changes_postgresql() {
         vec![
             "ALTER TABLE \"users\" ALTER COLUMN \"value\" TYPE TEXT;",
             "ALTER TABLE \"users\" ALTER COLUMN \"value\" SET NOT NULL;",
+        ]
+    );
+}
+
+#[test]
+fn alter_column_rename_and_change_type_postgresql() {
+    // Column renamed is_admin → user_type AND type changed Boolean → Text
+    // The type change must reference the column by its OLD name; the rename
+    // therefore has to come last. (See issue #755.)
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "is_admin", Type::Boolean),
+            ],
+        )],
+    };
+
+    let mut renamed = make_column(0, 1, "user_type", Type::Text);
+    renamed.primary_key = false;
+
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8)), renamed],
+        )],
+    };
+
+    let mut hints = diff::RenameHints::new();
+    hints.add_column_hint(
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+    );
+
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    assert_eq!(
+        sql,
+        vec![
+            "ALTER TABLE \"users\" ALTER COLUMN \"is_admin\" TYPE TEXT;",
+            "ALTER TABLE \"users\" RENAME COLUMN \"is_admin\" TO \"user_type\";",
+        ]
+    );
+}
+
+#[test]
+fn alter_column_rename_and_drop_not_null_postgresql() {
+    // Column renamed name → full_name AND nullability changed NOT NULL → NULL.
+    // Both changes must reference the OLD column name, so the rename comes
+    // last.
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "name", Type::Text),
+            ],
+        )],
+    };
+
+    let mut renamed = make_column(0, 1, "full_name", Type::Text);
+    renamed.primary_key = false;
+    renamed.nullable = true;
+
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8)), renamed],
+        )],
+    };
+
+    let mut hints = diff::RenameHints::new();
+    hints.add_column_hint(
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+        ColumnId {
+            table: TableId(0),
+            index: 1,
+        },
+    );
+
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    assert_eq!(
+        sql,
+        vec![
+            "ALTER TABLE \"users\" ALTER COLUMN \"name\" DROP NOT NULL;",
+            "ALTER TABLE \"users\" RENAME COLUMN \"name\" TO \"full_name\";",
         ]
     );
 }
@@ -336,10 +430,10 @@ fn alter_column_multiple_changes_with_table_rename_postgresql() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_table_hint(TableId(0), TableId(0));
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -381,7 +475,7 @@ fn alter_column_rename_mysql() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_column_hint(
         ColumnId {
             table: TableId(0),
@@ -393,7 +487,7 @@ fn alter_column_rename_mysql() {
         },
     );
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
     let sql = serialize_migration(&stmts, "mysql");
 
@@ -426,8 +520,8 @@ fn alter_column_multiple_changes_mysql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
     let sql = serialize_migration(&stmts, "mysql");
 
@@ -460,10 +554,10 @@ fn alter_column_multiple_changes_with_table_rename_mysql() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_table_hint(TableId(0), TableId(0));
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
     let sql = serialize_migration(&stmts, "mysql");
 
@@ -504,7 +598,7 @@ fn alter_column_rename_only_sqlite() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_column_hint(
         ColumnId {
             table: TableId(0),
@@ -516,7 +610,7 @@ fn alter_column_rename_only_sqlite() {
         },
     );
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -554,8 +648,8 @@ fn alter_column_change_nullability_sqlite() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -596,8 +690,8 @@ fn alter_column_change_type_sqlite() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -638,10 +732,10 @@ fn alter_column_change_nullability_with_table_rename_sqlite() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_table_hint(TableId(0), TableId(0));
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -686,7 +780,7 @@ fn alter_column_rename_and_change_type_sqlite() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_column_hint(
         ColumnId {
             table: TableId(0),
@@ -698,7 +792,7 @@ fn alter_column_rename_and_change_type_sqlite() {
         },
     );
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 

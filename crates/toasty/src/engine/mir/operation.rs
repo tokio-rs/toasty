@@ -6,7 +6,7 @@ use crate::engine::mir::Eval;
 
 use super::{
     Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Node,
-    Project, QueryPk, ReadModifyWrite, UpdateByKey,
+    Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey,
 };
 
 /// A step in the query execution plan.
@@ -49,6 +49,9 @@ pub(crate) enum Operation {
 
     QueryPk(QueryPk),
 
+    /// Full-table scan — emitted when no index covers the filter on a scan-capable driver.
+    Scan(Scan),
+
     UpdateByKey(UpdateByKey),
 }
 
@@ -73,6 +76,7 @@ impl From<Operation> for Node {
             Operation::Project(m) => indexset![m.input],
             Operation::ReadModifyWrite(m) => m.inputs.clone(),
             Operation::QueryPk(m) => m.input.into_iter().collect(),
+            Operation::Scan(m) => m.input.into_iter().collect(),
             Operation::UpdateByKey(m) => indexset![m.input],
         };
 

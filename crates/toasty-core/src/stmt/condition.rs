@@ -44,10 +44,11 @@ impl Condition {
 
 impl Statement {
     /// Returns a reference to this statement's condition, if it has one and it
-    /// is set. Only `Update` statements support conditions.
+    /// is set. Only `Update` and `Delete` statements support conditions.
     pub fn condition(&self) -> Option<&Condition> {
         match self {
             Statement::Update(update) if update.condition.is_some() => Some(&update.condition),
+            Statement::Delete(delete) if delete.condition.is_some() => Some(&delete.condition),
             _ => None,
         }
     }
@@ -58,6 +59,7 @@ impl Statement {
     pub fn condition_mut(&mut self) -> Option<&mut Condition> {
         match self {
             Statement::Update(update) => Some(&mut update.condition),
+            Statement::Delete(delete) => Some(&mut delete.condition),
             _ => None,
         }
     }
@@ -71,6 +73,7 @@ impl Statement {
     pub fn condition_mut_unwrap(&mut self) -> &mut Condition {
         match self {
             Statement::Update(update) => &mut update.condition,
+            Statement::Delete(delete) => &mut delete.condition,
             _ => panic!("expected Statement with condition"),
         }
     }

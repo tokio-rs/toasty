@@ -1,33 +1,24 @@
-mod association;
 mod expr_and;
 mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_exists;
-mod expr_in_list;
+mod expr_intersects;
 mod expr_is_null;
-mod expr_let;
+mod expr_is_superset;
 mod expr_list;
 mod expr_map;
-mod expr_match;
-mod expr_not;
 mod expr_or;
 mod expr_project;
-mod expr_record;
 mod stmt_query;
 
-// Simplifications
-// TODO: unify names
-mod lift_in_subquery;
 use toasty_core::{
-    schema::{
-        app::{Field, FieldId},
-        *,
-    },
+    driver::Capability,
+    schema::*,
     stmt::{self, Expr, IntoExprTarget, Node, VisitMut},
 };
 
-use crate::engine::Engine;
+use crate::engine::{Engine, fold};
 
 /// Statement and expression simplifier.
 ///
@@ -40,26 +31,36 @@ use crate::engine::Engine;
 pub(crate) struct Simplify<'a> {
     /// Expression context providing schema access and type information.
     cx: stmt::ExprContext<'a>,
+    /// Driver capabilities, consulted by passes that emit driver-specific shapes.
+    capability: &'a Capability,
 }
 
 impl Engine {
     /// Simplifies a statement or expression in place.
     pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
-        Simplify::new(&self.schema).visit_mut(stmt);
+        Simplify::new(&self.schema, self.capability).visit_mut(stmt);
     }
 }
 
-/// Simplifies an expression in place using the given context.
-pub(crate) fn simplify_expr(cx: stmt::ExprContext<'_>, expr: &mut stmt::Expr) {
-    Simplify { cx }.visit_expr_mut(expr);
+/// Simplifies an expression in place using the given context and capability.
+pub(crate) fn simplify_expr(
+    cx: stmt::ExprContext<'_>,
+    capability: &Capability,
+    expr: &mut stmt::Expr,
+) {
+    Simplify { cx, capability }.visit_expr_mut(expr);
 }
 
 impl VisitMut for Simplify<'_> {
     fn visit_expr_mut(&mut self, i: &mut stmt::Expr) {
-        // First, simplify the expression.
+        // Recurse into children first.
         stmt::visit_mut::visit_expr_mut(self, i);
 
-        // If an in-subquery expression, then try lifting it.
+        // Fold this node bottom-up so heavyweight rules see canonical input.
+        // Children are already canonical (post-order recursion), so this is
+        // effectively local.
+        fold::fold_stmt(i);
+
         let maybe_expr = match i {
             Expr::Any(expr) => self.simplify_expr_any(expr),
             Expr::And(expr) => self.simplify_expr_and(expr),
@@ -68,21 +69,21 @@ impl VisitMut for Simplify<'_> {
             }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
-            Expr::InList(expr) => self.simplify_expr_in_list(expr),
-            Expr::InSubquery(expr) => self.lift_in_subquery(&expr.expr, &expr.query),
-            Expr::Let(expr) => self.simplify_expr_let(expr),
+            Expr::Intersects(expr) => self.simplify_expr_intersects(expr),
+            Expr::IsSuperset(expr) => self.simplify_expr_is_superset(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
-            Expr::Match(expr) => self.simplify_expr_match(expr),
-            Expr::Not(expr) => self.simplify_expr_not(expr),
             Expr::Or(expr) => self.simplify_expr_or(expr),
-            Expr::Record(expr) => self.simplify_expr_record(expr),
             Expr::IsNull(expr) => self.simplify_expr_is_null(expr),
             Expr::Project(expr) => self.simplify_expr_project(expr),
             _ => None,
         };
 
-        if let Some(expr) = maybe_expr {
+        if let Some(mut expr) = maybe_expr {
+            // Heavyweight rules may emit new fold-eligible structure
+            // (e.g., match elimination produces ANDs containing constants
+            // that need short-circuiting).
+            fold::fold_stmt(&mut expr);
             *i = expr;
         }
     }
@@ -137,11 +138,6 @@ impl VisitMut for Simplify<'_> {
         // Visit and simplify source first before pushing a new scope
         self.visit_source_mut(&mut stmt.from);
 
-        // Convert "via" associations into WHERE filters. For example,
-        // user.todos().delete(...) becomes "DELETE FROM Todo" with via association,
-        // which gets simplified to "DELETE FROM Todo WHERE user_id IN (SELECT id FROM User WHERE ...)"
-        self.simplify_via_association_for_delete(stmt);
-
         let mut s = self.scope(&stmt.from);
 
         s.visit_filter_mut(&mut stmt.filter);
@@ -155,11 +151,6 @@ impl VisitMut for Simplify<'_> {
         // Visit target first before pushing a new scope.
         self.visit_insert_target_mut(&mut stmt.target);
 
-        // Convert "via" associations in insert scopes into WHERE filters. For example,
-        // user.todos().insert(...) creates a scope query that gets simplified to ensure
-        // inserted todos are automatically linked to the specific user.
-        self.simplify_via_association_for_insert(stmt);
-
         // Create a new scope for the insert target
         let mut s = self.scope(&stmt.target);
 
@@ -172,11 +163,44 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
-        self.simplify_via_association_for_query(stmt);
-
         stmt::visit_mut::visit_stmt_query_mut(self, stmt);
 
         self.simplify_stmt_query_when_empty(stmt);
+    }
+
+    fn visit_source_mut(&mut self, source: &mut stmt::Source) {
+        // A `Source::Table` JOIN constraint references columns in the
+        // source's own table list (`tbl_d_n.col`), so it must be simplified
+        // with that source in scope — not the outer query scope active here.
+        // Take the `from` items out so we can hold an immutable scope onto
+        // the (still table-list-bearing) source while simplifying the join
+        // constraint expressions, then put them back.
+        let from = match source {
+            stmt::Source::Table(table) if table.from.iter().any(|twj| !twj.joins.is_empty()) => {
+                Some(std::mem::take(&mut table.from))
+            }
+            _ => None,
+        };
+
+        if let Some(mut from) = from {
+            {
+                let mut scoped = self.scope(&*source);
+                for twj in &mut from {
+                    for join in &mut twj.joins {
+                        let (stmt::JoinOp::Inner(expr) | stmt::JoinOp::Left(expr)) =
+                            &mut join.constraint;
+                        scoped.visit_expr_mut(expr);
+                    }
+                }
+            }
+
+            if let stmt::Source::Table(table) = source {
+                table.from = from;
+            }
+            return;
+        }
+
+        stmt::visit_mut::visit_source_mut(self, source);
     }
 
     fn visit_stmt_select_mut(&mut self, stmt: &mut stmt::Select) {
@@ -197,22 +221,9 @@ impl VisitMut for Simplify<'_> {
     }
 
     fn visit_stmt_update_mut(&mut self, stmt: &mut stmt::Update) {
-        // If the update target is a query, start by simplifying the query, then
-        // rewriting it to be a filter.
-        if let stmt::UpdateTarget::Query(query) = &mut stmt.target {
-            self.visit_stmt_query_mut(query);
-
-            let stmt::ExprSet::Select(select) = &mut query.body else {
-                todo!()
-            };
-
-            assert!(select.returning.is_model());
-
-            stmt.filter.add_filter(select.filter.take());
-
-            stmt.target = stmt::UpdateTarget::Model(select.source.model_id_unwrap());
-        }
-
+        // `UpdateTarget::Query` is lifted into `UpdateTarget::Model` by the
+        // pre-lowering `lower::lift_update_query::LiftUpdateQuery` pass, not
+        // here.
         self.visit_update_target_mut(&mut stmt.target);
 
         let mut s = self.scope(&stmt.target);
@@ -231,20 +242,12 @@ impl VisitMut for Simplify<'_> {
 }
 
 impl<'a> Simplify<'a> {
-    pub(crate) fn new(schema: &'a Schema) -> Self {
-        Simplify::with_context(stmt::ExprContext::new(schema))
+    pub(crate) fn new(schema: &'a Schema, capability: &'a Capability) -> Self {
+        Simplify::with_context(stmt::ExprContext::new(schema), capability)
     }
 
-    pub(crate) fn with_context(cx: stmt::ExprContext<'a>) -> Self {
-        Simplify { cx }
-    }
-
-    fn schema(&self) -> &'a Schema {
-        self.cx.schema()
-    }
-
-    fn field(&self, field_id: impl Into<FieldId>) -> &Field {
-        self.cx.schema().app.field(field_id.into())
+    pub(crate) fn with_context(cx: stmt::ExprContext<'a>, capability: &'a Capability) -> Self {
+        Simplify { cx, capability }
     }
 
     /// Return a new `Simplify` instance that operates on a nested scope
@@ -255,6 +258,7 @@ impl<'a> Simplify<'a> {
     ) -> Simplify<'scope> {
         Simplify {
             cx: self.cx.scope(target),
+            capability: self.capability,
         }
     }
 

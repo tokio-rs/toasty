@@ -1,17 +1,17 @@
-use super::{HistoryFile, HistoryFileMigration, SnapshotFile};
 use crate::{Config, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Select;
+use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
-use std::collections::{HashMap, HashSet};
 use std::fs;
+use toasty::migration::{self, History, HistoryEntry, Snapshot};
 use toasty::{
     Db,
-    schema::db::{
-        ColumnId, ColumnsDiffItem, IndexId, IndicesDiffItem, Migration, RenameHints, Schema,
-        SchemaDiff, TableId, TablesDiffItem,
+    schema::{
+        db::{ColumnId, IndexId, Migration, Schema, TableId},
+        diff,
     },
 };
 
@@ -35,23 +35,21 @@ pub struct GenerateCommand {
 }
 
 /// Collects rename hints by interactively asking the user about potential renames
-fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<RenameHints> {
-    let mut hints = RenameHints::default();
+fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<diff::RenameHints> {
+    let mut hints = diff::RenameHints::default();
     let mut ignored_tables = HashSet::<TableId>::new();
     let mut ignored_columns = HashMap::<TableId, HashSet<ColumnId>>::new();
     let mut ignored_indices = HashMap::<TableId, HashSet<IndexId>>::new();
 
     'main: loop {
-        let diff = SchemaDiff::from(previous_schema, schema, &hints);
+        let diff = diff::Schema::from(previous_schema, schema, &hints);
 
         // Check for table renames
         let dropped_tables: Vec<_> = diff
             .tables()
             .iter()
             .filter_map(|item| match item {
-                TablesDiffItem::DropTable(table) if !ignored_tables.contains(&table.id) => {
-                    Some(*table)
-                }
+                diff::Table::Drop(table) if !ignored_tables.contains(&table.id) => Some(*table),
                 _ => None,
             })
             .collect();
@@ -60,7 +58,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
             .tables()
             .iter()
             .filter_map(|item| match item {
-                TablesDiffItem::CreateTable(table) => Some(*table),
+                diff::Table::Create(table) => Some(*table),
                 _ => None,
             })
             .collect();
@@ -97,7 +95,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
 
         // Check for column and index renames within altered tables
         for item in diff.tables().iter() {
-            if let TablesDiffItem::AlterTable {
+            if let diff::Table::Alter {
                 previous,
                 next: _,
                 columns,
@@ -108,7 +106,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let dropped_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        ColumnsDiffItem::DropColumn(column)
+                        diff::Column::Drop(column)
                             if !ignored_columns
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&column.id)) =>
@@ -122,7 +120,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let added_columns: Vec<_> = columns
                     .iter()
                     .filter_map(|item| match item {
-                        ColumnsDiffItem::AddColumn(column) => Some(*column),
+                        diff::Column::Add(column) => Some(*column),
                         _ => None,
                     })
                     .collect();
@@ -166,7 +164,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let dropped_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        IndicesDiffItem::DropIndex(index)
+                        diff::Index::Drop(index)
                             if !ignored_indices
                                 .get(&previous.id)
                                 .is_some_and(|set| set.contains(&index.id)) =>
@@ -180,7 +178,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<Ren
                 let added_indices: Vec<_> = indices
                     .iter()
                     .filter_map(|item| match item {
-                        IndicesDiffItem::CreateIndex(index) => Some(*index),
+                        diff::Index::Create(index) => Some(*index),
                         _ => None,
                     })
                     .collect();
@@ -244,14 +242,12 @@ impl GenerateCommand {
         fs::create_dir_all(config.migration.get_snapshots_dir())?;
         fs::create_dir_all(history_path.parent().unwrap())?;
 
-        let mut history = HistoryFile::load_or_default(&history_path)?;
+        let mut history = History::load_or_default(&history_path)?;
 
         let previous_snapshot = history
-            .migrations()
+            .entries()
             .last()
-            .map(|f| {
-                SnapshotFile::load(config.migration.get_snapshots_dir().join(&f.snapshot_name))
-            })
+            .map(|f| Snapshot::load(config.migration.get_snapshots_dir().join(&f.snapshot_name)))
             .transpose()?;
         let previous_schema = previous_snapshot
             .map(|snapshot| snapshot.schema)
@@ -260,9 +256,9 @@ impl GenerateCommand {
         let schema = toasty::schema::db::Schema::clone(&db.schema().db);
 
         let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
-        let diff = SchemaDiff::from(&previous_schema, &schema, &rename_hints);
-
-        if diff.is_empty() {
+        let Some(generated) =
+            migration::generate(db.driver(), &previous_schema, &schema, &rename_hints)
+        else {
             println!(
                 "  {}",
                 style("The current schema matches the previous snapshot. No migration needed.")
@@ -271,23 +267,27 @@ impl GenerateCommand {
             );
             println!();
             return Ok(());
-        }
+        };
 
-        let snapshot = SnapshotFile::new(schema.clone());
-        let migration_number = history.next_migration_number();
-        let snapshot_name = format!("{:04}_snapshot.toml", migration_number);
+        let migration_prefix = match config.migration.prefix_style {
+            crate::MigrationPrefixStyle::Sequential => {
+                format!("{:04}", history.next_migration_number())
+            }
+            crate::MigrationPrefixStyle::Timestamp => {
+                jiff::Timestamp::now().strftime("%Y%m%d_%H%M%S").to_string()
+            }
+        };
+        let snapshot_name = format!("{:04}_snapshot.toml", &migration_prefix);
         let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
 
         let migration_name = format!(
             "{:04}_{}.sql",
-            migration_number,
+            &migration_prefix,
             self.name.as_deref().unwrap_or("migration")
         );
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
 
-        let migration = db.driver().generate_migration(&diff);
-
-        history.add_migration(HistoryFileMigration {
+        history.add_entry(HistoryEntry {
             // Some databases only supported signed 64-bit integers.
             id: rand::rng().random_range(0..i64::MAX) as u64,
             name: migration_name.clone(),
@@ -295,15 +295,16 @@ impl GenerateCommand {
             checksum: None,
         });
 
+        let migration = generated.migration;
         let Migration::Sql(sql) = migration;
-        std::fs::write(migration_path, sql)?;
+        std::fs::write(&migration_path, format!("{sql}\n"))?;
         println!(
             "  {} {}",
             style("✓").green().bold(),
             style(format!("Created migration file: {}", migration_name)).dim()
         );
 
-        snapshot.save(&snapshot_path)?;
+        generated.snapshot.save(&snapshot_path)?;
         println!(
             "  {} {}",
             style("✓").green().bold(),

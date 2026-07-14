@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_vec_of_queries(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -21,7 +21,7 @@ pub async fn batch_vec_of_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_array_of_queries(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -38,7 +38,7 @@ pub async fn batch_array_of_queries(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_vec_some_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -56,7 +56,7 @@ pub async fn batch_vec_some_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -82,7 +82,7 @@ pub async fn batch_nested_tuple_with_vec(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn batch_vec_all_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

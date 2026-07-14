@@ -3,17 +3,14 @@ mod macros;
 #[macro_use]
 mod util;
 
-mod exec_log;
-pub use exec_log::ExecLog;
-
 mod helpers;
-pub use helpers::{column, columns, table_id};
+pub use helpers::{column, columns, pop_filter, pop_insert, pop_update, table_id};
 
 mod isolate;
 use isolate::Isolate;
 
-mod logging_driver;
-pub use logging_driver::{DriverOp, LoggingDriver};
+mod instrumented_driver;
+pub use instrumented_driver::{DriverOp, Fault, InstrumentedDriver, InstrumentedHandle};
 
 mod setup;
 pub use setup::Setup;
@@ -37,10 +34,14 @@ pub use toasty_driver_integration_suite_macros::generate_driver_test_variants;
 toasty_driver_integration_suite_macros::generate_test_registry!("src/tests");
 
 mod prelude {
-    pub(crate) use crate::{Test, columns, stmt::Any, table_id};
+    pub(crate) use crate::{
+        Test, columns, pop_filter, pop_insert, pop_update,
+        stmt::{Any, ArgOr},
+        table_id,
+    };
     pub(crate) use toasty::Result;
     pub(crate) use toasty::models;
-    pub(crate) use toasty::schema::Register;
+    pub(crate) use toasty::schema::{Embed, Model};
     pub(crate) type BoxError = Box<dyn std::error::Error + 'static>;
 
     pub(crate) use crate::util::{NumUtil, SliceUtil};

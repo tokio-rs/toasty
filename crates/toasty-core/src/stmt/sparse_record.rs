@@ -1,5 +1,4 @@
 use super::{PathFieldSet, Type, Value, ValueRecord};
-use std::hash::Hash;
 
 /// A record where only a subset of fields are populated.
 ///
@@ -20,7 +19,7 @@ use std::hash::Hash;
 /// let v = Value::empty_sparse_record();
 /// assert!(matches!(v, Value::SparseRecord(_)));
 /// ```
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+#[derive(Debug, Clone, PartialEq)]
 pub struct SparseRecord {
     /// Bit set of field indices that are populated in this record.
     pub fields: PathFieldSet,
@@ -45,7 +44,7 @@ impl Value {
     pub fn sparse_record(fields: PathFieldSet, record: ValueRecord) -> Self {
         let mut values = vec![];
 
-        for (index, value) in fields.iter().zip(record.fields.into_iter()) {
+        for (index, value) in fields.iter().zip(record.fields) {
             while index >= values.len() {
                 values.push(Value::Null);
             }

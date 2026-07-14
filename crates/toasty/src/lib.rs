@@ -25,10 +25,10 @@
 //! [`Auto`](schema::Auto), a wrapper for auto-generated values such as
 //! database-assigned IDs.
 //!
-//! The module also provides the types that represent associations between
-//! models: [`HasMany`](schema::HasMany), [`HasOne`](schema::HasOne), and
-//! [`BelongsTo`](schema::BelongsTo). These appear as fields on model structs
-//! and are populated through the generated relation accessors.
+//! Relation fields can use [`Deferred`](schema::Deferred) for lazy loading or
+//! direct relation values for eager loading. Lazy relations are populated
+//! through `.include(...)` or generated relation accessors. Eager relations are
+//! loaded whenever the model is loaded.
 //!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.
@@ -42,6 +42,11 @@
 //! [`Path`](stmt::Path), and the [`in_list`](stmt::in_list) function.
 //! Generated query builders (e.g. `find_by_*`, `filter_by_*`) produce these
 //! types.
+//!
+//! ## [`sql`] — raw SQL execution helpers
+//!
+//! Contains [`sql::statement`] and [`sql::query`] for running backend SQL
+//! through [`Db`], [`Connection`], or [`Transaction`] handles.
 //!
 //! # Key traits
 //!
@@ -63,6 +68,8 @@
 //! - [`Page`](stmt::Page) — a page of results from a paginated query, with cursor-based
 //!   navigation.
 //! - [`Batch`](stmt::Batch) — groups multiple queries into a single round-trip.
+//! - [`Capability`] / [`SqlPlaceholder`] — driver metadata, including SQL
+//!   placeholder syntax for raw SQL.
 //! - [`Error`] / [`Result`] — re-exported from `toasty-core`.
 //!
 //! # Derive macros
@@ -84,6 +91,7 @@
 //! | `postgresql`   | `toasty-driver-postgresql`   |
 //! | `mysql`        | `toasty-driver-mysql`        |
 //! | `dynamodb`     | `toasty-driver-dynamodb`     |
+//! | `turso`        | `toasty-driver-turso`        |
 //!
 //! Additional feature flags: `rust_decimal`, `bigdecimal`, `jiff` (date/time
 //! via the `jiff` crate), and `serde` (JSON serialization support).
@@ -110,51 +118,35 @@ pub use stmt::{Batch, batch};
 
 /// Database handle, connection pool, executor trait, and transaction support.
 pub mod db;
-pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
+pub use db::{
+    Capability, Connection, Db, Executor, SqlPlaceholder, Transaction, TransactionBuilder,
+};
 
 mod engine;
 
+mod instrument;
+
+/// Schema migration types: history files, snapshots, and generation helpers.
+#[cfg(feature = "migration")]
+pub mod migration;
+
 /// Model, relation, and schema inspection types.
 pub mod schema;
-pub use schema::{BelongsTo, HasMany, HasOne};
+pub use schema::Deferred;
 
 // `Page` lives in `stmt`.
 
 /// Typed statement, expression, and query builder types.
 pub mod stmt;
+#[cfg(feature = "serde")]
+pub use stmt::Json;
 pub use stmt::Statement;
 
-pub use toasty_macros::{Embed, Model, create, query};
+/// Raw SQL execution helpers.
+pub mod sql;
+
+pub use toasty_macros::{Embed, Model, create, query, update};
 
 pub use toasty_core::{Error, Result, schema::app::ModelSet};
 
-#[doc(hidden)]
-pub mod codegen_support {
-    pub use crate::schema::inventory;
-    pub use crate::{
-        Db, Error, Executor, Result, Statement,
-        schema::{
-            Auto, BelongsTo, DiscoverItem, Embed, Field, HasMany, HasOne, Load, Model, Register,
-            Relation, Scope, generate_unique_id,
-        },
-        stmt::CreateMany,
-        stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
-        update_target::UpdateTarget,
-    };
-    #[cfg(feature = "serde")]
-    pub use serde_json;
-    pub use std::{convert::Into, default::Default, option::Option};
-
-    pub use toasty_core as core;
-
-    /// Infer the [`Scope`] type from a scope expression and return its fields
-    /// path.
-    ///
-    /// The `create!` macro uses this in the scoped form (`in expr { ... }`) to
-    /// obtain the field struct for nested builders. Because the macro has no
-    /// type information, it cannot call `S::new_path_root()` directly — this function
-    /// lets Rust infer `S` from the scope argument.
-    pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
-        S::new_path_root()
-    }
-}
+pub mod codegen_support;

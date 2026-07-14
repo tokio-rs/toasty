@@ -169,21 +169,30 @@ pub enum ExprTarget<'a> {
 /// and `()` (which resolves nothing).
 pub trait Resolve {
     /// Returns the database table that stores the given model, if any.
-    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
+    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table> {
+        let _ = model;
+        None
+    }
 
     /// Returns a reference to the application Model with the specified ID.
     ///
     /// Used during high-level query building to access model metadata such as
     /// field definitions, relationships, and validation rules. Returns None if
     /// the model ID is not found in the application schema.
-    fn model(&self, id: ModelId) -> Option<&Model>;
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        let _ = id;
+        None
+    }
 
     /// Returns a reference to the database Table with the specified ID.
     ///
     /// Used during SQL generation and query execution to access table metadata
     /// including column definitions, constraints, and indexes. Returns None if
     /// the table ID is not found in the database schema.
-    fn table(&self, id: TableId) -> Option<&Table>;
+    fn table(&self, id: TableId) -> Option<&Table> {
+        let _ = id;
+        None
+    }
 }
 
 /// Conversion trait for producing an [`ExprTarget`] from a statement or
@@ -387,6 +396,11 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 ExprSet::Select(body) => cx.infer_returning_ty(&body.returning, args, stmt.single),
                 ExprSet::SetOp(_body) => todo!(),
                 ExprSet::Update(_body) => todo!(),
+                ExprSet::Delete(body) => body
+                    .returning
+                    .as_ref()
+                    .map(|returning| cx.infer_returning_ty(returning, args, stmt.single))
+                    .unwrap_or(Type::Unit),
                 ExprSet::Values(_body) => todo!(),
                 ExprSet::Insert(body) => body
                     .returning
@@ -416,12 +430,12 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 if single { ty } else { Type::list(ty) }
             }
             Returning::Changed => todo!(),
-            Returning::Expr(expr) => {
+            Returning::Project(expr) => {
                 let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
 
                 if single { ty } else { Type::list(ty) }
             }
-            Returning::Value(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
+            Returning::Expr(expr) => self.infer_expr_ty2(&arg_ty_stack, expr, true),
         }
     }
 
@@ -435,6 +449,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         match expr {
             Expr::Arg(e) => args.resolve_arg_ty(e).clone(),
             Expr::And(_) => Type::Bool,
+            Expr::AnyOp(_) | Expr::AllOp(_) => Type::Bool,
             Expr::BinaryOp(_) => Type::Bool,
             Expr::Cast(e) => e.ty.clone(),
             Expr::Reference(expr_ref) => {
@@ -501,6 +516,18 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                         Type::Record(mut fields) => {
                             std::mem::replace(&mut fields[*step], Type::Null)
                         }
+                        // A path into an embedded-model document value: descend
+                        // by field index through the embedded model's fields.
+                        // Keeping document projections type-able in the engine is
+                        // what lets them survive as plain `ExprProject` nodes
+                        // (rather than rewritten to a JSON function) until the
+                        // SQL edge.
+                        Type::Model(id) => match self.schema.model(id) {
+                            Some(Model::EmbeddedStruct(embedded)) => {
+                                embedded.fields[*step].expr_ty().clone()
+                            }
+                            _ => todo!("project into non-embedded model {id:?}"),
+                        },
                         Type::List(items) => *items,
                         expr => todo!(
                             "returning_expr={returning_expr:#?}; expr={expr:#?}; project={e:#?}"
@@ -547,6 +574,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Exists(_) => Type::Bool,
             Expr::Func(ExprFunc::Count(_)) => Type::U64,
             Expr::Func(ExprFunc::LastInsertId(_)) => Type::I64,
+            Expr::Func(ExprFunc::JsonExtract(func)) => func.ty.clone(),
             _ => todo!("{expr:#?}"),
         }
     }
@@ -679,33 +707,19 @@ impl Resolve for Schema {
     }
 }
 
-impl Resolve for db::Schema {
-    fn model(&self, _id: ModelId) -> Option<&Model> {
-        None
+impl Resolve for crate::schema::app::Schema {
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        self.get_model(id)
     }
+}
 
+impl Resolve for db::Schema {
     fn table(&self, id: TableId) -> Option<&Table> {
         Some(db::Schema::table(self, id))
     }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
-    }
 }
 
-impl Resolve for () {
-    fn model(&self, _id: ModelId) -> Option<&Model> {
-        None
-    }
-
-    fn table(&self, _id: TableId) -> Option<&Table> {
-        None
-    }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
-    }
-}
+impl Resolve for () {}
 
 impl<'a> ExprTarget<'a> {
     /// Returns the model if this target is [`ExprTarget::Model`], or `None`.
@@ -809,6 +823,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a ExprSet {
             ExprSet::Select(select) => select.into_expr_target(schema),
             ExprSet::SetOp(_) => todo!(),
             ExprSet::Update(update) => update.into_expr_target(schema),
+            ExprSet::Delete(delete) => delete.into_expr_target(schema),
             ExprSet::Values(_) => ExprTarget::Free,
             ExprSet::Insert(insert) => insert.into_expr_target(schema),
         }

@@ -1,8 +1,8 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::Register;
+use crate::schema::Field;
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
-    schema::app::VariantId,
+    schema::app::{ModelId, VariantId},
     stmt::{self, Direction, OrderByExpr},
 };
 
@@ -39,66 +39,30 @@ pub struct Path<T, U> {
     _p: PhantomData<(T, U)>,
 }
 
-impl<T: Register> Path<T, T> {
-    /// Create a path that points to the root model itself.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::Path;
-    ///
-    /// let root = Path::<User, User>::root();
-    /// ```
-    pub fn root() -> Self {
-        Self {
-            untyped: stmt::Path::model(T::id()),
-            _p: PhantomData,
-        }
-    }
-}
-
-impl<M: Register> Path<List<M>, List<M>> {
-    /// Create an identity path for a list of model `M`.
-    ///
-    /// This is the list counterpart of [`Path::root`] — it produces a
-    /// `Path<List<M>, List<M>>` rooted at the model's identity.
-    pub fn from_model_list() -> Self {
-        Self {
-            untyped: stmt::Path::model(M::id()),
-            _p: PhantomData,
-        }
-    }
-}
-
 impl<T, U> Path<T, U> {
-    /// Create a path to the field at `index` on model `T`.
+    /// Create a path rooted at the model (or embedded type) identified by
+    /// `model`.
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::Path;
-    ///
-    /// // Path to the second field (name, index 1)
-    /// let path = Path::<User, String>::from_field_index(1);
-    /// ```
-    pub fn from_field_index(index: usize) -> Self
-    where
-        T: Register,
-    {
+    /// This is the low-level constructor behind the `path_root` and
+    /// `path_model_list` helpers on the [`Model`](crate::schema::Model) and
+    /// [`Embed`](crate::schema::Embed) traits, which supply the [`ModelId`]
+    /// from their own `id()`.
+    pub(crate) fn from_model_id(model: ModelId) -> Self {
         Self {
-            untyped: stmt::Path::from_index(T::id(), index),
+            untyped: stmt::Path::model(model),
+            _p: PhantomData,
+        }
+    }
+
+    /// Create a path to the field at `index` on the model (or embedded type)
+    /// identified by `model`.
+    ///
+    /// Low-level constructor behind the `path_field` helpers on the
+    /// [`Model`](crate::schema::Model) and [`Embed`](crate::schema::Embed)
+    /// traits.
+    pub(crate) fn field_at(model: ModelId, index: usize) -> Self {
+        Self {
+            untyped: stmt::Path::from_index(model, index),
             _p: PhantomData,
         }
     }
@@ -115,9 +79,9 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// # use toasty::stmt::Path;
+    /// # use toasty::schema::Model;
     /// # use toasty_core::schema::app::{ModelId, VariantId};
-    /// let path = Path::<User, String>::from_field_index(1);
+    /// let path = User::path_field::<String>(1);
     /// let variant_id = VariantId { model: ModelId(0), index: 0 };
     /// let _variant_path = path.into_variant(variant_id);
     /// ```
@@ -145,9 +109,10 @@ impl<T, U> Path<T, U> {
     /// #     name: String,
     /// # }
     /// use toasty::stmt::Path;
+    /// use toasty::schema::Model;
     ///
-    /// let user_path = Path::<User, User>::root();
-    /// let name_path = Path::<User, String>::from_field_index(1);
+    /// let user_path = User::path_root();
+    /// let name_path = User::path_field::<String>(1);
     /// let _chained: Path<User, String> = user_path.chain(name_path);
     /// ```
     pub fn chain<X, V>(mut self, other: impl Into<Path<X, V>>) -> Path<T, V> {
@@ -160,7 +125,42 @@ impl<T, U> Path<T, U> {
         }
     }
 
+    /// Build a filter `Expr<bool>` from this path, automatically wrapping
+    /// the body with an `is_variant(parent, variant_id)` AND-gate when the
+    /// path is variant-rooted.
+    ///
+    /// All boolean-producing methods on `Path` (`eq`, `ne`, `gt`, `is_none`,
+    /// `starts_with`, `any`, …) funnel through this so that filter-context
+    /// uses of a variant-rooted path implicitly require the variant to
+    /// match. Path-yielding contexts (`include`, `order_by`, `chain`)
+    /// bypass this helper and keep the bare path.
+    fn build_filter<F>(self, build_body: F) -> Expr<bool>
+    where
+        F: FnOnce(stmt::Expr) -> stmt::Expr,
+    {
+        let gate = match &self.untyped.root {
+            stmt::PathRoot::Variant { parent, variant_id } => {
+                let parent_stmt = parent.as_ref().clone().into_stmt();
+                Some(stmt::Expr::is_variant(parent_stmt, *variant_id))
+            }
+            _ => None,
+        };
+        let body = build_body(self.untyped.into_stmt());
+        let untyped = match gate {
+            Some(g) => stmt::Expr::and(g, body),
+            None => body,
+        };
+        Expr {
+            untyped,
+            _p: PhantomData,
+        }
+    }
+
     /// Test whether this field equals `rhs`.
+    ///
+    /// For a variant-rooted path (e.g. `contact().email().address()`), the
+    /// resulting filter implicitly requires the variant to match — it
+    /// expands to `is_email(contact) AND address == rhs`.
     ///
     /// # Examples
     ///
@@ -174,10 +174,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().name().eq("Alice");
     /// ```
     pub fn eq(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::eq(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::eq(path, rhs))
     }
 
     /// Test whether this field does not equal `rhs`.
@@ -194,10 +192,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().name().ne("Alice");
     /// ```
     pub fn ne(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::ne(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::ne(path, rhs))
     }
 
     /// Test whether this field is greater than `rhs`.
@@ -214,10 +210,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().gt(10);
     /// ```
     pub fn gt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::gt(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::gt(path, rhs))
     }
 
     /// Test whether this field is greater than or equal to `rhs`.
@@ -234,10 +228,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().ge(1);
     /// ```
     pub fn ge(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::ge(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::ge(path, rhs))
     }
 
     /// Test whether this field is less than `rhs`.
@@ -254,10 +246,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().lt(100);
     /// ```
     pub fn lt(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::lt(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::lt(path, rhs))
     }
 
     /// Test whether this field is less than or equal to `rhs`.
@@ -274,8 +264,33 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().le(100);
     /// ```
     pub fn le(self, rhs: impl IntoExpr<U>) -> Expr<bool> {
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::le(path, rhs))
+    }
+
+    /// Test whether this field's value is in the inclusive range `[low, high]`.
+    ///
+    /// Generates a `BETWEEN low AND high` condition in SQL and a native
+    /// `BETWEEN` condition expression in DynamoDB.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let filter = User::fields().id().between(18_i64, 65_i64);
+    /// ```
+    pub fn between(self, low: impl IntoExpr<U>, high: impl IntoExpr<U>) -> Expr<bool> {
         Expr {
-            untyped: stmt::Expr::le(self.untyped.into_stmt(), rhs.into_expr().untyped),
+            untyped: stmt::Expr::between(
+                self.untyped.into_stmt(),
+                low.into_expr().untyped,
+                high.into_expr().untyped,
+            ),
             _p: PhantomData,
         }
     }
@@ -297,10 +312,8 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().in_list([1_i64, 2, 3]);
     /// ```
     pub fn in_list(self, rhs: impl IntoExpr<List<U>>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::in_list(self.untyped.into_stmt(), rhs.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let rhs = rhs.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::in_list(path, rhs))
     }
 
     /// Test whether this field's value appears in the result set of a
@@ -315,12 +328,13 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// use toasty::stmt::{List, Path, Query};
+    /// use toasty::stmt::{List, Query};
+    /// use toasty::schema::Model;
     ///
     /// // A path targeting User values
-    /// let path = Path::<User, User>::root();
+    /// let path = User::path_root();
     /// // A subquery returning List<User>
-    /// let subquery = Query::<List<User>>::filter(User::fields().name().eq("Alice"));
+    /// let subquery = Query::<List<User>>::all().filter(User::fields().name().eq("Alice"));
     /// let filter = path.in_query(subquery);
     /// ```
     pub fn in_query<Q>(self, rhs: Q) -> Expr<bool>
@@ -328,10 +342,7 @@ impl<T, U> Path<T, U> {
         Q: IntoStatement<Returning = List<U>>,
     {
         let query = rhs.into_statement().into_untyped_query();
-        Expr {
-            untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), query),
-            _p: PhantomData,
-        }
+        self.build_filter(move |path| stmt::Expr::in_subquery(path, query))
     }
 
     /// Produce an ascending [`OrderByExpr`] for this path.
@@ -345,8 +356,8 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// let mut q = User::all();
-    /// q.order_by(User::fields().name().asc());
+    /// let q = User::all()
+    ///     .order_by(User::fields().name().asc());
     /// ```
     pub fn asc(self) -> OrderByExpr {
         OrderByExpr {
@@ -366,8 +377,8 @@ impl<T, U> Path<T, U> {
     /// #     id: i64,
     /// #     name: String,
     /// # }
-    /// let mut q = User::all();
-    /// q.order_by(User::fields().name().desc());
+    /// let q = User::all()
+    ///     .order_by(User::fields().name().desc());
     /// ```
     pub fn desc(self) -> OrderByExpr {
         OrderByExpr {
@@ -400,10 +411,11 @@ impl<T, U> Path<T, List<U>> {
     /// #     id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Path, List};
+    /// use toasty::stmt::List;
+    /// use toasty::schema::Model;
     ///
     /// // Find users that have at least one todo with "urgent" in the title
-    /// let todos_path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let todos_path = User::path_field::<List<Todo>>(2);
     /// let filter = todos_path.any(Todo::fields().title().eq("urgent"));
     /// ```
     pub fn any(self, filter: Expr<bool>) -> Expr<bool>
@@ -411,12 +423,109 @@ impl<T, U> Path<T, List<U>> {
         U: crate::schema::Model,
     {
         // Build a query on the child model filtered by `filter`
-        let child_query = super::Query::<List<U>>::filter(filter);
+        let child_query = super::Query::<List<U>>::all().filter(filter);
+        self.build_filter(move |path| stmt::Expr::in_subquery(path, child_query.untyped))
+    }
 
-        Expr {
-            untyped: stmt::Expr::in_subquery(self.untyped.into_stmt(), child_query.untyped),
-            _p: PhantomData,
-        }
+    /// Build a `NOT IN subquery` expression that tests whether **all** associated
+    /// records satisfy `filter`.
+    ///
+    /// The path must point to a `HasMany` (or similar collection) field on the
+    /// parent model. Returns `true` when every associated record matches
+    /// `filter`, including the vacuous case where the parent has no associated
+    /// records (matching Rust's `[].iter().all()` semantics).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct Todo {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     complete: bool,
+    /// # }
+    /// use toasty::stmt::List;
+    /// use toasty::schema::Model;
+    ///
+    /// // Find users whose todos are all complete
+    /// let todos_path = User::path_field::<List<Todo>>(2);
+    /// let filter = todos_path.all(Todo::fields().complete().eq(true));
+    /// ```
+    pub fn all(self, filter: Expr<bool>) -> Expr<bool>
+    where
+        U: crate::schema::Model,
+    {
+        // parent NOT IN (SELECT child_fk FROM child WHERE NOT filter)
+        let child_query = super::Query::<List<U>>::all().filter(filter.not());
+        self.build_filter(move |path| {
+            stmt::Expr::not(stmt::Expr::in_subquery(path, child_query.untyped))
+        })
+    }
+}
+
+/// Container-style predicates on a `Vec<scalar>` model field. The path target
+/// is the [`List<U>`] marker (matching `Field::Path<Origin>` for `Vec<U>`),
+/// and the element type `U` is constrained to a path-target scalar so the
+/// same `IntoExpr` infrastructure that powers `eq`/`in_list` covers the
+/// right-hand side.
+impl<T, U> Path<T, List<U>>
+where
+    U: crate::schema::Scalar,
+{
+    /// Test whether the array contains `value`.
+    ///
+    /// Mirrors [`Vec::contains`]. Lowers to `value = ANY(col)` on PostgreSQL.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// let filter = User::fields().tags().contains("admin");
+    /// ```
+    pub fn contains(self, value: impl IntoExpr<U>) -> Expr<bool> {
+        let value = value.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::any_op(value, stmt::BinaryOp::Eq, path))
+    }
+
+    /// Test whether the array contains every element of `values`.
+    ///
+    /// Mirrors [`HashSet::is_superset`](std::collections::HashSet::is_superset).
+    /// Lowers to `col @> values` (PostgreSQL `@>` operator).
+    pub fn is_superset(self, values: impl IntoExpr<List<U>>) -> Expr<bool> {
+        let values = values.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::array_is_superset(path, values))
+    }
+
+    /// Test whether the array shares at least one element with `values`.
+    ///
+    /// Negation of [`HashSet::is_disjoint`](std::collections::HashSet::is_disjoint).
+    /// Lowers to `col && values` (PostgreSQL `&&` operator).
+    pub fn intersects(self, values: impl IntoExpr<List<U>>) -> Expr<bool> {
+        let values = values.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::array_intersects(path, values))
+    }
+
+    /// Returns the array length.
+    ///
+    /// Mirrors [`Vec::len`]. Lowers to `cardinality(col)` on PostgreSQL.
+    pub fn len(self) -> Expr<i64> {
+        Expr::from_untyped(stmt::Expr::array_length(self.untyped.into_stmt()))
+    }
+
+    /// Returns `true` if the array is empty.
+    ///
+    /// Equivalent to `.len().eq(0)`. Mirrors [`Vec::is_empty`].
+    pub fn is_empty(self) -> Expr<bool> {
+        let untyped = stmt::Expr::eq(
+            stmt::Expr::array_length(self.untyped.into_stmt()),
+            stmt::Expr::Value(stmt::Value::I64(0)),
+        );
+        Expr::from_untyped(untyped)
     }
 }
 
@@ -436,10 +545,7 @@ impl<T, U> Path<T, Option<U>> {
     /// let filter = User::fields().bio().is_none();
     /// ```
     pub fn is_none(self) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::is_null(self.untyped.into_stmt()),
-            _p: PhantomData,
-        }
+        self.build_filter(stmt::Expr::is_null)
     }
 
     /// Test whether this optional field is not `NULL`.
@@ -457,8 +563,202 @@ impl<T, U> Path<T, Option<U>> {
     /// let filter = User::fields().bio().is_some();
     /// ```
     pub fn is_some(self) -> Expr<bool> {
+        self.build_filter(stmt::Expr::is_not_null)
+    }
+}
+
+impl<T, U> Path<T, U>
+where
+    U: Field<Inner = String>,
+{
+    /// Test whether this string field starts with `prefix`.
+    ///
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    /// For DynamoDB, this maps to `begins_with` in a `KeyConditionExpression`
+    /// (sort key) or `FilterExpression` (non-key attribute).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     nickname: Option<String>,
+    /// # }
+    /// let filter = User::fields().name().starts_with("Al".to_string());
+    /// let filter = User::fields().nickname().starts_with("Al".to_string());
+    /// ```
+    pub fn starts_with(self, prefix: impl IntoExpr<String>) -> Expr<bool> {
+        let prefix = prefix.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::starts_with(path, prefix))
+    }
+
+    /// Test whether this string field matches a SQL `LIKE` pattern.
+    ///
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    /// The caller is responsible for including any `%` or `_` wildcard
+    /// characters in `pattern`. Not supported by the DynamoDB driver — use
+    /// [`starts_with`](Self::starts_with) instead.
+    ///
+    /// `.like()` is a pass-through to the database's own `LIKE`, whose case
+    /// sensitivity differs by backend: case-sensitive on PostgreSQL,
+    /// case-insensitive for ASCII on SQLite, and collation-dependent on MySQL.
+    /// For a case-insensitive match on PostgreSQL, use [`ilike`](Self::ilike).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     nickname: Option<String>,
+    /// # }
+    /// let filter = User::fields().name().like("Al%".to_string());
+    /// let filter = User::fields().nickname().like("Al%".to_string());
+    /// ```
+    pub fn like(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
+        let pattern = pattern.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::like(path, pattern))
+    }
+
+    /// Case-insensitive variant of [`like`](Self::like), mapping to
+    /// PostgreSQL's `ILIKE` operator.
+    ///
+    /// PostgreSQL is the only supported backend with a native `ILIKE`, so
+    /// `.ilike()` works only there. Toasty does not emulate it: on MySQL,
+    /// SQLite, and DynamoDB the query is rejected with an unsupported-feature
+    /// error. PostgreSQL's `LIKE` is case-sensitive and so provides `ILIKE` as
+    /// its case-insensitive companion; the other backends fold ASCII case in
+    /// `LIKE` (SQLite) or set it through the column collation (MySQL), so there
+    /// is no operator with matching semantics for `.ilike()` to pass through to.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// // Matches "Alice", "ALICIA", and "alfred".
+    /// let filter = User::fields().name().ilike("al%".to_string());
+    /// ```
+    pub fn ilike(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
         Expr {
-            untyped: stmt::Expr::is_not_null(self.untyped.into_stmt()),
+            untyped: stmt::Expr::ilike(self.untyped.into_stmt(), pattern.into_expr().untyped),
+            _p: PhantomData,
+        }
+    }
+
+    /// Test whether this string field matches a SQL `LIKE` pattern using an
+    /// explicit escape character.
+    ///
+    /// Available on any string-valued field, including `String`,
+    /// `Option<String>`, and other wrappers whose `Field::Inner` is `String`.
+    ///
+    /// The caller is responsible for constructing the `LIKE` pattern. Toasty does
+    /// not escape `pattern` automatically. Any `%` or `_` characters that are not
+    /// escaped by `escape` are treated as SQL `LIKE` wildcards:
+    ///
+    /// - `%` matches any sequence of characters.
+    /// - `_` matches any single character.
+    /// - `escape` followed by `%`, `_`, or `escape` matches that character
+    ///   literally.
+    ///
+    /// This is useful when the pattern needs to match literal `%` or `_`
+    /// characters. For example, with `escape` set to `'\\'`, the pattern
+    /// `"Alice\\%%"` matches strings beginning with the literal text `"Alice%"`.
+    /// The first `%` is escaped and matched literally; the second `%` remains a
+    /// wildcard.
+    ///
+    /// Not supported by the DynamoDB driver. Use [`starts_with`](Self::starts_with)
+    /// instead when targeting DynamoDB.
+    ///
+    /// `.like_with_escape()` is a pass-through to the database's own `LIKE`
+    /// operator with an `ESCAPE` clause. Case sensitivity differs by backend:
+    /// case-sensitive on PostgreSQL, case-insensitive for ASCII on SQLite, and
+    /// collation-dependent on MySQL. For a case-insensitive match on PostgreSQL,
+    /// use [`ilike`](Self::ilike).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     nickname: Option<String>,
+    /// # }
+    /// // Match names starting with "Al".
+    /// let filter = User::fields().name().like_with_escape("Al%".to_string(), '\\');
+    ///
+    /// // Match names starting with the literal text "Alice%".
+    /// let filter = User::fields().name().like_with_escape("Alice\\%%".to_string(), '\\');
+    ///
+    /// // Also works on nullable string fields.
+    /// let filter = User::fields().nickname().like_with_escape("Al%".to_string(), '\\');
+    /// ```
+    pub fn like_with_escape(self, pattern: impl IntoExpr<String>, escape: char) -> Expr<bool> {
+        let pattern = pattern.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::like_with_escape(path, pattern, escape))
+    }
+
+    /// Test whether this string field matches a case-insensitive SQL `LIKE`
+    /// pattern using an explicit escape character.
+    ///
+    /// This is the escaped variant of [`ilike`](Self::ilike). It maps to
+    /// PostgreSQL's `ILIKE ... ESCAPE ...` syntax.
+    ///
+    /// PostgreSQL is the only supported backend with a native `ILIKE`, so
+    /// `.ilike_with_escape()` works only there. Toasty does not emulate it: on
+    /// MySQL, SQLite, and DynamoDB the query is rejected with an
+    /// unsupported-feature error.
+    ///
+    /// The caller is responsible for constructing the `ILIKE` pattern. Toasty does
+    /// not escape `pattern` automatically. Any `%` or `_` characters that are not
+    /// escaped by `escape` are treated as SQL pattern wildcards:
+    ///
+    /// - `%` matches any sequence of characters.
+    /// - `_` matches any single character.
+    /// - `escape` followed by `%`, `_`, or `escape` matches that character
+    ///   literally.
+    ///
+    /// This is useful when the pattern needs to match literal `%` or `_`
+    /// characters while still matching case-insensitively. For example, with
+    /// `escape` set to `'\\'`, the pattern `"Alice\\%%"` matches strings beginning
+    /// with the literal text `"Alice%"`, ignoring case. It can match `"Alice%1"`,
+    /// `"ALICE%1"`, or `"alice%foo"`, but not `"AliceA1"`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// // Match names starting with "al", ignoring case.
+    /// let filter = User::fields().name().ilike_with_escape("al%".to_string(), '\\');
+    ///
+    /// // Match names starting with the literal text "alice%", ignoring case.
+    /// let filter = User::fields().name().ilike_with_escape("alice\\%%".to_string(), '\\');
+    /// ```
+    pub fn ilike_with_escape(self, pattern: impl IntoExpr<String>, escape: char) -> Expr<bool> {
+        Expr {
+            untyped: stmt::Expr::ilike_with_escape(
+                self.untyped.into_stmt(),
+                pattern.into_expr().untyped,
+                escape,
+            ),
             _p: PhantomData,
         }
     }

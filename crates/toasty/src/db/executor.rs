@@ -2,10 +2,13 @@ use crate::{Result, Statement, db::Transaction, schema::Load};
 
 use async_trait::async_trait;
 use std::sync::Arc;
-use toasty_core::{Schema, driver::ExecResponse};
+use toasty_core::{
+    Schema,
+    driver::{Capability, ExecResponse, operation::RawSql},
+};
 
-/// Anything that can execute queries — [`Db`](crate::Db) or
-/// [`Transaction`](crate::db::Transaction).
+/// Anything that can execute queries — [`Db`](crate::Db),
+/// [`Connection`](crate::Connection), or [`Transaction`](crate::Transaction).
 ///
 /// This trait is dyn-compatible. The generic [`exec`](dyn Executor::exec)
 /// method lives on `dyn Executor` and accepts any typed
@@ -13,11 +16,24 @@ use toasty_core::{Schema, driver::ExecResponse};
 #[async_trait]
 pub trait Executor: Send + Sync {
     /// Starts a (potentially nested) transaction.
+    ///
+    /// Takes `&mut self` so the executor is exclusively borrowed while the
+    /// transaction is open. This prevents statements from accidentally
+    /// executing on the parent handle rather than through `&mut tx`, which
+    /// would bypass the transaction.
     async fn transaction(&mut self) -> Result<Transaction<'_>>;
 
     /// Execute an untyped statement, returning the full execution response.
     #[doc(hidden)]
     async fn exec_untyped(&mut self, stmt: toasty_core::stmt::Statement) -> Result<ExecResponse>;
+
+    /// Execute user-authored SQL, returning the full execution response.
+    #[doc(hidden)]
+    async fn exec_raw_sql(&mut self, raw: RawSql) -> Result<ExecResponse>;
+
+    /// Returns the capabilities associated with this executor.
+    #[doc(hidden)]
+    fn capability(&mut self) -> &Capability;
 
     /// Returns the schema associated with this executor.
     #[doc(hidden)]

@@ -92,9 +92,9 @@ When `#[auto]` is used on a `uuid::Uuid` field, Toasty generates a UUID v7
 (time-ordered) by default. See [auto strategies](#auto-strategies) for other
 options.
 
-A newtype embedded struct can also be used as a key. The newtype wraps a
-primitive and maps to a single column, so it works like any other key type while
-adding type safety:
+A [newtype embedded struct](./embedded-types.md#newtype-structs) can also be
+used as a key. The newtype wraps a primitive and maps to a single column, so
+it works like any other key type while adding type safety:
 
 ```rust,ignore
 #[derive(Debug, toasty::Embed)]
@@ -108,8 +108,25 @@ struct User {
 }
 ```
 
-See [Embedded Types — Newtype structs](./embedded-types.md#newtype-structs) for
-more on newtypes.
+When the newtype wraps a type that already supports `#[auto]` — `uuid::Uuid`,
+an integer type — the model field can carry `#[auto]` and the macro proxies
+to the inner type's strategy:
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct UserId(uuid::Uuid);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]              // proxies through UserId to <Uuid as Auto> — UUID v7
+    id: UserId,
+    name: String,
+}
+```
+
+> **Runnable example:** [`crm-embedded`] flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.
+
 
 ## Auto-generated values
 
@@ -222,8 +239,8 @@ println!("post id: {}", post.id); // 1, 2, 3, ...
 # }
 ```
 
-Auto-increment requires database support. SQLite, PostgreSQL, and MySQL all
-support auto-incrementing columns. DynamoDB does not.
+Auto-increment requires database support. SQLite, Turso, PostgreSQL, and MySQL
+all support auto-incrementing columns. DynamoDB does not.
 
 ## Composite keys
 
@@ -286,8 +303,10 @@ struct Enrollment {
 }
 ```
 
-`#[key(student_id, course_id)]` on the struct is equivalent to putting `#[key]`
-on both `student_id` and `course_id`. It generates the same lookup methods:
+`#[key(student_id, course_id)]` is shorthand for
+`#[key(partition = student_id, local = course_id)]`: the first field is the
+partition (hash) key, and any remaining fields are local (sort) keys. It
+generates the same lookup methods as `#[key]` on each field:
 
 ```rust
 # use toasty::Model;
@@ -345,6 +364,17 @@ struct Todo {
 The `partition` field determines which partition the record is stored in. The
 `local` field uniquely identifies the record within that partition.
 
+Each side accepts a single bare identifier (`partition = user_id`) or
+a bracketed list when more than one field belongs to that role:
+
+```rust,ignore
+#[key(partition = [tenant_id, org_id], local = [id])]
+```
+
+See [Indexes and Unique Constraints — Named mode](./indexes-and-unique-constraints.md#named-mode)
+for how multi-field partition keys map onto DynamoDB GSIs versus SQL
+composite indexes; the same rules apply to the primary key.
+
 With partition/local keys, Toasty generates methods to query by both fields or
 by the partition key alone:
 
@@ -372,6 +402,9 @@ let todos = Todo::filter_by_user_id(&1)
 # }
 ```
 
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+
 ## What gets generated
 
 For a model with `#[key]`, Toasty generates these methods:
@@ -380,5 +413,11 @@ For a model with `#[key]`, Toasty generates these methods:
 |---|---|
 | `#[key]` on single field | `get_by_<field>()`, `filter_by_<field>()`, `delete_by_<field>()` |
 | `#[key]` on multiple fields | `get_by_<a>_and_<b>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
-| `#[key(a, b)]` on struct | Same as `#[key]` on multiple fields |
+| `#[key(a, b)]` on struct | Same generated methods as `#[key]` on multiple fields; `a` is the partition key, `b` is the local (sort) key |
 | `#[key(partition = a, local = b)]` | `get_by_<a>_and_<b>()`, `filter_by_<a>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`crm-embedded`]: https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

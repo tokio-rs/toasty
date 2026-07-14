@@ -1,10 +1,16 @@
 pub(crate) mod eval;
 pub(crate) mod exec;
 
+mod bind;
+#[cfg(test)]
+pub(crate) mod test_util;
+
+mod fold;
 mod hir;
 use hir::HirStatement;
 
 mod index;
+mod legalize;
 mod lower;
 mod mir;
 mod plan;
@@ -18,7 +24,7 @@ use crate::Result;
 use std::sync::Arc;
 use toasty_core::{
     Connection, Schema,
-    driver::Capability,
+    driver::{Capability, operation::RawSql},
     stmt::{self, Statement},
 };
 
@@ -31,10 +37,14 @@ use toasty_core::{
 ///
 /// The execution pipeline follows this process:
 ///
-/// 1. **Verification.** Validate statement structure (debug builds only).
+/// 1. **Verification.** Validate statement structure and reject AST shapes
+///    the driver does not support.
 /// 2. **Lowering.** Convert to HIR with dependency tracking.
 /// 3. **Planning.** Build MIR operation graph.
-/// 4. **Execution.** Run actions against the database driver.
+/// 4. **Execution.** Run actions against the database driver. Each
+///    driver-bound statement is legalized for the target backend and its
+///    bind parameters extracted ([`prepare_for_driver`](Self::prepare_for_driver))
+///    immediately before it crosses to the driver.
 #[derive(Debug, Clone)]
 pub(crate) struct Engine {
     /// The schema being managed by this database instance.
@@ -66,18 +76,7 @@ impl Engine {
         stmt: Statement,
         in_transaction: bool,
     ) -> Result<toasty_core::driver::ExecResponse> {
-        tracing::debug!(stmt.kind = stmt.name(), "executing statement");
-
-        if cfg!(debug_assertions) {
-            self.verify(&stmt);
-        }
-
-        if let stmt::Statement::Insert(stmt) = &stmt {
-            assert!(matches!(
-                stmt.returning,
-                Some(stmt::Returning::Model { .. })
-            ));
-        }
+        self.verify(&stmt)?;
 
         // Lower the statement to High-level intermediate representation
         let hir = self.lower_stmt(stmt)?;
@@ -94,6 +93,21 @@ impl Engine {
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
         self.exec_plan(connection, plan, in_transaction).await
+    }
+
+    /// Executes user-authored SQL through the driver SQL path.
+    pub(crate) async fn exec_raw_sql(
+        &self,
+        connection: &mut dyn Connection,
+        raw: RawSql,
+    ) -> Result<toasty_core::driver::ExecResponse> {
+        if !self.capability.sql {
+            return Err(toasty_core::Error::unsupported_feature(
+                "raw SQL is only supported by SQL drivers",
+            ));
+        }
+
+        connection.exec(&self.schema, raw.into()).await
     }
 
     /// Returns a new [`ExprContext`](stmt::ExprContext) for a specific target.

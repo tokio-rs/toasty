@@ -16,19 +16,9 @@ pub async fn create_macro_simple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
 pub async fn create_macro_multiple_fields(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Create with multiple fields
     let user = toasty::create!(User {
@@ -50,8 +40,24 @@ pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
 
     let name = "Carl";
 
-    // Value can be a variable expression
+    // Explicit `name: name` — field and variable have the same identifier
     let user = toasty::create!(User { name: name }).exec(&mut db).await?;
+
+    assert_eq!(user.name, "Carl");
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+pub async fn create_macro_with_different_variable(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user_name = "Carl";
+
+    // Explicit `name: expr` where the expression differs from the field name
+    let user = toasty::create!(User { name: user_name })
+        .exec(&mut db)
+        .await?;
 
     assert_eq!(user.name, "Carl");
 
@@ -92,7 +98,7 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -107,7 +113,7 @@ pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -202,7 +208,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         name: String,
 
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -215,12 +221,12 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         user_id: ID,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         title: String,
 
         #[has_many]
-        tags: toasty::HasMany<Tag>,
+        tags: toasty::Deferred<Vec<Tag>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -233,7 +239,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
         todo_id: ID,
 
         #[belongs_to(key = todo_id, references = id)]
-        todo: toasty::BelongsTo<Todo>,
+        todo: toasty::Deferred<Todo>,
 
         name: String,
     }
@@ -262,6 +268,94 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
     assert_eq!(tags.len(), 2);
     assert_eq!(tags[0].name, "urgent");
     assert_eq!(tags[1].name, "work");
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+pub async fn create_macro_field_shorthand(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let name = "Carl".to_string();
+
+    // Field shorthand — `name` is equivalent to `name: name`
+    let user = toasty::create!(User { name }).exec(&mut db).await?;
+
+    assert_eq!(user.name, "Carl");
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
+pub async fn create_macro_field_shorthand_multiple(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let name = "Carl".to_string();
+    let email = "carl@example.com".to_string();
+
+    // Multiple shorthand fields
+    let user = toasty::create!(User { name, email }).exec(&mut db).await?;
+
+    assert_eq!(user.name, "Carl");
+    assert_eq!(user.email, "carl@example.com");
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
+pub async fn create_macro_field_shorthand_mixed(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let name = "Carl".to_string();
+
+    // Mix shorthand and explicit fields
+    let user = toasty::create!(User {
+        name,
+        email: "carl@example.com"
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(user.name, "Carl");
+    assert_eq!(user.email, "carl@example.com");
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn create_macro_field_shorthand_scoped(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = User::create().name("Alice").exec(&mut db).await?;
+
+    let title = "get something done".to_string();
+
+    // Shorthand in scoped create
+    let todo = toasty::create!(in user.todos() { title })
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(todo.title, "get something done");
+    assert_eq!(todo.user_id, user.id);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+pub async fn create_macro_field_shorthand_batch(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let name = "Carl".to_string();
+
+    // Shorthand in batch create
+    let users = toasty::create!(User::[
+        { name },
+        { name: "Bob" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    assert_struct!(users, [{ name: "Carl" }, { name: "Bob" }]);
 
     Ok(())
 }

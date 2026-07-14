@@ -33,7 +33,7 @@ use std::path::PathBuf;
 ///     std::path::PathBuf::from("my_app/db/history.toml"),
 /// );
 /// ```
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq)]
 pub struct MigrationConfig {
     /// Path to the migrations folder
     pub path: PathBuf,

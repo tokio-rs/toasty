@@ -1,6 +1,6 @@
 use crate::{
     schema::{app::ModelId, db::ColumnId},
-    stmt::{PathFieldSet, Projection},
+    stmt::{self, PathFieldSet, Projection},
 };
 use indexmap::IndexMap;
 
@@ -10,7 +10,7 @@ use indexmap::IndexMap;
 /// - Primitive fields map to a single column
 /// - Struct fields flatten an embedded struct to multiple columns
 /// - Enum fields map to a discriminant column plus per-variant data columns
-/// - Relation fields (`BelongsTo`, `HasMany`, `HasOne`) don't have direct column storage
+/// - Relation fields (`BelongsTo`, `Has`) don't have direct column storage
 ///
 /// # Examples
 ///
@@ -179,6 +179,15 @@ pub struct FieldPrimitive {
     /// existing lowering and constantization pipeline resolves it to the
     /// correct column value without needing to carry assignment expressions.
     pub sub_projection: Projection,
+
+    /// Pre-computed table→model expression for this primitive — a column
+    /// reference, possibly wrapped in a cast when the storage type differs
+    /// from the primitive's expression type.
+    ///
+    /// Cached so that lowering can splice the loaded form `Record([..])` for
+    /// a deferred primitive without re-deriving the column expression
+    /// from the column id and schema.
+    pub column_expr: stmt::Expr,
 }
 
 /// Maps an embedded struct field to its flattened column representation.
@@ -220,6 +229,28 @@ pub struct FieldStruct {
     /// The projection from the root model field down to this embedded field
     /// within the type hierarchy. Identity for root-level embedded fields.
     pub sub_projection: Projection,
+
+    /// Pre-computed default record expression for this embedded struct.
+    ///
+    /// `Record([..])` shape matching the struct's fields, with deferred
+    /// sub-fields (direct or further nested) pre-masked to `Null`. Spliced
+    /// in by `process_includes` when a parent `.include()` activates a
+    /// `Deferred<EmbedStruct>` field.
+    pub default_returning: stmt::Expr,
+
+    /// The presence head column of a nullable embedded struct (`Option<Embed>`).
+    ///
+    /// `None` for a non-nullable embed. `Some(column)` when the field is
+    /// `Option<Embed>`: the head column whose null-ness is the option's
+    /// none-ness (`NULL` = `None`), like `Option<scalar>` and an embedded
+    /// enum's discriminant. Usually a dedicated nullable `bool` column
+    /// (`NULL` = `None`, `true` = `Some`); for a single-column (newtype) embed
+    /// it is the flattened leaf reused as the head. The encode lowering forces
+    /// every flattened leaf column nullable and the decode wraps the struct
+    /// record in a `Match` on this column, so a `None` value round-trips
+    /// without colliding with a `Some` whose fields are all themselves `None`.
+    /// The column's own encode lowering (if dedicated) is tracked in `columns`.
+    pub presence: Option<ColumnId>,
 }
 
 /// Maps an embedded enum field to its discriminant column and per-variant data columns.
@@ -250,6 +281,14 @@ pub struct FieldEnum {
 
     /// Sub-projection from the root model field to this enum field.
     pub sub_projection: Projection,
+
+    /// Pre-computed default expression for this embedded enum.
+    ///
+    /// For unit-only enums this is the discriminant column reference. For
+    /// data-carrying enums it is the full `Match { disc, arms[], else }`
+    /// expression with per-arm records (currently identical to the raw
+    /// `table_to_model` shape with deferred fields masked in each arm.
+    pub default_returning: stmt::Expr,
 }
 
 /// Mapping for a single variant of an embedded enum.
@@ -273,7 +312,7 @@ pub struct EnumVariant {
     pub fields: Vec<Field>,
 }
 
-/// Maps a relation field (`BelongsTo`, `HasMany`, `HasOne`).
+/// Maps a relation field (`BelongsTo`, `Has`).
 ///
 /// Relations don't map to columns in this table -- they are resolved through
 /// joins or foreign keys in other tables. A unique bit is assigned in the

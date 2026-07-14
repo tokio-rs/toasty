@@ -90,7 +90,9 @@
 use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
-use toasty_core::stmt::{self, Condition, visit_mut};
+use toasty_core::stmt::{self, visit_mut};
+
+use toasty_core::driver::operation::Pagination;
 
 use crate::{
     Result,
@@ -129,13 +131,6 @@ struct ReturningInfo {
 struct PaginationInfo {
     page_size: i64,
     cursor_column_indices: Vec<usize>,
-}
-
-/// Extracted pagination parameters for NoSQL `QueryPk` operations.
-struct QueryPkPagination {
-    limit: Option<i64>,
-    order: Option<stmt::Direction>,
-    cursor: Option<stmt::Value>,
 }
 
 struct PlanStatement<'a, 'b> {
@@ -196,13 +191,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // For single VALUES queries (e.g., batch queries), the VALUES body is
         // the output expression. Extract it as a returning value so the planner
-        // can wire up sub-statement dependencies.
+        // can wire up sub-statement dependencies. An empty VALUES body (e.g. an
+        // optional `belongs_to` whose foreign key is NULL, so simplification
+        // proved the filter false) has no output expression; leave `returning`
+        // empty so the query plans as an empty constant and produces zero
+        // rows, the same shape as any other query that matches nothing.
         if returning.is_none()
             && let stmt::Statement::Query(query) = &mut stmt
             && let stmt::ExprSet::Values(values) = &mut query.body
+            && !values.rows.is_empty()
         {
-            returning = Some(stmt::Returning::Value(if query.single {
-                assert_eq!(1, values.rows.len());
+            returning = Some(stmt::Returning::Expr(if query.single {
+                assert_eq!(1, values.rows.len(), "single query has more than one row");
                 values.rows.drain(..).next().unwrap()
             } else {
                 stmt::Expr::list(std::mem::take(&mut values.rows))
@@ -281,12 +281,47 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> IndexSet<mir::NodeId> {
         let mut inputs = IndexSet::new();
 
-        let is_returning_projection = matches!(returning, Some(stmt::Returning::Expr(..)));
+        let is_returning_projection = matches!(returning, Some(stmt::Returning::Project(..)));
         debug_assert!(
-            is_returning_projection || matches!(returning, None | Some(stmt::Returning::Value(..)))
+            is_returning_projection || matches!(returning, None | Some(stmt::Returning::Expr(..)))
         );
 
-        visit_mut::for_each_expr_mut(returning, |expr| {
+        match returning {
+            Some(stmt::Returning::Project(expr)) | Some(stmt::Returning::Expr(expr)) => {
+                self.rewrite_returning_inputs(
+                    expr,
+                    &mut inputs,
+                    load_data_node_id,
+                    is_returning_projection,
+                );
+            }
+            _ => {}
+        }
+
+        inputs
+    }
+
+    /// Rewrite the returning clause expression so statement-level
+    /// `Arg`/`Reference`/`Count`/`Project` nodes reference the MIR inputs that
+    /// supply their data, collecting those inputs into `inputs`.
+    ///
+    /// Walk scope-aware so that `Arg`/`Reference` nodes nested inside a
+    /// `Map`/`Let` body (e.g. the via-include projection that strips the
+    /// linking column with `Map(child, arg(1))`) are not mistaken for
+    /// statement-level args/columns. Statement-level constructs only appear at
+    /// the top scope (`scope_depth == 0`); a local arg inside a mapped body has
+    /// `nesting < scope_depth`.
+    fn rewrite_returning_inputs(
+        &self,
+        expr: &mut stmt::Expr,
+        inputs: &mut IndexSet<mir::NodeId>,
+        load_data_node_id: mir::NodeId,
+        is_returning_projection: bool,
+    ) {
+        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+            if scope_depth != 0 {
+                return true;
+            }
             match expr {
                 stmt::Expr::Arg(expr_arg) => {
                     match &self.stmt_info.args[expr_arg.position] {
@@ -343,6 +378,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             *expr = stmt::Expr::arg(index);
                         }
                     }
+                    false
                 }
                 stmt::Expr::Project(expr_project) if !is_returning_projection => {
                     // When returning an expression (not projection),
@@ -355,32 +391,33 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let column = self.load_data_expr_reference_position(expr_reference);
                         let (position, _) = inputs.insert_full(load_data_node_id);
                         *expr = stmt::Expr::arg_project(position, [*row, column]);
+                        false
+                    } else {
+                        true
                     }
                 }
-                stmt::Expr::Reference(expr_reference) => {
-                    if is_returning_projection {
-                        let column = self.load_data_expr_reference_position(expr_reference);
-                        let (position, _) = inputs.insert_full(load_data_node_id);
-                        *expr = stmt::Expr::arg_project(position, [column]);
-                    }
+                stmt::Expr::Reference(expr_reference) if is_returning_projection => {
+                    let column = self.load_data_expr_reference_position(expr_reference);
+                    let (position, _) = inputs.insert_full(load_data_node_id);
+                    *expr = stmt::Expr::arg_project(position, [column]);
+                    false
                 }
-                stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. })) => {
-                    if is_returning_projection {
-                        let index = self
-                            .stmt_info
-                            .load_data_select_items
-                            .get()
-                            .unwrap()
-                            .get_index_of_count_star();
-                        let (position, _) = inputs.insert_full(load_data_node_id);
-                        *expr = stmt::Expr::arg_project(position, [index]);
-                    }
+                stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. }))
+                    if is_returning_projection =>
+                {
+                    let index = self
+                        .stmt_info
+                        .load_data_select_items
+                        .get()
+                        .unwrap()
+                        .get_index_of_count_star();
+                    let (position, _) = inputs.insert_full(load_data_node_id);
+                    *expr = stmt::Expr::arg_project(position, [index]);
+                    false
                 }
-                _ => {}
+                _ => true,
             }
         });
-
-        inputs
     }
 
     fn load_data_expr_reference_position(&self, expr_reference: &stmt::ExprReference) -> usize {
@@ -588,7 +625,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         assert!(tables.len() <= 1, "TODO: handle more complicated cases");
 
         let sub_query = stmt::Select {
-            returning: stmt::Returning::Expr(stmt::Expr::record([1])),
+            returning: stmt::Returning::Project(stmt::Expr::record([1])),
             source: stmt::Source::Table(stmt::SourceTable {
                 tables,
                 from: vec![stmt::TableWithJoins {
@@ -597,6 +634,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }],
             }),
             filter,
+            distinct: false,
         };
 
         stmt.filter_mut_unwrap().set(stmt::Expr::exists(sub_query));
@@ -653,7 +691,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let expr = match assignment {
                 stmt::Assignment::Set(expr)
                 | stmt::Assignment::Insert(expr)
-                | stmt::Assignment::Remove(expr) => expr,
+                | stmt::Assignment::Remove(expr)
+                | stmt::Assignment::Append(expr)
+                | stmt::Assignment::RemoveAt(expr)
+                | stmt::Assignment::Add(expr)
+                | stmt::Assignment::Subtract(expr) => expr,
+                stmt::Assignment::Pop => continue,
                 stmt::Assignment::Batch(_) => {
                     todo!("batch assignments in arg dependency rewriting")
                 }
@@ -721,7 +764,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
             Ok(node_id)
         } else if self.planner.engine.capability().sql || stmt.is_insert() {
-            Ok(self.plan_data_loading_sql(stmt))
+            self.plan_data_loading_sql(stmt)
         } else {
             self.plan_data_loading_nosql(stmt)
         }
@@ -766,23 +809,20 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     // ===== SQL execution =====
 
-    fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> mir::NodeId {
+    fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> Result<mir::NodeId> {
         let const_returning = self.extract_insert_returning_as_const(&stmt);
 
         // Phase 1: Detect pagination and add ORDER BY columns to load_data
-        let pagination_info = self.plan_pagination_sql(&stmt);
+        let pagination_info = self.plan_pagination_sql(&stmt)?;
 
         // Set returning clause with all columns (including added ORDER BY columns)
         if !self.load_data.select_items.is_empty() {
-            stmt.set_returning(
-                stmt::Expr::record(
-                    self.load_data
-                        .select_items
-                        .iter()
-                        .map(|item| item.to_expr()),
-                )
-                .into(),
-            );
+            stmt.set_returning_project(stmt::Expr::record(
+                self.load_data
+                    .select_items
+                    .iter()
+                    .map(|item| item.to_expr()),
+            ));
         }
 
         let input_args: Vec<_> = self
@@ -799,25 +839,34 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let pagination_config = pagination_info.map(|info| self.build_extract_cursor(info, &ty));
 
         let node = if stmt.condition().is_some() {
-            if let stmt::Statement::Update(stmt) = stmt {
-                assert!(stmt.returning.is_none(), "TODO: stmt={stmt:#?}");
+            // A conditional UPDATE or DELETE (e.g. an OCC `#[version]` check).
+            // The condition is checked against the current rows and the write
+            // only applies when it holds; a mismatch surfaces as an error. Two
+            // strategies, chosen by capability: a single CTE statement
+            // (PostgreSQL) or a read-modify-write transaction (SQLite, MySQL).
+            debug_assert!(
+                stmt.is_update() || stmt.is_delete(),
+                "only UPDATE and DELETE carry conditions; stmt={stmt:#?}"
+            );
 
-                if self.planner.engine.capability().cte_with_update {
-                    mir::Operation::ExecStatement(Box::new(
-                        self.plan_conditional_sql_query_as_cte(stmt, ty),
-                    ))
-                } else {
-                    mir::Operation::ReadModifyWrite(Box::new(
-                        self.plan_conditional_sql_query_as_rmw(stmt, ty),
-                    ))
-                }
+            // A conditional UPDATE or DELETE compiles to a single CTE statement
+            // on backends that support data-modifying CTEs (PostgreSQL);
+            // elsewhere it becomes a read-modify-write transaction (which every
+            // SQL backend supports, locking the probed rows via `SELECT ... FOR
+            // UPDATE` where available).
+            if self.planner.engine.capability().cte_with_update {
+                mir::Operation::ExecStatement(Box::new(
+                    self.plan_conditional_sql_query_as_cte(stmt, ty),
+                ))
             } else {
-                todo!("stmt={stmt:#?}");
+                mir::Operation::ReadModifyWrite(Box::new(
+                    self.plan_conditional_sql_query_as_rmw(stmt, ty),
+                ))
             }
         } else {
             debug_assert!(
                 stmt.returning()
-                    .and_then(|returning| returning.as_expr())
+                    .and_then(|returning| returning.as_project())
                     .map(|expr| expr.is_record())
                     .unwrap_or(true),
                 "stmt={stmt:#?}"
@@ -828,7 +877,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 inputs: mem::take(&mut self.load_data.inputs),
                 stmt,
                 ty,
-                conditional_update_with_no_returning: false,
+                conditional: exec::ConditionalOutput::None,
                 pagination: pagination_config.clone(),
             }))
         };
@@ -847,7 +896,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
         }
 
-        exec_statement_node
+        Ok(exec_statement_node)
     }
 
     fn extract_insert_returning_as_const(
@@ -910,23 +959,31 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         Some((stmt::Value::List(result), ty))
     }
 
-    fn plan_pagination_sql(&mut self, stmt: &stmt::Statement) -> Option<PaginationInfo> {
+    fn plan_pagination_sql(&mut self, stmt: &stmt::Statement) -> Result<Option<PaginationInfo>> {
         let stmt::Statement::Query(query) = stmt else {
-            return None;
+            return Ok(None);
         };
 
         // Only cursor-based limits trigger pagination planning
-        let stmt::Limit::Cursor(cursor) = query.limit.as_ref()? else {
-            return None;
+        let Some(limit) = query.limit.as_ref() else {
+            return Ok(None);
         };
+        let stmt::Limit::Cursor(cursor) = limit else {
+            return Ok(None);
+        };
+
+        // SQL cursor pagination requires ORDER BY to produce a deterministic cursor.
+        let order_by = query.order_by.as_ref().ok_or_else(|| {
+            toasty_core::Error::unsupported_feature(
+                "cursor-based pagination requires an ORDER BY clause on SQL drivers",
+            )
+        })?;
 
         // Extract page_size
         let page_size = match &cursor.page_size {
             stmt::Expr::Value(stmt::Value::I64(n)) => *n,
-            _ => return None,
+            _ => return Ok(None),
         };
-
-        let order_by = query.order_by.as_ref()?;
 
         // Add ORDER BY columns to load_data so they're available for cursor extraction
         let mut cursor_column_indices = Vec::new();
@@ -942,14 +999,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 cursor_column_indices.push(index);
             } else {
                 // Complex expression in ORDER BY - can't handle yet
-                return None;
+                return Ok(None);
             }
         }
 
-        Some(PaginationInfo {
+        Ok(Some(PaginationInfo {
             page_size,
             cursor_column_indices,
-        })
+        }))
     }
 
     /// Builds extract_cursor function using the inferred row type.
@@ -984,205 +1041,222 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_conditional_sql_query_as_cte(
         &mut self,
-        stmt: stmt::Update,
+        stmt: stmt::Statement,
         ty: stmt::Type,
     ) -> mir::ExecStatement {
-        let Some(condition) = stmt.condition.expr else {
-            panic!("conditional update without condition");
+        let (condition, filter, source, mut write) = self.conditional_write_parts(stmt);
+
+        // `found`: the probe. Projects the OCC condition once per row matching
+        // the filter, locking those rows (`FOR UPDATE`) so the condition is
+        // evaluated against the latest committed row version and the rows
+        // cannot change before the write applies. Without the lock, a stale
+        // writer blocking on a concurrent committed update would pass the
+        // write's re-check (the probe is already materialized from the old
+        // snapshot and the write's own filter is key-only) and silently
+        // overwrite the newer row — the lost update `#[version]` exists to
+        // prevent.
+        let found = stmt::Cte {
+            query: conditional_probe_query(
+                condition,
+                filter.clone(),
+                source,
+                self.planner.engine.capability().select_for_update,
+            ),
         };
 
-        let Some(filter) = stmt.filter.expr else {
-            panic!("conditional update without filter");
+        // `counts`: aggregates the probe rows into `[matched, conditioned]`.
+        // Kept separate from `found` because a locking SELECT cannot carry
+        // aggregates. `found` sits one scope out (CTE body → WITH).
+        let counts = stmt::Cte {
+            query: stmt::Query::builder(stmt::Select {
+                source: stmt::TableRef::Cte {
+                    nesting: 1,
+                    index: 0,
+                }
+                .into(),
+                filter: stmt::Filter::new(true),
+                returning: stmt::Returning::Project(conditional_probe_projection(cte_column(0, 0))),
+                distinct: false,
+            })
+            .build(),
         };
 
-        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
-            panic!("conditional update without table");
-        };
-
-        let mut ctes = vec![];
-
-        // Select from update table without the update condition.
-        ctes.push(stmt::Cte {
-            query: stmt::Query::builder(target)
-                .filter(filter.clone())
-                .returning(vec![
-                    stmt::Expr::count_star(),
-                    stmt::FuncCount {
-                        arg: None,
-                        filter: Some(Box::new(condition)),
-                    }
-                    .into(),
-                ])
-                .build(),
-        });
-
-        let returning_len = match &stmt.returning {
-            Some(stmt::Returning::Expr(expr)) => {
-                let stmt::Expr::Record(expr_record) = expr else {
-                    panic!("returning must be a record");
-                };
-
-                expr_record.fields.len()
+        // `changed`: the write. It applies only when the probe's two counts
+        // agree, expressed as a scalar subquery over `counts` ANDed onto the
+        // filter. `counts` sits two scopes out from here (subquery → CTE body →
+        // WITH).
+        let counts_agree = stmt::Expr::stmt(stmt::Select {
+            source: stmt::TableRef::Cte {
+                nesting: 2,
+                index: 1,
             }
-            Some(_) => todo!(),
+            .into(),
+            filter: true.into(),
+            returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![stmt::Expr::eq(
+                stmt::ExprColumn {
+                    nesting: 0,
+                    table: 0,
+                    column: 0,
+                },
+                stmt::ExprColumn {
+                    nesting: 0,
+                    table: 0,
+                    column: 1,
+                },
+            )])),
+            distinct: false,
+        });
+        // The write applies only when the two counts agree — AND that guard
+        // onto the write's filter.
+        let guarded_filter = stmt::Filter::new(stmt::Expr::and(filter, counts_agree));
+        match &mut write {
+            stmt::Statement::Update(update) => update.filter = guarded_filter,
+            stmt::Statement::Delete(delete) => delete.filter = guarded_filter,
+            _ => unreachable!("conditional write is UPDATE or DELETE; write={write:#?}"),
+        }
+
+        // A `RETURNING` on the write (e.g. a relative `value = value + 1` read
+        // back) means the caller wants the changed rows; otherwise the write
+        // just reports how many rows it touched. Only an UPDATE reads columns
+        // back — a DELETE never has a returning.
+        let returning_len = match write.returning() {
+            Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record.fields.len(),
+            Some(returning) => todo!("unexpected conditional write returning={returning:#?}"),
             None => 0,
         };
 
-        // The update statement. The update condition is expressed using the select above
-        ctes.push(stmt::Cte {
-            query: stmt::Query::new(stmt::Update {
-                target: stmt.target,
-                assignments: stmt.assignments,
-                filter: stmt::Filter::new(stmt::Expr::and(
-                    filter,
-                    // SELECT found.count(*) = found.count(CONDITION) FROM found
-                    stmt::Expr::stmt(stmt::Select {
-                        source: stmt::TableRef::Cte {
-                            nesting: 2,
-                            index: 0,
-                        }
-                        .into(),
-                        filter: true.into(),
-                        returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
-                            stmt::Expr::eq(
-                                stmt::ExprColumn {
-                                    nesting: 0,
-                                    table: 0,
-                                    column: 0,
-                                },
-                                stmt::ExprColumn {
-                                    nesting: 0,
-                                    table: 0,
-                                    column: 1,
-                                },
-                            ),
-                        ])),
-                    }),
-                )),
-                condition: Condition::default(),
-                returning: Some(
-                    stmt.returning
-                        // TODO: hax
-                        .unwrap_or_else(|| {
-                            stmt::Returning::Expr(stmt::Expr::record_from_vec(vec![
-                                stmt::Expr::from("hello"),
-                            ]))
-                        }),
+        // `changed`: the write, wrapped as a data-modifying CTE body.
+        let changed_body: stmt::ExprSet = match write {
+            stmt::Statement::Update(update) => update.into(),
+            stmt::Statement::Delete(delete) => delete.into(),
+            _ => unreachable!("conditional write is UPDATE or DELETE"),
+        };
+        let changed = stmt::Cte {
+            query: stmt::Query::new(changed_body),
+        };
+
+        let outer = if returning_len == 0 {
+            // No columns to read back: select just the two probe counts. The
+            // `changed` CTE is data-modifying, so PostgreSQL runs it even though
+            // the outer query does not reference it.
+            stmt::Query::builder(stmt::Select {
+                source: stmt::TableRef::Cte {
+                    nesting: 0,
+                    index: 1,
+                }
+                .into(),
+                filter: stmt::Filter::new(true),
+                returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
+                    cte_column(0, 0),
+                    cte_column(0, 1),
+                ])),
+                distinct: false,
+            })
+        } else {
+            // Read the probe counts alongside the changed rows. `counts` yields
+            // exactly one row, so the LEFT JOIN repeats the counts across every
+            // changed row (and yields a single NULL-padded row when nothing
+            // changed).
+            let mut columns = vec![cte_column(0, 0), cte_column(0, 1)];
+            for i in 0..returning_len {
+                columns.push(cte_column(1, i));
+            }
+
+            stmt::Query::builder(stmt::Select {
+                source: stmt::Source::table_with_joins(
+                    vec![
+                        stmt::TableRef::Cte {
+                            nesting: 0,
+                            index: 1,
+                        },
+                        stmt::TableRef::Cte {
+                            nesting: 0,
+                            index: 2,
+                        },
+                    ],
+                    stmt::TableWithJoins {
+                        relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
+                        joins: vec![stmt::Join {
+                            table: stmt::SourceTableId(1),
+                            constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
+                        }],
+                    },
                 ),
-            }),
-        });
+                filter: stmt::Filter::new(true),
+                returning: stmt::Returning::Project(stmt::Expr::record_from_vec(columns)),
+                distinct: false,
+            })
+        };
 
-        let mut columns = vec![
-            stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: 0,
-            }),
-            stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: 1,
-            }),
-        ];
-
-        for i in 0..returning_len {
-            columns.push(stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 1,
-                column: i,
-            }));
-        }
-
-        let stmt = stmt::Query::builder(stmt::Select {
-            source: stmt::Source::table_with_joins(
-                vec![
-                    stmt::TableRef::Cte {
-                        nesting: 0,
-                        index: 0,
-                    },
-                    stmt::TableRef::Cte {
-                        nesting: 0,
-                        index: 1,
-                    },
-                ],
-                stmt::TableWithJoins {
-                    relation: stmt::TableFactor::Table(stmt::SourceTableId(0)),
-                    joins: vec![stmt::Join {
-                        table: stmt::SourceTableId(1),
-                        constraint: stmt::JoinOp::Left(stmt::Expr::from(true)),
-                    }],
-                },
-            ),
-            filter: stmt::Filter::new(true),
-            returning: stmt::Returning::Expr(stmt::Expr::record_from_vec(columns)),
-        })
-        .with(ctes)
-        .build()
-        .into();
+        let stmt = outer.with(vec![found, counts, changed]).build().into();
 
         mir::ExecStatement {
             inputs: mem::take(&mut self.load_data.inputs),
             stmt,
             ty,
-            conditional_update_with_no_returning: true,
+            conditional: if returning_len == 0 {
+                exec::ConditionalOutput::Count
+            } else {
+                exec::ConditionalOutput::Returning
+            },
             pagination: None,
         }
     }
 
     fn plan_conditional_sql_query_as_rmw(
         &mut self,
-        stmt: stmt::Update,
+        stmt: stmt::Statement,
         ty: stmt::Type,
     ) -> mir::ReadModifyWrite {
-        // For now, no returning supported
-        assert!(stmt.returning.is_none(), "TODO: support returning");
+        let (condition, filter, source, write) = self.conditional_write_parts(stmt);
 
-        let Some(condition) = stmt.condition.expr else {
-            panic!("conditional update without condition");
-        };
-
-        let Some(filter) = stmt.filter.expr else {
-            panic!("conditional update without filter");
-        };
-
-        let stmt::UpdateTarget::Table(target) = stmt.target.clone() else {
-            panic!("conditional update without table");
-        };
-
-        // Neither SQLite nor MySQL support CTE with update. We should transform
-        // the conditional update into a transaction with checks between.
-
-        let read = stmt::Query::builder(target)
-            .filter(filter.clone())
-            .returning(vec![
-                stmt::Expr::count_star(),
-                stmt::FuncCount {
-                    arg: None,
-                    filter: Some(Box::new(condition)),
-                }
-                .into(),
-            ])
-            .locks(if self.planner.engine.capability().select_for_update {
-                vec![stmt::Lock::Update]
-            } else {
-                vec![]
-            })
-            .build();
-
-        let write = stmt::Update {
-            target: stmt.target,
-            assignments: stmt.assignments,
-            filter: stmt::Filter::new(filter),
-            condition: stmt::Condition::default(),
-            returning: None,
-        };
+        // A conditional write on a backend without data-modifying CTEs (SQLite,
+        // MySQL) becomes a transaction: first probe the matched rows, then apply
+        // the write (filter only, no condition) when every matched row satisfies
+        // the condition. The engine derives the matched and satisfied counts
+        // from the probe's per-row results.
+        let read = conditional_probe_query(
+            condition,
+            filter,
+            source,
+            self.planner.engine.capability().select_for_update,
+        );
 
         mir::ReadModifyWrite {
             inputs: mem::take(&mut self.load_data.inputs),
             read,
-            write: write.into(),
+            write,
             ty,
         }
+    }
+
+    /// Decompose a conditional UPDATE/DELETE into the parts both SQL
+    /// conditional-write strategies need: the OCC condition, the row filter, a
+    /// SELECT source over the target table (for the count probe), and the bare
+    /// write statement with its condition stripped. The filter and any
+    /// `RETURNING` stay on the write.
+    fn conditional_write_parts(
+        &self,
+        mut stmt: stmt::Statement,
+    ) -> (stmt::Expr, stmt::Expr, stmt::Source, stmt::Statement) {
+        let condition = stmt
+            .condition_mut_unwrap()
+            .expr
+            .take()
+            .expect("conditional write without condition");
+
+        let filter = stmt
+            .filter()
+            .and_then(|filter| filter.expr.clone())
+            .expect("conditional write without filter");
+
+        let source = match &stmt {
+            stmt::Statement::Update(update) => stmt::Source::table(update.target.as_table_unwrap()),
+            stmt::Statement::Delete(delete) => delete.from.clone(),
+            _ => unreachable!("conditional write is UPDATE or DELETE; stmt={stmt:#?}"),
+        };
+
+        (condition, filter, source, stmt)
     }
 
     // ===== NoSQL execution =====
@@ -1194,12 +1268,32 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
-        let mut index_plan = self.planner.engine.plan_index_path(&stmt)?;
-        let post_filter = self.prepare_post_filter(&stmt, &mut index_plan);
+        let index_plan_opt = self.planner.engine.plan_index_path(&stmt)?;
 
-        // Type of the final record.
-        // TODO: Clean this up
-        let ty = if self.load_data.select_items.is_empty() {
+        if let Some(mut index_plan) = index_plan_opt {
+            // prepare_post_filter may insert additional columns (e.g. deferred
+            // fields used only in a post-filter) into select_items, so the
+            // record type must be computed AFTER this call.
+            let post_filter = self.prepare_post_filter(&stmt, &mut index_plan);
+
+            let ty = self.infer_nosql_record_ty(&stmt);
+
+            let node_id = if index_plan.index.primary_key {
+                self.plan_primary_key_execution(stmt, &mut index_plan, &ty)
+            } else {
+                self.plan_secondary_index_execution(stmt, &mut index_plan, &ty)
+            };
+
+            Ok(self.apply_post_filter(node_id, post_filter, ty))
+        } else {
+            // No index covers the filter — emit a full-table scan.
+            let ty = self.infer_nosql_record_ty(&stmt);
+            self.plan_scan_execution(stmt, ty)
+        }
+    }
+
+    fn infer_nosql_record_ty(&self, stmt: &stmt::Statement) -> stmt::Type {
+        if self.load_data.select_items.is_empty() {
             if stmt.is_query() {
                 // Query with no columns selected is an existence check: return
                 // an empty record for every matching row.
@@ -1210,16 +1304,60 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         } else {
             self.load_data
                 .select_items
-                .infer_record_list_ty(&self.planner.engine.expr_cx_for(&stmt))
-        };
+                .infer_record_list_ty(&self.planner.engine.expr_cx_for(stmt))
+        }
+    }
 
-        let node_id = if index_plan.index.primary_key {
-            self.plan_primary_key_execution(stmt, &mut index_plan, &ty)
+    fn plan_scan_execution(
+        &mut self,
+        stmt: stmt::Statement,
+        ty: stmt::Type,
+    ) -> Result<mir::NodeId> {
+        let input = if self.load_data.inputs.is_empty() {
+            None
+        } else if self.load_data.inputs.len() == 1 {
+            Some(self.load_data.inputs[0])
         } else {
-            self.plan_secondary_index_execution(stmt, &mut index_plan, &ty)
+            todo!("scan with multiple inputs")
         };
 
-        Ok(self.apply_post_filter(node_id, post_filter, ty))
+        let cx = stmt::ExprContext::new(&*self.planner.engine.schema);
+        let cx = cx.scope(&stmt);
+        let stmt::ExprTarget::Table(table) = cx.target() else {
+            return Err(toasty_core::Error::unsupported_feature(
+                "scan: expected table target",
+            ));
+        };
+        let table_id = table.id;
+
+        // Reject ORDER BY on drivers whose scan operation returns items in an
+        // unspecified order (e.g. DynamoDB Scan has no server-side sort).
+        if let Some(query) = stmt.as_query()
+            && query.order_by.is_some()
+            && !self.planner.engine.capability().scan_supports_sort
+        {
+            return Err(toasty_core::Error::unsupported_feature(
+                "ORDER BY is not supported on full-table scans for this database. \
+                     Consider adding an index on the sort field or removing the ORDER BY clause.",
+            ));
+        }
+
+        let mut row_filter = {
+            let f = stmt.filter_expr_unwrap();
+            if f.is_true() { None } else { Some(f.clone()) }
+        };
+        self.legalize_kv_expr(&mut row_filter);
+
+        let limit = extract_pagination(&stmt);
+
+        Ok(self.insert_mir_with_deps(mir::Scan {
+            input,
+            table: table_id,
+            columns: self.load_data.select_items.extract_expr_references(),
+            row_filter,
+            limit,
+            ty,
+        }))
     }
 
     fn plan_primary_key_execution(
@@ -1246,7 +1384,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             };
 
             if stmt.is_query() {
-                let qp = extract_query_pk_pagination(&stmt);
+                let limit = extract_pagination(&stmt);
+                let order = extract_query_pk_order(&stmt);
+
+                let mut row_filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut row_filter);
 
                 // For queries, stream all matching records with the requested columns.
                 self.insert_mir_with_deps(mir::QueryPk {
@@ -1255,11 +1397,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     index: None, // Querying primary key
                     columns: self.load_data.select_items.extract_expr_references(),
                     pk_filter: index_plan.index_filter.take(),
-                    row_filter: index_plan.result_filter.take(),
+                    row_filter,
                     ty: ty.clone(),
-                    limit: qp.limit,
-                    order: qp.order,
-                    cursor: qp.cursor,
+                    limit,
+                    order,
                 })
             } else {
                 // For mutations (UPDATE/DELETE) with a partial primary-key filter,
@@ -1279,17 +1420,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     }));
                 }
 
+                let mut row_filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut row_filter);
+
                 let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
                     input,
                     table: index_plan.table_id(),
                     index: None, // Querying primary key
                     columns,
                     pk_filter: index_plan.index_filter.take(),
-                    row_filter: index_plan.result_filter.take(),
+                    row_filter,
                     ty: index_key_ty,
                     limit: None,
                     order: None,
-                    cursor: None,
                 });
 
                 self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
@@ -1321,7 +1464,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 Some(inputs[0])
             };
 
-            let qp = extract_query_pk_pagination(&stmt);
+            let limit = extract_pagination(&stmt);
+            let order = extract_query_pk_order(&stmt);
+
+            let mut row_filter = index_plan.result_filter.take();
+            self.legalize_kv_expr(&mut row_filter);
 
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
@@ -1331,11 +1478,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 index: Some(index_plan.index.id), // Query the secondary index
                 columns: self.load_data.select_items.extract_expr_references(), // Return full records
                 pk_filter: index_plan.index_filter.take(),
-                row_filter: index_plan.result_filter.take(),
+                row_filter,
                 ty: ty.clone(), // Full record type, not just PKs
-                limit: qp.limit,
-                order: qp.order,
-                cursor: qp.cursor,
+                limit,
+                order,
             });
         }
 
@@ -1424,7 +1570,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         index_key_ty: stmt::Type,
     ) -> mir::NodeId {
         if keys.is_const() {
-            self.insert_const(keys.eval_const(), index_key_ty)
+            let keys = keys.eval_const(&self.planner.engine.schema);
+            self.insert_const(keys, index_key_ty)
         } else if keys.is_identity() {
             debug_assert_eq!(1, self.load_data.inputs.len(), "TODO");
             self.load_data.inputs[0]
@@ -1436,6 +1583,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 projection: keys,
                 ty,
             })
+        }
+    }
+
+    /// Legalize a driver-bound key-value operation expression (a filter or
+    /// condition the driver compiles, e.g. into a DynamoDB expression):
+    /// projections into `#[document]` columns become resolved
+    /// `FuncJsonExtract` name paths, mirroring what legalization does to full
+    /// statements at the SQL boundary. In-memory expressions (post filters,
+    /// guards) are deliberately *not* legalized — the interpreter wants the
+    /// positional form.
+    fn legalize_kv_expr(&self, expr: &mut Option<stmt::Expr>) {
+        if let Some(expr) = expr {
+            self.planner.engine.legalize_table_expr(expr);
         }
     }
 
@@ -1456,24 +1616,41 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     ty: ty.clone(),
                 })
             }
-            stmt::Statement::Delete(_) => self.insert_mir_with_deps(mir::DeleteByKey {
-                input: get_by_key_input,
-                table: index_plan.table_id(),
-                filter: index_plan.result_filter.take(),
-                ty: stmt::Type::Unit,
-            }),
+            stmt::Statement::Delete(delete_stmt) => {
+                let mut filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut filter);
+                let mut condition = delete_stmt.condition.expr.clone();
+                self.legalize_kv_expr(&mut condition);
+
+                self.insert_mir_with_deps(mir::DeleteByKey {
+                    input: get_by_key_input,
+                    table: index_plan.table_id(),
+                    filter,
+                    condition,
+                    ty: stmt::Type::Unit,
+                })
+            }
             stmt::Statement::Update(update_stmt) => {
                 // If there is a pre-filter, wrap the key input in a Guard
                 // node that produces an empty list when the guard is false,
                 // causing UpdateByKey to naturally no-op.
                 let guarded_input = self.apply_guard(get_by_key_input, index_plan);
 
+                let mut filter = index_plan.result_filter.take();
+                self.legalize_kv_expr(&mut filter);
+                let mut condition = update_stmt.condition.expr.clone();
+                self.legalize_kv_expr(&mut condition);
+
                 self.insert_mir_with_deps(mir::UpdateByKey {
                     input: guarded_input,
                     table: index_plan.table_id(),
+                    // Document values in the assignments are already named:
+                    // the mapping's lowering casts converted them during
+                    // statement lowering/simplification.
                     assignments: update_stmt.assignments.clone(),
-                    filter: index_plan.result_filter.take(),
-                    condition: update_stmt.condition.expr.clone(),
+                    filter,
+                    condition,
+                    columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })
             }
@@ -1611,6 +1788,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> mir::NodeId {
         // First check for nested merge
         if let Some(node_id) = self.planner.plan_nested_merge(self.stmt_id) {
+            // `plan_nested_merge` builds its own MIR node directly on
+            // `self.planner.mir`, so the parent statement's remaining HIR
+            // deps (e.g. a sibling `Disassociate` DELETE in an
+            // `stmt::apply([insert, remove])` batch) are never consumed.
+            // Attach them to the NestedMerge so the dep statements stay
+            // reachable from `completion` and end up in the exec plan.
+            self.apply_dependencies_to_node(node_id);
             return node_id;
         }
 
@@ -1623,7 +1807,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Then handle returning clause
         if let Some(clause) = returning.clause {
             match clause {
-                stmt::Returning::Value(expr) => {
+                stmt::Returning::Expr(expr) => {
                     // Value variant contains a constant expression that can be evaluated
                     if let Ok(value) = expr.eval_const() {
                         let ty = value.infer_ty();
@@ -1647,7 +1831,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         node_id
                     }
                 }
-                stmt::Returning::Expr(projection) => {
+                stmt::Returning::Project(projection) => {
                     if let Some(position) = returning.inputs.get_index_of(&data_load_node_id) {
                         self.insert_mir_with_deps(mir::Eval {
                             inputs: returning.inputs,
@@ -1692,7 +1876,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             "const types must be of type `stmt::Type::List`"
         );
         debug_assert!(
-            value.is_a(&ty),
+            value.is_a(&self.planner.engine.schema.app, &ty),
             "const type mismatch; expected={ty:#?}; actual={value:#?}",
         );
 
@@ -1729,49 +1913,105 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 }
 
-/// Extract pagination parameters (limit, sort direction, cursor) from a
-/// query statement for use with `QueryPk` on NoSQL drivers.
-fn extract_query_pk_pagination(stmt: &stmt::Statement) -> QueryPkPagination {
-    let Some(query) = stmt.as_query() else {
-        return QueryPkPagination {
-            limit: None,
-            order: None,
-            cursor: None,
-        };
-    };
+/// A reference to column `column` of CTE `table` in the outer query's `FROM`
+/// (both at zero nesting).
+fn cte_column(table: usize, column: usize) -> stmt::Expr {
+    stmt::Expr::column(stmt::ExprColumn {
+        nesting: 0,
+        table,
+        column,
+    })
+}
 
-    let (limit, cursor) = match query.limit.as_ref() {
-        Some(stmt::Limit::Cursor(c)) => {
-            let page_size = match &c.page_size {
-                stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-                _ => None,
-            };
-            let cursor = c.after.as_ref().and_then(|expr| match expr {
+/// The probe query shared by both SQL conditional-write strategies:
+/// `SELECT <condition> FROM <source> WHERE <filter> [FOR UPDATE]`.
+///
+/// The condition is projected once per matched row rather than as an
+/// aggregate: a per-row projection can carry `FOR UPDATE` while `SELECT
+/// count(*) ... FOR UPDATE` is rejected. Locking the matched rows makes the
+/// probe authoritative — the condition is evaluated against the latest
+/// committed row version and the rows cannot change before the write applies.
+fn conditional_probe_query(
+    condition: stmt::Expr,
+    filter: stmt::Expr,
+    source: stmt::Source,
+    lock: bool,
+) -> stmt::Query {
+    stmt::Query::builder(stmt::Select {
+        source,
+        filter: stmt::Filter::new(filter),
+        returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![condition])),
+        distinct: false,
+    })
+    .locks(if lock {
+        vec![stmt::Lock::Update]
+    } else {
+        vec![]
+    })
+    .build()
+}
+
+/// The aggregate projection over the probe's per-row results:
+/// `[count(*), count(*) FILTER (WHERE <ok>)]`. The first column counts rows
+/// matching the filter; the second counts those that also satisfy the OCC
+/// condition. The write is safe to apply exactly when the two agree. Used by
+/// the CTE strategy's `counts` CTE; the read-modify-write strategy derives the
+/// same counts client-side.
+fn conditional_probe_projection(condition: stmt::Expr) -> stmt::Expr {
+    stmt::Expr::record_from_vec(vec![
+        stmt::Expr::count_star(),
+        stmt::FuncCount {
+            arg: None,
+            filter: Some(Box::new(condition)),
+        }
+        .into(),
+    ])
+}
+
+/// Extract limit/pagination bounds from a query statement for use with
+/// `QueryPk` on NoSQL drivers. Returns `None` when the statement has no limit
+/// clause.
+///
+/// Assumes `page_size`, `limit`, and `offset` fields are `Value::I64` literals.
+/// Builders normalize to `I64`, and `verify::verify_limit_is_integer_literal`
+/// enforces this invariant on the AST — so any other shape reaching here is a
+/// bug upstream.
+fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
+    let query = stmt.as_query()?;
+    match query.limit.as_ref()? {
+        stmt::Limit::Cursor(c) => {
+            let page_size = as_i64_literal(&c.page_size);
+            let after = c.after.as_ref().and_then(|e| match e {
                 stmt::Expr::Value(v) => Some(v.clone()),
                 _ => None,
             });
-            (page_size, cursor)
+            Some(Pagination::Cursor { page_size, after })
         }
-        Some(stmt::Limit::Offset(lo)) => {
-            let limit = match &lo.limit {
-                stmt::Expr::Value(stmt::Value::I64(n)) => Some(*n),
-                _ => None,
-            };
-            (limit, None)
+        stmt::Limit::Offset(lo) => {
+            let limit = as_i64_literal(&lo.limit);
+            let offset = lo.offset.as_ref().map(as_i64_literal);
+            Some(Pagination::Offset { limit, offset })
         }
-        None => (None, None),
-    };
+    }
+}
 
-    let order = query.order_by.as_ref().and_then(|ob| {
+/// Extracts an `i64` from a `Value::I64` literal expression. Panics on any
+/// other shape — an invariant violation that `verify` should have caught.
+fn as_i64_literal(expr: &stmt::Expr) -> i64 {
+    match expr {
+        stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+        _ => panic!("limit/offset must be an i64 literal; got {expr:#?}"),
+    }
+}
+
+/// Extract the sort direction from a query statement's ORDER BY clause for use
+/// with `QueryPk` on NoSQL drivers.
+fn extract_query_pk_order(stmt: &stmt::Statement) -> Option<stmt::Direction> {
+    let query = stmt.as_query()?;
+    query.order_by.as_ref().and_then(|ob| {
         ob.exprs.first().map(|e| match e.order {
             Some(stmt::Direction::Desc) => stmt::Direction::Desc,
             _ => stmt::Direction::Asc,
         })
-    });
-
-    QueryPkPagination {
-        limit,
-        order,
-        cursor,
-    }
+    })
 }

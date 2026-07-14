@@ -6,9 +6,9 @@ foreign key. The child stores the parent's ID in one of its own fields.
 ## Defining a BelongsTo relationship
 
 A BelongsTo relationship requires two things on the child model: a foreign key
-field and a `BelongsTo<T>` relation field. The `#[belongs_to]` attribute tells
-Toasty which field holds the foreign key and which field on the parent it
-references.
+field and a relation field. Wrap the relation in `Deferred<T>` for lazy loading,
+or use `T` directly for eager loading. The `#[belongs_to]` attribute marks the
+relation field.
 
 ```rust
 # use toasty::Model;
@@ -21,7 +21,7 @@ struct User {
     name: String,
 
     #[has_many]
-    posts: toasty::HasMany<Post>,
+    posts: toasty::Deferred<Vec<Post>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -33,16 +33,43 @@ struct Post {
     #[index]
     user_id: u64,
 
-    #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    #[belongs_to]
+    user: toasty::Deferred<User>,
 
     title: String,
 }
 ```
 
 The `user_id` field is the foreign key — it stores the `id` of the associated
-`User`. The `#[belongs_to(key = user_id, references = id)]` attribute tells
-Toasty that `user_id` on `Post` maps to `id` on `User`.
+`User`.
+
+## Inferring the foreign key
+
+`#[belongs_to]` names two fields: `key`, the foreign key field on the child, and
+`references`, the field on the parent it points at. Both are inferred when
+omitted:
+
+- `key` defaults to the relation field name plus `_id`. The `user` field above
+  uses `user_id`.
+- `references` defaults to `id`, the conventional primary key.
+
+Both must name fields that exist; a missing one is a compile error.
+
+Spell out either when the convention does not match. Name a foreign key field
+that isn't `<field>_id`:
+
+```rust,ignore
+#[belongs_to(key = owner_id)]
+owner: toasty::Deferred<User>,
+```
+
+Or a parent field that isn't named `id`, and both fields of a composite key
+(composite keys are not inferred):
+
+```rust,ignore
+#[belongs_to(key = [user_id, user_revision], references = [id, revision])]
+user: toasty::Deferred<User>,
+```
 
 The foreign key field should have `#[index]` so that Toasty can efficiently look
 up posts by user. In the database, this creates:
@@ -58,6 +85,16 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 
 The parent model (`User`) typically declares a `#[has_many]` field pointing back
 at the child. See [HasMany](./has-many.md) for details.
+
+Use a plain relation field when every loaded child should also load its parent:
+
+```rust,ignore
+#[belongs_to]
+user: User,
+```
+
+This behaves like an implicit `.include(Post::fields().user())` on every query
+that returns `Post`.
 
 ## Optional BelongsTo
 
@@ -82,14 +119,21 @@ struct Post {
     #[index]
     user_id: Option<u64>,
 
-    #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<Option<User>>,
+    #[belongs_to]
+    user: toasty::Deferred<Option<User>>,
 
     title: String,
 }
 ```
 
 The `user_id` column is now nullable. A post can exist without a user.
+
+For eager loading, omit `Deferred` and keep the `Option`:
+
+```rust,ignore
+#[belongs_to]
+user: Option<User>,
+```
 
 ## Accessing the related record
 
@@ -105,7 +149,7 @@ name matches the relation field name.
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -115,7 +159,7 @@ name matches the relation field name.
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -146,7 +190,7 @@ For an optional BelongsTo, `.get()` returns `Option<User>`:
 #     #[index]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::Deferred<Option<User>>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -180,7 +224,7 @@ Pass a reference to an existing parent record:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -190,7 +234,7 @@ Pass a reference to an existing parent record:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -224,7 +268,7 @@ Set the foreign key field directly:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -234,7 +278,7 @@ Set the foreign key field directly:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -267,7 +311,7 @@ struct User {
     id: u64,
 
     #[has_many(pair = owner)]
-    todos: toasty::HasMany<Todo>,
+    todos: toasty::Deferred<Vec<Todo>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -279,24 +323,29 @@ struct Todo {
     #[index]
     owner_id: u64,
 
-    #[belongs_to(key = owner_id, references = id)]
-    owner: toasty::BelongsTo<User>,
+    #[belongs_to]
+    owner: toasty::Deferred<User>,
 
     title: String,
 }
 ```
 
-Here the child's relation field is named `owner` instead of `user`, so the
+The `owner` field still infers its `owner_id` foreign key. Here the child's
+relation field is named `owner` instead of `user`, so the
 parent specifies `pair = owner` to establish the connection.
 
 ## What gets generated
 
-For a `Post` model with `#[belongs_to] user: BelongsTo<User>`, Toasty generates:
+For a `Post` model with `#[belongs_to] user: Deferred<User>`, Toasty generates:
 
 | Method | Returns | Description |
 |---|---|---|
 | `post.user()` | Relation accessor | Returns an accessor for the associated user |
-| `.get(&mut db)` | `Result<User>` | Loads the associated user from the database |
+| `.exec(&mut db)` | `Result<User>` | Loads the associated user from the database |
 | `toasty::create!(Post { user: &user })` | Create builder | Sets the foreign key from a parent reference |
 | `toasty::create!(Post { user_id: id })` | Create builder | Sets the foreign key directly |
 | `Post::fields().user()` | Field path | Used with `.include()` for preloading |
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

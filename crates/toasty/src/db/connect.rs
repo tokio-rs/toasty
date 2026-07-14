@@ -2,10 +2,10 @@ use crate::Result;
 
 use async_trait::async_trait;
 use std::borrow::Cow;
-use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, ConnectContext, Driver};
 use toasty_core::{
     driver::Connection,
-    schema::db::{Migration, SchemaDiff},
+    schema::{db::Migration, diff},
 };
 
 use url::Url;
@@ -35,6 +35,7 @@ impl Connect {
     /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
     /// | `mysql` | MySQL | `mysql` |
     /// | `dynamodb` | DynamoDB | `dynamodb` |
+    /// | `turso` | Turso | `turso` |
     ///
     /// # Errors
     ///
@@ -46,7 +47,8 @@ impl Connect {
                 feature = "dynamodb",
                 feature = "mysql",
                 feature = "postgresql",
-                feature = "sqlite"
+                feature = "sqlite",
+                feature = "turso"
             )),
             allow(unused_variables, unreachable_code)
         )]
@@ -96,6 +98,15 @@ impl Connect {
                 ));
             }
 
+            #[cfg(feature = "turso")]
+            "turso" => Box::new(toasty_driver_turso::Turso::new(url)?),
+            #[cfg(not(feature = "turso"))]
+            "turso" => {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "`turso` feature not enabled",
+                ));
+            }
+
             scheme => {
                 return Err(toasty_core::Error::unsupported_feature(format!(
                     "unsupported database scheme `{scheme}`"
@@ -117,11 +128,11 @@ impl Driver for Connect {
         self.driver.capability()
     }
 
-    async fn connect(&self) -> Result<Box<dyn Connection>> {
-        self.driver.connect().await
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
+        self.driver.connect(cx).await
     }
 
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         self.driver.generate_migration(schema_diff)
     }
 

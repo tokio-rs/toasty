@@ -1,8 +1,9 @@
 use std::{
     cell::{Cell, OnceCell},
-    collections::{HashMap, HashSet},
     ops,
 };
+
+use hashbrown::{HashMap, HashSet};
 
 use index_vec::IndexVec;
 use indexmap::IndexSet;

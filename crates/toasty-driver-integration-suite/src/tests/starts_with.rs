@@ -1,0 +1,350 @@
+use crate::prelude::*;
+
+/// Model with a composite key (partition + sort) and a non-key string attribute.
+/// Used for all starts_with tests.
+#[derive(Debug, toasty::Model)]
+#[key(partition = partition_id, local = sort_key)]
+struct Item {
+    partition_id: i64,
+    sort_key: String,
+    name: String,
+}
+
+async fn setup(test: &mut Test) -> toasty::Db {
+    let mut db = test.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { partition_id: 1_i64, sort_key: "alpha-1", name: "Alice" },
+        { partition_id: 1_i64, sort_key: "alpha-2", name: "Alicia" },
+        { partition_id: 1_i64, sort_key: "beta-1",  name: "Bob"   },
+        { partition_id: 1_i64, sort_key: "beta-2",  name: "Barry" },
+        { partition_id: 2_i64, sort_key: "alpha-1", name: "Carol" },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    db
+}
+
+/// starts_with on the sort key. On DynamoDB this uses KeyConditionExpression;
+/// on SQL: SQLite/Turso use GLOB, MySQL uses BINARY LIKE, PostgreSQL uses `^@`.
+#[driver_test]
+pub async fn starts_with_sort_key(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut items: Vec<Item> = Item::filter(
+        Item::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(Item::fields().sort_key().starts_with("alpha".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    items.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].sort_key, "alpha-1");
+    assert_eq!(items[1].sort_key, "alpha-2");
+
+    Ok(())
+}
+
+/// starts_with on a non-key attribute. On DynamoDB this uses FilterExpression;
+/// on SQL: SQLite/Turso use GLOB, MySQL uses BINARY LIKE, PostgreSQL uses `^@`.
+#[driver_test]
+pub async fn starts_with_non_key_attr(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut items: Vec<Item> = Item::filter(
+        Item::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(Item::fields().name().starts_with("Al".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    items.sort_by(|a, b| a.name.cmp(&b.name));
+
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].name, "Alice");
+    assert_eq!(items[1].name, "Alicia");
+
+    Ok(())
+}
+
+/// starts_with with a prefix that matches nothing — returns empty result.
+#[driver_test]
+pub async fn starts_with_no_match(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let items: Vec<Item> = Item::filter(
+        Item::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(Item::fields().sort_key().starts_with("gamma".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(items.len(), 0);
+
+    Ok(())
+}
+
+/// starts_with with an empty prefix — DynamoDB rejects empty string key values.
+#[driver_test(requires(not(sql)))]
+pub async fn starts_with_empty_prefix(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let result: toasty::Result<Vec<Item>> = Item::filter(
+        Item::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(Item::fields().sort_key().starts_with("".to_string())),
+    )
+    .exec(&mut db)
+    .await;
+
+    assert!(
+        result.is_err(),
+        "expected error when using starts_with with empty prefix on DynamoDB"
+    );
+
+    Ok(())
+}
+
+/// starts_with with an empty prefix on SQL — lowers to LIKE '%', matches all rows.
+#[driver_test(requires(sql))]
+pub async fn starts_with_empty_prefix_sql(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let items: Vec<Item> = Item::filter(
+        Item::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(Item::fields().sort_key().starts_with("".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(items.len(), 4, "empty prefix should match all rows on SQL");
+
+    Ok(())
+}
+
+/// starts_with prefix containing LIKE wildcards (`%`, `_`) and the escape
+/// char (`!`). These must match literally on all backends.
+#[driver_test]
+pub async fn starts_with_special_chars(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = sort_key)]
+    struct StringItem {
+        partition_id: i64,
+        sort_key: String,
+    }
+
+    let mut db = test.setup_db(models!(StringItem)).await;
+
+    toasty::create!(StringItem::[
+        { partition_id: 1_i64, sort_key: "100%-discount" },
+        { partition_id: 1_i64, sort_key: "100xdiscount"  },
+        { partition_id: 1_i64, sort_key: "1009"          },
+        { partition_id: 1_i64, sort_key: "a_b-literal"   },
+        { partition_id: 1_i64, sort_key: "axb-wildcard"  },
+        { partition_id: 1_i64, sort_key: "!bang-literal" },
+        { partition_id: 1_i64, sort_key: "x!bang"        },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    // `%` must match literally, not as a wildcard.
+    let mut items: Vec<StringItem> = StringItem::filter(
+        StringItem::fields().partition_id().eq(1_i64).and(
+            StringItem::fields()
+                .sort_key()
+                .starts_with("100%".to_string()),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    items.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].sort_key, "100%-discount");
+
+    // `_` must match literally, not as a single-char wildcard.
+    let mut items: Vec<StringItem> = StringItem::filter(
+        StringItem::fields().partition_id().eq(1_i64).and(
+            StringItem::fields()
+                .sort_key()
+                .starts_with("a_b".to_string()),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    items.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].sort_key, "a_b-literal");
+
+    // `!` (the escape char chosen by the SQL lowering) must also match
+    // literally when present in the user-supplied prefix.
+    let mut items: Vec<StringItem> = StringItem::filter(
+        StringItem::fields().partition_id().eq(1_i64).and(
+            StringItem::fields()
+                .sort_key()
+                .starts_with("!bang".to_string()),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    items.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(items.len(), 1);
+    assert_eq!(items[0].sort_key, "!bang-literal");
+
+    Ok(())
+}
+
+/// starts_with on an `Option<String>` field — matches non-null values with
+/// the given prefix; rows with NULL values are excluded.
+#[driver_test]
+pub async fn starts_with_optional_field(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = id)]
+    struct OptItem {
+        partition_id: i64,
+        id: i64,
+        nickname: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(OptItem)).await;
+
+    toasty::create!(OptItem::[
+        { partition_id: 1_i64, id: 1_i64, nickname: Some("Ali".to_string())     },
+        { partition_id: 1_i64, id: 2_i64, nickname: Some("Alicia".to_string())  },
+        { partition_id: 1_i64, id: 3_i64, nickname: Some("Bob".to_string())     },
+        { partition_id: 1_i64, id: 4_i64, nickname: None                        },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let mut items: Vec<OptItem> = OptItem::filter(
+        OptItem::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(OptItem::fields().nickname().starts_with("Al".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+
+    items.sort_by_key(|i| i.id);
+
+    assert_eq!(items.len(), 2);
+    assert_eq!(items[0].nickname.as_deref(), Some("Ali"));
+    assert_eq!(items[1].nickname.as_deref(), Some("Alicia"));
+
+    Ok(())
+}
+
+/// starts_with is case-sensitive: a lowercase prefix must not match records
+/// whose values only start with the uppercase equivalent.
+#[driver_test]
+pub async fn starts_with_case_sensitive(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = sort_key)]
+    struct CaseItem {
+        partition_id: i64,
+        sort_key: String,
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(CaseItem)).await;
+
+    toasty::create!(CaseItem::[
+        { partition_id: 1_i64, sort_key: "1", name: "Alice" },
+        { partition_id: 1_i64, sort_key: "2", name: "alice" },
+        { partition_id: 1_i64, sort_key: "3", name: "ALICE" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Lowercase prefix — should match only the lowercase record.
+    let mut lower: Vec<CaseItem> = CaseItem::filter(
+        CaseItem::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(CaseItem::fields().name().starts_with("al".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+    lower.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(
+        lower.len(),
+        1,
+        "lowercase prefix should match only lowercase record"
+    );
+    assert_eq!(lower[0].name, "alice");
+
+    // Uppercase prefix — should match only the uppercase record.
+    let mut upper: Vec<CaseItem> = CaseItem::filter(
+        CaseItem::fields()
+            .partition_id()
+            .eq(1_i64)
+            .and(CaseItem::fields().name().starts_with("AL".to_string())),
+    )
+    .exec(&mut db)
+    .await?;
+    upper.sort_by(|a, b| a.sort_key.cmp(&b.sort_key));
+    assert_eq!(
+        upper.len(),
+        1,
+        "uppercase prefix should match only uppercase record"
+    );
+    assert_eq!(upper[0].name, "ALICE");
+
+    Ok(())
+}
+
+/// starts_with on the partition key — on scan-capable drivers (DynamoDB) this
+/// falls back to a table scan with a begins_with filter and succeeds; on
+/// non-scan NoSQL drivers it returns an error.
+#[driver_test(requires(not(sql)))]
+pub async fn starts_with_partition_key_error(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = partition_id, local = sort_key)]
+    struct StringKeyItem {
+        partition_id: String,
+        sort_key: String,
+    }
+
+    let mut db = test.setup_db(models!(StringKeyItem)).await;
+
+    StringKeyItem::create()
+        .partition_id("hello")
+        .sort_key("world")
+        .exec(&mut db)
+        .await?;
+
+    let result = StringKeyItem::filter(
+        StringKeyItem::fields()
+            .partition_id()
+            .starts_with("hel".to_string()),
+    )
+    .exec(&mut db)
+    .await;
+
+    if test.capability().scan {
+        let items = result?;
+        assert_eq!(1, items.len());
+        assert_eq!("hello", items[0].partition_id);
+    } else {
+        assert!(
+            result.is_err(),
+            "expected error when using starts_with on partition key"
+        );
+    }
+
+    Ok(())
+}

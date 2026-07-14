@@ -1,63 +1,23 @@
-use std::cmp::PartialOrd;
-
 use super::Simplify;
-use toasty_core::schema::app::FieldTy;
 use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
 
 impl Simplify<'_> {
-    pub(super) fn simplify_expr_eq_operand(&mut self, operand: &mut stmt::Expr) {
-        if let stmt::Expr::Reference(expr_reference) = operand {
-            match &*expr_reference {
-                stmt::ExprReference::Model { nesting } => {
-                    let model = self
-                        .cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_model_unwrap();
-
-                    let [pk_field] = &model.primary_key.fields[..] else {
-                        todo!("handle composite keys");
-                    };
-
-                    *operand = stmt::Expr::ref_field(*nesting, pk_field);
-                }
-                stmt::ExprReference::Field { .. } => {
-                    let field = self
-                        .cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_field_unwrap();
-
-                    match &field.ty {
-                        FieldTy::Primitive(_) | FieldTy::Embedded(_) => {}
-                        FieldTy::HasMany(_) | FieldTy::HasOne(_) => todo!(),
-                        FieldTy::BelongsTo(rel) => {
-                            let [fk_field] = &rel.foreign_key.fields[..] else {
-                                todo!("handle composite keys");
-                            };
-
-                            let stmt::ExprReference::Field { index, .. } = expr_reference else {
-                                panic!()
-                            };
-                            *index = fk_field.source.index;
-                        }
-                    }
-                }
-                _ => {}
-            }
-        }
-    }
-
-    /// Recursively walk a binary expression in parallel
+    /// Heavyweight binary-op rewrites. Cheap canonicalization (constant
+    /// folding, null propagation, boolean-constant simplification,
+    /// literal-on-right swap) runs in `fold::expr_binary_op` before this
+    /// is reached, so heavyweight rules see operands in canonical form
+    /// (no `(Value, Value)`, no `(Value, _)` ahead of `(_, Value)`).
+    ///
+    /// App-level rewrites on eq/ne operands (`Reference::Model` →
+    /// primary-key field, `BelongsTo` → foreign-key field) fire in the
+    /// pre-lowering `lower::expr_eq_operand::RewriteEqOperand` pass, not
+    /// here.
     pub(super) fn simplify_expr_binary_op(
         &mut self,
         op: stmt::BinaryOp,
         lhs: &mut stmt::Expr,
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
-        if op.is_eq() || op.is_ne() {
-            self.simplify_expr_eq_operand(lhs);
-            self.simplify_expr_eq_operand(rhs);
-        }
-
         let result = match (&mut *lhs, &mut *rhs) {
             // Self-comparison, e.g.,
             //
@@ -75,52 +35,6 @@ impl Simplify<'_> {
                     }
                 }
                 None
-            }
-            // Constant folding and null propagation,
-            //
-            //   - `5 = 5` → `true`
-            //   - `1 < 5` → `true`
-            //   - `"a" >= "b"` → `false`
-            //   - `null <op> x` → `null`
-            //   - `x <op> null` → `null`
-            (Expr::Value(lhs_val), Expr::Value(rhs_val)) => {
-                if lhs_val.is_null() || rhs_val.is_null() {
-                    return Some(Expr::null());
-                }
-
-                match op {
-                    stmt::BinaryOp::Eq => Some((*lhs_val == *rhs_val).into()),
-                    stmt::BinaryOp::Ne => Some((*lhs_val != *rhs_val).into()),
-                    stmt::BinaryOp::Lt => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_lt().into())
-                    }
-                    stmt::BinaryOp::Le => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_le().into())
-                    }
-                    stmt::BinaryOp::Gt => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_gt().into())
-                    }
-                    stmt::BinaryOp::Ge => {
-                        PartialOrd::partial_cmp(&*lhs_val, &*rhs_val).map(|o| o.is_ge().into())
-                    }
-                }
-            }
-            // Boolean constant comparisons:
-            //
-            //  - `x = true` → `x`
-            //  - `x = false` → `not(x)`
-            //  - `x != true` → `not(x)`
-            //  - `x != false` → `x`
-            (expr, Expr::Value(stmt::Value::Bool(b)))
-            | (Expr::Value(stmt::Value::Bool(b)), expr)
-                if op.is_eq() || op.is_ne() =>
-            {
-                let is_eq_true = (op.is_eq() && *b) || (op.is_ne() && !*b);
-                if is_eq_true {
-                    Some(expr.take())
-                } else {
-                    Some(Expr::not(expr.take()))
-                }
             }
             // Tuple decomposition,
             //
@@ -168,29 +82,17 @@ impl Simplify<'_> {
             //   → OR(subj == p1 AND e1 <op> rhs, subj == p2 AND e2 <op> rhs)
             //
             // Each arm is fully simplified inline. Arms that fold to false/null
-            // are pruned.
-            (Expr::Match(m), _) if m.subject.is_stable() => {
+            // are pruned. Comparison ops only — distributing arithmetic this
+            // way would produce a malformed boolean from a non-boolean term.
+            (Expr::Match(m), _) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let match_expr = lhs.take();
                 let other = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, true))
             }
-            (_, Expr::Match(m)) if m.subject.is_stable() => {
+            (_, Expr::Match(m)) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let other = lhs.take();
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
-            }
-            // Null propagation: `expr <op> null` → `null` (and symmetric)
-            //
-            // Any comparison with NULL yields NULL (SQL three-valued logic).
-            // This catches cases like `column = null` after input substitution
-            // provides a null FK value.
-            (_, Expr::Value(stmt::Value::Null)) | (Expr::Value(stmt::Value::Null), _) => {
-                return Some(Expr::null());
-            }
-            // Canonicalization, `literal <op> col` → `col <op_commuted> literal`
-            (Expr::Value(_), rhs) if !rhs.is_value() => {
-                std::mem::swap(lhs, rhs);
-                Some(Expr::binary_op(lhs.take(), op.commute(), rhs.take()))
             }
             // Self-comparison with projections, e.g.,
             //
@@ -199,8 +101,11 @@ impl Simplify<'_> {
             //
             // By this point, constant projections and record projections have been simplified.
             // What remains are projections with opaque bases (e.g., field references).
+            // `lhs.base.is_stable()` keeps this sound: a projection through a
+            // non-deterministic base would evaluate the base twice and could
+            // yield different values each time.
             (Expr::Project(lhs), Expr::Project(rhs))
-                if lhs == rhs && (op.is_eq() || op.is_ne()) =>
+                if lhs == rhs && lhs.base.is_stable() && (op.is_eq() || op.is_ne()) =>
             {
                 // TODO: Check if the projected value is nullable
                 Some(Expr::from(op.is_eq()))
@@ -221,6 +126,8 @@ impl Simplify<'_> {
             return Some(Expr::null());
         }
 
+        // Relation-path-comparison and IN-subquery lifting fire in the
+        // pre-lowering `lower::lift_in_subquery::*` pass, not here.
         None
     }
 
@@ -273,7 +180,7 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if term.is_false() || matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if is_dead_filter_term(&term) {
                 continue;
             }
 
@@ -305,11 +212,64 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if !term.is_false() && !matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if !is_dead_filter_term(&term) {
                 operands.push(term);
             }
         }
 
         Expr::or_from_vec(operands)
     }
+}
+
+/// Returns `true` when a distributed-comparison term can never be `true`, so it
+/// adds nothing to the surrounding `OR` and can be dropped.
+///
+/// Three shapes qualify:
+///
+/// 1. The term is `false` or a bare `NULL`.
+///
+/// 2. The term is an `AND` with a `NULL` conjunct, such as `x AND NULL`. This
+///    comes from comparing against a decode `Match`'s `null` else branch — for
+///    example `eq(option_embed, Some(..))` on a `None` row. `x AND NULL` never
+///    holds in three-valued logic, and DynamoDB rejects the bare `NULL`
+///    placeholder it would otherwise serialize to.
+///
+/// 3. The term compares against an `Expr::Error`, the placeholder a total enum
+///    decode puts in its unreachable else branch. For a two-variant enum,
+///    distributing `field == "x"` over the decode produces a term like
+///    `disc != 1 AND disc != 2 AND Error == "x"`. A surrounding variant gate
+///    usually contradicts the `disc != k` guards and folds this away, but
+///    factoring a shared predicate out from under its gates removes that gate
+///    (issue #1061). Since `Error` marks a branch that never runs, the
+///    comparison can never hold. Dropping the term also keeps `Error` out of
+///    the SQL serializer, which cannot render it.
+fn is_dead_filter_term(term: &Expr) -> bool {
+    if term.is_unsatisfiable() {
+        return true;
+    }
+    if contains_error(term) {
+        return true;
+    }
+    matches!(
+        term,
+        Expr::And(and) if and.operands.iter().any(Expr::is_value_null)
+    )
+}
+
+/// Returns `true` if `expr` contains an `Expr::Error` node anywhere in its
+/// subtree — the unreachable-branch placeholder produced by enum decode.
+fn contains_error(expr: &Expr) -> bool {
+    use toasty_core::stmt::Visit;
+
+    struct FindError(bool);
+
+    impl Visit for FindError {
+        fn visit_expr_error(&mut self, _: &stmt::ExprError) {
+            self.0 = true;
+        }
+    }
+
+    let mut find = FindError(false);
+    find.visit_expr(expr);
+    find.0
 }

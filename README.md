@@ -1,9 +1,25 @@
-# Toasty
+<div align="center">
+  <h1>Toasty</h1>
+</div>
+
+<div align="center">
+  <h3>The cozy, easy ORM for Rust</h3>
+  <a href="https://tokio-rs.github.io/toasty/0.8.0/guide/">Guide</a> •
+  <a href="https://docs.rs/toasty">API Docs</a> •
+  <a href="https://crates.io/crates/toasty">Crates.io</a> •
+  <a href="https://discord.gg/tokio">Discord</a>
+</div>
+
+<br/>
+
+<div align="center">
 
 [![Crates.io][crates-badge]][crates-url]
 [![MIT licensed][mit-badge]][mit-url]
 [![Build Status][actions-badge]][actions-url]
 [![Discord chat][discord-badge]][discord-url]
+
+</div>
 
 [crates-badge]: https://img.shields.io/crates/v/toasty.svg
 [crates-url]: https://crates.io/crates/toasty
@@ -14,24 +30,15 @@
 [discord-badge]: https://img.shields.io/discord/500028886025895936.svg?logo=discord&style=flat-square
 [discord-url]: https://discord.gg/tokio
 
-Toasty is an ORM for the Rust programming language that prioritizes ease-of-use.
-It currently supports SQL databases (SQLite, PostgreSQL, MySQL) and DynamoDB.
-Note that Toasty does not hide database capabilities. Instead, Toasty exposes
-features based on the target database.
-
-Current status: Preview — Most major features are in place and Toasty should be
-complete enough to build applications with. The API is not yet stable and
-breaking changes may still occur. Contributions are welcome.
-
-[User guide](https://tokio-rs.github.io/toasty/nightly/guide/): Explore Toasty in depth.
-
-[Nightly API docs](https://tokio-rs.github.io/toasty/nightly/api/): API reference built from the latest commit.
+Toasty supports SQL databases (SQLite/Turso, PostgreSQL, MySQL) and DynamoDB.
+It does not hide database capabilities — it exposes features based on the
+target database.
 
 ## Using Toasty
 
 You will define your data model using Rust structs annotated with the
-`#[derive(toasty::Model)]` derive macro. Here is the
-[hello-toasty](examples/hello-toasty/src/main.rs) example.
+`#[derive(toasty::Model)]` derive macro. Runnable examples live in the
+[`examples/`](examples/) directory; the snippets below illustrate the basics.
 
 ```rust
 #[derive(Debug, toasty::Model)]
@@ -46,7 +53,7 @@ struct User {
     email: String,
 
     #[has_many]
-    todos: toasty::HasMany<Todo>,
+    todos: toasty::Deferred<Vec<Todo>>,
 }
 
 #[derive(Debug, toasty::Model)]
@@ -58,8 +65,8 @@ struct Todo {
     #[index]
     user_id: u64,
 
-    #[belongs_to(key = user_id, references = id)]
-    user: toasty::BelongsTo<User>,
+    #[belongs_to]
+    user: toasty::Deferred<User>,
 
     title: String,
 }
@@ -93,9 +100,9 @@ for todo in &todos {
 ## SQL and NoSQL
 
 Toasty supports both SQL and NoSQL databases. Current drivers are SQLite,
-PostgreSQL, MySQL, and DynamoDB. However, it does not aim to abstract the
-database. Instead, Toasty leans into the target database's capabilities and
-aims to help the user avoid issuing inefficient queries for that database.
+Turso, PostgreSQL, MySQL, and DynamoDB. However, it does not aim to abstract
+the database. Instead, Toasty leans into the target database's capabilities
+and aims to help the user avoid issuing inefficient queries for that database.
 
 When targeting both SQL and NoSQL databases, Toasty generates query methods
 (e.g. `get_by_id` only for access patterns that are indexed). When targeting a
@@ -116,6 +123,13 @@ application data model maps to the database schema.
 
 Development priorities are based on feedback and contributions. If you run into
 missing features or rough edges, please open an issue or submit a pull request.
+Planned work lives under [`docs/dev/roadmap.md`](docs/dev/roadmap.md).
+
+## Contributing
+
+See [`CONTRIBUTING.md`](CONTRIBUTING.md). Small fixes can go straight to a PR;
+larger changes follow a lightweight propose → roadmap + design doc → implement
+flow.
 
 ## License
 

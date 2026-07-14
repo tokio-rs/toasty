@@ -7,6 +7,39 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.7.0...toasty-driver-integration-suite-macros-v0.8.0) - 2026-07-06
+
+### Added
+
+- infer `key` and `references` in `#[belongs_to]` ([#1063])
+
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.6.1...toasty-driver-integration-suite-macros-v0.7.0) - 2026-05-29
+
+### Added
+
+- Add Turso driver with TransactionMode-aware concurrent writes ([#938])
+
+### Changed
+
+- [**breaking**] Deferred relation fields are now required ([#954])
+
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.6.0...toasty-driver-integration-suite-macros-v0.6.1) - 2026-05-16
+
+- Internal improvements only.
+
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.5.0...toasty-driver-integration-suite-macros-v0.6.0) - 2026-05-14
+
+- Internal improvements only
+
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.4.0...toasty-driver-integration-suite-macros-v0.5.0) - 2026-04-27
+
+- Internal improvements only
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.2.0...toasty-driver-integration-suite-macros-v0.3.0) - 2026-04-03
 
 ### Other

@@ -4,12 +4,21 @@ use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
+const FIELD_STRUCT_RESERVED_METHODS: &[&str] =
+    &["from_path", "path", "eq", "in_query", "into_root", "create"];
+
+const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["from_path", "path", "any", "all", "create"];
+
 impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
+        // Cloned so the field-method closure below can capture it by move while
+        // `into_root` keeps using the original.
+        let field_schema_trait = schema_trait.clone();
 
         let create_method = if let ModelKind::Root(root) = &self.model.kind {
             let create_struct_ident = &root.create_struct_ident;
@@ -28,34 +37,66 @@ impl Expand<'_> {
             .fields
             .iter()
             .enumerate()
+            .filter(|(_, field)| {
+                !util::ident_is_reserved(&field.name.ident, FIELD_STRUCT_RESERVED_METHODS)
+            })
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(_) if field.attrs.serialize.is_some() => {
-                        // Serialized fields are stored as opaque JSON; no field accessor
-                        TokenStream::new()
-                    }
                     Primitive(ty) => {
+                        // The accessor resolves its path through the field
+                        // type's `Field` impl, so the type decides its own path
+                        // shape: a struct embed (column-expanded or
+                        // `#[document]`) yields a chainable Fields handle
+                        // (`profile().name()`), a `Vec<_>` collection yields a
+                        // list leaf.
                         self.expand_primitive_field_method(field_ident, ty, &field_offset)
                     }
                     BelongsTo(rel) => {
-                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
+                        self.expand_one_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::RelationOneField),
+                            &rel.ty,
+                            &field_offset,
+                        )
                     }
                     HasOne(rel) => {
-                        self.expand_one_relation_field_method(field_ident, &rel.ty, &field_offset)
+                        self.expand_one_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::RelationOneField),
+                            &rel.ty,
+                            &field_offset,
+                        )
                     }
                     HasMany(rel) => {
                         let ty = &rel.ty;
                         let span = field_ident.span();
                         let path = quote! {
-                            self.path().chain(#toasty::Path::<#model_ident, _>::from_field_index(#field_offset))
+                            self.path().chain(<#model_ident as #field_schema_trait>::path_field(#field_offset))
                         };
 
-                        quote_spanned! { span=>
-                            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
-                                <#ty as #toasty::Relation>::ManyField::from_path(#path)
+                        if rel.via.is_some() {
+                            // A `via` step returns its terminal's path handle
+                            // (`ViaTarget::Path`): a model terminal yields a
+                            // chainable `ManyField`, so a scalar terminal can
+                            // follow a via intermediate (`a.b.field` where `b` is
+                            // a via); a scalar terminal yields a plain list path,
+                            // a leaf. Both stay includable / selectable
+                            // (`Into<stmt::Path>`). The element type comes from
+                            // `ViaManyField`, which works for scalar terminals too
+                            // (where there is no `RelationManyField::Target`).
+                            quote_spanned! { span=>
+                                #vis fn #field_ident(&self) -> #toasty::ViaPath<#ty, __Origin> {
+                                    <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(#path)
+                                }
+                            }
+                        } else {
+                            quote_spanned! { span=>
+                                #vis fn #field_ident(&self) -> <<#ty as #toasty::RelationManyField>::Target as #toasty::Model>::ManyField<__Origin> {
+                                    <<<#ty as #toasty::RelationManyField>::Target as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
+                                }
                             }
                         }
                     }
@@ -92,6 +133,16 @@ impl Expand<'_> {
                     self.path.in_query(rhs)
                 }
 
+                /// Discard `self`'s origin parameter and return a fresh
+                /// fields struct typed against this model. Used by
+                /// `update!` to build `stmt::patch` paths for embedded
+                /// partial updates.
+                #[doc(hidden)]
+                pub fn into_root(self) -> #field_struct_ident<#model_ident> {
+                    let _ = self;
+                    #field_struct_ident::from_path(<#model_ident as #schema_trait>::path_root())
+                }
+
                 #create_method
 
                 #( #methods )*
@@ -100,6 +151,16 @@ impl Expand<'_> {
             impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
                 fn into(self) -> #toasty::Path<__Origin, #model_ident> {
                     self.path
+                }
+            }
+
+            impl<__Origin> #toasty::IntoExpr<#model_ident> for #field_struct_ident<__Origin> {
+                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
+                    self.path.into_expr()
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
+                    self.path.by_ref()
                 }
             }
         )
@@ -112,33 +173,81 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let is_root = matches!(self.model.kind, ModelKind::Root(_));
 
-        // Generate methods that return list field paths
+        // Generate methods that return list field paths.
+        //
+        // An embedded enum flattens every variant's fields into one list, so two
+        // variants may declare the same field name — e.g. a column shared across
+        // variants via `#[shared(name)]`. Emit each accessor name only once to
+        // avoid duplicate method definitions. Root models and embedded structs
+        // can never have duplicate field names, so this dedup is a no-op there.
+        let mut seen_names = std::collections::HashSet::new();
         let methods = self
             .model
             .fields
             .iter()
             .enumerate()
+            .filter(move |(_, field)| {
+                seen_names.insert(field.name.as_str().to_string())
+                    && !util::ident_is_reserved(
+                        &field.name.ident,
+                        FIELD_LIST_STRUCT_RESERVED_METHODS,
+                    )
+            })
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
 
                 match &field.ty {
-                    Primitive(_) if field.attrs.serialize.is_some() => TokenStream::new(),
+                    Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),
                     Primitive(ty) => {
                         self.expand_list_primitive_field_method(field_ident, ty, &field_offset)
                     }
                     // All relations from a list context return the list variant
                     BelongsTo(rel) => {
                         let ty = &rel.ty;
-                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                        self.expand_list_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::RelationOneField),
+                            ty,
+                            &field_offset,
+                        )
                     }
                     HasOne(rel) => {
                         let ty = &rel.ty;
-                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                        self.expand_list_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::RelationOneField),
+                            ty,
+                            &field_offset,
+                        )
+                    }
+                    HasMany(rel) if rel.via.is_some() => {
+                        // See the `via` branch in `expand_field_struct`: a via
+                        // step returns its terminal's `ViaTarget::Path` handle —
+                        // a chainable `ManyField` for a model terminal, a plain
+                        // list path for a scalar terminal — and its element type
+                        // comes from `ViaManyField` so scalar terminals work too.
+                        let ty = &rel.ty;
+                        let span = field_ident.span();
+                        let schema_trait = self.schema_trait();
+                        quote_spanned! { span=>
+                            #vis fn #field_ident(&self) -> #toasty::ViaPath<#ty, __Origin> {
+                                <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(
+                                    self.path().chain(
+                                        <#model_ident as #schema_trait>::path_field(#field_offset)
+                                    )
+                                )
+                            }
+                        }
                     }
                     HasMany(rel) => {
                         let ty = &rel.ty;
-                        self.expand_list_relation_field_method(field_ident, ty, &field_offset)
+                        self.expand_list_relation_field_method(
+                            field_ident,
+                            quote!(#toasty::RelationManyField),
+                            ty,
+                            &field_offset,
+                        )
                     }
                 }
             });
@@ -154,7 +263,8 @@ impl Expand<'_> {
             TokenStream::new()
         };
 
-        // any() is only available on root models (requires Model trait bound)
+        // any() / all() are only available on root models (they require the
+        // `Model` trait bound).
         let any_method = if is_root {
             quote! {
                 /// Filter the parent model by a condition on the associated
@@ -162,6 +272,14 @@ impl Expand<'_> {
                 /// satisfies `filter`.
                 #vis fn any(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
                     self.path.any(filter)
+                }
+
+                /// Filter the parent model by a condition on the associated
+                /// (child) model. Returns `true` when **all** associated records
+                /// satisfy `filter` (vacuously true when there are no
+                /// associated records).
+                #vis fn all(self, filter: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Expr<bool> {
+                    self.path.all(filter)
                 }
             }
         } else {
@@ -199,21 +317,34 @@ impl Expand<'_> {
                     self.path
                 }
             }
+
+            impl<__Origin> #toasty::IntoExpr<#toasty::List<#model_ident>> for #field_list_struct_ident<__Origin> {
+                fn into_expr(self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
+                    self.path.into_expr()
+                }
+
+                fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::List<#model_ident>> {
+                    self.path.by_ref()
+                }
+            }
         )
     }
 
     pub(super) fn expand_model_field_struct_init(&self) -> TokenStream {
-        let toasty = &self.toasty;
         let vis = &self.model.vis;
         let field_struct_ident = self.field_struct_ident();
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
+
+        let doc_fields = self.doc_fields();
 
         // Generate fields() as a method instead of const to avoid const initialization issues
         // This will be placed inside the existing impl block for the model
         quote!(
+            #[doc = #doc_fields]
             #vis fn fields() -> #field_struct_ident<#model_ident> {
                 #field_struct_ident {
-                    path: #toasty::Path::root(),
+                    path: <#model_ident as #schema_trait>::path_root(),
                 }
             }
         )
@@ -226,6 +357,20 @@ impl Expand<'_> {
             ModelKind::Root(root) => &root.field_struct_ident,
             ModelKind::EmbeddedStruct(embedded) => &embedded.field_struct_ident,
             ModelKind::EmbeddedEnum(e) => &e.field_struct_ident,
+        }
+    }
+
+    /// The schema trait (`Model` or `Embed`) implemented by the type being
+    /// expanded. The `path_root` / `path_field` constructors live on both, so
+    /// generated field accessors dispatch through whichever one this type
+    /// implements.
+    pub(super) fn schema_trait(&self) -> TokenStream {
+        use crate::model::schema::ModelKind;
+
+        let toasty = &self.toasty;
+        match &self.model.kind {
+            ModelKind::Root(_) => quote!(#toasty::Model),
+            ModelKind::EmbeddedStruct(_) | ModelKind::EmbeddedEnum(_) => quote!(#toasty::Embed),
         }
     }
 
@@ -248,7 +393,7 @@ impl Expand<'_> {
             .iter()
             .enumerate()
             .map(move |(offset, field)| {
-                let field_name = field.name.ident.to_string();
+                let field_name = field.name.as_str();
                 let field_offset = util::int(offset);
 
                 quote!( #field_name => #toasty::core::schema::app::FieldId { model: Self::id(), index: #field_offset }, )
@@ -256,7 +401,7 @@ impl Expand<'_> {
 
         quote! {
             fn field_name_to_id(name: &str) -> #toasty::core::schema::app::FieldId {
-                use #toasty::{Model, Register};
+                use #toasty::Model;
 
                 match name {
                     #( #fields )*
@@ -277,13 +422,14 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::ListPath<__Origin> {
                 <#ty as #toasty::Field>::new_list_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
             }
@@ -295,19 +441,21 @@ impl Expand<'_> {
     fn expand_list_relation_field_method(
         &self,
         field_ident: &syn::Ident,
+        field_trait: TokenStream,
         ty: &syn::Type,
         field_offset: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
+        let schema_trait = self.schema_trait();
         let span = field_ident.span();
 
         quote_spanned! { span=>
-            #vis fn #field_ident(&self) -> <#ty as #toasty::Relation>::ManyField<__Origin> {
-                <#ty as #toasty::Relation>::ManyField::from_path(
+            #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::ManyField<__Origin> {
+                <<<#ty as #field_trait>::Target as #toasty::Model>::ManyField<__Origin>>::from_path(
                     self.path().chain(
-                        #toasty::Path::<#model_ident, _>::from_field_index(#field_offset)
+                        <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
             }

@@ -1,0 +1,5 @@
+error: only one field may be annotated with #[version]
+  --> tests/ui/multiple_version_fields.rs:11:5
+   |
+11 |     other_version: u64,
+   |     ^^^^^^^^^^^^^

@@ -24,28 +24,16 @@ impl Expand<'_> {
         }
     }
 
-    /// Expand all update methods for all fields.
-    /// Generates both the field setter methods and the .with_field() method for each field.
+    /// Expand the field setter methods for an update builder.
     /// For embedded builders: uses self.projection.clone().push(index) and self.assignments
     /// For root builders: uses Projection::from_index(index) and self.assignments
     fn expand_update_field_methods(&self, is_embedded: bool) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
 
-        // For root builders, self.assignments is Assignments (owned),
-        // so &mut self.assignments gives &mut Assignments.
-        // For embedded builders, self.assignments is &'a mut Assignments,
-        // so we need &mut *self.assignments to reborrow.
-        let assignments_for_builder = if is_embedded {
-            quote!(&mut *self.assignments)
-        } else {
-            quote!(&mut self.assignments)
-        };
-
         self.model.fields.iter().enumerate().map(|(field_index, field)| {
             let field_ident = &field.name.ident;
             let set_field_ident = &field.set_ident;
-            let with_field_ident = &field.with_ident;
 
             let index = util::int(field_index);
             let projection = if is_embedded {
@@ -65,12 +53,12 @@ impl Expand<'_> {
                 let ty = &rel.ty;
 
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
                         self
@@ -78,102 +66,116 @@ impl Expand<'_> {
                 }
             }
             FieldTy::HasMany(rel) => {
-                let ty = &rel.ty;
+                if rel.via.is_some() {
+                    // Relation setters mutate membership through `Assign`
+                    // (set/insert/remove/apply). A via field has no direct
+                    // pair FK, and `Assignment` does not preserve enough type
+                    // information to reject only insert/create while accepting
+                    // narrower operations like remove.
+                    TokenStream::new()
+                } else {
+                    let ty = &rel.ty;
+                    let target = quote!(<#ty as #toasty::RelationManyField>::Target);
 
-                quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> Self {
-                        self.#set_field_ident(#field_ident);
-                        self
-                    }
+                    quote! {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> Self {
+                            self.#set_field_ident(#field_ident);
+                            self
+                        }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<<#ty as #toasty::Relation>::Expr>>) -> &mut Self {
-                        let projection = #projection;
-                        #field_ident.assign(&mut self.assignments, projection);
-                        self
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> &mut Self {
+                            let projection = #projection;
+                            #field_ident.assign(&mut self.assignments, projection);
+                            self
+                        }
                     }
                 }
             }
             FieldTy::HasOne(rel) => {
-                let ty = &rel.ty;
-
-                quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> Self {
-                        self.#set_field_ident(#field_ident);
-                        self
-                    }
-
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::Relation>::Expr>) -> &mut Self {
-                        let projection = #projection;
-                        #field_ident.assign(&mut self.assignments, projection);
-                        self
-                    }
-                }
-            }
-            FieldTy::Primitive(ty) if field.attrs.serialize.is_some() => {
-                let serialize_attr = field.attrs.serialize.as_ref().unwrap();
-                if serialize_attr.nullable {
-                    quote! {
-                        #vis fn #field_ident(mut self, #field_ident: #ty) -> Self {
-                            self.#set_field_ident(#field_ident);
-                            self
-                        }
-
-                        #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
-                            let projection = #projection;
-                            match &#field_ident {
-                                Some(v) => {
-                                    let json = #toasty::serde_json::to_string(v).expect("failed to serialize");
-                                    self.assignments.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
-                                }
-                                None => {
-                                    self.assignments.set(projection, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
-                                }
-                            }
-                            self
-                        }
-                    }
+                if rel.via.is_some() {
+                    // See the has-many via case above. Any has-one membership
+                    // assignment would require choosing or creating an
+                    // intermediate record, which this setter cannot express.
+                    TokenStream::new()
                 } else {
+                    let ty = &rel.ty;
+
                     quote! {
-                        #vis fn #field_ident(mut self, #field_ident: #ty) -> Self {
+                        #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
                             self.#set_field_ident(#field_ident);
                             self
                         }
 
-                        #vis fn #set_field_ident(&mut self, #field_ident: #ty) -> &mut Self {
+                        #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<<#ty as #toasty::RelationOneField>::Expr>) -> &mut Self {
                             let projection = #projection;
-                            let json = #toasty::serde_json::to_string(&#field_ident).expect("failed to serialize");
-                            self.assignments.set(projection, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                            #field_ident.assign(&mut self.assignments, projection);
                             self
                         }
                     }
                 }
             }
             FieldTy::Primitive(ty) => {
+                // Bind through `<Ty as Field>::ExprTarget` so each field's
+                // setter accepts whatever its expression-level type permits —
+                // `Self` for scalars, `List<T>` for `Vec<T>` collections, and
+                // so on. A `#[document]` field uses the same `Field` impl as
+                // its column-expanded form; only the schema `field_ty` differs.
                 quote! {
-                    #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#ty>) -> Self {
+                    #vis fn #field_ident(mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> Self {
                         self.#set_field_ident(#field_ident);
                         self
                     }
 
-                    #vis fn #set_field_ident(&mut self, #field_ident: impl #toasty::Assign<#ty>) -> &mut Self {
+                    #vis fn #set_field_ident(&mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> &mut Self {
                         let projection = #projection;
                         #field_ident.assign(&mut self.assignments, projection);
-                        self
-                    }
-
-                    #vis fn #with_field_ident(
-                        mut self,
-                        f: impl FnOnce(<#ty as #toasty::Field>::Update<'_>)
-                    ) -> Self {
-                        let projection = #projection;
-                        let builder = <#ty as #toasty::Field>::new_update(#assignments_for_builder, projection);
-                        f(builder);
                         self
                     }
                 }
             }
             }
         }).collect()
+    }
+
+    /// Generate statements to initialize the versionable field in the `update()` method.
+    /// Sets the assignment to `current + 1` and the condition to `field == current`.
+    /// Only emitted in the instance `update()` method where we have access to `self` (the model).
+    pub(super) fn expand_version_update_stmts(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let Some(version_index) = self.model.kind.as_root().and_then(|r| r.version_field) else {
+            return quote! {};
+        };
+
+        let field = &self.model.fields[version_index];
+        let index_tokenized = util::int(version_index);
+        let field_ident = &field.name.ident;
+        let FieldTy::Primitive(field_ty) = &field.ty else {
+            unreachable!("version field must be primitive");
+        };
+
+        quote! {
+            {
+                let current: u64 = <#field_ty as #toasty::Version>::as_u64(s.target.#field_ident);
+                let next = <#field_ty as #toasty::Version>::from_u64(current + 1);
+                s.assignments.set(
+                    #toasty::stmt::Projection::from_index(#index_tokenized),
+                    <#field_ty as #toasty::IntoExpr<#field_ty>>::into_expr(next),
+                );
+                let current_val = <#field_ty as #toasty::Version>::from_u64(current);
+                s.condition = Some(
+                    #toasty::core::stmt::Expr::eq(
+                        #toasty::core::stmt::Expr::Reference(
+                            #toasty::core::stmt::ExprReference::Field {
+                                nesting: 0,
+                                index: #index_tokenized,
+                            }
+                        ),
+                        #toasty::into_untyped_expr::<#field_ty, _>(current_val),
+                    )
+                );
+            }
+        }
     }
 
     fn expand_update_default_stmts(&self) -> TokenStream {
@@ -192,7 +194,7 @@ impl Expand<'_> {
                 Some(quote! {
                     self.assignments.set(
                         #toasty::stmt::Projection::from_index(#index_tokenized),
-                        <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr),
+                        <#ty as #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>>::into_expr(#expr),
                     );
                 })
             })
@@ -205,6 +207,7 @@ impl Expand<'_> {
         let model_ident = &self.model.ident;
         let query_struct_ident = &self.model.kind.as_root_unwrap().query_struct_ident;
         let update_struct_ident = &self.model.kind.as_root_unwrap().update_struct_ident;
+        let field_struct_ident = &self.model.kind.as_root_unwrap().field_struct_ident;
         let target_ty = util::ident("T");
         let builder_methods = self.expand_update_field_methods(false);
         let update_default_stmts = self.expand_update_default_stmts();
@@ -219,6 +222,7 @@ impl Expand<'_> {
             #[derive(Clone)]
             #vis struct #update_struct_ident<#target_ty: #toasty::UpdateTarget = #query_struct_ident> {
                 assignments: #toasty::core::stmt::Assignments,
+                condition: Option<#toasty::core::stmt::Expr>,
                 target: #target_ty,
             }
 
@@ -227,12 +231,30 @@ impl Expand<'_> {
                     #update_default_stmts
                 }
 
+                /// Return a fresh fields struct rooted at the model.
+                /// Used by `update!` to build `stmt::patch` paths for
+                /// embedded partial updates — the macro calls this on
+                /// the bound update builder, sidestepping the need to
+                /// keep the original target value accessible.
+                #[doc(hidden)]
+                pub fn __macro_fields_root(&self) -> #field_struct_ident<#model_ident> {
+                    #model_ident::fields()
+                }
+
                 #builder_methods
 
-                #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
+                fn build_stmt(&mut self) -> #toasty::core::stmt::Statement {
                     use #toasty::UpdateTarget as _;
-                    let stmt = self.target.to_update_stmt(self.assignments);
-                    let response = executor.exec_untyped(stmt.into_untyped()).await?;
+                    let assignments = ::std::mem::take(&mut self.assignments);
+                    let mut stmt = self.target.to_update_stmt(assignments);
+                    if let Some(cond) = self.condition.take() {
+                        stmt.as_untyped_mut().condition = #toasty::core::stmt::Condition::new(cond);
+                    }
+                    stmt.into_untyped()
+                }
+
+                #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<()> {
+                    let response = executor.exec_untyped(self.build_stmt()).await?;
                     let value = response.values.collect_as_value().await?;
                     self.target.apply_result(value)?;
                     Ok(())
@@ -287,6 +309,7 @@ impl Expand<'_> {
                 fn from(value: #query_struct_ident) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
+                        condition: None,
                         target: value,
                     };
                     s.apply_update_defaults();
@@ -298,6 +321,7 @@ impl Expand<'_> {
                 fn from(src: #toasty::stmt::Query<#toasty::List<#model_ident>>) -> #update_struct_ident {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
+                        condition: None,
                         target: #query_struct_ident::from_stmt(src),
                     };
                     s.apply_update_defaults();
@@ -309,9 +333,7 @@ impl Expand<'_> {
                 type Returning = ();
 
                 fn into_statement(mut self) -> #toasty::Statement<()> {
-                    use #toasty::UpdateTarget as _;
-                    let stmt = self.target.to_update_stmt(self.assignments);
-                    #toasty::Statement::from_untyped_stmt(stmt.into_untyped())
+                    #toasty::Statement::from_untyped_stmt(self.build_stmt())
                 }
             }
         }
@@ -324,41 +346,28 @@ impl Expand<'_> {
         self.model.fields.iter().enumerate().map(|(offset, field)| {
             let i = util::int(offset);
             let field_ident = &field.name.ident;
-            let field_name_str = field.name.ident.to_string();
 
             match &field.ty {
-                FieldTy::Primitive(_ty) if field.attrs.serialize.is_some() => {
-                    let serialize_attr = field.attrs.serialize.as_ref().unwrap();
-
-                    let json_deserialize = quote! {
-                        let json_str = <String as #toasty::Load>::load(value)?;
-                        #toasty::serde_json::from_str(&json_str)
-                            .map_err(|e| #toasty::Error::from_args(
-                                format_args!("failed to deserialize field '{}': {}", #field_name_str, e)
-                            ))?
-                    };
-
-                    let assign = if serialize_attr.nullable {
-                        quote! {
-                            if value.is_null() { None } else { Some({ #json_deserialize }) }
-                        }
-                    } else {
-                        quote! { { #json_deserialize } }
-                    };
-
-                    quote! {
-                        #i => {
-                            target.#field_ident = #assign;
-                        }
-                    }
-                }
                 FieldTy::Primitive(ty) => {
                     quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
                 }
-                _ => {
-                    // Relation fields (BelongsTo, HasMany, HasOne) are unloaded on update.
-                    // Embedded fields are handled above via the Primitive arm.
-                    quote!(#i => target.#field_ident.unload(),)
+                FieldTy::BelongsTo(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
+                }
+                FieldTy::HasMany(rel) => {
+                    let ty = &rel.ty;
+                    if rel.via.is_some() {
+                        // A via field has no `RelationManyField` impl (its
+                        // element may be a scalar); reload through `Load`.
+                        quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
+                    } else {
+                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
+                    }
+                }
+                FieldTy::HasOne(rel) => {
+                    let ty = &rel.ty;
+                    quote!(#i => <#ty as #toasty::RelationOneField>::reload(&mut target.#field_ident, value)?,)
                 }
             }
 

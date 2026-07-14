@@ -1,6 +1,6 @@
 use super::Value;
 
-use std::{hash::Hash, ops};
+use std::ops;
 
 /// An ordered sequence of [`Value`]s representing a record (row).
 ///
@@ -18,7 +18,7 @@ use std::{hash::Hash, ops};
 /// assert_eq!(record[0], 1_i64);
 /// assert_eq!(record[1], "alice");
 /// ```
-#[derive(Debug, Default, Clone, Eq)]
+#[derive(Debug, Default, Clone)]
 pub struct ValueRecord {
     /// The field values in this record, ordered by field index.
     pub fields: Vec<Value>,
@@ -90,13 +90,6 @@ impl<'a> IntoIterator for &'a mut ValueRecord {
 impl PartialEq for ValueRecord {
     fn eq(&self, other: &Self) -> bool {
         **self == **other
-    }
-}
-
-// had to impl hash for value record because conflicting implementations of hash trait
-impl Hash for ValueRecord {
-    fn hash<H: std::hash::Hasher>(&self, state: &mut H) {
-        (**self).hash(state);
     }
 }
 

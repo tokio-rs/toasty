@@ -12,8 +12,11 @@ pub use migration::*;
 
 /// SQL serialization and parameter handling.
 pub mod serializer;
-pub use serializer::{Params, Serializer, TypedValue};
+pub use serializer::Serializer;
 
 /// SQL statement types for both DML and DDL operations.
 pub mod stmt;
 pub use stmt::Statement;
+
+/// JSON encoding for `stmt::Value`s stored in document-backed columns.
+pub mod json;

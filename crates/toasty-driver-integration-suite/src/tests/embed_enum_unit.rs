@@ -7,7 +7,7 @@ use crate::{helpers::column, prelude::*};
 
 use toasty_core::{
     driver::Operation,
-    stmt::{Assignment, BinaryOp, Expr, ExprSet, Statement},
+    stmt::{Assignment, BinaryOp, Expr, ExprSet, Statement, Value},
 };
 
 /// Tests basic CRUD operations with an embedded enum field.
@@ -36,7 +36,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(User, Status)).await;
+    let mut db = t.setup_db(models!(User)).await;
     let user_table = table_id(&db, "users");
 
     // Create: enum variant is stored as its discriminant (1 = Pending)
@@ -48,11 +48,23 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    // Verify column list and that the discriminant is stored as I64, not a string or record
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    // Verify column list and that the discriminant is stored as I64, not a string or record.
+    //
+    // Position: id_u64 uses Expr::Default (no param), so status is at
+    // params[1] (name, status). id_uuid adds the uuid at params[0], shifting
+    // status to params[2].
+    let sql = t.capability().sql;
+    let status_pos = if driver_test_cfg!(id_u64) { 1 } else { 2 };
+    let status_pat = if sql {
+        ArgOr::Arg(status_pos)
+    } else {
+        ArgOr::Value(1i64)
+    };
+    let op = t.log().pop_op();
+    assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
-                rows: [== (Any, Any, 1i64)],
+                rows: [=~ (Any, Any, status_pat)],
             }),
             target: toasty_core::stmt::InsertTarget::Table({
                 table: == user_table,
@@ -60,6 +72,11 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             }),
         }),
     }));
+    if sql {
+        assert_struct!(op, Operation::QuerySql({
+            params[status_pos].value: == 1i64,
+        }));
+    }
 
     // Read: discriminant is loaded back and converted to the enum variant
     let found = User::get_by_id(&mut db, &user.id).await?;
@@ -75,8 +92,9 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         assert_struct!(t.log().pop_op(), Operation::QuerySql({
             stmt: Statement::Update({
                 target: toasty_core::stmt::UpdateTarget::Table(== user_table),
-                assignments: #{ [2]: Assignment::Set(== 2i64)},
+                assignments: #{ [2]: Assignment::Set(Expr::Arg({ position: 0 }))},
             }),
+            params: [{ value: == 2i64 }, ..],
         }));
     } else {
         assert_struct!(t.log().pop_op(), Operation::UpdateByKey({
@@ -84,7 +102,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
             filter: None,
             keys: _,
             assignments: #{ [2]: Assignment::Set(== 2i64)},
-            returning: false,
+            returning: None,
         }));
     }
 
@@ -109,33 +127,14 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests filtering records by embedded enum variant.
-/// SQL-only: DynamoDB requires a partition key in queries.
 /// Validates that enum fields can be used in WHERE clauses (comparing discriminants),
-/// and verifies the driver-level representation: the WHERE clause compares the status
-/// column to an I64 discriminant, not a string or other type.
-#[driver_test(requires(sql))]
+/// and verifies the driver-level representation: the predicate compares the status
+/// column to an I64 discriminant, not a string or other type. On SQL the predicate
+/// is emitted as `column = $0` with an I64 param; on DynamoDB it lowers to a
+/// `Scan` whose filter inlines the I64 value directly.
+#[driver_test(requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = setup(t).await;
 
     // Create tasks with different statuses: 1 pending, 2 active, 1 done
     for (name, status) in [
@@ -161,17 +160,28 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(active.len(), 2);
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql({
-            stmt: Statement::Query({
-                body: ExprSet::Select({
-                    filter.expr: Some(Expr::BinaryOp({
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
-                        op: BinaryOp::Eq,
-                        *rhs: == 2i64,
-                    })),
+        if t.capability().sql {
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Query({
+                    body: ExprSet::Select({
+                        filter.expr: Some(Expr::BinaryOp({
+                            lhs.as_expr_column_unwrap().column: == status_col.index,
+                            op: BinaryOp::Eq,
+                            *rhs: Expr::Arg({ position: 0 }),
+                        })),
+                    }),
                 }),
-            }),
-        }));
+                params: [{ value: == 2i64 }],
+            }));
+        } else {
+            assert_struct!(op, Operation::Scan({
+                filter: Some(Expr::BinaryOp({
+                    lhs.as_expr_column_unwrap().column: == status_col.index,
+                    op: BinaryOp::Eq,
+                    *rhs: Expr::Value(== Value::I64(2)),
+                })),
+            }));
+        }
     }
 
     // Filter: only Pending tasks (discriminant = 1)
@@ -182,17 +192,28 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(pending[0].name, "Task A");
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql({
-            stmt: Statement::Query({
-                body: ExprSet::Select({
-                    filter.expr: Some(Expr::BinaryOp({
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
-                        op: BinaryOp::Eq,
-                        *rhs: == 1i64,
-                    })),
+        if t.capability().sql {
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Query({
+                    body: ExprSet::Select({
+                        filter.expr: Some(Expr::BinaryOp({
+                            lhs.as_expr_column_unwrap().column: == status_col.index,
+                            op: BinaryOp::Eq,
+                            *rhs: Expr::Arg({ position: 0 }),
+                        })),
+                    }),
                 }),
-            }),
-        }));
+                params: [{ value: == 1i64 }],
+            }));
+        } else {
+            assert_struct!(op, Operation::Scan({
+                filter: Some(Expr::BinaryOp({
+                    lhs.as_expr_column_unwrap().column: == status_col.index,
+                    op: BinaryOp::Eq,
+                    *rhs: Expr::Value(== Value::I64(1)),
+                })),
+            }));
+        }
     }
 
     // Filter: only Done tasks (discriminant = 3)
@@ -203,17 +224,28 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
     assert_eq!(done[0].name, "Task D");
     {
         let (op, _) = t.log().pop();
-        assert_struct!(op, Operation::QuerySql({
-            stmt: Statement::Query({
-                body: ExprSet::Select({
-                    filter.expr: Some(Expr::BinaryOp({
-                        lhs.as_expr_column_unwrap().column: == status_col.index,
-                        op: BinaryOp::Eq,
-                        *rhs: == 3i64,
-                    })),
+        if t.capability().sql {
+            assert_struct!(op, Operation::QuerySql({
+                stmt: Statement::Query({
+                    body: ExprSet::Select({
+                        filter.expr: Some(Expr::BinaryOp({
+                            lhs.as_expr_column_unwrap().column: == status_col.index,
+                            op: BinaryOp::Eq,
+                            *rhs: Expr::Arg({ position: 0 }),
+                        })),
+                    }),
                 }),
-            }),
-        }));
+                params: [{ value: == 3i64 }],
+            }));
+        } else {
+            assert_struct!(op, Operation::Scan({
+                filter: Some(Expr::BinaryOp({
+                    lhs.as_expr_column_unwrap().column: == status_col.index,
+                    op: BinaryOp::Eq,
+                    *rhs: Expr::Value(== Value::I64(3)),
+                })),
+            }));
+        }
     }
 
     Ok(())
@@ -221,62 +253,30 @@ pub async fn filter_by_enum_variant(t: &mut Test) -> Result<()> {
 
 /// Tests that embedded enums are registered in the app schema but don't create
 /// their own database tables (they're inlined into parent models as a single column).
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_status))]
 pub async fn basic_embedded_enum(test: &mut Test) {
-    #[derive(toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    let db = test.setup_db(models!(Status)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     // Embedded enums exist in app schema as Model::EmbeddedEnum
-    assert_struct!(schema.app.models, #{
-        Status::id(): toasty::schema::app::Model::EmbeddedEnum({
-            name.upper_camel_case(): "Status",
-            variants: [
-                _ { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1), .. },
-                _ { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2), .. },
-                _ { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3), .. },
-            ],
-        }),
-    });
-
-    // Embedded enums don't create database tables (stored as a column in parent)
-    assert!(schema.db.tables.is_empty());
+    let status = &schema.app.models[&Status::id()];
+    assert_struct!(status, toasty::schema::app::Model::EmbeddedEnum({
+        name.upper_camel_case(): "Status",
+        variants: [
+            _ { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1), .. },
+            _ { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2), .. },
+            _ { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3), .. },
+        ],
+    }));
 }
 
 /// Tests the complete schema generation and mapping for an embedded enum field:
 /// - App schema: enum field with correct type reference
 /// - DB schema: enum field stored as a single INTEGER column
 /// - Mapping: enum field maps directly to a primitive column (discriminant IS the value)
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_with_status))]
 pub async fn root_model_with_embedded_enum_field(test: &mut Test) {
-    #[derive(toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(toasty::Model)]
-    struct User {
-        #[key]
-        id: String,
-        #[allow(dead_code)]
-        status: Status,
-    }
-
-    let db = test.setup_db(models!(User, Status)).await;
+    let db = setup(test).await;
     let schema = db.schema();
 
     // Both embedded enum and root model exist in app schema

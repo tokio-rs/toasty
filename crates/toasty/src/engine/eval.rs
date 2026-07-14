@@ -2,7 +2,10 @@ mod as_expr;
 use as_expr::AsExpr;
 
 use crate::Result;
-use toasty_core::stmt::{self, ExprContext};
+use toasty_core::{
+    schema::Schema,
+    stmt::{self, ExprContext},
+};
 
 #[derive(Clone, Debug)]
 pub(crate) struct Func<T = stmt::Expr> {
@@ -36,22 +39,25 @@ impl<T: AsExpr> Func<T> {
         matches!(self.expr.as_expr(), stmt::Expr::Arg(expr_arg) if expr_arg.position == 0)
     }
 
-    pub(crate) fn eval(&self, input: impl stmt::Input) -> Result<stmt::Value> {
+    /// Evaluates the function against `input`. `schema` directs the
+    /// schema-directed conversions (a `#[document]` embed's record ↔ object
+    /// casts); every other operation is schema-free.
+    pub(crate) fn eval(&self, schema: &Schema, input: impl stmt::Input) -> Result<stmt::Value> {
         use stmt::TypedInput;
 
-        let input = TypedInput::new(stmt::ExprContext::new_free(), &self.args, input);
+        let input = TypedInput::new(stmt::ExprContext::new(schema), &self.args, input);
         self.expr.as_expr().eval(input)
     }
 
-    pub(crate) fn eval_const(&self) -> stmt::Value {
+    pub(crate) fn eval_const(&self, schema: &Schema) -> stmt::Value {
         assert!(self.is_const());
-        self.expr.as_expr().eval_const().unwrap()
+        self.eval(schema, stmt::ConstInput::new()).unwrap()
     }
 
-    pub(crate) fn eval_bool(&self, input: impl stmt::Input) -> Result<bool> {
+    pub(crate) fn eval_bool(&self, schema: &Schema, input: impl stmt::Input) -> Result<bool> {
         use stmt::TypedInput;
 
-        let input = TypedInput::new(stmt::ExprContext::new_free(), &self.args, input);
+        let input = TypedInput::new(stmt::ExprContext::new(schema), &self.args, input);
         self.expr.as_expr().eval_bool(input)
     }
 }
@@ -76,6 +82,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
     match expr {
         Arg(_) => true,
         And(expr_and) => expr_and.operands.iter().all(verify_expr),
+        Or(expr_or) => expr_or.operands.iter().all(verify_expr),
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
         IsNull(expr) => verify_expr(&expr.expr),

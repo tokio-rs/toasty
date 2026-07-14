@@ -49,6 +49,9 @@ pub use delete::Delete;
 mod direction;
 pub use direction::Direction;
 
+mod document_storage_text;
+pub use document_storage_text::DocumentStorageText;
+
 mod entry;
 pub use entry::Entry;
 
@@ -63,11 +66,20 @@ mod eval;
 mod expr;
 pub use expr::Expr;
 
+mod expr_all_op;
+pub use expr_all_op::ExprAllOp;
+
 mod expr_and;
 pub use expr_and::ExprAnd;
 
+mod expr_between;
+pub use expr_between::ExprBetween;
+
 mod expr_any;
 pub use expr_any::ExprAny;
+
+mod expr_any_op;
+pub use expr_any_op::ExprAnyOp;
 
 mod expr_arg;
 pub use expr_arg::ExprArg;
@@ -93,14 +105,26 @@ pub use expr_in_list::ExprInList;
 mod expr_in_subquery;
 pub use expr_in_subquery::ExprInSubquery;
 
+mod expr_intersects;
+pub use expr_intersects::ExprIntersects;
+
 mod expr_is_null;
 pub use expr_is_null::ExprIsNull;
+
+mod expr_is_superset;
+pub use expr_is_superset::ExprIsSuperset;
 
 mod expr_is_variant;
 pub use expr_is_variant::ExprIsVariant;
 
+mod expr_length;
+pub use expr_length::ExprLength;
+
 mod expr_let;
 pub use expr_let::ExprLet;
+
+mod expr_like;
+pub use expr_like::ExprLike;
 
 mod expr_list;
 pub use expr_list::ExprList;
@@ -132,6 +156,9 @@ pub use expr_set::ExprSet;
 mod expr_set_op;
 pub use expr_set_op::ExprSetOp;
 
+mod expr_starts_with;
+pub use expr_starts_with::ExprStartsWith;
+
 mod expr_stmt;
 pub use expr_stmt::ExprStmt;
 
@@ -147,6 +174,9 @@ pub use sorted_index::SortedIndex;
 mod func_count;
 pub use func_count::FuncCount;
 
+mod func_json_extract;
+pub use func_json_extract::FuncJsonExtract;
+
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
@@ -160,6 +190,7 @@ mod insert_target;
 pub use insert_target::InsertTarget;
 
 mod input;
+pub(crate) use input::InputResolve;
 pub use input::{ConstInput, Input, TypedInput};
 
 mod join;
@@ -256,8 +287,14 @@ pub use values::Values;
 #[cfg(feature = "jiff")]
 mod value_jiff;
 
+mod value_object;
+pub use value_object::ValueObject;
+
 mod value_record;
 pub use value_record::ValueRecord;
+
+mod value_set;
+pub use value_set::ValueSet;
 
 /// Mutable AST visitor trait and helpers.
 pub mod visit_mut;

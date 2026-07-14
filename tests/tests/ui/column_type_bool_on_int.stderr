@@ -1,0 +1,23 @@
+error[E0277]: field type `bool` is not compatible with the requested column storage `toasty::codegen_support::storage::tag::I64`
+  --> tests/ui/column_type_bool_on_int.rs:10:14
+   |
+10 |     enabled: bool,
+   |              ^^^^ incompatible Rust type for `#[column(type = ...)]`
+   |
+   = note: see `toasty::codegen_support::storage` for the compatibility table
+help: the trait `CompatibleWith<toasty::codegen_support::storage::tag::I64>` is not implemented for `bool`
+      but trait `CompatibleWith<toasty::codegen_support::storage::tag::Boolean>` is implemented for it
+  --> $WORKSPACE/crates/toasty/src/codegen_support/storage.rs
+   |
+   | impl CompatibleWith<tag::Boolean> for bool {}
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+   = help: for that trait implementation, expected `toasty::codegen_support::storage::tag::Boolean`, found `toasty::codegen_support::storage::tag::I64`
+note: required by a bound in `_check`
+  --> tests/ui/column_type_bool_on_int.rs:3:17
+   |
+ 3 | #[derive(Debug, toasty::Model)]
+   |                 ^^^^^^^^^^^^^ required by this bound in `_check`
+...
+10 |     enabled: bool,
+   |              ---- required by a bound in this function
+   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

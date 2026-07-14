@@ -2,36 +2,11 @@ use super::Simplify;
 use toasty_core::stmt;
 
 impl Simplify<'_> {
+    /// Heavyweight `List` rewrites. Cheap canonicalization (collapsing a
+    /// list of literal values into `Value::List`) runs in
+    /// `fold::expr_list` before this is reached.
     pub(super) fn simplify_expr_list(&mut self, expr: &mut stmt::ExprList) -> Option<stmt::Expr> {
-        if let Some(expr) = self.simplify_expr_list_all_values(expr) {
-            return Some(expr);
-        }
-
-        if let Some(expr) = self.simplify_expr_list_insert_stmt(expr) {
-            return Some(expr);
-        }
-
-        None
-    }
-
-    fn simplify_expr_list_all_values(&mut self, expr: &mut stmt::ExprList) -> Option<stmt::Expr> {
-        // If all items are values,
-        let all_values = expr.items.iter().all(|expr| expr.is_value());
-
-        if all_values {
-            let mut values = vec![];
-
-            for expr in expr.items.drain(..) {
-                let stmt::Expr::Value(value) = expr else {
-                    panic!()
-                };
-                values.push(value);
-            }
-
-            Some(stmt::Value::list_from_vec(values).into())
-        } else {
-            None
-        }
+        self.simplify_expr_list_insert_stmt(expr)
     }
 
     // TODO: rewrite this

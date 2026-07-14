@@ -1,0 +1,8 @@
+error[E0599]: no method named `nonexistent` found for struct `UserUpdate<__toasty_T>` in the current scope
+  --> tests/ui/update_macro_invalid_field.rs:16:36
+   |
+ 1 | #[derive(Debug, toasty::Model)]
+   |                 ------------- method `nonexistent` not found for this struct
+...
+16 |     let _ = toasty::update!(user { nonexistent: "value" });
+   |                                    ^^^^^^^^^^^ method not found in `UserUpdate<&mut User>`

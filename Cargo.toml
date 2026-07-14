@@ -12,22 +12,48 @@ members = [
     "crates/toasty-driver-mysql",
     "crates/toasty-driver-postgresql",
     "crates/toasty-driver-sqlite",
+    "crates/toasty-driver-turso",
 
     # Driver integration test suite
     "crates/toasty-driver-integration-suite",
     "crates/toasty-driver-integration-suite-macros",
 
     # Examples
-    "examples/composite-key",
-    "examples/hello-toasty",
-    "examples/todo-with-cli",
-    "examples/user-has-one-profile",
+    "examples/cms-article-fields",
+    "examples/crm-embedded",
+    "examples/forum-relationships",
+    "examples/product-search",
+    "examples/quickstart-blog",
+    "examples/service-ops",
+    "examples/store-operations",
 
     # Tests
     "tests",
-
-    # Benchmarks
-    "benches",
+    "tests/tests/fixtures/post",
+    "tests/tests/fixtures/user",
+]
+# Driver crates are excluded so `cargo test` (no `-p`/`--workspace`) and CI's
+# per-driver jobs don't pull in *every* driver's crate-local unit tests. Each
+# driver-specific CI job runs `cargo test -p toasty-driver-<driver>` separately
+# to cover its own tests. `cargo test --workspace` still selects every member.
+default-members = [
+    "crates/toasty",
+    "crates/toasty-cli",
+    "crates/toasty-core",
+    "crates/toasty-macros",
+    "crates/toasty-sql",
+    "crates/toasty-driver-integration-suite",
+    "crates/toasty-driver-integration-suite-macros",
+    "examples/cms-article-fields",
+    "examples/crm-embedded",
+    "examples/forum-relationships",
+    "examples/product-search",
+    "examples/quickstart-blog",
+    "examples/service-ops",
+    "examples/store-operations",
+    "tests",
+    "tests/tests/fixtures/post",
+    "tests/tests/fixtures/user",
 ]
 
 [workspace.package]
@@ -38,7 +64,7 @@ homepage = "https://github.com/tokio-rs/toasty"
 keywords = ["orm", "database", "sql", "nosql", "async"]
 license = "MIT"
 repository = "https://github.com/tokio-rs/toasty"
-rust-version = "1.94"
+rust-version = "1.95"
 categories = ["database"]
 
 [workspace.lints.rust]
@@ -46,20 +72,21 @@ unsafe_code = "deny"
 
 [workspace.dependencies]
 # Toasty crates
-toasty = { version = "0.3.0", path = "crates/toasty" }
-toasty-cli = { version = "0.3.0", path = "crates/toasty-cli" }
-toasty-core = { version = "0.3.0", path = "crates/toasty-core" }
-toasty-macros = { version = "0.3.0", path = "crates/toasty-macros" }
-toasty-sql = { version = "0.3.0", path = "crates/toasty-sql" }
+toasty = { version = "0.8.0", path = "crates/toasty" }
+toasty-cli = { version = "0.8.0", path = "crates/toasty-cli" }
+toasty-core = { version = "0.8.0", path = "crates/toasty-core" }
+toasty-macros = { version = "0.8.0", path = "crates/toasty-macros" }
+toasty-sql = { version = "0.8.0", path = "crates/toasty-sql" }
 # Driver implementations
-toasty-driver-dynamodb = { version = "0.3.0", path = "crates/toasty-driver-dynamodb" }
-toasty-driver-mysql = { version = "0.3.0", path = "crates/toasty-driver-mysql" }
-toasty-driver-postgresql = { version = "0.3.0", path = "crates/toasty-driver-postgresql" }
-toasty-driver-sqlite = { version = "0.3.0", path = "crates/toasty-driver-sqlite" }
+toasty-driver-dynamodb = { version = "0.8.0", path = "crates/toasty-driver-dynamodb" }
+toasty-driver-mysql = { version = "0.8.0", path = "crates/toasty-driver-mysql" }
+toasty-driver-postgresql = { version = "0.8.0", path = "crates/toasty-driver-postgresql" }
+toasty-driver-sqlite = { version = "0.8.0", path = "crates/toasty-driver-sqlite" }
+toasty-driver-turso = { version = "0.8.0", path = "crates/toasty-driver-turso" }
 
 # Driver integration test suite dependencies
-toasty-driver-integration-suite = { version = "0.3.0", path = "crates/toasty-driver-integration-suite" }
-toasty-driver-integration-suite-macros = { version = "0.3.0", path = "crates/toasty-driver-integration-suite-macros" }
+toasty-driver-integration-suite = { version = "0.8.0", path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { version = "0.8.0", path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
 assert-struct = "0.4.2"
@@ -75,19 +102,25 @@ clap = { version = "4.6.0", features = ["derive"] }
 console = "0.16"
 deadpool = { version = "0.13", features = ["rt_tokio_1"] }
 dialoguer = "0.12"
+expect-test = "1.5"
+hashbrown = "0.17"
 heck = "0.5.0"
 indexmap = "2.13.0"
 index_vec = "0.1.4"
 inventory = "0.3.24"
+# Must match the version used by `postgres-protocol` (the postgres driver
+# iterates over its `FallibleIterator` types); do not bump independently.
+fallible-iterator = "0.2"
 jiff = "0.2.23"
-lru = "0.16.3"
-mysql_async = { version = "0.36.2", default-features = false, features = [
+lru = "0.18.0"
+mysql_async = { version = "0.37.0", default-features = false, features = [
     "minimal",
     "native-tls-tls",
 ] }
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
-postgres = "0.19.13"
+percent-encoding = "2.3.2"
+postgres-protocol = "0.6.11"
 postgres-types = { version = "0.2.13", features = ["with-uuid-1", "array-impls"] }
 pretty_assertions = "1.4.1"
 proc-macro2 = "1.0.106"
@@ -105,8 +138,14 @@ tempfile = "3.27"
 proptest = "1"
 tokio = { version = "1.50", features = ["full"] }
 tokio-postgres = "0.7.17"
+tokio-postgres-rustls = { version = "0.14.0", default-features = false }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+rustls-platform-verifier = "0.7"
+rustls-pemfile = "2"
+rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
+turso = "0.6"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"

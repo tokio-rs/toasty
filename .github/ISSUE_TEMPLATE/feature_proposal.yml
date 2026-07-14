@@ -1,0 +1,61 @@
+name: Feature proposal
+description: Propose a new feature or a change to the public API.
+labels: ["C-feature"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this template for new features, public-API changes, or anything
+        that affects driver implementations.
+
+        Read [`CONTRIBUTING.md`](https://github.com/tokio-rs/toasty/blob/main/CONTRIBUTING.md)
+        first. The recommended path for non-trivial work:
+
+        1. Open this issue to discuss the problem and the rough shape of the
+           solution.
+        2. Land a PR that adds an entry to `docs/dev/roadmap/` and a
+           guide-level design doc to `docs/dev/design/` (start from
+           [`_template.md`](https://github.com/tokio-rs/toasty/blob/main/docs/dev/design/_template.md)).
+        3. Land the implementation in a follow-up PR.
+
+        Small or obvious changes can skip straight to a PR. A PR opened
+        without prior discussion may be closed without detailed review.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: |
+        What problem are you trying to solve? Who is affected — Toasty users,
+        driver implementors, or both? Concrete examples help.
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: |
+        A sketch of the user-facing API, behavior, and any driver-facing
+        requirements. If the proposal lands on the roadmap, you'll expand
+        this into a guide-level design doc.
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Other approaches you weighed and why you discarded them.
+
+  - type: dropdown
+    id: scope
+    attributes:
+      label: Scope
+      description: Best guess at the size of this change.
+      options:
+        - Small — fits in one PR, no design doc needed
+        - Medium — touches public API or one subsystem
+        - Large — cross-cutting, multi-driver, or new subsystem
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: Additional context
+      description: Related issues, prior discussion, links to similar features in other ORMs, etc.

@@ -1,4 +1,4 @@
-use std::collections::{HashMap, hash_map};
+use hashbrown::{HashMap, hash_map};
 
 use by_address::ByAddress;
 use toasty_core::{schema::db::Index, stmt};
@@ -44,16 +44,41 @@ impl<'stmt> IndexMatch<'stmt> {
                     self.match_expr_binary_op_column(cx, lhs, expr, e.op)
                 }
                 (_, stmt::Expr::Reference(rhs @ stmt::ExprReference::Column(_))) => {
-                    self.match_expr_binary_op_column(cx, rhs, expr, e.op.commute())
+                    match e.op.commute() {
+                        Some(op) => self.match_expr_binary_op_column(cx, rhs, expr, op),
+                        // Non-commutative op (e.g. `5 - col`) cannot be normalized
+                        // to column-on-left form; it's not an index match.
+                        None => false,
+                    }
                 }
-                _ => todo!("expr={:#?}", expr),
+                // Neither operand is a bare column reference (e.g.
+                // `LENGTH(col) = 0` for `Vec::is_empty()`). This shape is not
+                // an index match — return false rather than failing.
+                _ => false,
+            },
+            StartsWith(e) => match &*e.expr {
+                stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
+                    // starts_with is a range-like condition: valid on sort key, not partition key
+                    self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Ge)
+                }
+                _ => false,
+            },
+            Between(e) => match &*e.expr {
+                stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
+                    // between is a range condition: valid on sort key, not partition key
+                    self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Ge)
+                }
+                _ => false,
             },
             InList(e) => self.match_expr_in_list(cx, &e.expr, expr),
             IsNull(e) => match &*e.expr {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
                     self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)
                 }
-                _ => todo!("expr={:#?}", expr),
+                // Not a bare column reference (e.g. a projection into a
+                // `#[document]` column). Not an index match — return false
+                // rather than failing.
+                _ => false,
             },
             And(and_exprs) => {
                 let matched = self.match_all_restrictions(cx, and_exprs);
@@ -224,10 +249,11 @@ impl<'stmt> IndexMatch<'stmt> {
         op: stmt::BinaryOp,
     ) -> bool {
         let mut matched = false;
+        let resolved_col = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
 
         for (i, index_column) in self.index.columns.iter().enumerate() {
             // Check that the path matches an index column
-            if cx.resolve_expr_reference(expr_ref).as_column_unwrap().id != index_column.column {
+            if resolved_col.id != index_column.column {
                 continue;
             }
 
@@ -279,7 +305,7 @@ impl<'stmt> IndexMatch<'stmt> {
         use stmt::Expr::*;
 
         match expr {
-            InList(_) | IsNull(_) | Not(_) => {
+            StartsWith(_) | Between(_) | InList(_) | IsNull(_) | Like(_) | Not(_) => {
                 if self
                     .columns
                     .iter()
@@ -310,7 +336,9 @@ impl<'stmt> IndexMatch<'stmt> {
                         ) => stmt::ExprBinaryOp {
                             lhs: Box::new(stmt::Expr::Reference(*column_ref)),
                             rhs: Box::new(lhs.clone()),
-                            op: binary_op.op.commute(),
+                            op: binary_op.op.commute().expect(
+                                "partition filter normalization reached a non-commutative op",
+                            ),
                         }
                         .into(),
                         _ => todo!("binary_op={binary_op:#?}"),

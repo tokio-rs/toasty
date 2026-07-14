@@ -1,10 +1,118 @@
 use super::{
     Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
-    TransactWriteItem, Update, UpdateItemError, Value, db, ddb_expression, ddb_key, operation,
-    stmt,
+    TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
+    ddb_key, item_to_record, operation, stmt,
 };
+use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
+
+/// An [`stmt::Input`] that resolves column references into a record produced
+/// by `item_to_record`. After lowering, filter/condition expressions reference
+/// columns via `ExprReference::Column { column: i }` where `i` is the column's
+/// position in `table.columns`. `item_to_record` builds the record in that same
+/// order, so indexing by `col.column` gives the right field.
+struct RecordInput<'a>(&'a stmt::ValueRecord);
+
+impl stmt::Input for RecordInput<'_> {
+    fn resolve_ref(
+        &mut self,
+        expr_reference: &stmt::ExprReference,
+        projection: &stmt::Projection,
+    ) -> Option<stmt::Expr> {
+        match expr_reference {
+            stmt::ExprReference::Column(col) => {
+                Some(self.0.fields[col.column].entry(projection).to_expr())
+            }
+            _ => None,
+        }
+    }
+}
+
+/// Returns `true` when the DynamoDB `ConditionalCheckFailedException` was
+/// caused by the *filter* expression failing (→ return count 0), or `false`
+/// when it was caused by the *condition* expression failing (→ return an
+/// error).
+///
+/// Strategy: DynamoDB returns the item's pre-update state when
+/// `ReturnValuesOnConditionCheckFailure::AllOld` is set.  We evaluate the
+/// filter in-memory against that snapshot:
+///
+/// - No old item → the record didn't exist; the filter trivially didn't
+///   match → count 0.
+/// - Old item exists, filter evaluates to `false` → count 0.
+/// - Old item exists, filter evaluates to `true` (or there is no filter) →
+///   the condition must have been the failing part → error.
+fn filter_failed(
+    old_item: Option<&HashMap<String, AttributeValue>>,
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+) -> bool {
+    let Some(filter) = filter else {
+        return false;
+    };
+
+    let Some(item) = old_item else {
+        return true;
+    };
+
+    let record = item_to_record(item, table.columns.iter()).unwrap();
+    !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
+}
+
+/// Interprets a `ConditionalCheckFailedException` from `update_item`: if the
+/// filter was the failing predicate return an empty response; otherwise surface
+/// a condition error.
+fn on_update_item_condition_failed(
+    item: Option<&HashMap<String, AttributeValue>>,
+    message: Option<&str>,
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+    returning: bool,
+) -> Result<ExecResponse> {
+    if filter_failed(item, table, filter) {
+        if returning {
+            Ok(ExecResponse::empty_value_stream())
+        } else {
+            Ok(ExecResponse::count(0))
+        }
+    } else {
+        Err(toasty_core::Error::condition_failed(
+            message
+                .unwrap_or("DynamoDB conditional check failed")
+                .to_string(),
+        ))
+    }
+}
+
+/// Interprets a `TransactionCanceledException` from `transact_write_items`:
+/// if every `ConditionalCheckFailed` reason was caused by the filter return an
+/// empty response; if any was caused by the condition expression surface a
+/// condition error.
+fn on_transaction_cancelled(
+    reasons: &[CancellationReason],
+    message: Option<&str>,
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+    returning: bool,
+) -> Result<ExecResponse> {
+    let any_condition_failed = reasons
+        .iter()
+        .filter(|r| r.code() == Some("ConditionalCheckFailed"))
+        .any(|r| !filter_failed(r.item(), table, filter));
+
+    if any_condition_failed {
+        Err(toasty_core::Error::condition_failed(
+            message
+                .unwrap_or("DynamoDB conditional check failed")
+                .to_string(),
+        ))
+    } else if returning {
+        Ok(ExecResponse::empty_value_stream())
+    } else {
+        Ok(ExecResponse::count(0))
+    }
+}
 
 impl Connection {
     pub(crate) async fn exec_update_by_key(
@@ -37,43 +145,118 @@ impl Connection {
         let filter_expression = match (&op.filter, &op.condition) {
             (Some(filter), None) => Some(ddb_expression(&cx, &mut expr_attrs, false, filter)),
             (None, Some(condition)) => Some(ddb_expression(&cx, &mut expr_attrs, false, condition)),
-            (Some(_), Some(_)) => {
-                todo!()
+            (Some(filter), Some(condition)) => {
+                let f = ddb_expression(&cx, &mut expr_attrs, false, filter);
+                let c = ddb_expression(&cx, &mut expr_attrs, false, condition);
+                Some(format!("({f}) AND ({c})"))
             }
             _ => None,
         };
 
         let mut update_expression_set = String::new();
         let mut update_expression_remove = String::new();
-        let mut ret = vec![];
+
+        // Bound value per assigned column index. Used below to seed the
+        // returning-row placeholders; only the transact path (which can't
+        // fetch `UPDATED_NEW`) actually surfaces these seeds.
+        let mut bound_values: HashMap<usize, &stmt::Value> = HashMap::new();
 
         for (projection, assignment) in op.assignments.iter() {
-            let stmt::Assignment::Set(expr) = assignment else {
-                todo!("only SET supported in DynamoDB; got {assignment:#?}");
+            enum AssignKind {
+                Set,
+                Append,
+                Add,
+                Subtract,
+            }
+
+            let (expr, kind) = match assignment {
+                stmt::Assignment::Set(expr) => (expr, AssignKind::Set),
+                stmt::Assignment::Append(expr) => (expr, AssignKind::Append),
+                stmt::Assignment::Add(expr) => (expr, AssignKind::Add),
+                stmt::Assignment::Subtract(expr) => (expr, AssignKind::Subtract),
+                stmt::Assignment::Remove(_)
+                | stmt::Assignment::Pop
+                | stmt::Assignment::RemoveAt(_) => {
+                    // Collection mutations are gated by `vec_remove` /
+                    // `vec_pop` / `vec_remove_at` capability flags, all
+                    // currently `false` on DynamoDB. The lowering rejects
+                    // them before reaching the driver; if one slips through
+                    // it's a bug worth surfacing.
+                    unreachable!(
+                        "collection mutation reached DynamoDB driver — capability flag is off; assignment={assignment:#?}",
+                    )
+                }
+                _ => todo!(
+                    "only SET / APPEND / ADD / SUBTRACT supported in DynamoDB; got {assignment:#?}"
+                ),
             };
             let value = match expr {
                 stmt::Expr::Value(value) => value,
                 _ => todo!("op = {:#?}", op),
             };
 
-            ret.push(value.clone());
+            let column_ref = table.resolve(projection);
+            bound_values.insert(column_ref.id.index, value);
 
-            let column = expr_attrs.column(table.resolve(projection)).to_string();
+            let column = expr_attrs.column(column_ref).to_string();
 
-            if value.is_null() {
-                if !update_expression_remove.is_empty() {
-                    write!(update_expression_remove, ", ").unwrap();
+            match kind {
+                AssignKind::Append => {
+                    // `stmt::push` / `stmt::extend` on a `Vec<scalar>` field
+                    // map to DynamoDB's `list_append(path, :v)`, which
+                    // atomically concatenates the given List `L` onto the
+                    // existing list attribute (creating the attribute if
+                    // absent).
+                    let value = expr_attrs.value(value);
+
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(
+                        update_expression_set,
+                        "{column} = list_append(if_not_exists({column}, :__toasty_empty_list), {value})"
+                    )
+                    .unwrap();
+                    expr_attrs.attr_values.insert(
+                        ":__toasty_empty_list".to_string(),
+                        aws_sdk_dynamodb::types::AttributeValue::L(Vec::new()),
+                    );
                 }
+                AssignKind::Set if value.is_null() => {
+                    if !update_expression_remove.is_empty() {
+                        write!(update_expression_remove, ", ").unwrap();
+                    }
 
-                write!(update_expression_remove, "{column}").unwrap();
-            } else {
-                let value = expr_attrs.value(value);
-
-                if !update_expression_set.is_empty() {
-                    write!(update_expression_set, ", ").unwrap();
+                    write!(update_expression_remove, "{column}").unwrap();
                 }
+                AssignKind::Set => {
+                    let value = expr_attrs.value(value);
 
-                write!(update_expression_set, "{column} = {value}").unwrap();
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(update_expression_set, "{column} = {value}").unwrap();
+                }
+                // `stmt::add` / `stmt::subtract` / `stmt::increment` /
+                // `stmt::decrement` map to DynamoDB's `SET col = col + :v` /
+                // `SET col = col - :v` form, which atomically combines the
+                // bound value with the current attribute value.
+                AssignKind::Add | AssignKind::Subtract => {
+                    let op = if matches!(kind, AssignKind::Add) {
+                        "+"
+                    } else {
+                        "-"
+                    };
+                    let value = expr_attrs.value(value);
+
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(update_expression_set, "{column} = {column} {op} {value}").unwrap();
+                }
             }
         }
 
@@ -87,11 +270,233 @@ impl Connection {
             write!(update_expression, " REMOVE {update_expression_remove}").unwrap();
         }
 
+        // Build the returning row from the explicit column list the engine
+        // requested — exactly these columns, in this order. The engine inlines
+        // `Set` values at plan time and injects the engine-managed `#[version]`
+        // bump outside the returning projection, so neither appears in
+        // `op.returning`; the driver no longer has to infer the row shape from
+        // the assignments. Each column is seeded with a placeholder, then
+        // refreshed below from the `UPDATED_NEW` response with its post-update
+        // value.
+        let mut ret = vec![];
+        let mut refresh_after_update: Vec<(usize, &db::Column)> = vec![];
+
+        if let Some(columns) = &op.returning {
+            for column_id in columns {
+                let column = schema.column(*column_id);
+                let placeholder = bound_values
+                    .get(&column_id.index)
+                    .map(|value| (*value).clone())
+                    .unwrap_or(stmt::Value::Null);
+                refresh_after_update.push((ret.len(), column));
+                ret.push(placeholder);
+            }
+        }
+
+        // The seeded placeholders are not the post-update column values.
+        // Request `UPDATED_NEW` so the response carries the actual new
+        // attribute values and we can replace the placeholders below.
+        let needs_updated_new = !refresh_after_update.is_empty();
+
         match &unique_indices[..] {
             [] => {
-                if op.keys.len() == 1 {
-                    let key = &op.keys[0];
+                // The engine shreds multi-key updates into one op per key, so a
+                // non-unique-index update always carries exactly one key.
+                let [key] = &op.keys[..] else {
+                    panic!("expected exactly 1 key, got {}", op.keys.len());
+                };
 
+                let res = self
+                    .client
+                    .update_item()
+                    .table_name(&table.name)
+                    .set_key(Some(ddb_key(table, key)))
+                    .set_update_expression(Some(update_expression))
+                    .set_expression_attribute_names(Some(expr_attrs.attr_names))
+                    .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
+                        Some(expr_attrs.attr_values)
+                    } else {
+                        None
+                    })
+                    .set_condition_expression(filter_expression)
+                    .return_values_on_condition_check_failure(
+                        ReturnValuesOnConditionCheckFailure::AllOld,
+                    )
+                    .set_return_values(needs_updated_new.then_some(ReturnValue::UpdatedNew))
+                    .send()
+                    .await;
+
+                let output = match res {
+                    Ok(output) => output,
+                    Err(SdkError::ServiceError(e)) => {
+                        if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
+                            return on_update_item_condition_failed(
+                                cce.item(),
+                                cce.message.as_deref(),
+                                table,
+                                op.filter.as_ref(),
+                                op.returning.is_some(),
+                            );
+                        }
+                        return Err(toasty_core::Error::driver_operation_failed(
+                            SdkError::ServiceError(e),
+                        ));
+                    }
+                    Err(other) => {
+                        return Err(toasty_core::Error::driver_operation_failed(other));
+                    }
+                };
+
+                if needs_updated_new && let Some(attrs) = output.attributes() {
+                    for (idx, column) in &refresh_after_update {
+                        if let Some(attr) = attrs.get(&column.name) {
+                            ret[*idx] = Value::from_ddb(&column.ty, attr).into_inner();
+                        }
+                    }
+                }
+            }
+            [index] => {
+                // Updating a unique-indexed column requires synchronizing the separate
+                // DynamoDB index table. Because DynamoDB has no native unique-constraint
+                // support, Toasty maintains a dedicated table per unique index and keeps
+                // it in sync manually.
+                //
+                // The sequence is:
+                //   1. Read the current unique column value(s) with get_item.
+                //   2. Compare against the incoming assignment to decide whether the
+                //      unique value actually changed.
+                //   3a. Unchanged → plain update_item; no index surgery needed.
+                //   3b. Changed (or first-time set) → transact_write_items that
+                //       atomically: updates the base table, deletes the old index entry
+                //       (if any), and inserts the new index entry with an
+                //       attribute_not_exists guard to enforce uniqueness.
+                //
+                // Concurrency contract:
+                //   The get_item in step 1 is NOT atomic with the write in step 3. A
+                //   concurrent writer could mutate the unique column between those two
+                //   operations.
+                //
+                //   Changed branch (3b): the base-table Update inside the transaction
+                //   carries `<unique_col> = :old_value` as its condition, so a
+                //   concurrent mutation is detected atomically at commit time and the
+                //   transaction is cancelled.
+                //
+                //   Unchanged branch (3a): the only concurrent-safety guarantee comes
+                //   from op.condition (e.g. a #[version] check). If the model has no
+                //   version field, a narrow ABA race is possible where a concurrent
+                //   writer changes the unique column away and back between the read and
+                //   the update_item, leaving the index in an inconsistent state. Models
+                //   with mutable unique fields should use #[version] to close this gap.
+                assert!(op.keys.len() == 1, "TODO: handle multiple keys");
+                let key = &op.keys[0];
+
+                let mut transact_items = vec![];
+
+                let attributes_to_get = index
+                    .columns
+                    .iter()
+                    .map(|index_column| index_column.table_column(schema).name.clone())
+                    .collect();
+
+                // Records that have had their unique values set initially
+                // (previously were null).
+                let mut set_unique_attrs = HashMap::new();
+                // Records that have had their unique attribute updated from a
+                // previous value.
+                let mut updated_unique_attrs = HashMap::new();
+
+                // Read the current unique column value(s) to determine whether index
+                // surgery is needed. Version is not fetched here; it is verified
+                // atomically at write time via op.condition.
+                let res = self
+                    .client
+                    .get_item()
+                    .table_name(&table.name)
+                    .set_key(Some(ddb_key(table, key)))
+                    .set_attributes_to_get(Some(attributes_to_get))
+                    .send()
+                    .await
+                    .map_err(toasty_core::Error::driver_operation_failed)?;
+
+                let Some(mut curr_unique_values) = res.item else {
+                    return Err(toasty_core::Error::record_not_found(format!(
+                        "table={} key={:?}",
+                        table.name, key
+                    )));
+                };
+
+                // Resolve each unique-column assignment to a concrete post-update
+                // value. `Set(v)` resolves to `v`; `Add(x)` / `Subtract(x)` resolve
+                // to `prev ± x` using the GET result above. The main-table update
+                // expression keeps the atomic `SET col = col ± :v` form, so
+                // atomicity is preserved by the transaction's `<col> = <prev>`
+                // condition below — if the column changed concurrently, the
+                // transaction is cancelled before the precomputed index entry is
+                // written.
+                let mut resolved_unique_values = HashMap::new();
+                for index_column in &index.columns {
+                    let column = index_column.table_column(schema);
+                    for (projection, assignment) in op.assignments.iter() {
+                        if *projection != column.id.index {
+                            continue;
+                        }
+                        let resolved = match assignment {
+                            stmt::Assignment::Set(stmt::Expr::Value(v)) => v.clone(),
+                            stmt::Assignment::Add(stmt::Expr::Value(delta))
+                            | stmt::Assignment::Subtract(stmt::Expr::Value(delta)) => {
+                                let prev = curr_unique_values.get(&column.name).ok_or_else(
+                                    || {
+                                        toasty_core::Error::invalid_statement(format!(
+                                            "arithmetic update on unique column {} requires an existing value",
+                                            column.name,
+                                        ))
+                                    },
+                                )?;
+                                let prev_value = Value::from_ddb(&column.ty, prev).into_inner();
+                                let result = match assignment {
+                                    stmt::Assignment::Add(_) => prev_value.checked_add(delta),
+                                    _ => prev_value.checked_sub(delta),
+                                };
+                                result.ok_or_else(|| {
+                                    toasty_core::Error::invalid_statement(format!(
+                                        "arithmetic overflow on unique column {}",
+                                        column.name,
+                                    ))
+                                })?
+                            }
+                            other => {
+                                return Err(toasty_core::Error::invalid_statement(format!(
+                                    "unsupported assignment on unique column {}: {other:#?}",
+                                    column.name,
+                                )));
+                            }
+                        };
+                        resolved_unique_values.insert(column.id, resolved);
+                    }
+                }
+
+                for index_column in &index.columns {
+                    let column = index_column.table_column(schema);
+
+                    for (projection, _) in op.assignments.iter() {
+                        if *projection != column.id.index {
+                            continue;
+                        }
+                        let new_value = &resolved_unique_values[&column.id];
+                        if let Some(prev) = curr_unique_values.remove(&column.name) {
+                            if Value::from_ddb(&column.ty, &prev).into_inner() != *new_value {
+                                updated_unique_attrs.insert(column.id, prev);
+                            }
+                        } else {
+                            set_unique_attrs.insert(column.id, ());
+                        }
+                    }
+                }
+
+                if updated_unique_attrs.is_empty() && set_unique_attrs.is_empty() {
+                    // The unique column appears in the assignment but its value is
+                    // unchanged — no index table surgery needed; just update the
+                    // main table directly.
                     let res = self
                         .client
                         .update_item()
@@ -112,158 +517,19 @@ impl Connection {
                         .await;
 
                     if let Err(SdkError::ServiceError(e)) = res {
-                        if let UpdateItemError::ConditionalCheckFailedException(_e) = e.err() {
-                            /*
-                            let record =
-                                item_to_record(e.item.as_ref().unwrap(), table.columns.iter())
-                                    .unwrap();
-                                */
-
-                            // First, if there is a filter, we need to check if the
-                            // filter matches it. If it doesn't, then the update did
-                            // not apply to the record.
-                            if op.filter.is_some() {
-                                // TODO: can't support both for now
-                                assert!(op.condition.is_none());
-                                /*
-                                if !filter.eval_bool(&record).unwrap() {
-                                    return Ok(stmt::ValueStream::new());
-                                }
-                                */
-                                return if op.returning {
-                                    Ok(ExecResponse::empty_value_stream())
-                                } else {
-                                    Ok(ExecResponse::count(0))
-                                };
-                            }
-
-                            // At this point, there should be a condition
-                            // let condition = op.condition.as_ref().unwrap();
-                            assert!(op.condition.is_some());
-
-                            // The condition must not have matched...
-                            // TODO: can we check?
-                            // assert!(!condition.eval_bool(&record).unwrap());
-
-                            return Err(toasty_core::Error::condition_failed(
-                                "DynamoDB conditional check failed",
-                            ));
+                        if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
+                            return on_update_item_condition_failed(
+                                cce.item(),
+                                cce.message.as_deref(),
+                                table,
+                                op.filter.as_ref(),
+                                op.returning.is_some(),
+                            );
                         }
-
                         return Err(toasty_core::Error::driver_operation_failed(
                             SdkError::ServiceError(e),
                         ));
                     }
-                } else {
-                    let mut transact_items = vec![];
-
-                    for key in &op.keys {
-                        transact_items.push(
-                            TransactWriteItem::builder()
-                                .update(
-                                    Update::builder()
-                                        .table_name(&table.name)
-                                        .set_key(Some(ddb_key(table, key)))
-                                        .set_update_expression(Some(update_expression.clone()))
-                                        .set_expression_attribute_names(Some(
-                                            expr_attrs.attr_names.clone(),
-                                        ))
-                                        .set_expression_attribute_values(
-                                            if !expr_attrs.attr_values.is_empty() {
-                                                Some(expr_attrs.attr_values.clone())
-                                            } else {
-                                                None
-                                            },
-                                        )
-                                        .set_condition_expression(filter_expression.clone())
-                                        .return_values_on_condition_check_failure(
-                                            ReturnValuesOnConditionCheckFailure::AllOld,
-                                        )
-                                        .build()
-                                        .unwrap(),
-                                )
-                                .build(),
-                        );
-                    }
-
-                    let res = self
-                        .client
-                        .transact_write_items()
-                        .set_transact_items(Some(transact_items))
-                        .send()
-                        .await;
-
-                    if let Err(SdkError::ServiceError(e)) = res {
-                        todo!("err={:#?}", e);
-                    }
-                }
-            }
-            [index] => {
-                assert!(op.keys.len() == 1, "TODO: handle multiple keys");
-                let key = &op.keys[0];
-
-                let mut transact_items = vec![];
-
-                let attributes_to_get = index
-                    .columns
-                    .iter()
-                    .map(|index_column| index_column.table_column(schema).name.clone())
-                    .collect();
-
-                // Records that have had their unique values set initially
-                // (previously were null).
-                let mut set_unique_attrs = HashMap::new();
-                // Records that have had their unique attribute update from a
-                // previous value.
-                let mut updated_unique_attrs = HashMap::new();
-
-                // First, we need to read the current value for the unique attributes
-                let res = self
-                    .client
-                    .get_item()
-                    .table_name(&table.name)
-                    .set_key(Some(ddb_key(table, key)))
-                    .set_attributes_to_get(Some(attributes_to_get))
-                    .send()
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-
-                let Some(mut curr_unique_values) = res.item else {
-                    return Err(toasty_core::Error::record_not_found(format!(
-                        "table={} key={:?}",
-                        table.name, key
-                    )));
-                };
-
-                // Which unique attributes are being updated
-                for index_column in &index.columns {
-                    let column = index_column.table_column(schema);
-
-                    for (projection, assignment) in op.assignments.iter() {
-                        if *projection == column.id.index {
-                            if let Some(prev) = curr_unique_values.remove(&column.name) {
-                                let stmt::Assignment::Set(expr) = assignment else {
-                                    todo!(
-                                        "only SET supported in DynamoDB unique check; got {assignment:#?}"
-                                    );
-                                };
-                                let stmt::Expr::Value(value) = expr else {
-                                    todo!()
-                                };
-
-                                // TODO: this probably could be made cheaper if needed
-                                if Value::from_ddb(&column.ty, &prev).into_inner() != *value {
-                                    updated_unique_attrs.insert(column.id, prev);
-                                }
-                            } else {
-                                set_unique_attrs.insert(column.id, ());
-                            }
-                        }
-                    }
-                }
-
-                if updated_unique_attrs.is_empty() && set_unique_attrs.is_empty() {
-                    todo!()
                 } else {
                     assert!(
                         updated_unique_attrs.len() + set_unique_attrs.len() == 1,
@@ -289,7 +555,6 @@ impl Connection {
                         condition_expression.push_str(&filter_expression);
                     }
 
-                    // Insert the update op
                     transact_items.push(
                         TransactWriteItem::builder()
                             .update(
@@ -308,8 +573,6 @@ impl Connection {
 
                     for (column_id, prev) in &updated_unique_attrs {
                         let name = &schema.column(*column_id).name;
-                        // Delete the index entry for all rows that are updating
-                        // their unique attribute.
                         transact_items.push(
                             TransactWriteItem::builder()
                                 .delete(
@@ -326,26 +589,11 @@ impl Connection {
                     for column_id in updated_unique_attrs.keys().chain(set_unique_attrs.keys()) {
                         let name = &schema.column(*column_id).name;
 
-                        // Create the new entry if there is one.
                         let mut index_insert_items = HashMap::new();
 
                         for index_column in &index.columns {
                             let column = index_column.table_column(schema);
-                            let (_, assignment) = op
-                                .assignments
-                                .iter()
-                                .find(|(projection, _)| **projection == column_id.index)
-                                .unwrap();
-
-                            let stmt::Assignment::Set(expr) = assignment else {
-                                todo!(
-                                    "only SET supported in DynamoDB index insert; got {assignment:#?}"
-                                );
-                            };
-                            let stmt::Expr::Value(value) = expr else {
-                                todo!()
-                            };
-
+                            let value = &resolved_unique_values[column_id];
                             if !value.is_null() {
                                 index_insert_items.insert(
                                     column.name.clone(),
@@ -359,7 +607,6 @@ impl Connection {
                             continue;
                         }
 
-                        // Add primary keys
                         for (index, column) in table.primary_key_columns().enumerate() {
                             let key_field = match key {
                                 stmt::Value::Record(record) => &record[index],
@@ -371,10 +618,8 @@ impl Connection {
                             );
                         }
 
-                        // Ensure value is unique
                         let mut expression_names = HashMap::new();
                         let expr_name = format!("#{name}");
-
                         let condition_expression = format!("attribute_not_exists({expr_name})");
                         expression_names.insert(expr_name, name.clone());
 
@@ -400,20 +645,125 @@ impl Connection {
                         .send()
                         .await;
 
-                    if let Err(e) = res {
-                        return Err(toasty_core::Error::driver_operation_failed(e));
+                    if let Err(SdkError::ServiceError(e)) = res {
+                        if let TransactWriteItemsError::TransactionCanceledException(tce) = e.err()
+                        {
+                            return on_transaction_cancelled(
+                                tce.cancellation_reasons(),
+                                tce.message(),
+                                table,
+                                op.filter.as_ref(),
+                                op.returning.is_some(),
+                            );
+                        }
+                        return Err(toasty_core::Error::driver_operation_failed(
+                            SdkError::ServiceError(e),
+                        ));
                     }
                 }
             }
             _ => todo!(),
         }
 
-        // If we get here, then returning should be false
-        Ok(if op.returning {
+        // If we get here, then returning should be None
+        Ok(if op.returning.is_some() {
             let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
             ExecResponse::value_stream(values)
         } else {
             ExecResponse::count(op.keys.len() as _)
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::filter_failed;
+    use crate::db;
+    use aws_sdk_dynamodb::types::AttributeValue;
+    use std::collections::HashMap;
+    use toasty_core::{
+        schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},
+        stmt::{self, BinaryOp, Expr, ExprBinaryOp, ExprColumn, ExprReference},
+    };
+
+    fn make_table() -> db::Table {
+        db::Table {
+            id: TableId(0),
+            name: "t".to_string(),
+            columns: vec![Column {
+                id: ColumnId {
+                    table: TableId(0),
+                    index: 0,
+                },
+                name: "status".to_string(),
+                ty: stmt::Type::String,
+                storage_ty: Type::Text,
+                nullable: false,
+                primary_key: false,
+                auto_increment: false,
+                versionable: false,
+            }],
+            primary_key: PrimaryKey {
+                columns: vec![],
+                index: IndexId {
+                    table: TableId(0),
+                    index: 0,
+                },
+            },
+            indices: vec![],
+        }
+    }
+
+    /// Build `status = "active"` as a column-reference filter expression.
+    fn status_eq_active() -> Expr {
+        Expr::BinaryOp(ExprBinaryOp {
+            lhs: Box::new(Expr::Reference(ExprReference::Column(ExprColumn {
+                nesting: 0,
+                table: 0,
+                column: 0, // column 0 in the table → "status"
+            }))),
+            op: BinaryOp::Eq,
+            rhs: Box::new(Expr::Value(stmt::Value::String("active".to_string()))),
+        })
+    }
+
+    fn item_with_status(status: &str) -> HashMap<String, AttributeValue> {
+        HashMap::from([("status".to_string(), AttributeValue::S(status.to_string()))])
+    }
+
+    // No filter at all: the condition expression failed → caller should surface an error,
+    // not return count 0.  filter_failed must return false.
+    #[test]
+    fn no_filter_returns_false() {
+        let table = make_table();
+        assert!(!filter_failed(None, &table, None));
+    }
+
+    // Filter present but item is missing (record was deleted between read and check):
+    // treat as "filter didn't match" → count 0.
+    #[test]
+    fn missing_item_with_filter_returns_true() {
+        let table = make_table();
+        let filter = status_eq_active();
+        assert!(filter_failed(None, &table, Some(&filter)));
+    }
+
+    // Item present and filter matches: the filter was NOT the failing part, so the
+    // condition expression must have failed → return false (surface an error).
+    #[test]
+    fn matching_item_returns_false() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let item = item_with_status("active");
+        assert!(!filter_failed(Some(&item), &table, Some(&filter)));
+    }
+
+    // Item present but filter does not match: the filter failed → count 0.
+    #[test]
+    fn non_matching_item_returns_true() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let item = item_with_status("inactive");
+        assert!(filter_failed(Some(&item), &table, Some(&filter)));
     }
 }

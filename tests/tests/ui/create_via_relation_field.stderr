@@ -1,0 +1,14 @@
+error[E0599]: no method named `tags` found for struct `UserCreate` in the current scope
+  --> tests/ui/create_via_relation_field.rs:46:9
+   |
+ 2 |   struct User {
+   |          ---- method `tags` not found for this struct
+...
+43 |       let _ = toasty::create!(User {
+   |  _____________________________-
+44 | |         id: 1,
+45 | |         name: "Alice",
+46 | |         tags: [{ id: 1, name: "urgent" }],
+   | |        -^^^^ method not found in `UserCreate`
+   | |________|
+   |

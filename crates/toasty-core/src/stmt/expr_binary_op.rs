@@ -76,6 +76,16 @@ impl Expr {
     pub fn ne(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
         Expr::binary_op(lhs, BinaryOp::Ne, rhs)
     }
+
+    /// Creates an arithmetic addition (`+`) expression.
+    pub fn add(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
+        Expr::binary_op(lhs, BinaryOp::Add, rhs)
+    }
+
+    /// Creates an arithmetic subtraction (`-`) expression.
+    pub fn sub(lhs: impl Into<Self>, rhs: impl Into<Self>) -> Self {
+        Expr::binary_op(lhs, BinaryOp::Sub, rhs)
+    }
 }
 
 impl From<ExprBinaryOp> for Expr {

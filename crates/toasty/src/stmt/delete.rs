@@ -30,7 +30,7 @@ use toasty_core::stmt;
 /// # db.push_schema().await.unwrap();
 /// use toasty::stmt::{List, Query};
 ///
-/// Query::<List<User>>::filter(User::fields().id().eq(1))
+/// Query::<List<User>>::all().filter(User::fields().id().eq(1))
 ///     .delete()
 ///     .exec(&mut db)
 ///     .await
@@ -64,6 +64,16 @@ impl<T> Delete<T> {
             untyped,
             _p: PhantomData,
         }
+    }
+}
+
+impl<T> Delete<T> {
+    /// Attach a condition to this delete. The condition is evaluated after the
+    /// filter; if it fails, the operation returns an error (unlike a filter
+    /// failure, which silently produces count 0).
+    pub fn set_condition(mut self, condition: toasty_core::stmt::Condition) -> Self {
+        self.untyped.condition = condition;
+        self
     }
 }
 

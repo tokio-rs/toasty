@@ -118,7 +118,10 @@ impl Expand<'_> {
                 };
                 let index_tokenized = util::int(index);
                 Some(quote! {
-                    s.stmt.set(#index_tokenized, <#ty as #toasty::IntoExpr<#ty>>::into_expr(#expr));
+                    s.stmt.set(
+                        #index_tokenized,
+                        <#ty as #toasty::IntoExpr<<#ty as #toasty::Field>::ExprTarget>>::into_expr(#expr),
+                    );
                 })
             })
             .collect()
@@ -142,7 +145,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
 
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
+                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
                                 // Silences unused field warning when the field is set on creation.
                                 if false {
                                     let m = <#model_ident as #toasty::Load>::load(Default::default()).unwrap();
@@ -155,65 +158,44 @@ impl Expand<'_> {
                         }
                     }
                     FieldTy::HasMany(rel) => {
-                        let singular = &rel.singular.ident;
-                        let plural = name;
-                        let ty = &rel.ty;
+                        if rel.via.is_some() {
+                            TokenStream::new()
+                        } else {
+                            let plural = name;
+                            let ty = &rel.ty;
+                            let target = quote!(<#ty as #toasty::RelationManyField>::Target);
 
-                        quote! {
-                            #vis fn #singular(mut self, #singular: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                                self.stmt.insert(#index_tokenized, #singular.into_expr());
-                                self
-                            }
-
-                            #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<<#ty as #toasty::Relation>::Model>>) -> Self {
-                                self.stmt.insert_all(#index_tokenized, #plural.into_expr());
-                                self
+                            quote! {
+                                #vis fn #plural(mut self, #plural: impl #toasty::IntoExpr<#toasty::List<#target>>) -> Self {
+                                    self.stmt.insert_all(#index_tokenized, #plural.into_expr());
+                                    self
+                                }
                             }
                         }
                     }
                     FieldTy::HasOne(rel) => {
-                        let ty = &rel.ty;
-
-                        quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::Relation>::Expr>) -> Self {
-                                self.stmt.set(#index_tokenized, #name.into_expr());
-                                self
-                            }
-                        }
-                    }
-                    FieldTy::Primitive(ty) if field.attrs.serialize.is_some() => {
-                        let serialize_attr = field.attrs.serialize.as_ref().unwrap();
-                        if serialize_attr.nullable {
-                            // For nullable serialized fields, extract the inner type from Option<T>
-                            // Accept Option<InnerType>, serialize Some(v) as JSON, None as NULL
-                            quote! {
-                                #vis fn #name(mut self, #name: #ty) -> Self {
-                                    match &#name {
-                                        Some(v) => {
-                                            let json = #toasty::serde_json::to_string(v).expect("failed to serialize");
-                                            self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
-                                        }
-                                        None => {
-                                            self.stmt.set(#index_tokenized, #toasty::stmt::Expr::<String>::from_untyped(#toasty::core::stmt::Expr::Value(#toasty::core::stmt::Value::Null)));
-                                        }
-                                    }
-                                    self
-                                }
-                            }
+                        if rel.via.is_some() {
+                            TokenStream::new()
                         } else {
-                            // Non-nullable serialized field: accept T directly, serialize to JSON
+                            let ty = &rel.ty;
+
                             quote! {
-                                #vis fn #name(mut self, #name: #ty) -> Self {
-                                    let json = #toasty::serde_json::to_string(&#name).expect("failed to serialize");
-                                    self.stmt.set(#index_tokenized, <String as #toasty::IntoExpr<String>>::into_expr(json));
+                                #vis fn #name(mut self, #name: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Expr>) -> Self {
+                                    self.stmt.set(#index_tokenized, #name.into_expr());
                                     self
                                 }
                             }
                         }
                     }
                     FieldTy::Primitive(ty) => {
+                        // The setter binds through `<Ty as Field>::ExprTarget`
+                        // — `Self` for scalars/`Vec<u8>`/struct embeds,
+                        // `List<T>` for `Vec<T>` collections (scalar or embed).
+                        // A `#[document]` field uses the same `Field` impl as
+                        // its column-expanded form; only the schema `field_ty`
+                        // differs.
                         quote! {
-                            #vis fn #name(mut self, #name: impl #toasty::IntoExpr<#ty>) -> Self {
+                            #vis fn #name(mut self, #name: impl IntoExpr<FieldExprTarget<#ty>>) -> Self {
                                 self.stmt.set(#index_tokenized, #name.into_expr());
                                 self
                             }

@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_all(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -15,7 +15,7 @@ pub async fn query_macro_all(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_eq(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -33,7 +33,7 @@ pub async fn query_macro_filter_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -50,7 +50,7 @@ pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -81,7 +81,7 @@ pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -102,7 +102,7 @@ pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_or(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -119,7 +119,7 @@ pub async fn query_macro_filter_or(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -136,7 +136,7 @@ pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -159,7 +159,7 @@ pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_external_ref(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -177,7 +177,7 @@ pub async fn query_macro_filter_external_ref(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_external_expr(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -198,7 +198,7 @@ pub async fn query_macro_filter_external_expr(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -221,7 +221,7 @@ pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -245,34 +245,22 @@ pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        name: String,
-
-        #[index]
-        active: bool,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
-
-    toasty::create!(Item::[
-        { name: "on", active: true },
-        { name: "off", active: false },
+    toasty::create!(Widget::[
+        { label: "on", count: 0, active: true, description: "" },
+        { label: "off", count: 0, active: false, description: "" },
     ])
     .exec(&mut db)
     .await?;
 
-    let items = toasty::query!(Item filter .active == true)
+    let widgets = toasty::query!(Widget filter .active == true)
         .exec(&mut db)
         .await?;
 
-    assert_struct!(items, [{ name: "on" }]);
+    assert_struct!(widgets, [{ label: "on" }]);
 
     Ok(())
 }
@@ -653,7 +641,7 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -671,7 +659,7 @@ pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -690,7 +678,7 @@ pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -708,34 +696,25 @@ pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn query_macro_filter_in_list_by_pk(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Item {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(Item)).await;
-
-    // Create several items and collect their IDs
+    // Create several users and collect their IDs
     let mut ids = Vec::new();
     for name in ["Alice", "Bob", "Carl", "Diana"] {
-        let item = Item::create().name(name).exec(&mut db).await?;
-        ids.push(item.id);
+        let user = User::create().name(name).exec(&mut db).await?;
+        ids.push(user.id);
     }
 
     // Batch fetch a subset by primary key using IN
     let target_ids = vec![ids[0], ids[2]]; // Alice and Carl
-    let items = toasty::query!(Item filter .id IN #target_ids)
+    let users = toasty::query!(User filter .id IN #target_ids)
         .exec(&mut db)
         .await?;
 
-    assert_eq!(items.len(), 2);
-    assert_struct!(items, #({ name: "Alice" }, { name: "Carl" }));
+    assert_eq!(users.len(), 2);
+    assert_struct!(users, #({ name: "Alice" }, { name: "Carl" }));
 
     Ok(())
 }

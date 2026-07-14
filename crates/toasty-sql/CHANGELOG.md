@@ -7,6 +7,89 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.7.0...toasty-sql-v0.8.0) - 2026-07-06
+
+### Added
+
+- Support #[version] attribute for optimistic concurrency on SQL drivers ([#1065])
+- Automatically infer key and references in #[belongs_to] relationships ([#1063])
+- Add escape support for LIKE expressions ([#1039])
+- Add BETWEEN operator to query DSL ([#1029])
+
+### Fixed
+
+- Fix incorrect results in OR'd variant filters when decoding enums ([#1067])
+
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1039]: https://github.com/tokio-rs/toasty/pull/1039
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1065]: https://github.com/tokio-rs/toasty/pull/1065
+[#1067]: https://github.com/tokio-rs/toasty/pull/1067
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.6.1...toasty-sql-v0.7.0) - 2026-05-29
+
+### Added
+
+- [**breaking**] add increment, decrement, add, subtract update ops ([#979](https://github.com/tokio-rs/toasty/pull/979))
+- add raw SQL execution API ([#965](https://github.com/tokio-rs/toasty/pull/965))
+- *(turso)* add Turso driver with TransactionMode-aware concurrent writes ([#938](https://github.com/tokio-rs/toasty/pull/938))
+- add TransactionMode for SQLite lock-acquisition control ([#931](https://github.com/tokio-rs/toasty/pull/931))
+- *(sql)* serialize `SELECT DISTINCT` ([#934](https://github.com/tokio-rs/toasty/pull/934))
+- *(core)* add INNER join variant + broaden serializer test coverage ([#922](https://github.com/tokio-rs/toasty/pull/922))
+
+### Fixed
+
+- make starts_with case-sensitive on SQLite and MySQL ([#983](https://github.com/tokio-rs/toasty/pull/983))
+- cap SQLite auto-increment integer storage at 4 bytes ([#969](https://github.com/tokio-rs/toasty/pull/969))
+- [**breaking**] scope `.ilike()` to PostgreSQL and document operator pass-through ([#937](https://github.com/tokio-rs/toasty/pull/937))
+
+### Other
+
+- [**breaking**] require Deferred relation fields ([#954](https://github.com/tokio-rs/toasty/pull/954))
+- rename types in toasty_core::schema::diff ([#942](https://github.com/tokio-rs/toasty/pull/942))
+- *(core)* [**breaking**] move schema diff types to `schema::diff` ([#929](https://github.com/tokio-rs/toasty/pull/929))
+- consolidate migration types in toasty crate and reorganize db::diff API ([#928](https://github.com/tokio-rs/toasty/pull/928))
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.6.0...toasty-sql-v0.6.1) - 2026-05-16
+
+- Internal improvements only
+
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.5.0...toasty-sql-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add Vec<scalar> field support on PostgreSQL, MySQL, SQLite, and DynamoDB ([#866], [#872])
+- Add mutating methods for Vec<scalar> fields: push, extend, clear, pop, remove_at, remove ([#880], [#887])
+- Bind IN-list as a single array parameter on PostgreSQL ([#818])
+- Add ilike() filter method ([#801])
+
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#866]: https://github.com/tokio-rs/toasty/pull/866
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#880]: https://github.com/tokio-rs/toasty/pull/880
+[#887]: https://github.com/tokio-rs/toasty/pull/887
+
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.4.0...toasty-sql-v0.5.0) - 2026-04-27
+
+### Added
+
+- String prefix filtering with begins_with and LIKE operators ([#745])
+- Optimistic concurrency control for DynamoDB with #[version] attribute ([#694])
+- Float type support ([#687])
+- Native database enum type support for embedded enums ([#665])
+
+### Fixed
+
+- Column rename emits last when combined with other schema changes ([#769])
+- Removed unnecessary unique index on primary key ([#682])
+
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#682]: https://github.com/tokio-rs/toasty/pull/682
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+[#694]: https://github.com/tokio-rs/toasty/pull/694
+[#745]: https://github.com/tokio-rs/toasty/pull/745
+[#769]: https://github.com/tokio-rs/toasty/pull/769
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.2.0...toasty-sql-v0.3.0) - 2026-04-03
 
 ### Other

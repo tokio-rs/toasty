@@ -19,8 +19,8 @@ tokio = { version = "1", features = ["full"] }
 ```
 
 The `sqlite` feature enables the SQLite driver. Toasty also supports
-`postgresql`, `mysql`, and `dynamodb` — swap the feature flag to use a
-different database.
+`postgresql`, `mysql`, `turso`, and `dynamodb` — swap the feature flag to use
+a different database.
 
 ## Define a model
 
@@ -127,3 +127,10 @@ connection URLs, and supported databases.
 `db.push_schema()` creates all tables and indexes defined by your models. See
 [Migrations and Schema Management](./schema-management.md) for more on managing
 your database schema.
+
+> **Runnable example:** [`service-ops`] lays out a lib + binaries project with connection pooling, tracing, and the `toasty-cli` migration workflow.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`service-ops`]: https://github.com/tokio-rs/toasty/tree/main/examples/service-ops

@@ -29,6 +29,11 @@ pub struct DeleteByKey {
     /// Optional filter expression. When set, only records whose key is in
     /// `keys` *and* that match this filter are deleted.
     pub filter: Option<stmt::Expr>,
+
+    /// Optional condition for optimistic locking. When set, the delete fails
+    /// with an error if the condition is not met (unlike `filter`, which
+    /// silently skips non-matching records).
+    pub condition: Option<stmt::Expr>,
 }
 
 impl From<DeleteByKey> for Operation {

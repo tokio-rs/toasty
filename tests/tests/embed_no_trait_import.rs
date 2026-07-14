@@ -1,11 +1,11 @@
 //! Test that `#[derive(Embed)]` works without importing toasty traits.
 //!
 //! Regression test: the generated code previously called `Self::id()` inside
-//! the `Primitive` impl without qualifying the `Register` trait, causing
+//! the embed impl without qualifying the trait, causing
 //! `E0599: no variant or associated item named 'id'` when the user had not
-//! imported `toasty::Register` (or `toasty::Embed`) in scope.
+//! imported `toasty::Embed` in scope.
 
-// Intentionally no `use toasty::*` or `use toasty::{Embed, Register}` here.
+// Intentionally no `use toasty::*` or `use toasty::Embed` here.
 
 #[derive(Debug, toasty::Embed)]
 pub enum AuthTokenKind {

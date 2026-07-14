@@ -40,6 +40,11 @@ assert!(result.is_err());
 The `.delete()` method consumes the instance (takes `self`, not `&self`). After
 deleting, you can no longer use the instance.
 
+If the model has a [`#[version]`](./concurrency-control.md) field, instance
+deletes are version-guarded: Toasty conditions the deletion on the version the
+instance was last loaded with. If a concurrent writer has modified the record
+in the meantime, `.exec()` returns an error.
+
 The generated SQL looks like:
 
 ```sql
@@ -115,3 +120,7 @@ For a model with `#[key]` on `id` and `#[unique]` on `email`, Toasty generates:
   given email. Executes immediately.
 - Any query builder's `.delete()` method — converts the query into a delete
   statement.
+
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

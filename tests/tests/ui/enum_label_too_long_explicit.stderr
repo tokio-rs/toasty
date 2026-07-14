@@ -1,0 +1,5 @@
+error: variant label "this_label_is_way_too_long_and_exceeds_the_sixty_three_byte_maximum_allowed" is 75 bytes; maximum is 63
+ --> tests/ui/enum_label_too_long_explicit.rs:5:5
+  |
+5 |     Inactive,
+  |     ^^^^^^^^

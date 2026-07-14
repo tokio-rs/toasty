@@ -1,14 +1,15 @@
 #![allow(unused_variables)]
 
 use super::{
-    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAnd, ExprAny, ExprArg,
-    ExprBinaryOp, ExprCast, ExprColumn, ExprError, ExprExists, ExprFunc, ExprInList,
-    ExprInSubquery, ExprIsNull, ExprIsVariant, ExprLet, ExprList, ExprMap, ExprMatch, ExprNot,
-    ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStmt, Filter,
-    FuncCount, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor,
-    LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning, Select, Source,
-    SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor, TableRef,
-    TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
+    ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
+    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
+    ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
+    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
+    FuncCount, FuncJsonExtract, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
+    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
+    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
+    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -97,6 +98,27 @@ pub trait Visit {
         visit_expr_arg(self, i);
     }
 
+    /// Visits an [`ExprAnyOp`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_any_op`].
+    fn visit_expr_any_op(&mut self, i: &ExprAnyOp) {
+        visit_expr_any_op(self, i);
+    }
+
+    /// Visits an [`ExprAllOp`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_all_op`].
+    fn visit_expr_all_op(&mut self, i: &ExprAllOp) {
+        visit_expr_all_op(self, i);
+    }
+
+    /// Visits an [`ExprBetween`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_between`].
+    fn visit_expr_between(&mut self, i: &ExprBetween) {
+        visit_expr_between(self, i);
+    }
+
     /// Visits an [`ExprBinaryOp`] node.
     ///
     /// The default implementation delegates to [`visit_expr_binary_op`].
@@ -153,6 +175,13 @@ pub trait Visit {
         visit_expr_func_count(self, i);
     }
 
+    /// Visits a [`FuncJsonExtract`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_func_json_extract`].
+    fn visit_expr_func_json_extract(&mut self, i: &FuncJsonExtract) {
+        visit_expr_func_json_extract(self, i);
+    }
+
     /// Visits a [`FuncLastInsertId`] node.
     ///
     /// The default implementation delegates to [`visit_expr_func_last_insert_id`].
@@ -174,11 +203,25 @@ pub trait Visit {
         visit_expr_in_subquery(self, i);
     }
 
+    /// Visits an [`ExprIntersects`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_intersects`].
+    fn visit_expr_intersects(&mut self, i: &ExprIntersects) {
+        visit_expr_intersects(self, i);
+    }
+
     /// Visits an [`ExprIsNull`] node.
     ///
     /// The default implementation delegates to [`visit_expr_is_null`].
     fn visit_expr_is_null(&mut self, i: &ExprIsNull) {
         visit_expr_is_null(self, i);
+    }
+
+    /// Visits an [`ExprIsSuperset`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_is_superset`].
+    fn visit_expr_is_superset(&mut self, i: &ExprIsSuperset) {
+        visit_expr_is_superset(self, i);
     }
 
     /// Visits an [`ExprIsVariant`] node.
@@ -188,11 +231,25 @@ pub trait Visit {
         visit_expr_is_variant(self, i);
     }
 
+    /// Visits an [`ExprLength`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_length`].
+    fn visit_expr_length(&mut self, i: &ExprLength) {
+        visit_expr_length(self, i);
+    }
+
     /// Visits an [`ExprLet`] node.
     ///
     /// The default implementation delegates to [`visit_expr_let`].
     fn visit_expr_let(&mut self, i: &ExprLet) {
         visit_expr_let(self, i);
+    }
+
+    /// Visits an [`ExprLike`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_like`].
+    fn visit_expr_like(&mut self, i: &ExprLike) {
+        visit_expr_like(self, i);
     }
 
     /// Visits an [`ExprMap`] node.
@@ -256,6 +313,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_set_op`].
     fn visit_expr_set_op(&mut self, i: &ExprSetOp) {
         visit_expr_set_op(self, i);
+    }
+
+    /// Visits an [`ExprStartsWith`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_starts_with`].
+    fn visit_expr_starts_with(&mut self, i: &ExprStartsWith) {
+        visit_expr_starts_with(self, i);
     }
 
     /// Visits an [`ExprStmt`] node.
@@ -526,6 +590,18 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_arg(&mut **self, i);
     }
 
+    fn visit_expr_any_op(&mut self, i: &ExprAnyOp) {
+        Visit::visit_expr_any_op(&mut **self, i);
+    }
+
+    fn visit_expr_all_op(&mut self, i: &ExprAllOp) {
+        Visit::visit_expr_all_op(&mut **self, i);
+    }
+
+    fn visit_expr_between(&mut self, i: &ExprBetween) {
+        Visit::visit_expr_between(&mut **self, i);
+    }
+
     fn visit_expr_binary_op(&mut self, i: &ExprBinaryOp) {
         Visit::visit_expr_binary_op(&mut **self, i);
     }
@@ -558,6 +634,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_func_count(&mut **self, i);
     }
 
+    fn visit_expr_func_json_extract(&mut self, i: &FuncJsonExtract) {
+        Visit::visit_expr_func_json_extract(&mut **self, i);
+    }
+
     fn visit_expr_in_list(&mut self, i: &ExprInList) {
         Visit::visit_expr_in_list(&mut **self, i);
     }
@@ -566,16 +646,32 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_in_subquery(&mut **self, i);
     }
 
+    fn visit_expr_intersects(&mut self, i: &ExprIntersects) {
+        Visit::visit_expr_intersects(&mut **self, i);
+    }
+
     fn visit_expr_is_null(&mut self, i: &ExprIsNull) {
         Visit::visit_expr_is_null(&mut **self, i);
+    }
+
+    fn visit_expr_is_superset(&mut self, i: &ExprIsSuperset) {
+        Visit::visit_expr_is_superset(&mut **self, i);
     }
 
     fn visit_expr_is_variant(&mut self, i: &ExprIsVariant) {
         Visit::visit_expr_is_variant(&mut **self, i);
     }
 
+    fn visit_expr_length(&mut self, i: &ExprLength) {
+        Visit::visit_expr_length(&mut **self, i);
+    }
+
     fn visit_expr_let(&mut self, i: &ExprLet) {
         Visit::visit_expr_let(&mut **self, i);
+    }
+
+    fn visit_expr_like(&mut self, i: &ExprLike) {
+        Visit::visit_expr_like(&mut **self, i);
     }
 
     fn visit_expr_map(&mut self, i: &ExprMap) {
@@ -612,6 +708,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_expr_set_op(&mut self, i: &ExprSetOp) {
         Visit::visit_expr_set_op(&mut **self, i);
+    }
+
+    fn visit_expr_starts_with(&mut self, i: &ExprStartsWith) {
+        Visit::visit_expr_starts_with(&mut **self, i);
     }
 
     fn visit_expr_stmt(&mut self, i: &ExprStmt) {
@@ -757,9 +857,16 @@ where
     V: Visit + ?Sized,
 {
     match node {
-        Assignment::Set(expr) | Assignment::Insert(expr) | Assignment::Remove(expr) => {
+        Assignment::Set(expr)
+        | Assignment::Insert(expr)
+        | Assignment::Remove(expr)
+        | Assignment::Append(expr)
+        | Assignment::RemoveAt(expr)
+        | Assignment::Add(expr)
+        | Assignment::Subtract(expr) => {
             v.visit_expr(expr);
         }
+        Assignment::Pop => {}
         Assignment::Batch(entries) => {
             for entry in entries {
                 visit_assignment(v, entry);
@@ -800,20 +907,28 @@ where
     V: Visit + ?Sized,
 {
     match node {
+        Expr::AllOp(expr) => v.visit_expr_all_op(expr),
         Expr::And(expr) => v.visit_expr_and(expr),
         Expr::Any(expr) => v.visit_expr_any(expr),
+        Expr::AnyOp(expr) => v.visit_expr_any_op(expr),
         Expr::Arg(expr) => v.visit_expr_arg(expr),
+        Expr::Between(expr) => v.visit_expr_between(expr),
         Expr::BinaryOp(expr) => v.visit_expr_binary_op(expr),
         Expr::Cast(expr) => v.visit_expr_cast(expr),
         Expr::Default => v.visit_expr_default(),
         Expr::Error(expr) => v.visit_expr_error(expr),
         Expr::Exists(expr) => v.visit_expr_exists(expr),
         Expr::Func(expr) => v.visit_expr_func(expr),
+        Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
+        Expr::Intersects(expr) => v.visit_expr_intersects(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
+        Expr::IsSuperset(expr) => v.visit_expr_is_superset(expr),
         Expr::IsVariant(expr) => v.visit_expr_is_variant(expr),
+        Expr::Length(expr) => v.visit_expr_length(expr),
         Expr::Let(expr) => v.visit_expr_let(expr),
+        Expr::Like(expr) => v.visit_expr_like(expr),
         Expr::Map(expr) => v.visit_expr_map(expr),
         Expr::Match(expr) => v.visit_expr_match(expr),
         Expr::Not(expr) => v.visit_expr_not(expr),
@@ -822,6 +937,7 @@ where
         Expr::Record(expr) => v.visit_expr_record(expr),
         Expr::Reference(expr) => v.visit_expr_reference(expr),
         Expr::List(expr) => v.visit_expr_list(expr),
+        Expr::StartsWith(expr) => v.visit_expr_starts_with(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
         Expr::Value(expr) => v.visit_value(expr),
     }
@@ -854,6 +970,24 @@ where
 
 /// Default traversal for [`ExprBinaryOp`] nodes. Visits left and right operands.
 pub fn visit_expr_binary_op<V>(v: &mut V, node: &ExprBinaryOp)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
+/// Default traversal for [`ExprAnyOp`] nodes. Visits left and right operands.
+pub fn visit_expr_any_op<V>(v: &mut V, node: &ExprAnyOp)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
+/// Default traversal for [`ExprAllOp`] nodes. Visits left and right operands.
+pub fn visit_expr_all_op<V>(v: &mut V, node: &ExprAllOp)
 where
     V: Visit + ?Sized,
 {
@@ -907,8 +1041,17 @@ where
 {
     match node {
         ExprFunc::Count(func) => v.visit_expr_func_count(func),
+        ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id(func),
     }
+}
+
+/// Default traversal for [`FuncJsonExtract`] nodes. Visits the base expression.
+pub fn visit_expr_func_json_extract<V>(v: &mut V, node: &FuncJsonExtract)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.base);
 }
 
 /// Default traversal for [`FuncCount`] nodes. Visits the optional argument and filter expressions.
@@ -933,6 +1076,16 @@ where
     // FuncLastInsertId has no fields to visit
 }
 
+/// Default traversal for [`ExprBetween`] nodes. Visits the expression, low, and high bounds.
+pub fn visit_expr_between<V>(v: &mut V, node: &ExprBetween)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+    v.visit_expr(&node.low);
+    v.visit_expr(&node.high);
+}
+
 /// Default traversal for [`ExprInList`] nodes. Visits the expression and list.
 pub fn visit_expr_in_list<V>(v: &mut V, node: &ExprInList)
 where
@@ -951,8 +1104,34 @@ where
     v.visit_stmt_query(&node.query);
 }
 
+/// Default traversal for [`ExprIntersects`] nodes. Visits left and right operands.
+pub fn visit_expr_intersects<V>(v: &mut V, node: &ExprIntersects)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
 /// Default traversal for [`ExprIsNull`] nodes. Visits the inner expression.
 pub fn visit_expr_is_null<V>(v: &mut V, node: &ExprIsNull)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+}
+
+/// Default traversal for [`ExprIsSuperset`] nodes. Visits left and right operands.
+pub fn visit_expr_is_superset<V>(v: &mut V, node: &ExprIsSuperset)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.lhs);
+    v.visit_expr(&node.rhs);
+}
+
+/// Default traversal for [`ExprLength`] nodes. Visits the inner expression.
+pub fn visit_expr_length<V>(v: &mut V, node: &ExprLength)
 where
     V: Visit + ?Sized,
 {
@@ -976,6 +1155,15 @@ where
         v.visit_expr(binding);
     }
     v.visit_expr(&node.body);
+}
+
+/// Default traversal for [`ExprLike`] nodes. Visits the attribute expression and pattern.
+pub fn visit_expr_like<V>(v: &mut V, node: &ExprLike)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+    v.visit_expr(&node.pattern);
 }
 
 /// Default traversal for [`ExprMap`] nodes. Visits base and map expressions.
@@ -1058,6 +1246,7 @@ where
         ExprSet::Select(expr) => v.visit_stmt_select(expr),
         ExprSet::SetOp(expr) => v.visit_expr_set_op(expr),
         ExprSet::Update(expr) => v.visit_stmt_update(expr),
+        ExprSet::Delete(expr) => v.visit_stmt_delete(expr),
         ExprSet::Values(expr) => v.visit_values(expr),
         ExprSet::Insert(expr) => v.visit_stmt_insert(expr),
     }
@@ -1071,6 +1260,15 @@ where
     for operand in &node.operands {
         v.visit_expr_set(operand);
     }
+}
+
+/// Default traversal for [`ExprStartsWith`] nodes. Visits the attribute expression and prefix.
+pub fn visit_expr_starts_with<V>(v: &mut V, node: &ExprStartsWith)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.expr);
+    v.visit_expr(&node.prefix);
 }
 
 /// Default traversal for [`ExprStmt`] nodes. Visits the inner statement.
@@ -1127,7 +1325,7 @@ where
 {
     v.visit_source_table_id(&node.table);
     match &node.constraint {
-        JoinOp::Left(expr) => v.visit_expr(expr),
+        JoinOp::Inner(expr) | JoinOp::Left(expr) => v.visit_expr(expr),
     }
 }
 
@@ -1209,8 +1407,8 @@ where
             }
         }
         Returning::Changed => {}
+        Returning::Project(expr) => v.visit_expr(expr),
         Returning::Expr(expr) => v.visit_expr(expr),
-        Returning::Value(expr) => v.visit_expr(expr),
     }
 }
 
@@ -1286,6 +1484,7 @@ where
 {
     v.visit_source(&node.from);
     v.visit_filter(&node.filter);
+    v.visit_condition(&node.condition);
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);

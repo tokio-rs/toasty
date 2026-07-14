@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{Assignment, Source, Statement, UpdateTarget},
+    stmt::{Assignment, Expr, Source, Statement, UpdateTarget},
 };
 
 #[driver_test(id(ID))]
@@ -133,8 +133,9 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 target: UpdateTarget::Table(== item_table_id),
-                assignments: #{ [1]: Assignment::Set(== "updated!")},
+                assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
             }),
+            params: [{ value: == "updated!" }, ..],
             ret: None,
         }));
     } else {
@@ -143,7 +144,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
             keys.len(): 1,
             assignments: #{ [1]: Assignment::Set(== "updated!")},
             filter: None,
-            returning: false,
+            returning: None,
         }));
     }
     assert_struct!(resp, { values: Rows::Count(1) });
@@ -196,19 +197,9 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn required_field_create_without_setting(test: &mut Test) {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[allow(dead_code)]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Try creating a user without setting the name field results in an error
     assert_err!(User::create().exec(&mut db).await);
@@ -401,21 +392,9 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email_with_name))]
 pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        email: String,
-
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let mut user = User::create()
         .email("user@example.com")
@@ -440,19 +419,43 @@ pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email_with_name))]
+pub async fn unique_index_set_same_value(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let mut user = toasty::create!(User {
+        email: "user@example.com",
+        name: "John Doe",
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Update both fields, but set email to the same value it already has.
+    // This exercises the path where the unique column appears in op.assignments
+    // but its new value equals the current stored value.
+    user.update()
+        .email("user@example.com")
+        .name("Jane Doe")
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!("user@example.com", user.email);
+    assert_eq!("Jane Doe", user.name);
+
+    let u = User::get_by_id(&mut db, &user.id).await?;
+    assert_eq!(user.email, u.email);
+    assert_eq!(user.name, u.name);
+
+    // Lookup by email still works
+    let u = User::get_by_email(&mut db, &user.email).await?;
+    assert_eq!(user.name, u.name);
+
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
 pub async fn update_multiple_fields(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let mut user = User::create()
         .name("John Doe")
@@ -488,19 +491,9 @@ pub async fn update_multiple_fields(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn update_and_delete_snippets(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[allow(dead_code)]
-        name: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     let user = User::create().name("John Doe").exec(&mut db).await?;
 

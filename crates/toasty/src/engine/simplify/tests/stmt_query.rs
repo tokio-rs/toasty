@@ -5,7 +5,7 @@ use toasty_core::stmt::{self, Direction, Limit, LimitOffset, OrderBy, OrderByExp
 #[test]
 fn empty_values_query_is_empty() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `stmt_query_is_empty(values([])) → true`
     let query = Query::values(Values::default());
@@ -15,7 +15,7 @@ fn empty_values_query_is_empty() {
 #[test]
 fn non_empty_values_query_not_empty() {
     let schema = test_schema();
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `stmt_query_is_empty(values([1])) → false`
     let mut values = Values::default();
@@ -27,7 +27,7 @@ fn non_empty_values_query_not_empty() {
 #[test]
 fn simplify_clears_order_by_and_limit() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `simplify_stmt_query_when_empty(empty_query)` clears `order_by` and
     // `limit`
@@ -52,7 +52,7 @@ fn simplify_clears_order_by_and_limit() {
 #[test]
 fn non_empty_query_keeps_order_by_and_limit() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `simplify_stmt_query_when_empty(non_empty_query)` keeps `order_by`
     // and `limit`

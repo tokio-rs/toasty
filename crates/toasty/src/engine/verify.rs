@@ -1,32 +1,45 @@
+use crate::Result;
 use crate::engine::Engine;
+use toasty_core::Error;
 use toasty_core::driver::Capability;
 use toasty_core::{
-    schema::{Schema, app::ModelId},
+    schema::{
+        Schema,
+        app::{self, ModelId},
+    },
     stmt::{self, Statement, Visit},
 };
 
-struct Verify<'a> {
+struct Verify<'a, 'v> {
     schema: &'a Schema,
     capability: &'a Capability,
+    error: &'v mut Option<Error>,
 }
 
-struct VerifyExpr<'a> {
+struct VerifyExpr<'a, 'v> {
     schema: &'a Schema,
     capability: &'a Capability,
     model: ModelId,
+    error: &'v mut Option<Error>,
 }
 
 impl Engine {
-    pub(crate) fn verify(&self, stmt: &Statement) {
+    pub(crate) fn verify(&self, stmt: &Statement) -> Result<()> {
+        let mut error = None;
         Verify {
             schema: &self.schema,
             capability: self.capability,
+            error: &mut error,
         }
         .visit(stmt);
+        match error {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
     }
 }
 
-impl stmt::Visit for Verify<'_> {
+impl stmt::Visit for Verify<'_, '_> {
     fn visit_stmt_delete(&mut self, i: &stmt::Delete) {
         stmt::visit::visit_stmt_delete(self, i);
 
@@ -34,6 +47,7 @@ impl stmt::Visit for Verify<'_> {
             schema: self.schema,
             model: i.from.model_id_unwrap(),
             capability: self.capability,
+            error: &mut *self.error,
         }
         .verify_filter(&i.filter);
     }
@@ -43,6 +57,7 @@ impl stmt::Visit for Verify<'_> {
 
         self.verify_single_query(i);
         self.verify_offset_key_matches_order_by(i);
+        self.verify_limit_is_integer_literal(i);
     }
 
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
@@ -52,6 +67,7 @@ impl stmt::Visit for Verify<'_> {
             schema: self.schema,
             model: i.source.model_id_unwrap(),
             capability: self.capability,
+            error: &mut *self.error,
         }
         .verify_filter(&i.filter);
     }
@@ -81,13 +97,14 @@ impl stmt::Visit for Verify<'_> {
             schema: self.schema,
             model: i.target.model_id_unwrap(),
             capability: self.capability,
+            error: &mut *self.error,
         };
 
         verify_expr.visit_stmt_update(i);
     }
 }
 
-impl Verify<'_> {
+impl Verify<'_, '_> {
     fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
         let Some(stmt::Limit::Cursor(cursor)) = i.limit.as_ref() else {
             return;
@@ -96,6 +113,13 @@ impl Verify<'_> {
         let Some(after) = cursor.after.as_ref() else {
             return;
         };
+
+        // SQL requires ORDER BY for cursor-based pagination.
+        // NoSQL drivers (DynamoDB) use a driver-level cursor (ExclusiveStartKey)
+        // and do not require ORDER BY.
+        if !self.capability.sql {
+            return;
+        }
 
         let Some(order_by) = i.order_by.as_ref() else {
             todo!("specified offset but no order; stmt={i:#?}");
@@ -132,12 +156,80 @@ impl Verify<'_> {
             assert_eq!(1, values.rows.len(), "stmt={i:#?}");
         }
     }
+
+    /// Assert that every field inside a `LIMIT` clause is a `Value::I64` literal.
+    ///
+    /// Builders always normalize integer limits to `I64`, and downstream
+    /// consumers (e.g. `extract_query_pk_limit`) rely on this invariant. Any
+    /// other variant here means either a builder regressed or the AST was
+    /// hand-constructed with a non-canonical shape — both bugs we want to catch
+    /// loudly instead of silently degrading to an unbounded scan.
+    fn verify_limit_is_integer_literal(&self, i: &stmt::Query) {
+        let Some(limit) = i.limit.as_ref() else {
+            return;
+        };
+        match limit {
+            stmt::Limit::Cursor(c) => {
+                assert_i64_literal(&c.page_size, "Cursor page_size");
+            }
+            stmt::Limit::Offset(o) => {
+                assert_i64_literal(&o.limit, "Offset limit");
+                if let Some(off) = o.offset.as_ref() {
+                    assert_i64_literal(off, "Offset offset");
+                }
+            }
+        }
+    }
 }
 
-impl VerifyExpr<'_> {
+#[track_caller]
+fn assert_i64_literal(expr: &stmt::Expr, what: &str) {
+    assert!(
+        matches!(expr, stmt::Expr::Value(stmt::Value::I64(_))),
+        "{what} must be a Value::I64 literal; got {expr:#?}"
+    );
+}
+
+impl VerifyExpr<'_, '_> {
     fn verify_filter(&mut self, filter: &stmt::Filter) {
         self.assert_bool_expr(filter.as_expr());
         self.visit_expr(filter.as_expr());
+    }
+
+    fn record(&mut self, err: Error) {
+        if self.error.is_none() {
+            *self.error = Some(err);
+        }
+    }
+
+    /// Whether `expr` references a whole document-stored field of the current
+    /// model: a `#[document]` embed (`Type::Model`) or an embed collection
+    /// (`List(Model)`).
+    fn is_document_field(&self, expr: &stmt::Expr) -> bool {
+        let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = expr else {
+            return false;
+        };
+        let Some(root) = self.schema.app.model(self.model).as_root() else {
+            return false;
+        };
+        let Some(field) = root.fields.get(*index) else {
+            return false;
+        };
+        let app::FieldTy::Primitive(primitive) = &field.ty else {
+            return false;
+        };
+        let embed_id = match &primitive.ty {
+            stmt::Type::Model(id) => *id,
+            stmt::Type::List(elem) => match &**elem {
+                stmt::Type::Model(id) => *id,
+                _ => return false,
+            },
+            _ => return false,
+        };
+        matches!(
+            self.schema.app.model(embed_id),
+            app::Model::EmbeddedStruct(_)
+        )
     }
 
     fn assert_bool_expr(&self, expr: &stmt::Expr) {
@@ -145,20 +237,27 @@ impl VerifyExpr<'_> {
 
         match expr {
             And(_)
+            | AllOp(_)
+            | AnyOp(_)
+            | Between(_)
             | BinaryOp(_)
+            | Like(_)
             | InList(_)
             | InSubquery(_)
+            | Intersects(_)
             | IsNull(_)
+            | IsSuperset(_)
             | IsVariant(_)
             | Not(_)
             | Or(_)
+            | StartsWith(_)
             | Value(stmt::Value::Bool(_)) => {}
             expr => panic!("Not a bool? {expr:#?}"),
         }
     }
 }
 
-impl stmt::Visit for VerifyExpr<'_> {
+impl stmt::Visit for VerifyExpr<'_, '_> {
     fn visit_expr_and(&mut self, i: &stmt::ExprAnd) {
         stmt::visit::visit_expr_and(self, i);
 
@@ -212,6 +311,18 @@ impl stmt::Visit for VerifyExpr<'_> {
 
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         stmt::visit::visit_expr_binary_op(self, i);
+
+        // Comparing a `#[document]` field against a whole embed value is not
+        // yet supported (document value equality is planned — see the design
+        // doc). Reject it here with a clear error instead of letting it reach
+        // the engine's type inference, which cannot merge a document column
+        // with a record value.
+        if self.is_document_field(&i.lhs) || self.is_document_field(&i.rhs) {
+            self.record(Error::unsupported_feature(
+                "comparing a #[document] field to a whole value is not yet supported; \
+                 filter on individual fields inside the document instead",
+            ));
+        }
     }
 
     fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery) {
@@ -220,11 +331,184 @@ impl stmt::Visit for VerifyExpr<'_> {
         // Visit **only** the subquery expression
         self.visit(&*i.expr);
 
-        // The subquery is verified independently
+        // The subquery is verified independently, sharing the error slot so
+        // failures inside it surface to the caller.
         Verify {
             schema: self.schema,
             capability: self.capability,
+            error: &mut *self.error,
         }
         .visit(&*i.query);
+    }
+
+    fn visit_expr_like(&mut self, i: &stmt::ExprLike) {
+        // `.ilike()` is a pass-through to the database's own case-insensitive
+        // LIKE operator. Only PostgreSQL has one (`ILIKE`), so reject a
+        // case-insensitive match on any other backend rather than silently
+        // emitting plain `LIKE`, whose case behavior differs across engines.
+        if i.case_insensitive && !self.capability.native_ilike {
+            self.record(Error::unsupported_feature(
+                "ilike requires a native ILIKE operator, which only PostgreSQL provides; \
+                 use like instead",
+            ));
+        }
+        stmt::visit::visit_expr_like(self, i);
+    }
+
+    fn visit_expr_is_superset(&mut self, i: &stmt::ExprIsSuperset) {
+        if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
+            self.record(Error::unsupported_feature(
+                "is_superset on this driver requires a literal list on the right-hand side",
+            ));
+        }
+        stmt::visit::visit_expr_is_superset(self, i);
+    }
+
+    fn visit_expr_intersects(&mut self, i: &stmt::ExprIntersects) {
+        if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
+            self.record(Error::unsupported_feature(
+                "intersects on this driver requires a literal list on the right-hand side",
+            ));
+        }
+        stmt::visit::visit_expr_intersects(self, i);
+    }
+}
+
+/// True when the expression is — or will fold to — a `Value::List` of
+/// concrete values. Verify runs before the simplifier, so the user's
+/// `vec![…]` still appears as an `Expr::List` of `Expr::Value` items;
+/// `fold::expr_list` collapses that shape to `Value::List` during
+/// lowering, which is what the driver eventually sees.
+fn rhs_is_concrete_list(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Value(stmt::Value::List(_)) => true,
+        stmt::Expr::List(list) => list
+            .items
+            .iter()
+            .all(|item| matches!(item, stmt::Expr::Value(_))),
+        _ => false,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::test_util::test_schema;
+    use toasty_core::driver::Capability;
+    use toasty_core::stmt::{Expr, ExprIsSuperset, ExprList, Value};
+
+    fn verify_with(capability: &'static Capability, stmt: Statement) -> Result<()> {
+        let schema = test_schema();
+        let mut error = None;
+        Verify {
+            schema: &schema,
+            capability,
+            error: &mut error,
+        }
+        .visit(&stmt);
+        match error {
+            Some(err) => Err(err),
+            None => Ok(()),
+        }
+    }
+
+    fn verify_expr_with(capability: &'static Capability, expr: &Expr) -> Option<Error> {
+        let schema = test_schema();
+        let mut error = None;
+        // ModelId is only used by projection-checking visitor methods, which
+        // these expression-only tests don't trigger.
+        VerifyExpr {
+            schema: &schema,
+            capability,
+            model: toasty_core::schema::app::ModelId(0),
+            error: &mut error,
+        }
+        .visit_expr(expr);
+        error
+    }
+
+    fn is_superset(rhs: Expr) -> Expr {
+        Expr::IsSuperset(ExprIsSuperset {
+            lhs: Box::new(Expr::arg(0)),
+            rhs: Box::new(rhs),
+        })
+    }
+
+    #[test]
+    #[should_panic(expected = "Offset offset must be a Value::I64 literal")]
+    fn offset_with_non_i64_limit_panics() {
+        let mut query = stmt::Query::unit();
+        query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
+            limit: stmt::Value::I64(10).into(),
+            offset: Some(stmt::Value::U64(5).into()),
+        }));
+        verify_with(&Capability::SQLITE, Statement::Query(query)).unwrap();
+    }
+
+    #[test]
+    fn is_superset_literal_rhs_accepted_on_ddb() {
+        let expr = is_superset(Expr::Value(Value::List(vec![Value::I64(1)])));
+        assert!(verify_expr_with(&Capability::DYNAMODB, &expr).is_none());
+    }
+
+    #[test]
+    fn is_superset_pre_fold_expr_list_accepted_on_ddb() {
+        // Pre-simplifier shape produced by `is_superset(vec![…])`: an
+        // `Expr::List` of `Expr::Value` items. The fold pass will collapse
+        // this to `Value::List` during lowering.
+        let expr = is_superset(Expr::List(ExprList {
+            items: vec![Expr::Value(Value::I64(1)), Expr::Value(Value::I64(2))],
+        }));
+        assert!(verify_expr_with(&Capability::DYNAMODB, &expr).is_none());
+    }
+
+    #[test]
+    fn is_superset_non_literal_rhs_rejected_on_ddb() {
+        let expr = is_superset(Expr::arg(1));
+        let err = verify_expr_with(&Capability::DYNAMODB, &expr)
+            .expect("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
+    }
+
+    #[test]
+    fn is_superset_non_literal_rhs_accepted_on_sqlite() {
+        let expr = is_superset(Expr::arg(1));
+        assert!(verify_expr_with(&Capability::SQLITE, &expr).is_none());
+    }
+
+    #[test]
+    fn ilike_accepted_on_postgresql() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        assert!(verify_expr_with(&Capability::POSTGRESQL, &expr).is_none());
+    }
+
+    #[test]
+    fn ilike_rejected_on_sqlite() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        let err = verify_expr_with(&Capability::SQLITE, &expr)
+            .expect("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
+    }
+
+    #[test]
+    fn ilike_rejected_on_mysql() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        let err = verify_expr_with(&Capability::MYSQL, &expr)
+            .expect("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
+    }
+
+    #[test]
+    fn ilike_rejected_on_dynamodb() {
+        let expr = Expr::ilike(Expr::arg(0), Expr::arg(1));
+        let err = verify_expr_with(&Capability::DYNAMODB, &expr)
+            .expect("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
+    }
+
+    #[test]
+    fn case_sensitive_like_accepted_on_sqlite() {
+        let expr = Expr::like(Expr::arg(0), Expr::arg(1));
+        assert!(verify_expr_with(&Capability::SQLITE, &expr).is_none());
     }
 }

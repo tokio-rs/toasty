@@ -1,40 +1,58 @@
-use postgres::types::Type;
-use toasty_core::stmt;
+use toasty_core::schema::db;
+use tokio_postgres::types::Type;
 
-pub trait TypeExt {
-    /// Converts a Toasty type to a PostgreSQL type.
-    fn to_postgres_type(&self) -> Type;
+/// Converts a database storage type to a PostgreSQL wire type.
+pub(crate) fn to_postgres_type(ty: &db::Type) -> &'static Type {
+    match ty {
+        db::Type::Boolean => &Type::BOOL,
+        db::Type::Float(4) => &Type::FLOAT4,
+        db::Type::Float(8) => &Type::FLOAT8,
+        db::Type::Integer(1) => &Type::INT2,
+        db::Type::Integer(2) => &Type::INT2,
+        db::Type::Integer(4) => &Type::INT4,
+        db::Type::Integer(8) => &Type::INT8,
+        db::Type::UnsignedInteger(1) => &Type::INT2,
+        db::Type::UnsignedInteger(2) => &Type::INT4,
+        db::Type::UnsignedInteger(4) => &Type::INT8,
+        db::Type::UnsignedInteger(8) => &Type::INT8,
+        db::Type::Text | db::Type::VarChar(_) => &Type::TEXT,
+        db::Type::Uuid => &Type::UUID,
+        db::Type::Numeric(_) => &Type::NUMERIC,
+        db::Type::Blob | db::Type::Binary(_) => &Type::BYTEA,
+        db::Type::Timestamp(_) => &Type::TIMESTAMPTZ,
+        db::Type::Date => &Type::DATE,
+        db::Type::Time(_) => &Type::TIME,
+        db::Type::DateTime(_) => &Type::TIMESTAMP,
+        // Enum types are handled separately via the cached OID map;
+        // fall back to TEXT if we reach here (shouldn't happen in practice).
+        db::Type::Enum(_) => &Type::TEXT,
+        db::Type::List(elem) => array_type_of(to_postgres_type(elem)),
+        // `#[document]` columns: `jsonb` for the binary encoding. The text
+        // encoding (`#[document(text)]`) is not yet wired up.
+        db::Type::Document { binary: true } => &Type::JSONB,
+        db::Type::Document { binary: false } => &Type::JSON,
+        _ => todo!("to_postgres_type; db_ty={ty:#?}"),
+    }
 }
 
-impl TypeExt for stmt::Type {
-    fn to_postgres_type(&self) -> Type {
-        match self {
-            stmt::Type::Null => Type::TEXT, // Default for NULL values
-
-            stmt::Type::Bool => Type::BOOL,
-            stmt::Type::I8 => Type::INT2,
-            stmt::Type::I16 => Type::INT2,
-            stmt::Type::I32 => Type::INT4,
-            stmt::Type::I64 => Type::INT8,
-            stmt::Type::U8 => Type::INT2,
-            stmt::Type::U16 => Type::INT4,
-            stmt::Type::U32 => Type::INT8,
-            stmt::Type::U64 => Type::INT8,
-            stmt::Type::String => Type::TEXT,
-            stmt::Type::Uuid => Type::UUID,
-            stmt::Type::Bytes => Type::BYTEA,
-            #[cfg(feature = "rust_decimal")]
-            stmt::Type::Decimal => Type::NUMERIC,
-            #[cfg(feature = "jiff")]
-            stmt::Type::Timestamp => Type::TIMESTAMPTZ,
-            #[cfg(feature = "jiff")]
-            stmt::Type::Date => Type::DATE,
-            #[cfg(feature = "jiff")]
-            stmt::Type::Time => Type::TIME,
-            #[cfg(feature = "jiff")]
-            stmt::Type::DateTime => Type::TIMESTAMP,
-
-            _ => todo!("to_postgres_type; ty={:#?}", self),
-        }
+/// Returns the PostgreSQL array type whose element type is `elem`.
+pub(crate) fn array_type_of(elem: &Type) -> &'static Type {
+    match *elem {
+        Type::BOOL => &Type::BOOL_ARRAY,
+        Type::INT2 => &Type::INT2_ARRAY,
+        Type::INT4 => &Type::INT4_ARRAY,
+        Type::INT8 => &Type::INT8_ARRAY,
+        Type::FLOAT4 => &Type::FLOAT4_ARRAY,
+        Type::FLOAT8 => &Type::FLOAT8_ARRAY,
+        Type::TEXT => &Type::TEXT_ARRAY,
+        Type::VARCHAR => &Type::VARCHAR_ARRAY,
+        Type::BYTEA => &Type::BYTEA_ARRAY,
+        Type::UUID => &Type::UUID_ARRAY,
+        Type::NUMERIC => &Type::NUMERIC_ARRAY,
+        Type::TIMESTAMP => &Type::TIMESTAMP_ARRAY,
+        Type::TIMESTAMPTZ => &Type::TIMESTAMPTZ_ARRAY,
+        Type::DATE => &Type::DATE_ARRAY,
+        Type::TIME => &Type::TIME_ARRAY,
+        _ => todo!("no PostgreSQL array type for element type {elem:?}"),
     }
 }

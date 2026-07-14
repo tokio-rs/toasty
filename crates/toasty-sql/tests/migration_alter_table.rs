@@ -1,24 +1,12 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{
-        Column, ColumnId, IndexId, PrimaryKey, RenameHints, Schema, SchemaDiff, Table, TableId,
-        Type,
+    schema::{
+        db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type},
+        diff,
     },
     stmt as core_stmt,
 };
-use toasty_sql::{
-    Serializer,
-    migration::MigrationStatement,
-    serializer::{Params, Placeholder},
-};
-
-struct NoParams;
-
-impl Params for NoParams {
-    fn push(&mut self, _: &core_stmt::Value, _: Option<&core_stmt::Type>) -> Placeholder {
-        Placeholder(0)
-    }
-}
+use toasty_sql::{Serializer, migration::MigrationStatement};
 
 fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> Column {
     Column {
@@ -32,6 +20,7 @@ fn make_column(table_id: usize, index: usize, name: &str, storage_ty: Type) -> C
         nullable: false,
         primary_key: index == 0,
         auto_increment: false,
+        versionable: false,
     }
 }
 
@@ -67,7 +56,7 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
                 "mysql" => Serializer::mysql(ms.schema()),
                 _ => panic!("unknown flavor: {flavor}"),
             };
-            serializer.serialize(ms.statement(), &mut NoParams)
+            serializer.serialize(ms.statement())
         })
         .collect()
 }
@@ -95,10 +84,10 @@ fn rename_table_sqlite() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_table_hint(TableId(0), TableId(0));
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -129,10 +118,10 @@ fn rename_table_postgresql() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_table_hint(TableId(0), TableId(0));
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -160,10 +149,10 @@ fn rename_table_and_add_column() {
         )],
     };
 
-    let mut hints = RenameHints::new();
+    let mut hints = diff::RenameHints::new();
     hints.add_table_hint(TableId(0), TableId(0));
 
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -198,8 +187,8 @@ fn rename_without_hint_is_drop_and_create() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 

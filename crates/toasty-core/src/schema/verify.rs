@@ -7,7 +7,7 @@ use super::{
 };
 use crate::stmt;
 
-use std::collections::HashSet;
+use hashbrown::{HashMap, HashSet};
 
 struct Verify<'a> {
     schema: &'a Schema,
@@ -28,8 +28,9 @@ impl Verify<'_> {
                 continue;
             };
             for field in &root.fields {
-                self.verify_relations_are_indexed(field);
+                self.verify_relations_are_indexed(model, field)?;
                 self.verify_auto_field_type(field);
+                self.verify_deferred_field(field)?;
             }
         }
 
@@ -39,11 +40,53 @@ impl Verify<'_> {
         self.verify_index_names_are_unique()?;
         self.verify_table_indices_and_nullable();
         self.verify_auto_increment_columns()?;
+        self.verify_enum_type_names_are_unique()?;
+        self.verify_at_most_one_version_field()?;
+
+        Ok(())
+    }
+
+    fn verify_at_most_one_version_field(&self) -> Result<()> {
+        for model in self.schema.app.models() {
+            let super::app::Model::Root(root) = model else {
+                continue;
+            };
+
+            let count = root.fields.iter().filter(|f| f.versionable).count();
+            if count > 1 {
+                return Err(crate::Error::invalid_schema(format!(
+                    "model `{}` has {count} versionable fields; only one field may be marked versionable",
+                    root.name
+                )));
+            }
+        }
 
         Ok(())
     }
 
     // TODO: move these methods to separate modules?
+
+    fn verify_deferred_field(&self, field: &super::app::Field) -> Result<()> {
+        if !field.deferred {
+            return Ok(());
+        }
+
+        if field.primary_key {
+            return Err(crate::Error::invalid_schema(format!(
+                "field `{}` cannot be both deferred and part of the primary key",
+                field.name
+            )));
+        }
+
+        if field.versionable {
+            return Err(crate::Error::invalid_schema(format!(
+                "field `{}` cannot be both deferred and versionable",
+                field.name
+            )));
+        }
+
+        Ok(())
+    }
 
     fn verify_ids_populated(&self) -> bool {
         for model in self.schema.app.models() {
@@ -54,7 +97,7 @@ impl Verify<'_> {
             };
             for field in &root.fields {
                 if let Some(has_many) = field.ty.as_has_many() {
-                    assert_ne!(has_many.pair, FieldId::placeholder());
+                    assert_ne!(has_many.pair_id, FieldId::placeholder());
                 }
 
                 if let Some(belongs_to) = field.ty.as_belongs_to() {
@@ -138,19 +181,19 @@ impl Verify<'_> {
     fn verify_table_indices_and_nullable(&self) {
         for table in &self.schema.db.tables {
             for index in &table.indices {
-                let nullable = index
-                    .columns
-                    .iter()
-                    .any(|index_column| table.column(index_column.column).nullable);
-
-                if nullable {
-                    // If there are nullable columns, then (for now) the index
-                    // should only have one column
-                    assert_eq!(
-                        index.columns.len(),
-                        1,
-                        "table index with multiple columns includes a nullable column"
-                    );
+                // A nullable column is permitted in any index, including
+                // composite ones (e.g. an embedded enum's variant columns,
+                // which are nullable by construction). SQL treats NULLs as
+                // distinct in unique indices, so rows lacking a value never
+                // conflict. The primary key is the exception: its columns
+                // must be non-nullable.
+                if index.primary_key {
+                    for index_column in &index.columns {
+                        assert!(
+                            !table.column(index_column.column).nullable,
+                            "primary key includes a nullable column"
+                        );
+                    }
                 }
             }
         }
@@ -189,6 +232,37 @@ impl Verify<'_> {
                             "auto_increment column `{}` in table `{}` must be part of the primary key",
                             column.name, table.name
                         )));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
+    fn verify_enum_type_names_are_unique(&self) -> Result<()> {
+        // Collect all enum type names across all columns. If two columns share
+        // the same enum type name, their variant sets must match exactly.
+        let mut seen: HashMap<&str, &[super::db::EnumVariant]> = HashMap::new();
+
+        for table in &self.schema.db.tables {
+            for column in &table.columns {
+                if let super::db::Type::Enum(type_enum) = &column.storage_ty
+                    && let Some(name) = &type_enum.name
+                {
+                    match seen.get(name.as_str()) {
+                        Some(existing) if *existing != type_enum.variants.as_slice() => {
+                            return Err(crate::Error::invalid_schema(format!(
+                                "conflicting enum type name `{name}`: multiple embedded enums \
+                                 resolve to the same database type name with different variants; \
+                                 use `#[column(type = enum(\"custom_name\"))]` on one of them \
+                                 to disambiguate"
+                            )));
+                        }
+                        None => {
+                            seen.insert(name, &type_enum.variants);
+                        }
+                        _ => {} // Same name, same variants — shared type, OK.
                     }
                 }
             }

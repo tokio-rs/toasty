@@ -9,7 +9,6 @@ pub trait TypeExt {
 impl TypeExt for stmt::Type {
     fn to_ddb_type(&self) -> ScalarAttributeType {
         match self {
-            stmt::Type::Bool => ScalarAttributeType::N,
             stmt::Type::String => ScalarAttributeType::S,
             stmt::Type::I8
             | stmt::Type::I16
@@ -18,7 +17,9 @@ impl TypeExt for stmt::Type {
             | stmt::Type::U8
             | stmt::Type::U16
             | stmt::Type::U32
-            | stmt::Type::U64 => ScalarAttributeType::N,
+            | stmt::Type::U64
+            | stmt::Type::F32
+            | stmt::Type::F64 => ScalarAttributeType::N,
             stmt::Type::Bytes => ScalarAttributeType::B,
             _ => panic!("key attribute must be a string, number, or binary"),
         }

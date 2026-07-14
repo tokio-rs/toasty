@@ -6,16 +6,16 @@ query, avoiding extra database round-trips when you access associations.
 ## Async means a query
 
 Toasty's API follows one rule for associations: **if you `.await` it, it hits
-the database.** The two ways to access
-an association make this visible in the code:
+the database.** Lazy relation fields make this visible in the code:
 
 - `user.posts().exec(&mut db).await?` — async, executes a query.
 - `user.posts.get()` — not async, reads already-loaded data in memory.
 
 Because `.get()` is a plain (non-async) method, the compiler won't let you
-confuse the two. You can scan any code path for `.await` to know exactly where
-database round-trips happen. This makes N+1 problems easy to spot and impossible
-to introduce by accident.
+confuse the two. Plain eager relation fields are already-loaded values, so
+accessing `user.posts` also does not issue a query. You can scan any code path
+for `.await` to know exactly where database round-trips happen. This makes N+1
+problems easy to spot and impossible to introduce by accident.
 
 ## The N+1 problem
 
@@ -40,8 +40,8 @@ how many records you load.
 
 ## Using `.include()`
 
-Add `.include()` to a query to preload a relation. Pass the field path from the
-model's `fields()` accessor:
+Add `.include()` to a query to preload a `Deferred<_>` relation. Pass the field
+path from the model's `fields()` accessor:
 
 ```rust
 # use toasty::Model;
@@ -52,7 +52,7 @@ model's `fields()` accessor:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -62,7 +62,7 @@ model's `fields()` accessor:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -88,17 +88,79 @@ with `user.posts().exec(&mut db).await?`, which is async and always runs a
 query. The presence or absence of `.await` tells you whether code touches the
 database.
 
+## Eager relation fields
+
+A relation field that is not wrapped in `Deferred<_>` is loaded by every query
+that returns the model. This is equivalent to an implicit `.include(...)`.
+
+```rust,ignore
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[has_many]
+    posts: Vec<Post>,
+}
+
+let user = User::filter_by_id(user_id).get(&mut db).await?;
+
+// Already loaded — no .include() and no .get() wrapper.
+let post_count = user.posts.len();
+```
+
+Use eager relation fields when most queries for the model need the relation. Use
+`Deferred<_>` when callers should choose between lazy access and explicit
+`.include(...)`.
+
+Eager relations cannot form cycles. Toasty rejects a schema where eager loading
+would recurse forever, such as `User.posts: Vec<Post>` paired with
+`Post.user: User`. Make one side `Deferred<_>` when two models point at each
+other.
+
 ## Preloaded vs unloaded access
 
-There are two ways to access a relation, depending on whether it was preloaded:
+There are three access patterns for relations:
 
 | Access pattern | Async | When to use | Queries |
 |---|---|---|---|
-| `user.posts().exec(&mut db).await?` | Yes | Relation was not preloaded | Executes a query |
-| `user.posts.get()` | No | Relation was preloaded with `.include()` | No query |
+| `user.posts().exec(&mut db).await?` | Yes | Lazy relation was not preloaded | Executes a query |
+| `user.posts.get()` | No | `Deferred<_>` relation was preloaded with `.include()` | No query |
+| `user.posts` | No | Relation field is not wrapped in `Deferred<_>` | No query |
 
 Calling `.get()` on an unloaded relation panics. Only use `.get()` when you know
 the relation was preloaded.
+
+### `.try_get()` when the load state is uncertain
+
+When a function receives a record from a caller it does not control, it may not
+know whether a given relation was preloaded. Use `.try_get()` to access the
+loaded value without panicking — it returns `None` if the relation has not been
+loaded:
+
+```rust,ignore
+fn post_count(user: &User) -> Option<usize> {
+    user.posts.try_get().map(<[_]>::len)
+}
+```
+
+`.try_get()` is available on relation fields and returns the same reference
+shape as `.get()` wrapped in an `Option`:
+
+| Field type | `.get()` returns | `.try_get()` returns |
+|---|---|---|
+| `Deferred<T>` | `&T` | `Option<&T>` |
+| `Deferred<Option<T>>` | `&Option<T>` | `Option<&Option<T>>` |
+| `Deferred<Vec<T>>` | `&Vec<T>` | `Option<&Vec<T>>` |
+
+For `Deferred<Vec<T>>`, an empty vector means the association was loaded and
+the record has no related rows, while `None` from `.try_get()` means the
+association was not loaded.
+
+Prefer `.get()` in code paths that control the query (the call site can see the
+matching `.include()`); reserve `.try_get()` for code that accepts records from
+elsewhere and needs to fall back when the data is missing.
 
 ## Preloading BelongsTo
 
@@ -113,7 +175,7 @@ Preload a parent record from the child side:
 #     id: u64,
 #     name: String,
 #     #[has_many]
-#     posts: toasty::HasMany<Post>,
+#     posts: toasty::Deferred<Vec<Post>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Post {
@@ -123,7 +185,7 @@ Preload a parent record from the child side:
 #     #[index]
 #     user_id: u64,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<User>,
+#     user: toasty::Deferred<User>,
 #     title: String,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -156,7 +218,7 @@ Preload a single child record from the parent side:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::Deferred<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -167,7 +229,7 @@ Preload a single child record from the parent side:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::Deferred<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 # let user = toasty::create!(User { name: "Alice", profile: { bio: "A person" } })
@@ -197,7 +259,7 @@ panic:
 #     id: u64,
 #     name: String,
 #     #[has_one]
-#     profile: toasty::HasOne<Option<Profile>>,
+#     profile: toasty::Deferred<Option<Profile>>,
 # }
 # #[derive(Debug, toasty::Model)]
 # struct Profile {
@@ -208,7 +270,7 @@ panic:
 #     #[unique]
 #     user_id: Option<u64>,
 #     #[belongs_to(key = user_id, references = id)]
-#     user: toasty::BelongsTo<Option<User>>,
+#     user: toasty::Deferred<Option<User>>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let user = toasty::create!(User { name: "No Profile" }).exec(&mut db).await?;
@@ -223,6 +285,34 @@ assert!(user.profile.get().is_none());
 # Ok(())
 # }
 ```
+
+## Preloading multi-step (`via`) relations
+
+A [multi-step (`via`) relation](./has-many.md#multi-step-relations-via) reaches
+its target through a path of existing relations. Preload it with `.include()`
+the same way as a single-step relation:
+
+```rust,ignore
+let users = User::all()
+    .include(User::fields().commented_articles())
+    .exec(&mut db)
+    .await?;
+
+for user in &users {
+    // Distinct articles this user has commented on — no N+1.
+    let articles: &[Article] = user.commented_articles.get();
+}
+```
+
+Toasty loads the parents once, then issues a single query that follows the
+relation path and groups the targets under each parent. Duplicate targets are
+collapsed, so an article a user commented on twice appears once. A
+`has_one(via = ...)` relation preloads a single optional target instead of a
+list.
+
+Preloading a `via` relation with `.include()` (and projecting one with
+`.select()`) is supported on SQL backends (SQLite, PostgreSQL, MySQL). It is
+not yet available on DynamoDB.
 
 ## Multiple includes
 
@@ -273,8 +363,12 @@ for user in &users {
 
 | Syntax | Description |
 |---|---|
-| `.include(Model::fields().relation())` | Preload a relation in the query |
-| `model.relation.get()` | Access preloaded HasMany data (returns `&[T]`) |
-| `model.relation.get()` | Access preloaded BelongsTo data (returns `&T`) |
-| `model.relation.get()` | Access preloaded HasOne data (returns `&T` or `&Option<T>`) |
-| `model.relation.is_unloaded()` | Check if a relation was preloaded |
+| `.include(Model::fields().relation())` | Preload a `Deferred<_>` relation in the query |
+| `model.relation.get()` | Access preloaded `Deferred<Vec<T>>`, `Deferred<T>`, or `Deferred<Option<T>>` data |
+| `model.relation` | Access an eager `Vec<T>`, `T`, or `Option<T>` relation field |
+| `model.relation.try_get()` | Non-panicking access; returns `None` if not preloaded |
+| `model.relation.is_unloaded()` | Check whether a `Deferred<_>` relation was preloaded |
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

@@ -85,6 +85,8 @@ impl_into_expr_for_copy! {
     U16(u16);
     U32(u32);
     U64(u64);
+    F32(f32);
+    F64(f64);
     Uuid(uuid::Uuid);
 }
 
@@ -319,6 +321,13 @@ where
     }
 }
 impl_assign_via_expr!({T, U: IntoExpr<T>} Vec<U> => List<T>);
+
+// `Vec<scalar>` model fields bind through the existing `IntoExpr<List<T>>`
+// impls (slice, array, `Vec<U>`, …) — `Field::ExprTarget = List<T>` for
+// `Vec<T: Scalar>`, so the create/update setter macros emit
+// `IntoExpr<List<T>>` bounds without any type parsing. `Vec<u8>` keeps
+// `ExprTarget = Self` and goes through its scalar `IntoExpr<Vec<u8>>` impl
+// above.
 
 macro_rules! forward_impl {
     ( $( $ty:ty ,) *) => {

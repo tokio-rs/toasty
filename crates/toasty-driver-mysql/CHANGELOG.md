@@ -7,6 +7,61 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.7.0...toasty-driver-mysql-v0.8.0) - 2026-07-06
+
+### Added
+
+- Emit one `toasty::query` event per statement and propagate caller spans ([#1071])
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1071]: https://github.com/tokio-rs/toasty/pull/1071
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.6.1...toasty-driver-mysql-v0.7.0) - 2026-05-29
+
+### Added
+
+- Raw SQL execution API ([#965])
+- Turso driver with TransactionMode-aware concurrent writes ([#938])
+- TransactionMode for SQLite lock-acquisition control ([#931])
+
+### Changed
+
+- [**breaking**] Deferred relation fields are now required ([#954])
+- [**breaking**] Schema diff types moved to `schema::diff` ([#929])
+
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.6.0...toasty-driver-mysql-v0.6.1) - 2026-05-16
+
+- Internal improvements only.
+
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.5.0...toasty-driver-mysql-v0.6.0) - 2026-05-14
+
+### Added
+
+- Support for Vec<scalar> fields on MySQL, SQLite, and DynamoDB ([#872])
+- Detect and recover from broken pool connections before executing queries ([#874])
+- Automatically evict stale pooled connections after backend restart ([#867])
+
+[#867]: https://github.com/tokio-rs/toasty/pull/867
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#874]: https://github.com/tokio-rs/toasty/pull/874
+
+## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.4.0...toasty-driver-mysql-v0.5.0) - 2026-04-27
+
+### Added
+
+- Support for float types ([#687])
+- Native database enum types for embedded enums ([#665])
+
+[#665]: https://github.com/tokio-rs/toasty/pull/665
+[#687]: https://github.com/tokio-rs/toasty/pull/687
+
 ## [0.3.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-mysql-v0.2.0...toasty-driver-mysql-v0.3.0) - 2026-04-03
 
 ### Other

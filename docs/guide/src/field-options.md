@@ -87,8 +87,9 @@ Supported type values:
 Not all databases support all column types. Toasty validates explicit column
 types against the database's capabilities when you call `db.push_schema()`. If a
 type is not supported, schema creation fails with an error. For example,
-`varchar` is supported by PostgreSQL and MySQL but not by SQLite or DynamoDB —
-using `#[column(type = varchar(100))]` with SQLite produces an error like
+`varchar` is supported by PostgreSQL and MySQL but not by SQLite, Turso, or
+DynamoDB — using `#[column(type = varchar(100))]` with SQLite produces an
+error like
 `"unsupported feature: VARCHAR type is not supported by this database"`. If the
 requested size exceeds the database's maximum, Toasty reports that as well.
 
@@ -348,8 +349,20 @@ struct Event {
 
 ## JSON serialization
 
-Use `#[serialize(json)]` to store a Rust value as a JSON string in the database.
-The field type must implement `serde::Serialize` and `serde::Deserialize`.
+Wrap a field type in [`toasty::Json<T>`][json-doc] to store it as a JSON
+string in the database. The inner `T` must implement `serde::Serialize`
+and `serde::Deserialize`.
+
+[json-doc]: https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html
+
+Reach for `Json<T>` when the field is a serde-typed value that Toasty
+doesn't natively support — for example, a third-party type or a struct
+you don't want to declare as `#[derive(toasty::Embed)]`. For
+`Vec<scalar>` fields, prefer the native form (`tags: Vec<String>`,
+documented in [Defining Models](./defining-models.md)) which is
+queryable and supports collection mutations via `stmt::push`,
+`stmt::extend`, `stmt::pop`, `stmt::remove`, `stmt::remove_at`, and
+`stmt::clear`.
 
 ```rust,ignore
 # use toasty::Model;
@@ -369,11 +382,12 @@ struct Post {
 
     title: String,
 
-    #[serialize(json)]
+    // Native `Vec<scalar>` storage — no wrapper needed.
     tags: Vec<String>,
 
-    #[serialize(json)]
-    meta: Metadata,
+    // Arbitrary serde type — `Json<T>` stores it as one opaque JSON
+    // column. Toasty cannot query into it.
+    meta: toasty::Json<Metadata>,
 }
 ```
 
@@ -397,15 +411,15 @@ that support `varchar`.
 #     #[auto]
 #     id: u64,
 #     title: String,
-#     #[serialize(json)]
 #     tags: Vec<String>,
-#     #[serialize(json)]
-#     meta: Metadata,
+#     meta: toasty::Json<Metadata>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
 let post = toasty::create!(Post {
     title: "Hello",
     tags: vec!["rust".to_string(), "toasty".to_string()],
+    // The bare value is accepted via the `IntoExpr<Json<T>> for T`
+    // blanket — wrapping with `toasty::Json(...)` is optional.
     meta: Metadata {
         version: 1,
         labels: vec!["alpha".to_string()],
@@ -422,13 +436,11 @@ assert_eq!(post.meta.version, 1);
 
 ### Nullable JSON fields
 
-By default, `#[serialize(json)]` creates a `NOT NULL` column. An `Option<T>`
-field with `#[serialize(json)]` serializes `None` as the JSON text `"null"` —
-the column still stores a non-null string.
+`Json<T>` composes with `Option` in two distinct, both-useful ways
+depending on whether `None` should land in a SQL `NULL` cell or be
+encoded inside the JSON itself:
 
-To allow SQL `NULL` in the column, add the `nullable` modifier:
-
-```rust
+```rust,ignore
 # use toasty::Model;
 # use std::collections::HashMap;
 # #[derive(Debug, toasty::Model)]
@@ -437,18 +449,25 @@ To allow SQL `NULL` in the column, add the `nullable` modifier:
 #     #[auto]
 #     id: u64,
 #     title: String,
-#[serialize(json, nullable)]
-metadata: Option<HashMap<String, String>>,
+// `None` maps to SQL `NULL`; `Some(v)` to a JSON string.
+metadata: Option<toasty::Json<HashMap<String, String>>>,
+
+// `None` maps to the JSON literal `"null"` (still a non-null string);
+// `Some(v)` to a JSON string.
+labels: toasty::Json<Option<Vec<String>>>,
 # }
 ```
 
-With `nullable`:
-- `None` maps to SQL `NULL` in the database
-- `Some(value)` maps to the JSON string representation
+`Option<Json<T>>` is the common case — pick it when the database should
+see a `NULL` for missing values. Use `Json<Option<T>>` when callers
+expect the column to always contain valid JSON.
 
-Without `nullable`:
-- `None` maps to the JSON text `"null"` (a non-null string)
-- `Some(value)` maps to the JSON string representation
+## Scalar arrays
+
+A `Vec<T>` field where `T` is a scalar type stores a homogeneous,
+ordered collection in a single column. These fields have their own
+guide page covering the element types, storage per driver, creation,
+querying, and updates — see [`Vec<scalar>` Fields](./vec-scalar-fields.md).
 
 ## Attribute summary
 
@@ -460,5 +479,15 @@ Without `nullable`:
 | `#[update(expr)]` | Automatic value | Create and update |
 | `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create only |
 | `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
-| `#[serialize(json)]` | Store as JSON text | Create and update |
-| `#[serialize(json, nullable)]` | Store as JSON text with SQL NULL support | Create and update |
+
+JSON storage is handled by the [`toasty::Json<T>`][json-doc] field
+wrapper — see [JSON serialization](#json-serialization) above. Use
+`Option<Json<T>>` to allow SQL `NULL`, or `Json<Option<T>>` to embed
+the JSON literal `"null"` instead.
+
+See [Concurrency Control](./concurrency-control.md) for the `#[version]`
+attribute.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields

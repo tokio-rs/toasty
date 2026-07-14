@@ -1,5 +1,6 @@
+use hashbrown::HashSet;
 use rand::seq::SliceRandom;
-use std::{collections::HashSet, hash::Hash};
+use std::hash::Hash;
 
 pub(crate) trait NumUtil: PartialOrd + Ord + Eq {
     fn is_even(&self) -> bool;

@@ -1,4 +1,4 @@
-use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
 use crate::{Result, driver, stmt};
 use indexmap::IndexMap;
 use std::fmt;
@@ -156,12 +156,17 @@ pub struct ModelRoot {
     /// The primary key definition. Root models always have a primary key.
     pub primary_key: PrimaryKey,
 
-    /// Optional explicit table name. When `None`, a name is derived from the
-    /// model name.
-    pub table_name: Option<String>,
+    /// The table this model maps to, before any builder-level prefix is
+    /// applied. Always set by the caller constructing the schema: `#[derive(Model)]`
+    /// derives the default (snake_case + pluralized) name at compile time, or
+    /// uses the explicit `#[table = "..."]` override.
+    pub table_name: String,
 
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
+
+    /// The versionable field, if any. Points directly into `fields` to avoid scanning.
+    pub version_field: Option<FieldId>,
 }
 
 impl ModelRoot {
@@ -202,6 +207,11 @@ impl ModelRoot {
             .map(|pk_field| &self.fields[pk_field.index])
     }
 
+    /// Returns the versionable field, if one is defined on this model.
+    pub fn version_field(&self) -> Option<&Field> {
+        self.version_field.map(|id| &self.fields[id.index])
+    }
+
     /// Looks up a field by its application-level name.
     ///
     /// Returns `None` if no field with that name exists on this model.
@@ -214,6 +224,20 @@ impl ModelRoot {
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         for field in &self.fields {
             field.verify(db)?;
+
+            // Multi-step (`via`) relations lower to nested `IN` subqueries.
+            // Only SQL drivers can evaluate them today; key-value drivers
+            // would need a separate per-step batched fetch strategy that
+            // is not yet implemented.
+            if matches!(&field.ty, FieldTy::Via(_)) && !db.sql {
+                return Err(crate::Error::invalid_schema(format!(
+                    "field `{}::{}` declares a multi-step `via` relation, which \
+                     requires a SQL-capable driver; the configured driver does not \
+                     support SQL",
+                    self.name.upper_camel_case(),
+                    field.name,
+                )));
+            }
         }
         Ok(())
     }
@@ -402,6 +426,16 @@ impl Model {
         match self {
             Model::Root(root) => Some(root),
             _ => None,
+        }
+    }
+
+    /// The model's fields. For an [`EmbeddedEnum`] these are the flattened
+    /// variant fields ([`EmbeddedEnum::fields`]), not the variants themselves.
+    pub fn fields(&self) -> &[Field] {
+        match self {
+            Model::Root(root) => &root.fields,
+            Model::EmbeddedStruct(embedded) => &embedded.fields,
+            Model::EmbeddedEnum(e) => &e.fields,
         }
     }
 

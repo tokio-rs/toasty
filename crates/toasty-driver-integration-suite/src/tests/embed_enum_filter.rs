@@ -2,27 +2,9 @@ use crate::prelude::*;
 
 /// Filtering by a data-carrying enum value using a SQL WHERE clause.
 /// DynamoDB does not support arbitrary filter predicates, so this is SQL-only.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .name("Alice")
@@ -53,27 +35,9 @@ pub async fn filter_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Filtering by variant alone (discriminant-only check) using `is_{variant}()`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .name("Alice")
@@ -116,29 +80,9 @@ pub async fn filter_data_enum_by_variant(t: &mut Test) -> Result<()> {
 }
 
 /// Filtering a unit-only enum by variant using `is_{variant}()`.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_name_status))]
 pub async fn filter_unit_enum_by_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = 1)]
-        Pending,
-        #[column(variant = 2)]
-        Active,
-        #[column(variant = 3)]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = setup(t).await;
 
     Task::create()
         .name("A")
@@ -210,7 +154,7 @@ pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> 
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     for (owner, title, status) in [
         ("alice", "Task A", Status::Pending),
@@ -270,27 +214,9 @@ pub async fn filter_enum_variant_with_partition_key(t: &mut Test) -> Result<()> 
 /// Creates records with different data-carrying enum variants and retrieves them
 /// by primary key, verifying enum values round-trip correctly. This exercises
 /// the same create + read path on all drivers including DynamoDB.
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::user_contact_info))]
 pub async fn create_and_get_data_enum(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = setup(t).await;
 
     let alice = User::create()
         .name("Alice")
