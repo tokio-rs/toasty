@@ -463,6 +463,12 @@ fn decode_array_element(elem_pg_ty: &Type, bytes: &[u8], elem_ty: &stmt::Type) -
         stmt::Value::Uuid(
             uuid::Uuid::from_sql(elem_pg_ty, bytes).expect("decode UUID array element"),
         )
+    } else if matches!(elem_pg_ty.kind(), Kind::Enum(_)) {
+        // Enum labels are plain UTF-8; `EnumString` accepts `Kind::Enum` where
+        // `String` won't.
+        let EnumString(v) =
+            EnumString::from_sql(elem_pg_ty, bytes).expect("decode ENUM array element");
+        text_to_value(v, elem_ty)
     } else {
         todo!(
             "implement PostgreSQL array decoding for element type `{:#?}`",

@@ -196,10 +196,9 @@ impl Field for Vec<u8> {
 }
 
 /// A `Vec<T>` of embedded structs (`T: Embed`) is a `#[document]` collection —
-/// stored as a single JSON array of objects. There is no override for
-/// `field_ty`: the default returns `Primitive(<Self as Load>::ty())`, which is
-/// `List(Model(T::id()))`, which the schema builder stores as a single JSON
-/// document column.
+/// `Primitive(List(Model(T::id())))`, stored by the schema builder as a single
+/// JSON array of objects. The `field_ty` override below only adds the
+/// native-enum element hint; for struct embeds it matches the trait default.
 ///
 /// This is the only *blanket* `Field for Vec<_>` impl. A blanket
 /// `impl<T: Scalar> Field for Vec<T>` cannot coexist with it: the compiler
@@ -232,6 +231,21 @@ where
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    /// Lifts [`Embed::element_storage_ty`] into a `List` storage hint so a
+    /// `Vec<native-enum>` stores as `myenum[]`.
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        let storage_ty = storage_ty.or_else(|| {
+            <T as Embed>::element_storage_ty().map(toasty_core::schema::db::Type::list)
+        });
+        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
+            ty: <Self as super::Load>::ty(),
+            storage_ty,
+            serialize: None,
+        })
     }
 
     fn key_constraint<Origin>(&self, _target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {

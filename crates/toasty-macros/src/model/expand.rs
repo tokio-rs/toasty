@@ -12,7 +12,7 @@ mod util;
 
 use filters::Filter;
 
-use super::schema::{FieldTy, Model, ModelKind};
+use super::schema::{EnumStorageStrategy, FieldTy, Model, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
@@ -260,6 +260,22 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         quote! {}
     };
 
+    // A native unit enum exposes its discriminant storage type so `Vec<Enum>`
+    // stores as a native array (`myenum[]`) instead of `text[]`.
+    let element_storage_ty_impl = if model.fields.is_empty()
+        && matches!(
+            embedded_enum.storage_strategy,
+            Some(EnumStorageStrategy::NativeEnum(_))
+        ) {
+        quote! {
+            fn element_storage_ty() -> ::std::option::Option<#toasty::core::schema::db::Type> {
+                #storage_ty_tokens
+            }
+        }
+    } else {
+        quote! {}
+    };
+
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
@@ -293,6 +309,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                 )
             }
 
+            #element_storage_ty_impl
         }
 
         #load_impl

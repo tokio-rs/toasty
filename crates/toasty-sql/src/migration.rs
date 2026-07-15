@@ -22,13 +22,24 @@ fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
         return false;
     }
 
-    matches!(
+    // A scalar ↔ array change is a real column type change, so both sides
+    // must have the same shape.
+    let same_shape = matches!(
         (&previous.storage_ty, &next.storage_ty),
-        (
-            Type::Enum(TypeEnum { name: Some(a), .. }),
-            Type::Enum(TypeEnum { name: Some(b), .. }),
-        ) if a == b
-    )
+        (Type::Enum(_), Type::Enum(_)) | (Type::List(_), Type::List(_))
+    );
+
+    same_shape
+        && matches!(
+            (
+                previous.storage_ty.named_enum(),
+                next.storage_ty.named_enum(),
+            ),
+            (
+                Some(TypeEnum { name: Some(a), .. }),
+                Some(TypeEnum { name: Some(b), .. }),
+            ) if a == b
+        )
 }
 
 /// A migration step pairing a DDL [`Statement`] with the [`Schema`] it applies against.

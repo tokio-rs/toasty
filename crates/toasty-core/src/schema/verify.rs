@@ -247,7 +247,7 @@ impl Verify<'_> {
 
         for table in &self.schema.db.tables {
             for column in &table.columns {
-                if let super::db::Type::Enum(type_enum) = &column.storage_ty
+                if let Some(type_enum) = column.storage_ty.named_enum()
                     && let Some(name) = &type_enum.name
                 {
                     match seen.get(name.as_str()) {
