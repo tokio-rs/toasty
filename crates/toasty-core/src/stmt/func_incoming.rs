@@ -2,6 +2,11 @@ use super::{Expr, ExprFunc, Projection, Type};
 use crate::schema::db::ColumnId;
 
 /// A reference to a value proposed by an upsert's create branch.
+///
+/// An update assignment uses this expression when it needs the incoming value
+/// rather than the value already stored in the conflicting row. SQL serializers
+/// map it to the backend's proposed-row syntax, such as PostgreSQL's
+/// `EXCLUDED` relation.
 #[derive(Clone, Debug, PartialEq)]
 pub struct FuncIncoming {
     /// Field before lowering or column after lowering.

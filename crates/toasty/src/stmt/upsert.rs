@@ -4,6 +4,58 @@ use std::{fmt, marker::PhantomData};
 use toasty_core::stmt;
 
 /// A typed single-row upsert statement for model `M`.
+///
+/// `#[derive(Model)]` generates an `upsert_by_*` constructor for each primary
+/// key and unique constraint. The generated builder owns an `Upsert<M>` and
+/// exposes typed field setters, `on_create`, `on_update`, `or_ignore`, and
+/// `exec`. Users normally work through that builder instead of constructing
+/// this type directly.
+///
+/// An ordinary field setter initializes the field when the row is absent and
+/// applies the same assignment when the selected constraint matches. The
+/// branch-specific closures override that behavior for fields that need
+/// different create and update values. A regular execution returns the record
+/// stored by the database; `or_ignore` returns `Some(M)` after an insert and
+/// `None` after a conflict.
+///
+/// The database executes the conflict check and mutation atomically. Backend
+/// support differs: PostgreSQL, SQLite, and Turso accept primary-key and unique
+/// targets plus branch-specific assignments; DynamoDB accepts primary-key
+/// targets without branch-specific assignments; MySQL does not support this
+/// targeted upsert API.
+///
+/// # Examples
+///
+/// ```
+/// # tokio::runtime::Runtime::new().unwrap().block_on(async {
+/// # #[derive(Debug, toasty::Model)]
+/// # struct User {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     #[unique]
+/// #     email: String,
+/// #     name: String,
+/// # }
+/// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
+/// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
+/// # db.push_schema().await.unwrap();
+/// let created = User::upsert_by_email("alice@example.com")
+///     .name("Alice")
+///     .exec(&mut db)
+///     .await
+///     .unwrap();
+///
+/// let updated = User::upsert_by_email("alice@example.com")
+///     .name("Alicia")
+///     .exec(&mut db)
+///     .await
+///     .unwrap();
+///
+/// assert_eq!(updated.id, created.id);
+/// assert_eq!(updated.name, "Alicia");
+/// # });
+/// ```
 pub struct Upsert<M> {
     pub(crate) untyped: stmt::Insert,
     _p: PhantomData<M>,

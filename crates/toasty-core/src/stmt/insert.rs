@@ -7,7 +7,8 @@ use crate::stmt;
 /// An `INSERT` statement that creates new records.
 ///
 /// Combines an [`InsertTarget`] (where to insert), a [`Query`] source
-/// (the values to insert), and an optional [`Returning`] clause.
+/// (the values to insert), optional [`Upsert`] conflict handling, and an
+/// optional [`Returning`] clause.
 ///
 /// # Examples
 ///
@@ -31,7 +32,7 @@ pub struct Insert {
     /// The source query providing values to insert.
     pub source: Query,
 
-    /// Optional conflict handling for an upsert.
+    /// Optional conflict handling that turns this insert into an upsert.
     pub upsert: Option<Upsert>,
 
     /// Optional `RETURNING` clause to return data from the insertion.
@@ -39,37 +40,64 @@ pub struct Insert {
 }
 
 /// Conflict handling attached to an [`Insert`].
+///
+/// The target selects one primary-key or unique-constraint conflict. `Update`
+/// applies [`assignments`](Self::assignments) to the matching row, while
+/// `Ignore` leaves it unchanged. The insert source contains the values for the
+/// create branch in both cases.
+///
+/// The engine stores model-field targets before lowering and database-column
+/// targets afterward. Drivers receive only the lowered column form inside
+/// [`Operation::Upsert`](crate::driver::Operation::Upsert).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Upsert {
     /// The unique constraint that selects the conflicting row.
     pub target: UpsertTarget,
 
-    /// Assignments applied when the row already exists.
+    /// Assignments applied when the target matches an existing row.
+    ///
+    /// These may reference stored columns and [`FuncIncoming`](super::FuncIncoming)
+    /// values proposed by the insert source.
     pub assignments: Assignments,
 
-    /// Values applied only while creating a DynamoDB item.
+    /// Create-only default assignments retained for key-value lowering.
+    ///
+    /// DynamoDB uses these to initialize required values with
+    /// `if_not_exists` without overwriting an existing item's field.
     pub create_defaults: Assignments,
 
     /// Whether to update or ignore a conflicting row.
     pub action: UpsertAction,
 
-    /// Whether the caller used `on_create`.
+    /// Whether the caller explicitly configured the create branch with
+    /// `on_create`.
+    ///
+    /// The verifier checks this flag against the driver's branch-assignment
+    /// capability.
     pub explicit_create: bool,
 
-    /// Whether the caller used `on_update`.
+    /// Whether the caller explicitly configured the update branch with
+    /// `on_update`.
+    ///
+    /// The verifier checks this flag against the driver's branch-assignment
+    /// capability.
     pub explicit_update: bool,
 
-    /// Shared assignments that cannot define a value for the create branch.
+    /// Shared assignments that cannot initialize the corresponding create
+    /// field.
+    ///
+    /// Verification rejects these assignments and directs the caller to use
+    /// separate create and update branches.
     pub invalid_shared_assignments: Vec<Projection>,
 }
 
-/// The columns or fields identifying an upsert conflict.
+/// The fields or columns that identify the selected upsert conflict.
 #[derive(Debug, Clone, PartialEq)]
 pub enum UpsertTarget {
-    /// Model fields before lowering.
+    /// Model-field projections used before engine lowering.
     Fields(Vec<Projection>),
 
-    /// Database columns after lowering.
+    /// Database columns sent to the driver after engine lowering.
     Columns(Vec<ColumnId>),
 }
 

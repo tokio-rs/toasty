@@ -8,7 +8,7 @@ You define your models as Rust structs and annotate them with
 annotated structs — field types map to column types, and attributes like
 `#[key]`, `#[unique]`, and `#[index]` control the schema. You can customize the
 mapping with attributes for table names, column names, and column types. Toasty's
-derive macro also generates query builders, create/update builders, and
+derive macro also generates query builders, create/update/upsert builders, and
 relationship accessors at compile time.
 
 ```rust
@@ -49,6 +49,7 @@ transactions.
 - **[Creating Records](./creating-records.md)** — insert one or many records
 - **[Querying Records](./querying-records.md)** — find, filter, and iterate over results
 - **[Updating Records](./updating-records.md)** — modify existing records
+- **[Upserting Records](./upserting-records.md)** — create or update atomically by a key or unique constraint
 - **[Deleting Records](./deleting-records.md)** — remove records
 - **[Indexes and Unique Constraints](./indexes-and-unique-constraints.md)** — add indexes and unique constraints
 - **[Field Options](./field-options.md)** — column names, types, defaults, and JSON serialization

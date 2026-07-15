@@ -52,16 +52,31 @@ pub struct Capability {
     /// SQL: Mysql doesn't support returning clauses from insert / update queries
     pub returning_from_mutation: bool,
 
-    /// Whether upsert may target the primary key.
+    /// Whether [`Operation::Upsert`](super::Operation::Upsert) may target the
+    /// table's primary key.
+    ///
+    /// When `false`, the verifier returns `unsupported_feature` before
+    /// dispatching a primary-key upsert to the driver.
     pub upsert_primary_key: bool,
 
-    /// Whether upsert may target a secondary unique constraint.
+    /// Whether [`Operation::Upsert`](super::Operation::Upsert) may target a
+    /// secondary unique constraint.
+    ///
+    /// The driver must match the exact lowered target columns rather than
+    /// reacting to an arbitrary unique conflict.
     pub upsert_unique: bool,
 
-    /// Whether `on_create` and `on_update` branch overrides are supported.
+    /// Whether an upsert can apply separate `on_create` and `on_update`
+    /// assignments.
+    ///
+    /// A driver with this capability must select the branch atomically within
+    /// the database operation; it cannot read first and choose a second write.
     pub upsert_branch_assignments: bool,
 
-    /// Whether `or_ignore` can name its conflict target precisely.
+    /// Whether an insert-or-ignore upsert suppresses only the selected target's
+    /// conflict.
+    ///
+    /// Other uniqueness conflicts and validation errors must remain errors.
     pub upsert_targeted_ignore: bool,
 
     /// DynamoDB does not support != predicates on the primary key.

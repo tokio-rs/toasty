@@ -53,13 +53,28 @@ impl Expand<'_> {
                 .collect::<Vec<_>>()
                 .join("_and_")
         );
+        let target_name = target_fields
+            .iter()
+            .map(|&field| self.model.fields[field].name.ident.to_string())
+            .collect::<Vec<_>>()
+            .join("_and_");
         let method_doc = format!(
-            "Creates an upsert builder targeting the unique `{}` constraint.",
-            target_fields
-                .iter()
-                .map(|&field| self.model.fields[field].name.ident.to_string())
-                .collect::<Vec<_>>()
-                .join("_and_")
+            "Returns a builder that creates `{model_ident}` or updates the record whose `{target_name}` constraint matches.\n\n\
+             The target arguments initialize a new record and remain unchanged when an existing record is updated."
+        );
+        let builder_doc = format!(
+            "Builds one atomic create-or-update operation for `{model_ident}` using the `{target_name}` conflict target."
+        );
+        let create_doc =
+            format!("Sets values used only when the `{model_ident}` record is created.");
+        let update_doc = format!(
+            "Assigns fields only when the `{target_name}` target matches an existing `{model_ident}` record."
+        );
+        let incoming_doc = format!(
+            "References values proposed for the new `{model_ident}` record from `on_update`."
+        );
+        let ignore_doc = format!(
+            "Builds an insert-or-ignore operation for `{model_ident}` using the `{target_name}` conflict target."
         );
         let builder_ident = format_ident!("{}UpsertBy{}", model_ident, suffix);
         let create_ident = format_ident!("{}UpsertBy{}Create", model_ident, suffix);
@@ -143,6 +158,7 @@ impl Expand<'_> {
             }
 
             #[derive(Clone)]
+            #[doc = #builder_doc]
             #vis struct #builder_ident {
                 stmt: #toasty::stmt::Upsert<#model_ident>,
             }
@@ -150,6 +166,7 @@ impl Expand<'_> {
             impl #builder_ident {
                 #shared_methods
 
+                #[doc = "Adds assignments used only when the record is created.\n\nDatabase drivers that do not support branch-specific upsert assignments return `unsupported_feature` at execution."]
                 #vis fn on_create(
                     mut self,
                     f: impl for<'a> FnOnce(#create_ident<'a>) -> #create_ident<'a>,
@@ -160,6 +177,7 @@ impl Expand<'_> {
                     self
                 }
 
+                #[doc = "Adds assignments used only when the conflict target matches an existing record.\n\nThe closure accepts the same assignment operators as a normal update. Database drivers that do not support branch-specific upsert assignments return `unsupported_feature` at execution."]
                 #vis fn on_update(
                     mut self,
                     f: impl for<'a> FnOnce(#update_ident<'a>) -> #update_ident<'a>,
@@ -170,16 +188,19 @@ impl Expand<'_> {
                     self
                 }
 
+                #[doc = "Leaves a record unchanged when the selected conflict target matches.\n\nThe returned builder's `exec` method produces `Some(model)` after an insert and `None` after a conflict."]
                 #vis fn or_ignore(mut self) -> #ignore_ident {
                     self.stmt.set_ignore();
                     #ignore_ident { stmt: self.stmt }
                 }
 
+                #[doc = "Executes the upsert and returns the record stored by the database."]
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     executor.exec(self.stmt.into()).await
                 }
             }
 
+            #[doc = #create_doc]
             #vis struct #create_ident<'a> {
                 stmt: &'a mut #toasty::stmt::Upsert<#model_ident>,
             }
@@ -188,11 +209,13 @@ impl Expand<'_> {
                 #create_methods
             }
 
+            #[doc = #update_doc]
             #vis struct #update_ident<'a> {
                 stmt: &'a mut #toasty::stmt::Upsert<#model_ident>,
             }
 
             impl<'a> #update_ident<'a> {
+                #[doc = "Returns field expressions for values proposed by the create branch."]
                 #vis fn incoming(&self) -> #incoming_ident {
                     #incoming_ident
                 }
@@ -201,17 +224,20 @@ impl Expand<'_> {
             }
 
             #[derive(Clone, Copy)]
+            #[doc = #incoming_doc]
             #vis struct #incoming_ident;
 
             impl #incoming_ident {
                 #incoming_methods
             }
 
+            #[doc = #ignore_doc]
             #vis struct #ignore_ident {
                 stmt: #toasty::stmt::Upsert<#model_ident>,
             }
 
             impl #ignore_ident {
+                #[doc = "Executes the insert-or-ignore operation.\n\nReturns `Some(model)` when the record is inserted and `None` when the selected target conflicts."]
                 #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<Option<#model_ident>> {
                     let stmt = #toasty::Statement::<Option<#model_ident>>::from_untyped_stmt(
                         self.stmt.into_untyped(),
@@ -238,7 +264,9 @@ impl Expand<'_> {
                 };
                 let name = &field.name.ident;
                 let index = util::int(field_index);
+                let doc = format!("Assigns `{name}` on both the create and update branches.");
                 Some(quote! {
+                    #[doc = #doc]
                     #vis fn #name(mut self, #name: impl Assign<FieldExprTarget<#ty>>) -> Self {
                         #name.assign(
                             self.stmt.update_assignments_mut(),
@@ -260,7 +288,9 @@ impl Expand<'_> {
             let FieldTy::Primitive(ty) = &field.ty else { return None };
             let name = &field.name.ident;
             let index = util::int(field_index);
+            let doc = format!("Sets `{name}` only when the record is created.");
             Some(quote! {
+                #[doc = #doc]
                 #vis fn #name(mut self, #name: impl IntoExpr<FieldExprTarget<#ty>>) -> Self {
                     self.stmt.set_create(
                         #index,
@@ -288,7 +318,11 @@ impl Expand<'_> {
                 };
                 let name = &field.name.ident;
                 let index = util::int(field_index);
+                let doc = format!(
+                    "Assigns `{name}` only when the conflict target matches an existing record."
+                );
                 Some(quote! {
+                    #[doc = #doc]
                     #vis fn #name(mut self, #name: impl Assign<FieldExprTarget<#ty>>) -> Self {
                         #name.assign(
                             self.stmt.update_assignments_mut(),
@@ -314,7 +348,9 @@ impl Expand<'_> {
                 };
                 let name = &field.name.ident;
                 let index = util::int(field_index);
+                let doc = format!("Returns an expression referencing the proposed `{name}` value.");
                 Some(quote! {
+                    #[doc = #doc]
                     #vis fn #name(self) -> #toasty::stmt::Expr<FieldExprTarget<#ty>> {
                         #toasty::stmt::Expr::from_untyped(
                             #toasty::core::stmt::FuncIncoming::field(

@@ -5,6 +5,9 @@ the create builder. The macro uses a syntax inspired by struct literals and expa
 calls under the hood. Most code uses the macro; the builder is there when you
 need programmatic control (e.g., conditional fields).
 
+Use an [upsert](./upserting-records.md) when the same operation must create a
+missing record or update the record selected by a key or unique constraint.
+
 ## Creating a single record
 
 With the macro:

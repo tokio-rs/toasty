@@ -8,7 +8,9 @@
 //! The query planner inspects [`Capability`] to decide which [`Operation`]
 //! variants to emit. SQL-based drivers receive [`Operation::QuerySql`],
 //! [`Operation::RawSql`], and [`Operation::Insert`], while key-value drivers
-//! (e.g., DynamoDB) receive [`Operation::GetByKey`], [`Operation::QueryPk`], etc. The
+//! (e.g., DynamoDB) receive [`Operation::GetByKey`], [`Operation::QueryPk`], etc.
+//! Drivers that advertise upsert support receive `Operation::Upsert` with an
+//! already-lowered conflict target and return projection. The
 //! [`SchemaMutations`] sub-struct (`Capability::schema_mutations`) describes
 //! what the database can do to its own schema — for example, whether
 //! `ALTER COLUMN` can change a column's type — and the migration generator

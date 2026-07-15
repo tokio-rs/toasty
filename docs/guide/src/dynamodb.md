@@ -206,6 +206,26 @@ support them via `CREATE UNIQUE INDEX`.
 See [Indexes and Unique Constraints](./indexes-and-unique-constraints.md)
 for the model-level syntax.
 
+### Upsert
+
+DynamoDB supports [`upsert_by_*`](./upserting-records.md) only when the
+conflict target is the primary key. A regular upsert uses one `UpdateItem`
+request, which creates a missing item or applies the same update expression to
+an existing item. `on_create` and `on_update` return `unsupported_feature`
+because `UpdateItem` cannot choose an expression based on whether the item
+existed before the request.
+
+`or_ignore()` uses a conditional put and returns `None` when the primary key
+already exists. If the new item also contains `#[unique]` fields, Toasty uses
+`TransactWriteItems` to create the item and its managed unique-index entries
+atomically.
+
+A regular upsert cannot assign a `#[unique]` secondary field because creating
+and updating the managed index require different writes. DynamoDB also rejects
+a nullable `#[default]` value and a field that combines `#[default]` with
+`#[update]` inside a regular upsert; attribute absence cannot reliably
+distinguish a new item from an existing item whose optional field is absent.
+
 ### Billing mode
 
 Tables and GSIs are created with on-demand (PAY_PER_REQUEST) billing.
