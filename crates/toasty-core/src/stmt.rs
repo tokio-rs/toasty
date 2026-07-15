@@ -105,6 +105,9 @@ pub use expr_in_list::ExprInList;
 mod expr_in_subquery;
 pub use expr_in_subquery::ExprInSubquery;
 
+mod expr_incoming;
+pub use expr_incoming::{ExprIncoming, IncomingTarget};
+
 mod expr_intersects;
 pub use expr_intersects::ExprIntersects;
 
@@ -173,9 +176,6 @@ pub use sorted_index::SortedIndex;
 
 mod func_count;
 pub use func_count::FuncCount;
-
-mod func_incoming;
-pub use func_incoming::{FuncIncoming, IncomingTarget};
 
 mod func_json_extract;
 pub use func_json_extract::FuncJsonExtract;

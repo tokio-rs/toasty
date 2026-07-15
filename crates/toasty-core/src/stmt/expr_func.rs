@@ -1,4 +1,4 @@
-use super::{Expr, FuncCount, FuncIncoming, FuncJsonExtract, FuncLastInsertId};
+use super::{Expr, FuncCount, FuncJsonExtract, FuncLastInsertId};
 
 /// A function call expression.
 ///
@@ -26,9 +26,6 @@ pub enum ExprFunc {
     /// extraction on the SQL backends). Produced when filtering on a field
     /// inside a `#[document]` embed.
     JsonExtract(FuncJsonExtract),
-
-    /// A value proposed by an upsert's create branch.
-    Incoming(FuncIncoming),
 }
 
 impl From<ExprFunc> for Expr {

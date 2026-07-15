@@ -353,7 +353,7 @@ impl Expand<'_> {
                     #[doc = #doc]
                     #vis fn #name(self) -> #toasty::stmt::Expr<FieldExprTarget<#ty>> {
                         #toasty::stmt::Expr::from_untyped(
-                            #toasty::core::stmt::FuncIncoming::field(
+                            #toasty::core::stmt::ExprIncoming::field(
                                 #index,
                                 <#ty as #toasty::Load>::ty(),
                             ),

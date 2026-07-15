@@ -56,7 +56,7 @@ pub struct Upsert {
 
     /// Assignments applied when the target matches an existing row.
     ///
-    /// These may reference stored columns and [`FuncIncoming`](super::FuncIncoming)
+    /// These may reference stored columns and [`ExprIncoming`](super::ExprIncoming)
     /// values proposed by the insert source.
     pub assignments: Assignments,
 

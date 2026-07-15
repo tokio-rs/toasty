@@ -39,8 +39,8 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
                 serialize_json_extract(f, func);
             }
-            stmt::Expr::Func(stmt::ExprFunc::Incoming(func)) => {
-                let stmt::IncomingTarget::Column(column) = func.target else {
+            stmt::Expr::Incoming(incoming) => {
+                let stmt::IncomingTarget::Column(column) = incoming.target else {
                     panic!("incoming reference was not lowered")
                 };
                 fmt!(f, "excluded." f.serializer.column_name(column));

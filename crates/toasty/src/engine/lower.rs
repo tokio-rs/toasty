@@ -804,7 +804,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
                 }
             }
-            stmt::Expr::Func(stmt::ExprFunc::Incoming(incoming)) => {
+            stmt::Expr::Incoming(incoming) => {
                 if let stmt::IncomingTarget::Field(field) = &incoming.target {
                     let mapped = self
                         .mapping_unwrap()
@@ -1592,7 +1592,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             | LoweringContext::Insert(..) => {
                 // Upsert update assignments are visited in the surrounding
                 // Insert context. Their field references read the stored row;
-                // proposed-row values use ExprFunc::Incoming instead. Inserted
+                // proposed-row values use Expr::Incoming instead. Inserted
                 // value rows use the separate InsertRow branch below.
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)

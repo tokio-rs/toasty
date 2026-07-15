@@ -1,4 +1,4 @@
-use super::{Expr, ExprFunc, Projection, Type};
+use super::{Expr, Projection, Type};
 use crate::schema::db::ColumnId;
 
 /// A reference to a value proposed by an upsert's create branch.
@@ -8,7 +8,7 @@ use crate::schema::db::ColumnId;
 /// map it to the backend's proposed-row syntax, such as PostgreSQL's
 /// `EXCLUDED` relation.
 #[derive(Clone, Debug, PartialEq)]
-pub struct FuncIncoming {
+pub struct ExprIncoming {
     /// Field before lowering or column after lowering.
     pub target: IncomingTarget,
 
@@ -16,7 +16,7 @@ pub struct FuncIncoming {
     pub ty: Type,
 }
 
-/// The field or column referenced by [`FuncIncoming`].
+/// The field or column referenced by [`ExprIncoming`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum IncomingTarget {
     /// Application field before lowering.
@@ -26,7 +26,7 @@ pub enum IncomingTarget {
     Column(ColumnId),
 }
 
-impl FuncIncoming {
+impl ExprIncoming {
     /// Creates an incoming-value reference to an application field.
     pub fn field(field: usize, ty: Type) -> Self {
         Self {
@@ -36,8 +36,8 @@ impl FuncIncoming {
     }
 }
 
-impl From<FuncIncoming> for Expr {
-    fn from(value: FuncIncoming) -> Self {
-        ExprFunc::Incoming(value).into()
+impl From<ExprIncoming> for Expr {
+    fn from(value: ExprIncoming) -> Self {
+        Self::Incoming(value)
     }
 }
