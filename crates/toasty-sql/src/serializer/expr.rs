@@ -39,6 +39,12 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
                 serialize_json_extract(f, func);
             }
+            stmt::Expr::Func(stmt::ExprFunc::Incoming(func)) => {
+                let stmt::IncomingTarget::Column(column) = func.target else {
+                    panic!("incoming reference was not lowered")
+                };
+                fmt!(f, "excluded." f.serializer.column_name(column));
+            }
             stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
                 // The rhs Value::List is bound as one JSON string. MySQL's

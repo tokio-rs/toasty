@@ -63,6 +63,9 @@ pub use scope::IntoScope;
 mod update;
 pub use update::Update;
 
+mod upsert;
+pub use upsert::Upsert;
+
 pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
 
 use toasty_core::stmt;

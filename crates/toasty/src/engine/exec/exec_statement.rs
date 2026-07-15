@@ -190,14 +190,25 @@ impl Exec<'_> {
             ConditionalOutput::None => action.output.ty.clone(),
         };
 
-        let op = operation::QuerySql {
-            stmt,
-            params,
-            ret,
-            last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
+        let op = if matches!(&stmt, stmt::Statement::Insert(insert) if insert.upsert.is_some()) {
+            let insert = stmt.into_insert_unwrap();
+            operation::Upsert {
+                stmt: insert,
+                params,
+                ret,
+            }
+            .into()
+        } else {
+            operation::QuerySql {
+                stmt,
+                params,
+                ret,
+                last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
+            }
+            .into()
         };
 
-        let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
+        let mut res = self.connection.exec(&self.engine.schema, op).await?;
 
         match action.conditional {
             ConditionalOutput::None => {
@@ -325,7 +336,7 @@ impl Exec<'_> {
         &self,
         stmt: &mut stmt::Statement,
     ) -> Option<MySQLUpdateReturning> {
-        if self.engine.capability().returning_from_mutation {
+        if self.engine.capability().returning_from_mutation || !self.engine.capability().sql {
             return None;
         }
 
@@ -386,7 +397,7 @@ impl Exec<'_> {
         &self,
         stmt: &mut stmt::Statement,
     ) -> Option<MySQLInsertReturning> {
-        if self.engine.capability().returning_from_mutation {
+        if !self.engine.capability().sql || self.engine.capability().returning_from_mutation {
             return None;
         }
 

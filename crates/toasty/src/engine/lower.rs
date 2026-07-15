@@ -804,6 +804,23 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
                 }
             }
+            stmt::Expr::Func(stmt::ExprFunc::Incoming(incoming)) => {
+                if let stmt::IncomingTarget::Field(field) = &incoming.target {
+                    let mapped = self
+                        .mapping_unwrap()
+                        .resolve_field_mapping(field)
+                        .expect("incoming upsert field must map to a column");
+                    let mut columns = mapped.columns();
+                    let (column, _) = columns
+                        .next()
+                        .expect("incoming upsert field has no database column");
+                    assert!(
+                        columns.next().is_none(),
+                        "incoming() does not yet support column-expanded embedded fields"
+                    );
+                    incoming.target = stmt::IncomingTarget::Column(column);
+                }
+            }
             // A null-check on an `Option<Embed>` field reduces to a null-check on
             // the embed's head column instead of distributing the check over
             // every flattened column. The head column is `NULL` for `None`, so
@@ -1072,19 +1089,49 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
 
+        if let Some(upsert) = &mut stmt.upsert {
+            if let stmt::UpsertTarget::Fields(fields) = &upsert.target {
+                let mapping = lower.mapping_unwrap();
+                let mut columns = Vec::new();
+                for field in fields {
+                    let mapped = mapping
+                        .resolve_field_mapping(field)
+                        .expect("upsert target must map to database columns");
+                    columns.extend(mapped.columns().map(|(column, _)| column));
+                }
+                upsert.target = stmt::UpsertTarget::Columns(columns);
+            }
+            lower.visit_assignments_mut(&mut upsert.assignments);
+        }
+
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
         }
 
         // Preprocess the insertion source (values usually)
-        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning);
+        // `DO NOTHING RETURNING` legitimately produces zero rows. Keep its
+        // returning clause as a projection over the database result so the
+        // normal single-statement boundary can turn an empty list into
+        // `Value::Null` (and therefore `Option::None`). Converting it to an
+        // expression would project row zero eagerly and panic on conflict.
+        let preserve_returning_projection = stmt
+            .upsert
+            .as_ref()
+            .is_some_and(|upsert| upsert.action == stmt::UpsertAction::Ignore);
+        lower.preprocess_insert_values(
+            &mut stmt.source,
+            &mut stmt.returning,
+            preserve_returning_projection,
+        );
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
-            lower.constantize_insert_returning(returning, &stmt.source);
+            if stmt.upsert.is_none() {
+                lower.constantize_insert_returning(returning, &stmt.source);
+            }
 
             if stmt.source.single
                 && let stmt::Returning::Expr(expr) = &returning

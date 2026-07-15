@@ -174,6 +174,9 @@ pub use sorted_index::SortedIndex;
 mod func_count;
 pub use func_count::FuncCount;
 
+mod func_incoming;
+pub use func_incoming::{FuncIncoming, IncomingTarget};
+
 mod func_json_extract;
 pub use func_json_extract::FuncJsonExtract;
 
@@ -181,7 +184,7 @@ mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
 mod insert;
-pub use insert::Insert;
+pub use insert::{Insert, Upsert, UpsertAction, UpsertTarget};
 
 mod insert_table;
 pub use insert_table::InsertTable;

@@ -62,6 +62,7 @@ impl LowerStatement<'_, '_> {
         &mut self,
         source: &mut stmt::Query,
         returning: &mut Option<stmt::Returning>,
+        preserve_returning_projection: bool,
     ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
             todo!()
@@ -83,7 +84,9 @@ impl LowerStatement<'_, '_> {
         // If there are any has_n associations included in the insertion, the
         // statement returning has to be transformed to accomodate the nested
         // structure.
-        self.convert_returning_for_insert(values, returning, source.single);
+        if !preserve_returning_projection {
+            self.convert_returning_for_insert(values, returning, source.single);
+        }
 
         for (index, row) in values.rows.iter_mut().enumerate() {
             self.lower_insert_with_row(index, |lower| {

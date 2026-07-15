@@ -539,6 +539,11 @@ impl toasty_core::driver::Connection for Connection {
                 );
                 (sql::Statement::from(op.stmt), op.params, op.ret)
             }
+            Operation::Upsert(op) => (
+                sql::Statement::from(stmt::Statement::Insert(op.stmt)),
+                op.params,
+                op.ret,
+            ),
             Operation::RawSql(op) => {
                 let ret = match op.ret {
                     RawSqlRet::None => SqlReturn::Count,

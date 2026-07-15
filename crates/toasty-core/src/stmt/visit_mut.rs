@@ -1045,6 +1045,7 @@ where
         ExprFunc::Count(func) => v.visit_expr_func_count_mut(func),
         ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract_mut(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id_mut(func),
+        ExprFunc::Incoming(_) => {}
     }
 }
 
@@ -1500,6 +1501,10 @@ where
 {
     v.visit_insert_target_mut(&mut node.target);
     v.visit_stmt_query_mut(&mut node.source);
+
+    if let Some(upsert) = &mut node.upsert {
+        v.visit_assignments_mut(&mut upsert.assignments);
+    }
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);

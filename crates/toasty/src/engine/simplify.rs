@@ -157,6 +157,10 @@ impl VisitMut for Simplify<'_> {
         // First, simplify the source
         s.visit_stmt_query_mut(&mut stmt.source);
 
+        if let Some(upsert) = &mut stmt.upsert {
+            s.visit_assignments_mut(&mut upsert.assignments);
+        }
+
         if let Some(returning) = &mut stmt.returning {
             s.visit_returning_mut(returning);
         }

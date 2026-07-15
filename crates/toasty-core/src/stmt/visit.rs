@@ -1043,6 +1043,7 @@ where
         ExprFunc::Count(func) => v.visit_expr_func_count(func),
         ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id(func),
+        ExprFunc::Incoming(_) => {}
     }
 }
 
@@ -1500,6 +1501,10 @@ where
         v.visit_stmt_query(scope);
     }
     v.visit_stmt_query(&node.source);
+
+    if let Some(upsert) = &node.upsert {
+        v.visit_assignments(&upsert.assignments);
+    }
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);

@@ -44,6 +44,9 @@ pub use typed_value::TypedValue;
 mod update_by_key;
 pub use update_by_key::UpdateByKey;
 
+mod upsert;
+pub use upsert::Upsert;
+
 /// A single database operation to be executed by a driver.
 ///
 /// Each variant maps to one logical database action. The query planner selects
@@ -94,6 +97,9 @@ pub enum Operation {
     /// Update one or more records identified by primary key.
     UpdateByKey(UpdateByKey),
 
+    /// Atomically creates or updates one record by a unique key.
+    Upsert(Upsert),
+
     /// Full-table scan with optional filter and pagination.
     ///
     /// Only sent to drivers with [`Capability::scan`](super::Capability::scan) set to `true`.
@@ -113,6 +119,7 @@ impl Operation {
             Operation::RawSql(_) => "raw_sql",
             Operation::Transaction(_) => "transaction",
             Operation::UpdateByKey(_) => "update_by_key",
+            Operation::Upsert(_) => "upsert",
             Operation::Scan(_) => "scan",
         }
     }

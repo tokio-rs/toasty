@@ -357,9 +357,39 @@ impl ToSql for &stmt::Insert {
 
         f.in_insert = true;
 
+        let upsert = self.upsert.as_ref().map(|_| UpsertClause(self));
+
         fmt!(
-            &mut f, "INSERT INTO " self.target " " self.source returning
+            &mut f, "INSERT INTO " self.target " " self.source upsert returning
         );
+    }
+}
+
+struct UpsertClause<'a>(&'a stmt::Insert);
+
+impl ToSql for UpsertClause<'_> {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        let insert = self.0;
+        let upsert = insert.upsert.as_ref().unwrap();
+        let target = insert.target.as_table_unwrap();
+        let stmt::UpsertTarget::Columns(columns) = &upsert.target else {
+            panic!("upsert target must be lowered before SQL serialization")
+        };
+        let columns = Comma(
+            columns
+                .iter()
+                .map(|column| f.serializer.column_name(*column)),
+        );
+
+        fmt!(f, " ON CONFLICT (" columns ")");
+        match upsert.action {
+            stmt::UpsertAction::Ignore => fmt!(f, " DO NOTHING"),
+            stmt::UpsertAction::Update => {
+                let table = f.serializer.table(target.table);
+                let assignments = (table, &upsert.assignments);
+                fmt!(f, " DO UPDATE SET " assignments);
+            }
+        }
     }
 }
 

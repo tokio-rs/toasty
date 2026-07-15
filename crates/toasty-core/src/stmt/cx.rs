@@ -575,6 +575,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Func(ExprFunc::Count(_)) => Type::U64,
             Expr::Func(ExprFunc::LastInsertId(_)) => Type::I64,
             Expr::Func(ExprFunc::JsonExtract(func)) => func.ty.clone(),
+            Expr::Func(ExprFunc::Incoming(func)) => func.ty.clone(),
             _ => todo!("{expr:#?}"),
         }
     }

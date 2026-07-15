@@ -475,6 +475,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     self.extract_data_load_args_from_expr(expr, Some(i));
                 });
             }
+
+            if let Some(upsert) = &insert.upsert {
+                for (_, assignment) in upsert.assignments.iter() {
+                    stmt::visit::for_each_expr(assignment, |expr| {
+                        self.extract_data_load_args_from_expr(expr, None);
+                    });
+                }
+            }
         }
 
         if let stmt::Statement::Update(update) = stmt {
@@ -683,6 +691,30 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         for row in &mut values.rows {
             self.rewrite_arg_dependencies(row);
+        }
+
+        if let Some(upsert) = &mut stmt.upsert {
+            for (_, assignment) in upsert.assignments.iter_mut() {
+                self.rewrite_assignment_arg_dependencies(assignment);
+            }
+        }
+    }
+
+    fn rewrite_assignment_arg_dependencies(&mut self, assignment: &mut stmt::Assignment) {
+        match assignment {
+            stmt::Assignment::Set(expr)
+            | stmt::Assignment::Insert(expr)
+            | stmt::Assignment::Remove(expr)
+            | stmt::Assignment::Append(expr)
+            | stmt::Assignment::RemoveAt(expr)
+            | stmt::Assignment::Add(expr)
+            | stmt::Assignment::Subtract(expr) => self.rewrite_arg_dependencies(expr),
+            stmt::Assignment::Pop => {}
+            stmt::Assignment::Batch(assignments) => {
+                for assignment in assignments {
+                    self.rewrite_assignment_arg_dependencies(assignment);
+                }
+            }
         }
     }
 
@@ -906,6 +938,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let stmt::Statement::Insert(insert) = stmt else {
             return None;
         };
+
+        if insert.upsert.is_some() {
+            return None;
+        }
 
         if self.load_data.select_items.is_empty() {
             return None;

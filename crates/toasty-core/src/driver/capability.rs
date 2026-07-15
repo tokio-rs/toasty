@@ -52,6 +52,18 @@ pub struct Capability {
     /// SQL: Mysql doesn't support returning clauses from insert / update queries
     pub returning_from_mutation: bool,
 
+    /// Whether upsert may target the primary key.
+    pub upsert_primary_key: bool,
+
+    /// Whether upsert may target a secondary unique constraint.
+    pub upsert_unique: bool,
+
+    /// Whether `on_create` and `on_update` branch overrides are supported.
+    pub upsert_branch_assignments: bool,
+
+    /// Whether `or_ignore` can name its conflict target precisely.
+    pub upsert_targeted_ignore: bool,
+
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
 
@@ -543,6 +555,10 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: true,
+        upsert_primary_key: true,
+        upsert_unique: true,
+        upsert_branch_assignments: true,
+        upsert_targeted_ignore: true,
         primary_key_ne_predicate: true,
         auto_increment: true,
         max_auto_increment_integer_width: Some(4),
@@ -687,6 +703,10 @@ impl Capability {
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
+        upsert_primary_key: false,
+        upsert_unique: false,
+        upsert_branch_assignments: false,
+        upsert_targeted_ignore: false,
         auto_increment: true,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: true,
@@ -757,6 +777,10 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: false,
+        upsert_primary_key: true,
+        upsert_unique: false,
+        upsert_branch_assignments: false,
+        upsert_targeted_ignore: true,
         primary_key_ne_predicate: false,
         auto_increment: false,
         max_auto_increment_integer_width: None,

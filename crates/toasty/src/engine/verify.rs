@@ -40,6 +40,117 @@ impl Engine {
 }
 
 impl stmt::Visit for Verify<'_, '_> {
+    fn visit_stmt_insert(&mut self, i: &stmt::Insert) {
+        stmt::visit::visit_stmt_insert(self, i);
+
+        let Some(upsert) = &i.upsert else {
+            return;
+        };
+        let model = self
+            .schema
+            .app
+            .model(i.target.model_id_unwrap())
+            .as_root_unwrap();
+        let stmt::UpsertTarget::Fields(target) = &upsert.target else {
+            self.record(Error::invalid_statement(
+                "upsert conflict target must contain model fields before lowering",
+            ));
+            return;
+        };
+        let target = target
+            .iter()
+            .filter_map(|projection| projection.as_slice().first().copied())
+            .collect::<Vec<_>>();
+        let Some(index) = model.indices.iter().find(|index| {
+            index.unique
+                && index.fields.len() == target.len()
+                && index
+                    .fields
+                    .iter()
+                    .zip(&target)
+                    .all(|(field, target)| field.field.index == *target)
+        }) else {
+            self.record(Error::invalid_statement(
+                "upsert conflict target must exactly match a unique constraint",
+            ));
+            return;
+        };
+
+        if index.primary_key && !self.capability.upsert_primary_key {
+            self.record(Error::unsupported_feature(
+                "primary-key upsert is not supported by this database",
+            ));
+        } else if !index.primary_key && !self.capability.upsert_unique {
+            self.record(Error::unsupported_feature(
+                "upsert by a secondary unique constraint is not supported by this database",
+            ));
+        }
+
+        if upsert.action == stmt::UpsertAction::Ignore && !self.capability.upsert_targeted_ignore {
+            self.record(Error::unsupported_feature(
+                "targeted upsert ignore is not supported by this database",
+            ));
+        }
+
+        if (upsert.explicit_create || upsert.explicit_update)
+            && !self.capability.upsert_branch_assignments
+        {
+            self.record(Error::unsupported_feature(
+                "upsert on_create and on_update branches are not supported by this database",
+            ));
+        }
+
+        if upsert.action == stmt::UpsertAction::Update && upsert.assignments.is_empty() {
+            self.record(Error::invalid_statement(
+                "upsert requires at least one update assignment; use or_ignore() instead",
+            ));
+        }
+
+        if !upsert.invalid_shared_assignments.is_empty() {
+            self.record(Error::invalid_statement(
+                "upsert assignment cannot initialize the field on the create branch; use on_create and on_update instead",
+            ));
+        }
+
+        if !self.capability.sql {
+            for (projection, _) in upsert.create_defaults.iter() {
+                let Some(&field) = projection.as_slice().first() else {
+                    continue;
+                };
+                if model.fields[field].nullable {
+                    self.record(Error::unsupported_feature(
+                        "nullable create defaults are not supported by DynamoDB upsert",
+                    ));
+                }
+                if upsert.assignments.contains(projection) {
+                    self.record(Error::unsupported_feature(
+                        "a field with both #[default] and #[update] is not supported by DynamoDB upsert",
+                    ));
+                }
+            }
+
+            if upsert.action == stmt::UpsertAction::Update {
+                for secondary in model
+                    .indices
+                    .iter()
+                    .filter(|index| index.unique && !index.primary_key)
+                {
+                    if secondary.fields.iter().any(|field| {
+                        upsert.assignments.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&field.field.index)
+                        }) || upsert.create_defaults.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&field.field.index)
+                        }) || model.fields[field.field.index].auto.is_some()
+                    }) {
+                        self.record(Error::unsupported_feature(
+                            "updating a unique secondary-index field is not supported by DynamoDB upsert",
+                        ));
+                    }
+                }
+            }
+        }
+    }
+
     fn visit_stmt_delete(&mut self, i: &stmt::Delete) {
         stmt::visit::visit_stmt_delete(self, i);
 
@@ -105,6 +216,12 @@ impl stmt::Visit for Verify<'_, '_> {
 }
 
 impl Verify<'_, '_> {
+    fn record(&mut self, err: Error) {
+        if self.error.is_none() {
+            *self.error = Some(err);
+        }
+    }
+
     fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
         let Some(stmt::Limit::Cursor(cursor)) = i.limit.as_ref() else {
             return;

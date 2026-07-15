@@ -1,4 +1,7 @@
-use super::{InsertTarget, Node, Query, Returning, Statement, Visit, VisitMut};
+use super::{
+    Assignments, InsertTarget, Node, Projection, Query, Returning, Statement, Visit, VisitMut,
+};
+use crate::schema::db::ColumnId;
 use crate::stmt;
 
 /// An `INSERT` statement that creates new records.
@@ -15,6 +18,7 @@ use crate::stmt;
 /// let insert = Insert {
 ///     target: InsertTarget::Model(ModelId(0)),
 ///     source: Query::values(Values::new(vec![Expr::null()])),
+///     upsert: None,
 ///     returning: None,
 /// };
 /// assert!(insert.target.is_model());
@@ -27,8 +31,56 @@ pub struct Insert {
     /// The source query providing values to insert.
     pub source: Query,
 
+    /// Optional conflict handling for an upsert.
+    pub upsert: Option<Upsert>,
+
     /// Optional `RETURNING` clause to return data from the insertion.
     pub returning: Option<Returning>,
+}
+
+/// Conflict handling attached to an [`Insert`].
+#[derive(Debug, Clone, PartialEq)]
+pub struct Upsert {
+    /// The unique constraint that selects the conflicting row.
+    pub target: UpsertTarget,
+
+    /// Assignments applied when the row already exists.
+    pub assignments: Assignments,
+
+    /// Values applied only while creating a DynamoDB item.
+    pub create_defaults: Assignments,
+
+    /// Whether to update or ignore a conflicting row.
+    pub action: UpsertAction,
+
+    /// Whether the caller used `on_create`.
+    pub explicit_create: bool,
+
+    /// Whether the caller used `on_update`.
+    pub explicit_update: bool,
+
+    /// Shared assignments that cannot define a value for the create branch.
+    pub invalid_shared_assignments: Vec<Projection>,
+}
+
+/// The columns or fields identifying an upsert conflict.
+#[derive(Debug, Clone, PartialEq)]
+pub enum UpsertTarget {
+    /// Model fields before lowering.
+    Fields(Vec<Projection>),
+
+    /// Database columns after lowering.
+    Columns(Vec<ColumnId>),
+}
+
+/// Action to take when an upsert finds an existing row.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum UpsertAction {
+    /// Update the conflicting row.
+    Update,
+
+    /// Leave the conflicting row unchanged and return no row.
+    Ignore,
 }
 
 impl Insert {
