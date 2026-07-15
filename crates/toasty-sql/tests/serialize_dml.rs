@@ -211,6 +211,55 @@ fn insert_returning_panics_on_mysql() {
     render(Flavor::Mysql, &schema, insert_basic(returning));
 }
 
+/// A transposed multi-row insert: `unnest`-marked `Values` with a single
+/// record row of per-column array params.
+fn insert_unnest(returning: Option<Returning>) -> stmt::Statement {
+    let target = InsertTarget::Table(InsertTable {
+        table: TableId(0),
+        columns: vec![
+            ColumnId {
+                table: TableId(0),
+                index: 0,
+            },
+            ColumnId {
+                table: TableId(0),
+                index: 1,
+            },
+        ],
+    });
+
+    let row = Expr::record([Expr::arg(0), Expr::arg(1)]);
+    let mut values = Values::new(vec![row]);
+    values.unnest = true;
+    let source = stmt::Query::values(values);
+
+    Insert {
+        target,
+        source,
+        returning,
+    }
+    .into()
+}
+
+#[test]
+fn insert_unnest_arrays() {
+    let schema = users_schema();
+    expect![[
+        r#"INSERT INTO "users" ("id", "name") SELECT * FROM unnest($1::BIGINT[], $2::TEXT[]);"#
+    ]]
+    .assert_eq(&render(Flavor::Postgresql, &schema, insert_unnest(None)));
+}
+
+#[test]
+fn insert_unnest_with_returning() {
+    let schema = users_schema();
+    let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
+    expect![[
+        r#"INSERT INTO "users" ("id", "name") SELECT * FROM unnest($1::BIGINT[], $2::TEXT[]) RETURNING "id" AS column1;"#
+    ]]
+    .assert_eq(&render(Flavor::Postgresql, &schema, insert_unnest(returning)));
+}
+
 // -----------------------------------------------------------------------------
 // UPDATE
 // -----------------------------------------------------------------------------

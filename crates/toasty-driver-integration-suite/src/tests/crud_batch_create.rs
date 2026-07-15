@@ -68,6 +68,37 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// On PostgreSQL this exercises the INSERT → `unnest` transpose with a NULL
+/// cell inside a column array bind.
+#[driver_test(id(ID))]
+pub async fn batch_create_with_null_field(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        name: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let res = Item::create_many()
+        .item(Item::create().name("n1"))
+        .item(Item::create())
+        .item(Item::create().name("n3"))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(3, res.len());
+    assert_eq!(res[0].name.as_deref(), Some("n1"));
+    assert_eq!(res[1].name, None);
+    assert_eq!(res[2].name.as_deref(), Some("n3"));
+
+    let reloaded = Item::get_by_id(&mut db, &res[1].id).await?;
+    assert_eq!(reloaded.name, None);
+    Ok(())
+}
+
 // TODO: is a batch supposed to be atomic? Probably not.
 #[driver_test(id(ID))]
 #[should_panic]

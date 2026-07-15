@@ -43,8 +43,13 @@ pub(crate) fn run(
     db_schema: &db::Schema,
     capability: &Capability,
 ) -> Vec<TypedValue> {
-    // Phase 1: mechanical extraction — replace values with Arg(n).
     let mut params: Vec<Param> = Vec::new();
+
+    // Phase 0: transpose a multi-row INSERT into per-column array params
+    // where the driver can bind them as `unnest(...)`.
+    transpose_insert_unnest(stmt, db_schema, capability, &mut params);
+
+    // Phase 1: mechanical extraction — replace values with Arg(n).
     extract::extract_values(stmt, &mut params, capability);
 
     // Phases 2+3: bidirectional type inference — refine param types.
@@ -62,6 +67,129 @@ pub(crate) fn run(
             }
         })
         .collect()
+}
+
+/// Rewrite a multi-row `INSERT ... VALUES` into a single row of per-column
+/// array params, serialized as `SELECT * FROM unnest($1::t[], $2::t[])`.
+/// No-op for single-row inserts, non-scalar target columns, non-value rows,
+/// or when [`Capability::insert_values_unnest`] is off.
+///
+/// Each column array is bound as a param here, not left for extract: extract
+/// refuses lists containing NULL, but a NULL cell must ride inside the array
+/// bind. Must run after lowering (returning constantization assumes the
+/// per-row `VALUES` shape) and before serialization.
+fn transpose_insert_unnest(
+    stmt: &mut stmt::Statement,
+    db_schema: &db::Schema,
+    capability: &Capability,
+    params: &mut Vec<Param>,
+) {
+    if !capability.insert_values_unnest {
+        return;
+    }
+
+    let stmt::Statement::Insert(insert) = stmt else {
+        return;
+    };
+    let stmt::InsertTarget::Table(table) = &insert.target else {
+        return;
+    };
+    let stmt::ExprSet::Values(values) = &mut insert.source.body else {
+        return;
+    };
+
+    if values.unnest || values.rows.len() < 2 {
+        return;
+    }
+
+    let num_cols = table.columns.len();
+    if num_cols == 0 {
+        return;
+    }
+
+    // A list/document column's per-row value is itself a collection, not a
+    // single array element.
+    let db_table = &db_schema.tables[table.table.0];
+    let all_scalar = table
+        .columns
+        .iter()
+        .all(|col_id| column_supports_unnest(&db_table.columns[col_id.index].storage_ty));
+    if !all_scalar {
+        tracing::debug!(
+            table = %db_table.name,
+            "multi-row INSERT not transposed to unnest: non-scalar target column"
+        );
+        return;
+    }
+
+    let rows_ok = values
+        .rows
+        .iter()
+        .all(|row| row_is_transposable(row, num_cols));
+    if !rows_ok {
+        tracing::debug!(
+            table = %db_table.name,
+            "multi-row INSERT not transposed to unnest: non-value row shape"
+        );
+        return;
+    }
+
+    // Matched directly rather than via `Expr::into_record_items`: this is the
+    // bulk-insert hot path and the generic iterator boxes per row.
+    let mut columns: Vec<Vec<stmt::Value>> = (0..num_cols)
+        .map(|_| Vec::with_capacity(values.rows.len()))
+        .collect();
+    for row in std::mem::take(&mut values.rows) {
+        match row {
+            stmt::Expr::Value(stmt::Value::Record(record)) => {
+                for (col, value) in record.fields.into_iter().enumerate() {
+                    columns[col].push(value);
+                }
+            }
+            stmt::Expr::Record(record) => {
+                for (col, field) in record.fields.into_iter().enumerate() {
+                    let stmt::Expr::Value(value) = field else {
+                        panic!("row validated as plain values above; field={field:?}");
+                    };
+                    columns[col].push(value);
+                }
+            }
+            _ => unreachable!("row validated as a record above"),
+        }
+    }
+
+    let record = columns
+        .into_iter()
+        .map(|cells| {
+            let value = stmt::Value::List(cells);
+            let ty = extract::infer_ty(&value);
+            let position = params.len();
+            params.push(Param { value, ty });
+            stmt::Expr::arg(position)
+        })
+        .collect::<Vec<_>>();
+
+    values.rows = vec![stmt::Expr::Record(stmt::ExprRecord::from_vec(record))];
+    values.unnest = true;
+}
+
+/// A row is transposable if it is a record of exactly `num_cols` plain values.
+fn row_is_transposable(row: &stmt::Expr, num_cols: usize) -> bool {
+    if row.record_len() != Some(num_cols) {
+        return false;
+    }
+    match row {
+        stmt::Expr::Value(_) => true,
+        stmt::Expr::Record(record) => record
+            .fields
+            .iter()
+            .all(|field| matches!(field, stmt::Expr::Value(_))),
+        _ => false,
+    }
+}
+
+fn column_supports_unnest(ty: &db::Type) -> bool {
+    !matches!(ty, db::Type::List(_) | db::Type::Document { .. })
 }
 
 /// A bind parameter being inferred. Once inference completes, the `Ty` is

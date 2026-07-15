@@ -83,22 +83,35 @@ fn refine_insert(
     };
     let db_table = &db_schema.tables[table.table.0];
 
+    let stmt::ExprSet::Values(values) = &insert.source.body else {
+        return;
+    };
+
     // Expected type from the column list (authoritative). `check` pushes it
     // down into each VALUES row, field by field, typing every `Arg` param —
     // including a `#[document]` column, whose list/object value resolves to its
     // scalar `Document` storage type in `merge`.
+    //
+    // A transposed insert (`transpose_insert_unnest`) binds each field as an
+    // array of the column's values, so the expected field type is a list of
+    // the column type — which also pins an all-NULL column array.
     let expected = Ty::Record(
         table
             .columns
             .iter()
-            .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
+            .map(|col_id| {
+                let ty = ty_from_column(db_table.columns[col_id.index].storage_ty.clone());
+                if values.unnest {
+                    Ty::List(Box::new(ty))
+                } else {
+                    ty
+                }
+            })
             .collect(),
     );
 
-    if let stmt::ExprSet::Values(values) = &insert.source.body {
-        for row in &values.rows {
-            check(row, &expected, params);
-        }
+    for row in &values.rows {
+        check(row, &expected, params);
     }
 }
 

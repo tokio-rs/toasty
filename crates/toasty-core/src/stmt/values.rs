@@ -18,12 +18,22 @@ use super::{Expr, ExprSet, Query};
 pub struct Values {
     /// The row expressions. Each element is one row to insert or return.
     pub rows: Vec<Expr>,
+
+    /// Transposed multi-row INSERT source: the single row is a record of
+    /// per-column arrays, serialized as `SELECT * FROM unnest($1::t[], ...)`.
+    /// Set only by the engine's bind phase (`transpose_insert_unnest`) right
+    /// before serialization; no other pass observes this shape. If a second
+    /// dialect needs the form, promote to a source variant.
+    pub unnest: bool,
 }
 
 impl Values {
     /// Creates a `Values` from a vector of row expressions.
     pub fn new(rows: Vec<Expr>) -> Self {
-        Self { rows }
+        Self {
+            rows,
+            unnest: false,
+        }
     }
 
     /// Returns `true` if there are no rows.
@@ -51,6 +61,6 @@ impl From<Values> for Query {
 
 impl From<Expr> for Values {
     fn from(value: Expr) -> Self {
-        Self { rows: vec![value] }
+        Self::new(vec![value])
     }
 }

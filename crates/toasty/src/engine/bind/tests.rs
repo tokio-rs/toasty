@@ -86,6 +86,194 @@ fn null_values_not_extracted() {
     assert_eq!(params[0].value, Value::from("abc"));
 }
 
+// ============================================================================
+// Multi-row INSERT → unnest transpose (Capability::insert_values_unnest)
+// ============================================================================
+
+/// Build `INSERT INTO items (id, name) VALUES ('a1', 'n1'), ('a2', 'n2')`.
+fn two_row_item_insert(schema: &toasty_core::Schema) -> stmt::Statement {
+    stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a1"),
+                Value::from("n1"),
+            ]))),
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a2"),
+                Value::from("n2"),
+            ]))),
+        ])),
+        returning: None,
+    })
+}
+
+#[test]
+fn multi_row_insert_transposed_to_column_arrays_on_postgres() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: String,
+    }
+
+    let schema = test_schema_postgresql(&[Item::schema()]);
+    let mut stmt = two_row_item_insert(&schema);
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::POSTGRESQL,
+    );
+
+    // One array param per column, each holding that column's values across rows.
+    assert_eq!(params.len(), 2);
+    assert_eq!(
+        params[0].value,
+        Value::List(vec![Value::from("a1"), Value::from("a2")])
+    );
+    assert_eq!(
+        params[1].value,
+        Value::List(vec![Value::from("n1"), Value::from("n2")])
+    );
+
+    // The source is marked `unnest` with a single record row of Args.
+    let stmt::Statement::Insert(insert) = &stmt else {
+        panic!("expected insert");
+    };
+    let stmt::ExprSet::Values(values) = &insert.source.body else {
+        panic!("expected values body");
+    };
+    assert!(values.unnest);
+    assert_eq!(values.rows.len(), 1);
+    let Expr::Record(record) = &values.rows[0] else {
+        panic!("expected a single record row");
+    };
+    assert!(matches!(record.fields[0], Expr::Arg(_)));
+    assert!(matches!(record.fields[1], Expr::Arg(_)));
+}
+
+#[test]
+fn multi_row_insert_with_null_cell_binds_one_array_per_column() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: Option<String>,
+    }
+
+    let schema = test_schema_postgresql(&[Item::schema()]);
+    let mut stmt = stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(&schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a1"),
+                Value::from("n1"),
+            ]))),
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a2"),
+                Value::Null,
+            ]))),
+        ])),
+        returning: None,
+    });
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::POSTGRESQL,
+    );
+
+    // The NULL cell rides inside the column's array param; it must not decay
+    // to an inline NULL literal (which would break the unnest arity).
+    assert_eq!(params.len(), 2);
+    assert_eq!(
+        params[1].value,
+        Value::List(vec![Value::from("n1"), Value::Null])
+    );
+    assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
+
+    let stmt::Statement::Insert(insert) = &stmt else {
+        panic!("expected insert");
+    };
+    let stmt::ExprSet::Values(values) = &insert.source.body else {
+        panic!("expected values body");
+    };
+    assert!(values.unnest);
+    let Expr::Record(record) = &values.rows[0] else {
+        panic!("expected a single record row");
+    };
+    assert!(matches!(record.fields[1], Expr::Arg(_)));
+}
+
+#[test]
+fn multi_row_insert_all_null_column_typed_from_schema() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: Option<String>,
+    }
+
+    let schema = test_schema_postgresql(&[Item::schema()]);
+    let mut stmt = stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(&schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a1"),
+                Value::Null,
+            ]))),
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a2"),
+                Value::Null,
+            ]))),
+        ])),
+        returning: None,
+    });
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::POSTGRESQL,
+    );
+
+    // An all-NULL column array carries no value to infer from; its element
+    // type must come from the target column's storage type.
+    assert_eq!(params.len(), 2);
+    assert_eq!(params[1].value, Value::List(vec![Value::Null, Value::Null]));
+    assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
+}
+
+#[test]
+fn multi_row_insert_not_transposed_without_capability() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: String,
+    }
+
+    let schema = test_schema_with(&[Item::schema()]);
+    let mut stmt = two_row_item_insert(&schema);
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
+
+    // SQLite keeps the per-cell VALUES form: four scalar params, no unnest.
+    assert_eq!(params.len(), 4);
+    let stmt::Statement::Insert(insert) = &stmt else {
+        panic!("expected insert");
+    };
+    let stmt::ExprSet::Values(values) = &insert.source.body else {
+        panic!("expected values body");
+    };
+    assert!(!values.unnest);
+    assert_eq!(values.rows.len(), 2);
+}
+
 #[test]
 fn extract_from_where_clause() {
     let schema = test_schema();
