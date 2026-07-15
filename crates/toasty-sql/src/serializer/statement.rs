@@ -750,13 +750,11 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
 /// - PostgreSQL: `col || $1` — `text[] || text[]` concatenates arrays.
 /// - MySQL: `JSON_MERGE_PRESERVE(col, $1)` — preserves duplicates and
 ///   appends every element of the right-hand array to the left-hand one.
-/// - SQLite: a `json_group_array` subquery over the `json_each` rows of both
-///   arrays, concatenating them while preserving element order and types.
-///   `json_each.value` returns object and array elements as plain TEXT, which
-///   `json_group_array` would re-encode as JSON strings, so those elements
-///   pass through `json()` to keep their structure (a document collection's
-///   elements are objects); scalar elements pass through `json_quote`, since
-///   `json()` rejects a bare string like `a`.
+/// - SQLite: a scalar expression removes the closing bracket from the stored
+///   array and the opening bracket from the appended array, then joins them
+///   with a comma when both contain elements. `json()` validates and
+///   canonicalizes the result. This form also works in SQLite-compatible
+///   engines that reject subqueries inside an upsert assignment.
 fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
     match f.serializer.flavor {
         Flavor::Postgresql => fmt!(f, Ident(column_name) " || " expr),
@@ -765,10 +763,10 @@ fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt
         }
         Flavor::Sqlite => fmt!(
             f,
-            "(SELECT json_group_array(json(CASE WHEN type IN ('object', 'array') \
-             THEN value ELSE json_quote(value) END)) \
-             FROM (SELECT type, value FROM json_each("
-            Ident(column_name) ") UNION ALL SELECT type, value FROM json_each(" expr ")))"
+            "json(substr(" Ident(column_name) ", 1, length(" Ident(column_name) ") - 1) || \
+             CASE WHEN json_array_length(" Ident(column_name) ") > 0 \
+             AND json_array_length(" expr ") > 0 THEN ',' ELSE '' END || \
+             substr(" expr ", 2))"
         ),
     }
 }
