@@ -513,11 +513,6 @@ impl toasty_core::driver::Connection for Connection {
 
         let (sql, typed_params, ret_tys) = match op {
             Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, None),
-            Operation::Upsert(op) => (
-                sql::Statement::from(stmt::Statement::Insert(op.stmt)),
-                op.params,
-                op.ret,
-            ),
             Operation::QuerySql(query) => {
                 assert!(
                     query.last_insert_id_hack.is_none(),

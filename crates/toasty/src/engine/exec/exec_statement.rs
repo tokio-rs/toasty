@@ -190,7 +190,7 @@ impl Exec<'_> {
             ConditionalOutput::None => action.output.ty.clone(),
         };
 
-        let op = if matches!(&stmt, stmt::Statement::Insert(insert) if insert.upsert.is_some()) {
+        let op = if !self.engine.capability().sql && stmt.is_upsert() {
             let insert = stmt.into_insert_unwrap();
             operation::Upsert {
                 stmt: insert,

@@ -47,8 +47,9 @@ pub struct Insert {
 /// create branch in both cases.
 ///
 /// The engine stores model-field targets before lowering and database-column
-/// targets afterward. Drivers receive only the lowered column form inside
-/// [`Operation::Upsert`](crate::driver::Operation::Upsert).
+/// targets afterward. SQL drivers receive the lowered form inside
+/// [`Operation::QuerySql`](crate::driver::Operation::QuerySql); non-SQL drivers
+/// receive it inside [`Operation::Upsert`](crate::driver::Operation::Upsert).
 #[derive(Debug, Clone, PartialEq)]
 pub struct Upsert {
     /// The unique constraint that selects the conflicting row.
@@ -137,6 +138,11 @@ impl Statement {
     /// Returns `true` if this statement is an [`Insert`].
     pub fn is_insert(&self) -> bool {
         matches!(self, Statement::Insert(..))
+    }
+
+    /// Returns `true` if this statement is an [`Insert`] with an upsert action.
+    pub fn is_upsert(&self) -> bool {
+        matches!(self, Statement::Insert(insert) if insert.upsert.is_some())
     }
 
     /// Attempts to return a reference to an inner [`Insert`].

@@ -204,10 +204,11 @@ when an ordinary setter would otherwise assign the same proposed value.
 
 ## Driver integration
 
-Drivers receive a new `Operation::Upsert` containing the create values, the
-selected conflict target, shared and branch-specific assignments, the ignore
-policy, and the returning model projection. A driver must execute the operation
-atomically without selecting a branch in application code.
+SQL drivers receive the upsert as `Operation::QuerySql` containing a lowered
+`Insert` statement. Non-SQL drivers receive `Operation::Upsert` containing the
+same create values, selected conflict target, assignments, ignore policy, and
+returning projection. A driver must execute the operation atomically without
+selecting a branch in application code.
 
 The capability contract describes which upsert forms a driver supports:
 
@@ -228,8 +229,8 @@ MySQL's `ON DUPLICATE KEY UPDATE` does not select a conflict target. A proposed
 row that conflicts with any primary key or unique index can update a row, and a
 table with multiple unique indexes can match a different row than the named
 Toasty target. The initial MySQL driver therefore reports `unsupported_feature`
-for `Operation::Upsert`. Toasty does not use `INSERT IGNORE`, which suppresses
-errors beyond the selected uniqueness conflict. A separate API for MySQL's
+before dispatch. Toasty does not use `INSERT IGNORE`, which suppresses errors
+beyond the selected uniqueness conflict. A separate API for MySQL's
 any-unique-key behavior can be designed later.
 
 DynamoDB accepts only primary-key targets. The driver serializes a regular
@@ -270,9 +271,10 @@ different writes depending on whether the base item was created or updated,
 which one `UpdateItem` cannot express. `or_ignore` does not have this
 restriction because it only has a create branch.
 
-Adding `Operation::Upsert` requires out-of-tree drivers to handle the new
-variant. A driver may return `unsupported_feature` without implementing it.
-Existing operations and their behavior do not change.
+SQL drivers continue to receive `Operation::QuerySql`; their SQL serializer
+must support the upsert clause on `Insert`. A non-SQL driver that advertises
+upsert support must handle `Operation::Upsert`. Other drivers fail verification
+with `unsupported_feature` before dispatch.
 
 ## Alternatives considered
 

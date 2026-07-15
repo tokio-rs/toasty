@@ -1,7 +1,7 @@
 use super::{Operation, TypedValue};
 use crate::stmt;
 
-/// Executes a lowered single-row upsert on a database driver.
+/// Executes a lowered single-row upsert on a non-SQL database driver.
 ///
 /// The query engine emits this operation only after verifying the requested
 /// target and branch behavior against [`Capability`](crate::driver::Capability).

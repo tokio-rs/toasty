@@ -97,7 +97,7 @@ pub enum Operation {
     /// Update one or more records identified by primary key.
     UpdateByKey(UpdateByKey),
 
-    /// Atomically creates or updates one record by a unique key.
+    /// Atomically creates or updates one record by a unique key on a non-SQL driver.
     Upsert(Upsert),
 
     /// Full-table scan with optional filter and pagination.

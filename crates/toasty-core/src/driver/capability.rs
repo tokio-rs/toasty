@@ -52,15 +52,13 @@ pub struct Capability {
     /// SQL: Mysql doesn't support returning clauses from insert / update queries
     pub returning_from_mutation: bool,
 
-    /// Whether [`Operation::Upsert`](super::Operation::Upsert) may target the
-    /// table's primary key.
+    /// Whether an upsert may target the table's primary key.
     ///
     /// When `false`, the verifier returns `unsupported_feature` before
     /// dispatching a primary-key upsert to the driver.
     pub upsert_primary_key: bool,
 
-    /// Whether [`Operation::Upsert`](super::Operation::Upsert) may target a
-    /// secondary unique constraint.
+    /// Whether an upsert may target a secondary unique constraint.
     ///
     /// The driver must match the exact lowered target columns rather than
     /// reacting to an arbitrary unique conflict.
