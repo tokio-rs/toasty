@@ -1,4 +1,4 @@
-error: two fields in the same variant map to column `x`; a column can be shared only across different variants
+error: two fields in the same variant declare `#[shared(x)]`; a column can be shared only across different variants
   --> tests/ui/enum_shared_column_same_variant.rs:12:9
    |
 12 |         right: String,

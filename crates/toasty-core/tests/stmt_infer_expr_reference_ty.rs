@@ -87,6 +87,7 @@ fn model_root(id: usize, field_types: &[(Type, &str)]) -> ModelRoot {
             deferred: false,
             constraints: vec![],
             variant: None,
+            shared: None,
         })
         .collect();
 

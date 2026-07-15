@@ -177,7 +177,7 @@ impl Expand<'_> {
         //
         // An embedded enum flattens every variant's fields into one list, so two
         // variants may declare the same field name — e.g. a column shared across
-        // variants via `#[column("name")]`. Emit each accessor name only once to
+        // variants via `#[shared(name)]`. Emit each accessor name only once to
         // avoid duplicate method definitions. Root models and embedded structs
         // can never have duplicate field names, so this dedup is a no-op there.
         let mut seen_names = std::collections::HashSet::new();

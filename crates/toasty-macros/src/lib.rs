@@ -713,7 +713,7 @@ use proc_macro::TokenStream;
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        version, document
+        version, shared, document
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
@@ -977,6 +977,84 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// }
 /// ```
 ///
+/// ## `#[shared(ident)]` — share a column across enum variants
+///
+/// Declares a shared logical field on the enum. Variant fields declaring
+/// the same identifier are backed by a single nullable column instead of
+/// one column per variant. The identifier — not the Rust field names,
+/// which may differ per variant — names the field: the column name derives
+/// from it (`{enum_field}_{ident}`), and enum-level `#[index]` /
+/// `#[unique]` attributes reference it.
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum Creature {
+///     #[column(variant = 1)]
+///     Human {
+///         #[shared(name)]
+///         full_name: String,
+///         profession: String,
+///     },
+///     #[column(variant = 2)]
+///     Animal {
+///         #[shared(name)]
+///         nickname: String,
+///         species: String,
+///     },
+/// }
+/// // Columns: creature, creature_name (shared), creature_profession,
+/// // creature_species
+/// ```
+///
+/// Fields sharing an identifier must have the same type. To rename the
+/// shared column, add `#[column("...")]` to any one member of the group
+/// (if several declare it, they must agree):
+///
+/// ```
+/// # #[derive(toasty::Embed)]
+/// # enum Example {
+/// # #[column(variant = 1)]
+/// # V {
+/// #[shared(name)]
+/// #[column("legacy_name")]
+/// name: String,
+/// # },
+/// # }
+/// ```
+///
+/// ## Enum-level `#[index(...)]` / `#[unique(...)]`
+///
+/// On the enum itself, `#[index(...)]` and `#[unique(...)]` create an
+/// index over variant-field columns. Each reference is a shared field
+/// identifier or a `variant::field` path naming a variant field that owns
+/// its column; the two forms compose into composite indices.
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// #[unique(name)]
+/// #[index(name, human::profession)]
+/// enum Creature {
+///     #[column(variant = 1)]
+///     Human {
+///         #[shared(name)]
+///         name: String,
+///         profession: String,
+///     },
+///     #[column(variant = 2)]
+///     Animal {
+///         #[shared(name)]
+///         name: String,
+///     },
+/// }
+/// ```
+///
+/// An index on a shared column covers rows of **every** variant: with
+/// `#[unique(name)]` above, a `Human` named "Bob" and an `Animal` named
+/// "Bob" conflict. Rows of variants that do not declare the shared field
+/// store `NULL` and never conflict. For this reason, field-level
+/// `#[index]` / `#[unique]` on a `#[shared]` field is a compile error
+/// pointing at the enum-level form.
+///
 /// # Using embedded types in a model
 ///
 /// Reference an embedded type as a field on a [`Model`][`derive@Model`]
@@ -1107,7 +1185,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
-#[proc_macro_derive(Embed, attributes(column, document, index, unique))]
+#[proc_macro_derive(Embed, attributes(column, document, index, unique, shared))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
