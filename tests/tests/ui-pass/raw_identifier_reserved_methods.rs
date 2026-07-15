@@ -28,4 +28,12 @@ fn main() {
     let _ = Item::fields().r#count();
     let _ = Item::fields().r#all();
     let _ = Item::fields().r#filter();
+
+    // `Item` has a field named `filter`, so its field structs keep the
+    // accessor and skip the include-filter combinator. `Comment` has no such
+    // field, so the combinator is available — including when `Comment` is
+    // reached by navigating through `Item`.
+    let _ = Item::fields()
+        .r#filter()
+        .filter(Comment::fields().id().eq(1));
 }

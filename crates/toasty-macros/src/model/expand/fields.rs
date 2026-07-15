@@ -183,6 +183,16 @@ impl Expand<'_> {
         if !matches!(self.model.kind, ModelKind::Root(_)) {
             return TokenStream::new();
         }
+        // A field named `filter` keeps its accessor; the include-filter
+        // combinator is skipped for this model rather than colliding.
+        if self
+            .model
+            .fields
+            .iter()
+            .any(|field| util::bare_ident_name(&field.name.ident) == "filter")
+        {
+            return TokenStream::new();
+        }
         quote! {
             /// Restrict which related rows preload when this path is passed
             /// to `.include(...)`. The predicate is evaluated in the relation

@@ -489,13 +489,12 @@ pub async fn preload_eager_has_many_with_filter(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Filtering a non-optional 1-1 relation: there is no `None` to load into,
-/// so a predicate that excludes the row fails the whole query with
-/// `RecordNotFound` — the same error as a genuinely missing row.
+/// Filtering a non-optional 1-1 relation is rejected upfront: there is no
+/// `None` to load a non-matching row into, so whether the query would
+/// succeed would depend on the data. The query fails with
+/// `invalid_statement` regardless of whether the predicate matches.
 #[driver_test]
-pub async fn preload_required_has_one_filter_miss_is_record_not_found(
-    test: &mut Test,
-) -> Result<()> {
+pub async fn preload_required_has_one_filter_rejected(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -527,30 +526,53 @@ pub async fn preload_required_has_one_filter_miss_is_record_not_found(
     .exec(&mut db)
     .await?;
 
-    // Filter matches → loads normally.
-    let loaded = User::filter_by_id(user.id)
+    // Rejected even when the predicate would match every row.
+    let err = User::filter_by_id(user.id)
         .include(
             User::fields()
                 .profile()
                 .filter(Profile::fields().bio().eq("real bio")),
         )
         .get(&mut db)
-        .await?;
-    assert_eq!("real bio", loaded.profile.bio);
+        .await
+        .unwrap_err();
+    assert!(
+        err.is_invalid_statement(),
+        "expected invalid_statement error, got: {err:?}"
+    );
 
-    // Filter misses → the parent cannot be represented; the query errors.
-    let err = User::filter_by_id(user.id)
+    Ok(())
+}
+
+/// Filtering the include of a required `BelongsTo` is rejected for the same
+/// reason as a required `HasOne`: the loaded value cannot represent a
+/// non-matching parent row.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn preload_required_belongs_to_filter_rejected(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let _alice = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut todos: Vec<Todo> = Todo::all().exec(&mut db).await?;
+    let todo = todos.remove(0);
+
+    let err = Todo::filter_by_id(todo.id)
         .include(
-            User::fields()
-                .profile()
-                .filter(Profile::fields().bio().eq("nope")),
+            Todo::fields()
+                .user()
+                .filter(User::fields().name().eq("alice")),
         )
         .get(&mut db)
         .await
         .unwrap_err();
     assert!(
-        err.is_record_not_found(),
-        "expected record_not_found error, got: {err:?}"
+        err.is_invalid_statement(),
+        "expected invalid_statement error, got: {err:?}"
     );
 
     Ok(())
