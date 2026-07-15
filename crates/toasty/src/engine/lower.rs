@@ -1587,7 +1587,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
-            LoweringContext::Statement | LoweringContext::Returning(_) => {
+            LoweringContext::Statement
+            | LoweringContext::Returning(_)
+            | LoweringContext::Insert(..) => {
+                // Upsert update assignments are visited in the surrounding
+                // Insert context. Their field references read the stored row;
+                // proposed-row values use ExprFunc::Incoming instead. Inserted
+                // value rows use the separate InsertRow branch below.
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
@@ -1601,7 +1607,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     row.entry(index).unwrap().to_expr()
                 }
             }
-            _ => todo!("cx={:#?}", self.cx),
         }
     }
 

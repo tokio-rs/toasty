@@ -265,6 +265,30 @@ pub async fn upsert_update_can_reference_incoming_value(test: &mut Test) -> Resu
     Ok(())
 }
 
+#[driver_test(id(ID), requires(upsert_branch_assignments))]
+pub async fn upsert_update_can_reference_stored_value(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        value: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let seed = toasty::create!(Item { value: "stored" })
+        .exec(&mut db)
+        .await?;
+
+    let updated = Item::upsert_by_id(seed.id)
+        .value("incoming")
+        .on_update(|update| update.value(toasty::stmt::set(Item::fields().value())))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(updated.value, "stored");
+    Ok(())
+}
+
 #[driver_test(id(ID), requires(upsert_primary_key))]
 pub async fn upsert_shared_assignment_operators(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]

@@ -192,7 +192,14 @@ impl ToSql for &stmt::Expr {
                     let column =
                         f.cx.resolve_expr_reference(expr_reference)
                             .as_column_unwrap();
-                    fmt!(f, Ident(&column.name))
+                    if matches!(f.serializer.flavor, Flavor::Postgresql)
+                        && expr_column.nesting == 0
+                        && f.assignment_table == Some(column.id.table)
+                    {
+                        fmt!(f, f.serializer.table_name(column.id.table) "." Ident(&column.name))
+                    } else {
+                        fmt!(f, Ident(&column.name))
+                    }
                 }
             }
             stmt::Expr::Stmt(expr) => {
