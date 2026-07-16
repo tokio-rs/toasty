@@ -71,107 +71,130 @@
 <a href=#71 id=71 data-nosnippet>71</a>        .collect()
 <a href=#72 id=72 data-nosnippet>72</a>}
 <a href=#73 id=73 data-nosnippet>73</a>
-<a href=#74 id=74 data-nosnippet>74</a><span class="kw">use </span>std::collections::BTreeMap;
-<a href=#75 id=75 data-nosnippet>75</a>
-<a href=#76 id=76 data-nosnippet>76</a><span class="kw">use </span>toasty_core::{
-<a href=#77 id=77 data-nosnippet>77</a>    driver::{Operation, operation::TypedValue},
-<a href=#78 id=78 data-nosnippet>78</a>    stmt::{Assignment, Expr, ExprSet, Statement, Value},
-<a href=#79 id=79 data-nosnippet>79</a>};
-<a href=#80 id=80 data-nosnippet>80</a>
-<a href=#81 id=81 data-nosnippet>81</a><span class="kw">use </span><span class="kw">crate</span>::Test;
-<a href=#82 id=82 data-nosnippet>82</a>
-<a href=#83 id=83 data-nosnippet>83</a><span class="doccomment">/// Resolve a value expression: a literal `Value`, or a bound param looked up in
-<a href=#84 id=84 data-nosnippet>84</a>/// `params` (SQL drivers replace scalars with `Expr::Arg` placeholders).
-<a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">fn </span>expr_value(expr: <span class="kw-2">&amp;</span>Expr, params: <span class="kw-2">&amp;</span>[Value]) -&gt; Value {
-<a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">match </span>expr {
-<a href=#87 id=87 data-nosnippet>87</a>        Expr::Value(value) =&gt; value.clone(),
-<a href=#88 id=88 data-nosnippet>88</a>        Expr::Arg(arg) =&gt; params[arg.position].clone(),
-<a href=#89 id=89 data-nosnippet>89</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected a value expression, got {other:#?}"</span>),
-<a href=#90 id=90 data-nosnippet>90</a>    }
-<a href=#91 id=91 data-nosnippet>91</a>}
-<a href=#92 id=92 data-nosnippet>92</a>
-<a href=#93 id=93 data-nosnippet>93</a><span class="kw">fn </span>params_of(params: Vec&lt;TypedValue&gt;) -&gt; Vec&lt;Value&gt; {
-<a href=#94 id=94 data-nosnippet>94</a>    params.into_iter().map(|tv| tv.value).collect()
+<a href=#74 id=74 data-nosnippet>74</a><span class="doccomment">/// Helper function to look up the storage type of a column from the schema
+<a href=#75 id=75 data-nosnippet>75</a>/// (handles database-specific table prefixes)
+<a href=#76 id=76 data-nosnippet>76</a></span><span class="kw">pub fn </span>column_storage_ty(
+<a href=#77 id=77 data-nosnippet>77</a>    db: <span class="kw-2">&amp;</span>toasty::Db,
+<a href=#78 id=78 data-nosnippet>78</a>    table_name: <span class="kw-2">&amp;</span>str,
+<a href=#79 id=79 data-nosnippet>79</a>    column_name: <span class="kw-2">&amp;</span>str,
+<a href=#80 id=80 data-nosnippet>80</a>) -&gt; toasty_core::schema::db::Type {
+<a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">let </span>schema = db.schema();
+<a href=#82 id=82 data-nosnippet>82</a>    <span class="kw">let </span>table = schema
+<a href=#83 id=83 data-nosnippet>83</a>        .db
+<a href=#84 id=84 data-nosnippet>84</a>        .tables
+<a href=#85 id=85 data-nosnippet>85</a>        .iter()
+<a href=#86 id=86 data-nosnippet>86</a>        .find(|t| t.name == table_name || t.name.ends_with(table_name))
+<a href=#87 id=87 data-nosnippet>87</a>        .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"table '{table_name}' not in schema"</span>));
+<a href=#88 id=88 data-nosnippet>88</a>    table
+<a href=#89 id=89 data-nosnippet>89</a>        .columns
+<a href=#90 id=90 data-nosnippet>90</a>        .iter()
+<a href=#91 id=91 data-nosnippet>91</a>        .find(|c| c.name == column_name)
+<a href=#92 id=92 data-nosnippet>92</a>        .unwrap_or_else(|| <span class="macro">panic!</span>(<span class="string">"column '{column_name}' not in table '{table_name}'"</span>))
+<a href=#93 id=93 data-nosnippet>93</a>        .storage_ty
+<a href=#94 id=94 data-nosnippet>94</a>        .clone()
 <a href=#95 id=95 data-nosnippet>95</a>}
 <a href=#96 id=96 data-nosnippet>96</a>
-<a href=#97 id=97 data-nosnippet>97</a><span class="doccomment">/// Pop the next logged op (a create) and return `column index -&gt; inserted
-<a href=#98 id=98 data-nosnippet>98</a>/// value`, normalizing SQL (`QuerySql`) vs key-value (`Insert`) ops and inlining
-<a href=#99 id=99 data-nosnippet>99</a>/// bound params. Useful for asserting exactly what an `INSERT` writes.
-<a href=#100 id=100 data-nosnippet>100</a></span><span class="kw">pub fn </span>pop_insert(test: <span class="kw-2">&amp;mut </span>Test) -&gt; BTreeMap&lt;usize, Value&gt; {
-<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">let </span>(op, <span class="kw">_</span>) = test.log().pop();
-<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">let </span>(stmt, params) = <span class="kw">match </span>op {
-<a href=#103 id=103 data-nosnippet>103</a>        Operation::QuerySql(q) =&gt; (q.stmt, params_of(q.params)),
-<a href=#104 id=104 data-nosnippet>104</a>        Operation::Insert(i) =&gt; (i.stmt, params_of(i.params)),
-<a href=#105 id=105 data-nosnippet>105</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected an insert op, got {other:#?}"</span>),
-<a href=#106 id=106 data-nosnippet>106</a>    };
-<a href=#107 id=107 data-nosnippet>107</a>    <span class="kw">let </span>Statement::Insert(insert) = stmt <span class="kw">else </span>{
-<a href=#108 id=108 data-nosnippet>108</a>        <span class="macro">panic!</span>(<span class="string">"expected an Insert statement"</span>);
-<a href=#109 id=109 data-nosnippet>109</a>    };
-<a href=#110 id=110 data-nosnippet>110</a>    <span class="kw">let </span>toasty_core::stmt::InsertTarget::Table(target) = <span class="kw-2">&amp;</span>insert.target <span class="kw">else </span>{
-<a href=#111 id=111 data-nosnippet>111</a>        <span class="macro">panic!</span>(<span class="string">"expected a table insert target"</span>);
-<a href=#112 id=112 data-nosnippet>112</a>    };
-<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">let </span>ExprSet::Values(values) = <span class="kw-2">&amp;</span>insert.source.body <span class="kw">else </span>{
-<a href=#114 id=114 data-nosnippet>114</a>        <span class="macro">panic!</span>(<span class="string">"expected a VALUES source"</span>);
-<a href=#115 id=115 data-nosnippet>115</a>    };
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="comment">// The single row is an `Expr::Record` of value/param exprs (SQL) or an
-<a href=#117 id=117 data-nosnippet>117</a>    // already-evaluated `Value::Record` (key-value drivers).
-<a href=#118 id=118 data-nosnippet>118</a>    </span><span class="kw">let </span>row: Vec&lt;Value&gt; = <span class="kw">match </span><span class="kw-2">&amp;</span>values.rows[<span class="number">0</span>] {
-<a href=#119 id=119 data-nosnippet>119</a>        Expr::Record(record) =&gt; record
-<a href=#120 id=120 data-nosnippet>120</a>            .fields
-<a href=#121 id=121 data-nosnippet>121</a>            .iter()
-<a href=#122 id=122 data-nosnippet>122</a>            .map(|expr| expr_value(expr, <span class="kw-2">&amp;</span>params))
-<a href=#123 id=123 data-nosnippet>123</a>            .collect(),
-<a href=#124 id=124 data-nosnippet>124</a>        Expr::Value(Value::Record(record)) =&gt; record.fields.clone(),
-<a href=#125 id=125 data-nosnippet>125</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected a record row, got {other:#?}"</span>),
-<a href=#126 id=126 data-nosnippet>126</a>    };
-<a href=#127 id=127 data-nosnippet>127</a>    target
-<a href=#128 id=128 data-nosnippet>128</a>        .columns
-<a href=#129 id=129 data-nosnippet>129</a>        .iter()
-<a href=#130 id=130 data-nosnippet>130</a>        .zip(row)
-<a href=#131 id=131 data-nosnippet>131</a>        .map(|(col, value)| (col.index, value))
-<a href=#132 id=132 data-nosnippet>132</a>        .collect()
-<a href=#133 id=133 data-nosnippet>133</a>}
-<a href=#134 id=134 data-nosnippet>134</a>
-<a href=#135 id=135 data-nosnippet>135</a><span class="doccomment">/// Pop the next logged op (an update) and return `column index -&gt; assigned
-<a href=#136 id=136 data-nosnippet>136</a>/// value`, normalizing SQL (`QuerySql`) vs key-value (`UpdateByKey`) ops and
-<a href=#137 id=137 data-nosnippet>137</a>/// inlining bound params.
-<a href=#138 id=138 data-nosnippet>138</a></span><span class="kw">pub fn </span>pop_update(test: <span class="kw-2">&amp;mut </span>Test) -&gt; BTreeMap&lt;usize, Value&gt; {
-<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">let </span>(op, <span class="kw">_</span>) = test.log().pop();
-<a href=#140 id=140 data-nosnippet>140</a>    <span class="kw">let </span>(assignments, params) = <span class="kw">match </span>op {
-<a href=#141 id=141 data-nosnippet>141</a>        Operation::QuerySql(q) =&gt; <span class="kw">match </span>q.stmt {
-<a href=#142 id=142 data-nosnippet>142</a>            Statement::Update(update) =&gt; (update.assignments, params_of(q.params)),
-<a href=#143 id=143 data-nosnippet>143</a>            other =&gt; <span class="macro">panic!</span>(<span class="string">"expected an Update statement, got {other:#?}"</span>),
-<a href=#144 id=144 data-nosnippet>144</a>        },
-<a href=#145 id=145 data-nosnippet>145</a>        Operation::UpdateByKey(update) =&gt; (update.assignments, <span class="macro">vec!</span>[]),
-<a href=#146 id=146 data-nosnippet>146</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected an update op, got {other:#?}"</span>),
-<a href=#147 id=147 data-nosnippet>147</a>    };
-<a href=#148 id=148 data-nosnippet>148</a>    assignments
-<a href=#149 id=149 data-nosnippet>149</a>        .iter()
-<a href=#150 id=150 data-nosnippet>150</a>        .map(|(projection, assignment)| {
-<a href=#151 id=151 data-nosnippet>151</a>            <span class="kw">let </span>Assignment::Set(expr) = assignment <span class="kw">else </span>{
-<a href=#152 id=152 data-nosnippet>152</a>                <span class="macro">panic!</span>(<span class="string">"expected a Set assignment, got {assignment:#?}"</span>);
-<a href=#153 id=153 data-nosnippet>153</a>            };
-<a href=#154 id=154 data-nosnippet>154</a>            (projection.as_slice()[<span class="number">0</span>], expr_value(expr, <span class="kw-2">&amp;</span>params))
-<a href=#155 id=155 data-nosnippet>155</a>        })
-<a href=#156 id=156 data-nosnippet>156</a>        .collect()
-<a href=#157 id=157 data-nosnippet>157</a>}
-<a href=#158 id=158 data-nosnippet>158</a>
-<a href=#159 id=159 data-nosnippet>159</a><span class="doccomment">/// Pop the next logged op (a read) and return its filter predicate, normalizing
-<a href=#160 id=160 data-nosnippet>160</a>/// SQL (`QuerySql` select) vs key-value (`Scan`) ops.
-<a href=#161 id=161 data-nosnippet>161</a></span><span class="kw">pub fn </span>pop_filter(test: <span class="kw-2">&amp;mut </span>Test) -&gt; Expr {
+<a href=#97 id=97 data-nosnippet>97</a><span class="kw">use </span>std::collections::BTreeMap;
+<a href=#98 id=98 data-nosnippet>98</a>
+<a href=#99 id=99 data-nosnippet>99</a><span class="kw">use </span>toasty_core::{
+<a href=#100 id=100 data-nosnippet>100</a>    driver::{Operation, operation::TypedValue},
+<a href=#101 id=101 data-nosnippet>101</a>    stmt::{Assignment, Expr, ExprSet, Statement, Value},
+<a href=#102 id=102 data-nosnippet>102</a>};
+<a href=#103 id=103 data-nosnippet>103</a>
+<a href=#104 id=104 data-nosnippet>104</a><span class="kw">use </span><span class="kw">crate</span>::Test;
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a><span class="doccomment">/// Resolve a value expression: a literal `Value`, or a bound param looked up in
+<a href=#107 id=107 data-nosnippet>107</a>/// `params` (SQL drivers replace scalars with `Expr::Arg` placeholders).
+<a href=#108 id=108 data-nosnippet>108</a></span><span class="kw">fn </span>expr_value(expr: <span class="kw-2">&amp;</span>Expr, params: <span class="kw-2">&amp;</span>[Value]) -&gt; Value {
+<a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">match </span>expr {
+<a href=#110 id=110 data-nosnippet>110</a>        Expr::Value(value) =&gt; value.clone(),
+<a href=#111 id=111 data-nosnippet>111</a>        Expr::Arg(arg) =&gt; params[arg.position].clone(),
+<a href=#112 id=112 data-nosnippet>112</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected a value expression, got {other:#?}"</span>),
+<a href=#113 id=113 data-nosnippet>113</a>    }
+<a href=#114 id=114 data-nosnippet>114</a>}
+<a href=#115 id=115 data-nosnippet>115</a>
+<a href=#116 id=116 data-nosnippet>116</a><span class="kw">fn </span>params_of(params: Vec&lt;TypedValue&gt;) -&gt; Vec&lt;Value&gt; {
+<a href=#117 id=117 data-nosnippet>117</a>    params.into_iter().map(|tv| tv.value).collect()
+<a href=#118 id=118 data-nosnippet>118</a>}
+<a href=#119 id=119 data-nosnippet>119</a>
+<a href=#120 id=120 data-nosnippet>120</a><span class="doccomment">/// Pop the next logged op (a create) and return `column index -&gt; inserted
+<a href=#121 id=121 data-nosnippet>121</a>/// value`, normalizing SQL (`QuerySql`) vs key-value (`Insert`) ops and inlining
+<a href=#122 id=122 data-nosnippet>122</a>/// bound params. Useful for asserting exactly what an `INSERT` writes.
+<a href=#123 id=123 data-nosnippet>123</a></span><span class="kw">pub fn </span>pop_insert(test: <span class="kw-2">&amp;mut </span>Test) -&gt; BTreeMap&lt;usize, Value&gt; {
+<a href=#124 id=124 data-nosnippet>124</a>    <span class="kw">let </span>(op, <span class="kw">_</span>) = test.log().pop();
+<a href=#125 id=125 data-nosnippet>125</a>    <span class="kw">let </span>(stmt, params) = <span class="kw">match </span>op {
+<a href=#126 id=126 data-nosnippet>126</a>        Operation::QuerySql(q) =&gt; (q.stmt, params_of(q.params)),
+<a href=#127 id=127 data-nosnippet>127</a>        Operation::Insert(i) =&gt; (i.stmt, params_of(i.params)),
+<a href=#128 id=128 data-nosnippet>128</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected an insert op, got {other:#?}"</span>),
+<a href=#129 id=129 data-nosnippet>129</a>    };
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">let </span>Statement::Insert(insert) = stmt <span class="kw">else </span>{
+<a href=#131 id=131 data-nosnippet>131</a>        <span class="macro">panic!</span>(<span class="string">"expected an Insert statement"</span>);
+<a href=#132 id=132 data-nosnippet>132</a>    };
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">let </span>toasty_core::stmt::InsertTarget::Table(target) = <span class="kw-2">&amp;</span>insert.target <span class="kw">else </span>{
+<a href=#134 id=134 data-nosnippet>134</a>        <span class="macro">panic!</span>(<span class="string">"expected a table insert target"</span>);
+<a href=#135 id=135 data-nosnippet>135</a>    };
+<a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">let </span>ExprSet::Values(values) = <span class="kw-2">&amp;</span>insert.source.body <span class="kw">else </span>{
+<a href=#137 id=137 data-nosnippet>137</a>        <span class="macro">panic!</span>(<span class="string">"expected a VALUES source"</span>);
+<a href=#138 id=138 data-nosnippet>138</a>    };
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="comment">// The single row is an `Expr::Record` of value/param exprs (SQL) or an
+<a href=#140 id=140 data-nosnippet>140</a>    // already-evaluated `Value::Record` (key-value drivers).
+<a href=#141 id=141 data-nosnippet>141</a>    </span><span class="kw">let </span>row: Vec&lt;Value&gt; = <span class="kw">match </span><span class="kw-2">&amp;</span>values.rows[<span class="number">0</span>] {
+<a href=#142 id=142 data-nosnippet>142</a>        Expr::Record(record) =&gt; record
+<a href=#143 id=143 data-nosnippet>143</a>            .fields
+<a href=#144 id=144 data-nosnippet>144</a>            .iter()
+<a href=#145 id=145 data-nosnippet>145</a>            .map(|expr| expr_value(expr, <span class="kw-2">&amp;</span>params))
+<a href=#146 id=146 data-nosnippet>146</a>            .collect(),
+<a href=#147 id=147 data-nosnippet>147</a>        Expr::Value(Value::Record(record)) =&gt; record.fields.clone(),
+<a href=#148 id=148 data-nosnippet>148</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected a record row, got {other:#?}"</span>),
+<a href=#149 id=149 data-nosnippet>149</a>    };
+<a href=#150 id=150 data-nosnippet>150</a>    target
+<a href=#151 id=151 data-nosnippet>151</a>        .columns
+<a href=#152 id=152 data-nosnippet>152</a>        .iter()
+<a href=#153 id=153 data-nosnippet>153</a>        .zip(row)
+<a href=#154 id=154 data-nosnippet>154</a>        .map(|(col, value)| (col.index, value))
+<a href=#155 id=155 data-nosnippet>155</a>        .collect()
+<a href=#156 id=156 data-nosnippet>156</a>}
+<a href=#157 id=157 data-nosnippet>157</a>
+<a href=#158 id=158 data-nosnippet>158</a><span class="doccomment">/// Pop the next logged op (an update) and return `column index -&gt; assigned
+<a href=#159 id=159 data-nosnippet>159</a>/// value`, normalizing SQL (`QuerySql`) vs key-value (`UpdateByKey`) ops and
+<a href=#160 id=160 data-nosnippet>160</a>/// inlining bound params.
+<a href=#161 id=161 data-nosnippet>161</a></span><span class="kw">pub fn </span>pop_update(test: <span class="kw-2">&amp;mut </span>Test) -&gt; BTreeMap&lt;usize, Value&gt; {
 <a href=#162 id=162 data-nosnippet>162</a>    <span class="kw">let </span>(op, <span class="kw">_</span>) = test.log().pop();
-<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">match </span>op {
-<a href=#164 id=164 data-nosnippet>164</a>        Operation::QuerySql(q) =&gt; {
-<a href=#165 id=165 data-nosnippet>165</a>            <span class="kw">let </span>Statement::Query(query) = q.stmt <span class="kw">else </span>{
-<a href=#166 id=166 data-nosnippet>166</a>                <span class="macro">panic!</span>(<span class="string">"expected a Query statement"</span>);
-<a href=#167 id=167 data-nosnippet>167</a>            };
-<a href=#168 id=168 data-nosnippet>168</a>            <span class="kw">let </span>ExprSet::Select(select) = query.body <span class="kw">else </span>{
-<a href=#169 id=169 data-nosnippet>169</a>                <span class="macro">panic!</span>(<span class="string">"expected a Select body"</span>);
-<a href=#170 id=170 data-nosnippet>170</a>            };
-<a href=#171 id=171 data-nosnippet>171</a>            select.filter.expr.expect(<span class="string">"filter predicate present"</span>)
-<a href=#172 id=172 data-nosnippet>172</a>        }
-<a href=#173 id=173 data-nosnippet>173</a>        Operation::Scan(scan) =&gt; scan.filter.expect(<span class="string">"filter predicate present"</span>),
-<a href=#174 id=174 data-nosnippet>174</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected a query/scan op, got {other:#?}"</span>),
-<a href=#175 id=175 data-nosnippet>175</a>    }
-<a href=#176 id=176 data-nosnippet>176</a>}
+<a href=#163 id=163 data-nosnippet>163</a>    <span class="kw">let </span>(assignments, params) = <span class="kw">match </span>op {
+<a href=#164 id=164 data-nosnippet>164</a>        Operation::QuerySql(q) =&gt; <span class="kw">match </span>q.stmt {
+<a href=#165 id=165 data-nosnippet>165</a>            Statement::Update(update) =&gt; (update.assignments, params_of(q.params)),
+<a href=#166 id=166 data-nosnippet>166</a>            other =&gt; <span class="macro">panic!</span>(<span class="string">"expected an Update statement, got {other:#?}"</span>),
+<a href=#167 id=167 data-nosnippet>167</a>        },
+<a href=#168 id=168 data-nosnippet>168</a>        Operation::UpdateByKey(update) =&gt; (update.assignments, <span class="macro">vec!</span>[]),
+<a href=#169 id=169 data-nosnippet>169</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected an update op, got {other:#?}"</span>),
+<a href=#170 id=170 data-nosnippet>170</a>    };
+<a href=#171 id=171 data-nosnippet>171</a>    assignments
+<a href=#172 id=172 data-nosnippet>172</a>        .iter()
+<a href=#173 id=173 data-nosnippet>173</a>        .map(|(projection, assignment)| {
+<a href=#174 id=174 data-nosnippet>174</a>            <span class="kw">let </span>Assignment::Set(expr) = assignment <span class="kw">else </span>{
+<a href=#175 id=175 data-nosnippet>175</a>                <span class="macro">panic!</span>(<span class="string">"expected a Set assignment, got {assignment:#?}"</span>);
+<a href=#176 id=176 data-nosnippet>176</a>            };
+<a href=#177 id=177 data-nosnippet>177</a>            (projection.as_slice()[<span class="number">0</span>], expr_value(expr, <span class="kw-2">&amp;</span>params))
+<a href=#178 id=178 data-nosnippet>178</a>        })
+<a href=#179 id=179 data-nosnippet>179</a>        .collect()
+<a href=#180 id=180 data-nosnippet>180</a>}
+<a href=#181 id=181 data-nosnippet>181</a>
+<a href=#182 id=182 data-nosnippet>182</a><span class="doccomment">/// Pop the next logged op (a read) and return its filter predicate, normalizing
+<a href=#183 id=183 data-nosnippet>183</a>/// SQL (`QuerySql` select) vs key-value (`Scan`) ops.
+<a href=#184 id=184 data-nosnippet>184</a></span><span class="kw">pub fn </span>pop_filter(test: <span class="kw-2">&amp;mut </span>Test) -&gt; Expr {
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="kw">let </span>(op, <span class="kw">_</span>) = test.log().pop();
+<a href=#186 id=186 data-nosnippet>186</a>    <span class="kw">match </span>op {
+<a href=#187 id=187 data-nosnippet>187</a>        Operation::QuerySql(q) =&gt; {
+<a href=#188 id=188 data-nosnippet>188</a>            <span class="kw">let </span>Statement::Query(query) = q.stmt <span class="kw">else </span>{
+<a href=#189 id=189 data-nosnippet>189</a>                <span class="macro">panic!</span>(<span class="string">"expected a Query statement"</span>);
+<a href=#190 id=190 data-nosnippet>190</a>            };
+<a href=#191 id=191 data-nosnippet>191</a>            <span class="kw">let </span>ExprSet::Select(select) = query.body <span class="kw">else </span>{
+<a href=#192 id=192 data-nosnippet>192</a>                <span class="macro">panic!</span>(<span class="string">"expected a Select body"</span>);
+<a href=#193 id=193 data-nosnippet>193</a>            };
+<a href=#194 id=194 data-nosnippet>194</a>            select.filter.expr.expect(<span class="string">"filter predicate present"</span>)
+<a href=#195 id=195 data-nosnippet>195</a>        }
+<a href=#196 id=196 data-nosnippet>196</a>        Operation::Scan(scan) =&gt; scan.filter.expect(<span class="string">"filter predicate present"</span>),
+<a href=#197 id=197 data-nosnippet>197</a>        other =&gt; <span class="macro">panic!</span>(<span class="string">"expected a query/scan op, got {other:#?}"</span>),
+<a href=#198 id=198 data-nosnippet>198</a>    }
+<a href=#199 id=199 data-nosnippet>199</a>}
 </code></pre></div></section></main></body></html>

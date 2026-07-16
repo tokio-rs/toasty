@@ -1431,7 +1431,7 @@
 <a href=#1431 id=1431 data-nosnippet>1431</a>
 <a href=#1432 id=1432 data-nosnippet>1432</a>        <span class="comment">// Prefix native enum type names so they don't collide across test runs
 <a href=#1433 id=1433 data-nosnippet>1433</a>        // or multi-tenant deployments.
-<a href=#1434 id=1434 data-nosnippet>1434</a>        </span><span class="kw">if let </span>db::Type::Enum(<span class="kw-2">ref mut </span>type_enum) = storage_ty
+<a href=#1434 id=1434 data-nosnippet>1434</a>        </span><span class="kw">if let </span><span class="prelude-val">Some</span>(type_enum) = storage_ty.named_enum_mut()
 <a href=#1435 id=1435 data-nosnippet>1435</a>            &amp;&amp; <span class="kw">let </span>(<span class="prelude-val">Some</span>(prefix), <span class="prelude-val">Some</span>(name)) = (<span class="kw-2">&amp;</span><span class="self">self</span>.build.name_prefix, <span class="kw-2">&amp;mut </span>type_enum.name)
 <a href=#1436 id=1436 data-nosnippet>1436</a>        {
 <a href=#1437 id=1437 data-nosnippet>1437</a>            <span class="kw-2">*</span>name = <span class="macro">format!</span>(<span class="string">"{prefix}{name}"</span>);
