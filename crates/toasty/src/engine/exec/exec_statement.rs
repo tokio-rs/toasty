@@ -190,25 +190,14 @@ impl Exec<'_> {
             ConditionalOutput::None => action.output.ty.clone(),
         };
 
-        let op = if !self.engine.capability().sql && stmt.is_upsert() {
-            let insert = stmt.into_insert_unwrap();
-            operation::Upsert {
-                stmt: insert,
-                params,
-                ret,
-            }
-            .into()
-        } else {
-            operation::QuerySql {
-                stmt,
-                params,
-                ret,
-                last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
-            }
-            .into()
+        let op = operation::QuerySql {
+            stmt,
+            params,
+            ret,
+            last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 
-        let mut res = self.connection.exec(&self.engine.schema, op).await?;
+        let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
         match action.conditional {
             ConditionalOutput::None => {

@@ -903,32 +903,42 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     .unwrap_or(true),
                 "stmt={stmt:#?}"
             );
-            // With SQL capability, we can just punt the details of execution to
-            // the database's query planner.
-            mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
-                inputs: mem::take(&mut self.load_data.inputs),
-                stmt,
-                ty,
-                conditional: exec::ConditionalOutput::None,
-                pagination: pagination_config.clone(),
-            }))
+            let inputs = mem::take(&mut self.load_data.inputs);
+
+            if !self.planner.engine.capability().sql && stmt.is_upsert() {
+                debug_assert!(pagination_config.is_none());
+
+                mir::Operation::Upsert(Box::new(mir::Upsert {
+                    inputs,
+                    stmt: stmt.into_insert_unwrap(),
+                    ty,
+                }))
+            } else {
+                // With SQL capability, we can just punt the details of execution to
+                // the database's query planner.
+                mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
+                    inputs,
+                    stmt,
+                    ty,
+                    conditional: exec::ConditionalOutput::None,
+                    pagination: pagination_config.clone(),
+                }))
+            }
         };
 
-        // With SQL capability, we can just punt the details of execution to
-        // the database's query planner.
-        let mut exec_statement_node = self.insert_mir_with_deps(node);
+        let mut load_data_node = self.insert_mir_with_deps(node);
 
         if let Some((const_value, const_ty)) = const_returning {
-            exec_statement_node = self.planner.mir.insert_with_deps(
+            load_data_node = self.planner.mir.insert_with_deps(
                 mir::Const {
                     value: const_value,
                     ty: const_ty,
                 },
-                [exec_statement_node],
+                [load_data_node],
             );
         }
 
-        Ok(exec_statement_node)
+        Ok(load_data_node)
     }
 
     fn extract_insert_returning_as_const(
