@@ -184,7 +184,7 @@ mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
 mod insert;
-pub use insert::{Insert, Upsert, UpsertAction, UpsertTarget};
+pub use insert::{Insert, Upsert, UpsertAction, UpsertCreate, UpsertTarget, UpsertUpdate};
 
 mod insert_table;
 pub use insert_table::InsertTable;

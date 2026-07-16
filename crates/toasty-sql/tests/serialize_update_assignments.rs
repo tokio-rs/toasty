@@ -137,18 +137,18 @@ fn upsert_with(assignments: Assignments) -> stmt::Statement {
             Expr::from("a"),
             Expr::list([Expr::from(7i64)]),
         ])])),
-        upsert: Some(stmt::Upsert {
+        upsert: Some(Box::new(stmt::Upsert {
             target: stmt::UpsertTarget::Columns(vec![ColumnId {
                 table: TableId(0),
                 index: 0,
             }]),
             assignments,
+            on_create: None,
+            on_update: None,
             create_defaults: Assignments::default(),
             action: stmt::UpsertAction::Update,
-            explicit_create: false,
-            explicit_update: false,
             invalid_shared_assignments: vec![],
-        }),
+        })),
         returning: None,
     }
     .into()

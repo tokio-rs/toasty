@@ -33,7 +33,7 @@ pub struct Insert {
     pub source: Query,
 
     /// Optional conflict handling that turns this insert into an upsert.
-    pub upsert: Option<Upsert>,
+    pub upsert: Option<Box<Upsert>>,
 
     /// Optional `RETURNING` clause to return data from the insertion.
     pub returning: Option<Returning>,
@@ -61,6 +61,12 @@ pub struct Upsert {
     /// [`ExprIncoming`](super::ExprIncoming), the row proposed by the insert source.
     pub assignments: Assignments,
 
+    /// Assignments explicitly scoped to record creation with `on_create`.
+    pub on_create: Option<UpsertCreate>,
+
+    /// Assignments explicitly scoped to conflict updates with `on_update`.
+    pub on_update: Option<UpsertUpdate>,
+
     /// Create-only default assignments retained for key-value lowering.
     ///
     /// DynamoDB uses these to initialize required values with
@@ -70,26 +76,26 @@ pub struct Upsert {
     /// Whether to update or ignore a conflicting row.
     pub action: UpsertAction,
 
-    /// Whether the caller explicitly configured the create branch with
-    /// `on_create`.
-    ///
-    /// The verifier checks this flag against the driver's branch-assignment
-    /// capability.
-    pub explicit_create: bool,
-
-    /// Whether the caller explicitly configured the update branch with
-    /// `on_update`.
-    ///
-    /// The verifier checks this flag against the driver's branch-assignment
-    /// capability.
-    pub explicit_update: bool,
-
     /// Shared assignments that cannot initialize the corresponding create
     /// field.
     ///
     /// Verification rejects these assignments and directs the caller to use
     /// separate create and update branches.
     pub invalid_shared_assignments: Vec<Projection>,
+}
+
+/// Assignments explicitly scoped to the create branch of an [`Upsert`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct UpsertCreate {
+    /// Values that override shared assignments when the insert creates a row.
+    pub assignments: Assignments,
+}
+
+/// Assignments explicitly scoped to the update branch of an [`Upsert`].
+#[derive(Debug, Clone, Default, PartialEq)]
+pub struct UpsertUpdate {
+    /// Operations that override shared assignments when the target conflicts.
+    pub assignments: Assignments,
 }
 
 /// The fields or columns that identify the selected upsert conflict.

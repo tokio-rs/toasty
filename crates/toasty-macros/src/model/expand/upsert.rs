@@ -171,7 +171,7 @@ impl Expand<'_> {
                     mut self,
                     f: impl for<'a> FnOnce(#create_ident<'a>) -> #create_ident<'a>,
                 ) -> Self {
-                    self.stmt.mark_explicit_create();
+                    self.stmt.begin_on_create();
                     let branch = #create_ident { stmt: &mut self.stmt };
                     let _ = f(branch);
                     self
@@ -182,7 +182,7 @@ impl Expand<'_> {
                     mut self,
                     f: impl for<'a> FnOnce(#update_ident<'a>) -> #update_ident<'a>,
                 ) -> Self {
-                    self.stmt.mark_explicit_update();
+                    self.stmt.begin_on_update();
                     let branch = #update_ident { stmt: &mut self.stmt };
                     let _ = f(branch);
                     self
@@ -249,7 +249,6 @@ impl Expand<'_> {
     }
 
     fn expand_upsert_shared_methods(&self, target_fields: &[usize]) -> TokenStream {
-        let toasty = &self.toasty;
         let vis = &self.model.vis;
         self.model
             .fields
@@ -268,11 +267,9 @@ impl Expand<'_> {
                 Some(quote! {
                     #[doc = #doc]
                     #vis fn #name(mut self, #name: impl Assign<FieldExprTarget<#ty>>) -> Self {
-                        #name.assign(
-                            self.stmt.update_assignments_mut(),
-                            #toasty::stmt::Projection::from_index(#index),
-                        );
-                        self.stmt.sync_create_from_update(#index);
+                        self.stmt.assign_shared(#index, |assignments, projection| {
+                            #name.assign(assignments, projection);
+                        });
                         self
                     }
                 })
@@ -292,7 +289,7 @@ impl Expand<'_> {
             Some(quote! {
                 #[doc = #doc]
                 #vis fn #name(mut self, #name: impl IntoExpr<FieldExprTarget<#ty>>) -> Self {
-                    self.stmt.set_create(
+                    self.stmt.set_create_override(
                         #index,
                         #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#name),
                     );
@@ -303,7 +300,6 @@ impl Expand<'_> {
     }
 
     fn expand_upsert_update_methods(&self, target_fields: &[usize]) -> TokenStream {
-        let toasty = &self.toasty;
         let vis = &self.model.vis;
         self.model
             .fields
@@ -324,10 +320,9 @@ impl Expand<'_> {
                 Some(quote! {
                     #[doc = #doc]
                     #vis fn #name(mut self, #name: impl Assign<FieldExprTarget<#ty>>) -> Self {
-                        #name.assign(
-                            self.stmt.update_assignments_mut(),
-                            #toasty::stmt::Projection::from_index(#index),
-                        );
+                        self.stmt.assign_update_override(#index, |assignments, projection| {
+                            #name.assign(assignments, projection);
+                        });
                         self
                     }
                 })

@@ -92,7 +92,7 @@ impl stmt::Visit for Verify<'_, '_> {
             ));
         }
 
-        if (upsert.explicit_create || upsert.explicit_update)
+        if (upsert.on_create.is_some() || upsert.on_update.is_some())
             && !self.capability.upsert_branch_assignments
         {
             self.record(Error::unsupported_feature(
@@ -100,7 +100,13 @@ impl stmt::Visit for Verify<'_, '_> {
             ));
         }
 
-        if upsert.action == stmt::UpsertAction::Update && upsert.assignments.is_empty() {
+        if upsert.action == stmt::UpsertAction::Update
+            && upsert.assignments.is_empty()
+            && upsert
+                .on_update
+                .as_ref()
+                .is_none_or(|clause| clause.assignments.is_empty())
+        {
             self.record(Error::invalid_statement(
                 "upsert requires at least one update assignment; use or_ignore() instead",
             ));

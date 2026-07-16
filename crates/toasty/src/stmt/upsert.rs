@@ -66,7 +66,7 @@ impl<M: Model> Upsert<M> {
     #[doc(hidden)]
     pub fn blank(target: impl IntoIterator<Item = usize>) -> Self {
         let mut insert = Insert::<M>::blank_single().untyped;
-        insert.upsert = Some(stmt::Upsert {
+        insert.upsert = Some(Box::new(stmt::Upsert {
             target: stmt::UpsertTarget::Fields(
                 target
                     .into_iter()
@@ -74,12 +74,12 @@ impl<M: Model> Upsert<M> {
                     .collect(),
             ),
             assignments: stmt::Assignments::new(),
+            on_create: None,
+            on_update: None,
             create_defaults: stmt::Assignments::new(),
             action: stmt::UpsertAction::Update,
-            explicit_create: false,
-            explicit_update: false,
             invalid_shared_assignments: Vec::new(),
-        });
+        }));
         Self {
             untyped: insert,
             _p: PhantomData,
@@ -89,12 +89,34 @@ impl<M: Model> Upsert<M> {
     /// Sets a value on both the create and update branches.
     #[doc(hidden)]
     pub fn set_shared(&mut self, field: usize, expr: stmt::Expr) {
-        self.set_create(field, expr.clone());
-        let upsert = self.untyped.upsert.as_mut().unwrap();
-        upsert.create_defaults.unset(&[field]);
-        upsert
-            .assignments
-            .set(stmt::Projection::from_index(field), expr);
+        self.assign_shared(field, |assignments, projection| {
+            assignments.set(projection, expr);
+        });
+    }
+
+    /// Applies an assignment to every branch without an explicit override.
+    #[doc(hidden)]
+    pub fn assign_shared(
+        &mut self,
+        field: usize,
+        assign: impl FnOnce(&mut stmt::Assignments, stmt::Projection),
+    ) {
+        let create_overridden = self
+            .untyped
+            .upsert
+            .as_ref()
+            .unwrap()
+            .on_create
+            .as_ref()
+            .is_some_and(|clause| clause.assignments.contains(&[field]));
+
+        assign(
+            self.update_assignments_mut(),
+            stmt::Projection::from_index(field),
+        );
+        if !create_overridden {
+            self.sync_create_from_update(field);
+        }
     }
 
     /// Derives the create value from an assignment already set on the update branch.
@@ -109,6 +131,7 @@ impl<M: Model> Upsert<M> {
             .assignments
             .get(&projection)
             .cloned();
+
         let create = assignment.as_ref().and_then(create_expr_for_assignment);
 
         let invalid = &mut self
@@ -126,6 +149,28 @@ impl<M: Model> Upsert<M> {
         }
     }
 
+    /// Starts an explicit create branch.
+    #[doc(hidden)]
+    pub fn begin_on_create(&mut self) {
+        self.untyped
+            .upsert
+            .as_mut()
+            .unwrap()
+            .on_create
+            .get_or_insert_default();
+    }
+
+    /// Starts an explicit update branch.
+    #[doc(hidden)]
+    pub fn begin_on_update(&mut self) {
+        self.untyped
+            .upsert
+            .as_mut()
+            .unwrap()
+            .on_update
+            .get_or_insert_default();
+    }
+
     /// Sets a value only on the create branch.
     #[doc(hidden)]
     pub fn set_create(&mut self, field: usize, expr: stmt::Expr) {
@@ -133,6 +178,21 @@ impl<M: Model> Upsert<M> {
         let row = values.rows.last_mut().unwrap().as_record_mut_unwrap();
         row.fields[field] = expr;
         let upsert = self.untyped.upsert.as_mut().unwrap();
+        upsert.create_defaults.unset(&[field]);
+        upsert
+            .invalid_shared_assignments
+            .retain(|projection| projection.as_slice() != [field]);
+    }
+
+    /// Overrides a field only on the create branch.
+    #[doc(hidden)]
+    pub fn set_create_override(&mut self, field: usize, expr: stmt::Expr) {
+        let upsert = self.untyped.upsert.as_mut().unwrap();
+        upsert
+            .on_create
+            .get_or_insert_default()
+            .assignments
+            .set(stmt::Projection::from_index(field), expr);
         upsert.create_defaults.unset(&[field]);
         upsert
             .invalid_shared_assignments
@@ -157,16 +217,22 @@ impl<M: Model> Upsert<M> {
         &mut self.untyped.upsert.as_mut().unwrap().assignments
     }
 
-    /// Marks that the create branch was explicitly customized.
+    /// Overrides a field only on the update branch.
     #[doc(hidden)]
-    pub fn mark_explicit_create(&mut self) {
-        self.untyped.upsert.as_mut().unwrap().explicit_create = true;
-    }
-
-    /// Marks that the update branch was explicitly customized.
-    #[doc(hidden)]
-    pub fn mark_explicit_update(&mut self) {
-        self.untyped.upsert.as_mut().unwrap().explicit_update = true;
+    pub fn assign_update_override(
+        &mut self,
+        field: usize,
+        assign: impl FnOnce(&mut stmt::Assignments, stmt::Projection),
+    ) {
+        let assignments = &mut self
+            .untyped
+            .upsert
+            .as_mut()
+            .unwrap()
+            .on_update
+            .get_or_insert_default()
+            .assignments;
+        assign(assignments, stmt::Projection::from_index(field));
     }
 
     /// Changes conflict handling to `DO NOTHING`.
@@ -175,6 +241,7 @@ impl<M: Model> Upsert<M> {
         let upsert = self.untyped.upsert.as_mut().unwrap();
         upsert.action = stmt::UpsertAction::Ignore;
         upsert.assignments = stmt::Assignments::new();
+        upsert.on_update = None;
     }
 
     /// Consumes the wrapper and returns its untyped statement.

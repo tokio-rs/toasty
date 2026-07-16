@@ -75,11 +75,14 @@ pub async fn upsert_branch_overrides(test: &mut Test) -> Result<()> {
     }
 
     let mut db = test.setup_db(models!(Item)).await;
-    let seed = Item::create().value("seed").exec(&mut db).await?;
+    let seed = toasty::create!(Item { value: "seed" })
+        .exec(&mut db)
+        .await?;
     let id = seed.id;
     seed.delete().exec(&mut db).await?;
 
     let created = Item::upsert_by_id(id)
+        .value("shared")
         .on_create(|create| create.value("created"))
         .on_update(|update| update.value("updated"))
         .exec(&mut db)
@@ -87,8 +90,99 @@ pub async fn upsert_branch_overrides(test: &mut Test) -> Result<()> {
     assert_eq!(created.value, "created");
 
     let updated = Item::upsert_by_id(id)
+        .value("shared again")
         .on_create(|create| create.value("created again"))
         .on_update(|update| update.value("updated"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(updated.value, "updated");
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(upsert_branch_assignments))]
+pub async fn upsert_branch_overrides_are_order_independent(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        value: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let seed = toasty::create!(Item { value: "seed" })
+        .exec(&mut db)
+        .await?;
+    let id = seed.id;
+    seed.delete().exec(&mut db).await?;
+
+    let created = Item::upsert_by_id(id)
+        .on_create(|create| create.value("created"))
+        .on_update(|update| update.value("updated"))
+        .value("shared")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(created.value, "created");
+
+    let updated = Item::upsert_by_id(id)
+        .on_create(|create| create.value("created again"))
+        .on_update(|update| update.value("updated"))
+        .value("shared again")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(updated.value, "updated");
+    Ok(())
+}
+
+#[driver_test(id(ID), requires(upsert_branch_assignments))]
+pub async fn upsert_single_branch_override_keeps_shared_other_branch(
+    test: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        value: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let create_seed = toasty::create!(Item { value: "seed" })
+        .exec(&mut db)
+        .await?;
+    let create_id = create_seed.id;
+    create_seed.delete().exec(&mut db).await?;
+
+    let created = Item::upsert_by_id(create_id)
+        .on_create(|create| create.value("created"))
+        .value("shared")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(created.value, "created");
+
+    let updated = Item::upsert_by_id(create_id)
+        .on_create(|create| create.value("created again"))
+        .value("shared")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(updated.value, "shared");
+
+    let update_seed = toasty::create!(Item { value: "seed" })
+        .exec(&mut db)
+        .await?;
+    let update_id = update_seed.id;
+    update_seed.delete().exec(&mut db).await?;
+
+    let created = Item::upsert_by_id(update_id)
+        .on_update(|update| update.value("updated"))
+        .value("shared")
+        .exec(&mut db)
+        .await?;
+    assert_eq!(created.value, "shared");
+
+    let updated = Item::upsert_by_id(update_id)
+        .on_update(|update| update.value("updated"))
+        .value("shared again")
         .exec(&mut db)
         .await?;
     assert_eq!(updated.value, "updated");
@@ -286,14 +380,15 @@ pub async fn upsert_update_can_reference_incoming_value(test: &mut Test) -> Resu
     let id = seed.id;
 
     let updated = Item::upsert_by_id(id)
-        .value("incoming")
+        .value("shared")
+        .on_create(|create| create.value("created"))
         .on_update(|update| {
             let incoming = update.incoming();
             update.value(incoming.value())
         })
         .exec(&mut db)
         .await?;
-    assert_eq!(updated.value, "incoming");
+    assert_eq!(updated.value, "created");
     Ok(())
 }
 

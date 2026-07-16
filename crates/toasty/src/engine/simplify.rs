@@ -159,6 +159,12 @@ impl VisitMut for Simplify<'_> {
 
         if let Some(upsert) = &mut stmt.upsert {
             s.visit_assignments_mut(&mut upsert.assignments);
+            if let Some(on_create) = &mut upsert.on_create {
+                s.visit_assignments_mut(&mut on_create.assignments);
+            }
+            if let Some(on_update) = &mut upsert.on_update {
+                s.visit_assignments_mut(&mut on_update.assignments);
+            }
         }
 
         if let Some(returning) = &mut stmt.returning {
