@@ -274,8 +274,4 @@ impl<'a> Serializer<'a> {
         let column = self.schema.column(id.into());
         Ident(&column.name)
     }
-
-    fn column(&self, id: impl Into<db::ColumnId>) -> &'a db::Column {
-        self.schema.column(id.into())
-    }
 }

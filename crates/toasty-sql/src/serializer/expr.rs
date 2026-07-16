@@ -1,4 +1,4 @@
-use toasty_core::stmt::ResolvedRef;
+use toasty_core::{schema::db, stmt::ResolvedRef};
 
 use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
@@ -24,21 +24,7 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, "EXISTS (" expr.subquery ")");
                 f.depth -= 1;
             }
-            stmt::Expr::Func(stmt::ExprFunc::Count(func)) => match (&func.arg, &func.filter) {
-                (None, None) => fmt!(f, "COUNT(*)"),
-                // Mysql does not support filters, so translate it to an expression
-                (None, Some(expr)) if f.serializer.is_mysql() => {
-                    fmt!(f, "COUNT(CASE WHEN " expr " THEN 1 END)")
-                }
-                (None, Some(expr)) => fmt!(f, "COUNT(*) FILTER (WHERE " expr ")"),
-                _ => todo!("func={func:#?}"),
-            },
-            stmt::Expr::Func(stmt::ExprFunc::LastInsertId(_)) => {
-                fmt!(f, "LAST_INSERT_ID()")
-            }
-            stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
-                serialize_json_extract(f, func);
-            }
+            stmt::Expr::Func(func) => func.to_sql(f),
             stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
                 // The rhs Value::List is bound as one JSON string. MySQL's
@@ -212,6 +198,40 @@ impl ToSql for &stmt::Expr {
                 Flavor::Sqlite => fmt!(f, "NULL"),
             },
             _ => todo!("expr={:#?}", self),
+        }
+    }
+}
+
+impl ToSql for &stmt::ExprFunc {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        match self {
+            stmt::ExprFunc::Count(func) => match (&func.arg, &func.filter) {
+                (None, None) => fmt!(f, "COUNT(*)"),
+                // Mysql does not support filters, so translate it to an expression
+                (None, Some(expr)) if f.serializer.is_mysql() => {
+                    fmt!(f, "COUNT(CASE WHEN " expr " THEN 1 END)")
+                }
+                (None, Some(expr)) => fmt!(f, "COUNT(*) FILTER (WHERE " expr ")"),
+                _ => todo!("func={func:#?}"),
+            },
+            stmt::ExprFunc::LastInsertId(_) => fmt!(f, "LAST_INSERT_ID()"),
+            stmt::ExprFunc::JsonExtract(func) => serialize_json_extract(f, func),
+            stmt::ExprFunc::Unnest(func) => {
+                if !matches!(f.serializer.flavor, Flavor::Postgresql) {
+                    panic!("unnest is only supported on PostgreSQL");
+                }
+
+                fmt!(f, "unnest(");
+                for (i, arg) in func.args.iter().enumerate() {
+                    if i > 0 {
+                        f.dst.push_str(", ");
+                    }
+                    let expr = &arg.expr;
+                    let ty = &db::Type::list(arg.elem_ty.clone());
+                    fmt!(f, expr "::" ty);
+                }
+                f.dst.push(')');
+            }
         }
     }
 }

@@ -1,8 +1,9 @@
-use super::{Expr, FuncCount, FuncJsonExtract, FuncLastInsertId};
+use super::{Expr, FuncCount, FuncJsonExtract, FuncLastInsertId, FuncUnnest};
 
 /// A function call expression.
 ///
-/// Represents aggregate or scalar functions applied to expressions.
+/// Represents aggregate, scalar, and set-returning functions applied to
+/// expressions.
 ///
 /// # Examples
 ///
@@ -10,6 +11,7 @@ use super::{Expr, FuncCount, FuncJsonExtract, FuncLastInsertId};
 /// count(*)           // counts all rows
 /// count(field)       // counts non-null values
 /// last_insert_id()   // MySQL: get the last auto-increment ID
+/// unnest(arrays...)   // PostgreSQL: expands arrays into rows
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExprFunc {
@@ -26,6 +28,9 @@ pub enum ExprFunc {
     /// extraction on the SQL backends). Produced when filtering on a field
     /// inside a `#[document]` embed.
     JsonExtract(FuncJsonExtract),
+
+    /// Expands parallel PostgreSQL arrays into a set of rows.
+    Unnest(FuncUnnest),
 }
 
 impl From<ExprFunc> for Expr {

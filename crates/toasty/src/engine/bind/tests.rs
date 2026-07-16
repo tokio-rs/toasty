@@ -108,6 +108,21 @@ fn two_row_item_insert(schema: &toasty_core::Schema) -> stmt::Statement {
     })
 }
 
+fn unnest_source(stmt: &stmt::Statement) -> &stmt::FuncUnnest {
+    let stmt::Statement::Insert(insert) = stmt else {
+        panic!("expected insert");
+    };
+    let stmt::ExprSet::Select(select) = &insert.source.body else {
+        panic!("expected select source");
+    };
+    assert!(matches!(select.returning, stmt::Returning::Star));
+    let source = select.source.as_table_unwrap();
+    let [stmt::TableRef::Func(stmt::ExprFunc::Unnest(unnest))] = source.tables.as_slice() else {
+        panic!("expected unnest table source");
+    };
+    unnest
+}
+
 #[test]
 fn multi_row_insert_transposed_to_column_arrays_on_postgres() {
     #[derive(toasty::Model)]
@@ -137,20 +152,13 @@ fn multi_row_insert_transposed_to_column_arrays_on_postgres() {
         Value::List(vec![Value::from("n1"), Value::from("n2")])
     );
 
-    // The source is marked `unnest` with a single record row of Args.
-    let stmt::Statement::Insert(insert) = &stmt else {
-        panic!("expected insert");
-    };
-    let stmt::ExprSet::Values(values) = &insert.source.body else {
-        panic!("expected values body");
-    };
-    assert!(values.unnest);
-    assert_eq!(values.rows.len(), 1);
-    let Expr::Record(record) = &values.rows[0] else {
-        panic!("expected a single record row");
-    };
-    assert!(matches!(record.fields[0], Expr::Arg(_)));
-    assert!(matches!(record.fields[1], Expr::Arg(_)));
+    // The source is an unnest function with one array argument per column.
+    let unnest = unnest_source(&stmt);
+    assert_eq!(unnest.args.len(), 2);
+    assert!(matches!(unnest.args[0].expr, Expr::Arg(_)));
+    assert!(matches!(unnest.args[1].expr, Expr::Arg(_)));
+    assert_eq!(unnest.args[0].elem_ty, db::Type::Text);
+    assert_eq!(unnest.args[1].elem_ty, db::Type::Text);
 }
 
 #[test]
@@ -193,17 +201,9 @@ fn multi_row_insert_with_null_cell_binds_one_array_per_column() {
     );
     assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
 
-    let stmt::Statement::Insert(insert) = &stmt else {
-        panic!("expected insert");
-    };
-    let stmt::ExprSet::Values(values) = &insert.source.body else {
-        panic!("expected values body");
-    };
-    assert!(values.unnest);
-    let Expr::Record(record) = &values.rows[0] else {
-        panic!("expected a single record row");
-    };
-    assert!(matches!(record.fields[1], Expr::Arg(_)));
+    let unnest = unnest_source(&stmt);
+    assert!(matches!(unnest.args[1].expr, Expr::Arg(_)));
+    assert_eq!(unnest.args[1].elem_ty, db::Type::Text);
 }
 
 #[test]
@@ -262,7 +262,7 @@ fn multi_row_insert_not_transposed_without_capability() {
         &toasty_core::driver::Capability::SQLITE,
     );
 
-    // SQLite keeps the per-cell VALUES form: four scalar params, no unnest.
+    // SQLite keeps the per-cell VALUES form with four scalar params.
     assert_eq!(params.len(), 4);
     let stmt::Statement::Insert(insert) = &stmt else {
         panic!("expected insert");
@@ -270,7 +270,6 @@ fn multi_row_insert_not_transposed_without_capability() {
     let stmt::ExprSet::Values(values) = &insert.source.body else {
         panic!("expected values body");
     };
-    assert!(!values.unnest);
     assert_eq!(values.rows.len(), 2);
 }
 

@@ -83,35 +83,24 @@ fn refine_insert(
     };
     let db_table = &db_schema.tables[table.table.0];
 
-    let stmt::ExprSet::Values(values) = &insert.source.body else {
-        return;
-    };
+    match &insert.source.body {
+        stmt::ExprSet::Values(values) => {
+            // The column list supplies the authoritative type for each field.
+            // This also maps document values to their scalar storage type.
+            let expected = Ty::Record(
+                table
+                    .columns
+                    .iter()
+                    .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
+                    .collect(),
+            );
 
-    // Expected type from the column list (authoritative). `check` pushes it
-    // down into each VALUES row, field by field, typing every `Arg` param —
-    // including a `#[document]` column, whose list/object value resolves to its
-    // scalar `Document` storage type in `merge`.
-    //
-    // A transposed insert (`transpose_insert_unnest`) binds each field as an
-    // array of the column's values, so the expected field type is a list of
-    // the column type — which also pins an all-NULL column array.
-    let expected = Ty::Record(
-        table
-            .columns
-            .iter()
-            .map(|col_id| {
-                let ty = ty_from_column(db_table.columns[col_id.index].storage_ty.clone());
-                if values.unnest {
-                    Ty::List(Box::new(ty))
-                } else {
-                    ty
-                }
-            })
-            .collect(),
-    );
-
-    for row in &values.rows {
-        check(row, &expected, params);
+            for row in &values.rows {
+                check(row, &expected, params);
+            }
+        }
+        stmt::ExprSet::Select(select) => refine_source(&select.source, params),
+        _ => {}
     }
 }
 
@@ -185,6 +174,7 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
 
     match &query.body {
         stmt::ExprSet::Select(select) => {
+            refine_source(&select.source, params);
             refine_filter(&select.filter, &cx, params);
         }
         stmt::ExprSet::Values(values) => {
@@ -208,6 +198,25 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
     if let Some(with) = &query.with {
         for cte in &with.ctes {
             refine_query(&cte.query, &cx, params);
+        }
+    }
+}
+
+fn refine_source(source: &stmt::Source, params: &mut [Param]) {
+    let stmt::Source::Table(source) = source else {
+        return;
+    };
+
+    for table in &source.tables {
+        let stmt::TableRef::Func(stmt::ExprFunc::Unnest(unnest)) = table else {
+            continue;
+        };
+
+        // The function stores each element type with its argument. Applying
+        // the corresponding array type resolves all-NULL array parameters.
+        for arg in &unnest.args {
+            let array_ty = db::Type::list(arg.elem_ty.clone());
+            check(&arg.expr, &ty_from_column(array_ty), params);
         }
     }
 }

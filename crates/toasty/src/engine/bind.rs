@@ -98,7 +98,7 @@ fn transpose_insert_unnest(
         return;
     };
 
-    if values.unnest || values.rows.len() < 2 {
+    if values.rows.len() < 2 {
         return;
     }
 
@@ -158,19 +158,28 @@ fn transpose_insert_unnest(
         }
     }
 
-    let record = columns
+    let args = columns
         .into_iter()
-        .map(|cells| {
+        .zip(table.columns.iter())
+        .map(|(cells, column_id)| {
             let value = stmt::Value::List(cells);
             let ty = extract::infer_ty(&value);
             let position = params.len();
             params.push(Param { value, ty });
-            stmt::Expr::arg(position)
+            stmt::FuncUnnestArg {
+                expr: stmt::Expr::arg(position),
+                elem_ty: db_table.columns[column_id.index].storage_ty.clone(),
+            }
         })
         .collect::<Vec<_>>();
 
-    values.rows = vec![stmt::Expr::Record(stmt::ExprRecord::from_vec(record))];
-    values.unnest = true;
+    let source = stmt::Source::table(stmt::TableRef::Func(stmt::FuncUnnest { args }.into()));
+    insert.source.body = stmt::ExprSet::Select(Box::new(stmt::Select {
+        returning: stmt::Returning::Star,
+        source,
+        filter: stmt::Filter::ALL,
+        distinct: false,
+    }));
 }
 
 /// A row is transposable if it is a record of exactly `num_cols` plain values.

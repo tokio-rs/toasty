@@ -1,4 +1,4 @@
-use crate::stmt::{ExprArg, TableDerived};
+use crate::stmt::{ExprArg, ExprFunc, TableDerived};
 
 use super::TableId;
 
@@ -6,7 +6,7 @@ use super::TableId;
 ///
 /// Each entry in [`SourceTable::tables`](super::SourceTable) is a `TableRef`
 /// that identifies where data comes from: a schema table, a CTE, a derived
-/// subquery, or a placeholder argument.
+/// subquery, a table function, or a placeholder argument.
 ///
 /// # Examples
 ///
@@ -36,6 +36,9 @@ pub enum TableRef {
     /// A schema-defined table.
     Table(TableId),
 
+    /// A function used as a table source.
+    Func(ExprFunc),
+
     /// A placeholder that will be replaced with a derived table at a later
     /// compilation stage.
     Arg(ExprArg),
@@ -48,6 +51,7 @@ impl TableRef {
             Self::Cte { .. } => false,
             Self::Derived { .. } => false,
             Self::Table(id) => id == &table_id,
+            Self::Func(_) => false,
             Self::Arg { .. } => todo!(),
         }
     }
@@ -67,6 +71,12 @@ impl From<TableId> for TableRef {
 impl From<ExprArg> for TableRef {
     fn from(value: ExprArg) -> Self {
         TableRef::Arg(value)
+    }
+}
+
+impl From<ExprFunc> for TableRef {
+    fn from(value: ExprFunc) -> Self {
+        Self::Func(value)
     }
 }
 

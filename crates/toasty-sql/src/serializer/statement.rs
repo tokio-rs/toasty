@@ -357,62 +357,7 @@ impl ToSql for &stmt::Insert {
 
         f.in_insert = true;
 
-        // A transposed multi-row insert renders its source as `unnest(...)`;
-        // target and RETURNING are shared with the plain path.
-        if let stmt::ExprSet::Values(values) = &self.source.body
-            && values.unnest
-        {
-            let source = UnnestValues {
-                target: &self.target,
-                values,
-            };
-            fmt!(&mut f, "INSERT INTO " self.target " " source returning);
-        } else {
-            fmt!(&mut f, "INSERT INTO " self.target " " self.source returning);
-        }
-    }
-}
-
-/// A transposed multi-row insert source (`Values` with `unnest`, one array
-/// param per target column): renders as `SELECT * FROM unnest($1::t0[], ...)`.
-///
-/// RETURNING row order relies on PostgreSQL expanding `unnest` in array index
-/// order — the same non-standard guarantee the `VALUES` form relies on.
-struct UnnestValues<'a> {
-    target: &'a stmt::InsertTarget,
-    values: &'a stmt::Values,
-}
-
-impl ToSql for &UnnestValues<'_> {
-    fn to_sql(self, f: &mut super::Formatter<'_>) {
-        let stmt::InsertTarget::Table(table) = self.target else {
-            panic!(
-                "unnest insert requires a table target; target={:?}",
-                self.target
-            );
-        };
-        let [stmt::Expr::Record(record)] = self.values.rows.as_slice() else {
-            panic!(
-                "unnest insert source must be a single record row; rows={:?}",
-                self.values.rows
-            );
-        };
-        assert_eq!(
-            record.fields.len(),
-            table.columns.len(),
-            "unnest insert record arity must match the target column count",
-        );
-
-        fmt!(f, "SELECT * FROM unnest(");
-        for (i, (arg, column_id)) in record.fields.iter().zip(table.columns.iter()).enumerate() {
-            if i > 0 {
-                f.dst.push_str(", ");
-            }
-            let elem_ty = f.serializer.column(*column_id).storage_ty.clone();
-            let array_ty = &db::Type::list(elem_ty);
-            fmt!(f, arg "::" array_ty);
-        }
-        f.dst.push(')');
+        fmt!(&mut f, "INSERT INTO " self.target " " self.source returning);
     }
 }
 
@@ -508,6 +453,7 @@ impl ToSql for &stmt::OrderByExpr {
 impl ToSql for &stmt::Returning {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
+            stmt::Returning::Star => fmt!(f, "*"),
             stmt::Returning::Project(stmt::Expr::Record(expr_record)) => {
                 // Alias every projected field positionally (`AS column1`, ...).
                 // A nested SELECT/RETURNING referenced from an outer query (e.g.
@@ -654,6 +600,7 @@ impl ToSql for &stmt::TableRef {
                 fmt!(f, table_name);
             }
             stmt::TableRef::Derived(table_derived) => fmt!(f, table_derived),
+            stmt::TableRef::Func(func) => func.to_sql(f),
             stmt::TableRef::Cte { nesting, index } => {
                 assert!(f.depth >= *nesting, "nesting={nesting} depth={}", f.depth);
 

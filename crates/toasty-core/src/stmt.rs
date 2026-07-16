@@ -180,6 +180,9 @@ pub use func_json_extract::FuncJsonExtract;
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
+mod func_unnest;
+pub use func_unnest::{FuncUnnest, FuncUnnestArg};
+
 mod insert;
 pub use insert::Insert;
 
