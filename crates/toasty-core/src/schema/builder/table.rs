@@ -1431,7 +1431,7 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         // Prefix native enum type names so they don't collide across test runs
         // or multi-tenant deployments.
-        if let db::Type::Enum(ref mut type_enum) = storage_ty
+        if let Some(type_enum) = storage_ty.named_enum_mut()
             && let (Some(prefix), Some(name)) = (&self.build.name_prefix, &mut type_enum.name)
         {
             *name = format!("{prefix}{name}");

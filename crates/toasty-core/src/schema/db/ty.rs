@@ -144,6 +144,31 @@ impl Type {
         }
     }
 
+    /// The named enum this storage type carries: a scalar [`Type::Enum`] or the
+    /// element of an enum array (`List(Enum)`).
+    pub fn named_enum(&self) -> Option<&TypeEnum> {
+        match self {
+            Type::Enum(type_enum) => Some(type_enum),
+            Type::List(elem) => match elem.as_ref() {
+                Type::Enum(type_enum) => Some(type_enum),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Mutable counterpart to [`named_enum`](Self::named_enum).
+    pub fn named_enum_mut(&mut self) -> Option<&mut TypeEnum> {
+        match self {
+            Type::Enum(type_enum) => Some(type_enum),
+            Type::List(elem) => match elem.as_mut() {
+                Type::Enum(type_enum) => Some(type_enum),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,

@@ -3,24 +3,6 @@ use crate::prelude::*;
 use toasty::Db;
 use toasty_core::schema::db;
 
-/// The (driver-independent) storage type of a database column.
-fn column_storage_ty(db: &Db, table: &str, column: &str) -> db::Type {
-    let schema = db.schema();
-    let table = schema
-        .db
-        .tables
-        .iter()
-        .find(|t| t.name == table || t.name.ends_with(table))
-        .unwrap_or_else(|| panic!("table '{table}' not in schema"));
-    table
-        .columns
-        .iter()
-        .find(|c| c.name == column)
-        .unwrap_or_else(|| panic!("column '{column}' not in table"))
-        .storage_ty
-        .clone()
-}
-
 /// The (type name, variant labels) of a native enum column, in declaration
 /// order. Panics if the column is not a native enum type.
 fn native_enum(db: &Db, table: &str, column: &str) -> (String, Vec<String>) {

@@ -295,7 +295,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     }
                 )
             }
-
         }
 
         #load_impl

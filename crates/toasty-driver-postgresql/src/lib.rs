@@ -550,7 +550,7 @@ impl toasty_core::driver::Connection for Connection {
         let mut created_enum_types = hashbrown::HashSet::new();
         for table in &schema.db.tables {
             for column in &table.columns {
-                if let toasty_core::schema::db::Type::Enum(type_enum) = &column.storage_ty
+                if let Some(type_enum) = column.storage_ty.named_enum()
                     && created_enum_types.insert(type_enum.name.clone())
                 {
                     let sql = serializer.serialize(&sql::Statement::create_enum_type(type_enum));
