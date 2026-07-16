@@ -88,7 +88,7 @@ pub enum Expr {
     /// `expr IN (SELECT ...)` membership test. See [`ExprInSubquery`].
     InSubquery(ExprInSubquery),
 
-    /// A reference to a value proposed by an upsert's create branch. See [`ExprIncoming`].
+    /// The row proposed by an upsert's create branch. See [`ExprIncoming`].
     Incoming(ExprIncoming),
 
     /// Boolean: two array operands share at least one element
@@ -786,7 +786,7 @@ impl fmt::Debug for Expr {
             Self::Ident(e) => write!(f, "Ident({e:?})"),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
-            Self::Incoming(e) => e.fmt(f),
+            Self::Incoming(e) => write!(f, "Incoming({e:?})"),
             Self::Intersects(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
             Self::IsSuperset(e) => e.fmt(f),

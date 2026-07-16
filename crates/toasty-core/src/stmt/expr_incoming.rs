@@ -1,38 +1,30 @@
-use super::{Expr, Projection, Type};
-use crate::schema::db::ColumnId;
+use super::Expr;
+use crate::schema::{app::ModelId, db::TableId};
 
-/// A reference to a value proposed by an upsert's create branch.
+/// The row proposed by an upsert's create branch.
 ///
-/// An update assignment uses this expression when it needs the incoming value
-/// rather than the value already stored in the conflicting row. SQL serializers
-/// map it to the backend's proposed-row syntax, such as PostgreSQL's
-/// `EXCLUDED` relation.
+/// Projecting a field from this expression references the proposed value rather
+/// than the value already stored in the conflicting row. SQL serializers map
+/// the projected expression to the backend's proposed-row syntax, such as
+/// PostgreSQL's `EXCLUDED` relation.
 #[derive(Clone, Debug, PartialEq)]
-pub struct ExprIncoming {
-    /// Field before lowering or column after lowering.
-    pub target: IncomingTarget,
+pub enum ExprIncoming {
+    /// The proposed application-model row before lowering.
+    Model(ModelId),
 
-    /// Expression-level type of the proposed value.
-    pub ty: Type,
-}
-
-/// The field or column referenced by [`ExprIncoming`].
-#[derive(Clone, Debug, PartialEq)]
-pub enum IncomingTarget {
-    /// Application field before lowering.
-    Field(Projection),
-
-    /// Database column after lowering.
-    Column(ColumnId),
+    /// The proposed database-table row after lowering.
+    Table(TableId),
 }
 
 impl ExprIncoming {
-    /// Creates an incoming-value reference to an application field.
-    pub fn field(field: usize, ty: Type) -> Self {
-        Self {
-            target: IncomingTarget::Field(Projection::from_index(field)),
-            ty,
-        }
+    /// Creates an incoming application-model row.
+    pub fn model(model: ModelId) -> Self {
+        Self::Model(model)
+    }
+
+    /// Creates an incoming database-table row.
+    pub fn table(table: TableId) -> Self {
+        Self::Table(table)
     }
 }
 

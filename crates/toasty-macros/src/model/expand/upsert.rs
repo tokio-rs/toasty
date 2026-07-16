@@ -338,6 +338,7 @@ impl Expand<'_> {
     fn expand_upsert_incoming_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
         self.model
             .fields
             .iter()
@@ -353,9 +354,11 @@ impl Expand<'_> {
                     #[doc = #doc]
                     #vis fn #name(self) -> #toasty::stmt::Expr<FieldExprTarget<#ty>> {
                         #toasty::stmt::Expr::from_untyped(
-                            #toasty::core::stmt::ExprIncoming::field(
-                                #index,
-                                <#ty as #toasty::Load>::ty(),
+                            #toasty::core::stmt::Expr::project(
+                                #toasty::core::stmt::ExprIncoming::model(
+                                    <#model_ident as #toasty::Model>::id(),
+                                ),
+                                #toasty::stmt::Projection::from_index(#index),
                             ),
                         )
                     }

@@ -16,8 +16,8 @@ use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
-        self, Assignments, Expr, ExprColumn, Filter, Insert, InsertTable, InsertTarget, Update,
-        UpdateTarget, Values,
+        self, Assignments, Expr, ExprColumn, ExprIncoming, Filter, Insert, InsertTable,
+        InsertTarget, Update, UpdateTarget, Values,
     },
 };
 use toasty_sql::{Serializer, Statement as SqlStatement};
@@ -249,6 +249,22 @@ fn upsert_self_references_qualify_postgresql_target() {
     assignments.append(2usize, Expr::list([Expr::from(7i64)]));
 
     expect![[r#"INSERT INTO "users" ("id", "name", "tags") VALUES (1, 'a', (7)) ON CONFLICT ("id") DO UPDATE SET "name" = "users"."name", "tags" = "users"."tags" || (7);"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        upsert_with(assignments),
+    ));
+}
+
+#[test]
+fn upsert_incoming_projection_postgresql() {
+    let schema = users_schema();
+    let mut assignments = Assignments::default();
+    assignments.set(
+        1usize,
+        Expr::project(ExprIncoming::table(TableId(0)), [1usize]),
+    );
+
+    expect![[r#"INSERT INTO "users" ("id", "name", "tags") VALUES (1, 'a', (7)) ON CONFLICT ("id") DO UPDATE SET "name" = excluded."name";"#]].assert_eq(&render(
         Flavor::Postgresql,
         &schema,
         upsert_with(assignments),

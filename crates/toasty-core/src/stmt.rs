@@ -106,7 +106,7 @@ mod expr_in_subquery;
 pub use expr_in_subquery::ExprInSubquery;
 
 mod expr_incoming;
-pub use expr_incoming::{ExprIncoming, IncomingTarget};
+pub use expr_incoming::ExprIncoming;
 
 mod expr_intersects;
 pub use expr_intersects::ExprIntersects;

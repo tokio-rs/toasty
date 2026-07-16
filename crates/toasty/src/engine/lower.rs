@@ -804,11 +804,14 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
                 }
             }
-            stmt::Expr::Incoming(incoming) => {
-                if let stmt::IncomingTarget::Field(field) = &incoming.target {
-                    let mapped = self
-                        .mapping_unwrap()
-                        .resolve_field_mapping(field)
+            stmt::Expr::Project(project)
+                if let stmt::Expr::Incoming(stmt::ExprIncoming::Model(model)) =
+                    project.base.as_ref() =>
+            {
+                let (table, column) = {
+                    let mapping = self.schema().mapping_for(*model);
+                    let mapped = mapping
+                        .resolve_field_mapping(&project.projection)
                         .expect("incoming upsert field must map to a column");
                     let mut columns = mapped.columns();
                     let (column, _) = columns
@@ -818,8 +821,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         columns.next().is_none(),
                         "incoming() does not yet support column-expanded embedded fields"
                     );
-                    incoming.target = stmt::IncomingTarget::Column(column);
-                }
+                    (mapping.table, column)
+                };
+                debug_assert_eq!(table, column.table);
+                *project.base = stmt::ExprIncoming::table(table).into();
+                project.projection = stmt::Projection::from_index(column.index);
             }
             // A null-check on an `Option<Embed>` field reduces to a null-check on
             // the embed's head column instead of distributing the check over
