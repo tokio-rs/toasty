@@ -32,6 +32,38 @@ pub async fn upsert_by_primary_key_creates_then_updates(test: &mut Test) -> Resu
     Ok(())
 }
 
+/// Upsert updates advance the OCC version, so a stale instance cannot overwrite
+/// the updated row.
+#[driver_test(id(ID), requires(upsert_primary_key))]
+pub async fn upsert_update_increments_version(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        value: String,
+        #[version]
+        version: u64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let seed = toasty::create!(Item { value: "seed" })
+        .exec(&mut db)
+        .await?;
+    let id = seed.id;
+    seed.delete().exec(&mut db).await?;
+
+    let mut stale = Item::upsert_by_id(id).value("first").exec(&mut db).await?;
+    assert_struct!(stale, _ { value: "first", version: 1, .. });
+
+    let updated = Item::upsert_by_id(id).value("second").exec(&mut db).await?;
+    assert_struct!(updated, _ { value: "second", version: 2, .. });
+
+    let result: Result<()> = stale.update().value("stale").exec(&mut db).await;
+    assert!(result.is_err(), "expected stale update to fail");
+    Ok(())
+}
+
 #[driver_test(id(ID), requires(upsert_branch_assignments))]
 pub async fn upsert_branch_overrides(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]

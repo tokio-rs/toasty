@@ -362,6 +362,24 @@ impl<'b> LowerStatement<'_, 'b> {
             stmt::Expr::Value(stmt::Value::U64(1)),
         )
     }
+
+    /// Adds an atomic version increment unless the statement already assigns
+    /// the version field.
+    pub(super) fn inject_version_increment(&self, assignments: &mut stmt::Assignments) {
+        let Some(version_id) = self.model().and_then(|m| m.version_field()).map(|f| f.id) else {
+            return;
+        };
+
+        let already_assigned = assignments
+            .keys()
+            .any(|projection| projection.as_slice().first() == Some(&version_id.index));
+        if already_assigned {
+            return;
+        }
+
+        let (projection, delta) = self.version_increment_target(version_id);
+        assignments.add(projection, delta);
+    }
 }
 
 impl ApplyInsertScope<'_> {
