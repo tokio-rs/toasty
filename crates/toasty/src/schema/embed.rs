@@ -38,10 +38,4 @@ pub trait Embed {
     {
         Path::field_at(Self::id(), index)
     }
-
-    /// The storage type this embed pins as a `Vec<T>` element: `Some` only for
-    /// a native unit enum, so the collection stores as `myenum[]`.
-    fn element_storage_ty() -> Option<toasty_core::schema::db::Type> {
-        None
-    }
 }

@@ -1,6 +1,9 @@
 use super::{Embed, Load};
 use crate::stmt::{self, Expr, List};
-use toasty_core::schema::app::ModelSet;
+use toasty_core::schema::{
+    app::{Model, ModelSet},
+    db,
+};
 
 /// Schema and runtime information for a field type.
 ///
@@ -197,8 +200,8 @@ impl Field for Vec<u8> {
 
 /// A `Vec<T>` of embedded structs (`T: Embed`) is a `#[document]` collection —
 /// `Primitive(List(Model(T::id())))`, stored by the schema builder as a single
-/// JSON array of objects. The `field_ty` override below only adds the
-/// native-enum element hint; for struct embeds it matches the trait default.
+/// JSON array of objects. The `field_ty` override below derives the storage
+/// type for native unit enums; for struct embeds it matches the trait default.
 ///
 /// This is the only *blanket* `Field for Vec<_>` impl. A blanket
 /// `impl<T: Scalar> Field for Vec<T>` cannot coexist with it: the compiler
@@ -233,13 +236,23 @@ where
     ) -> Self::Update<'a> {
     }
 
-    /// Lifts [`Embed::element_storage_ty`] into a `List` storage hint so a
-    /// `Vec<native-enum>` stores as `myenum[]`.
+    /// Derives a `List(Enum)` storage hint for native unit enums.
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
         let storage_ty = storage_ty.or_else(|| {
-            <T as Embed>::element_storage_ty().map(toasty_core::schema::db::Type::list)
+            let Model::EmbeddedEnum(embed) = <T as Embed>::schema() else {
+                return None;
+            };
+
+            if embed.has_data_variants() {
+                return None;
+            }
+
+            match embed.discriminant.storage_ty {
+                Some(ty @ db::Type::Enum(_)) => Some(db::Type::list(ty)),
+                _ => None,
+            }
         });
         toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
             ty: <Self as super::Load>::ty(),
