@@ -25,7 +25,7 @@ the entry lands here.
 - `BelongsTo` fields in embedded structs ([#670])
 - Native PostgreSQL enum types ([#641])
 - Migrations for enum representation changes ([#724])
-- Serde-serialized fields (JSON/JSONB for arbitrary Rust types) ([design](design/serialize-fields.md), [#672])
+- Native JSON values for schema-less payloads ([design](design/native-json-values.md), [#672])
 - Document and collection fields — `Vec`, `HashSet`, `HashMap`, with backend-chosen storage and a `#[document]` override ([design](design/document-fields.md))
 - Foreign key constraints ([#366])
 - Server-side check constraints ([#644])

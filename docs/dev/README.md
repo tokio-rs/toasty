@@ -30,6 +30,7 @@ Guide-level design documents for specific features. Use
 - [DynamoDB Scan Support](./design/ddb-scan.md)
 - [Document and Collection Fields](./design/document-fields.md)
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
+- [Native JSON Values](./design/native-json-values.md)
 - [Optimistic Concurrency with `#[version]`](./design/field-version.md)
 - [`query!` Macro](./design/query-macro.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
