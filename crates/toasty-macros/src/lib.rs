@@ -9,11 +9,26 @@
 extern crate proc_macro;
 
 mod create;
+mod embed_migrations;
 mod model;
 mod query;
 mod update;
 
 use proc_macro::TokenStream;
+
+/// Embeds a Toasty migration directory into the application binary.
+///
+/// The path is relative to `CARGO_MANIFEST_DIR` and must contain
+/// `history.toml` plus the `migrations/*.sql` files named by that history.
+/// The macro is available through `toasty` when its `migration` feature is
+/// enabled.
+#[proc_macro]
+pub fn embed_migrations(input: TokenStream) -> TokenStream {
+    match embed_migrations::generate(input.into()) {
+        Ok(output) => output.into(),
+        Err(error) => error.to_compile_error().into(),
+    }
+}
 
 /// Derive macro that turns a struct into a Toasty model backed by a database
 /// table.
