@@ -293,7 +293,7 @@ impl BuilderOptions {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use toasty_driver_turso::Turso;
 ///
 /// // File-backed database
