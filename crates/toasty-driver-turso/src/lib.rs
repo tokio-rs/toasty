@@ -274,7 +274,7 @@ impl BuilderOptions {
                 &self.sync_options.remote_encryption_cipher,
             )
         {
-            b = b.with_remote_encryption(base64_key, cipher.clone())
+            b = b.with_remote_encryption(base64_key, *cipher)
         } else if let Some(key) = &self.sync_options.remote_encryption_key {
             b = b.with_remote_encryption_key(key);
         }
