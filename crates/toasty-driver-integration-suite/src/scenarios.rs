@@ -35,6 +35,7 @@ pub mod two_models_unique_title;
 pub mod user_account_subscription;
 pub mod user_comment_article;
 pub mod user_contact_info;
+pub mod user_group_membership;
 pub mod user_name_email;
 pub mod user_org_project_todo;
 pub mod user_post_comment;

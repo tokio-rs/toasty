@@ -16,6 +16,11 @@ const UNRESOLVED_TARGET: ModelId = ModelId(usize::MAX);
 /// every `E`, so the derive can route a via field through [`ViaTarget`]
 /// without requiring `E: Model`. A single blanket impl per outer shape keeps
 /// it coherent with the per-target `ViaTarget` impls.
+///
+/// A join-model many-to-many field is a model-terminal via. For example,
+/// `#[has_many(via = memberships.group)] groups: Deferred<Vec<Group>>`
+/// follows the declaring model's `memberships` relation and then each
+/// membership's `group` relation.
 pub trait ViaManyField {
     /// The via's terminal type — the model or scalar the path projects.
     type Target: ViaTarget;

@@ -547,6 +547,67 @@ use proc_macro::TokenStream;
 /// with `.select()` is supported on SQL backends; both are not yet available on
 /// DynamoDB.
 ///
+/// #### Many-to-many through a join model
+///
+/// Model a many-to-many relationship with a join model that belongs to both
+/// endpoints. Each endpoint has a direct `has_many` relation to the join model
+/// and a derived `has_many(via = ...)` relation to the opposite endpoint:
+///
+/// ```
+/// # use toasty::Model;
+/// #[derive(Debug, toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     #[has_many]
+///     memberships: toasty::Deferred<Vec<Membership>>,
+///
+///     #[has_many(via = memberships.group)]
+///     groups: toasty::Deferred<Vec<Group>>,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// struct Group {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     #[has_many]
+///     memberships: toasty::Deferred<Vec<Membership>>,
+///
+///     #[has_many(via = memberships.user)]
+///     users: toasty::Deferred<Vec<User>>,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// #[key(user_id, group_id)]
+/// struct Membership {
+///     #[index]
+///     user_id: i64,
+///
+///     #[belongs_to(key = user_id, references = id)]
+///     user: toasty::Deferred<User>,
+///
+///     #[index]
+///     group_id: i64,
+///
+///     #[belongs_to(key = group_id, references = id)]
+///     group: toasty::Deferred<Group>,
+///
+///     role: String,
+/// }
+/// ```
+///
+/// The composite key prevents duplicate user-group links. Fields such as
+/// `role` belong on the join model because they describe one connection. The
+/// derived `groups` and `users` relations return distinct endpoints and are
+/// read-only; create, update, or delete `Membership` records to change links.
+/// Call `.any()` on a derived field to filter by the opposite endpoint, or on
+/// `memberships` to filter by join-model fields. Traversing, filtering,
+/// preloading, or projecting the derived `via` fields requires a SQL backend.
+///
 /// ## `#[has_one]` — one-to-one association
 ///
 /// Declares a single related model. The target model must have a

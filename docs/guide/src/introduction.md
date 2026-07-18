@@ -55,6 +55,7 @@ transactions.
 - **[Relationships](./relationships.md)** — overview of how models connect to each other
 - **[BelongsTo](./belongs-to.md)** — define and use many-to-one relationships
 - **[HasMany](./has-many.md)** — define and use one-to-many relationships
+- **[Many-to-Many](./many-to-many.md)** — connect two models through a join model
 - **[HasOne](./has-one.md)** — define and use one-to-one relationships
 - **[Preloading Associations](./preloading-associations.md)** — eager loading to avoid extra queries
 - **[Filtering with Expressions](./filtering-with-expressions.md)** — comparisons, AND/OR, and more

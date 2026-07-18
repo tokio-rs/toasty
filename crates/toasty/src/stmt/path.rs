@@ -396,6 +396,11 @@ impl<T, U> Path<T, List<U>> {
     /// parent model. The returned expression can be used as a filter on the
     /// parent query.
     ///
+    /// This also works on model-terminal `#[has_many(via = ...)]` fields. In a
+    /// join-model many-to-many relation, call `any` on the derived field to
+    /// filter by the opposite endpoint, or on the direct join-model field to
+    /// filter by data stored on the connection.
+    ///
     /// # Examples
     ///
     /// ```

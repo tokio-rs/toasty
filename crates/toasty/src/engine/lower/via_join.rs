@@ -135,12 +135,9 @@ impl ViaJoin {
         // For a scalar terminal the path's last step is the projected field,
         // not a relation; the relation chain (which the JOIN walks) is
         // everything before it.
-        let projection = via.path.projection.as_slice();
-        let relation_steps = match via.terminal {
-            Some(_) => &projection[..projection.len() - 1],
-            None => projection,
-        };
-        let steps = flatten_via_steps(schema, root, relation_steps);
+        let steps = super::relation_path::flatten_via_path(schema, via)
+            .expect("via relation path must start at a model");
+        debug_assert_eq!(steps.first().map(|field| field.model), Some(root));
         assert!(
             !steps.is_empty(),
             "via path must have at least one step (validated at schema build time)"
@@ -254,47 +251,6 @@ impl Edge {
             }
         }
     }
-}
-
-/// Walk a via path, inlining any `via` field's own resolved path so the
-/// result is a flat sequence of direct relation `FieldId`s.
-fn flatten_via_steps(
-    schema: &toasty_core::Schema,
-    source_model_id: app::ModelId,
-    initial_steps: &[usize],
-) -> Vec<app::FieldId> {
-    let mut result = Vec::with_capacity(initial_steps.len());
-    let mut current_model = source_model_id;
-    let mut queue: Vec<usize> = initial_steps.to_vec();
-    queue.reverse(); // pop from the back
-
-    while let Some(idx) = queue.pop() {
-        let field = &schema.app.model(current_model).as_root_unwrap().fields[idx];
-        let field_id = app::FieldId {
-            model: current_model,
-            index: idx,
-        };
-
-        // If this step itself names a `via` relation, splice the nested
-        // path in place of it and continue (handles via-of-via naturally).
-        let nested_via = match &field.ty {
-            app::FieldTy::Via(via) => Some(via),
-            _ => None,
-        };
-        if let Some(via) = nested_via {
-            for step in via.path.projection.as_slice().iter().rev() {
-                queue.push(*step);
-            }
-            continue;
-        }
-
-        current_model = field
-            .relation_target_id()
-            .expect("via path step is a relation");
-        result.push(field_id);
-    }
-
-    result
 }
 
 /// The single-column mapping for a foreign-key field. Via include paths only

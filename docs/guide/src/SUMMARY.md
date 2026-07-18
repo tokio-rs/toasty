@@ -25,6 +25,7 @@
 - [Relationships](./relationships.md)
 - [BelongsTo](./belongs-to.md)
 - [HasMany](./has-many.md)
+- [Many-to-Many](./many-to-many.md)
 - [HasOne](./has-one.md)
 - [Preloading Associations](./preloading-associations.md)
 

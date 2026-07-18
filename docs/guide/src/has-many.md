@@ -300,6 +300,11 @@ fields, read left to right from this model. This expresses a relationship that
 exists only *through* a third model — a user has many comments, each comment
 belongs to an article, so a user has many commented articles:
 
+A [many-to-many relationship](./many-to-many.md) uses this mechanism: each
+endpoint has a direct `HasMany` to a join model and a derived
+`has_many(via = ...)` to the opposite endpoint. The example below follows the
+same kind of path with `Comment` as the intermediate model.
+
 ```rust
 # use toasty::Model;
 #[derive(Debug, toasty::Model)]
