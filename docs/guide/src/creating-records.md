@@ -216,6 +216,11 @@ let todo = user.todos().create()
 You don't need to set `user_id` — Toasty fills it in from the parent
 because the create builder is scoped to `user.todos()`.
 
+For a [many-to-many relationship](./many-to-many.md), create the join-model
+record instead of creating through the derived `has_many(via = ...)` accessor.
+The join record sets both endpoint relations and can store fields that describe
+the connection.
+
 ## Nested creation
 
 When models have relationships, you can create a parent and its children in a

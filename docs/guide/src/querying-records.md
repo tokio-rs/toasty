@@ -267,7 +267,8 @@ let name: Option<String> = User::filter_by_email("alice@example.com")
 `.select()` can also project a [multi-step (`via`)
 relation](./has-many.md#multi-step-relations-via), returning the related
 records per row — a `Vec<T>` for a `has_many` `via`, or a single optional
-record for a `has_one` `via`:
+record for a `has_one` `via`. A [many-to-many relation](./many-to-many.md) uses
+the same projection to return the opposite endpoints for each source record:
 
 ```rust,ignore
 // The distinct articles each user has commented on.

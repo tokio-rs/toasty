@@ -11,6 +11,11 @@ use toasty_core::stmt;
 /// impls is the source of truth for which Rust shapes are valid as a
 /// has-many field: anything outside those two combinations does not satisfy
 /// the trait.
+///
+/// A direct `#[has_many]` pairs with a `BelongsTo` on its target. A
+/// `#[has_many(via = ...)]` follows a relation path instead. Many-to-many
+/// models use a direct field for join-model records and a `via` field for the
+/// opposite endpoints.
 pub trait RelationManyField: Load<Output = Self> {
     /// The target model that this field references.
     type Target: Model;

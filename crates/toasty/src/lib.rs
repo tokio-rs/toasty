@@ -30,6 +30,11 @@
 //! through `.include(...)` or generated relation accessors. Eager relations are
 //! loaded whenever the model is loaded.
 //!
+//! A many-to-many relationship uses a join model with one `BelongsTo` relation
+//! to each endpoint. Endpoint models can expose the opposite side with
+//! `#[has_many(via = memberships.group)]`; code mutates the join model and uses
+//! the derived `via` field for read-only traversal.
+//!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.
 //!

@@ -586,6 +586,11 @@ The path `User::fields().todos()` refers to the HasMany relation. Calling
 `.any()` on it takes a filter expression on the child model (`Todo`) and
 produces a filter expression on the parent (`User`).
 
+`.any()` also works on a model-terminal `has_many(via = ...)` path. For a
+[many-to-many relationship](./many-to-many.md), call `.any()` on the derived
+relation to filter by the opposite endpoint, or on the direct join-model
+relation to filter by fields stored on the connection.
+
 ### `all` — every related record matches
 
 `.all()` on a `HasMany` path is the universal counterpart to `.any()`:
