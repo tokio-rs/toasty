@@ -42,12 +42,15 @@ pub struct Insert {
 /// Conflict handling attached to an [`Insert`].
 ///
 /// The target selects one primary-key or unique-constraint conflict. `Update`
-/// applies [`assignments`](Self::assignments) to the matching row, while
-/// `Ignore` leaves it unchanged. The insert source contains the values for the
-/// create branch in both cases.
+/// applies the normalized [`shared`](Self::shared) assignments to the matching
+/// row, while `Ignore` leaves it unchanged.
 ///
-/// The engine stores model-field targets before lowering and database-column
-/// targets afterward. SQL drivers receive the lowered form inside
+/// Before normalization, [`shared`](Self::shared), [`create`](Self::create),
+/// and [`update`](Self::update) contain the declarative branch assignments.
+/// Normalization writes the create branch into the insert source, overlays the
+/// update branch onto `shared`, and clears `create` and `update`. The engine
+/// also stores model-field targets before lowering and database-column targets
+/// afterward. SQL drivers receive the normalized, lowered form inside
 /// [`Operation::QuerySql`](crate::driver::Operation::QuerySql); non-SQL drivers
 /// receive it inside [`Operation::Upsert`](crate::driver::Operation::Upsert).
 #[derive(Debug, Clone, PartialEq)]
@@ -55,47 +58,27 @@ pub struct Upsert {
     /// The unique constraint that selects the conflicting row.
     pub target: UpsertTarget,
 
-    /// Assignments applied when the target matches an existing row.
+    /// Assignments applied to both the create and update branches.
     ///
-    /// These may reference stored columns and fields projected from
+    /// Normalization derives create values from these assignments and retains
+    /// the assignments for conflict updates.
+    pub shared: Assignments,
+
+    /// Assignments applied only when the insert creates a record.
+    ///
+    /// Model defaults populate this branch. Explicit `on_create` assignments
+    /// replace defaults and shared assignments for the same field.
+    pub create: Assignments,
+
+    /// Assignments applied only when the target matches an existing record.
+    ///
+    /// These override shared assignments for the same field and may reference
+    /// stored columns or fields projected from
     /// [`ExprIncoming`](super::ExprIncoming), the row proposed by the insert source.
-    pub assignments: Assignments,
-
-    /// Assignments explicitly scoped to record creation with `on_create`.
-    pub on_create: Option<UpsertCreate>,
-
-    /// Assignments explicitly scoped to conflict updates with `on_update`.
-    pub on_update: Option<UpsertUpdate>,
-
-    /// Create-only default assignments retained for key-value lowering.
-    ///
-    /// DynamoDB uses these to initialize required values with
-    /// `if_not_exists` without overwriting an existing item's field.
-    pub create_defaults: Assignments,
+    pub update: Assignments,
 
     /// Whether to update or ignore a conflicting row.
     pub action: UpsertAction,
-
-    /// Shared assignments that cannot initialize the corresponding create
-    /// field.
-    ///
-    /// Verification rejects these assignments and directs the caller to use
-    /// separate create and update branches.
-    pub invalid_shared_assignments: Vec<Projection>,
-}
-
-/// Assignments explicitly scoped to the create branch of an [`Upsert`].
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct UpsertCreate {
-    /// Values that override shared assignments when the insert creates a row.
-    pub assignments: Assignments,
-}
-
-/// Assignments explicitly scoped to the update branch of an [`Upsert`].
-#[derive(Debug, Clone, Default, PartialEq)]
-pub struct UpsertUpdate {
-    /// Operations that override shared assignments when the target conflicts.
-    pub assignments: Assignments,
 }
 
 /// The fields or columns that identify the selected upsert conflict.

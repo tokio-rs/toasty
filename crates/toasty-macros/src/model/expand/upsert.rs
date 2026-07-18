@@ -99,10 +99,16 @@ impl Expand<'_> {
             };
             let index = util::int(field_index);
             quote! {
-                stmt.set_create(
-                    #index,
-                    #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#name),
-                );
+                stmt.untyped_mut()
+                    .source
+                    .body
+                    .as_values_mut_unwrap()
+                    .rows
+                    .last_mut()
+                    .unwrap()
+                    .as_record_mut_unwrap()
+                    .fields[#index] =
+                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#name);
             }
         });
 
@@ -116,26 +122,62 @@ impl Expand<'_> {
             let update = field.attrs.update_expr.as_ref();
             match (create, update) {
                 (Some(create), Some(update)) => Some(quote! {
-                    stmt.set_create_default(
-                        #index,
-                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
-                    );
-                    stmt.update_assignments_mut().set(
-                        #toasty::stmt::Projection::from_index(#index),
-                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update),
-                    );
+                    {
+                        let shared = upsert.shared.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&#index)
+                        });
+                        if !shared && !upsert.create.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&#index)
+                        }) {
+                            upsert.create.set(
+                                [#index],
+                                #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
+                            );
+                        }
+                        if !shared && !upsert.update.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&#index)
+                        }) {
+                            upsert.update.set(
+                                [#index],
+                                #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update),
+                            );
+                        }
+                    }
                 }),
                 (Some(create), None) => Some(quote! {
-                    stmt.set_create_default(
-                        #index,
-                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
-                    );
+                    if !upsert.shared.keys().any(|projection| {
+                        projection.as_slice().first() == Some(&#index)
+                    }) && !upsert.create.keys().any(|projection| {
+                        projection.as_slice().first() == Some(&#index)
+                    }) {
+                        upsert.create.set(
+                            [#index],
+                            #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
+                        );
+                    }
                 }),
                 (None, Some(update)) => Some(quote! {
-                    stmt.set_shared(
-                        #index,
-                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update),
-                    );
+                    {
+                        let create = upsert.shared.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&#index)
+                        }) || upsert.create.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&#index)
+                        });
+                        let update = upsert.shared.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&#index)
+                        }) || upsert.update.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&#index)
+                        });
+                        if !create || !update {
+                            let expr = #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update);
+                            match (create, update) {
+                                (false, false) => upsert.shared.set([#index], expr),
+                                (false, true) => upsert.create.set([#index], expr),
+                                (true, false) => upsert.update.set([#index], expr),
+                                (true, true) => unreachable!(),
+                            }
+                        }
+                    }
                 }),
                 (None, None) => None,
             }
@@ -151,7 +193,6 @@ impl Expand<'_> {
                 #[doc = #method_doc]
                 #vis fn #method_name(#(#target_args),*) -> #builder_ident {
                     let mut stmt = #toasty::stmt::Upsert::<#model_ident>::blank([#(#target_indices),*]);
-                    #(#defaults)*
                     #(#target_sets)*
                     #builder_ident { stmt }
                 }
@@ -166,12 +207,16 @@ impl Expand<'_> {
             impl #builder_ident {
                 #shared_methods
 
-                #[doc = "Adds assignments used only when the record is created.\n\nDatabase drivers that do not support branch-specific upsert assignments return `unsupported_feature` at execution."]
+                fn apply_defaults(&mut self) {
+                    let upsert = self.stmt.untyped_mut().upsert.as_mut().unwrap();
+                    #(#defaults)*
+                }
+
+                #[doc = "Adds assignments used only when the record is created.\n\nBackend support depends on whether the assignment can be applied atomically without changing an existing record."]
                 #vis fn on_create(
                     mut self,
                     f: impl for<'a> FnOnce(#create_ident<'a>) -> #create_ident<'a>,
                 ) -> Self {
-                    self.stmt.begin_on_create();
                     let branch = #create_ident { stmt: &mut self.stmt };
                     let _ = f(branch);
                     self
@@ -182,7 +227,6 @@ impl Expand<'_> {
                     mut self,
                     f: impl for<'a> FnOnce(#update_ident<'a>) -> #update_ident<'a>,
                 ) -> Self {
-                    self.stmt.begin_on_update();
                     let branch = #update_ident { stmt: &mut self.stmt };
                     let _ = f(branch);
                     self
@@ -190,12 +234,15 @@ impl Expand<'_> {
 
                 #[doc = "Leaves a record unchanged when the selected conflict target matches.\n\nThe returned builder's `exec` method produces `Some(model)` after an insert and `None` after a conflict."]
                 #vis fn or_ignore(mut self) -> #ignore_ident {
-                    self.stmt.set_ignore();
+                    self.apply_defaults();
+                    self.stmt.untyped_mut().upsert.as_mut().unwrap().action =
+                        #toasty::core::stmt::UpsertAction::Ignore;
                     #ignore_ident { stmt: self.stmt }
                 }
 
                 #[doc = "Executes the upsert and returns the record stored by the database."]
-                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
+                #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
+                    self.apply_defaults();
                     executor.exec(self.stmt.into()).await
                 }
             }
@@ -249,6 +296,7 @@ impl Expand<'_> {
     }
 
     fn expand_upsert_shared_methods(&self, target_fields: &[usize]) -> TokenStream {
+        let toasty = &self.toasty;
         let vis = &self.model.vis;
         self.model
             .fields
@@ -267,9 +315,11 @@ impl Expand<'_> {
                 Some(quote! {
                     #[doc = #doc]
                     #vis fn #name(mut self, #name: impl Assign<FieldExprTarget<#ty>>) -> Self {
-                        self.stmt.assign_shared(#index, |assignments, projection| {
-                            #name.assign(assignments, projection);
-                        });
+                        let upsert = self.stmt.untyped_mut().upsert.as_mut().unwrap();
+                        #name.assign(
+                            &mut upsert.shared,
+                            #toasty::stmt::Projection::from_index(#index),
+                        );
                         self
                     }
                 })
@@ -289,10 +339,16 @@ impl Expand<'_> {
             Some(quote! {
                 #[doc = #doc]
                 #vis fn #name(mut self, #name: impl IntoExpr<FieldExprTarget<#ty>>) -> Self {
-                    self.stmt.set_create_override(
-                        #index,
-                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#name),
-                    );
+                    self.stmt
+                        .untyped_mut()
+                        .upsert
+                        .as_mut()
+                        .unwrap()
+                        .create
+                        .set(
+                            #toasty::stmt::Projection::from_index(#index),
+                            #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#name),
+                        );
                     self
                 }
             })
@@ -300,6 +356,7 @@ impl Expand<'_> {
     }
 
     fn expand_upsert_update_methods(&self, target_fields: &[usize]) -> TokenStream {
+        let toasty = &self.toasty;
         let vis = &self.model.vis;
         self.model
             .fields
@@ -320,9 +377,11 @@ impl Expand<'_> {
                 Some(quote! {
                     #[doc = #doc]
                     #vis fn #name(mut self, #name: impl Assign<FieldExprTarget<#ty>>) -> Self {
-                        self.stmt.assign_update_override(#index, |assignments, projection| {
-                            #name.assign(assignments, projection);
-                        });
+                        let upsert = self.stmt.untyped_mut().upsert.as_mut().unwrap();
+                        #name.assign(
+                            &mut upsert.update,
+                            #toasty::stmt::Projection::from_index(#index),
+                        );
                         self
                     }
                 })

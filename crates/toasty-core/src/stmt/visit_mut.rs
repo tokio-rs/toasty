@@ -1522,13 +1522,9 @@ where
     v.visit_stmt_query_mut(&mut node.source);
 
     if let Some(upsert) = &mut node.upsert {
-        v.visit_assignments_mut(&mut upsert.assignments);
-        if let Some(on_create) = &mut upsert.on_create {
-            v.visit_assignments_mut(&mut on_create.assignments);
-        }
-        if let Some(on_update) = &mut upsert.on_update {
-            v.visit_assignments_mut(&mut on_update.assignments);
-        }
+        v.visit_assignments_mut(&mut upsert.shared);
+        v.visit_assignments_mut(&mut upsert.create);
+        v.visit_assignments_mut(&mut upsert.update);
     }
 
     if let Some(returning) = &mut node.returning {

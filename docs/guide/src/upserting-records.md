@@ -211,11 +211,13 @@ without changing Toasty's semantics:
 | PostgreSQL | Yes | Yes | Yes | Yes |
 | SQLite | Yes | Yes | Yes | Yes |
 | Turso | Yes | Yes | Yes | Yes |
-| DynamoDB | Yes | No | No | Yes |
+| DynamoDB | Yes | No | Required fields / No | Yes |
 | MySQL | No | No | No | No |
 
 DynamoDB executes a regular primary-key upsert with one `UpdateItem` request.
-It rejects branch-specific closures and regular upserts that assign a
+It lowers a create-only assignment on a required field to `if_not_exists`.
+Nullable create-only assignments and all update-only assignments return
+`unsupported_feature`. DynamoDB also rejects regular upserts that assign a
 Toasty-managed `#[unique]` field. Its `or_ignore()` form can initialize unique
 fields because that form only has a create branch.
 

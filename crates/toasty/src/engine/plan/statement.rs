@@ -477,7 +477,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
 
             if let Some(upsert) = &insert.upsert {
-                for (_, assignment) in upsert.assignments.iter() {
+                for (_, assignment) in upsert.shared.iter() {
                     stmt::visit::for_each_expr(assignment, |expr| {
                         self.extract_data_load_args_from_expr(expr, None);
                     });
@@ -694,7 +694,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         if let Some(upsert) = &mut stmt.upsert {
-            for (_, assignment) in upsert.assignments.iter_mut() {
+            for (_, assignment) in upsert.shared.iter_mut() {
                 self.rewrite_assignment_arg_dependencies(assignment);
             }
         }

@@ -305,6 +305,89 @@ pub async fn upsert_applies_model_defaults(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+#[driver_test(id(ID), requires(upsert_primary_key))]
+pub async fn upsert_explicit_assignments_override_model_defaults(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+
+        #[default("create default".to_string())]
+        default_only: String,
+
+        #[update("update default".to_string())]
+        update_only: String,
+
+        #[default("create branch default".to_string())]
+        #[update("update branch default".to_string())]
+        branch_defaults: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let seed = toasty::create!(Item {}).exec(&mut db).await?;
+    let id = seed.id;
+    seed.delete().exec(&mut db).await?;
+
+    let created = Item::upsert_by_id(id)
+        .default_only("created explicitly")
+        .update_only("created explicitly")
+        .branch_defaults("created explicitly")
+        .exec(&mut db)
+        .await?;
+    assert_struct!(created, _ {
+        default_only: "created explicitly",
+        update_only: "created explicitly",
+        branch_defaults: "created explicitly",
+        ..
+    });
+
+    let updated = Item::upsert_by_id(id)
+        .default_only("updated explicitly")
+        .update_only("updated explicitly")
+        .branch_defaults("updated explicitly")
+        .exec(&mut db)
+        .await?;
+    assert_struct!(updated, _ {
+        default_only: "updated explicitly",
+        update_only: "updated explicitly",
+        branch_defaults: "updated explicitly",
+        ..
+    });
+
+    assert_none!(Item::upsert_by_id(id).or_ignore().exec(&mut db).await?);
+    Ok(())
+}
+
+#[driver_test(
+    id(ID),
+    requires(upsert_primary_key),
+    scenario(crate::scenarios::upsert_models)
+)]
+pub async fn upsert_create_assignment_initializes_only_new_record(test: &mut Test) -> Result<()> {
+    let mut db = setup_defaulted_item(test).await;
+    let seed = toasty::create!(DefaultedItem { value: "seed" })
+        .exec(&mut db)
+        .await?;
+    let id = seed.id;
+    seed.delete().exec(&mut db).await?;
+
+    let created = DefaultedItem::upsert_by_id(id)
+        .value("one")
+        .on_create(|create| create.created_only("initial"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(created.created_only, "initial");
+
+    let updated = DefaultedItem::upsert_by_id(id)
+        .value("two")
+        .on_create(|create| create.created_only("replacement"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(updated.created_only, "initial");
+    Ok(())
+}
+
 #[driver_test(
     id(ID),
     requires(upsert_branch_assignments),

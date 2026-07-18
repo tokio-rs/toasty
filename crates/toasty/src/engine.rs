@@ -18,6 +18,7 @@ mod select_item;
 pub(crate) use select_item::{SelectItem, SelectItems};
 mod simplify;
 mod ty;
+mod upsert;
 mod verify;
 
 use crate::Result;

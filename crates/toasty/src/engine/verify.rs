@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::engine::Engine;
+use crate::engine::{Engine, upsert};
 use toasty_core::Error;
 use toasty_core::driver::Capability;
 use toasty_core::{
@@ -92,66 +92,75 @@ impl stmt::Visit for Verify<'_, '_> {
             ));
         }
 
-        if (upsert.on_create.is_some() || upsert.on_update.is_some())
+        if upsert.action == stmt::UpsertAction::Update
+            && !upsert.update.is_empty()
             && !self.capability.upsert_branch_assignments
         {
             self.record(Error::unsupported_feature(
-                "upsert on_create and on_update branches are not supported by this database",
+                "upsert on_update assignments are not supported by this database",
             ));
         }
 
         if upsert.action == stmt::UpsertAction::Update
-            && upsert.assignments.is_empty()
-            && upsert
-                .on_update
-                .as_ref()
-                .is_none_or(|clause| clause.assignments.is_empty())
+            && upsert.shared.is_empty()
+            && upsert.update.is_empty()
         {
             self.record(Error::invalid_statement(
                 "upsert requires at least one update assignment; use or_ignore() instead",
             ));
         }
 
-        if !upsert.invalid_shared_assignments.is_empty() {
-            self.record(Error::invalid_statement(
-                "upsert assignment cannot initialize the field on the create branch; use on_create and on_update instead",
-            ));
+        for (projection, assignment) in &upsert.shared {
+            if !upsert.create.contains(projection)
+                && upsert::create_expr_for_assignment(assignment).is_none()
+            {
+                self.record(Error::invalid_statement(
+                    "upsert assignment cannot initialize the field on the create branch; use on_create and on_update instead",
+                ));
+            }
         }
 
-        if !self.capability.sql {
-            for (projection, _) in upsert.create_defaults.iter() {
+        if !self.capability.upsert_branch_assignments && upsert.action == stmt::UpsertAction::Update
+        {
+            for (projection, _) in &upsert.create {
                 let Some(&field) = projection.as_slice().first() else {
                     continue;
                 };
                 if model.fields[field].nullable {
                     self.record(Error::unsupported_feature(
-                        "nullable create defaults are not supported by DynamoDB upsert",
+                        "nullable upsert create assignments are not supported by this database",
                     ));
                 }
-                if upsert.assignments.contains(projection) {
+                if upsert.shared.contains(projection) {
                     self.record(Error::unsupported_feature(
-                        "a field with both #[default] and #[update] is not supported by DynamoDB upsert",
+                        "different create and update assignments for one field are not supported by this database",
                     ));
                 }
             }
+        }
 
-            if upsert.action == stmt::UpsertAction::Update {
-                for secondary in model
-                    .indices
-                    .iter()
-                    .filter(|index| index.unique && !index.primary_key)
-                {
-                    if secondary.fields.iter().any(|field| {
-                        upsert.assignments.keys().any(|projection| {
+        if !self.capability.sql && upsert.action == stmt::UpsertAction::Update {
+            for secondary in model
+                .indices
+                .iter()
+                .filter(|index| index.unique && !index.primary_key)
+            {
+                if secondary.fields.iter().any(|field| {
+                    upsert
+                        .shared
+                        .keys()
+                        .any(|projection| projection.as_slice().first() == Some(&field.field.index))
+                        || upsert.create.keys().any(|projection| {
                             projection.as_slice().first() == Some(&field.field.index)
-                        }) || upsert.create_defaults.keys().any(|projection| {
+                        })
+                        || upsert.update.keys().any(|projection| {
                             projection.as_slice().first() == Some(&field.field.index)
-                        }) || model.fields[field.field.index].auto.is_some()
-                    }) {
-                        self.record(Error::unsupported_feature(
-                            "updating a unique secondary-index field is not supported by DynamoDB upsert",
-                        ));
-                    }
+                        })
+                        || model.fields[field.field.index].auto.is_some()
+                }) {
+                    self.record(Error::unsupported_feature(
+                        "updating a unique secondary-index field is not supported by DynamoDB upsert",
+                    ));
                 }
             }
         }

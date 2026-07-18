@@ -64,11 +64,13 @@ pub struct Capability {
     /// reacting to an arbitrary unique conflict.
     pub upsert_unique: bool,
 
-    /// Whether an upsert can apply separate `on_create` and `on_update`
-    /// assignments.
+    /// Whether an upsert can apply arbitrary separate `on_create` and
+    /// `on_update` assignments.
     ///
     /// A driver with this capability must select the branch atomically within
     /// the database operation; it cannot read first and choose a second write.
+    /// Drivers without this capability may still accept branch patterns that
+    /// map to native conditional assignments.
     pub upsert_branch_assignments: bool,
 
     /// Whether an insert-or-ignore upsert suppresses only the selected target's

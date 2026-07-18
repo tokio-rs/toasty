@@ -28,7 +28,7 @@ use toasty_core::{
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, hir, simplify::Simplify, upsert};
 
 /// Wrap a nullable single-relation subquery so a missing row passes through as
 /// `Null`, while a present row is transformed by `present`. Used when lowering
@@ -1091,7 +1091,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
-        if let Err(err) = resolve_upsert_branches(stmt) {
+        if let Err(err) = upsert::normalize(stmt) {
             self.state.errors.push(err);
             return;
         }
@@ -1113,9 +1113,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 upsert.target = stmt::UpsertTarget::Columns(columns);
             }
             if upsert.action == stmt::UpsertAction::Update {
-                lower.inject_version_increment(&mut upsert.assignments);
+                lower.inject_version_increment(&mut upsert.shared);
             }
-            lower.visit_assignments_mut(&mut upsert.assignments);
+            lower.visit_assignments_mut(&mut upsert.shared);
         }
 
         if let Some(returning) = &mut stmt.returning {
@@ -1290,70 +1290,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         visit_mut::visit_values_mut(self, stmt);
     }
-}
-
-fn resolve_upsert_branches(stmt: &mut stmt::Insert) -> Result<()> {
-    let Some(upsert) = &mut stmt.upsert else {
-        return Ok(());
-    };
-
-    if let Some(on_update) = upsert.on_update.take() {
-        upsert.assignments.overlay(on_update.assignments);
-    }
-
-    let Some(on_create) = upsert.on_create.take() else {
-        return Ok(());
-    };
-
-    let stmt::ExprSet::Values(values) = &mut stmt.source.body else {
-        return Err(crate::Error::invalid_statement(
-            "upsert on_create requires a VALUES source",
-        ));
-    };
-    let [row] = values.rows.as_mut_slice() else {
-        return Err(crate::Error::invalid_statement(
-            "upsert on_create requires exactly one source row",
-        ));
-    };
-    if !row.is_record() {
-        let Some(fields) = row.take().into_record_items() else {
-            return Err(crate::Error::invalid_statement(
-                "upsert on_create requires a record source row",
-            ));
-        };
-        *row = stmt::Expr::record(fields);
-    }
-    let Some(record) = row.as_record_mut() else {
-        return Err(crate::Error::invalid_statement(
-            "upsert on_create requires a record source row",
-        ));
-    };
-
-    for (projection, assignment) in on_create.assignments {
-        let [field] = projection.as_slice() else {
-            return Err(crate::Error::invalid_statement(
-                "upsert on_create assignments must target one model field",
-            ));
-        };
-        let stmt::Assignment::Set(expr) = assignment else {
-            return Err(crate::Error::invalid_statement(
-                "upsert on_create only supports value assignments",
-            ));
-        };
-        let Some(slot) = record.fields.get_mut(*field) else {
-            return Err(crate::Error::invalid_statement(
-                "upsert on_create assignment targets an unknown model field",
-            ));
-        };
-
-        *slot = expr;
-        upsert.create_defaults.unset(&[*field]);
-        upsert
-            .invalid_shared_assignments
-            .retain(|candidate| candidate != &projection);
-    }
-
-    Ok(())
 }
 
 impl<'a, 'b> LowerStatement<'a, 'b> {

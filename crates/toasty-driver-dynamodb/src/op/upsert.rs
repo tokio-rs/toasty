@@ -78,7 +78,7 @@ impl Connection {
                 for (position, column_id) in target.columns.iter().enumerate() {
                     let column = schema.column(*column_id);
                     if conflict_columns.contains(&column.id)
-                        || upsert.assignments.contains(&[column.id.index])
+                        || upsert.shared.contains(&[column.id.index])
                         || row_value(row, position)?.is_null()
                     {
                         continue;
@@ -89,7 +89,7 @@ impl Connection {
                     write!(sets, "{name} = if_not_exists({name}, {value})").unwrap();
                 }
 
-                for (projection, assignment) in upsert.assignments.iter() {
+                for (projection, assignment) in upsert.shared.iter() {
                     render_assignment(
                         table,
                         &mut attrs,

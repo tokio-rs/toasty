@@ -386,7 +386,7 @@ impl ToSql for UpsertClause<'_> {
             stmt::UpsertAction::Ignore => fmt!(f, " DO NOTHING"),
             stmt::UpsertAction::Update => {
                 let table = f.serializer.table(target.table);
-                let assignments = AssignmentList::upsert(table, &upsert.assignments);
+                let assignments = AssignmentList::upsert(table, &upsert.shared);
                 fmt!(f, " DO UPDATE SET " assignments);
             }
         }

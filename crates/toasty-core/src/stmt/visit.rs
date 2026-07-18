@@ -1522,13 +1522,9 @@ where
     v.visit_stmt_query(&node.source);
 
     if let Some(upsert) = &node.upsert {
-        v.visit_assignments(&upsert.assignments);
-        if let Some(on_create) = &upsert.on_create {
-            v.visit_assignments(&on_create.assignments);
-        }
-        if let Some(on_update) = &upsert.on_update {
-            v.visit_assignments(&on_update.assignments);
-        }
+        v.visit_assignments(&upsert.shared);
+        v.visit_assignments(&upsert.create);
+        v.visit_assignments(&upsert.update);
     }
 
     if let Some(returning) = &node.returning {
