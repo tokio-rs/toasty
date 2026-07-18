@@ -262,7 +262,9 @@ jobs:
       - name: cargo test -p toasty-driver-dynamodb
         run: cargo test -p toasty-driver-dynamodb -- --test-threads 1
 
-  test-turso-sync:
+  test-turso:
+    needs: check
+    name: Run tests for Turso
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
