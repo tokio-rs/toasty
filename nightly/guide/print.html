@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-eeb7c739.js";
+            window.path_to_searchindex_js = "searchindex-baf47f78.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ecb82dcc.js"></script>
+        <script src="toc-a253e6fc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -228,6 +228,7 @@ transactions.</p>
 <li><strong><a href="#relationships">Relationships</a></strong> — overview of how models connect to each other</li>
 <li><strong><a href="#belongsto">BelongsTo</a></strong> — define and use many-to-one relationships</li>
 <li><strong><a href="#hasmany">HasMany</a></strong> — define and use one-to-many relationships</li>
+<li><strong><a href="#many-to-many-relationships">Many-to-Many</a></strong> — connect two models through a join model</li>
 <li><strong><a href="#hasone">HasOne</a></strong> — define and use one-to-one relationships</li>
 <li><strong><a href="#preloading-associations">Preloading Associations</a></strong> — eager loading to avoid extra queries</li>
 <li><strong><a href="#filtering-with-expressions-1">Filtering with Expressions</a></strong> — comparisons, AND/OR, and more</li>
@@ -1218,6 +1219,10 @@ assert_eq!(todo.user_id, user.id);
     .await?;</code></pre>
 <p>You don’t need to set <code>user_id</code> — Toasty fills it in from the parent
 because the create builder is scoped to <code>user.todos()</code>.</p>
+<p>For a <a href="#many-to-many-relationships">many-to-many relationship</a>, create the join-model
+record instead of creating through the derived <code>has_many(via = ...)</code> accessor.
+The join record sets both endpoint relations and can store fields that describe
+the connection.</p>
 <h2 id="nested-creation"><a class="header" href="#nested-creation">Nested creation</a></h2>
 <p>When models have relationships, you can create a parent and its children in a
 single call. Inside the macro, use <code>{ ... }</code> (without a type prefix) for
@@ -1630,7 +1635,8 @@ columns from the matching rows:</p>
 <p><code>.select()</code> can also project a <a href="#multi-step-relations-via">multi-step (<code>via</code>)
 relation</a>, returning the related
 records per row — a <code>Vec&lt;T&gt;</code> for a <code>has_many</code> <code>via</code>, or a single optional
-record for a <code>has_one</code> <code>via</code>:</p>
+record for a <code>has_one</code> <code>via</code>. A <a href="#many-to-many-relationships">many-to-many relation</a> uses
+the same projection to return the opposite endpoints for each source record:</p>
 <pre><code class="language-rust ignore">// The distinct articles each user has commented on.
 let per_user: Vec&lt;Vec&lt;Article&gt;&gt; = User::all()
     .select(User::fields().commented_articles())
@@ -3500,11 +3506,35 @@ table has a <code>user_id</code> column that references the <code>users</code> t
 </code></pre>
 <p>The <code>posts</code> table holds the foreign key (<code>user_id</code>). Each post points to exactly
 one user. A user can have many posts.</p>
-<p>This single pattern — a foreign key column in one table referencing the primary
-key of another — underlies all three relationship types in Toasty.</p>
+<p>This foreign-key pattern underlies each direct relationship type in Toasty. A
+many-to-many relationship uses two direct relationships joined through a third
+model.</p>
+<h2 id="many-to-many-uses-a-join-model"><a class="header" href="#many-to-many-uses-a-join-model">Many-to-many uses a join model</a></h2>
+<p>A many-to-many relationship lets each record on either side connect to multiple
+records on the other side. Users can join multiple groups, and groups can contain
+multiple users. A <code>memberships</code> table represents each user-group connection as a
+row with foreign keys to both endpoint tables:</p>
+<pre><code class="language-text">users              memberships                 groups
+┌────┬───────┐     ┌─────────┬──────────┐      ┌────┬───────────┐
+│ id │ name  │     │ user_id │ group_id │      │ id │ name      │
+├────┼───────┤     ├─────────┼──────────┤      ├────┼───────────┤
+│  1 │ Alice │◄────│       1 │       10 │─────►│ 10 │ Rust      │
+│  2 │ Bob   │◄────│       2 │       10 │─────►│ 20 │ Databases │
+└────┴───────┘     │       1 │       20 │─────►└────┴───────────┘
+                   └─────────┴──────────┘
+</code></pre>
+<p>In Toasty, the join table is a normal model such as <code>Membership</code>. Each endpoint
+has a direct <code>#[has_many]</code> relation to the join model and a derived
+<code>#[has_many(via = ...)]</code> relation to the opposite endpoint. Code creates,
+updates, and deletes join-model records to change the connections; the derived
+relation provides read-only traversal. The <a href="#many-to-many-relationships">Many-to-Many</a>
+chapter shows the model definition, traversal, filtering, preloading, and link
+mutation.</p>
 <h2 id="relationship-types"><a class="header" href="#relationship-types">Relationship types</a></h2>
-<p>Toasty supports three relationship types. They differ in how many records each
-side of the relationship holds, and which model contains the foreign key.</p>
+<p>Toasty supports three direct relationship types. They differ in how many records
+each side holds and which model contains the foreign key. Many-to-many is a
+modeling pattern composed from these types rather than a fourth relation
+attribute.</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -3696,6 +3726,7 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 <tr><td>A post has one author</td><td><code>Post</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code> + <code>User</code> → <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code> or <code>Vec&lt;Post&gt;</code></td><td><code>posts.user_id</code></td></tr>
 <tr><td>A user has one profile</td><td><code>User</code> → <code>Deferred&lt;Profile&gt;</code> or <code>Profile</code> + <code>Profile</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code></td><td><code>profiles.user_id</code></td></tr>
 <tr><td>A comment belongs to a post</td><td><code>Comment</code> → <code>Deferred&lt;Post&gt;</code> or <code>Post</code> + <code>Post</code> → <code>Deferred&lt;Vec&lt;Comment&gt;&gt;</code> or <code>Vec&lt;Comment&gt;</code></td><td><code>comments.post_id</code></td></tr>
+<tr><td>Users join many groups and groups contain many users</td><td>Join model with two <code>BelongsTo</code> relations plus <code>has_many(via = ...)</code> on the endpoints</td><td><code>memberships.user_id</code> and <code>memberships.group_id</code></td></tr>
 </tbody>
 </table>
 </div>
@@ -3753,6 +3784,8 @@ querying, creating, and updating:</p>
 parent, setting the relation on create</li>
 <li><a href="#hasmany"><strong>HasMany</strong></a> — querying children, creating through the
 relation, inserting and removing, scoped queries</li>
+<li><a href="#many-to-many-relationships"><strong>Many-to-Many</strong></a> — defining a join model, traversing in
+both directions, filtering by endpoints or join metadata, and changing links</li>
 <li><a href="#hasone"><strong>HasOne</strong></a> — required vs optional, creating and updating the
 child, replace and unset behavior</li>
 <li><a href="#preloading-associations"><strong>Preloading Associations</strong></a> — avoiding extra
@@ -3831,6 +3864,10 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 </code></pre>
 <p>The parent model (<code>User</code>) typically declares a <code>#[has_many]</code> field pointing back
 at the child. See <a href="#hasmany">HasMany</a> for details.</p>
+<p>A <a href="#many-to-many-relationships">many-to-many relationship</a> uses a join model with two
+<code>BelongsTo</code> fields, one for each endpoint. The endpoint models each declare a
+<code>HasMany</code> to the join model and can add a derived <code>has_many(via = ...)</code> field for
+direct traversal to the other endpoint.</p>
 <p>Use a plain relation field when every loaded child should also load its parent:</p>
 <pre><code class="language-rust ignore">#[belongs_to]
 user: User,</code></pre>
@@ -4313,6 +4350,10 @@ a single foreign key. Declare it with <code>via</code> and a dotted chain of rel
 fields, read left to right from this model. This expresses a relationship that
 exists only <em>through</em> a third model — a user has many comments, each comment
 belongs to an article, so a user has many commented articles:</p>
+<p>A <a href="#many-to-many-relationships">many-to-many relationship</a> uses this mechanism: each
+endpoint has a direct <code>HasMany</code> to a join model and a derived
+<code>has_many(via = ...)</code> to the opposite endpoint. The example below follows the
+same kind of path with <code>Comment</code> as the intermediate model.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -4436,6 +4477,226 @@ available on DynamoDB.</p>
 <blockquote>
 <p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
 </blockquote>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="many-to-many-relationships"><a class="header" href="#many-to-many-relationships">Many-to-Many Relationships</a></h1>
+<p>A many-to-many relationship connects multiple records on each side. A user can
+join multiple groups, and each group can contain multiple users. Relational
+databases store these connections in a join table with one foreign key for each
+endpoint.</p>
+<p>Toasty represents the join table as a model. Direct <code>HasMany</code> and <code>BelongsTo</code>
+relations connect each endpoint to that join model. A
+<code>#[has_many(via = ...)]</code> field provides direct, read-only traversal from one
+endpoint to the other.</p>
+<h2 id="defining-the-join-model"><a class="header" href="#defining-the-join-model">Defining the join model</a></h2>
+<p>The following schema connects <code>User</code> and <code>Group</code> through <code>Membership</code>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[has_many]
+    memberships: toasty::Deferred&lt;Vec&lt;Membership&gt;&gt;,
+
+    #[has_many(via = memberships.group)]
+    groups: toasty::Deferred&lt;Vec&lt;Group&gt;&gt;,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Group {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[has_many]
+    memberships: toasty::Deferred&lt;Vec&lt;Membership&gt;&gt;,
+
+    #[has_many(via = memberships.user)]
+    users: toasty::Deferred&lt;Vec&lt;User&gt;&gt;,
+}
+
+#[derive(Debug, toasty::Model)]
+#[key(user_id, group_id)]
+struct Membership {
+    #[index]
+    user_id: u64,
+
+    #[belongs_to(key = user_id, references = id)]
+    user: toasty::Deferred&lt;User&gt;,
+
+    #[index]
+    group_id: u64,
+
+    #[belongs_to(key = group_id, references = id)]
+    group: toasty::Deferred&lt;Group&gt;,
+
+    role: String,
+}
+<span class="boring">}</span></code></pre>
+<p>Each relation has a separate job:</p>
+<ul>
+<li><code>User::memberships</code> and <code>Group::memberships</code> are direct, mutable relations to
+the join model.</li>
+<li><code>Membership::user</code> and <code>Membership::group</code> own the two foreign keys.</li>
+<li><code>User::groups</code> follows <code>memberships.group</code> to reach groups without exposing
+the join step to callers.</li>
+<li><code>Group::users</code> follows <code>memberships.user</code> in the opposite direction.</li>
+</ul>
+<p>The composite primary key on <code>(user_id, group_id)</code> permits one membership for
+each user-group pair. Use a separate generated primary key when duplicate join
+rows have distinct meanings. A <code>via</code> query still returns each target once; query
+the join model when each duplicate row must remain visible.</p>
+<p>The join model can store data about the connection. <code>Membership::role</code> belongs
+on <code>Membership</code> because it describes one user’s role in one group, not the user
+or group independently.</p>
+<h2 id="creating-a-link"><a class="header" href="#creating-a-link">Creating a link</a></h2>
+<p>Create a join-model record to connect two existing endpoints:</p>
+<pre><code class="language-rust ignore">let membership = toasty::create!(Membership {
+    user: &amp;user,
+    group: &amp;group,
+    role: "member",
+})
+.exec(&amp;mut db)
+.await?;</code></pre>
+<p>The <code>user</code> and <code>group</code> setters fill <code>user_id</code> and <code>group_id</code>. Creating the
+membership does not update either endpoint row.</p>
+<p>The derived <code>user.groups()</code> relation is read-only. It does not generate
+<code>create</code>, <code>insert</code>, or <code>remove</code> operations because those operations would need
+to construct or identify a <code>Membership</code> row. Create and delete <code>Membership</code>
+records instead.</p>
+<h2 id="querying-both-directions"><a class="header" href="#querying-both-directions">Querying both directions</a></h2>
+<p>The derived relations return the opposite endpoints:</p>
+<pre><code class="language-rust ignore">let groups: Vec&lt;Group&gt; = user.groups().exec(&amp;mut db).await?;
+let users: Vec&lt;User&gt; = group.users().exec(&amp;mut db).await?;</code></pre>
+<p>These accessors support the same query operations as other relation queries:</p>
+<pre><code class="language-rust ignore">let rust_groups = user
+    .groups()
+    .filter(Group::fields().name().eq("Rust"))
+    .order_by(Group::fields().name().asc())
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>A derived <code>via</code> relation returns distinct targets. If multiple join rows reach
+the same group, <code>user.groups()</code> returns that group once.</p>
+<h2 id="filtering-endpoints"><a class="header" href="#filtering-endpoints">Filtering endpoints</a></h2>
+<p>Use <code>.any()</code> on the derived relation when the condition only references the
+opposite endpoint:</p>
+<pre><code class="language-rust ignore">let rust_users = User::filter(
+    User::fields()
+        .groups()
+        .any(Group::fields().name().eq("Rust")),
+)
+.exec(&amp;mut db)
+.await?;</code></pre>
+<p>The expression reads as: select users for whom at least one related group is
+named <code>Rust</code>.</p>
+<p>Use <code>.any()</code> on the direct join-model relation when the condition needs fields
+from <code>Membership</code>:</p>
+<pre><code class="language-rust ignore">let owners = User::filter(
+    User::fields()
+        .memberships()
+        .any(Membership::fields().role().eq("owner")),
+)
+.exec(&amp;mut db)
+.await?;</code></pre>
+<p>The predicate can also traverse from the join model to the opposite endpoint:</p>
+<pre><code class="language-rust ignore">let rust_users = User::filter(
+    User::fields()
+        .memberships()
+        .any(Membership::fields().group().name().eq("Rust")),
+)
+.exec(&amp;mut db)
+.await?;</code></pre>
+<p>Choose the derived relation for endpoint fields and the direct join relation for
+join metadata.</p>
+<h2 id="preloading-endpoints"><a class="header" href="#preloading-endpoints">Preloading endpoints</a></h2>
+<p>Preload the derived relation when a query returns multiple endpoint records:</p>
+<pre><code class="language-rust ignore">let users = User::all()
+    .include(User::fields().groups())
+    .exec(&amp;mut db)
+    .await?;
+
+for user in &amp;users {
+    let groups: &amp;[Group] = user.groups.get();
+    println!("{} belongs to {} groups", user.name, groups.len());
+}</code></pre>
+<p><code>.include()</code> loads and groups the distinct targets for every parent in the
+result. Accessing <code>user.groups.get()</code> reads the preloaded collection without
+issuing another query.</p>
+<h2 id="updating-and-removing-a-link"><a class="header" href="#updating-and-removing-a-link">Updating and removing a link</a></h2>
+<p>Update fields on the join model directly:</p>
+<pre><code class="language-rust ignore">membership.update().role("owner").exec(&amp;mut db).await?;</code></pre>
+<p>Delete the join-model record to remove the connection:</p>
+<pre><code class="language-rust ignore">membership.delete().exec(&amp;mut db).await?;</code></pre>
+<p>Deleting a membership leaves the <code>User</code> and <code>Group</code> records intact because the
+membership belongs to both endpoints; neither endpoint belongs to the
+membership.</p>
+<p>Deleting an endpoint removes its required membership rows but leaves records on
+the opposite endpoint intact. Deleting a user therefore removes that user’s
+memberships without deleting any groups.</p>
+<h2 id="self-referential-many-to-many-relationships"><a class="header" href="#self-referential-many-to-many-relationships">Self-referential many-to-many relationships</a></h2>
+<p>A self-referential join model points both foreign keys at the same endpoint
+model. A follower graph uses one foreign key for the follower and one for the
+followed user:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[has_many(pair = follower)]
+    outgoing_follows: toasty::Deferred&lt;Vec&lt;Follow&gt;&gt;,
+
+    #[has_many(pair = followed)]
+    incoming_follows: toasty::Deferred&lt;Vec&lt;Follow&gt;&gt;,
+
+    #[has_many(via = outgoing_follows.followed)]
+    following: toasty::Deferred&lt;Vec&lt;User&gt;&gt;,
+
+    #[has_many(via = incoming_follows.follower)]
+    followers: toasty::Deferred&lt;Vec&lt;User&gt;&gt;,
+}
+
+#[derive(Debug, toasty::Model)]
+#[key(follower_id, followed_id)]
+struct Follow {
+    #[index]
+    follower_id: u64,
+
+    #[belongs_to(key = follower_id, references = id)]
+    follower: toasty::Deferred&lt;User&gt;,
+
+    #[index]
+    followed_id: u64,
+
+    #[belongs_to(key = followed_id, references = id)]
+    followed: toasty::Deferred&lt;User&gt;,
+}
+<span class="boring">}</span></code></pre>
+<p><code>pair</code> tells Toasty which <code>Follow</code> relation matches each direct <code>HasMany</code>; model
+types alone cannot distinguish two <code>BelongsTo&lt;User&gt;</code> fields. The two <code>via</code> paths
+then name the direction explicitly: outgoing rows reach followed users, and
+incoming rows reach followers.</p>
+<h2 id="backend-support"><a class="header" href="#backend-support">Backend support</a></h2>
+<p>Queries that traverse <code>has_many(via = ...)</code>, including relation accessors,
+<code>.any()</code>, <code>.include()</code>, and <code>.select()</code>, require a SQL backend. They are supported
+on SQLite, PostgreSQL, and MySQL and are not available on DynamoDB. Creating,
+updating, querying, and deleting the join model use its ordinary model APIs.</p>
+<p>See <a href="#multi-step-relations-via">HasMany</a> for the general <code>via</code>
+rules, <a href="#filtering-on-associations">Filtering with Expressions</a>
+for association predicates, and <a href="#preloading-associations">Preloading Associations</a>
+for loaded-state behavior.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="hasone"><a class="header" href="#hasone">HasOne</a></h1>
 <p>A <code>HasOne</code> relationship connects a parent model to a single child record. Like
@@ -5079,6 +5340,8 @@ assert!(user.profile.get().is_none());
 <p>A <a href="#multi-step-relations-via">multi-step (<code>via</code>) relation</a> reaches
 its target through a path of existing relations. Preload it with <code>.include()</code>
 the same way as a single-step relation:</p>
+<p>This includes <a href="#many-to-many-relationships">many-to-many relationships</a>, where the path
+crosses a join model to reach the opposite endpoint.</p>
 <pre><code class="language-rust ignore">let users = User::all()
     .include(User::fields().commented_articles())
     .exec(&amp;mut db)
@@ -5715,6 +5978,10 @@ let users = User::filter(
 <p>The path <code>User::fields().todos()</code> refers to the HasMany relation. Calling
 <code>.any()</code> on it takes a filter expression on the child model (<code>Todo</code>) and
 produces a filter expression on the parent (<code>User</code>).</p>
+<p><code>.any()</code> also works on a model-terminal <code>has_many(via = ...)</code> path. For a
+<a href="#many-to-many-relationships">many-to-many relationship</a>, call <code>.any()</code> on the derived
+relation to filter by the opposite endpoint, or on the direct join-model
+relation to filter by fields stored on the connection.</p>
 <h3 id="all--every-related-record-matches"><a class="header" href="#all--every-related-record-matches"><code>all</code> — every related record matches</a></h3>
 <p><code>.all()</code> on a <code>HasMany</code> path is the universal counterpart to <code>.any()</code>:
 it tests whether <em>every</em> related record matches the filter. <strong>SQL-only.</strong></p>

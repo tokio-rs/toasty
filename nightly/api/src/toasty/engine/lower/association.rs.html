@@ -146,128 +146,94 @@
 <a href=#146 id=146 data-nosnippet>146</a>        }
 <a href=#147 id=147 data-nosnippet>147</a>    }
 <a href=#148 id=148 data-nosnippet>148</a>
-<a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// Entry point for path unfolding. Pulls the seed `source_model_id` off
-<a href=#150 id=150 data-nosnippet>150</a>    /// the association's source query and delegates to the recursive
-<a href=#151 id=151 data-nosnippet>151</a>    /// [`unfold_steps`](Self::unfold_steps) helper. Returns an association
-<a href=#152 id=152 data-nosnippet>152</a>    /// whose path is a single step that does **not** name a via relation.
-<a href=#153 id=153 data-nosnippet>153</a>    </span><span class="kw">fn </span>unfold_path(<span class="kw-2">&amp;</span><span class="self">self</span>, association: stmt::Association) -&gt; stmt::Association {
-<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">let </span>stmt::Association { source, path } = association;
-<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span>source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
-<a href=#156 id=156 data-nosnippet>156</a>        <span class="self">self</span>.unfold_steps(source, source_model_id, path.projection.as_slice())
-<a href=#157 id=157 data-nosnippet>157</a>    }
-<a href=#158 id=158 data-nosnippet>158</a>
-<a href=#159 id=159 data-nosnippet>159</a>    <span class="doccomment">/// Walk `steps`, splicing each via relation's resolved path inline and
-<a href=#160 id=160 data-nosnippet>160</a>    /// wrapping every intermediate step in a nested `Source::Model { via }`.
-<a href=#161 id=161 data-nosnippet>161</a>    /// Returns the outer single-step association the caller filters against.
-<a href=#162 id=162 data-nosnippet>162</a>    ///
-<a href=#163 id=163 data-nosnippet>163</a>    /// Via splicing allocates a `Vec&lt;usize&gt;` per via segment so the recursion
-<a href=#164 id=164 data-nosnippet>164</a>    /// can borrow it as a slice. Paths are short (typically 1-3 steps) and
-<a href=#165 id=165 data-nosnippet>165</a>    /// vias are rare, so this is cheap in practice.
-<a href=#166 id=166 data-nosnippet>166</a>    </span><span class="kw">fn </span>unfold_steps(
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
-<a href=#168 id=168 data-nosnippet>168</a>        source: Box&lt;stmt::Query&gt;,
-<a href=#169 id=169 data-nosnippet>169</a>        source_model_id: app::ModelId,
-<a href=#170 id=170 data-nosnippet>170</a>        steps: <span class="kw-2">&amp;</span>[usize],
-<a href=#171 id=171 data-nosnippet>171</a>    ) -&gt; stmt::Association {
-<a href=#172 id=172 data-nosnippet>172</a>        <span class="kw">let </span>[first, rest @ ..] = steps <span class="kw">else </span>{
-<a href=#173 id=173 data-nosnippet>173</a>            <span class="macro">unreachable!</span>(<span class="string">"unfold_steps called with empty steps"</span>)
-<a href=#174 id=174 data-nosnippet>174</a>        };
-<a href=#175 id=175 data-nosnippet>175</a>
-<a href=#176 id=176 data-nosnippet>176</a>        <span class="kw">let </span>field = <span class="kw-2">&amp;</span><span class="self">self
-<a href=#177 id=177 data-nosnippet>177</a>            </span>.schema()
-<a href=#178 id=178 data-nosnippet>178</a>            .app
-<a href=#179 id=179 data-nosnippet>179</a>            .model(source_model_id)
-<a href=#180 id=180 data-nosnippet>180</a>            .as_root_unwrap()
-<a href=#181 id=181 data-nosnippet>181</a>            .fields[<span class="kw-2">*</span>first];
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="doccomment">/// Resolve the association path into direct relation fields, then wrap
+<a href=#150 id=150 data-nosnippet>150</a>    /// each intermediate field in a nested `Source::Model { via }` query.
+<a href=#151 id=151 data-nosnippet>151</a>    /// Returns an association whose path contains one direct relation step.
+<a href=#152 id=152 data-nosnippet>152</a>    </span><span class="kw">fn </span>unfold_path(<span class="kw-2">&amp;</span><span class="self">self</span>, association: stmt::Association) -&gt; stmt::Association {
+<a href=#153 id=153 data-nosnippet>153</a>        <span class="kw">let </span>stmt::Association { source, path } = association;
+<a href=#154 id=154 data-nosnippet>154</a>        <span class="kw">let </span>source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
+<a href=#155 id=155 data-nosnippet>155</a>        <span class="kw">let </span>fields = <span class="kw">super</span>::relation_path::flatten_relation_path(
+<a href=#156 id=156 data-nosnippet>156</a>            <span class="self">self</span>.schema(),
+<a href=#157 id=157 data-nosnippet>157</a>            source_model_id,
+<a href=#158 id=158 data-nosnippet>158</a>            path.projection.as_slice(),
+<a href=#159 id=159 data-nosnippet>159</a>        );
+<a href=#160 id=160 data-nosnippet>160</a>
+<a href=#161 id=161 data-nosnippet>161</a>        <span class="self">self</span>.unfold_fields(source, <span class="kw-2">&amp;</span>fields)
+<a href=#162 id=162 data-nosnippet>162</a>    }
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">fn </span>unfold_fields(
+<a href=#165 id=165 data-nosnippet>165</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
+<a href=#166 id=166 data-nosnippet>166</a>        source: Box&lt;stmt::Query&gt;,
+<a href=#167 id=167 data-nosnippet>167</a>        fields: <span class="kw-2">&amp;</span>[app::FieldId],
+<a href=#168 id=168 data-nosnippet>168</a>    ) -&gt; stmt::Association {
+<a href=#169 id=169 data-nosnippet>169</a>        <span class="kw">let </span>[field_id, rest @ ..] = fields <span class="kw">else </span>{
+<a href=#170 id=170 data-nosnippet>170</a>            <span class="macro">unreachable!</span>(<span class="string">"unfold_fields called with empty fields"</span>)
+<a href=#171 id=171 data-nosnippet>171</a>        };
+<a href=#172 id=172 data-nosnippet>172</a>        <span class="kw">let </span>field = <span class="self">self</span>.schema().app.field(<span class="kw-2">*</span>field_id);
+<a href=#173 id=173 data-nosnippet>173</a>
+<a href=#174 id=174 data-nosnippet>174</a>        <span class="comment">// Base case: a single direct relation step stays on the outer
+<a href=#175 id=175 data-nosnippet>175</a>        // association.
+<a href=#176 id=176 data-nosnippet>176</a>        </span><span class="kw">if </span>rest.is_empty() {
+<a href=#177 id=177 data-nosnippet>177</a>            <span class="kw">return </span>stmt::Association {
+<a href=#178 id=178 data-nosnippet>178</a>                source,
+<a href=#179 id=179 data-nosnippet>179</a>                path: stmt::Path::from_index(field_id.model, field_id.index),
+<a href=#180 id=180 data-nosnippet>180</a>            };
+<a href=#181 id=181 data-nosnippet>181</a>        }
 <a href=#182 id=182 data-nosnippet>182</a>
-<a href=#183 id=183 data-nosnippet>183</a>        <span class="comment">// If this step names a via relation, splice the via's resolved path
-<a href=#184 id=184 data-nosnippet>184</a>        // in place of the via field and continue. Handles via-of-via
-<a href=#185 id=185 data-nosnippet>185</a>        // naturally because the recursion re-examines the spliced steps. A
-<a href=#186 id=186 data-nosnippet>186</a>        // scalar-terminal via contributes only its relation chain to the
-<a href=#187 id=187 data-nosnippet>187</a>        // reachability filter — the terminal field is a projection, handled by
-<a href=#188 id=188 data-nosnippet>188</a>        // the query's returning, not the filter.
-<a href=#189 id=189 data-nosnippet>189</a>        </span><span class="kw">let </span>via_path = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
-<a href=#190 id=190 data-nosnippet>190</a>            app::FieldTy::Via(via) =&gt; {
-<a href=#191 id=191 data-nosnippet>191</a>                <span class="kw">let </span>projection = via.path.projection.as_slice();
-<a href=#192 id=192 data-nosnippet>192</a>                <span class="prelude-val">Some</span>(<span class="kw">match </span>via.terminal {
-<a href=#193 id=193 data-nosnippet>193</a>                    <span class="prelude-val">Some</span>(<span class="kw">_</span>) =&gt; <span class="kw-2">&amp;</span>projection[..projection.len() - <span class="number">1</span>],
-<a href=#194 id=194 data-nosnippet>194</a>                    <span class="prelude-val">None </span>=&gt; projection,
-<a href=#195 id=195 data-nosnippet>195</a>                })
-<a href=#196 id=196 data-nosnippet>196</a>            }
-<a href=#197 id=197 data-nosnippet>197</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
-<a href=#198 id=198 data-nosnippet>198</a>        };
-<a href=#199 id=199 data-nosnippet>199</a>        <span class="kw">if let </span><span class="prelude-val">Some</span>(via_steps) = via_path {
-<a href=#200 id=200 data-nosnippet>200</a>            <span class="kw">let </span><span class="kw-2">mut </span>spliced = Vec::with_capacity(via_steps.len() + rest.len());
-<a href=#201 id=201 data-nosnippet>201</a>            spliced.extend_from_slice(via_steps);
-<a href=#202 id=202 data-nosnippet>202</a>            spliced.extend_from_slice(rest);
-<a href=#203 id=203 data-nosnippet>203</a>            <span class="kw">return </span><span class="self">self</span>.unfold_steps(source, source_model_id, <span class="kw-2">&amp;</span>spliced);
-<a href=#204 id=204 data-nosnippet>204</a>        }
-<a href=#205 id=205 data-nosnippet>205</a>
-<a href=#206 id=206 data-nosnippet>206</a>        <span class="comment">// Base case: a single direct relation step stays on the outer
-<a href=#207 id=207 data-nosnippet>207</a>        // association.
-<a href=#208 id=208 data-nosnippet>208</a>        </span><span class="kw">if </span>rest.is_empty() {
-<a href=#209 id=209 data-nosnippet>209</a>            <span class="kw">return </span>stmt::Association {
-<a href=#210 id=210 data-nosnippet>210</a>                source,
-<a href=#211 id=211 data-nosnippet>211</a>                path: stmt::Path::from_index(source_model_id, <span class="kw-2">*</span>first),
-<a href=#212 id=212 data-nosnippet>212</a>            };
-<a href=#213 id=213 data-nosnippet>213</a>        }
-<a href=#214 id=214 data-nosnippet>214</a>
-<a href=#215 id=215 data-nosnippet>215</a>        <span class="kw">let </span>next_model_id = <span class="kw">match </span><span class="kw-2">&amp;</span>field.ty {
-<a href=#216 id=216 data-nosnippet>216</a>            app::FieldTy::Has(rel) =&gt; rel.target,
-<a href=#217 id=217 data-nosnippet>217</a>            app::FieldTy::Via(rel) =&gt; rel.target,
-<a href=#218 id=218 data-nosnippet>218</a>            app::FieldTy::BelongsTo(rel) =&gt; rel.target,
-<a href=#219 id=219 data-nosnippet>219</a>            other =&gt; <span class="macro">todo!</span>(<span class="string">"non-relation field in via path: {other:#?}"</span>),
-<a href=#220 id=220 data-nosnippet>220</a>        };
-<a href=#221 id=221 data-nosnippet>221</a>
-<a href=#222 id=222 data-nosnippet>222</a>        <span class="kw">let </span>inner = stmt::Association {
-<a href=#223 id=223 data-nosnippet>223</a>            source,
-<a href=#224 id=224 data-nosnippet>224</a>            path: stmt::Path::from_index(source_model_id, <span class="kw-2">*</span>first),
-<a href=#225 id=225 data-nosnippet>225</a>        };
-<a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">let </span>new_source = Box::new(stmt::Query::new_select(
-<a href=#227 id=227 data-nosnippet>227</a>            stmt::Source::Model(stmt::SourceModel {
-<a href=#228 id=228 data-nosnippet>228</a>                id: next_model_id,
-<a href=#229 id=229 data-nosnippet>229</a>                via: <span class="prelude-val">Some</span>(inner),
-<a href=#230 id=230 data-nosnippet>230</a>            }),
-<a href=#231 id=231 data-nosnippet>231</a>            stmt::Expr::Value(stmt::Value::Bool(<span class="bool-val">true</span>)),
-<a href=#232 id=232 data-nosnippet>232</a>        ));
+<a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">let </span>next_model_id = field
+<a href=#184 id=184 data-nosnippet>184</a>            .relation_target_id()
+<a href=#185 id=185 data-nosnippet>185</a>            .expect(<span class="string">"unfolded association path field is not a relation"</span>);
+<a href=#186 id=186 data-nosnippet>186</a>
+<a href=#187 id=187 data-nosnippet>187</a>        <span class="kw">let </span>inner = stmt::Association {
+<a href=#188 id=188 data-nosnippet>188</a>            source,
+<a href=#189 id=189 data-nosnippet>189</a>            path: stmt::Path::from_index(field_id.model, field_id.index),
+<a href=#190 id=190 data-nosnippet>190</a>        };
+<a href=#191 id=191 data-nosnippet>191</a>        <span class="kw">let </span>new_source = Box::new(stmt::Query::new_select(
+<a href=#192 id=192 data-nosnippet>192</a>            stmt::Source::Model(stmt::SourceModel {
+<a href=#193 id=193 data-nosnippet>193</a>                id: next_model_id,
+<a href=#194 id=194 data-nosnippet>194</a>                via: <span class="prelude-val">Some</span>(inner),
+<a href=#195 id=195 data-nosnippet>195</a>            }),
+<a href=#196 id=196 data-nosnippet>196</a>            stmt::Expr::Value(stmt::Value::Bool(<span class="bool-val">true</span>)),
+<a href=#197 id=197 data-nosnippet>197</a>        ));
+<a href=#198 id=198 data-nosnippet>198</a>
+<a href=#199 id=199 data-nosnippet>199</a>        <span class="macro">debug_assert_eq!</span>(rest[<span class="number">0</span>].model, next_model_id);
+<a href=#200 id=200 data-nosnippet>200</a>        <span class="self">self</span>.unfold_fields(new_source, rest)
+<a href=#201 id=201 data-nosnippet>201</a>    }
+<a href=#202 id=202 data-nosnippet>202</a>
+<a href=#203 id=203 data-nosnippet>203</a>    <span class="kw">fn </span>rewrite_association_belongs_to_as_filter(
+<a href=#204 id=204 data-nosnippet>204</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
+<a href=#205 id=205 data-nosnippet>205</a>        rel: <span class="kw-2">&amp;</span>app::BelongsTo,
+<a href=#206 id=206 data-nosnippet>206</a>        association: stmt::Association,
+<a href=#207 id=207 data-nosnippet>207</a>    ) -&gt; stmt::Filter {
+<a href=#208 id=208 data-nosnippet>208</a>        <span class="comment">// The FK lives on the source model; the target model carries the
+<a href=#209 id=209 data-nosnippet>209</a>        // referenced fields. Filter is `&lt;fk.target...&gt; IN (SELECT
+<a href=#210 id=210 data-nosnippet>210</a>        // &lt;fk.source...&gt; FROM &lt;source&gt;)` — a single field reference on each
+<a href=#211 id=211 data-nosnippet>211</a>        // side for single-column FKs, a record of references for composite
+<a href=#212 id=212 data-nosnippet>212</a>        // FKs (lowered to a tuple-style IN by the SQL serializer).
+<a href=#213 id=213 data-nosnippet>213</a>        </span><span class="kw">let </span>target = <span class="kw">super</span>::key_field_refs(<span class="number">0</span>, rel.foreign_key.fields.iter().map(|fk| fk.target));
+<a href=#214 id=214 data-nosnippet>214</a>        <span class="kw">let </span>returning = <span class="kw">super</span>::key_field_refs(<span class="number">0</span>, rel.foreign_key.fields.iter().map(|fk| fk.source));
+<a href=#215 id=215 data-nosnippet>215</a>
+<a href=#216 id=216 data-nosnippet>216</a>        <span class="kw">let </span><span class="kw-2">mut </span>source = <span class="kw-2">*</span>association.source;
+<a href=#217 id=217 data-nosnippet>217</a>        source.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
+<a href=#218 id=218 data-nosnippet>218</a>
+<a href=#219 id=219 data-nosnippet>219</a>        stmt::Expr::in_subquery(target, source).into()
+<a href=#220 id=220 data-nosnippet>220</a>    }
+<a href=#221 id=221 data-nosnippet>221</a>}
+<a href=#222 id=222 data-nosnippet>222</a>
+<a href=#223 id=223 data-nosnippet>223</a><span class="kw">impl </span>VisitMut <span class="kw">for </span>RewriteVia&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#224 id=224 data-nosnippet>224</a>    <span class="kw">fn </span>visit_stmt_delete_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Delete) {
+<a href=#225 id=225 data-nosnippet>225</a>        <span class="self">self</span>.rewrite_via_for_delete(i);
+<a href=#226 id=226 data-nosnippet>226</a>        stmt::visit_mut::visit_stmt_delete_mut(<span class="self">self</span>, i);
+<a href=#227 id=227 data-nosnippet>227</a>    }
+<a href=#228 id=228 data-nosnippet>228</a>
+<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">fn </span>visit_stmt_insert_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Insert) {
+<a href=#230 id=230 data-nosnippet>230</a>        <span class="self">self</span>.rewrite_via_for_insert(i);
+<a href=#231 id=231 data-nosnippet>231</a>        stmt::visit_mut::visit_stmt_insert_mut(<span class="self">self</span>, i);
+<a href=#232 id=232 data-nosnippet>232</a>    }
 <a href=#233 id=233 data-nosnippet>233</a>
-<a href=#234 id=234 data-nosnippet>234</a>        <span class="self">self</span>.unfold_steps(new_source, next_model_id, rest)
-<a href=#235 id=235 data-nosnippet>235</a>    }
-<a href=#236 id=236 data-nosnippet>236</a>
-<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">fn </span>rewrite_association_belongs_to_as_filter(
-<a href=#238 id=238 data-nosnippet>238</a>        <span class="kw-2">&amp;mut </span><span class="self">self</span>,
-<a href=#239 id=239 data-nosnippet>239</a>        rel: <span class="kw-2">&amp;</span>app::BelongsTo,
-<a href=#240 id=240 data-nosnippet>240</a>        association: stmt::Association,
-<a href=#241 id=241 data-nosnippet>241</a>    ) -&gt; stmt::Filter {
-<a href=#242 id=242 data-nosnippet>242</a>        <span class="comment">// The FK lives on the source model; the target model carries the
-<a href=#243 id=243 data-nosnippet>243</a>        // referenced fields. Filter is `&lt;fk.target...&gt; IN (SELECT
-<a href=#244 id=244 data-nosnippet>244</a>        // &lt;fk.source...&gt; FROM &lt;source&gt;)` — a single field reference on each
-<a href=#245 id=245 data-nosnippet>245</a>        // side for single-column FKs, a record of references for composite
-<a href=#246 id=246 data-nosnippet>246</a>        // FKs (lowered to a tuple-style IN by the SQL serializer).
-<a href=#247 id=247 data-nosnippet>247</a>        </span><span class="kw">let </span>target = <span class="kw">super</span>::key_field_refs(<span class="number">0</span>, rel.foreign_key.fields.iter().map(|fk| fk.target));
-<a href=#248 id=248 data-nosnippet>248</a>        <span class="kw">let </span>returning = <span class="kw">super</span>::key_field_refs(<span class="number">0</span>, rel.foreign_key.fields.iter().map(|fk| fk.source));
-<a href=#249 id=249 data-nosnippet>249</a>
-<a href=#250 id=250 data-nosnippet>250</a>        <span class="kw">let </span><span class="kw-2">mut </span>source = <span class="kw-2">*</span>association.source;
-<a href=#251 id=251 data-nosnippet>251</a>        source.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
-<a href=#252 id=252 data-nosnippet>252</a>
-<a href=#253 id=253 data-nosnippet>253</a>        stmt::Expr::in_subquery(target, source).into()
-<a href=#254 id=254 data-nosnippet>254</a>    }
-<a href=#255 id=255 data-nosnippet>255</a>}
-<a href=#256 id=256 data-nosnippet>256</a>
-<a href=#257 id=257 data-nosnippet>257</a><span class="kw">impl </span>VisitMut <span class="kw">for </span>RewriteVia&lt;<span class="lifetime">'_</span>&gt; {
-<a href=#258 id=258 data-nosnippet>258</a>    <span class="kw">fn </span>visit_stmt_delete_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Delete) {
-<a href=#259 id=259 data-nosnippet>259</a>        <span class="self">self</span>.rewrite_via_for_delete(i);
-<a href=#260 id=260 data-nosnippet>260</a>        stmt::visit_mut::visit_stmt_delete_mut(<span class="self">self</span>, i);
-<a href=#261 id=261 data-nosnippet>261</a>    }
-<a href=#262 id=262 data-nosnippet>262</a>
-<a href=#263 id=263 data-nosnippet>263</a>    <span class="kw">fn </span>visit_stmt_insert_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Insert) {
-<a href=#264 id=264 data-nosnippet>264</a>        <span class="self">self</span>.rewrite_via_for_insert(i);
-<a href=#265 id=265 data-nosnippet>265</a>        stmt::visit_mut::visit_stmt_insert_mut(<span class="self">self</span>, i);
-<a href=#266 id=266 data-nosnippet>266</a>    }
-<a href=#267 id=267 data-nosnippet>267</a>
-<a href=#268 id=268 data-nosnippet>268</a>    <span class="kw">fn </span>visit_stmt_query_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Query) {
-<a href=#269 id=269 data-nosnippet>269</a>        <span class="self">self</span>.rewrite_via_for_query(i);
-<a href=#270 id=270 data-nosnippet>270</a>        stmt::visit_mut::visit_stmt_query_mut(<span class="self">self</span>, i);
-<a href=#271 id=271 data-nosnippet>271</a>    }
-<a href=#272 id=272 data-nosnippet>272</a>}
+<a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">fn </span>visit_stmt_query_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, i: <span class="kw-2">&amp;mut </span>stmt::Query) {
+<a href=#235 id=235 data-nosnippet>235</a>        <span class="self">self</span>.rewrite_via_for_query(i);
+<a href=#236 id=236 data-nosnippet>236</a>        stmt::visit_mut::visit_stmt_query_mut(<span class="self">self</span>, i);
+<a href=#237 id=237 data-nosnippet>237</a>    }
+<a href=#238 id=238 data-nosnippet>238</a>}
 </code></pre></div></section></main></body></html>

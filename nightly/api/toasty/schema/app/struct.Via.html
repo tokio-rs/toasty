@@ -21,6 +21,11 @@ projects that field through the relation path — e.g.
 <a href="struct.Via.html#structfield.terminal" title="field toasty::schema::app::Via::terminal"><code>terminal</code></a> holds the terminal field’s index on
 <a href="struct.Via.html#method.target" title="method toasty::schema::app::Via::target"><code>target</code></a> (the model the relation chain reaches), and
 <a href="struct.Via.html#structfield.path" title="field toasty::schema::app::Via::path"><code>path</code></a> still includes that terminal step as its last element.</p>
+<p>A common model-terminal use is many-to-many traversal through a join model.
+If <code>User</code> has many <code>Membership</code> records and each membership belongs to a
+<code>Group</code>, <code>#[has_many(via = memberships.group)]</code> exposes the distinct groups
+reachable from a user. The join model owns the foreign keys and any fields
+that describe the connection.</p>
 </div></details><h2 id="fields" class="fields section-header">Fields<a href="#fields" class="anchor">§</a></h2><span id="structfield.target" class="structfield section-header"><a href="#structfield.target" class="anchor field">§</a><code>target: <a class="struct" href="struct.ModelId.html" title="struct toasty::schema::app::ModelId">ModelId</a></code></span><div class="docblock"><p>The <a href="struct.ModelId.html" title="struct toasty::schema::app::ModelId"><code>ModelId</code></a> of the model the relation chain reaches. For a relation
 terminal this is the associated (target) model; for a scalar terminal
 it is the model that owns the projected terminal field.</p>

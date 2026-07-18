@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-eeb7c739.js";
+            window.path_to_searchindex_js = "searchindex-baf47f78.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ecb82dcc.js"></script>
+        <script src="toc-a253e6fc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -371,6 +371,10 @@ assert_eq!(todo.user_id, user.id);
     .await?;</code></pre>
 <p>You don’t need to set <code>user_id</code> — Toasty fills it in from the parent
 because the create builder is scoped to <code>user.todos()</code>.</p>
+<p>For a <a href="./many-to-many.html">many-to-many relationship</a>, create the join-model
+record instead of creating through the derived <code>has_many(via = ...)</code> accessor.
+The join record sets both endpoint relations and can store fields that describe
+the connection.</p>
 <h2 id="nested-creation"><a class="header" href="#nested-creation">Nested creation</a></h2>
 <p>When models have relationships, you can create a parent and its children in a
 single call. Inside the macro, use <code>{ ... }</code> (without a type prefix) for

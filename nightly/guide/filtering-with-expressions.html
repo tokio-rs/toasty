@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-eeb7c739.js";
+            window.path_to_searchindex_js = "searchindex-baf47f78.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ecb82dcc.js"></script>
+        <script src="toc-a253e6fc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -743,6 +743,10 @@ let users = User::filter(
 <p>The path <code>User::fields().todos()</code> refers to the HasMany relation. Calling
 <code>.any()</code> on it takes a filter expression on the child model (<code>Todo</code>) and
 produces a filter expression on the parent (<code>User</code>).</p>
+<p><code>.any()</code> also works on a model-terminal <code>has_many(via = ...)</code> path. For a
+<a href="./many-to-many.html">many-to-many relationship</a>, call <code>.any()</code> on the derived
+relation to filter by the opposite endpoint, or on the direct join-model
+relation to filter by fields stored on the connection.</p>
 <h3 id="all--every-related-record-matches"><a class="header" href="#all--every-related-record-matches"><code>all</code> — every related record matches</a></h3>
 <p><code>.all()</code> on a <code>HasMany</code> path is the universal counterpart to <code>.any()</code>:
 it tests whether <em>every</em> related record matches the filter. <strong>SQL-only.</strong></p>

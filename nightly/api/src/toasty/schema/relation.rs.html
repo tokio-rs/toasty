@@ -11,30 +11,35 @@
 <a href=#11 id=11 data-nosnippet>11</a>/// impls is the source of truth for which Rust shapes are valid as a
 <a href=#12 id=12 data-nosnippet>12</a>/// has-many field: anything outside those two combinations does not satisfy
 <a href=#13 id=13 data-nosnippet>13</a>/// the trait.
-<a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub trait </span>RelationManyField: Load&lt;Output = <span class="self">Self</span>&gt; {
-<a href=#15 id=15 data-nosnippet>15</a>    <span class="doccomment">/// The target model that this field references.
-<a href=#16 id=16 data-nosnippet>16</a>    </span><span class="kw">type </span>Target: Model;
-<a href=#17 id=17 data-nosnippet>17</a>
-<a href=#18 id=18 data-nosnippet>18</a>    <span class="doccomment">/// Whether the field stores its value in a deferred load slot.
-<a href=#19 id=19 data-nosnippet>19</a>    </span><span class="kw">const </span>DEFERRED: bool;
-<a href=#20 id=20 data-nosnippet>20</a>
-<a href=#21 id=21 data-nosnippet>21</a>    <span class="doccomment">/// Reloads this relation field from a returned value.
-<a href=#22 id=22 data-nosnippet>22</a>    </span><span class="kw">fn </span>reload(target: <span class="kw-2">&amp;mut </span><span class="self">Self</span>, value: stmt::Value) -&gt; <span class="kw">crate</span>::Result&lt;()&gt;;
-<a href=#23 id=23 data-nosnippet>23</a>
-<a href=#24 id=24 data-nosnippet>24</a>    <span class="doccomment">/// Build the [`FieldTy`] for a `HasMany` relation field, given the
-<a href=#25 id=25 data-nosnippet>25</a>    /// singular name derived from the field identifier and an optional
-<a href=#26 id=26 data-nosnippet>26</a>    /// paired `BelongsTo` field on the target model resolved from
-<a href=#27 id=27 data-nosnippet>27</a>    /// `#[has_many(pair = &lt;field&gt;)]`. When `None`, the linker selects the
-<a href=#28 id=28 data-nosnippet>28</a>    /// pair by searching the target for a unique `BelongsTo` back to the
-<a href=#29 id=29 data-nosnippet>29</a>    /// source.
-<a href=#30 id=30 data-nosnippet>30</a>    ///
-<a href=#31 id=31 data-nosnippet>31</a>    /// `via` carries the fully resolved [`stmt::Path`] of a
-<a href=#32 id=32 data-nosnippet>32</a>    /// `#[has_many(via = a.b)]` multi-step relation, rooted at the declaring
-<a href=#33 id=33 data-nosnippet>33</a>    /// model. A `via` relation has no pair.
-<a href=#34 id=34 data-nosnippet>34</a>    </span><span class="kw">fn </span>many_relation_field_ty(
-<a href=#35 id=35 data-nosnippet>35</a>        singular: Name,
-<a href=#36 id=36 data-nosnippet>36</a>        pair: <span class="prelude-ty">Option</span>&lt;FieldId&gt;,
-<a href=#37 id=37 data-nosnippet>37</a>        via: <span class="prelude-ty">Option</span>&lt;stmt::Path&gt;,
-<a href=#38 id=38 data-nosnippet>38</a>    ) -&gt; FieldTy;
-<a href=#39 id=39 data-nosnippet>39</a>}
+<a href=#14 id=14 data-nosnippet>14</a>///
+<a href=#15 id=15 data-nosnippet>15</a>/// A direct `#[has_many]` pairs with a `BelongsTo` on its target. A
+<a href=#16 id=16 data-nosnippet>16</a>/// `#[has_many(via = ...)]` follows a relation path instead. Many-to-many
+<a href=#17 id=17 data-nosnippet>17</a>/// models use a direct field for join-model records and a `via` field for the
+<a href=#18 id=18 data-nosnippet>18</a>/// opposite endpoints.
+<a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">pub trait </span>RelationManyField: Load&lt;Output = <span class="self">Self</span>&gt; {
+<a href=#20 id=20 data-nosnippet>20</a>    <span class="doccomment">/// The target model that this field references.
+<a href=#21 id=21 data-nosnippet>21</a>    </span><span class="kw">type </span>Target: Model;
+<a href=#22 id=22 data-nosnippet>22</a>
+<a href=#23 id=23 data-nosnippet>23</a>    <span class="doccomment">/// Whether the field stores its value in a deferred load slot.
+<a href=#24 id=24 data-nosnippet>24</a>    </span><span class="kw">const </span>DEFERRED: bool;
+<a href=#25 id=25 data-nosnippet>25</a>
+<a href=#26 id=26 data-nosnippet>26</a>    <span class="doccomment">/// Reloads this relation field from a returned value.
+<a href=#27 id=27 data-nosnippet>27</a>    </span><span class="kw">fn </span>reload(target: <span class="kw-2">&amp;mut </span><span class="self">Self</span>, value: stmt::Value) -&gt; <span class="kw">crate</span>::Result&lt;()&gt;;
+<a href=#28 id=28 data-nosnippet>28</a>
+<a href=#29 id=29 data-nosnippet>29</a>    <span class="doccomment">/// Build the [`FieldTy`] for a `HasMany` relation field, given the
+<a href=#30 id=30 data-nosnippet>30</a>    /// singular name derived from the field identifier and an optional
+<a href=#31 id=31 data-nosnippet>31</a>    /// paired `BelongsTo` field on the target model resolved from
+<a href=#32 id=32 data-nosnippet>32</a>    /// `#[has_many(pair = &lt;field&gt;)]`. When `None`, the linker selects the
+<a href=#33 id=33 data-nosnippet>33</a>    /// pair by searching the target for a unique `BelongsTo` back to the
+<a href=#34 id=34 data-nosnippet>34</a>    /// source.
+<a href=#35 id=35 data-nosnippet>35</a>    ///
+<a href=#36 id=36 data-nosnippet>36</a>    /// `via` carries the fully resolved [`stmt::Path`] of a
+<a href=#37 id=37 data-nosnippet>37</a>    /// `#[has_many(via = a.b)]` multi-step relation, rooted at the declaring
+<a href=#38 id=38 data-nosnippet>38</a>    /// model. A `via` relation has no pair.
+<a href=#39 id=39 data-nosnippet>39</a>    </span><span class="kw">fn </span>many_relation_field_ty(
+<a href=#40 id=40 data-nosnippet>40</a>        singular: Name,
+<a href=#41 id=41 data-nosnippet>41</a>        pair: <span class="prelude-ty">Option</span>&lt;FieldId&gt;,
+<a href=#42 id=42 data-nosnippet>42</a>        via: <span class="prelude-ty">Option</span>&lt;stmt::Path&gt;,
+<a href=#43 id=43 data-nosnippet>43</a>    ) -&gt; FieldTy;
+<a href=#44 id=44 data-nosnippet>44</a>}
 </code></pre></div></section></main></body></html>

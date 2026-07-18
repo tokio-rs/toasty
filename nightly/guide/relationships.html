@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-eeb7c739.js";
+            window.path_to_searchindex_js = "searchindex-baf47f78.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ecb82dcc.js"></script>
+        <script src="toc-a253e6fc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -197,11 +197,35 @@ table has a <code>user_id</code> column that references the <code>users</code> t
 </code></pre>
 <p>The <code>posts</code> table holds the foreign key (<code>user_id</code>). Each post points to exactly
 one user. A user can have many posts.</p>
-<p>This single pattern — a foreign key column in one table referencing the primary
-key of another — underlies all three relationship types in Toasty.</p>
+<p>This foreign-key pattern underlies each direct relationship type in Toasty. A
+many-to-many relationship uses two direct relationships joined through a third
+model.</p>
+<h2 id="many-to-many-uses-a-join-model"><a class="header" href="#many-to-many-uses-a-join-model">Many-to-many uses a join model</a></h2>
+<p>A many-to-many relationship lets each record on either side connect to multiple
+records on the other side. Users can join multiple groups, and groups can contain
+multiple users. A <code>memberships</code> table represents each user-group connection as a
+row with foreign keys to both endpoint tables:</p>
+<pre><code class="language-text">users              memberships                 groups
+┌────┬───────┐     ┌─────────┬──────────┐      ┌────┬───────────┐
+│ id │ name  │     │ user_id │ group_id │      │ id │ name      │
+├────┼───────┤     ├─────────┼──────────┤      ├────┼───────────┤
+│  1 │ Alice │◄────│       1 │       10 │─────►│ 10 │ Rust      │
+│  2 │ Bob   │◄────│       2 │       10 │─────►│ 20 │ Databases │
+└────┴───────┘     │       1 │       20 │─────►└────┴───────────┘
+                   └─────────┴──────────┘
+</code></pre>
+<p>In Toasty, the join table is a normal model such as <code>Membership</code>. Each endpoint
+has a direct <code>#[has_many]</code> relation to the join model and a derived
+<code>#[has_many(via = ...)]</code> relation to the opposite endpoint. Code creates,
+updates, and deletes join-model records to change the connections; the derived
+relation provides read-only traversal. The <a href="./many-to-many.html">Many-to-Many</a>
+chapter shows the model definition, traversal, filtering, preloading, and link
+mutation.</p>
 <h2 id="relationship-types"><a class="header" href="#relationship-types">Relationship types</a></h2>
-<p>Toasty supports three relationship types. They differ in how many records each
-side of the relationship holds, and which model contains the foreign key.</p>
+<p>Toasty supports three direct relationship types. They differ in how many records
+each side holds and which model contains the foreign key. Many-to-many is a
+modeling pattern composed from these types rather than a fourth relation
+attribute.</p>
 <div class="table-wrapper">
 <table>
 <thead>
@@ -393,6 +417,7 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 <tr><td>A post has one author</td><td><code>Post</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code> + <code>User</code> → <code>Deferred&lt;Vec&lt;Post&gt;&gt;</code> or <code>Vec&lt;Post&gt;</code></td><td><code>posts.user_id</code></td></tr>
 <tr><td>A user has one profile</td><td><code>User</code> → <code>Deferred&lt;Profile&gt;</code> or <code>Profile</code> + <code>Profile</code> → <code>Deferred&lt;User&gt;</code> or <code>User</code></td><td><code>profiles.user_id</code></td></tr>
 <tr><td>A comment belongs to a post</td><td><code>Comment</code> → <code>Deferred&lt;Post&gt;</code> or <code>Post</code> + <code>Post</code> → <code>Deferred&lt;Vec&lt;Comment&gt;&gt;</code> or <code>Vec&lt;Comment&gt;</code></td><td><code>comments.post_id</code></td></tr>
+<tr><td>Users join many groups and groups contain many users</td><td>Join model with two <code>BelongsTo</code> relations plus <code>has_many(via = ...)</code> on the endpoints</td><td><code>memberships.user_id</code> and <code>memberships.group_id</code></td></tr>
 </tbody>
 </table>
 </div>
@@ -450,6 +475,8 @@ querying, creating, and updating:</p>
 parent, setting the relation on create</li>
 <li><a href="./has-many.html"><strong>HasMany</strong></a> — querying children, creating through the
 relation, inserting and removing, scoped queries</li>
+<li><a href="./many-to-many.html"><strong>Many-to-Many</strong></a> — defining a join model, traversing in
+both directions, filtering by endpoints or join metadata, and changing links</li>
 <li><a href="./has-one.html"><strong>HasOne</strong></a> — required vs optional, creating and updating the
 child, replace and unset behavior</li>
 <li><a href="./preloading-associations.html"><strong>Preloading Associations</strong></a> — avoiding extra

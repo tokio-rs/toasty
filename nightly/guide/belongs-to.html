@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-eeb7c739.js";
+            window.path_to_searchindex_js = "searchindex-baf47f78.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ecb82dcc.js"></script>
+        <script src="toc-a253e6fc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -243,6 +243,10 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 </code></pre>
 <p>The parent model (<code>User</code>) typically declares a <code>#[has_many]</code> field pointing back
 at the child. See <a href="./has-many.html">HasMany</a> for details.</p>
+<p>A <a href="./many-to-many.html">many-to-many relationship</a> uses a join model with two
+<code>BelongsTo</code> fields, one for each endpoint. The endpoint models each declare a
+<code>HasMany</code> to the join model and can add a derived <code>has_many(via = ...)</code> field for
+direct traversal to the other endpoint.</p>
 <p>Use a plain relation field when every loaded child should also load its parent:</p>
 <pre><code class="language-rust ignore">#[belongs_to]
 user: User,</code></pre>

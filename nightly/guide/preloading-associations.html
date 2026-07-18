@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-eeb7c739.js";
+            window.path_to_searchindex_js = "searchindex-baf47f78.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-ecb82dcc.js"></script>
+        <script src="toc-a253e6fc.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -442,6 +442,8 @@ assert!(user.profile.get().is_none());
 <p>A <a href="./has-many.html#multi-step-relations-via">multi-step (<code>via</code>) relation</a> reaches
 its target through a path of existing relations. Preload it with <code>.include()</code>
 the same way as a single-step relation:</p>
+<p>This includes <a href="./many-to-many.html">many-to-many relationships</a>, where the path
+crosses a join model to reach the opposite endpoint.</p>
 <pre><code class="language-rust ignore">let users = User::all()
     .include(User::fields().commented_articles())
     .exec(&amp;mut db)
