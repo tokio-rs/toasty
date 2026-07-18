@@ -258,7 +258,7 @@ impl Edge {
 
 /// Walk a via path, inlining any `via` field's own resolved path so the
 /// result is a flat sequence of direct relation `FieldId`s.
-fn flatten_via_steps(
+pub(super) fn flatten_via_steps(
     schema: &toasty_core::Schema,
     source_model_id: app::ModelId,
     initial_steps: &[usize],

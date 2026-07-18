@@ -194,16 +194,69 @@ pub(super) fn lift_in_subquery(
         }
     };
 
-    // If the field is not a relation, abort. Multi-step (`via`) relations
-    // have no paired BelongsTo to lift through — they are already rewritten
-    // into nested IN subqueries by `RewriteVia` earlier in the lowering
-    // pipeline, so any reference reaching here that still names one is not
-    // something this pass can handle.
+    // If the field is not a relation, abort. A direct relation lifts through
+    // its paired foreign key. A `via` has no single pair, so expand its path
+    // and lift each relation step from the target query back to the source.
     match &field.ty {
         FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
         FieldTy::Has(has) => lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query),
+        FieldTy::Via(via) => lift_via_in_subquery(cx, via, query),
         _ => None,
     }
+}
+
+/// Lift an `IN` subquery whose left side names a `via` relation.
+///
+/// For `User.groups.any(Group.name == "Rust")`, where `groups` follows
+/// `User.memberships.group`, this builds:
+///
+/// ```text
+/// User.id IN (
+///     SELECT Membership.user_id FROM Membership
+///     WHERE Membership.group_id IN (
+///         SELECT Group.id FROM Group WHERE Group.name == "Rust"
+///     )
+/// )
+/// ```
+///
+/// The path is expanded first so nested vias use the same logic. Each direct
+/// relation is then lifted in reverse order, starting with the target query.
+fn lift_via_in_subquery(
+    cx: &ExprContext,
+    via: &app::Via,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    if via.is_scalar() {
+        return None;
+    }
+
+    let root = via.path.root.as_model()?;
+    let fields =
+        super::via_join::flatten_via_steps(cx.schema(), root, via.path.projection.as_slice());
+    let target = fields
+        .last()
+        .and_then(|field| cx.schema().app.field(*field).relation_target_id())?;
+
+    if target != via.target || target != query.body.as_select_unwrap().source.model_id_unwrap() {
+        return None;
+    }
+
+    let mut fields = fields.into_iter().rev().peekable();
+    let mut query = query.clone();
+
+    while let Some(field_id) = fields.next() {
+        let source: stmt::Source = field_id.model.into();
+        let scoped_cx = cx.scope(&source);
+        let filter = lift_in_subquery(&scoped_cx, &stmt::Expr::ref_self_field(field_id), &query)?;
+
+        if fields.peek().is_none() {
+            return Some(filter);
+        }
+
+        query = stmt::Query::new_select(source, filter);
+    }
+
+    None
 }
 
 /// Lifts an `IN`-subquery whose left side is a path through a relation field.

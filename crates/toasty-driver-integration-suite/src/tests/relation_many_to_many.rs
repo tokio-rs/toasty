@@ -92,6 +92,41 @@ pub async fn filter_through_join_model(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Parent queries can apply `.any()` directly to either derived relation,
+/// without spelling the join model in the predicate.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_group_membership)
+)]
+pub async fn filter_through_via_from_both_sides(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+    seed(&mut db).await?;
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .groups()
+            .any(Group::fields().name().eq("Rust")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq_unordered!(users.iter().map(|user| &user.name[..]), ["Alice", "Bob"]);
+
+    let groups: Vec<Group> = Group::filter(
+        Group::fields()
+            .users()
+            .any(User::fields().name().eq("Alice")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq_unordered!(
+        groups.iter().map(|group| &group.name[..]),
+        ["Rust", "Databases"]
+    );
+
+    Ok(())
+}
+
 /// Preloading works in both directions and keeps results grouped under the
 /// correct endpoint, including endpoints with no join rows.
 #[driver_test(

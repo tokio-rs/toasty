@@ -119,6 +119,75 @@ pub async fn via_relation_query_can_be_filtered(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// `.any()` on a `via` field filters parent records through the expanded
+/// relation path. The same predicate works when the path contains another
+/// `via` field.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::user_org_project_todo)
+)]
+pub async fn filter_parent_by_via_any(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+    let alice_org = toasty::create!(Organization {
+        name: "Alice Org",
+        user: &users[0]
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_org = toasty::create!(Organization {
+        name: "Bob Org",
+        user: &users[1]
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_project = toasty::create!(Project {
+        name: "Alice Project",
+        organization: &alice_org
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_project = toasty::create!(Project {
+        name: "Bob Project",
+        organization: &bob_org
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(Todo::[
+        { title: "match", project: &alice_project },
+        { title: "other", project: &bob_project },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .todos()
+            .any(Todo::fields().title().eq("match")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .nested_todos()
+            .any(Todo::fields().title().eq("match")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}
+
 // ===== `.include()` / `.select()` of multi-step `via` relations =====
 //
 // The scenarios below cover via paths of different lengths and shapes:
