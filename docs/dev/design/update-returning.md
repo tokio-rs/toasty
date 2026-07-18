@@ -2,172 +2,171 @@
 
 ## Summary
 
-Query-based updates gain `.all()`, `.first()`, and `.one()` modifiers that make
-`exec` return stored models. The builders compose with `toasty::batch()`.
-Backends without a native update-returning operation reject them before writing.
+Query updates keep returning `()`. `.affected_count()` returns the backend's
+affected count. `.all()`, `.first()`, and `.one()` update every matching row but
+control how many updated models are returned. They can select old or new values.
 
 ## Motivation
 
-Query-based updates currently discard database-generated values. Reading them
-requires a second query, which adds a round trip, can observe another writer's
-changes, and may fail when the update changes a filtered field.
+`()` is the only portable default. Cassandra, for example, does not report
+affected rows. Explicit counts avoid returning rows where supported.
 
-```rust
-User::update_by_id(id)
-    .login_count(toasty::stmt::increment())
-    .exec(&mut db)
-    .await?;
-
-let user = User::filter_by_id(id).get(&mut db).await?;
-```
-
-Native mutation results return the values produced by the update itself,
-including relative assignments, version fields, triggers, and generated values.
+Returning models avoids a second query, its extra round trip, and races with
+other writers. Old values let callers remove replaced keys from caches or
+search indexes.
 
 ## User-facing API
 
-Choose a result cardinality after setting the assignments:
+Executing a query update directly remains unchanged:
 
 ```rust
-let users: Vec<User> = User::filter(User::fields().active().eq(false))
+User::filter_by_active(false)
+    .update()
+    .active(true)
+    .exec(&mut db)
+    .await?;
+```
+
+Call `.affected_count()` after the assignments to request a count:
+
+```rust
+let count: u64 = User::filter_by_active(false)
+    .update()
+    .active(true)
+    .affected_count()
+    .exec(&mut db)
+    .await?;
+```
+
+Call `.all()`, `.first()`, or `.one()` to return new models:
+
+```rust
+let users: Vec<User> = User::filter_by_active(false)
     .update()
     .active(true)
     .all()
     .exec(&mut db)
     .await?;
-
-let user: Option<User> = User::all()
-    .order_by(User::fields().id().asc())
-    .update()
-    .active(true)
-    .first()
-    .exec(&mut db)
-    .await?;
-
-let user: User = User::update_by_id(id)
-    .name("Alice Smith")
-    .one()
-    .exec(&mut db)
-    .await?;
 ```
 
-`.all()` updates every match. `.first()` and `.one()` update at most one row,
-using the source query's ordering. `.first()` returns `None` for no match;
-`.one()` returns the same record-not-found error as a one-record query.
+All three methods update every matching row. They control only return
+cardinality: `.all()` returns every updated model, while `.first()` and `.one()`
+return the first according to the query's ordering. `.first()` returns `None`
+for no match; `.one()` returns a record-not-found error.
 
-Calling `exec` without a modifier remains a no-result update. Thus the earlier
-read-after-write example becomes:
+### Selecting old or new values
+
+Model-returning statements default to new values. Call `.returning_old()` for
+pre-update values or `.returning_new()` to select post-update values explicitly:
 
 ```rust
-let user = User::update_by_id(id)
-    .login_count(toasty::stmt::increment())
+let previous: User = User::update_by_id(id)
+    .email(new_email)
     .one()
+    .returning_old()
     .exec(&mut db)
     .await?;
+
+cache.remove(&previous.email).await?;
 ```
 
-The modifiers produce typed statements for `toasty::batch()`:
-
-```rust
-let (users, post): (Vec<User>, Post) = toasty::batch((
-    User::all().update().active(true).all(),
-    Post::update_by_id(post_id).published(true).one(),
-))
-.exec(&mut db)
-.await?;
-```
-
-Returning updates can be mixed with queries, creates, and no-result updates.
-
-Instance updates keep returning `()` and reloading the borrowed model in place.
-The modifiers apply only to query-based update builders.
+Both methods preserve the result cardinality and are available after `.all()`,
+`.first()`, or `.one()`. All result forms compose with `toasty::batch()`.
+Instance updates remain unchanged: they return `()` and reload the borrowed
+model.
 
 ## Behavior
 
-| Builder | Result |
+| Builder | Result | Default model version |
+|---|---|---|
+| `update.exec(&mut db)` | `Result<()>` | N/A |
+| `update.affected_count().exec(&mut db)` | `Result<u64>` | N/A |
+| `update.all().exec(&mut db)` | `Result<Vec<Model>>` | New |
+| `update.first().exec(&mut db)` | `Result<Option<Model>>` | New |
+| `update.one().exec(&mut db)` | `Result<Model>` | New |
+
+Affected-count semantics follow the backend:
+
+| Backend | Affected count |
 |---|---|
-| `update.exec(&mut db)` | `Result<()>` |
-| `update.all().exec(&mut db)` | `Result<Vec<Model>>` |
-| `update.first().exec(&mut db)` | `Result<Option<Model>>` |
-| `update.one().exec(&mut db)` | `Result<Model>` |
+| PostgreSQL | Updated rows, including unchanged values |
+| SQLite, Turso | Directly updated rows; side effects excluded |
+| MySQL | Matched rows, using `CLIENT_FOUND_ROWS` |
+| DynamoDB | Successful root-item mutations, summed by Toasty |
+| Cassandra-like drivers | `Error::unsupported_feature` |
 
-`.all()` preserves the full selection. `.first()` and `.one()` apply a one-row
-limit before updating; without explicit ordering, the backend may select any
-match. Like a one-record query, `.one()` does not test whether the unconstrained
-selection would match multiple rows. Generated `update_by_*` builders do not
-infer cardinality.
+Unsupported count requests fail before writing. Counts exclude changes caused
+by relation updates.
 
-Each result contains the stored post-update state, not values reconstructed
-from assignments. It includes rows even when an assignment changes a filtered
-field or leaves all stored values unchanged. Normal field-loading rules apply:
-deferred fields remain deferred, and relations remain unloaded.
+Return cardinality never limits the update. `.first()` and `.one()` update every
+match, then return the first model according to the query's ordering. Without
+ordering, the backend may choose any updated model. `.one()` does not reject a
+query that matches multiple rows; it differs from `.first()` only when no rows
+match.
 
-Backend support is:
+Returned models include no-op assignments. Deferred primitive and embedded
+fields remain deferred, and relations remain unloaded.
 
-| Backend | Behavior |
-|---|---|
-| PostgreSQL, SQLite, Turso | Native `UPDATE ... RETURNING` |
-| DynamoDB `UpdateItem` | `ReturnValues = ALL_NEW` |
-| MySQL | `Error::unsupported_feature` before writing |
-| DynamoDB `TransactWriteItems` | `Error::unsupported_feature` before writing |
+| Backend | New values | Old values |
+|---|---|---|
+| PostgreSQL 18+ | Native | Native |
+| PostgreSQL before 18 | Native | `Error::unsupported_feature` |
+| SQLite, Turso | Native | `Error::unsupported_feature` |
+| MySQL | `Error::unsupported_feature` | `Error::unsupported_feature` |
+| DynamoDB `UpdateItem` | `ALL_NEW` | `ALL_OLD` |
+| DynamoDB `TransactWriteItems` | `Error::unsupported_feature` | `Error::unsupported_feature` |
 
-DynamoDB uses its existing per-item behavior for multi-row updates. An update
-that may require `TransactWriteItems`, including a change to a Toasty-managed
-unique-index field, cannot return a model because transactions do not return
-new items.
+SQLite returns values from before subsequent `AFTER` triggers; PostgreSQL
+returns values after update triggers. Toasty preserves these semantics.
 
-Existing assignment and condition errors remain unchanged. In a batch,
-unsupported forms are rejected before any write; a `.one()` not-found error
-uses the batch's existing rollback behavior.
+DynamoDB updates that require `TransactWriteItems`, including changes to a
+Toasty-managed unique-index field, cannot return models. Unsupported forms fail
+before writing. In a batch, `.one()` errors use the existing rollback behavior.
 
 ## Edge cases
 
 - `.all()` has no defined result order.
-- Partial embedded-field and engine-managed assignments return their complete
-  stored models, subject to deferred fields.
-- Relation assignments return only the root models.
-- A DynamoDB multi-row failure retains the driver's existing partial-write
-  behavior for non-transactional updates.
+- No matches produce `()`, `0`, an empty vector, `None`, or a record-not-found
+  error for the default, count, `.all()`, `.first()`, and `.one()` forms.
+- Partial embedded and engine-managed assignments return complete models,
+  subject to deferred fields.
+- Relation assignments return only root models.
+- Non-transactional DynamoDB multi-row updates retain existing partial-write
+  behavior.
 
 ## Driver integration
 
-SQL drivers receive the existing update statement with a full-model returning
-projection. For `.first()` and `.one()`, the engine first constrains the target
-to the first key from the ordered source query. Drivers with
-`Capability::returning_from_mutation == false` are rejected before execution.
+Unit updates require no capability. Drivers report support for affected counts,
+new values, and old values separately; unsupported requests fail before
+writing.
 
-Key-value drivers distinguish instance reloads from full-model results:
+Drivers apply the update to the full selection before narrowing returned rows
+for `.first()` or `.one()`.
 
-```rust
-pub enum UpdateReturning {
-    Changed(Vec<ColumnId>),
-    Model(Vec<ColumnId>),
-}
-```
+SQL drivers derive counts from statement-completion metadata. Key-value drivers
+count successful root-item mutations without reading rows. SQL model returns
+use projected `RETURNING` columns; old values require native pre-update row
+references.
 
-`UpdateByKey::returning` becomes `Option<UpdateReturning>`. `Changed` preserves
-the existing sparse result used for instance reloads. `Model` returns every
-requested column in order. DynamoDB maps them to `UPDATED_NEW` and `ALL_NEW`,
-respectively, and rejects `Model` before any operation that may require
-`TransactWriteItems`.
+MySQL's non-atomic update-then-select fallback does not satisfy the model-return
+contract. DynamoDB maps instance reloads, new models, and old models to
+`UPDATED_NEW`, `ALL_NEW`, and `ALL_OLD`, and rejects model returns when planning
+requires `TransactWriteItems`.
 
-No new capability is needed. SQL uses `returning_from_mutation`; other drivers
-reject unsupported operation forms before mutation. Changing the public
-`UpdateByKey::returning` type is a breaking change for out-of-tree key-value
-drivers, which must support `Changed` and either implement or reject `Model`.
+Out-of-tree drivers must preserve unit updates and existing instance reloads.
+They may implement or reject affected counts and each model-returning mode.
 
-The cardinality builders implement `IntoStatement` with `List<Model>`,
-`Option<Model>`, or `Model` as their return type, enabling batch composition.
+## Alternatives considered
+
+### Return new models by default
+
+This transfers and decodes unused rows and makes ordinary updates unsupported
+where model returning is unavailable.
 
 ### Infer cardinality from `update_by_*`
 
-Even unique filters can match no row. Explicit `.first()` and `.one()` keep the
-zero-row policy visible and consistent across query-based updates.
-
-### Return projected fields
-
-Returning tuples requires a separate write-projection design. This proposal
-returns models only.
+Unique filters can match no row. Explicit `.first()` and `.one()` keep the
+zero-row policy visible.
 
 ## Open questions
 
@@ -176,5 +175,5 @@ None.
 ## Out of scope
 
 - Selected fields, eager-loaded relations, and deleted models.
-- Affected-row and matched-versus-changed metadata.
+- Separate matched-row and physically-changed-row metadata.
 - Owned or borrowed return values from instance updates.
