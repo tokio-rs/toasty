@@ -39,6 +39,11 @@ mod json;
 #[cfg(feature = "serde")]
 pub use json::Json;
 
+#[cfg(feature = "serde")]
+mod json_value;
+#[cfg(feature = "serde")]
+pub use json_value::JsonValue;
+
 mod list;
 pub use list::List;
 

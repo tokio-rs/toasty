@@ -32,7 +32,9 @@ pub(crate) fn to_turso(value: &CoreValue) -> TursoValue {
         CoreValue::Null => TursoValue::Null,
         // A `Vec<scalar>` / document collection (`List`) or a bare
         // `#[document]` embed (`Object`) is stored as JSON text.
-        CoreValue::List(_) | CoreValue::Object(_) => TursoValue::Text(value_to_json_text(value)),
+        CoreValue::List(_) | CoreValue::Object(_) | CoreValue::Json(_) => {
+            TursoValue::Text(value_to_json_text(value))
+        }
         _ => todo!("to_turso: value = {value:#?}"),
     }
 }
@@ -65,7 +67,7 @@ pub(crate) fn from_turso(value: TursoValue, ty: &stmt::Type) -> CoreValue {
             // A bare `#[document]` column (`Type::Object`) decodes
             // shape-directed to the named `Value::Object` wire form; the
             // engine raises it to the embed's positional record.
-            stmt::Type::Object => json_text_to_value(&v, ty),
+            stmt::Type::Object | stmt::Type::Json => json_text_to_value(&v, ty),
             _ => CoreValue::String(v),
         },
         TursoValue::Blob(v) => match ty {

@@ -291,13 +291,14 @@ impl BuildSchema<'_> {
                     })
                 };
 
-                let is_document = document_embed_id(&primitive.ty).is_some();
+                let is_document =
+                    document_embed_id(&primitive.ty).is_some() || primitive.ty.is_json();
 
                 if is_document {
                     if !self.db.document_collections {
                         return Err(crate::Error::unsupported_feature(format!(
-                            "model `{model_name}` field `{}` uses `#[document]` storage, \
-                             but this backend does not yet support `#[document]` fields.",
+                            "model `{model_name}` field `{}` uses document storage, \
+                             but this backend does not support document fields.",
                             field_name()
                         )));
                     }

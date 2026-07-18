@@ -54,6 +54,10 @@ let exchange = toasty::create!(Exchange {
 assert_eq!(exchange.request_body["action"], "create");
 ```
 
+`JsonValue` implements `serde::Serialize` and `serde::Deserialize`
+transparently. Serializing the wrapper produces the inner JSON value without
+an extra object or string layer.
+
 An embed can contain a dynamic JSON field. When the embed is column-expanded,
 the JSON field gets its own document column:
 

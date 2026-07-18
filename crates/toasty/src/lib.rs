@@ -138,9 +138,9 @@ pub use schema::Deferred;
 
 /// Typed statement, expression, and query builder types.
 pub mod stmt;
-#[cfg(feature = "serde")]
-pub use stmt::Json;
 pub use stmt::Statement;
+#[cfg(feature = "serde")]
+pub use stmt::{Json, JsonValue};
 
 /// Raw SQL execution helpers.
 pub mod sql;

@@ -48,7 +48,7 @@ impl Value {
                 // A bare `#[document]` column (`Type::Object`) decodes
                 // shape-directed to the named `Value::Object` wire form; the
                 // engine raises it to the embed's positional record.
-                stmt::Type::Object => json_text_to_value(&value, ty),
+                stmt::Type::Object | stmt::Type::Json => json_text_to_value(&value, ty),
                 _ => stmt::Value::String(value),
             },
             Some(SqlValue::Blob(value)) => match ty {
@@ -98,9 +98,9 @@ impl ToSql for Value {
             Value::Null => Ok(ToSqlOutput::Owned(SqlValue::Null)),
             // A `Vec<scalar>` / document collection (`List`) or a bare
             // `#[document]` embed (`Object`) is stored as JSON text.
-            Value::List(_) | Value::Object(_) => Ok(ToSqlOutput::Owned(SqlValue::Text(
-                value_to_json_text(&self.0),
-            ))),
+            Value::List(_) | Value::Object(_) | Value::Json(_) => Ok(ToSqlOutput::Owned(
+                SqlValue::Text(value_to_json_text(&self.0)),
+            )),
             _ => todo!("value = {:#?}", self.0),
         }
     }

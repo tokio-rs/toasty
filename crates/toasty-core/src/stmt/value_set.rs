@@ -125,10 +125,17 @@ pub(super) fn value_eq(a: &Value, b: &Value) -> bool {
         (F32(a), F32(b)) => a.to_bits() == b.to_bits(),
         (F64(a), F64(b)) => a.to_bits() == b.to_bits(),
         (String(a), String(b)) => a == b,
+        (Json(a), Json(b)) => value_eq(a, b),
         (Bytes(a), Bytes(b)) => a == b,
         (Uuid(a), Uuid(b)) => a == b,
         (List(a), List(b)) => a.len() == b.len() && a.iter().zip(b).all(|(x, y)| value_eq(x, y)),
         (Record(a), Record(b)) => record_eq(a, b),
+        (Object(a), Object(b)) => {
+            a.entries.len() == b.entries.len()
+                && a.iter()
+                    .zip(b.iter())
+                    .all(|((ak, av), (bk, bv))| ak == bk && value_eq(av, bv))
+        }
         (SparseRecord(a), SparseRecord(b)) => sparse_record_eq(a, b),
         #[cfg(feature = "rust_decimal")]
         (Decimal(a), Decimal(b)) => a == b,
@@ -176,6 +183,7 @@ pub(super) fn hash_value<H: Hasher>(v: &Value, state: &mut H) {
         Value::F32(x) => x.to_bits().hash(state),
         Value::F64(x) => x.to_bits().hash(state),
         Value::String(x) => x.hash(state),
+        Value::Json(x) => hash_value(x, state),
         Value::Bytes(x) => x.hash(state),
         Value::Uuid(x) => x.hash(state),
         Value::List(items) => {

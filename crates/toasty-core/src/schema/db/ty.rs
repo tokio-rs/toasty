@@ -215,7 +215,7 @@ impl Type {
                 // `Type::list` collapses a list-of-documents back to one
                 // document, so a `#[document]` collection (`List(Model)`) lands
                 // here as a plain `Document`.
-                stmt::Type::Model(_) => Ok(Type::Document { binary: true }),
+                stmt::Type::Model(_) | stmt::Type::Json => Ok(Type::Document { binary: true }),
                 stmt::Type::List(elem) => Ok(Type::list(Self::from_app(elem, None, db)?)),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
@@ -267,6 +267,7 @@ impl Type {
             // document collection (`List(Model)`, whose storage collapses to
             // one document) keeps its list shape with `Object` elements.
             (Self::Document { .. }, stmt::Type::Model(_)) => stmt::Type::Object,
+            (Self::Document { .. }, stmt::Type::Json) => stmt::Type::Json,
             (Self::Document { .. }, stmt::Type::List(elem))
                 if matches!(**elem, stmt::Type::Model(_)) =>
             {

@@ -26,6 +26,7 @@ rust_decimal.workspace = true
 bigdecimal.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
+serde_json.workspace = true
 toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
 toasty-core.workspace = true
 toasty-macros.workspace = true

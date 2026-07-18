@@ -235,7 +235,7 @@ fn typed_mysql_value_to_core(
             // A `#[document]` column (`Type::Object`): decode the JSON object
             // shape-directed to the named `Value::Object` wire form; the
             // engine raises it to the embed's positional record.
-            stmt::Type::Object => {
+            stmt::Type::Object | stmt::Type::Json => {
                 convert_or_null(value, |bytes: Vec<u8>| json_bytes_to_value(&bytes, ty))
             }
             _ => todo!("MySQL JSON column with stmt::Type {ty:#?}"),
@@ -451,7 +451,7 @@ impl ToValue for Value {
                     toasty_sql::json::to_vec(&self.0).expect("serialize JSON list column"),
                 )
             }
-            CoreValue::Object(_) => {
+            CoreValue::Object(_) | CoreValue::Json(_) => {
                 // Bound to a MySQL `JSON` column — a bare `#[document]` embed
                 // (`Value::Object`). Serialize the named object to JSON bytes,
                 // the same way the list arm handles a document collection.

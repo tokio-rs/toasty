@@ -51,6 +51,7 @@ impl Value {
                     .collect();
                 stmt::Value::List(items)
             }
+            (Type::Json, val) => stmt::Value::Json(Box::new(Self::from_ddb_any(val))),
             // A `#[document]` column stored as a Map `M`: decode
             // shape-directed to the named wire object. The engine raises it
             // to the embed's positional record — the field layout is a
@@ -131,10 +132,33 @@ impl Value {
                 AV::M(map)
             }
             stmt::Value::List(items) => AV::L(items.iter().map(Self::to_ddb_document).collect()),
+            stmt::Value::Json(value) => Self::to_ddb_json(value),
             value => match value.document_storage_text() {
                 Some(text) => AV::S(text.to_string()),
                 None => Value(value.clone()).to_ddb(),
             },
+        }
+    }
+
+    fn to_ddb_json(value: &CoreValue) -> AttributeValue {
+        use AttributeValue as AV;
+
+        match value {
+            stmt::Value::Null => AV::Null(true),
+            stmt::Value::Bool(value) => AV::Bool(*value),
+            stmt::Value::I64(value) => AV::N(value.to_string()),
+            stmt::Value::U64(value) => AV::N(value.to_string()),
+            stmt::Value::F64(value) => AV::N(value.to_string()),
+            stmt::Value::String(value) => AV::S(value.clone()),
+            stmt::Value::List(values) => AV::L(values.iter().map(Self::to_ddb_json).collect()),
+            stmt::Value::Object(object) => AV::M(
+                object
+                    .iter()
+                    .map(|(key, value)| (key.clone(), Self::to_ddb_json(value)))
+                    .collect(),
+            ),
+            stmt::Value::Json(value) => Self::to_ddb_json(value),
+            value => panic!("invalid dynamic JSON value: {value:#?}"),
         }
     }
 
@@ -168,6 +192,7 @@ impl Value {
             // encode through the document leaf encoding
             // ([`to_ddb_document`](Self::to_ddb_document)).
             value @ stmt::Value::Object(_) => Self::to_ddb_document(value),
+            stmt::Value::Json(value) => Self::to_ddb_json(value),
             stmt::Value::Null => AV::Null(true),
             // Scalars whose DynamoDB representation is their string form
             // (temporals, decimals): the same `Type::cast` conversions the

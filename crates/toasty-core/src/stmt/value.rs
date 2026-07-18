@@ -82,6 +82,10 @@ pub enum Value {
     /// document-stored fields, and consumed structurally by drivers.
     Object(ValueObject),
 
+    /// A schema-less JSON value. The wrapper distinguishes JSON null from
+    /// database null while the inner value preserves the JSON structure.
+    Json(Box<Value>),
+
     /// A list of values of the same type
     List(Vec<Value>),
 
@@ -322,6 +326,7 @@ impl Value {
             Self::U64(_) => ty.is_u64(),
             Self::F32(_) => ty.is_f32(),
             Self::F64(_) => ty.is_f64(),
+            Self::Json(_) => ty.is_json(),
             Self::List(value) => match ty {
                 Type::List(ty) => {
                     if value.is_empty() {
@@ -440,6 +445,7 @@ impl Value {
                     .map(|(_, value)| value.infer_ty())
                     .collect(),
             ),
+            Value::Json(_) => Type::Json,
             Value::String(_) => Type::String,
             Value::List(items) if items.is_empty() => Type::list(Type::Null),
             Value::List(items) => {
@@ -563,6 +569,7 @@ impl Value {
             // which have no element type.
             Value::List(_) => DbType::from_app(&self.infer_ty(), None, storage)
                 .map_err(|err| err.context(cannot_infer()))?,
+            Value::Json(_) => DbType::Document { binary: true },
             Value::Null | Value::Record(_) | Value::Object(_) | Value::SparseRecord(_) => {
                 return Err(cannot_infer());
             }

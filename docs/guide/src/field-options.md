@@ -462,6 +462,67 @@ labels: toasty::Json<Option<Vec<String>>>,
 see a `NULL` for missing values. Use `Json<Option<T>>` when callers
 expect the column to always contain valid JSON.
 
+### Native dynamic JSON
+
+Use `toasty::JsonValue` for JSON whose fields are not known when the model is
+defined. Unlike `Json<T>`, `JsonValue` uses the database's native document
+storage: `jsonb` on PostgreSQL, `JSON` on MySQL, JSON text on SQLite and
+Turso, and native document attributes on DynamoDB.
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+struct Exchange {
+    #[key]
+    id: String,
+
+    request_body: toasty::JsonValue,
+    response_body: Option<toasty::JsonValue>,
+}
+```
+
+Set the field with either `JsonValue` or a bare `serde_json::Value`:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Exchange {
+#     #[key]
+#     id: String,
+#     request_body: toasty::JsonValue,
+#     response_body: Option<toasty::JsonValue>,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let request = serde_json::json!({
+    "action": "create",
+    "arguments": { "name": "Alice" },
+});
+
+let exchange = toasty::create!(Exchange {
+    id: "request-1",
+    request_body: request,
+})
+.exec(&mut db)
+.await?;
+
+assert_eq!(exchange.request_body["action"], "create");
+# Ok(())
+# }
+```
+
+`JsonValue` implements `serde::Serialize` and `serde::Deserialize`
+transparently, so serializing a model field produces the inner JSON value
+without an extra wrapper or string layer.
+
+`JsonValue::null()` stores JSON null. `Option<JsonValue>::None` stores database
+null, so the two cases remain distinct. Updates replace the complete JSON
+value. Toasty does not currently expose filters or partial updates for paths
+inside `JsonValue`.
+
+An embedded struct can contain `JsonValue`. If the embed is itself stored with
+`#[document]`, the dynamic value remains nested JSON rather than an escaped
+JSON string.
+
 ## Scalar arrays
 
 A `Vec<T>` field where `T` is a scalar type stores a homogeneous,

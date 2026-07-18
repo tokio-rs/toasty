@@ -187,6 +187,16 @@ fn value_total_cmp(a: &Value, b: &Value) -> Ordering {
             }
             a.len().cmp(&b.len())
         }
+        (Value::Object(a), Value::Object(b)) => {
+            for ((ak, av), (bk, bv)) in a.iter().zip(b.iter()) {
+                let ord = ak.cmp(bk).then_with(|| value_total_cmp(av, bv));
+                if ord != Ordering::Equal {
+                    return ord;
+                }
+            }
+            a.entries.len().cmp(&b.entries.len())
+        }
+        (Value::Json(a), Value::Json(b)) => value_total_cmp(a, b),
 
         // Feature-gated types.
         #[cfg(feature = "rust_decimal")]
@@ -237,6 +247,7 @@ fn variant_index(v: &Value) -> u8 {
         Value::List(_) => 16,
         Value::SparseRecord(_) => 17,
         Value::Object(_) => 25,
+        Value::Json(_) => 26,
         #[cfg(feature = "rust_decimal")]
         Value::Decimal(_) => 18,
         #[cfg(feature = "bigdecimal")]

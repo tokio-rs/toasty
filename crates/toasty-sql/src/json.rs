@@ -83,6 +83,7 @@ impl Serialize for Encode<'_> {
                 }
                 map.end()
             }
+            Value::Json(value) => EncodeJson(value).serialize(s),
             // Decimals and jiff temporal scalars store the shared document
             // text form ([`Value::document_storage_text`]): decimals as their
             // `Display` form, temporals as ISO 8601 / RFC 3339 text truncated
@@ -118,6 +119,42 @@ impl Serialize for Encode<'_> {
     }
 }
 
+/// JSON values preserve explicit null object members, unlike typed document
+/// objects where `Value::Null` represents an omitted `Option` field.
+struct EncodeJson<'a>(&'a Value);
+
+impl Serialize for EncodeJson<'_> {
+    fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        match self.0 {
+            Value::Null => s.serialize_unit(),
+            Value::Bool(v) => s.serialize_bool(*v),
+            Value::I64(v) => s.serialize_i64(*v),
+            Value::U64(v) => s.serialize_u64(*v),
+            Value::F64(v) if v.is_finite() => s.serialize_f64(*v),
+            Value::F64(_) => Err(S::Error::custom("non-finite JSON number")),
+            Value::String(v) => s.serialize_str(v),
+            Value::List(items) => {
+                let mut seq = s.serialize_seq(Some(items.len()))?;
+                for item in items {
+                    seq.serialize_element(&EncodeJson(item))?;
+                }
+                seq.end()
+            }
+            Value::Object(object) => {
+                let mut map = s.serialize_map(Some(object.entries.len()))?;
+                for (key, value) in object.iter() {
+                    map.serialize_entry(key, &EncodeJson(value))?;
+                }
+                map.end()
+            }
+            Value::Json(value) => EncodeJson(value).serialize(s),
+            other => Err(S::Error::custom(format!(
+                "cannot encode {other:?} as a dynamic JSON value"
+            ))),
+        }
+    }
+}
+
 /// Encode a `stmt::Value` as a JSON string.
 pub fn to_string(value: &Value) -> Result<String, serde_json::Error> {
     serde_json::to_string(&Encode(value))
@@ -147,6 +184,10 @@ impl<'de> DeserializeSeed<'de> for Seed<'_> {
     type Value = Value;
 
     fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<Value, D::Error> {
+        if matches!(self.ty, stmt::Type::Json) {
+            return de.deserialize_any(AnyVisitor { wrap_json: true });
+        }
+
         // JSON is self-describing, so `deserialize_any` lets the parser drive
         // the visit method by token; each method coerces using `self.ty`.
         de.deserialize_any(ValueVisitor { ty: self.ty })
@@ -169,11 +210,23 @@ impl<'de> DeserializeSeed<'de> for AnySeed {
     type Value = Value;
 
     fn deserialize<D: Deserializer<'de>>(self, de: D) -> Result<Value, D::Error> {
-        de.deserialize_any(AnyVisitor)
+        de.deserialize_any(AnyVisitor { wrap_json: false })
     }
 }
 
-struct AnyVisitor;
+struct AnyVisitor {
+    wrap_json: bool,
+}
+
+impl AnyVisitor {
+    fn wrap(&self, value: Value) -> Value {
+        if self.wrap_json {
+            Value::Json(Box::new(value))
+        } else {
+            value
+        }
+    }
+}
 
 impl<'de> Visitor<'de> for AnyVisitor {
     type Value = Value;
@@ -183,32 +236,32 @@ impl<'de> Visitor<'de> for AnyVisitor {
     }
 
     fn visit_unit<E: serde::de::Error>(self) -> Result<Value, E> {
-        Ok(Value::Null)
+        Ok(self.wrap(Value::Null))
     }
 
     fn visit_bool<E: serde::de::Error>(self, v: bool) -> Result<Value, E> {
-        Ok(Value::Bool(v))
+        Ok(self.wrap(Value::Bool(v)))
     }
 
     fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Value, E> {
-        Ok(Value::I64(v))
+        Ok(self.wrap(Value::I64(v)))
     }
 
     fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Value, E> {
         // Integer fit: values representable as `i64` decode to `I64` so the
         // same stored number always has the same wire shape.
-        Ok(match i64::try_from(v) {
+        Ok(self.wrap(match i64::try_from(v) {
             Ok(v) => Value::I64(v),
             Err(_) => Value::U64(v),
-        })
+        }))
     }
 
     fn visit_f64<E: serde::de::Error>(self, v: f64) -> Result<Value, E> {
-        Ok(Value::F64(v))
+        Ok(self.wrap(Value::F64(v)))
     }
 
     fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Value, E> {
-        Ok(Value::String(v.to_owned()))
+        Ok(self.wrap(Value::String(v.to_owned())))
     }
 
     fn visit_seq<A: SeqAccess<'de>>(self, mut seq: A) -> Result<Value, A::Error> {
@@ -216,7 +269,7 @@ impl<'de> Visitor<'de> for AnyVisitor {
         while let Some(value) = seq.next_element_seed(AnySeed)? {
             items.push(value);
         }
-        Ok(Value::List(items))
+        Ok(self.wrap(Value::List(items)))
     }
 
     fn visit_map<A: MapAccess<'de>>(self, mut map: A) -> Result<Value, A::Error> {
@@ -224,7 +277,7 @@ impl<'de> Visitor<'de> for AnyVisitor {
         while let Some(key) = map.next_key::<String>()? {
             entries.push((key, map.next_value_seed(AnySeed)?));
         }
-        Ok(Value::Object(stmt::ValueObject::from_vec(entries)))
+        Ok(self.wrap(Value::Object(stmt::ValueObject::from_vec(entries))))
     }
 }
 
@@ -307,7 +360,7 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
         // raises the result to the embed's positional record — the field
         // layout is a model-level concept this codec does not know.
         match self.ty {
-            stmt::Type::Object => AnyVisitor.visit_map(map),
+            stmt::Type::Object => AnyVisitor { wrap_json: false }.visit_map(map),
             other => Err(A::Error::custom(format!(
                 "unexpected JSON object for type {other:?}"
             ))),

@@ -134,6 +134,9 @@ pub enum Type {
     /// document lowering and raising).
     Object,
 
+    /// A schema-less JSON value stored in a native document column.
+    Json,
+
     /// A byte array, more efficient than `List(U8)`.
     Bytes,
 
@@ -257,6 +260,11 @@ impl Type {
     /// Returns `true` if this is [`Type::Object`].
     pub fn is_object(&self) -> bool {
         matches!(self, Self::Object)
+    }
+
+    /// Returns `true` if this is [`Type::Json`].
+    pub fn is_json(&self) -> bool {
+        matches!(self, Self::Json)
     }
 
     /// Returns `true` if this is [`Type::Bytes`].
@@ -398,6 +406,18 @@ impl Type {
         Ok(match (value, self) {
             // Identity
             (value @ Value::String(_), Self::String) => value,
+            (value @ Value::Json(_), Self::Json) => value,
+            (
+                value @ (Value::Null
+                | Value::Bool(_)
+                | Value::I64(_)
+                | Value::U64(_)
+                | Value::F64(_)
+                | Value::String(_)
+                | Value::List(_)
+                | Value::Object(_)),
+                Self::Json,
+            ) => Value::Json(Box::new(value)),
             // String <-> Uuid
             (Value::Uuid(value), Self::String) => Value::String(value.to_string()),
             (Value::String(value), Self::Uuid) => {
@@ -545,6 +565,8 @@ impl Type {
     fn cast_document_leaf(&self, resolve: &impl Resolve, value: Value) -> Result<Value> {
         match (self, value) {
             (Self::Model(_), value @ Value::Object(_)) => self.raise_document(resolve, value),
+            (Self::Json, value @ Value::Json(_)) => Ok(value),
+            (Self::Json, value) => Ok(Value::Json(Box::new(value))),
             (Self::List(elem), Value::List(items)) => Ok(Value::List(
                 items
                     .into_iter()
