@@ -6,6 +6,7 @@ mod lift_in_subquery;
 mod lift_update_query;
 mod paginate;
 mod relation;
+mod relation_path;
 mod returning;
 mod via_join;
 
