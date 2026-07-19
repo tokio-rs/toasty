@@ -23,6 +23,9 @@ use crate::{schema::db, stmt};
 /// ```
 #[derive(Debug)]
 pub struct Capability {
+    /// Human-readable driver name used in diagnostics.
+    pub driver_name: &'static str,
+
     /// When `true`, the database uses a SQL-based query language and the
     /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
@@ -563,6 +566,7 @@ impl Capability {
 
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
+        driver_name: "SQLite",
         sql: true,
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
@@ -653,6 +657,7 @@ impl Capability {
 
     /// PostgreSQL capabilities
     pub const POSTGRESQL: Self = Self {
+        driver_name: "PostgreSQL",
         cte_with_update: true,
         sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
@@ -712,6 +717,7 @@ impl Capability {
 
     /// MySQL capabilities
     pub const MYSQL: Self = Self {
+        driver_name: "MySQL",
         cte_with_update: false,
         sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
@@ -779,12 +785,14 @@ impl Capability {
     ///   unchanged, so callers can still request the classic locking
     ///   strategies per transaction.
     pub const TURSO: Self = Self {
+        driver_name: "Turso",
         test_connection_pool: true,
         ..Self::SQLITE
     };
 
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
+        driver_name: "DynamoDB",
         sql: false,
         sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,

@@ -77,28 +77,32 @@ impl stmt::Visit for Verify<'_, '_> {
         };
 
         if index.primary_key && !self.capability.upsert_primary_key {
-            self.record(Error::unsupported_feature(
-                "primary-key upsert is not supported by this database",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support primary-key upsert",
+                self.capability.driver_name
+            )));
         } else if !index.primary_key && !self.capability.upsert_unique {
-            self.record(Error::unsupported_feature(
-                "upsert by a secondary unique constraint is not supported by this database",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support upsert by a secondary unique constraint",
+                self.capability.driver_name
+            )));
         }
 
         if upsert.action == stmt::UpsertAction::Ignore && !self.capability.upsert_targeted_ignore {
-            self.record(Error::unsupported_feature(
-                "targeted upsert ignore is not supported by this database",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support targeted upsert ignore",
+                self.capability.driver_name
+            )));
         }
 
         if upsert.action == stmt::UpsertAction::Update
             && !upsert.update.is_empty()
             && !self.capability.upsert_branch_assignments
         {
-            self.record(Error::unsupported_feature(
-                "upsert on_update assignments are not supported by this database",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support upsert on_update assignments",
+                self.capability.driver_name
+            )));
         }
 
         if upsert.action == stmt::UpsertAction::Update
@@ -127,14 +131,16 @@ impl stmt::Visit for Verify<'_, '_> {
                     continue;
                 };
                 if model.fields[field].nullable {
-                    self.record(Error::unsupported_feature(
-                        "nullable upsert create assignments are not supported by this database",
-                    ));
+                    self.record(Error::unsupported_feature(format!(
+                        "{} does not support nullable upsert create assignments",
+                        self.capability.driver_name
+                    )));
                 }
                 if upsert.shared.contains(projection) {
-                    self.record(Error::unsupported_feature(
-                        "different create and update assignments for one field are not supported by this database",
-                    ));
+                    self.record(Error::unsupported_feature(format!(
+                        "{} does not support different create and update assignments for one field",
+                        self.capability.driver_name
+                    )));
                 }
             }
         }
@@ -158,9 +164,10 @@ impl stmt::Visit for Verify<'_, '_> {
                         })
                         || model.fields[field.field.index].auto.is_some()
                 }) {
-                    self.record(Error::unsupported_feature(
-                        "updating a unique secondary-index field is not supported by DynamoDB upsert",
-                    ));
+                    self.record(Error::unsupported_feature(format!(
+                        "{} upsert does not support updating a unique secondary-index field",
+                        self.capability.driver_name
+                    )));
                 }
             }
         }
@@ -479,28 +486,30 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
         // case-insensitive match on any other backend rather than silently
         // emitting plain `LIKE`, whose case behavior differs across engines.
         if i.case_insensitive && !self.capability.native_ilike {
-            self.record(Error::unsupported_feature(
-                "ilike requires a native ILIKE operator, which only PostgreSQL provides; \
-                 use like instead",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} does not provide a native ILIKE operator; use like instead",
+                self.capability.driver_name
+            )));
         }
         stmt::visit::visit_expr_like(self, i);
     }
 
     fn visit_expr_is_superset(&mut self, i: &stmt::ExprIsSuperset) {
         if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
-            self.record(Error::unsupported_feature(
-                "is_superset on this driver requires a literal list on the right-hand side",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} requires a literal list on the right-hand side of is_superset",
+                self.capability.driver_name
+            )));
         }
         stmt::visit::visit_expr_is_superset(self, i);
     }
 
     fn visit_expr_intersects(&mut self, i: &stmt::ExprIntersects) {
         if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
-            self.record(Error::unsupported_feature(
-                "intersects on this driver requires a literal list on the right-hand side",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} requires a literal list on the right-hand side of intersects",
+                self.capability.driver_name
+            )));
         }
         stmt::visit::visit_expr_intersects(self, i);
     }
@@ -620,6 +629,7 @@ mod tests {
         let err = verify_expr_with(&Capability::SQLITE, &expr)
             .expect("expected unsupported_feature error");
         assert!(err.is_unsupported_feature());
+        assert!(err.to_string().contains(Capability::SQLITE.driver_name));
     }
 
     #[test]

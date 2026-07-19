@@ -783,9 +783,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if self.load_data.select_items.contains(&SelectItem::CountStar)
             && !self.planner.engine.capability().sql
         {
-            return Err(toasty_core::Error::unsupported_feature(
-                "count() queries are only supported with SQL drivers",
-            ));
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support count() queries",
+                self.planner.engine.capability().driver_name
+            )));
         }
 
         if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning) {
@@ -1057,9 +1058,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // SQL cursor pagination requires ORDER BY to produce a deterministic cursor.
         let order_by = query.order_by.as_ref().ok_or_else(|| {
-            toasty_core::Error::unsupported_feature(
-                "cursor-based pagination requires an ORDER BY clause on SQL drivers",
-            )
+            toasty_core::Error::unsupported_feature(format!(
+                "cursor-based pagination on {} requires an ORDER BY clause",
+                self.planner.engine.capability().driver_name
+            ))
         })?;
 
         // Extract page_size
@@ -1419,10 +1421,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             && query.order_by.is_some()
             && !self.planner.engine.capability().scan_supports_sort
         {
-            return Err(toasty_core::Error::unsupported_feature(
-                "ORDER BY is not supported on full-table scans for this database. \
-                     Consider adding an index on the sort field or removing the ORDER BY clause.",
-            ));
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support ORDER BY on full-table scans. Consider adding an index on \
+                 the sort field or removing the ORDER BY clause.",
+                self.planner.engine.capability().driver_name
+            )));
         }
 
         let mut row_filter = {

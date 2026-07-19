@@ -507,6 +507,10 @@ pub async fn unsupported_upsert_branches_are_reported_before_dispatch(
         .await
         .unwrap_err();
     assert!(error.is_unsupported_feature(), "unexpected error: {error}");
+    assert!(
+        error.to_string().contains(test.capability().driver_name),
+        "error does not identify the driver: {error}"
+    );
     Ok(())
 }
 
@@ -523,6 +527,10 @@ pub async fn unsupported_unique_upsert_is_reported_before_dispatch(test: &mut Te
         .await
         .unwrap_err();
     assert!(error.is_unsupported_feature(), "unexpected error: {error}");
+    assert!(
+        error.to_string().contains(test.capability().driver_name),
+        "error does not identify the driver: {error}"
+    );
     Ok(())
 }
 
@@ -540,5 +548,9 @@ pub async fn unsupported_upsert_is_reported_before_dispatch(test: &mut Test) -> 
         .await
         .unwrap_err();
     assert!(error.is_unsupported_feature(), "unexpected error: {error}");
+    assert!(
+        error.to_string().contains(test.capability().driver_name),
+        "error does not identify the driver: {error}"
+    );
     Ok(())
 }
