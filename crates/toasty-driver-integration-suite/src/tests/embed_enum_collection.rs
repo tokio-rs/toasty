@@ -71,6 +71,34 @@ pub async fn vec_enum_contains_and_len(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// An enum-level integer storage type applies to collection elements.
+#[driver_test(requires(document_collections))]
+pub async fn vec_enum_uses_discriminant_storage(t: &mut Test) {
+    #[derive(Clone, Copy, Debug, PartialEq, toasty::Embed)]
+    #[column(type = u8)]
+    enum SmallColor {
+        #[column(variant = 1)]
+        Red,
+        #[column(variant = 2)]
+        Green,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct SmallPalette {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        colors: Vec<SmallColor>,
+    }
+
+    let db = t.setup_db(models!(SmallPalette)).await;
+
+    assert_eq!(
+        column_storage_ty(&db, "small_palettes", "colors"),
+        db::Type::list(db::Type::UnsignedInteger(1))
+    );
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, toasty::Embed)]
 enum Ink {
     Cyan,

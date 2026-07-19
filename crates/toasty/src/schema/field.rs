@@ -201,7 +201,8 @@ impl Field for Vec<u8> {
 /// A `Vec<T>` of embedded structs (`T: Embed`) is a `#[document]` collection —
 /// `Primitive(List(Model(T::id())))`, stored by the schema builder as a single
 /// JSON array of objects. The `field_ty` override below derives the storage
-/// type for native unit enums; for struct embeds it matches the trait default.
+/// type configured for unit-enum discriminants; for struct embeds it matches
+/// the trait default.
 ///
 /// This is the only *blanket* `Field for Vec<_>` impl. A blanket
 /// `impl<T: Scalar> Field for Vec<T>` cannot coexist with it: the compiler
@@ -236,7 +237,7 @@ where
     ) -> Self::Update<'a> {
     }
 
-    /// Derives a `List(Enum)` storage hint for native unit enums.
+    /// Derives a list storage hint from a unit enum's discriminant storage.
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
@@ -249,10 +250,7 @@ where
                 return None;
             }
 
-            match embed.discriminant.storage_ty {
-                Some(ty @ db::Type::Enum(_)) => Some(db::Type::list(ty)),
-                _ => None,
-            }
+            embed.discriminant.storage_ty.map(db::Type::list)
         });
         toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
             ty: <Self as super::Load>::ty(),
