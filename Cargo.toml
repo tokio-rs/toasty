@@ -10,6 +10,8 @@ members = [
     # Driver implementations
     "crates/toasty-driver-dynamodb",
     "crates/toasty-driver-mysql",
+    "crates/toasty-driver-memory",
+    "crates/toasty-driver-markdown",
     "crates/toasty-driver-postgresql",
     "crates/toasty-driver-sqlite",
     "crates/toasty-driver-turso",
@@ -80,6 +82,8 @@ toasty-sql = { version = "0.8.0", path = "crates/toasty-sql" }
 # Driver implementations
 toasty-driver-dynamodb = { version = "0.8.0", path = "crates/toasty-driver-dynamodb" }
 toasty-driver-mysql = { version = "0.8.0", path = "crates/toasty-driver-mysql" }
+toasty-driver-memory = { version = "0.8.0", path = "crates/toasty-driver-memory" }
+toasty-driver-markdown = { version = "0.8.0", path = "crates/toasty-driver-markdown" }
 toasty-driver-postgresql = { version = "0.8.0", path = "crates/toasty-driver-postgresql" }
 toasty-driver-sqlite = { version = "0.8.0", path = "crates/toasty-driver-sqlite" }
 toasty-driver-turso = { version = "0.8.0", path = "crates/toasty-driver-turso" }
@@ -131,6 +135,7 @@ bigdecimal = "0.4.10"
 rusqlite = { version = "0.39", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+serde_yaml = "0.9.34"
 syn = { version = "2.0.117", features = ["full", "extra-traits", "visit-mut"] }
 toml = "1.1.0"
 toml_edit = "0.25.8"
@@ -148,6 +153,7 @@ tracing = "0.1"
 turso = "0.6"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
+unicode-casefold = "0.2.0"
 url = "2.5.8"
 uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng"] }
 

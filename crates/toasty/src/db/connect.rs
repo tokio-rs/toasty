@@ -35,6 +35,7 @@ impl Connect {
     /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
     /// | `mysql` | MySQL | `mysql` |
     /// | `dynamodb` | DynamoDB | `dynamodb` |
+    /// | `markdown` | Markdown | `markdown` |
     /// | `turso` | Turso | `turso` |
     ///
     /// # Errors
@@ -45,6 +46,7 @@ impl Connect {
         #![cfg_attr(
             not(any(
                 feature = "dynamodb",
+                feature = "markdown",
                 feature = "mysql",
                 feature = "postgresql",
                 feature = "sqlite",
@@ -68,6 +70,19 @@ impl Connect {
             "dynamodb" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`dynamodb` feature not enabled",
+                ));
+            }
+
+            #[cfg(feature = "markdown")]
+            "markdown" => Box::new(toasty_driver_markdown::Markdown::new(
+                percent_encoding::percent_decode(url.path().as_bytes())
+                    .decode_utf8_lossy()
+                    .to_string(),
+            )),
+            #[cfg(not(feature = "markdown"))]
+            "markdown" => {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "`markdown` feature not enabled",
                 ));
             }
 
@@ -126,6 +141,10 @@ impl Driver for Connect {
 
     fn capability(&self) -> &'static Capability {
         self.driver.capability()
+    }
+
+    async fn initialize(&mut self, schema: &std::sync::Arc<toasty_core::Schema>) -> Result<()> {
+        self.driver.initialize(schema).await
     }
 
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {

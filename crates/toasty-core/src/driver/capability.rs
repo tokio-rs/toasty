@@ -23,6 +23,13 @@ use crate::{schema::db, stmt};
 /// ```
 #[derive(Debug)]
 pub struct Capability {
+    /// Whether the driver supports inserting, updating, and deleting rows.
+    ///
+    /// When `false`, the query verifier rejects every mutation before lowering,
+    /// planning, connection acquisition, or execution. Drivers must still
+    /// reject mutation operations defensively when called directly.
+    pub data_mutations: bool,
+
     /// When `true`, the database uses a SQL-based query language and the
     /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
@@ -162,13 +169,13 @@ pub struct Capability {
     /// will not produce one.
     pub native_like: bool,
 
-    /// Whether the database has a native case-insensitive `LIKE` operator
-    /// (`ILIKE`). Only PostgreSQL has one.
+    /// Whether the backend implements case-insensitive `LIKE` semantics.
     ///
-    /// Toasty does not emulate `ILIKE` on backends that lack it: `.ilike()`
-    /// is a pass-through to the database's own operator. When `native_ilike`
-    /// is `false`, the query-verify pass rejects a case-insensitive
-    /// `Expr::Like` with an
+    /// SQL drivers use the database's own operator rather than emulating it;
+    /// PostgreSQL is the only SQL backend that provides `ILIKE`. Non-SQL
+    /// drivers may implement and document their own semantics. When
+    /// `native_ilike` is `false`, query verification rejects a
+    /// case-insensitive `Expr::Like` with an
     /// [`unsupported_feature`](crate::Error::unsupported_feature) error rather
     /// than silently degrading to plain `LIKE`, whose case behavior differs.
     ///
@@ -458,7 +465,7 @@ impl Capability {
         }
 
         // ILIKE is a case-insensitive LIKE; a backend cannot offer it without
-        // a native LIKE.
+        // LIKE support.
         if self.native_ilike && !self.native_like {
             return Err(crate::Error::invalid_driver_configuration(
                 "native_ilike is true but native_like is false",
@@ -536,6 +543,7 @@ impl Capability {
 
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
+        data_mutations: true,
         sql: true,
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
@@ -750,6 +758,7 @@ impl Capability {
 
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
+        data_mutations: true,
         sql: false,
         sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,

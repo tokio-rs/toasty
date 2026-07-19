@@ -26,6 +26,9 @@ pub(crate) struct Scan {
     /// Filter expression applied to each scanned row.
     pub(crate) row_filter: Option<stmt::Expr>,
 
+    /// Expressions used to order matching rows before pagination.
+    pub(crate) order_by: Option<stmt::OrderBy>,
+
     /// Limit and pagination bounds. `None` means return all rows.
     pub(crate) limit: Option<Pagination>,
 
@@ -72,6 +75,7 @@ impl Scan {
             table: self.table,
             columns,
             row_filter: self.row_filter.clone(),
+            order_by: self.order_by.clone(),
             limit: self.limit.clone(),
         }
     }

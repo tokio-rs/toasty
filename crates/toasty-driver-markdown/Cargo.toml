@@ -1,0 +1,29 @@
+[package]
+name = "toasty-driver-markdown"
+version = "0.8.0"
+description = "Read-only Markdown content driver for Toasty"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/toasty-driver-markdown"
+
+[dependencies]
+async-trait.workspace = true
+serde_yaml.workspace = true
+toasty-core.workspace = true
+toasty-driver-memory.workspace = true
+
+[features]
+default = []
+rust_decimal = ["toasty-core/rust_decimal", "toasty-driver-memory/rust_decimal"]
+bigdecimal = ["toasty-core/bigdecimal", "toasty-driver-memory/bigdecimal"]
+jiff = ["toasty-core/jiff", "toasty-driver-memory/jiff"]
+
+[lints]
+workspace = true

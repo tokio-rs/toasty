@@ -26,7 +26,7 @@ rust_decimal.workspace = true
 bigdecimal.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
-toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff"] }
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "markdown"] }
 toasty-core.workspace = true
 toasty-macros.workspace = true
 tokio.workspace = true
@@ -40,6 +40,8 @@ toasty-driver-turso = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-dynamodb = { workspace = true, optional = true }
+toasty-driver-markdown.workspace = true
+toasty-driver-memory.workspace = true
 
 # Database clients used directly by per-driver integration test binaries
 tokio-postgres = { workspace = true, optional = true }
@@ -52,6 +54,7 @@ tracing.workspace = true
 tracing-subscriber.workspace = true
 trybuild.workspace = true
 url.workspace = true
+tempfile.workspace = true
 
 # Fixtures
 tests-fixture-post = { path = "tests/fixtures/post" }

@@ -1266,6 +1266,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             debug_assert!(self.load_data.select_items.is_empty());
         }
 
+        // A sortable scan can honor arbitrary ordering expressions. QueryPk
+        // only carries the direction of an index sort key, so selecting it for
+        // another ORDER BY expression would return rows in the wrong order.
+        if stmt
+            .as_query()
+            .and_then(|query| query.order_by.as_ref())
+            .is_some()
+            && self.planner.engine.capability().scan_supports_sort
+        {
+            let ty = self.infer_nosql_record_ty(&stmt);
+            return self.plan_scan_execution(stmt, ty);
+        }
+
         // Without SQL capability, we have to plan the execution of the
         // statement based on available indices.
         let index_plan_opt = self.planner.engine.plan_index_path(&stmt)?;
@@ -1348,6 +1361,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
         self.legalize_kv_expr(&mut row_filter);
 
+        let mut order_by = stmt.as_query().and_then(|query| query.order_by.clone());
+        if let Some(order_by) = &mut order_by {
+            for order in &mut order_by.exprs {
+                self.planner.engine.legalize_table_expr(&mut order.expr);
+            }
+        }
+
         let limit = extract_pagination(&stmt);
 
         Ok(self.insert_mir_with_deps(mir::Scan {
@@ -1355,6 +1375,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             table: table_id,
             columns: self.load_data.select_items.extract_expr_references(),
             row_filter,
+            order_by,
             limit,
             ty,
         }))

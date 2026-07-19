@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
-//! Toasty is an async ORM for Rust supporting both SQL (SQLite, PostgreSQL,
-//! MySQL) and NoSQL (DynamoDB) databases.
+//! Toasty is an async ORM for Rust supporting SQL (SQLite, PostgreSQL, MySQL),
+//! NoSQL (DynamoDB), and read-only Markdown content.
 //!
 //! This crate is the user-facing API. It contains the database handle,
 //! query execution traits, and the types that generated code builds on. For

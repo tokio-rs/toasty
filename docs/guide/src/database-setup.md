@@ -51,6 +51,7 @@ requires its corresponding feature flag in `Cargo.toml`.
 | `postgresql` or `postgres` | PostgreSQL | `postgresql` |
 | `mysql` | MySQL | `mysql` |
 | `dynamodb` | DynamoDB | `dynamodb` |
+| `markdown` | Markdown directory (read-only) | `markdown` |
 
 Examples:
 
@@ -69,11 +70,15 @@ Examples:
 
 // DynamoDB (uses AWS config from environment)
 .connect("dynamodb://us-east-1")
+
+// Markdown content directory
+.connect("markdown:./content")
 ```
 
 For per-backend details — URL query parameters, TLS, type mapping,
 and per-driver behavior — see the
-[Database Backends](./postgresql.md) chapters.
+[Database Backends](./postgresql.md) chapters. The read-only Markdown source is
+documented in [Markdown](./markdown.md).
 
 ## Using a driver directly
 

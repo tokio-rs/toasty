@@ -26,6 +26,7 @@ serde = { workspace = true, optional = true }
 heck.workspace = true
 tokio-stream.workspace = true
 tracing.workspace = true
+unicode-casefold.workspace = true
 uuid.workspace = true
 
 [features]

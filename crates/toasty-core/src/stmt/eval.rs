@@ -24,6 +24,7 @@ use crate::{
     },
 };
 use std::cmp::Ordering;
+use unicode_casefold::UnicodeCaseFold;
 
 enum ScopeStack<'a> {
     Root,
@@ -198,10 +199,34 @@ impl Expr {
                 match expr_binary_op.op {
                     BinaryOp::Eq => Ok((lhs == rhs).into()),
                     BinaryOp::Ne => Ok((lhs != rhs).into()),
-                    BinaryOp::Ge => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Less).into()),
-                    BinaryOp::Gt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Greater).into()),
-                    BinaryOp::Le => Ok((cmp_ordered(&lhs, &rhs)? != Ordering::Greater).into()),
-                    BinaryOp::Lt => Ok((cmp_ordered(&lhs, &rhs)? == Ordering::Less).into()),
+                    BinaryOp::Ge => Ok(ordered_predicate(
+                        &lhs,
+                        &rhs,
+                        input.ordered_nulls_are_false(),
+                        |order| order != Ordering::Less,
+                    )?
+                    .into()),
+                    BinaryOp::Gt => Ok(ordered_predicate(
+                        &lhs,
+                        &rhs,
+                        input.ordered_nulls_are_false(),
+                        |order| order == Ordering::Greater,
+                    )?
+                    .into()),
+                    BinaryOp::Le => Ok(ordered_predicate(
+                        &lhs,
+                        &rhs,
+                        input.ordered_nulls_are_false(),
+                        |order| order != Ordering::Greater,
+                    )?
+                    .into()),
+                    BinaryOp::Lt => Ok(ordered_predicate(
+                        &lhs,
+                        &rhs,
+                        input.ordered_nulls_are_false(),
+                        |order| order == Ordering::Less,
+                    )?
+                    .into()),
                     BinaryOp::Add => lhs.checked_add(&rhs).ok_or_else(|| {
                         crate::Error::expression_evaluation_failed(
                             "arithmetic overflow or type mismatch in `+`",
@@ -213,6 +238,17 @@ impl Expr {
                         )
                     }),
                 }
+            }
+            Expr::Between(expr_between) => {
+                let value = expr_between.expr.eval_ref(scope, input)?;
+                let low = expr_between.low.eval_ref(scope, input)?;
+                let high = expr_between.high.eval_ref(scope, input)?;
+                if value.is_null() || low.is_null() || high.is_null() {
+                    return Ok(false.into());
+                }
+                Ok((cmp_ordered(&value, &low)? != Ordering::Less
+                    && cmp_ordered(&value, &high)? != Ordering::Greater)
+                    .into())
             }
             Expr::Cast(expr_cast) => {
                 let value = expr_cast.expr.eval_ref(scope, input)?;
@@ -362,6 +398,52 @@ impl Expr {
 
                 Ok(items.iter().any(|item| item == &needle).into())
             }
+            Expr::Intersects(expr) => {
+                let lhs = expr.lhs.eval_ref(scope, input)?;
+                let rhs = expr.rhs.eval_ref(scope, input)?;
+                if lhs.is_null() || rhs.is_null() {
+                    return Ok(false.into());
+                }
+                let (Value::List(lhs), Value::List(rhs)) = (lhs, rhs) else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "intersects operands must evaluate to lists",
+                    ));
+                };
+                Ok(lhs.iter().any(|value| rhs.contains(value)).into())
+            }
+            Expr::IsSuperset(expr) => {
+                let lhs = expr.lhs.eval_ref(scope, input)?;
+                let rhs = expr.rhs.eval_ref(scope, input)?;
+                if lhs.is_null() || rhs.is_null() {
+                    return Ok(false.into());
+                }
+                let (Value::List(lhs), Value::List(rhs)) = (lhs, rhs) else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "is_superset operands must evaluate to lists",
+                    ));
+                };
+                Ok(rhs.iter().all(|value| lhs.contains(value)).into())
+            }
+            Expr::Length(expr) => match expr.expr.eval_ref(scope, input)? {
+                Value::List(items) => Ok(Value::I64(items.len() as i64)),
+                Value::Null => Ok(Value::Null),
+                _ => Err(crate::Error::expression_evaluation_failed(
+                    "length operand must evaluate to a list",
+                )),
+            },
+            Expr::Like(expr) => {
+                let value = expr.expr.eval_ref(scope, input)?;
+                let pattern = expr.pattern.eval_ref(scope, input)?;
+                if value.is_null() || pattern.is_null() {
+                    return Ok(false.into());
+                }
+                let (Value::String(value), Value::String(pattern)) = (value, pattern) else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "LIKE operands must evaluate to strings",
+                    ));
+                };
+                Ok(like_matches(&value, &pattern, expr.escape, expr.case_insensitive)?.into())
+            }
             Expr::AnyOp(e) => {
                 let lhs = e.lhs.eval_ref(scope, input)?;
                 let rhs = e.rhs.eval_ref(scope, input)?;
@@ -370,7 +452,14 @@ impl Expr {
                         "ANY right-hand side must evaluate to a list",
                     ));
                 };
-                Ok(any_all_compare(&lhs, &items, e.op, /*all=*/ false)?.into())
+                Ok(any_all_compare(
+                    &lhs,
+                    &items,
+                    e.op,
+                    /*all=*/ false,
+                    input.ordered_nulls_are_false(),
+                )?
+                .into())
             }
             Expr::AllOp(e) => {
                 let lhs = e.lhs.eval_ref(scope, input)?;
@@ -380,7 +469,14 @@ impl Expr {
                         "ALL right-hand side must evaluate to a list",
                     ));
                 };
-                Ok(any_all_compare(&lhs, &items, e.op, /*all=*/ true)?.into())
+                Ok(any_all_compare(
+                    &lhs,
+                    &items,
+                    e.op,
+                    /*all=*/ true,
+                    input.ordered_nulls_are_false(),
+                )?
+                .into())
             }
             Expr::Match(expr_match) => {
                 let subject = expr_match.subject.eval_ref(scope, input)?;
@@ -410,10 +506,25 @@ impl Expr {
                         }
                         Ok(false.into())
                     }
-                    _ => todo!("ExprExists with non-Values body"),
+                    _ => Err(crate::Error::expression_evaluation_failed(
+                        "EXISTS can only evaluate VALUES subqueries client-side",
+                    )),
                 }
             }
             Expr::Value(value) => Ok(value.clone()),
+            Expr::StartsWith(expr) => {
+                let value = expr.expr.eval_ref(scope, input)?;
+                let prefix = expr.prefix.eval_ref(scope, input)?;
+                if value.is_null() || prefix.is_null() {
+                    return Ok(false.into());
+                }
+                let (Value::String(value), Value::String(prefix)) = (value, prefix) else {
+                    return Err(crate::Error::expression_evaluation_failed(
+                        "starts_with operands must evaluate to strings",
+                    ));
+                };
+                Ok(value.starts_with(&prefix).into())
+            }
             // A document path read: navigate the named wire form
             // (`Value::Object`) by key, then cast the leaf to the extraction's
             // declared type. This is how a driver-side in-memory check (e.g.
@@ -442,7 +553,9 @@ impl Expr {
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",
             )),
-            _ => todo!("expr={self:#?}"),
+            _ => Err(crate::Error::expression_evaluation_failed(format!(
+                "expression cannot be evaluated client-side: {self:#?}"
+            ))),
         }
     }
 
@@ -506,15 +619,41 @@ fn cmp_ordered(lhs: &Value, rhs: &Value) -> Result<Ordering> {
     })
 }
 
-fn any_all_compare(lhs: &Value, items: &[Value], op: BinaryOp, all: bool) -> Result<bool> {
+fn ordered_predicate(
+    lhs: &Value,
+    rhs: &Value,
+    nulls_are_false: bool,
+    predicate: impl FnOnce(Ordering) -> bool,
+) -> Result<bool> {
+    if nulls_are_false && (lhs.is_null() || rhs.is_null()) {
+        return Ok(false);
+    }
+    Ok(predicate(cmp_ordered(lhs, rhs)?))
+}
+
+fn any_all_compare(
+    lhs: &Value,
+    items: &[Value],
+    op: BinaryOp,
+    all: bool,
+    nulls_are_false: bool,
+) -> Result<bool> {
     for item in items {
         let matches = match op {
             BinaryOp::Eq => lhs == item,
             BinaryOp::Ne => lhs != item,
-            BinaryOp::Ge => cmp_ordered(lhs, item)? != Ordering::Less,
-            BinaryOp::Gt => cmp_ordered(lhs, item)? == Ordering::Greater,
-            BinaryOp::Le => cmp_ordered(lhs, item)? != Ordering::Greater,
-            BinaryOp::Lt => cmp_ordered(lhs, item)? == Ordering::Less,
+            BinaryOp::Ge => {
+                ordered_predicate(lhs, item, nulls_are_false, |order| order != Ordering::Less)?
+            }
+            BinaryOp::Gt => ordered_predicate(lhs, item, nulls_are_false, |order| {
+                order == Ordering::Greater
+            })?,
+            BinaryOp::Le => ordered_predicate(lhs, item, nulls_are_false, |order| {
+                order != Ordering::Greater
+            })?,
+            BinaryOp::Lt => {
+                ordered_predicate(lhs, item, nulls_are_false, |order| order == Ordering::Less)?
+            }
             BinaryOp::Add | BinaryOp::Sub => {
                 return Err(crate::Error::expression_evaluation_failed(
                     "ANY/ALL only supports comparison operators",
@@ -531,4 +670,77 @@ fn any_all_compare(lhs: &Value, items: &[Value], op: BinaryOp, all: bool) -> Res
     }
     // ANY over empty list → false; ALL over empty list → true.
     Ok(all)
+}
+
+#[derive(Clone, Copy)]
+enum LikeToken {
+    AnySequence,
+    AnyOne,
+    Literal(char),
+}
+
+fn like_matches(
+    value: &str,
+    pattern: &str,
+    escape: Option<char>,
+    case_insensitive: bool,
+) -> Result<bool> {
+    let mut tokens = Vec::new();
+    let mut chars = pattern.chars();
+    while let Some(ch) = chars.next() {
+        if Some(ch) == escape {
+            let Some(literal) = chars.next() else {
+                return Err(crate::Error::expression_evaluation_failed(
+                    "LIKE pattern ends with its escape character",
+                ));
+            };
+            push_like_literal(&mut tokens, literal, case_insensitive);
+        } else {
+            match ch {
+                '%' => tokens.push(LikeToken::AnySequence),
+                '_' => tokens.push(LikeToken::AnyOne),
+                literal => push_like_literal(&mut tokens, literal, case_insensitive),
+            }
+        }
+    }
+
+    let value: Vec<char> = if case_insensitive {
+        value.case_fold().collect()
+    } else {
+        value.chars().collect()
+    };
+    let mut reachable = vec![false; value.len() + 1];
+    reachable[0] = true;
+
+    for token in tokens {
+        let mut next = vec![false; value.len() + 1];
+        match token {
+            LikeToken::AnySequence => {
+                let mut seen = false;
+                for index in 0..=value.len() {
+                    seen |= reachable[index];
+                    next[index] = seen;
+                }
+            }
+            LikeToken::AnyOne => {
+                next[1..].copy_from_slice(&reachable[..value.len()]);
+            }
+            LikeToken::Literal(expected) => {
+                for index in 0..value.len() {
+                    next[index + 1] = reachable[index] && value[index] == expected;
+                }
+            }
+        }
+        reachable = next;
+    }
+
+    Ok(reachable[value.len()])
+}
+
+fn push_like_literal(tokens: &mut Vec<LikeToken>, literal: char, case_insensitive: bool) {
+    if case_insensitive {
+        tokens.extend(literal.case_fold().map(LikeToken::Literal));
+    } else {
+        tokens.push(LikeToken::Literal(literal));
+    }
 }
