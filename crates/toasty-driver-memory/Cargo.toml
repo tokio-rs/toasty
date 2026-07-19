@@ -1,0 +1,27 @@
+[package]
+name = "toasty-driver-memory"
+version = "0.8.0"
+description = "Reusable in-memory read executor for Toasty drivers"
+authors.workspace = true
+edition.workspace = true
+homepage.workspace = true
+keywords.workspace = true
+license.workspace = true
+repository.workspace = true
+rust-version.workspace = true
+categories.workspace = true
+readme.workspace = true
+documentation = "https://docs.rs/toasty-driver-memory"
+
+[dependencies]
+async-trait.workspace = true
+toasty-core.workspace = true
+
+[features]
+default = []
+rust_decimal = ["toasty-core/rust_decimal"]
+bigdecimal = ["toasty-core/bigdecimal"]
+jiff = ["toasty-core/jiff"]
+
+[lints]
+workspace = true

@@ -26,6 +26,9 @@ pub(crate) struct Scan {
     /// Filter to apply to each scanned row.
     pub row_filter: Option<stmt::Expr>,
 
+    /// Expressions used to order matching rows before pagination.
+    pub order_by: Option<stmt::OrderBy>,
+
     /// Limit and pagination bounds. `None` means return all rows.
     pub limit: Option<Pagination>,
 }
@@ -33,11 +36,17 @@ pub(crate) struct Scan {
 impl Exec<'_> {
     pub(super) async fn action_scan(&mut self, action: &Scan) -> Result<()> {
         let mut row_filter = action.row_filter.clone();
+        let mut order_by = action.order_by.clone();
 
         if let Some(input) = &action.input {
             let input = self.collect_input(&[*input]).await?;
             if let Some(ref mut f) = row_filter {
                 f.substitute(&input);
+            }
+            if let Some(ref mut order_by) = order_by {
+                for order in &mut order_by.exprs {
+                    order.expr.substitute(&input);
+                }
             }
         }
 
@@ -49,12 +58,15 @@ impl Exec<'_> {
                     table: action.table,
                     columns: action.columns.iter().map(|col_id| col_id.index).collect(),
                     filter: row_filter,
+                    order_by,
                     limit: action.limit.clone(),
                 }
                 .into(),
             )
             .await?;
 
+        let next_cursor = res.next_cursor;
+        let prev_cursor = res.prev_cursor;
         let rows: Vec<stmt::Value> = res.values.into_value_stream().collect().await?;
 
         self.vars.store(
@@ -62,8 +74,8 @@ impl Exec<'_> {
             action.output.num_uses,
             ExecResponse {
                 values: Rows::Stream(stmt::ValueStream::from_vec(rows)),
-                next_cursor: res.next_cursor,
-                prev_cursor: None,
+                next_cursor,
+                prev_cursor,
             },
         );
 

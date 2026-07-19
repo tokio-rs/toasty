@@ -54,6 +54,15 @@ pub trait Input {
         let _ = id;
         None
     }
+
+    /// Returns whether ordered comparisons involving null evaluate to false.
+    ///
+    /// The default evaluator contract reports these comparisons as undefined.
+    /// Backends with two-valued predicate semantics can override this method
+    /// so a null comparison excludes the row instead.
+    fn ordered_nulls_are_false(&self) -> bool {
+        false
+    }
 }
 
 /// Adapts an [`Input`]'s model resolution to the [`Resolve`] trait, so
@@ -137,6 +146,10 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
 
     fn resolve_model(&self, id: ModelId) -> Option<&Model> {
         self.cx.schema().model(id)
+    }
+
+    fn ordered_nulls_are_false(&self) -> bool {
+        self.input.ordered_nulls_are_false()
     }
 }
 

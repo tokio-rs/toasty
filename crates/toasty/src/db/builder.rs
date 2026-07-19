@@ -287,7 +287,7 @@ impl Builder {
     ///     .unwrap();
     /// # });
     /// ```
-    pub async fn build(&mut self, driver: impl Driver) -> Result<Db> {
+    pub async fn build(&mut self, mut driver: impl Driver) -> Result<Db> {
         tracing::info!(models = self.models.len(), "building database schema");
         let capability = driver.capability();
         capability.validate()?;
@@ -295,7 +295,10 @@ impl Builder {
 
         tracing::info!(tables = schema.db.tables.len(), "schema built successfully");
 
-        let engine = Engine::new(Arc::new(schema), capability);
+        let schema = Arc::new(schema);
+        driver.initialize(&schema).await?;
+
+        let engine = Engine::new(schema, capability);
         let pool = Pool::new(driver, engine.clone(), self.pool.clone())?;
 
         let shared = Arc::new(Shared { engine, pool });

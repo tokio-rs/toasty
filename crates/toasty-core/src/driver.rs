@@ -121,6 +121,16 @@ pub trait Driver: Debug + Send + Sync + 'static {
     /// Describes the driver's capability, which informs the query planner.
     fn capability(&self) -> &'static Capability;
 
+    /// Initializes schema-dependent driver state before the connection pool is
+    /// made available.
+    ///
+    /// Most drivers do not need this hook. File-backed and in-memory drivers
+    /// can use it to validate and load typed rows once the compiled schema is
+    /// available. The default is a no-op.
+    async fn initialize(&mut self, _schema: &Arc<Schema>) -> crate::Result<()> {
+        Ok(())
+    }
+
     /// Creates a new connection to the database.
     ///
     /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is

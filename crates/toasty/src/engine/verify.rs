@@ -40,7 +40,13 @@ impl Engine {
 }
 
 impl stmt::Visit for Verify<'_, '_> {
+    fn visit_stmt_insert(&mut self, i: &stmt::Insert) {
+        self.verify_data_mutation();
+        stmt::visit::visit_stmt_insert(self, i);
+    }
+
     fn visit_stmt_delete(&mut self, i: &stmt::Delete) {
+        self.verify_data_mutation();
         stmt::visit::visit_stmt_delete(self, i);
 
         VerifyExpr {
@@ -88,6 +94,7 @@ impl stmt::Visit for Verify<'_, '_> {
     }
 
     fn visit_stmt_update(&mut self, i: &stmt::Update) {
+        self.verify_data_mutation();
         stmt::visit::visit_stmt_update(self, i);
 
         // Is not an empty update
@@ -105,6 +112,14 @@ impl stmt::Visit for Verify<'_, '_> {
 }
 
 impl Verify<'_, '_> {
+    fn verify_data_mutation(&mut self) {
+        if !self.capability.data_mutations && self.error.is_none() {
+            *self.error = Some(Error::unsupported_feature(
+                "this database is read-only and does not support data mutations",
+            ));
+        }
+    }
+
     fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
         let Some(stmt::Limit::Cursor(cursor)) = i.limit.as_ref() else {
             return;
@@ -342,14 +357,11 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
     }
 
     fn visit_expr_like(&mut self, i: &stmt::ExprLike) {
-        // `.ilike()` is a pass-through to the database's own case-insensitive
-        // LIKE operator. Only PostgreSQL has one (`ILIKE`), so reject a
-        // case-insensitive match on any other backend rather than silently
-        // emitting plain `LIKE`, whose case behavior differs across engines.
+        // SQL drivers pass `.ilike()` through to the database's operator;
+        // non-SQL drivers may provide their own documented implementation.
         if i.case_insensitive && !self.capability.native_ilike {
             self.record(Error::unsupported_feature(
-                "ilike requires a native ILIKE operator, which only PostgreSQL provides; \
-                 use like instead",
+                "ilike is not supported by this database; use like instead",
             ));
         }
         stmt::visit::visit_expr_like(self, i);

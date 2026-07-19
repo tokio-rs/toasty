@@ -51,6 +51,7 @@ impl Exec<'_> {
         let filters = self.split_filter(pk_filter, action.table);
         let mut all_rows = Vec::new();
         let mut response_cursor = None;
+        let mut response_prev_cursor = None;
 
         // A limit or pagination clause is only meaningful against a single
         // partition key query. With multiple filters, each partition call
@@ -86,8 +87,9 @@ impl Exec<'_> {
                 .await?;
 
             // Only capture cursor when paginating a single filter
-            if paginated && res.next_cursor.is_some() {
+            if paginated {
                 response_cursor = res.next_cursor;
+                response_prev_cursor = res.prev_cursor;
             }
 
             all_rows.extend(res.values.into_value_stream().collect().await?);
@@ -99,7 +101,7 @@ impl Exec<'_> {
             ExecResponse {
                 values: Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
                 next_cursor: response_cursor,
-                prev_cursor: None,
+                prev_cursor: response_prev_cursor,
             },
         );
 

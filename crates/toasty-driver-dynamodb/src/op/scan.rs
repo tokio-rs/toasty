@@ -15,6 +15,7 @@ impl Connection {
         schema: &Arc<Schema>,
         op: operation::Scan,
     ) -> Result<ExecResponse> {
+        debug_assert!(op.order_by.is_none());
         let table = schema.db.table(op.table);
         let cx = ExprContext::new_with_target(&schema.db, table);
 

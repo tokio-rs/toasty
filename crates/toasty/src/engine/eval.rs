@@ -82,11 +82,22 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
     match expr {
         Arg(_) => true,
         And(expr_and) => expr_and.operands.iter().all(verify_expr),
+        AllOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
+        AnyOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
+        Any(expr) => verify_expr(&expr.expr),
+        Between(expr) => {
+            verify_expr(&expr.expr) && verify_expr(&expr.low) && verify_expr(&expr.high)
+        }
         Or(expr_or) => expr_or.operands.iter().all(verify_expr),
         BinaryOp(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         Cast(expr) => verify_expr(&expr.expr),
+        InList(expr) => verify_expr(&expr.expr) && verify_expr(&expr.list),
+        Intersects(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
         IsNull(expr) => verify_expr(&expr.expr),
+        IsSuperset(expr) => verify_expr(&expr.lhs) && verify_expr(&expr.rhs),
+        Length(expr) => verify_expr(&expr.expr),
         Let(expr) => expr.bindings.iter().all(verify_expr) && verify_expr(&expr.body),
+        Like(expr) => verify_expr(&expr.expr) && verify_expr(&expr.pattern),
         List(expr) => expr.items.iter().all(verify_expr),
         Map(expr) => verify_expr(&expr.base) && verify_expr(&expr.map),
         Match(expr_match) => {
@@ -95,13 +106,16 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
         }
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
+        StartsWith(expr) => verify_expr(&expr.expr) && verify_expr(&expr.prefix),
+        Not(expr) => verify_expr(&expr.expr),
         Exists(expr_exists) => match &expr_exists.subquery.body {
             stmt::ExprSet::Values(values) => values.rows.iter().all(verify_expr),
             _ => false,
         },
         Reference(_) => false,
+        Func(stmt::ExprFunc::JsonExtract(expr)) => verify_expr(&expr.base),
         Func(_) => false,
         Value(_) => true,
-        _ => todo!("expr={expr:#?}"),
+        _ => false,
     }
 }

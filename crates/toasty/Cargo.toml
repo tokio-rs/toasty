@@ -16,6 +16,7 @@ documentation = "https://docs.rs/toasty"
 [features]
 default = []
 dynamodb = ["dep:toasty-driver-dynamodb"]
+markdown = ["dep:toasty-driver-markdown"]
 migration = ["dep:serde", "dep:toml", "dep:toml_edit", "toasty-core/serde"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
@@ -26,6 +27,7 @@ rust_decimal = [
 	"toasty-core/rust_decimal",
 	"toasty-driver-postgresql?/rust_decimal",
 	"toasty-driver-mysql?/rust_decimal",
+	"toasty-driver-markdown?/rust_decimal",
 	"toasty-driver-sqlite?/rust_decimal",
 	"toasty-driver-turso?/rust_decimal",
 ]
@@ -34,6 +36,7 @@ bigdecimal = [
 	"toasty-core/bigdecimal",
 	"toasty-driver-postgresql?/bigdecimal",
 	"toasty-driver-mysql?/bigdecimal",
+	"toasty-driver-markdown?/bigdecimal",
 	"toasty-driver-sqlite?/bigdecimal",
 	"toasty-driver-turso?/bigdecimal",
 ]
@@ -42,6 +45,7 @@ jiff = [
 	"toasty-core/jiff",
 	"toasty-driver-postgresql?/jiff",
 	"toasty-driver-mysql?/jiff",
+	"toasty-driver-markdown?/jiff",
 	"toasty-driver-sqlite?/jiff",
 	"toasty-driver-turso?/jiff",
 ]
@@ -54,6 +58,7 @@ toasty-core.workspace = true
 
 # Built-in database drivers
 toasty-driver-dynamodb = { workspace = true, optional = true }
+toasty-driver-markdown = { workspace = true, optional = true }
 toasty-driver-mysql = { workspace = true, optional = true }
 toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
@@ -73,6 +78,7 @@ uuid.workspace = true
 indexmap.workspace = true
 index_vec.workspace = true
 inventory.workspace = true
+percent-encoding.workspace = true
 serde = { workspace = true, optional = true }
 tokio.workspace = true
 toml = { workspace = true, optional = true }

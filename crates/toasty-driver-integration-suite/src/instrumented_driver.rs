@@ -138,6 +138,10 @@ impl Driver for InstrumentedDriver {
         self.inner.capability()
     }
 
+    async fn initialize(&mut self, schema: &Arc<Schema>) -> Result<()> {
+        self.inner.initialize(schema).await
+    }
+
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
         Ok(Box::new(InstrumentedConnection {
             inner: self.inner.connect(cx).await?,
