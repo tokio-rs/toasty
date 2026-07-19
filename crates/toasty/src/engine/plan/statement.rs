@@ -795,7 +795,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt
             );
             Ok(node_id)
-        } else if self.planner.engine.capability().sql || stmt.is_insert() {
+        } else if stmt.is_insert() {
+            self.plan_insert(stmt)
+        } else if self.planner.engine.capability().sql {
             self.plan_data_loading_sql(stmt)
         } else {
             self.plan_data_loading_nosql(stmt)
@@ -839,10 +841,67 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         None
     }
 
+    // ===== Insert execution =====
+
+    fn plan_insert(&mut self, mut stmt: stmt::Statement) -> Result<mir::NodeId> {
+        debug_assert!(stmt.is_insert(), "stmt={stmt:#?}");
+
+        let const_returning = self.extract_insert_returning_as_const(&stmt);
+
+        if !self.load_data.select_items.is_empty() {
+            stmt.set_returning_project(stmt::Expr::record(
+                self.load_data
+                    .select_items
+                    .iter()
+                    .map(|item| item.to_expr()),
+            ));
+        }
+
+        let input_args: Vec<_> = self
+            .load_data
+            .inputs
+            .iter()
+            .map(|input| self.planner.mir.ty(*input).clone())
+            .collect();
+        let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
+        let inputs = mem::take(&mut self.load_data.inputs);
+
+        let node = if !self.planner.engine.capability().sql && stmt.is_upsert() {
+            mir::Operation::Upsert(Box::new(mir::Upsert {
+                inputs,
+                stmt: stmt.into_insert_unwrap(),
+                ty,
+            }))
+        } else {
+            mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
+                inputs,
+                stmt,
+                ty,
+                conditional: exec::ConditionalOutput::None,
+                pagination: None,
+            }))
+        };
+
+        let mut load_data_node = self.insert_mir_with_deps(node);
+
+        if let Some((const_value, const_ty)) = const_returning {
+            load_data_node = self.planner.mir.insert_with_deps(
+                mir::Const {
+                    value: const_value,
+                    ty: const_ty,
+                },
+                [load_data_node],
+            );
+        }
+
+        Ok(load_data_node)
+    }
+
     // ===== SQL execution =====
 
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> Result<mir::NodeId> {
-        let const_returning = self.extract_insert_returning_as_const(&stmt);
+        debug_assert!(self.planner.engine.capability().sql, "stmt={stmt:#?}");
+        debug_assert!(!stmt.is_insert(), "stmt={stmt:#?}");
 
         // Phase 1: Detect pagination and add ORDER BY columns to load_data
         let pagination_info = self.plan_pagination_sql(&stmt)?;
@@ -905,40 +964,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             );
             let inputs = mem::take(&mut self.load_data.inputs);
 
-            if !self.planner.engine.capability().sql && stmt.is_upsert() {
-                debug_assert!(pagination_config.is_none());
-
-                mir::Operation::Upsert(Box::new(mir::Upsert {
-                    inputs,
-                    stmt: stmt.into_insert_unwrap(),
-                    ty,
-                }))
-            } else {
-                // With SQL capability, we can just punt the details of execution to
-                // the database's query planner.
-                mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
-                    inputs,
-                    stmt,
-                    ty,
-                    conditional: exec::ConditionalOutput::None,
-                    pagination: pagination_config.clone(),
-                }))
-            }
+            // With SQL capability, we can just punt the details of execution to
+            // the database's query planner.
+            mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
+                inputs,
+                stmt,
+                ty,
+                conditional: exec::ConditionalOutput::None,
+                pagination: pagination_config,
+            }))
         };
 
-        let mut load_data_node = self.insert_mir_with_deps(node);
-
-        if let Some((const_value, const_ty)) = const_returning {
-            load_data_node = self.planner.mir.insert_with_deps(
-                mir::Const {
-                    value: const_value,
-                    ty: const_ty,
-                },
-                [load_data_node],
-            );
-        }
-
-        Ok(load_data_node)
+        Ok(self.insert_mir_with_deps(node))
     }
 
     fn extract_insert_returning_as_const(
