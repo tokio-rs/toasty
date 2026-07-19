@@ -1010,8 +1010,12 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// An enum cannot mix string and integer discriminants. Integer discriminants
-/// are stored as `i64` and do not support `rename_all`. All discriminant values
-/// must be unique. String labels may contain at most 63 bytes.
+/// use `i64` storage by default. Add an integer enum-level override such as
+/// `#[column(type = u8)]` to request narrower storage. Every discriminant must
+/// fit the selected type. The same attribute can be placed on a model field to
+/// override one use of the enum. Integer-discriminant enums do not support
+/// `rename_all`. All discriminant values must be unique. String labels may
+/// contain at most 63 bytes.
 ///
 /// ## `#[index]` — add a database index
 ///

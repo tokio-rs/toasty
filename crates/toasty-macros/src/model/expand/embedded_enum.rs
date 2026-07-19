@@ -29,6 +29,26 @@ impl Expand<'_> {
             .uses_string_discriminants()
     }
 
+    /// Implements compatibility with integer storage markers. Exact range
+    /// validation happens when the app schema applies a field-level override,
+    /// because that override belongs to the containing model rather than this
+    /// enum definition.
+    pub(super) fn expand_enum_discriminant_compat_impls(&self) -> TokenStream {
+        if self.uses_string_discriminants() {
+            return quote! {};
+        }
+
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        quote! {
+            impl<__Storage> #toasty::storage::CompatibleWith<__Storage> for #model_ident
+            where
+                __Storage: #toasty::storage::IntegerStorage,
+            {}
+        }
+    }
+
     /// Generates tokens for an `is_variant(path, variant_id)` expression.
     /// Reused by `is_{variant}()` methods and the `matches()` method.
     fn expand_is_variant_expr(&self, variant_idx: &TokenStream) -> TokenStream {
@@ -701,7 +721,8 @@ impl Expand<'_> {
     ///
     /// - Native enum: `Some(db::Type::Enum(TypeEnum { ... }))`
     /// - Plain string (`#[column(type = text)]`): `Some(db::Type::Text)`
-    /// - Integer discriminants: `None`
+    /// - Explicit integer type: the requested integer storage type
+    /// - Default integer discriminants: `None`
     pub(super) fn expand_enum_storage_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
@@ -743,6 +764,10 @@ impl Expand<'_> {
                 }
             }
             Some(EnumStorageStrategy::PlainString(col_ty)) => {
+                let ty_tokens = col_ty.expand_with(toasty);
+                quote! { ::std::option::Option::Some(#ty_tokens) }
+            }
+            Some(EnumStorageStrategy::Integer(col_ty)) => {
                 let ty_tokens = col_ty.expand_with(toasty);
                 quote! { ::std::option::Option::Some(#ty_tokens) }
             }

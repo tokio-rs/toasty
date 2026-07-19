@@ -404,8 +404,8 @@ storage or a plain `text` or `varchar` column.
 
 To store integer discriminants, set `#[column(variant = N)]` on every variant.
 Toasty does not auto-assign integers. The values do not need to be sequential;
-you can choose any `i64` values. This lets you add variants to an existing
-schema without renumbering:
+you can choose any non-negative `i64` values. This lets you add variants to an
+existing schema without renumbering:
 
 ```rust,ignore
 #[derive(toasty::Embed)]
@@ -416,6 +416,39 @@ enum Priority {
     Normal,
     #[column(variant = 30)]
     High,
+}
+```
+
+Integer discriminants use `i64` storage by default. Add an integer
+`#[column(type = ...)]` to the enum to request a narrower database type for
+every field that uses it:
+
+```rust,ignore
+#[derive(toasty::Embed)]
+#[column(type = u8)]
+enum Priority {
+    #[column(variant = 10)]
+    Low,
+    #[column(variant = 20)]
+    Normal,
+    #[column(variant = 30)]
+    High,
+}
+```
+
+This requests unsigned 8-bit storage. MySQL uses `TINYINT UNSIGNED`; databases
+without an unsigned 8-bit integer use their closest supported representation.
+Every discriminant must fit the selected type.
+
+Place the attribute on a model field instead to override one use of the enum:
+
+```rust,ignore
+#[derive(toasty::Model)]
+struct Task {
+    #[key]
+    id: u64,
+    #[column(type = u8)]
+    priority: Priority,
 }
 ```
 

@@ -253,6 +253,17 @@ impl Type {
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             // Enum values are always strings at the application level
             (Self::Enum(_), _) => stmt::Type::String,
+            // Integer-discriminant enums use I64 at the application level.
+            // An explicit storage width bridges through the corresponding
+            // statement type so lowering inserts checked casts in both
+            // directions.
+            (Self::Integer(1), stmt::Type::I64) => stmt::Type::I8,
+            (Self::Integer(2), stmt::Type::I64) => stmt::Type::I16,
+            (Self::Integer(3..=4), stmt::Type::I64) => stmt::Type::I32,
+            (Self::UnsignedInteger(1), stmt::Type::I64) => stmt::Type::U8,
+            (Self::UnsignedInteger(2), stmt::Type::I64) => stmt::Type::U16,
+            (Self::UnsignedInteger(3..=4), stmt::Type::I64) => stmt::Type::U32,
+            (Self::UnsignedInteger(5..=8), stmt::Type::I64) => stmt::Type::U64,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,

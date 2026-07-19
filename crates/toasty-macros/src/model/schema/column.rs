@@ -241,6 +241,15 @@ impl ColumnType {
     pub(crate) fn is_string_like(&self) -> bool {
         matches!(self, Self::Text | Self::VarChar(_))
     }
+
+    /// Returns the signedness and byte width of an integer storage type.
+    pub(crate) fn integer_spec(&self) -> Option<(bool, u8)> {
+        match self {
+            Self::Integer(size) => Some((true, *size)),
+            Self::UnsignedInteger(size) => Some((false, *size)),
+            _ => None,
+        }
+    }
 }
 
 impl syn::parse::Parse for ColumnType {

@@ -159,12 +159,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
 
             fn field_ty(
-                _storage_ty: Option<#toasty::core::schema::db::Type>,
+                storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
+                        storage_ty,
                     }
                 )
             }
@@ -245,6 +246,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
+    let discriminant_storage_compat_impls = e.expand_enum_discriminant_compat_impls();
     let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
 
@@ -265,6 +267,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #enum_field_list_struct
 
         #storage_compat_checks
+        #discriminant_storage_compat_impls
         #shared_column_checks
         #indexable_checks
         #unit_enum_impls
@@ -318,12 +321,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
 
             fn field_ty(
-                _storage_ty: Option<#toasty::core::schema::db::Type>,
+                storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
+                        storage_ty,
                     }
                 )
             }

@@ -89,6 +89,7 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
         ty: FieldTy::Embedded(Embedded {
             target,
             expr_ty: stmt::Type::Model(target),
+            storage_ty: None,
         }),
         nullable: false,
         primary_key: false,

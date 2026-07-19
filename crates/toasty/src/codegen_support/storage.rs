@@ -52,6 +52,19 @@ pub mod tag {
 )]
 pub trait CompatibleWith<Storage> {}
 
+/// Marker implemented by the integer storage tags accepted for embedded enum
+/// discriminant columns.
+pub trait IntegerStorage {}
+
+impl IntegerStorage for tag::I8 {}
+impl IntegerStorage for tag::I16 {}
+impl IntegerStorage for tag::I32 {}
+impl IntegerStorage for tag::I64 {}
+impl IntegerStorage for tag::U8 {}
+impl IntegerStorage for tag::U16 {}
+impl IntegerStorage for tag::U32 {}
+impl IntegerStorage for tag::U64 {}
+
 // `Option<T>` is compatible with the same storage tags as `T`. The schema
 // tracks nullability separately, so the storage type is unaffected by the
 // option wrapper.
