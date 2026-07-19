@@ -159,7 +159,8 @@ impl VisitMut for Simplify<'_> {
 
         if let Some(upsert) = &mut stmt.upsert {
             s.visit_assignments_mut(&mut upsert.shared);
-            s.visit_assignments_mut(&mut upsert.initializers);
+            s.visit_assignments_mut(&mut upsert.defaults);
+            s.visit_assignments_mut(&mut upsert.update_defaults);
             s.visit_assignments_mut(&mut upsert.create);
             s.visit_assignments_mut(&mut upsert.update);
         }

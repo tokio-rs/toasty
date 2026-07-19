@@ -1116,11 +1116,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             if upsert.action == stmt::UpsertAction::Update {
                 let version = lower.inject_version_increment(&mut upsert.shared);
                 if !sql && let Some(projection) = version {
-                    upsert.initializers.set(projection, stmt::Value::U64(0));
+                    upsert.defaults.set(projection, stmt::Value::U64(0));
                 }
             }
             lower.visit_assignments_mut(&mut upsert.shared);
-            lower.visit_assignments_mut(&mut upsert.initializers);
+            lower.visit_assignments_mut(&mut upsert.defaults);
+            lower.visit_assignments_mut(&mut upsert.update_defaults);
         }
 
         if let Some(returning) = &mut stmt.returning {

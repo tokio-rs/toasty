@@ -223,7 +223,7 @@ without changing Toasty's semantics:
 DynamoDB executes a regular primary-key upsert with one `UpdateItem` request.
 It lowers a create-only assignment on a required field to `if_not_exists`.
 For a shared arithmetic or append mutation, the declared `#[default]` is the
-`if_not_exists` operand, so DynamoDB uses the same initializer as SQL drivers.
+`if_not_exists` operand, so DynamoDB uses the same default as SQL drivers.
 Nullable create-only assignments and all update-only assignments return
 `unsupported_feature`. DynamoDB also rejects regular upserts that assign a
 Toasty-managed `#[unique]` field. Its `or_ignore()` form can initialize unique

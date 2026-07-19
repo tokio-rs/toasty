@@ -74,9 +74,10 @@ impl Engine {
     pub(crate) async fn exec(
         &self,
         connection: &mut dyn Connection,
-        stmt: Statement,
+        mut stmt: Statement,
         in_transaction: bool,
     ) -> Result<toasty_core::driver::ExecResponse> {
+        upsert::apply_defaults(&mut stmt)?;
         self.verify(&stmt)?;
 
         // Lower the statement to High-level intermediate representation

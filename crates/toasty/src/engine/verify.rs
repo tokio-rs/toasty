@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::engine::Engine;
+use crate::engine::{Engine, upsert};
 use toasty_core::Error;
 use toasty_core::driver::Capability;
 use toasty_core::{
@@ -115,8 +115,8 @@ impl stmt::Visit for Verify<'_, '_> {
         }
 
         for (projection, assignment) in &upsert.shared {
-            let has_default = upsert.defaulted.contains(projection);
-            if assignment.requires_current_value() && !has_default {
+            let has_default = upsert.defaults.contains(projection);
+            if upsert::requires_current_value(assignment) && !has_default {
                 self.record(Error::invalid_statement(
                     "shared upsert mutations require a field with #[default]; use on_create and on_update instead",
                 ));
@@ -125,13 +125,21 @@ impl stmt::Visit for Verify<'_, '_> {
 
         if !self.capability.upsert_branch_assignments && upsert.action == stmt::UpsertAction::Update
         {
-            for (projection, _) in &upsert.initializers {
+            for (projection, _) in &upsert.defaults {
+                let used = upsert
+                    .shared
+                    .get(projection)
+                    .is_some_and(upsert::requires_current_value)
+                    || (!upsert.shared.contains(projection) && !upsert.create.contains(projection));
+                if !used {
+                    continue;
+                }
                 let Some(&field) = projection.as_slice().first() else {
                     continue;
                 };
                 if model.fields[field].nullable {
                     self.record(Error::unsupported_feature(format!(
-                        "{} does not support nullable upsert field initializers",
+                        "{} does not support nullable upsert field defaults",
                         self.capability.driver_name
                     )));
                 }
@@ -170,7 +178,7 @@ impl stmt::Visit for Verify<'_, '_> {
                         || upsert.create.keys().any(|projection| {
                             projection.as_slice().first() == Some(&field.field.index)
                         })
-                        || upsert.initializers.keys().any(|projection| {
+                        || upsert.defaults.keys().any(|projection| {
                             projection.as_slice().first() == Some(&field.field.index)
                         })
                         || upsert.update.keys().any(|projection| {

@@ -112,87 +112,48 @@ impl Expand<'_> {
             }
         });
 
-        let defaults = self.model.fields.iter().enumerate().filter_map(|(field_index, field)| {
-            if target_fields.contains(&field_index) {
-                return None;
-            }
-            let FieldTy::Primitive(ty) = &field.ty else { return None };
-            let index = util::int(field_index);
-            let create = field.attrs.default_expr.as_ref();
-            let update = field.attrs.update_expr.as_ref();
-            match (create, update) {
-                (Some(create), Some(update)) => Some(quote! {
-                    {
-                        let field = #toasty::stmt::Projection::from_index(#index);
-                        if !upsert.defaulted.contains(&field) {
-                            upsert.defaulted.push(field);
-                        }
-                        let projection = [#index];
-                        let needs_initializer = upsert
-                            .shared
-                            .get(&projection)
-                            .is_none_or(|assignment| assignment.requires_current_value());
-                        if needs_initializer && !upsert.create.contains(&projection) {
-                            upsert.initializers.set(
-                                [#index],
-                                #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
-                            );
-                        }
-                        if !upsert.shared.contains(&projection)
-                            && !upsert.update.contains(&projection)
-                        {
-                            upsert.update.set(
-                                [#index],
-                                #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update),
-                            );
-                        }
-                    }
-                }),
-                (Some(create), None) => Some(quote! {
-                    {
-                        let field = #toasty::stmt::Projection::from_index(#index);
-                        if !upsert.defaulted.contains(&field) {
-                            upsert.defaulted.push(field);
-                        }
-                        let projection = [#index];
-                        let needs_initializer = upsert
-                            .shared
-                            .get(&projection)
-                            .is_none_or(|assignment| assignment.requires_current_value());
-                        if needs_initializer && !upsert.create.contains(&projection) {
-                            upsert.initializers.set(
-                                [#index],
-                                #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
-                            );
-                        }
-                    }
-                }),
-                (None, Some(update)) => Some(quote! {
-                    {
-                        let create = upsert.shared.keys().any(|projection| {
-                            projection.as_slice().first() == Some(&#index)
-                        }) || upsert.create.keys().any(|projection| {
-                            projection.as_slice().first() == Some(&#index)
-                        });
-                        let update = upsert.shared.keys().any(|projection| {
-                            projection.as_slice().first() == Some(&#index)
-                        }) || upsert.update.keys().any(|projection| {
-                            projection.as_slice().first() == Some(&#index)
-                        });
-                        if !create || !update {
-                            let expr = #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update);
-                            match (create, update) {
-                                (false, false) => upsert.shared.set([#index], expr),
-                                (false, true) => upsert.create.set([#index], expr),
-                                (true, false) => upsert.update.set([#index], expr),
-                                (true, true) => unreachable!(),
-                            }
-                        }
-                    }
-                }),
-                (None, None) => None,
-            }
-        });
+        let defaults = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(field_index, field)| {
+                if target_fields.contains(&field_index) {
+                    return None;
+                }
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let index = util::int(field_index);
+                let default = field.attrs.default_expr.as_ref()?;
+                Some(quote! {
+                    upsert.defaults.set(
+                        [#index],
+                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#default),
+                    );
+                })
+            });
+        let update_defaults = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(field_index, field)| {
+                if target_fields.contains(&field_index) {
+                    return None;
+                }
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let index = util::int(field_index);
+                let update = field.attrs.update_expr.as_ref()?;
+                Some(quote! {
+                    upsert.update_defaults.set(
+                        [#index],
+                        #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update),
+                    );
+                })
+            });
 
         let shared_methods = self.expand_upsert_shared_methods(target_fields);
         let create_methods = self.expand_upsert_create_methods(target_fields);
@@ -205,6 +166,11 @@ impl Expand<'_> {
                 #vis fn #method_name(#(#target_args),*) -> #builder_ident {
                     let mut stmt = #toasty::stmt::Upsert::<#model_ident>::blank([#(#target_indices),*]);
                     #(#target_sets)*
+                    {
+                        let upsert = stmt.untyped_mut().upsert.as_mut().unwrap();
+                        #(#defaults)*
+                        #(#update_defaults)*
+                    }
                     #builder_ident { stmt }
                 }
             }
@@ -217,11 +183,6 @@ impl Expand<'_> {
 
             impl #builder_ident {
                 #shared_methods
-
-                fn apply_defaults(&mut self) {
-                    let upsert = self.stmt.untyped_mut().upsert.as_mut().unwrap();
-                    #(#defaults)*
-                }
 
                 #[doc = "Adds assignments used only when the record is created.\n\nBackend support depends on whether the assignment can be applied atomically without changing an existing record."]
                 #vis fn on_create(
@@ -245,15 +206,13 @@ impl Expand<'_> {
 
                 #[doc = "Leaves a record unchanged when the selected conflict target matches.\n\nThe returned builder's `exec` method produces `Some(model)` after an insert and `None` after a conflict."]
                 #vis fn or_ignore(mut self) -> #ignore_ident {
-                    self.apply_defaults();
                     self.stmt.untyped_mut().upsert.as_mut().unwrap().action =
                         #toasty::core::stmt::UpsertAction::Ignore;
                     #ignore_ident { stmt: self.stmt }
                 }
 
                 #[doc = "Executes the upsert and returns the record stored by the database."]
-                #vis async fn exec(mut self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
-                    self.apply_defaults();
+                #vis async fn exec(self, executor: &mut dyn #toasty::Executor) -> #toasty::Result<#model_ident> {
                     executor.exec(self.stmt.into()).await
                 }
             }

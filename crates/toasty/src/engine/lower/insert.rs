@@ -369,9 +369,7 @@ impl<'b> LowerStatement<'_, 'b> {
         &self,
         assignments: &mut stmt::Assignments,
     ) -> Option<stmt::Projection> {
-        let Some(version_id) = self.model().and_then(|m| m.version_field()).map(|f| f.id) else {
-            return None;
-        };
+        let version_id = self.model().and_then(|m| m.version_field()).map(|f| f.id)?;
 
         let already_assigned = assignments
             .keys()

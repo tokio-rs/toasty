@@ -8,7 +8,7 @@ use crate::stmt;
 /// [`stmt`](Self::stmt) contains one values row and an
 /// [`stmt::Upsert`](crate::stmt::Upsert) clause whose target has been lowered
 /// from model fields to database columns. Shared mutations retain their
-/// model-declared field initializers so the driver can apply the same default
+/// model-declared field defaults so the driver can apply the same value
 /// when it creates an item.
 ///
 /// A driver must perform the conflict check and the create, update, or ignore

@@ -246,7 +246,7 @@ when an ordinary setter would otherwise assign the same proposed value.
 
 SQL drivers receive the upsert as `Operation::QuerySql` containing a lowered
 `Insert` statement. Non-SQL drivers receive `Operation::Upsert` containing the
-same create values, declared field initializers, selected conflict target,
+same create values, declared field defaults, selected conflict target,
 assignments, ignore policy, and returning projection. A driver must execute the
 operation atomically without selecting a branch in application code.
 
@@ -355,7 +355,7 @@ Toasty could treat missing numbers as zero and missing lists as empty. That
 would make `subtract(3)` insert negative three and make `push(value)` insert a
 single-element list, regardless of the model's create behavior. Requiring
 `#[default]` uses the same initialization rule for create and upsert and also
-defines nonzero numeric and nonempty list initializers.
+supports nonzero numeric and nonempty list defaults.
 
 ### Infer the only unique constraint
 

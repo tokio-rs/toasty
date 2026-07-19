@@ -1523,7 +1523,8 @@ where
 
     if let Some(upsert) = &mut node.upsert {
         v.visit_assignments_mut(&mut upsert.shared);
-        v.visit_assignments_mut(&mut upsert.initializers);
+        v.visit_assignments_mut(&mut upsert.defaults);
+        v.visit_assignments_mut(&mut upsert.update_defaults);
         v.visit_assignments_mut(&mut upsert.create);
         v.visit_assignments_mut(&mut upsert.update);
     }

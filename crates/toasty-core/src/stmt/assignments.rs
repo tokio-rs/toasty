@@ -393,31 +393,6 @@ impl Assignment {
         matches!(self, Self::Remove(_))
     }
 
-    /// Returns `true` when evaluating this assignment requires a prior field
-    /// value.
-    ///
-    /// `Set` supplies a complete value. Every other individual assignment
-    /// mutates a value that must already exist. A batch needs an initial value
-    /// unless an earlier entry initializes it with `Set`.
-    pub fn requires_current_value(&self) -> bool {
-        match self {
-            Self::Set(_) => false,
-            Self::Batch(entries) => {
-                let mut initialized = false;
-                for entry in entries {
-                    if !initialized && entry.requires_current_value() {
-                        return true;
-                    }
-                    if !entry.requires_current_value() {
-                        initialized = true;
-                    }
-                }
-                false
-            }
-            _ => true,
-        }
-    }
-
     /// Appends another assignment, converting to `Batch` if needed.
     pub fn push(&mut self, other: Assignment) {
         match self {

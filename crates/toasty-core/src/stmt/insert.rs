@@ -46,14 +46,15 @@ pub struct Insert {
 /// row, while `Ignore` leaves it unchanged.
 ///
 /// Before normalization, [`shared`](Self::shared),
-/// [`initializers`](Self::initializers), [`defaulted`](Self::defaulted),
+/// [`defaults`](Self::defaults), [`update_defaults`](Self::update_defaults),
 /// [`create`](Self::create), and [`update`](Self::update) contain the
-/// declarative assignments. Normalization writes the create branch into the
-/// insert source, overlays the update branch onto `shared`, and clears
-/// `defaulted`, `create`, and `update`. Initializers remain available to
-/// non-SQL drivers and are cleared before SQL serialization. The engine also
-/// stores model-field targets before lowering and database-column targets
-/// afterward. SQL drivers receive the normalized, lowered form inside
+/// declarative assignments. The engine first routes `update_defaults` to any
+/// branch without an explicit assignment. Normalization then writes the create
+/// branch into the insert source, overlays the update branch onto `shared`, and
+/// clears `create` and `update`. Defaults remain available to non-SQL drivers
+/// and are cleared before SQL serialization. The engine also stores model-field
+/// targets before lowering and database-column targets afterward. SQL drivers
+/// receive the normalized, lowered form inside
 /// [`Operation::QuerySql`](crate::driver::Operation::QuerySql); non-SQL drivers
 /// receive it inside [`Operation::Upsert`](crate::driver::Operation::Upsert).
 #[derive(Debug, Clone, PartialEq)]
@@ -67,22 +68,22 @@ pub struct Upsert {
     /// the assignments for conflict updates.
     pub shared: Assignments,
 
-    /// Model-declared values used to initialize shared mutations.
+    /// Values declared with `#[default]` on model fields.
     ///
-    /// Generated builders populate this map from `#[default]`. Unlike
-    /// [`create`](Self::create), an initializer is the input to a shared
-    /// mutation rather than a branch-specific replacement value.
-    pub initializers: Assignments,
+    /// These supply omitted create fields and initialize shared mutations.
+    /// Explicit create assignments override them.
+    pub defaults: Assignments,
 
-    /// Fields whose generated model definition contains `#[default]`.
+    /// Values declared with `#[update]` on model fields.
     ///
-    /// This preserves the declaration independently of whether an explicit
-    /// `on_create` assignment makes evaluation of the default unnecessary.
-    pub defaulted: Vec<Projection>,
+    /// Before verification, the engine routes each value to the create branch,
+    /// update branch, or both according to which branches already have an
+    /// explicit assignment.
+    pub update_defaults: Assignments,
 
     /// Assignments applied only when the insert creates a record.
     ///
-    /// Explicit `on_create` assignments replace initializers and shared
+    /// Explicit `on_create` assignments replace defaults and shared
     /// assignments for the same field.
     pub create: Assignments,
 

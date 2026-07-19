@@ -103,7 +103,8 @@ fn refine_insert(
 
     if let Some(upsert) = &insert.upsert {
         refine_assignments(&upsert.shared, db_table, params);
-        refine_assignments(&upsert.initializers, db_table, params);
+        refine_assignments(&upsert.defaults, db_table, params);
+        refine_assignments(&upsert.update_defaults, db_table, params);
     }
 }
 

@@ -94,7 +94,7 @@ impl Connection {
                         &mut attrs,
                         projection,
                         assignment,
-                        upsert.initializers.get(projection),
+                        upsert.defaults.get(projection),
                         &mut sets,
                         &mut removes,
                     )?;
@@ -314,21 +314,13 @@ fn render_assignment(
     attrs: &mut ExprAttrs,
     projection: &stmt::Projection,
     assignment: &stmt::Assignment,
-    initializer: Option<&stmt::Assignment>,
+    default: Option<&stmt::Assignment>,
     sets: &mut String,
     removes: &mut String,
 ) -> Result<()> {
     if let stmt::Assignment::Batch(batch) = assignment {
         for assignment in batch {
-            render_assignment(
-                table,
-                attrs,
-                projection,
-                assignment,
-                initializer,
-                sets,
-                removes,
-            )?;
+            render_assignment(table, attrs, projection, assignment, default, sets, removes)?;
         }
         return Ok(());
     }
@@ -346,33 +338,25 @@ fn render_assignment(
         }
         stmt::Assignment::Append(stmt::Expr::Value(value)) => {
             let value = attrs.value(value);
-            let initializer = render_initializer(attrs, initializer)?;
+            let default = render_default(attrs, default)?;
             comma(sets);
             write!(
                 sets,
-                "{name} = list_append(if_not_exists({name}, {initializer}), {value})"
+                "{name} = list_append(if_not_exists({name}, {default}), {value})"
             )
             .unwrap();
         }
         stmt::Assignment::Add(stmt::Expr::Value(value)) => {
             let value = attrs.value(value);
-            let initializer = render_initializer(attrs, initializer)?;
+            let default = render_default(attrs, default)?;
             comma(sets);
-            write!(
-                sets,
-                "{name} = if_not_exists({name}, {initializer}) + {value}"
-            )
-            .unwrap();
+            write!(sets, "{name} = if_not_exists({name}, {default}) + {value}").unwrap();
         }
         stmt::Assignment::Subtract(stmt::Expr::Value(value)) => {
             let value = attrs.value(value);
-            let initializer = render_initializer(attrs, initializer)?;
+            let default = render_default(attrs, default)?;
             comma(sets);
-            write!(
-                sets,
-                "{name} = if_not_exists({name}, {initializer}) - {value}"
-            )
-            .unwrap();
+            write!(sets, "{name} = if_not_exists({name}, {default}) - {value}").unwrap();
         }
         other => {
             return Err(toasty_core::Error::unsupported_feature(format!(
@@ -383,11 +367,8 @@ fn render_assignment(
     Ok(())
 }
 
-fn render_initializer(
-    attrs: &mut ExprAttrs,
-    initializer: Option<&stmt::Assignment>,
-) -> Result<String> {
-    let Some(stmt::Assignment::Set(stmt::Expr::Value(value))) = initializer else {
+fn render_default(attrs: &mut ExprAttrs, default: Option<&stmt::Assignment>) -> Result<String> {
+    let Some(stmt::Assignment::Set(stmt::Expr::Value(value))) = default else {
         return Err(toasty_core::Error::invalid_statement(
             "DynamoDB shared upsert mutations require a literal #[default] value",
         ));
