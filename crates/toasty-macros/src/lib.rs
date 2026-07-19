@@ -1011,11 +1011,14 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// An enum cannot mix string and integer discriminants. Integer discriminants
 /// use `i64` storage by default. Add an integer enum-level override such as
-/// `#[column(type = u8)]` to request narrower storage. Every discriminant must
-/// fit the selected type. The same attribute can be placed on a model field to
-/// override one use of the enum. Integer-discriminant enums do not support
-/// `rename_all`. All discriminant values must be unique. String labels may
-/// contain at most 63 bytes.
+/// `#[column(type = u8)]` to request narrower storage. The type applies to
+/// flattened discriminant columns, through transparent field wrappers, and to
+/// each element of `Vec<unit-enum>`. The same attribute on a model field
+/// overrides the enum default for that use; on a collection it selects the
+/// element type. Every discriminant must fit the selected type. Enum embeds
+/// inside `#[document]` fields are not supported. Integer-discriminant enums do
+/// not support `rename_all`. All discriminant values must be unique. String
+/// labels may contain at most 63 bytes.
 ///
 /// ## `#[index]` — add a database index
 ///

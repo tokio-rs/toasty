@@ -249,6 +249,13 @@ impl Type {
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
+            // Collections use the same application-to-storage conversion as
+            // their elements. For example, an integer-discriminant enum is
+            // `I64` in the application schema, while `#[column(type = u8)]`
+            // stores `Vec<Enum>` as `List(U8)`.
+            (Self::List(storage), stmt::Type::List(app)) => {
+                stmt::Type::List(Box::new(storage.bridge_type(app)))
+            }
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             // Enum values are always strings at the application level

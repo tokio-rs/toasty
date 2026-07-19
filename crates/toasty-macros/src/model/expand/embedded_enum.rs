@@ -29,10 +29,11 @@ impl Expand<'_> {
             .uses_string_discriminants()
     }
 
-    /// Implements compatibility with integer storage markers. Exact range
-    /// validation happens when the app schema applies a field-level override,
-    /// because that override belongs to the containing model rather than this
-    /// enum definition.
+    /// Implements compatibility with every integer storage marker that can
+    /// represent all of this enum's discriminants. This lets field-level
+    /// overrides fail during type checking, including overrides on transparent
+    /// wrappers and `Vec<unit-enum>` fields whose app-schema type no longer
+    /// carries the enum model id.
     pub(super) fn expand_enum_discriminant_compat_impls(&self) -> TokenStream {
         if self.uses_string_discriminants() {
             return quote! {};
@@ -41,11 +42,57 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
 
+        let max_discriminant = self
+            .model
+            .kind
+            .as_embedded_enum_unwrap()
+            .variants
+            .iter()
+            .map(|variant| match variant.attrs.discriminant {
+                VariantValue::Integer(value) => value,
+                VariantValue::String(_) => unreachable!("integer enum has a string discriminant"),
+            })
+            .max()
+            .unwrap_or(0);
+
+        let mut markers = Vec::new();
+        if max_discriminant <= i8::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::I8 });
+        }
+        if max_discriminant <= i16::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::I16 });
+        }
+        if max_discriminant <= i32::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::I32 });
+        }
+        markers.push(quote! { #toasty::storage::tag::I64 });
+        if max_discriminant <= u8::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::U8 });
+        }
+        if max_discriminant <= u16::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::U16 });
+        }
+        if max_discriminant <= i64::from(u32::MAX) {
+            markers.push(quote! { #toasty::storage::tag::U32 });
+        }
+        markers.push(quote! { #toasty::storage::tag::U64 });
+
+        for size in [3_u8, 5, 6, 7] {
+            let signed_max = (1_i64 << (u32::from(size) * 8 - 1)) - 1;
+            if max_discriminant <= signed_max {
+                markers.push(quote! { #toasty::storage::tag::Int<#size> });
+            }
+
+            let unsigned_max = (1_i64 << (u32::from(size) * 8)) - 1;
+            if max_discriminant <= unsigned_max {
+                markers.push(quote! { #toasty::storage::tag::UInt<#size> });
+            }
+        }
+
         quote! {
-            impl<__Storage> #toasty::storage::CompatibleWith<__Storage> for #model_ident
-            where
-                __Storage: #toasty::storage::IntegerStorage,
-            {}
+            #(
+                impl #toasty::storage::CompatibleWith<#markers> for #model_ident {}
+            )*
         }
     }
 

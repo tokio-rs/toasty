@@ -237,11 +237,12 @@ where
     ) -> Self::Update<'a> {
     }
 
-    /// Derives a list storage hint from a unit enum's discriminant storage.
+    /// Lifts a field-level element override into a list storage type, then
+    /// falls back to the unit enum's discriminant storage.
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
-        let storage_ty = storage_ty.or_else(|| {
+        let storage_ty = storage_ty.map(db::Type::list).or_else(|| {
             let Model::EmbeddedEnum(embed) = <T as Embed>::schema() else {
                 return None;
             };
@@ -447,6 +448,12 @@ impl<T: Field> Field for std::sync::Arc<T> {
     ) -> Self::Update<'a> {
     }
 
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
+    }
+
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         T::key_constraint(self, target)
     }
@@ -479,6 +486,12 @@ impl<T: Field> Field for std::rc::Rc<T> {
     ) -> Self::Update<'a> {
     }
 
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
+    }
+
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         T::key_constraint(self, target)
     }
@@ -509,6 +522,12 @@ impl<T: Field> Field for Box<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
     }
 
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
