@@ -163,22 +163,6 @@ note: required by a bound in `UserUpdate::<__toasty_T>::set_profile`
   |     ------- required by a bound in this associated function
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
 
-error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
- --> tests/ui/relation_has_one_requires_attr.rs:1:10
-  |
-1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
-  |
-note: required by a bound in `UserUpsertById::profile`
- --> tests/ui/relation_has_one_requires_attr.rs:1:10
-  |
-1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ required by this bound in `UserUpsertById::profile`
-...
-7 |     profile: toasty::Deferred<Option<Profile>>,
-  |     ------- required by a bound in this associated function
-  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
-
 error[E0277]: the trait bound `impl IntoExpr<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: IntoExpr<Option<Profile>>` is not satisfied
  --> tests/ui/relation_has_one_requires_attr.rs:1:10
   |
@@ -190,20 +174,4 @@ note: required by a bound in `toasty::codegen_support::into_untyped_expr`
   |
   | pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
   |                                ^^^^^^^^^^^ required by this bound in `into_untyped_expr`
-  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
-
-error[E0277]: the trait bound `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>: Assign<Option<Profile>>` is not satisfied
- --> tests/ui/relation_has_one_requires_attr.rs:1:10
-  |
-1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ the trait `Assign<Option<Profile>>` is not implemented for `impl Assign<FieldExprTarget<toasty::Deferred<Option<Profile>>>>`
-  |
-note: required by a bound in `UserUpsertByIdUpdate::<'a>::profile`
- --> tests/ui/relation_has_one_requires_attr.rs:1:10
-  |
-1 | #[derive(toasty::Model)]
-  |          ^^^^^^^^^^^^^ required by this bound in `UserUpsertByIdUpdate::<'a>::profile`
-...
-7 |     profile: toasty::Deferred<Option<Profile>>,
-  |     ------- required by a bound in this associated function
   = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
