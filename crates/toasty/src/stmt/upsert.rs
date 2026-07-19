@@ -11,8 +11,9 @@ use toasty_core::stmt;
 /// `exec`. Users normally work through that builder instead of constructing
 /// this type directly.
 ///
-/// An ordinary field setter initializes the field when the row is absent and
-/// applies the same assignment when the selected constraint matches. The
+/// An ordinary replacement setter supplies a value for both branches. A shared
+/// mutation applies to the field's `#[default]` value when the row is absent
+/// and to the stored value when the selected constraint matches. The
 /// branch-specific closures override that behavior for fields that need
 /// different create and update values. A regular execution returns the record
 /// stored by the database; `or_ignore` returns `Some(M)` after an insert and
@@ -74,6 +75,8 @@ impl<M: Model> Upsert<M> {
                     .collect(),
             ),
             shared: stmt::Assignments::new(),
+            initializers: stmt::Assignments::new(),
+            defaulted: Vec::new(),
             create: stmt::Assignments::new(),
             update: stmt::Assignments::new(),
             action: stmt::UpsertAction::Update,

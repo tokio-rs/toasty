@@ -72,7 +72,6 @@ impl Connection {
                 let mut attrs = ExprAttrs::default();
                 let mut sets = String::new();
                 let mut removes = String::new();
-                let mut adds = String::new();
 
                 // Values present only on the create side become `if_not_exists`.
                 for (position, column_id) in target.columns.iter().enumerate() {
@@ -95,9 +94,9 @@ impl Connection {
                         &mut attrs,
                         projection,
                         assignment,
+                        upsert.initializers.get(projection),
                         &mut sets,
                         &mut removes,
-                        &mut adds,
                     )?;
                 }
 
@@ -107,9 +106,6 @@ impl Connection {
                 }
                 if !removes.is_empty() {
                     write!(expression, " REMOVE {removes}").unwrap();
-                }
-                if !adds.is_empty() {
-                    write!(expression, " ADD {adds}").unwrap();
                 }
 
                 let output = self
@@ -318,13 +314,21 @@ fn render_assignment(
     attrs: &mut ExprAttrs,
     projection: &stmt::Projection,
     assignment: &stmt::Assignment,
+    initializer: Option<&stmt::Assignment>,
     sets: &mut String,
     removes: &mut String,
-    adds: &mut String,
 ) -> Result<()> {
     if let stmt::Assignment::Batch(batch) = assignment {
         for assignment in batch {
-            render_assignment(table, attrs, projection, assignment, sets, removes, adds)?;
+            render_assignment(
+                table,
+                attrs,
+                projection,
+                assignment,
+                initializer,
+                sets,
+                removes,
+            )?;
         }
         return Ok(());
     }
@@ -342,36 +346,33 @@ fn render_assignment(
         }
         stmt::Assignment::Append(stmt::Expr::Value(value)) => {
             let value = attrs.value(value);
-            let empty = attrs.ddb_value(AttributeValue::L(Vec::new()));
+            let initializer = render_initializer(attrs, initializer)?;
             comma(sets);
             write!(
                 sets,
-                "{name} = list_append(if_not_exists({name}, {empty}), {value})"
+                "{name} = list_append(if_not_exists({name}, {initializer}), {value})"
             )
             .unwrap();
         }
         stmt::Assignment::Add(stmt::Expr::Value(value)) => {
             let value = attrs.value(value);
-            comma(adds);
-            write!(adds, "{name} {value}").unwrap();
+            let initializer = render_initializer(attrs, initializer)?;
+            comma(sets);
+            write!(
+                sets,
+                "{name} = if_not_exists({name}, {initializer}) + {value}"
+            )
+            .unwrap();
         }
         stmt::Assignment::Subtract(stmt::Expr::Value(value)) => {
-            let negative = match Value::from(value.clone()).to_ddb() {
-                AttributeValue::N(value) => AttributeValue::N(
-                    value
-                        .strip_prefix('-')
-                        .map(ToOwned::to_owned)
-                        .unwrap_or_else(|| format!("-{value}")),
-                ),
-                _ => {
-                    return Err(toasty_core::Error::invalid_statement(
-                        "DynamoDB subtraction requires a numeric value",
-                    ));
-                }
-            };
-            let value = attrs.ddb_value(negative);
-            comma(adds);
-            write!(adds, "{name} {value}").unwrap();
+            let value = attrs.value(value);
+            let initializer = render_initializer(attrs, initializer)?;
+            comma(sets);
+            write!(
+                sets,
+                "{name} = if_not_exists({name}, {initializer}) - {value}"
+            )
+            .unwrap();
         }
         other => {
             return Err(toasty_core::Error::unsupported_feature(format!(
@@ -380,6 +381,18 @@ fn render_assignment(
         }
     }
     Ok(())
+}
+
+fn render_initializer(
+    attrs: &mut ExprAttrs,
+    initializer: Option<&stmt::Assignment>,
+) -> Result<String> {
+    let Some(stmt::Assignment::Set(stmt::Expr::Value(value))) = initializer else {
+        return Err(toasty_core::Error::invalid_statement(
+            "DynamoDB shared upsert mutations require a literal #[default] value",
+        ));
+    };
+    Ok(attrs.value(value).to_string())
 }
 
 fn comma(dst: &mut String) {

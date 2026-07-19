@@ -149,7 +149,8 @@ insert time, not at compile time.
 
 `#[default]` applies to a create builder and to the create branch of an
 [upsert](./upserting-records.md). It does not change an existing record on the
-update branch.
+update branch. A shared upsert mutation applies to this value when it creates a
+record; for example, `#[default(10)]` with `subtract(3)` inserts seven.
 
 ## Update expressions
 

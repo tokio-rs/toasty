@@ -36,7 +36,10 @@ scenario! {
         #[auto]
         id: ID,
 
+        #[default(0)]
         count: i64,
+
+        #[default(Vec::<String>::new())]
         tags: Vec<String>,
         note: Option<String>,
     }

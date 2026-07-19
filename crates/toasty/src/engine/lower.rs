@@ -1091,7 +1091,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
-        if let Err(err) = upsert::normalize(stmt) {
+        let sql = self.state.engine.capability.sql;
+        if let Err(err) = upsert::normalize(stmt, !sql) {
             self.state.errors.push(err);
             return;
         }
@@ -1113,9 +1114,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 upsert.target = stmt::UpsertTarget::Columns(columns);
             }
             if upsert.action == stmt::UpsertAction::Update {
-                lower.inject_version_increment(&mut upsert.shared);
+                let version = lower.inject_version_increment(&mut upsert.shared);
+                if !sql && let Some(projection) = version {
+                    upsert.initializers.set(projection, stmt::Value::U64(0));
+                }
             }
             lower.visit_assignments_mut(&mut upsert.shared);
+            lower.visit_assignments_mut(&mut upsert.initializers);
         }
 
         if let Some(returning) = &mut stmt.returning {
@@ -1246,7 +1251,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // would force a per-row read-back that the multi-row DynamoDB transact
         // path cannot serve. The counter still advances in the database — a
         // query update just doesn't read it back (it discards its result).
-        lower.inject_version_increment(&mut stmt.assignments);
+        let _ = lower.inject_version_increment(&mut stmt.assignments);
 
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);

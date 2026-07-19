@@ -59,10 +59,10 @@ operation handles.
 
 ## Applying one assignment to both branches
 
-An ordinary setter initializes the field on create and applies the same
-assignment on update. Update operators from `toasty::stmt` retain their normal
-meaning on the stored value and define the corresponding initial value on
-create:
+An ordinary replacement setter supplies the value for both branches. A shared
+mutation such as `increment`, `subtract`, or `push` reads the existing field
+value on update. Add `#[default]` to define the value that the mutation reads
+when Toasty creates the record:
 
 ```rust
 # use toasty::Model;
@@ -70,6 +70,7 @@ create:
 # struct Counter {
 #     #[key]
 #     name: String,
+#     #[default(0)]
 #     count: i64,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -81,13 +82,17 @@ let counter = Counter::upsert_by_name("requests")
 # }
 ```
 
-This creates `requests` with `count = 1` or atomically increments the existing
-count. Operators such as `add`, `subtract`, `push`, and `extend` follow the same
-create-or-update rule.
+This applies `increment` to the declared zero when `requests` is absent, so the
+inserted count is one. On conflict, it atomically increments the stored count.
+All shared mutations follow the same rule. For example, `#[default(10)]` with
+`subtract(3)` inserts seven, and a list default with `pop()` inserts that list
+without its last element.
 
-An assignment that cannot initialize a missing field, such as removing a list
-item, is not valid as a shared setter. Put separate values in `on_create` and
-`on_update` when an operator only makes sense for an existing record.
+A shared mutation on a field without `#[default]` returns
+`invalid_statement`. Put a complete value in `on_create` and the mutation in
+`on_update` when the model has no general default for that field. Replacement
+assignments, including `set` and `clear`, do not read an existing value and do
+not require `#[default]`.
 
 ## Setting different values on create and update
 
@@ -185,7 +190,8 @@ branch:
 | Value source | Create branch | Update branch |
 |---|---:|---:|
 | Conflict-target argument | Applied | Unchanged |
-| Ordinary setter | Applied | Applied |
+| Ordinary replacement setter | Applied | Applied |
+| Ordinary mutation | Applied to `#[default]` | Applied to stored value |
 | `on_create` setter | Applied | Unchanged |
 | `on_update` setter | Omitted | Applied |
 | `#[default]` | Applied | Unchanged |
@@ -216,6 +222,8 @@ without changing Toasty's semantics:
 
 DynamoDB executes a regular primary-key upsert with one `UpdateItem` request.
 It lowers a create-only assignment on a required field to `if_not_exists`.
+For a shared arithmetic or append mutation, the declared `#[default]` is the
+`if_not_exists` operand, so DynamoDB uses the same initializer as SQL drivers.
 Nullable create-only assignments and all update-only assignments return
 `unsupported_feature`. DynamoDB also rejects regular upserts that assign a
 Toasty-managed `#[unique]` field. Its `or_ignore()` form can initialize unique

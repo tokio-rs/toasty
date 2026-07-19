@@ -123,20 +123,24 @@ impl Expand<'_> {
             match (create, update) {
                 (Some(create), Some(update)) => Some(quote! {
                     {
-                        let shared = upsert.shared.keys().any(|projection| {
-                            projection.as_slice().first() == Some(&#index)
-                        });
-                        if !shared && !upsert.create.keys().any(|projection| {
-                            projection.as_slice().first() == Some(&#index)
-                        }) {
-                            upsert.create.set(
+                        let field = #toasty::stmt::Projection::from_index(#index);
+                        if !upsert.defaulted.contains(&field) {
+                            upsert.defaulted.push(field);
+                        }
+                        let projection = [#index];
+                        let needs_initializer = upsert
+                            .shared
+                            .get(&projection)
+                            .is_none_or(|assignment| assignment.requires_current_value());
+                        if needs_initializer && !upsert.create.contains(&projection) {
+                            upsert.initializers.set(
                                 [#index],
                                 #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
                             );
                         }
-                        if !shared && !upsert.update.keys().any(|projection| {
-                            projection.as_slice().first() == Some(&#index)
-                        }) {
+                        if !upsert.shared.contains(&projection)
+                            && !upsert.update.contains(&projection)
+                        {
                             upsert.update.set(
                                 [#index],
                                 #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#update),
@@ -145,15 +149,22 @@ impl Expand<'_> {
                     }
                 }),
                 (Some(create), None) => Some(quote! {
-                    if !upsert.shared.keys().any(|projection| {
-                        projection.as_slice().first() == Some(&#index)
-                    }) && !upsert.create.keys().any(|projection| {
-                        projection.as_slice().first() == Some(&#index)
-                    }) {
-                        upsert.create.set(
-                            [#index],
-                            #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
-                        );
+                    {
+                        let field = #toasty::stmt::Projection::from_index(#index);
+                        if !upsert.defaulted.contains(&field) {
+                            upsert.defaulted.push(field);
+                        }
+                        let projection = [#index];
+                        let needs_initializer = upsert
+                            .shared
+                            .get(&projection)
+                            .is_none_or(|assignment| assignment.requires_current_value());
+                        if needs_initializer && !upsert.create.contains(&projection) {
+                            upsert.initializers.set(
+                                [#index],
+                                #toasty::into_untyped_expr::<<#ty as #toasty::Field>::ExprTarget, _>(#create),
+                            );
+                        }
                     }
                 }),
                 (None, Some(update)) => Some(quote! {

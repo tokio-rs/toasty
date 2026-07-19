@@ -211,11 +211,13 @@ for the model-level syntax.
 DynamoDB supports [`upsert_by_*`](./upserting-records.md) only when the
 conflict target is the primary key. A regular upsert uses one `UpdateItem`
 request, which creates a missing item or applies the same update expression to
-an existing item. `on_create` supports required fields by using
-`if_not_exists`; nullable create-only assignments return `unsupported_feature`
-because an existing item may omit the attribute. `on_update` also returns
-`unsupported_feature` because `UpdateItem` cannot choose an expression based
-on whether the item existed before the request.
+an existing item. Shared mutations use the field's `#[default]` value with
+`if_not_exists`; for example, `add` lowers to `SET field =
+if_not_exists(field, :default) + :value`. `on_create` supports required fields
+by using `if_not_exists`; nullable create-only assignments return
+`unsupported_feature` because an existing item may omit the attribute.
+`on_update` also returns `unsupported_feature` because `UpdateItem` cannot
+choose an expression based on whether the item existed before the request.
 
 `or_ignore()` uses a conditional put and returns `None` when the primary key
 already exists. If the new item also contains `#[unique]` fields, Toasty uses

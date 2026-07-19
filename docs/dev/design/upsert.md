@@ -5,8 +5,10 @@
 Toasty generates `upsert_by_*` builders for primary keys and unique
 constraints. An upsert atomically creates a record when its conflict target is
 absent or updates the matching record when it is present. Ordinary setters
-apply to both branches. On drivers that support branch-specific assignments,
-`on_create` and `on_update` express values that apply to only one branch.
+apply to both branches. Shared mutations apply to a field's declared default
+when creating a record and its stored value when updating one. On drivers that
+support branch-specific assignments, `on_create` and `on_update` express
+values that apply to only one branch.
 
 ## Motivation
 
@@ -74,6 +76,39 @@ let membership = Membership::upsert_by_org_id_and_user_id(org_id, user_id)
 
 Toasty does not infer a conflict target for `User::upsert()`. Naming the target
 keeps the operation stable when a model gains another unique constraint.
+
+### Applying shared mutations
+
+A shared mutation reads the field's current value. Declare `#[default]` to
+define that value when the upsert creates a record:
+
+```rust
+#[derive(toasty::Model)]
+struct Counter {
+    #[key]
+    name: String,
+
+    #[default(10)]
+    count: i64,
+}
+
+let counter = Counter::upsert_by_name("requests")
+    .count(toasty::stmt::subtract(3))
+    .exec(&mut db)
+    .await?;
+```
+
+The create branch stores seven. The update branch subtracts three from the
+stored count. `add`, `increment`, `decrement`, `push`, `extend`, `pop`,
+`remove`, and `remove_at` use the same rule. Backend capability checks still
+apply; declaring a list default does not make `pop` available on a backend that
+cannot update the last list element atomically.
+
+A shared mutation on a field without `#[default]` returns
+`invalid_statement`. A replacement assignment does not read the previous
+value, so ordinary values, `stmt::set`, and `stmt::clear` do not require a
+default. When only the update branch needs a mutation, use a complete
+`on_create` value and put the mutation in `on_update`.
 
 ### Using existing values on update
 
@@ -154,7 +189,8 @@ automatic update field.
 | Value source | Create branch | Update branch |
 |---|---:|---:|
 | Conflict-target arguments | Yes | No |
-| Ordinary field setter | Yes | Yes |
+| Ordinary replacement setter | Yes | Yes |
+| Ordinary mutation | Apply to `#[default]` | Apply to stored value |
 | `on_create` assignment | Yes | No |
 | `on_update` assignment | No | Yes |
 | `#[default]` | Yes | No |
@@ -164,6 +200,10 @@ An `on_create` or `on_update` assignment overrides an earlier assignment to
 the same field on that branch. Fields omitted from the builder use their
 normal create behavior when inserting and remain unchanged when updating.
 Conflict-target fields cannot be assigned through the returned builder.
+
+Toasty evaluates a field's `#[default]` once while building the upsert. The
+create branch applies the shared mutation to that value. An explicit
+`on_create` assignment overrides the default and avoids evaluating it.
 
 The default `exec` returns the record stored by the database. Toasty does not
 return the proposed create value because generated fields and update
@@ -206,9 +246,9 @@ when an ordinary setter would otherwise assign the same proposed value.
 
 SQL drivers receive the upsert as `Operation::QuerySql` containing a lowered
 `Insert` statement. Non-SQL drivers receive `Operation::Upsert` containing the
-same create values, selected conflict target, assignments, ignore policy, and
-returning projection. A driver must execute the operation atomically without
-selecting a branch in application code.
+same create values, declared field initializers, selected conflict target,
+assignments, ignore policy, and returning projection. A driver must execute the
+operation atomically without selecting a branch in application code.
 
 The capability contract describes which upsert forms a driver supports:
 
@@ -246,8 +286,9 @@ behavior for both a present and missing item:
 |---|---|
 | Replace with a value | `SET field = :value` |
 | Replace with `None` | `REMOVE field` |
-| Append | `SET field = list_append(if_not_exists(field, :empty), :value)` |
-| Add or subtract | `ADD field :delta`, using a negative delta for subtraction |
+| Append | `SET field = list_append(if_not_exists(field, :default), :value)` |
+| Add | `SET field = if_not_exists(field, :default) + :value` |
+| Subtract | `SET field = if_not_exists(field, :default) - :value` |
 | Required create default | `SET field = if_not_exists(field, :default)` |
 
 A required create default is safe because every valid existing item already
@@ -307,6 +348,14 @@ An API with required `create` and `update` sections expresses every branch but
 duplicates values in the common replacement case. Ordinary setters plus
 optional `on_create` and `on_update` closures make shared values concise without
 removing branch control.
+
+### Infer mutation identity values
+
+Toasty could treat missing numbers as zero and missing lists as empty. That
+would make `subtract(3)` insert negative three and make `push(value)` insert a
+single-element list, regardless of the model's create behavior. Requiring
+`#[default]` uses the same initialization rule for create and upsert and also
+defines nonzero numeric and nonempty list initializers.
 
 ### Infer the only unique constraint
 

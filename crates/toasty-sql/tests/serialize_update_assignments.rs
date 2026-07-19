@@ -143,6 +143,8 @@ fn upsert_with(assignments: Assignments) -> stmt::Statement {
                 index: 0,
             }]),
             shared: assignments,
+            initializers: Assignments::default(),
+            defaulted: Vec::new(),
             create: Assignments::default(),
             update: Assignments::default(),
             action: stmt::UpsertAction::Update,

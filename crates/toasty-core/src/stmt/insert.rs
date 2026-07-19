@@ -45,11 +45,14 @@ pub struct Insert {
 /// applies the normalized [`shared`](Self::shared) assignments to the matching
 /// row, while `Ignore` leaves it unchanged.
 ///
-/// Before normalization, [`shared`](Self::shared), [`create`](Self::create),
-/// and [`update`](Self::update) contain the declarative branch assignments.
-/// Normalization writes the create branch into the insert source, overlays the
-/// update branch onto `shared`, and clears `create` and `update`. The engine
-/// also stores model-field targets before lowering and database-column targets
+/// Before normalization, [`shared`](Self::shared),
+/// [`initializers`](Self::initializers), [`defaulted`](Self::defaulted),
+/// [`create`](Self::create), and [`update`](Self::update) contain the
+/// declarative assignments. Normalization writes the create branch into the
+/// insert source, overlays the update branch onto `shared`, and clears
+/// `defaulted`, `create`, and `update`. Initializers remain available to
+/// non-SQL drivers and are cleared before SQL serialization. The engine also
+/// stores model-field targets before lowering and database-column targets
 /// afterward. SQL drivers receive the normalized, lowered form inside
 /// [`Operation::QuerySql`](crate::driver::Operation::QuerySql); non-SQL drivers
 /// receive it inside [`Operation::Upsert`](crate::driver::Operation::Upsert).
@@ -64,10 +67,23 @@ pub struct Upsert {
     /// the assignments for conflict updates.
     pub shared: Assignments,
 
+    /// Model-declared values used to initialize shared mutations.
+    ///
+    /// Generated builders populate this map from `#[default]`. Unlike
+    /// [`create`](Self::create), an initializer is the input to a shared
+    /// mutation rather than a branch-specific replacement value.
+    pub initializers: Assignments,
+
+    /// Fields whose generated model definition contains `#[default]`.
+    ///
+    /// This preserves the declaration independently of whether an explicit
+    /// `on_create` assignment makes evaluation of the default unnecessary.
+    pub defaulted: Vec<Projection>,
+
     /// Assignments applied only when the insert creates a record.
     ///
-    /// Model defaults populate this branch. Explicit `on_create` assignments
-    /// replace defaults and shared assignments for the same field.
+    /// Explicit `on_create` assignments replace initializers and shared
+    /// assignments for the same field.
     pub create: Assignments,
 
     /// Assignments applied only when the target matches an existing record.

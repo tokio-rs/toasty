@@ -482,6 +482,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         self.extract_data_load_args_from_expr(expr, None);
                     });
                 }
+                for (_, assignment) in upsert.initializers.iter() {
+                    stmt::visit::for_each_expr(assignment, |expr| {
+                        self.extract_data_load_args_from_expr(expr, None);
+                    });
+                }
             }
         }
 
@@ -695,6 +700,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         if let Some(upsert) = &mut stmt.upsert {
             for (_, assignment) in upsert.shared.iter_mut() {
+                self.rewrite_assignment_arg_dependencies(assignment);
+            }
+            for (_, assignment) in upsert.initializers.iter_mut() {
                 self.rewrite_assignment_arg_dependencies(assignment);
             }
         }

@@ -1523,6 +1523,7 @@ where
 
     if let Some(upsert) = &node.upsert {
         v.visit_assignments(&upsert.shared);
+        v.visit_assignments(&upsert.initializers);
         v.visit_assignments(&upsert.create);
         v.visit_assignments(&upsert.update);
     }

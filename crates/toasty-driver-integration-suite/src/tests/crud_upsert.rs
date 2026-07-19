@@ -477,6 +477,133 @@ pub async fn upsert_shared_assignment_operators(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+#[driver_test(requires(upsert_primary_key))]
+pub async fn upsert_shared_mutations_apply_declared_defaults(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+
+        #[default(10)]
+        count: i64,
+
+        #[default(vec!["base".to_string()])]
+        tags: Vec<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let created = Item::upsert_by_id("item")
+        .count(toasty::stmt::subtract(3))
+        .tags(toasty::stmt::push("a"))
+        .exec(&mut db)
+        .await?;
+    assert_struct!(created, _ { count: 7, tags: ["base", "a"] });
+
+    let updated = Item::upsert_by_id("item")
+        .count(toasty::stmt::subtract(3))
+        .tags(toasty::stmt::push("b"))
+        .exec(&mut db)
+        .await?;
+    assert_struct!(updated, _ { count: 4, tags: ["base", "a", "b"] });
+    Ok(())
+}
+
+#[driver_test(requires(upsert_primary_key))]
+pub async fn upsert_shared_mutation_requires_declared_default(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+
+        count: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let error = Item::upsert_by_id("item")
+        .count(toasty::stmt::increment())
+        .exec(&mut db)
+        .await
+        .unwrap_err();
+    assert!(error.is_invalid_statement(), "unexpected error: {error}");
+    assert!(error.to_string().contains("#[default]"));
+    Ok(())
+}
+
+#[driver_test(requires(and(upsert_primary_key, vec_scalar)))]
+pub async fn upsert_shared_replacement_does_not_require_default(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+
+        tags: Vec<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let created = Item::upsert_by_id("item")
+        .tags(toasty::stmt::clear())
+        .exec(&mut db)
+        .await?;
+    assert!(created.tags.is_empty());
+    Ok(())
+}
+
+#[driver_test(requires(upsert_branch_assignments))]
+pub async fn upsert_update_mutation_does_not_require_default(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+
+        count: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let created = Item::upsert_by_id("item")
+        .on_create(|item| item.count(10))
+        .on_update(|item| item.count(toasty::stmt::subtract(3)))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(created.count, 10);
+
+    let updated = Item::upsert_by_id("item")
+        .on_create(|item| item.count(10))
+        .on_update(|item| item.count(toasty::stmt::subtract(3)))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(updated.count, 7);
+    Ok(())
+}
+
+#[driver_test(requires(and(upsert_primary_key, vec_pop)))]
+pub async fn upsert_pop_applies_declared_default_on_create(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+
+        #[default(vec!["a".to_string(), "b".to_string()])]
+        tags: Vec<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let created = Item::upsert_by_id("item")
+        .tags(toasty::stmt::pop())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(created.tags, ["a"]);
+
+    let updated = Item::upsert_by_id("item")
+        .tags(toasty::stmt::pop())
+        .exec(&mut db)
+        .await?;
+    assert!(updated.tags.is_empty());
+    Ok(())
+}
+
 #[driver_test(
     id(ID),
     requires(upsert_primary_key),

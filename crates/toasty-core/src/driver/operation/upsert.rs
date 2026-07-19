@@ -7,7 +7,9 @@ use crate::stmt;
 /// target and branch behavior against [`Capability`](crate::driver::Capability).
 /// [`stmt`](Self::stmt) contains one values row and an
 /// [`stmt::Upsert`](crate::stmt::Upsert) clause whose target has been lowered
-/// from model fields to database columns.
+/// from model fields to database columns. Shared mutations retain their
+/// model-declared field initializers so the driver can apply the same default
+/// when it creates an item.
 ///
 /// A driver must perform the conflict check and the create, update, or ignore
 /// action atomically. It must not implement this operation as a read followed
