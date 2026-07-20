@@ -137,7 +137,7 @@ impl LowerStatement<'_, '_> {
     ///
     /// Assumes the per-row `VALUES` shape: the bind phase's
     /// `transpose_insert_unnest` must keep running after lowering, or this
-    /// pass sees the transposed record-of-arrays row.
+    /// pass sees a table-function source instead of the rows to constantize.
     pub(super) fn constantize_insert_returning(
         &self,
         returning: &mut stmt::Returning,

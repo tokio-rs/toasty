@@ -1087,14 +1087,12 @@ where
     // FuncLastInsertId has no fields to visit
 }
 
-/// Default mutable traversal for [`FuncUnnest`] nodes. Visits each array argument.
+/// Default mutable traversal for [`FuncUnnest`] nodes. Visits the array argument.
 pub fn visit_expr_func_unnest_mut<V>(v: &mut V, node: &mut FuncUnnest)
 where
     V: VisitMut + ?Sized,
 {
-    for arg in &mut node.args {
-        v.visit_expr_mut(&mut arg.expr);
-    }
+    v.visit_expr_mut(&mut node.arg);
 }
 
 /// Default mutable traversal for [`ExprBetween`] nodes. Visits the expression, low, and high bounds.
@@ -1589,6 +1587,11 @@ where
         TableRef::Derived(table_derived) => v.visit_table_derived_mut(table_derived),
         TableRef::Table(_) => {}
         TableRef::Func(func) => v.visit_expr_func_mut(func),
+        TableRef::RowsFrom(funcs) => {
+            for func in funcs {
+                v.visit_expr_func_mut(func);
+            }
+        }
         TableRef::Arg(expr_arg) => v.visit_expr_arg_mut(expr_arg),
     }
 }

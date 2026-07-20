@@ -364,6 +364,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                 }
                             }
                             TableRef::Func(_) => todo!(),
+                            TableRef::RowsFrom(_) => todo!(),
                             TableRef::Arg(_) => todo!(),
                         }
                     }

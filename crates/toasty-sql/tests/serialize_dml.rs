@@ -211,19 +211,9 @@ fn insert_returning_panics_on_mysql() {
     render(Flavor::Mysql, &schema, insert_basic(returning));
 }
 
-/// An `unnest` function with one typed array argument per column.
-fn unnest_func() -> stmt::ExprFunc {
+fn unnest_func(position: usize) -> stmt::ExprFunc {
     stmt::FuncUnnest {
-        args: vec![
-            stmt::FuncUnnestArg {
-                expr: Expr::arg(0),
-                elem_ty: StorageType::Integer(8),
-            },
-            stmt::FuncUnnestArg {
-                expr: Expr::arg(1),
-                elem_ty: StorageType::Text,
-            },
-        ],
+        arg: Box::new(Expr::arg(position)),
     }
     .into()
 }
@@ -244,7 +234,10 @@ fn insert_unnest(returning: Option<Returning>) -> stmt::Statement {
     });
     let source = stmt::Query::new(stmt::Select {
         returning: Returning::Star,
-        source: Source::table(stmt::TableRef::Func(unnest_func())),
+        source: Source::table(stmt::TableRef::RowsFrom(vec![
+            unnest_func(0),
+            unnest_func(1),
+        ])),
         filter: Filter::ALL,
         distinct: false,
     });
@@ -260,7 +253,7 @@ fn insert_unnest(returning: Option<Returning>) -> stmt::Statement {
 #[test]
 fn select_unnest_expression() {
     let select = stmt::Select {
-        returning: Returning::Project(Expr::record([Expr::Func(unnest_func())])),
+        returning: Returning::Project(Expr::record([Expr::Func(unnest_func(0))])),
         source: Source::Table(stmt::SourceTable {
             tables: vec![],
             from: vec![],
@@ -268,7 +261,7 @@ fn select_unnest_expression() {
         filter: Filter::ALL,
         distinct: false,
     };
-    expect![[r#"SELECT unnest($1::BIGINT[], $2::TEXT[]) AS column1;"#]].assert_eq(&render(
+    expect![[r#"SELECT unnest($1) AS column1;"#]].assert_eq(&render(
         Flavor::Postgresql,
         &users_schema(),
         stmt::Query::new(select).into(),
@@ -279,7 +272,7 @@ fn select_unnest_expression() {
 fn insert_unnest_arrays() {
     let schema = users_schema();
     expect![[
-        r#"INSERT INTO "users" ("id", "name") SELECT * FROM unnest($1::BIGINT[], $2::TEXT[]) AS tbl_0_0;"#
+        r#"INSERT INTO "users" ("id", "name") SELECT * FROM ROWS FROM (unnest($1), unnest($2)) AS tbl_0_0;"#
     ]]
     .assert_eq(&render(Flavor::Postgresql, &schema, insert_unnest(None)));
 }
@@ -289,7 +282,7 @@ fn insert_unnest_with_returning() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
     expect![[
-        r#"INSERT INTO "users" ("id", "name") SELECT * FROM unnest($1::BIGINT[], $2::TEXT[]) AS tbl_0_0 RETURNING "id" AS column1;"#
+        r#"INSERT INTO "users" ("id", "name") SELECT * FROM ROWS FROM (unnest($1), unnest($2)) AS tbl_0_0 RETURNING "id" AS column1;"#
     ]]
     .assert_eq(&render(Flavor::Postgresql, &schema, insert_unnest(returning)));
 }

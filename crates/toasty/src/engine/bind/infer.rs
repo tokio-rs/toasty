@@ -72,12 +72,7 @@ fn ty_from_column(storage_ty: db::Type) -> Ty {
     }
 }
 
-fn refine_insert(
-    insert: &stmt::Insert,
-    _cx: &Cx<'_>,
-    db_schema: &db::Schema,
-    params: &mut [Param],
-) {
+fn refine_insert(insert: &stmt::Insert, cx: &Cx<'_>, db_schema: &db::Schema, params: &mut [Param]) {
     let stmt::InsertTarget::Table(table) = &insert.target else {
         return;
     };
@@ -99,7 +94,15 @@ fn refine_insert(
                 check(row, &expected, params);
             }
         }
-        stmt::ExprSet::Select(select) => refine_source(&select.source, params),
+        stmt::ExprSet::Select(select) => {
+            let expected = table
+                .columns
+                .iter()
+                .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
+                .collect::<Vec<_>>();
+            refine_insert_source(&select.source, &expected, params);
+            refine_source(&select.source, cx, params);
+        }
         _ => {}
     }
 }
@@ -174,7 +177,7 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
 
     match &query.body {
         stmt::ExprSet::Select(select) => {
-            refine_source(&select.source, params);
+            refine_source(&select.source, &cx, params);
             refine_filter(&select.filter, &cx, params);
         }
         stmt::ExprSet::Values(values) => {
@@ -202,21 +205,52 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
     }
 }
 
-fn refine_source(source: &stmt::Source, params: &mut [Param]) {
+/// Apply an insert target's column types to a source composed only of
+/// `unnest` table functions. Each function produces one target column, so its
+/// argument must be an array of that column's storage type.
+fn refine_insert_source(source: &stmt::Source, expected: &[Ty], params: &mut [Param]) {
+    let stmt::Source::Table(source) = source else {
+        return;
+    };
+
+    let funcs = match source.tables.as_slice() {
+        [stmt::TableRef::Func(func)] => std::slice::from_ref(func),
+        [stmt::TableRef::RowsFrom(funcs)] => funcs.as_slice(),
+        _ => return,
+    };
+
+    if funcs.len() != expected.len()
+        || !funcs
+            .iter()
+            .all(|func| matches!(func, stmt::ExprFunc::Unnest(_)))
+    {
+        return;
+    }
+
+    for (func, expected) in funcs.iter().zip(expected) {
+        let stmt::ExprFunc::Unnest(unnest) = func else {
+            unreachable!()
+        };
+        check(&unnest.arg, &Ty::List(Box::new(expected.clone())), params);
+    }
+}
+
+fn refine_source(source: &stmt::Source, cx: &Cx<'_>, params: &mut [Param]) {
     let stmt::Source::Table(source) = source else {
         return;
     };
 
     for table in &source.tables {
-        let stmt::TableRef::Func(stmt::ExprFunc::Unnest(unnest)) = table else {
-            continue;
-        };
-
-        // The function stores each element type with its argument. Applying
-        // the corresponding array type resolves all-NULL array parameters.
-        for arg in &unnest.args {
-            let array_ty = db::Type::list(arg.elem_ty.clone());
-            check(&arg.expr, &ty_from_column(array_ty), params);
+        match table {
+            stmt::TableRef::Func(func) => {
+                synthesize_func(func, cx, params);
+            }
+            stmt::TableRef::RowsFrom(funcs) => {
+                for func in funcs {
+                    synthesize_func(func, cx, params);
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -288,6 +322,8 @@ pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -
             }
             Ty::List(Box::new(merged))
         }
+
+        stmt::Expr::Func(func) => synthesize_func(func, cx, params),
 
         // BinaryOp (comparison) — synthesize both sides, merge, check both
         stmt::Expr::BinaryOp(binary) => {
@@ -383,6 +419,19 @@ pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -
         stmt::Expr::Default => Ty::Unknown,
 
         // Anything else
+        _ => Ty::Unknown,
+    }
+}
+
+fn synthesize_func(func: &stmt::ExprFunc, cx: &Cx<'_>, params: &mut [Param]) -> Ty {
+    match func {
+        stmt::ExprFunc::Unnest(func) => match synthesize(&func.arg, cx, params) {
+            Ty::List(elem) => *elem,
+            Ty::Column(db::Type::List(elem)) => Ty::Column(*elem),
+            Ty::Inferred(db::Type::List(elem)) => Ty::Inferred(*elem),
+            Ty::Unknown => Ty::Unknown,
+            ty => panic!("unnest argument must be a list; ty={ty:?}"),
+        },
         _ => Ty::Unknown,
     }
 }

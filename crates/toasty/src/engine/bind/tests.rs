@@ -108,7 +108,7 @@ fn two_row_item_insert(schema: &toasty_core::Schema) -> stmt::Statement {
     })
 }
 
-fn unnest_source(stmt: &stmt::Statement) -> &stmt::FuncUnnest {
+fn unnest_source(stmt: &stmt::Statement) -> &[stmt::ExprFunc] {
     let stmt::Statement::Insert(insert) = stmt else {
         panic!("expected insert");
     };
@@ -117,10 +117,10 @@ fn unnest_source(stmt: &stmt::Statement) -> &stmt::FuncUnnest {
     };
     assert!(matches!(select.returning, stmt::Returning::Star));
     let source = select.source.as_table_unwrap();
-    let [stmt::TableRef::Func(stmt::ExprFunc::Unnest(unnest))] = source.tables.as_slice() else {
-        panic!("expected unnest table source");
+    let [stmt::TableRef::RowsFrom(funcs)] = source.tables.as_slice() else {
+        panic!("expected ROWS FROM table source");
     };
-    unnest
+    funcs
 }
 
 #[test]
@@ -152,13 +152,20 @@ fn multi_row_insert_transposed_to_column_arrays_on_postgres() {
         Value::List(vec![Value::from("n1"), Value::from("n2")])
     );
 
-    // The source is an unnest function with one array argument per column.
-    let unnest = unnest_source(&stmt);
-    assert_eq!(unnest.args.len(), 2);
-    assert!(matches!(unnest.args[0].expr, Expr::Arg(_)));
-    assert!(matches!(unnest.args[1].expr, Expr::Arg(_)));
-    assert_eq!(unnest.args[0].elem_ty, db::Type::Text);
-    assert_eq!(unnest.args[1].elem_ty, db::Type::Text);
+    assert_eq!(params[0].ty, db::Type::list(db::Type::Text));
+    assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
+
+    // ROWS FROM evaluates one single-argument unnest function per column.
+    let funcs = unnest_source(&stmt);
+    let [
+        stmt::ExprFunc::Unnest(first),
+        stmt::ExprFunc::Unnest(second),
+    ] = funcs
+    else {
+        panic!("expected two unnest functions");
+    };
+    assert!(matches!(first.arg.as_ref(), Expr::Arg(_)));
+    assert!(matches!(second.arg.as_ref(), Expr::Arg(_)));
 }
 
 #[test]
@@ -201,9 +208,10 @@ fn multi_row_insert_with_null_cell_binds_one_array_per_column() {
     );
     assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
 
-    let unnest = unnest_source(&stmt);
-    assert!(matches!(unnest.args[1].expr, Expr::Arg(_)));
-    assert_eq!(unnest.args[1].elem_ty, db::Type::Text);
+    let [_, stmt::ExprFunc::Unnest(unnest)] = unnest_source(&stmt) else {
+        panic!("expected two unnest functions");
+    };
+    assert!(matches!(unnest.arg.as_ref(), Expr::Arg(_)));
 }
 
 #[test]
@@ -376,6 +384,50 @@ fn non_enum_insert_keeps_default_types() {
     assert_eq!(params.len(), 2);
     assert!(matches!(&params[0].ty, db::Type::Text));
     assert!(matches!(&params[1].ty, db::Type::Integer(8)));
+}
+
+#[test]
+fn synthesize_unnest_returns_array_element_type() {
+    use super::infer::synthesize;
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+    let mut params = vec![Param {
+        value: Value::List(vec![Value::from("a"), Value::from("b")]),
+        ty: Ty::List(Box::new(Ty::Inferred(db::Type::Text))),
+    }];
+    let expr = Expr::Func(
+        stmt::FuncUnnest {
+            arg: Box::new(Expr::arg(0)),
+        }
+        .into(),
+    );
+
+    let ty = synthesize(&expr, &cx, &mut params);
+
+    assert!(matches!(ty, Ty::Inferred(db::Type::Text)));
+}
+
+#[test]
+fn synthesize_unnest_returns_array_column_element_type() {
+    use super::infer::synthesize;
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+    let mut params = vec![Param {
+        value: Value::List(vec![Value::from("a"), Value::from("b")]),
+        ty: Ty::Column(db::Type::list(db::Type::Text)),
+    }];
+    let expr = Expr::Func(
+        stmt::FuncUnnest {
+            arg: Box::new(Expr::arg(0)),
+        }
+        .into(),
+    );
+
+    let ty = synthesize(&expr, &cx, &mut params);
+
+    assert!(matches!(ty, Ty::Column(db::Type::Text)));
 }
 
 // ============================================================================

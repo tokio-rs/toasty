@@ -181,7 +181,7 @@ mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
 mod func_unnest;
-pub use func_unnest::{FuncUnnest, FuncUnnestArg};
+pub use func_unnest::FuncUnnest;
 
 mod insert;
 pub use insert::Insert;

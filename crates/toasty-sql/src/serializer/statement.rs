@@ -601,6 +601,9 @@ impl ToSql for &stmt::TableRef {
             }
             stmt::TableRef::Derived(table_derived) => fmt!(f, table_derived),
             stmt::TableRef::Func(func) => func.to_sql(f),
+            stmt::TableRef::RowsFrom(funcs) => {
+                fmt!(f, "ROWS FROM (" Comma(funcs.iter()) ")")
+            }
             stmt::TableRef::Cte { nesting, index } => {
                 assert!(f.depth >= *nesting, "nesting={nesting} depth={}", f.depth);
 

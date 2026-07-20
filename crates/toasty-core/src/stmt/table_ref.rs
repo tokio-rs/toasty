@@ -6,7 +6,7 @@ use super::TableId;
 ///
 /// Each entry in [`SourceTable::tables`](super::SourceTable) is a `TableRef`
 /// that identifies where data comes from: a schema table, a CTE, a derived
-/// subquery, a table function, or a placeholder argument.
+/// subquery, one or more table functions, or a placeholder argument.
 ///
 /// # Examples
 ///
@@ -39,6 +39,9 @@ pub enum TableRef {
     /// A function used as a table source.
     Func(ExprFunc),
 
+    /// Table functions evaluated in parallel using SQL `ROWS FROM`.
+    RowsFrom(Vec<ExprFunc>),
+
     /// A placeholder that will be replaced with a derived table at a later
     /// compilation stage.
     Arg(ExprArg),
@@ -52,6 +55,7 @@ impl TableRef {
             Self::Derived { .. } => false,
             Self::Table(id) => id == &table_id,
             Self::Func(_) => false,
+            Self::RowsFrom(_) => false,
             Self::Arg { .. } => todo!(),
         }
     }

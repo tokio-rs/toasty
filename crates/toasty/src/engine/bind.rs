@@ -69,8 +69,9 @@ pub(crate) fn run(
         .collect()
 }
 
-/// Rewrite a multi-row `INSERT ... VALUES` into a single row of per-column
-/// array params, serialized as `SELECT * FROM unnest($1::t[], $2::t[])`.
+/// Rewrite a multi-row `INSERT ... VALUES` into parallel `unnest` table
+/// functions over per-column array params, serialized as
+/// `SELECT * FROM ROWS FROM (unnest($1), unnest($2))`.
 /// No-op for single-row inserts, non-scalar target columns, non-value rows,
 /// or when [`Capability::insert_values_unnest`] is off.
 ///
@@ -158,22 +159,21 @@ fn transpose_insert_unnest(
         }
     }
 
-    let args = columns
+    let funcs = columns
         .into_iter()
-        .zip(table.columns.iter())
-        .map(|(cells, column_id)| {
+        .map(|cells| {
             let value = stmt::Value::List(cells);
             let ty = extract::infer_ty(&value);
             let position = params.len();
             params.push(Param { value, ty });
-            stmt::FuncUnnestArg {
-                expr: stmt::Expr::arg(position),
-                elem_ty: db_table.columns[column_id.index].storage_ty.clone(),
+            stmt::FuncUnnest {
+                arg: Box::new(stmt::Expr::arg(position)),
             }
+            .into()
         })
         .collect::<Vec<_>>();
 
-    let source = stmt::Source::table(stmt::TableRef::Func(stmt::FuncUnnest { args }.into()));
+    let source = stmt::Source::table(stmt::TableRef::RowsFrom(funcs));
     insert.source.body = stmt::ExprSet::Select(Box::new(stmt::Select {
         returning: stmt::Returning::Star,
         source,

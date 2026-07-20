@@ -11,7 +11,7 @@ use super::{Expr, FuncCount, FuncJsonExtract, FuncLastInsertId, FuncUnnest};
 /// count(*)           // counts all rows
 /// count(field)       // counts non-null values
 /// last_insert_id()   // MySQL: get the last auto-increment ID
-/// unnest(arrays...)   // PostgreSQL: expands arrays into rows
+/// unnest(array)       // PostgreSQL: expands an array into rows
 /// ```
 #[derive(Clone, Debug, PartialEq)]
 pub enum ExprFunc {
@@ -29,7 +29,7 @@ pub enum ExprFunc {
     /// inside a `#[document]` embed.
     JsonExtract(FuncJsonExtract),
 
-    /// Expands parallel PostgreSQL arrays into a set of rows.
+    /// Expands a PostgreSQL array into a set of rows.
     Unnest(FuncUnnest),
 }
 

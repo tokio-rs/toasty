@@ -254,8 +254,8 @@ pub struct Capability {
     pub predicate_match_any: bool,
 
     /// The backend can insert a multi-row batch as one array bind per column:
-    /// `INSERT ... SELECT * FROM unnest($1::t[], $2::t[])` instead of a
-    /// per-cell `VALUES` list. PostgreSQL only; implies
+    /// `INSERT ... SELECT * FROM ROWS FROM (unnest($1), unnest($2))` instead
+    /// of a per-cell `VALUES` list. PostgreSQL only; implies
     /// [`Self::bind_list_param`].
     pub insert_values_unnest: bool,
 

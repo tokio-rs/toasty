@@ -1,4 +1,4 @@
-use toasty_core::{schema::db, stmt::ResolvedRef};
+use toasty_core::stmt::ResolvedRef;
 
 use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
@@ -221,16 +221,7 @@ impl ToSql for &stmt::ExprFunc {
                     panic!("unnest is only supported on PostgreSQL");
                 }
 
-                fmt!(f, "unnest(");
-                for (i, arg) in func.args.iter().enumerate() {
-                    if i > 0 {
-                        f.dst.push_str(", ");
-                    }
-                    let expr = &arg.expr;
-                    let ty = &db::Type::list(arg.elem_ty.clone());
-                    fmt!(f, expr "::" ty);
-                }
-                f.dst.push(')');
+                fmt!(f, "unnest(" func.arg ")");
             }
         }
     }
