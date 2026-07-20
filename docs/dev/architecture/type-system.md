@@ -62,6 +62,28 @@ pub async fn exec<M: Model>(&self, statement: Statement<M>) -> Result<ValueStrea
 
 At this boundary, the statement becomes untyped (no Rust generic), but the engine tracks the type of value the statement evaluates to using `stmt::Type`. Initially, this remains at the model-level—a query for `User` evaluates to `Type::List(Type::Model(user_model_id))`. During lowering, these convert to structural record types for database execution.
 
+### Application types and storage types
+
+The application schema and database schema may assign different types to the
+same value. An integer-discriminant enum is `stmt::Type::I64` in expressions,
+for example, while `#[column(type = u8)]` gives its database column
+`db::Type::UnsignedInteger(1)`. The database column records `U8` as its bridge
+type, and lowering inserts checked casts between `I64` and `U8`.
+
+Storage hints follow these rules:
+
+| Field placement | Application type | Database storage |
+|---|---|---|
+| Direct or nested flattened enum | Enum discriminant type | Field override, then enum default, then inferred storage |
+| `Option`, `Deferred`, `Box`, `Arc`, or `Rc` | Inner field type | Same as the inner field |
+| `Vec<unit-enum>` | `List(discriminant type)` | `List(element override or enum default)` |
+| `#[document]` | Structural document | Enum embeds are currently rejected |
+
+`db::Type::bridge_type` recurses through `List`, so collection elements use
+the same checked conversion as scalar columns. A field-level type always takes
+precedence over the enum-level default. All integer discriminants must fit the
+selected type.
+
 ## Type Flow Through the System
 
 ```
