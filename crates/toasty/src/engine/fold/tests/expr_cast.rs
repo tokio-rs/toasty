@@ -1,5 +1,8 @@
 use crate::engine::fold::expr_cast::fold_expr_cast;
-use toasty_core::stmt::{Expr, ExprCast, Type, Value};
+use toasty_core::{
+    schema::app::ModelId,
+    stmt::{Expr, ExprCast, Type, Value},
+};
 use uuid::Uuid;
 
 #[test]
@@ -7,6 +10,7 @@ fn uuid_cast_to_string() {
     // `cast(Uuid("129d7fd7-..."), String) → "129d7fd7-..."`
     let uuid = Uuid::parse_str("129d7fd7-cde2-42d1-be4b-5a27b793f93a").unwrap();
     let mut expr = ExprCast {
+        from: None,
         expr: Box::new(Expr::Value(Value::Uuid(uuid))),
         ty: Type::String,
     };
@@ -23,6 +27,7 @@ fn uuid_cast_to_string() {
 fn string_cast_to_uuid() {
     // `cast("129d7fd7-...", Uuid) → Uuid("129d7fd7-...")`
     let mut expr = ExprCast {
+        from: None,
         expr: Box::new(Expr::Value(Value::from(
             "129d7fd7-cde2-42d1-be4b-5a27b793f93a",
         ))),
@@ -41,6 +46,7 @@ fn string_cast_to_uuid() {
 fn non_const_not_simplified() {
     // `cast(arg(0), String)`, non-constant, not simplified
     let mut expr = ExprCast {
+        from: None,
         expr: Box::new(Expr::arg(0)),
         ty: Type::String,
     };
@@ -50,9 +56,21 @@ fn non_const_not_simplified() {
 }
 
 #[test]
+fn default_passes_through() {
+    let mut expr = ExprCast {
+        from: None,
+        expr: Box::new(Expr::Default),
+        ty: Type::I32,
+    };
+
+    assert_eq!(fold_expr_cast(&mut expr), Some(Expr::Default));
+}
+
+#[test]
 fn null_passes_through() {
     // `cast(null, String) → null`
     let mut expr = ExprCast {
+        from: None,
         expr: Box::new(Expr::Value(Value::Null)),
         ty: Type::String,
     };
@@ -66,9 +84,40 @@ fn null_passes_through() {
 }
 
 #[test]
+fn document_lowering_cast_skipped() {
+    // A `#[document]` lowering cast (source type present) is schema-directed;
+    // fold is schema-free and must leave it for the simplifier.
+    let mut expr = ExprCast {
+        from: Some(Type::Model(ModelId(0))),
+        expr: Box::new(Expr::Value(Value::record_from_vec(vec![Value::from(
+            "Alice",
+        )]))),
+        ty: Type::Object,
+    };
+    let result = fold_expr_cast(&mut expr);
+
+    assert!(result.is_none());
+}
+
+#[test]
+fn document_raising_cast_skipped() {
+    // A `#[document]` raising cast (model-typed target) is schema-directed;
+    // fold is schema-free and must leave it for the simplifier.
+    let mut expr = ExprCast {
+        from: None,
+        expr: Box::new(Expr::Value(Value::Null)),
+        ty: Type::Model(ModelId(0)),
+    };
+    let result = fold_expr_cast(&mut expr);
+
+    assert!(result.is_none());
+}
+
+#[test]
 fn string_identity_cast() {
     // `cast("hello", String) → "hello"`
     let mut expr = ExprCast {
+        from: None,
         expr: Box::new(Expr::Value(Value::from("hello"))),
         ty: Type::String,
     };

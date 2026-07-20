@@ -4,7 +4,7 @@ pub use primitive::{FieldPrimitive, SerializeFormat};
 use super::{
     AutoStrategy, BelongsTo, Constraint, Embedded, Has, Model, ModelId, Schema, VariantId, Via,
 };
-use crate::{Result, driver, stmt};
+use crate::{Result, driver, schema::Name, stmt};
 use std::fmt;
 
 /// A single field within a model.
@@ -58,6 +58,12 @@ pub struct Field {
     /// If this field belongs to an enum variant, identifies that variant.
     /// `None` for fields on root models and embedded structs.
     pub variant: Option<VariantId>,
+
+    /// The shared logical field this variant field participates in, from
+    /// `#[shared(<ident>)]`. Variant fields declaring the same identifier are
+    /// backed by a single shared column. `None` for fields that own their
+    /// column outright (including all fields outside enum variants).
+    pub shared: Option<Name>,
 }
 
 /// Uniquely identifies a [`Field`] within a schema.

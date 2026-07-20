@@ -1,0 +1,5 @@
+error: variant discriminant 256 does not fit the requested integer column type
+ --> tests/ui/enum_integer_storage_out_of_range.rs:5:5
+  |
+5 |     Invalid,
+  |     ^^^^^^^

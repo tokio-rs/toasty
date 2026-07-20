@@ -7,6 +7,48 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.7.0...toasty-sql-v0.8.0) - 2026-07-06
+
+### Added
+
+- Support #[version] attribute for optimistic concurrency on SQL drivers ([#1065])
+- Automatically infer key and references in #[belongs_to] relationships ([#1063])
+- Add escape support for LIKE expressions ([#1039])
+- Add BETWEEN operator to query DSL ([#1029])
+
+### Fixed
+
+- Fix incorrect results in OR'd variant filters when decoding enums ([#1067])
+
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1039]: https://github.com/tokio-rs/toasty/pull/1039
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1065]: https://github.com/tokio-rs/toasty/pull/1065
+[#1067]: https://github.com/tokio-rs/toasty/pull/1067
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.6.1...toasty-sql-v0.7.0) - 2026-05-29
+
+### Added
+
+- [**breaking**] add increment, decrement, add, subtract update ops ([#979](https://github.com/tokio-rs/toasty/pull/979))
+- add raw SQL execution API ([#965](https://github.com/tokio-rs/toasty/pull/965))
+- *(turso)* add Turso driver with TransactionMode-aware concurrent writes ([#938](https://github.com/tokio-rs/toasty/pull/938))
+- add TransactionMode for SQLite lock-acquisition control ([#931](https://github.com/tokio-rs/toasty/pull/931))
+- *(sql)* serialize `SELECT DISTINCT` ([#934](https://github.com/tokio-rs/toasty/pull/934))
+- *(core)* add INNER join variant + broaden serializer test coverage ([#922](https://github.com/tokio-rs/toasty/pull/922))
+
+### Fixed
+
+- make starts_with case-sensitive on SQLite and MySQL ([#983](https://github.com/tokio-rs/toasty/pull/983))
+- cap SQLite auto-increment integer storage at 4 bytes ([#969](https://github.com/tokio-rs/toasty/pull/969))
+- [**breaking**] scope `.ilike()` to PostgreSQL and document operator pass-through ([#937](https://github.com/tokio-rs/toasty/pull/937))
+
+### Other
+
+- [**breaking**] require Deferred relation fields ([#954](https://github.com/tokio-rs/toasty/pull/954))
+- rename types in toasty_core::schema::diff ([#942](https://github.com/tokio-rs/toasty/pull/942))
+- *(core)* [**breaking**] move schema diff types to `schema::diff` ([#929](https://github.com/tokio-rs/toasty/pull/929))
+- consolidate migration types in toasty crate and reorganize db::diff API ([#928](https://github.com/tokio-rs/toasty/pull/928))
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.6.0...toasty-sql-v0.6.1) - 2026-05-16
 
 - Internal improvements only

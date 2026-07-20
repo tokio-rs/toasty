@@ -54,12 +54,24 @@ impl LowerStatement<'_, '_> {
         let link_col = model_level_column_expr(schema, link_field, join.slot(1));
         let filter = stmt::Expr::eq(link_col.clone(), stmt::Expr::ref_field(1, parent_key_field));
 
-        // RETURNING `[link_col, target_record]`. The link column lands in
+        // RETURNING `[link_col, value]`. The link column lands in
         // `load_data_select_items` so the qualification resolves to a
-        // `SortLookup`; `target_record` is the schema's `default_returning`,
-        // whose column refs already point at table slot 0 (the target).
-        let target_record = schema.mapping_for(join.target()).default_returning.clone();
-        let returning = stmt::Expr::record_from_vec(vec![link_col, target_record]);
+        // `SortLookup`. For a relation terminal, `value` is the schema's
+        // `default_returning` (the whole target record). For a scalar terminal,
+        // it is the projected terminal column on the target (table slot 0) —
+        // the same shape as `.select(Target::fields().field())`.
+        let value = match via.terminal {
+            Some(terminal) => model_level_column_expr(
+                schema,
+                app::FieldId {
+                    model: join.target(),
+                    index: terminal,
+                },
+                0,
+            ),
+            None => schema.mapping_for(join.target()).default_returning.clone(),
+        };
+        let returning = stmt::Expr::record_from_vec(vec![link_col, value]);
 
         // `DISTINCT` collapses duplicate targets produced when the path fans
         // out (e.g. two comments on the same article) — matching a direct via
@@ -120,7 +132,12 @@ struct ViaJoin {
 
 impl ViaJoin {
     fn resolve(schema: &toasty_core::Schema, root: app::ModelId, via: &app::Via) -> ViaJoin {
-        let steps = flatten_via_steps(schema, root, via.path.projection.as_slice());
+        // For a scalar terminal the path's last step is the projected field,
+        // not a relation; the relation chain (which the JOIN walks) is
+        // everything before it.
+        let steps = super::relation_path::flatten_via_path(schema, via)
+            .expect("via relation path must start at a model");
+        debug_assert_eq!(steps.first().map(|field| field.model), Some(root));
         assert!(
             !steps.is_empty(),
             "via path must have at least one step (validated at schema build time)"
@@ -234,47 +251,6 @@ impl Edge {
             }
         }
     }
-}
-
-/// Walk a via path, inlining any `via` field's own resolved path so the
-/// result is a flat sequence of direct relation `FieldId`s.
-fn flatten_via_steps(
-    schema: &toasty_core::Schema,
-    source_model_id: app::ModelId,
-    initial_steps: &[usize],
-) -> Vec<app::FieldId> {
-    let mut result = Vec::with_capacity(initial_steps.len());
-    let mut current_model = source_model_id;
-    let mut queue: Vec<usize> = initial_steps.to_vec();
-    queue.reverse(); // pop from the back
-
-    while let Some(idx) = queue.pop() {
-        let field = &schema.app.model(current_model).as_root_unwrap().fields[idx];
-        let field_id = app::FieldId {
-            model: current_model,
-            index: idx,
-        };
-
-        // If this step itself names a `via` relation, splice the nested
-        // path in place of it and continue (handles via-of-via naturally).
-        let nested_via = match &field.ty {
-            app::FieldTy::Via(via) => Some(via),
-            _ => None,
-        };
-        if let Some(via) = nested_via {
-            for step in via.path.projection.as_slice().iter().rev() {
-                queue.push(*step);
-            }
-            continue;
-        }
-
-        current_model = field
-            .relation_target_id()
-            .expect("via path step is a relation");
-        result.push(field_id);
-    }
-
-    result
 }
 
 /// The single-column mapping for a foreign-key field. Via include paths only

@@ -100,6 +100,7 @@ the entry lands here.
 
 ## Transactions
 
+- Atomic batches per driver — multi-write `toasty::batch()` and cascades commit or fail together on every shipped driver, via `Operation::TransactWrite` on DynamoDB ([design](design/atomic-batches.md))
 - Cross-database atomic batch API — type-safe, all-or-nothing across SQL and NoSQL
 - Manual SQL transactions — `BEGIN` / `COMMIT` / `ROLLBACK`, savepoints, isolation levels
 - Row-level locking — `SELECT ... FOR UPDATE` / `SKIP LOCKED` ([#424])
@@ -119,6 +120,7 @@ the entry lands here.
 
 - DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
 - Connection pooling improvements ([#384])
+- Retry-safe transparent recovery from connection loss ([design](design/retry-safe-recovery.md), [#863])
 - New driver backends
   - MongoDB — `toasty-mongodb` ([#48])
   - DuckDB ([#608])
@@ -134,6 +136,7 @@ the entry lands here.
 [#608]: https://github.com/tokio-rs/toasty/issues/608
 [#669]: https://github.com/tokio-rs/toasty/issues/669
 [#741]: https://github.com/tokio-rs/toasty/issues/741
+[#863]: https://github.com/tokio-rs/toasty/issues/863
 
 ## Macros
 
@@ -153,9 +156,10 @@ the entry lands here.
 
 ## Observability
 
-- Query logging — `tracing` debug / trace output from the engine ([#254])
-
-[#254]: https://github.com/tokio-rs/toasty/issues/254
+- Per-query row counts for key-value drivers — the `toasty::query` event
+  reports `rows` for SQL drivers and count-style responses; DynamoDB
+  streaming responses do not report a count yet
+- OpenTelemetry span-per-statement export helpers
 
 ## Safety
 

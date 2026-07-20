@@ -61,6 +61,41 @@ impl<'a> RewriteVia<'a> {
             && let stmt::Source::Model(model) = &mut select.source
             && let Some(via) = model.via.take()
         {
+            // Complete a scalar-terminal via used as a query source. For
+            // `#[has_many(via = todos.tags.name)]`, `user.tag_names()` selects
+            // the `name` column from `Tag` (the model the chain reaches), not
+            // whole `Tag` records:
+            //
+            //     SELECT DISTINCT tag.name      -- returning: project Tag.name
+            //     FROM tag                      -- source model: Tag (the via target)
+            //     WHERE <tag reachable from user>  -- the chain, unfolded below
+            //
+            // The navigation method can't build this: it runs in user code with
+            // no linked schema, so it can't name the target model and emits a
+            // placeholder source id with no projection. The resolved `Via` is
+            // available here, so set the source model (the FROM table) and the
+            // terminal projection (the RETURNING) before unfolding the chain
+            // into the WHERE filter.
+            //
+            // A model-terminal via has `terminal == None` — its source already
+            // selects whole target records — so this is a no-op there.
+            let scalar_terminal =
+                self.schema()
+                    .app
+                    .resolve_field_path(&via.path)
+                    .and_then(|field| match &field.ty {
+                        app::FieldTy::Via(v) => v.terminal.map(|terminal| (v.target, terminal)),
+                        _ => None,
+                    });
+
+            if let Some((target, _)) = scalar_terminal {
+                model.id = target;
+            }
+            if let Some((target, terminal)) = scalar_terminal {
+                select.returning =
+                    stmt::Returning::Project(stmt::Path::field(target, terminal).into_stmt());
+            }
+
             // Create a new scope to indicate we are operating in the
             // context of stmt.target
             let mut s = self.scope(&select.source);
@@ -111,73 +146,47 @@ impl<'a> RewriteVia<'a> {
         }
     }
 
-    /// Entry point for path unfolding. Pulls the seed `source_model_id` off
-    /// the association's source query and delegates to the recursive
-    /// [`unfold_steps`](Self::unfold_steps) helper. Returns an association
-    /// whose path is a single step that does **not** name a via relation.
+    /// Resolve the association path into direct relation fields, then wrap
+    /// each intermediate field in a nested `Source::Model { via }` query.
+    /// Returns an association whose path contains one direct relation step.
     fn unfold_path(&self, association: stmt::Association) -> stmt::Association {
         let stmt::Association { source, path } = association;
         let source_model_id = source.body.as_select_unwrap().source.model_id_unwrap();
-        self.unfold_steps(source, source_model_id, path.projection.as_slice())
+        let fields = super::relation_path::flatten_relation_path(
+            self.schema(),
+            source_model_id,
+            path.projection.as_slice(),
+        );
+
+        self.unfold_fields(source, &fields)
     }
 
-    /// Walk `steps`, splicing each via relation's resolved path inline and
-    /// wrapping every intermediate step in a nested `Source::Model { via }`.
-    /// Returns the outer single-step association the caller filters against.
-    ///
-    /// Via splicing allocates a `Vec<usize>` per via segment so the recursion
-    /// can borrow it as a slice. Paths are short (typically 1-3 steps) and
-    /// vias are rare, so this is cheap in practice.
-    fn unfold_steps(
+    fn unfold_fields(
         &self,
         source: Box<stmt::Query>,
-        source_model_id: app::ModelId,
-        steps: &[usize],
+        fields: &[app::FieldId],
     ) -> stmt::Association {
-        let [first, rest @ ..] = steps else {
-            unreachable!("unfold_steps called with empty steps")
+        let [field_id, rest @ ..] = fields else {
+            unreachable!("unfold_fields called with empty fields")
         };
-
-        let field = &self
-            .schema()
-            .app
-            .model(source_model_id)
-            .as_root_unwrap()
-            .fields[*first];
-
-        // If this step names a via relation, splice the via's resolved path
-        // in place of the via field and continue. Handles via-of-via
-        // naturally because the recursion re-examines the spliced steps.
-        let via_path = match &field.ty {
-            app::FieldTy::Via(via) => Some(via.path.projection.as_slice()),
-            _ => None,
-        };
-        if let Some(via_steps) = via_path {
-            let mut spliced = Vec::with_capacity(via_steps.len() + rest.len());
-            spliced.extend_from_slice(via_steps);
-            spliced.extend_from_slice(rest);
-            return self.unfold_steps(source, source_model_id, &spliced);
-        }
+        let field = self.schema().app.field(*field_id);
 
         // Base case: a single direct relation step stays on the outer
         // association.
         if rest.is_empty() {
             return stmt::Association {
                 source,
-                path: stmt::Path::from_index(source_model_id, *first),
+                path: stmt::Path::from_index(field_id.model, field_id.index),
             };
         }
 
-        let next_model_id = match &field.ty {
-            app::FieldTy::Has(rel) => rel.target,
-            app::FieldTy::Via(rel) => rel.target,
-            app::FieldTy::BelongsTo(rel) => rel.target,
-            other => todo!("non-relation field in via path: {other:#?}"),
-        };
+        let next_model_id = field
+            .relation_target_id()
+            .expect("unfolded association path field is not a relation");
 
         let inner = stmt::Association {
             source,
-            path: stmt::Path::from_index(source_model_id, *first),
+            path: stmt::Path::from_index(field_id.model, field_id.index),
         };
         let new_source = Box::new(stmt::Query::new_select(
             stmt::Source::Model(stmt::SourceModel {
@@ -187,7 +196,8 @@ impl<'a> RewriteVia<'a> {
             stmt::Expr::Value(stmt::Value::Bool(true)),
         ));
 
-        self.unfold_steps(new_source, next_model_id, rest)
+        debug_assert_eq!(rest[0].model, next_model_id);
+        self.unfold_fields(new_source, rest)
     }
 
     fn rewrite_association_belongs_to_as_filter(

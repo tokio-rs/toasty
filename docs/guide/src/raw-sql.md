@@ -162,3 +162,7 @@ tx.commit().await?;
 
 Nested transactions work the same way as they do for query builders: raw SQL
 executed through the nested transaction is part of that savepoint.
+
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

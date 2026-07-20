@@ -1,6 +1,6 @@
 use crate as toasty;
 use crate::engine::simplify::Simplify;
-use crate::schema::Register;
+use crate::schema::Model;
 use toasty_core::{
     driver::Capability,
     schema::{Builder, app},
@@ -32,6 +32,7 @@ fn non_id_cast_not_unwrapped() {
 
     // `eq(cast(arg(0), String), "test")`, non-Id cast is not unwrapped
     let mut lhs = Expr::Cast(ExprCast {
+        from: None,
         expr: Box::new(Expr::arg(0)),
         ty: Type::String,
     });

@@ -259,3 +259,27 @@ impl<T: fmt::Display> fmt::Display for Json<T> {
         self.0.fmt(f)
     }
 }
+
+impl<T> serde_core::Serialize for Json<T>
+where
+    T: serde_core::Serialize,
+{
+    fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: serde_core::Serializer,
+    {
+        self.0.serialize(serializer)
+    }
+}
+
+impl<'de, T> serde_core::Deserialize<'de> for Json<T>
+where
+    T: serde_core::Deserialize<'de>,
+{
+    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
+    where
+        D: serde_core::Deserializer<'de>,
+    {
+        T::deserialize(deserializer).map(Json)
+    }
+}

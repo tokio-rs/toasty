@@ -1,6 +1,6 @@
 use std::fmt;
 
-use super::{Expr, ExprSetOp, Insert, Select, SourceModel, Update, Values};
+use super::{Delete, Expr, ExprSetOp, Insert, Select, SourceModel, Update, Values};
 use crate::schema::db::TableId;
 
 /// A set of rows produced by a query, set operation, or explicit values.
@@ -24,6 +24,9 @@ pub enum ExprSet {
 
     /// An update expression.
     Update(Box<Update>),
+
+    /// A delete expression (used as a data-modifying CTE for conditional deletes).
+    Delete(Box<Delete>),
 
     /// Explicitly listed values (as expressions).
     Values(Values),
@@ -121,6 +124,7 @@ impl ExprSet {
                 .iter()
                 .all(|operand| operand.is_const()),
             ExprSet::Update(..) => false,
+            ExprSet::Delete(..) => false,
             ExprSet::Values(values) => values.is_const(),
             ExprSet::Insert(..) => false,
         }
@@ -133,6 +137,7 @@ impl fmt::Debug for ExprSet {
             Self::Select(e) => e.fmt(f),
             Self::SetOp(e) => e.fmt(f),
             Self::Update(e) => e.fmt(f),
+            Self::Delete(e) => e.fmt(f),
             Self::Values(e) => e.fmt(f),
             Self::Insert(e) => e.fmt(f),
         }
@@ -154,6 +159,12 @@ impl From<Select> for ExprSet {
 impl From<Update> for ExprSet {
     fn from(value: Update) -> Self {
         Self::Update(Box::new(value))
+    }
+}
+
+impl From<Delete> for ExprSet {
+    fn from(value: Delete) -> Self {
+        Self::Delete(Box::new(value))
     }
 }
 

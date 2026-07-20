@@ -1,9 +1,12 @@
 use crate::Result;
-use crate::engine::Engine;
+use crate::engine::{Engine, upsert};
 use toasty_core::Error;
 use toasty_core::driver::Capability;
 use toasty_core::{
-    schema::{Schema, app::ModelId},
+    schema::{
+        Schema,
+        app::{self, ModelId},
+    },
     stmt::{self, Statement, Visit},
 };
 
@@ -37,6 +40,161 @@ impl Engine {
 }
 
 impl stmt::Visit for Verify<'_, '_> {
+    fn visit_stmt_insert(&mut self, i: &stmt::Insert) {
+        stmt::visit::visit_stmt_insert(self, i);
+
+        let Some(upsert) = &i.upsert else {
+            return;
+        };
+        let model = self
+            .schema
+            .app
+            .model(i.target.model_id_unwrap())
+            .as_root_unwrap();
+        let stmt::UpsertTarget::Fields(target) = &upsert.target else {
+            self.record(Error::invalid_statement(
+                "upsert conflict target must contain model fields before lowering",
+            ));
+            return;
+        };
+        let target = target
+            .iter()
+            .filter_map(|projection| projection.as_slice().first().copied())
+            .collect::<Vec<_>>();
+        let Some(index) = model.indices.iter().find(|index| {
+            index.unique
+                && index.fields.len() == target.len()
+                && index
+                    .fields
+                    .iter()
+                    .zip(&target)
+                    .all(|(field, target)| field.field.index == *target)
+        }) else {
+            self.record(Error::invalid_statement(
+                "upsert conflict target must exactly match a unique constraint",
+            ));
+            return;
+        };
+
+        if index.primary_key && !self.capability.upsert_primary_key {
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support primary-key upsert",
+                self.capability.driver_name
+            )));
+        } else if !index.primary_key && !self.capability.upsert_unique {
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support upsert by a secondary unique constraint",
+                self.capability.driver_name
+            )));
+        }
+
+        if upsert.action == stmt::UpsertAction::Ignore && !self.capability.upsert_targeted_ignore {
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support targeted upsert ignore",
+                self.capability.driver_name
+            )));
+        }
+
+        if upsert.action == stmt::UpsertAction::Update
+            && !upsert.update.is_empty()
+            && !self.capability.upsert_branch_assignments
+        {
+            self.record(Error::unsupported_feature(format!(
+                "{} does not support upsert on_update assignments",
+                self.capability.driver_name
+            )));
+        }
+
+        if upsert.action == stmt::UpsertAction::Update
+            && upsert.shared.is_empty()
+            && upsert.update.is_empty()
+        {
+            self.record(Error::invalid_statement(
+                "upsert requires at least one update assignment; use or_ignore() instead",
+            ));
+        }
+
+        for (projection, assignment) in &upsert.shared {
+            let has_default = upsert.defaults.contains(projection);
+            if upsert::requires_current_value(assignment) && !has_default {
+                self.record(Error::invalid_statement(
+                    "shared upsert mutations require a field with #[default]; use on_create and on_update instead",
+                ));
+            }
+        }
+
+        if !self.capability.upsert_branch_assignments && upsert.action == stmt::UpsertAction::Update
+        {
+            for (projection, _) in &upsert.defaults {
+                let used = upsert
+                    .shared
+                    .get(projection)
+                    .is_some_and(upsert::requires_current_value)
+                    || (!upsert.shared.contains(projection) && !upsert.create.contains(projection));
+                if !used {
+                    continue;
+                }
+                let Some(&field) = projection.as_slice().first() else {
+                    continue;
+                };
+                if model.fields[field].nullable {
+                    self.record(Error::unsupported_feature(format!(
+                        "{} does not support nullable upsert field defaults",
+                        self.capability.driver_name
+                    )));
+                }
+            }
+
+            for (projection, _) in &upsert.create {
+                let Some(&field) = projection.as_slice().first() else {
+                    continue;
+                };
+                if model.fields[field].nullable {
+                    self.record(Error::unsupported_feature(format!(
+                        "{} does not support nullable upsert create assignments",
+                        self.capability.driver_name
+                    )));
+                }
+                if upsert.shared.contains(projection) {
+                    self.record(Error::unsupported_feature(format!(
+                        "{} does not support different create and update assignments for one field",
+                        self.capability.driver_name
+                    )));
+                }
+            }
+        }
+
+        if !self.capability.sql && upsert.action == stmt::UpsertAction::Update {
+            for secondary in model
+                .indices
+                .iter()
+                .filter(|index| index.unique && !index.primary_key)
+            {
+                if secondary.fields.iter().any(|field| {
+                    upsert
+                        .shared
+                        .keys()
+                        .any(|projection| projection.as_slice().first() == Some(&field.field.index))
+                        || upsert.create.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&field.field.index)
+                        })
+                        || upsert.defaults.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&field.field.index)
+                        })
+                        || upsert.update.keys().any(|projection| {
+                            projection.as_slice().first() == Some(&field.field.index)
+                        })
+                        || model.fields[field.field.index].auto.is_some()
+                }) {
+                    self.record(Error::unsupported_feature(format!(
+                        "{} upsert does not support updating a unique secondary-index field",
+                        self.capability.driver_name
+                    )));
+                }
+            }
+        }
+    }
+
     fn visit_stmt_delete(&mut self, i: &stmt::Delete) {
         stmt::visit::visit_stmt_delete(self, i);
 
@@ -102,6 +260,12 @@ impl stmt::Visit for Verify<'_, '_> {
 }
 
 impl Verify<'_, '_> {
+    fn record(&mut self, err: Error) {
+        if self.error.is_none() {
+            *self.error = Some(err);
+        }
+    }
+
     fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
         let Some(stmt::Limit::Cursor(cursor)) = i.limit.as_ref() else {
             return;
@@ -202,6 +366,36 @@ impl VerifyExpr<'_, '_> {
         }
     }
 
+    /// Whether `expr` references a whole document-stored field of the current
+    /// model: a `#[document]` embed (`Type::Model`) or an embed collection
+    /// (`List(Model)`).
+    fn is_document_field(&self, expr: &stmt::Expr) -> bool {
+        let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = expr else {
+            return false;
+        };
+        let Some(root) = self.schema.app.model(self.model).as_root() else {
+            return false;
+        };
+        let Some(field) = root.fields.get(*index) else {
+            return false;
+        };
+        let app::FieldTy::Primitive(primitive) = &field.ty else {
+            return false;
+        };
+        let embed_id = match &primitive.ty {
+            stmt::Type::Model(id) => *id,
+            stmt::Type::List(elem) => match &**elem {
+                stmt::Type::Model(id) => *id,
+                _ => return false,
+            },
+            _ => return false,
+        };
+        matches!(
+            self.schema.app.model(embed_id),
+            app::Model::EmbeddedStruct(_)
+        )
+    }
+
     fn assert_bool_expr(&self, expr: &stmt::Expr) {
         use stmt::Expr::*;
 
@@ -209,6 +403,7 @@ impl VerifyExpr<'_, '_> {
             And(_)
             | AllOp(_)
             | AnyOp(_)
+            | Between(_)
             | BinaryOp(_)
             | Like(_)
             | InList(_)
@@ -280,6 +475,18 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
 
     fn visit_expr_binary_op(&mut self, i: &stmt::ExprBinaryOp) {
         stmt::visit::visit_expr_binary_op(self, i);
+
+        // Comparing a `#[document]` field against a whole embed value is not
+        // yet supported (document value equality is planned — see the design
+        // doc). Reject it here with a clear error instead of letting it reach
+        // the engine's type inference, which cannot merge a document column
+        // with a record value.
+        if self.is_document_field(&i.lhs) || self.is_document_field(&i.rhs) {
+            self.record(Error::unsupported_feature(
+                "comparing a #[document] field to a whole value is not yet supported; \
+                 filter on individual fields inside the document instead",
+            ));
+        }
     }
 
     fn visit_expr_in_subquery(&mut self, i: &stmt::ExprInSubquery) {
@@ -304,28 +511,30 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
         // case-insensitive match on any other backend rather than silently
         // emitting plain `LIKE`, whose case behavior differs across engines.
         if i.case_insensitive && !self.capability.native_ilike {
-            self.record(Error::unsupported_feature(
-                "ilike requires a native ILIKE operator, which only PostgreSQL provides; \
-                 use like instead",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} does not provide a native ILIKE operator; use like instead",
+                self.capability.driver_name
+            )));
         }
         stmt::visit::visit_expr_like(self, i);
     }
 
     fn visit_expr_is_superset(&mut self, i: &stmt::ExprIsSuperset) {
         if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
-            self.record(Error::unsupported_feature(
-                "is_superset on this driver requires a literal list on the right-hand side",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} requires a literal list on the right-hand side of is_superset",
+                self.capability.driver_name
+            )));
         }
         stmt::visit::visit_expr_is_superset(self, i);
     }
 
     fn visit_expr_intersects(&mut self, i: &stmt::ExprIntersects) {
         if !self.capability.native_array_set_predicates && !rhs_is_concrete_list(&i.rhs) {
-            self.record(Error::unsupported_feature(
-                "intersects on this driver requires a literal list on the right-hand side",
-            ));
+            self.record(Error::unsupported_feature(format!(
+                "{} requires a literal list on the right-hand side of intersects",
+                self.capability.driver_name
+            )));
         }
         stmt::visit::visit_expr_intersects(self, i);
     }
@@ -445,6 +654,7 @@ mod tests {
         let err = verify_expr_with(&Capability::SQLITE, &expr)
             .expect("expected unsupported_feature error");
         assert!(err.is_unsupported_feature());
+        assert!(err.to_string().contains(Capability::SQLITE.driver_name));
     }
 
     #[test]

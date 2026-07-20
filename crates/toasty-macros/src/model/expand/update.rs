@@ -75,7 +75,7 @@ impl Expand<'_> {
                     TokenStream::new()
                 } else {
                     let ty = &rel.ty;
-                    let target = quote!(<#ty as #toasty::RelationManyField>::Model);
+                    let target = quote!(<#ty as #toasty::RelationManyField>::Target);
 
                     quote! {
                         #vis fn #field_ident(mut self, #field_ident: impl #toasty::Assign<#toasty::List<#target>>) -> Self {
@@ -115,9 +115,11 @@ impl Expand<'_> {
                 }
             }
             FieldTy::Primitive(ty) => {
-                // Bind through `Field::ExprTarget` so each field's setter
-                // accepts whatever its expression-level type permits —
-                // `Self` for scalars, `List<T>` for `Vec<T: Scalar>`.
+                // Bind through `<Ty as Field>::ExprTarget` so each field's
+                // setter accepts whatever its expression-level type permits —
+                // `Self` for scalars, `List<T>` for `Vec<T>` collections, and
+                // so on. A `#[document]` field uses the same `Field` impl as
+                // its column-expanded form; only the schema `field_ty` differs.
                 quote! {
                     #vis fn #field_ident(mut self, #field_ident: impl Assign<FieldExprTarget<#ty>>) -> Self {
                         self.#set_field_ident(#field_ident);
@@ -355,7 +357,13 @@ impl Expand<'_> {
                 }
                 FieldTy::HasMany(rel) => {
                     let ty = &rel.ty;
-                    quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
+                    if rel.via.is_some() {
+                        // A via field has no `RelationManyField` impl (its
+                        // element may be a scalar); reload through `Load`.
+                        quote!(#i => <#ty as #toasty::Load>::reload(&mut target.#field_ident, value)?,)
+                    } else {
+                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut target.#field_ident, value)?,)
+                    }
                 }
                 FieldTy::HasOne(rel) => {
                     let ty = &rel.ty;

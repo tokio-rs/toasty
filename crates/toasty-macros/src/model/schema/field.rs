@@ -4,6 +4,21 @@ use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
 
+/// Parsed `#[document]` / `#[document(text)]` attribute data.
+///
+/// `#[document]` forces a field into document storage. The `text` modifier
+/// (`#[document(text)]`) selects PostgreSQL's text `json` over `jsonb`; it is
+/// parsed here but rejected during validation until the text encoding path is
+/// wired up.
+#[derive(Debug, Clone)]
+pub(crate) struct DocumentAttr {
+    /// True if `#[document(text)]` was written (the `binary: false` encoding).
+    pub(crate) text: bool,
+
+    /// The originating attribute, retained for span-accurate diagnostics.
+    pub(crate) attr: syn::Attribute,
+}
+
 #[derive(Debug)]
 pub(crate) struct Field {
     /// Index of field in the containing model
@@ -43,11 +58,19 @@ pub(crate) struct FieldAttr {
     /// Optional database column name and / or type
     pub(crate) column: Option<Column>,
 
+    /// Shared logical field this enum variant field participates in:
+    /// `#[shared(<ident>)]`. Variant fields declaring the same identifier are
+    /// backed by a single shared column. Only valid on enum variant fields.
+    pub(crate) shared: Option<syn::Ident>,
+
     /// Expression to use as default value on create: `#[default(<expr>)]`
     pub(crate) default_expr: Option<syn::Expr>,
 
     /// Expression to apply on create and update: `#[update(<expr>)]`
     pub(crate) update_expr: Option<syn::Expr>,
+
+    /// Document-storage info for the field: `#[document]` or `#[document(text)]`
+    pub(crate) document: Option<DocumentAttr>,
 
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
@@ -69,7 +92,8 @@ impl FieldAttr {
     /// Parse `FieldAttr`-related attributes from an attribute list.
     ///
     /// Handles `#[key]`, `#[auto]`, `#[unique]`, `#[index]`, `#[column]`,
-    /// `#[default]`, and `#[update]`. Other attributes are silently skipped.
+    /// `#[shared]`, `#[default]`, and `#[update]`. Other attributes are
+    /// silently skipped.
     pub(crate) fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self> {
         let mut errs = ErrorSet::new();
         let mut field_attr = FieldAttr {
@@ -78,8 +102,10 @@ impl FieldAttr {
             auto: None,
             index: false,
             column: None,
+            shared: None,
             default_expr: None,
             update_expr: None,
+            document: None,
             versionable: false,
         };
 
@@ -136,6 +162,22 @@ impl FieldAttr {
                         Err(e) => errs.push(e),
                     }
                 }
+            } else if attr.path().is_ident("shared") {
+                if field_attr.shared.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[shared] attribute",
+                    ));
+                } else {
+                    match attr.parse_args::<syn::Ident>() {
+                        Ok(ident) => field_attr.shared = Some(ident),
+                        Err(_) => errs.push(syn::Error::new_spanned(
+                            attr,
+                            "expected `#[shared(<identifier>)]`; the argument names \
+                             the logical field shared across enum variants",
+                        )),
+                    }
+                }
             } else if attr.path().is_ident("default") {
                 if field_attr.default_expr.is_some() {
                     errs.push(syn::Error::new_spanned(
@@ -181,6 +223,51 @@ impl FieldAttr {
                      wrap the field type in `toasty::Json<T>` instead \
                      (e.g. `tags: toasty::Json<Vec<String>>`)",
                 ));
+            } else if attr.path().is_ident("document") {
+                if field_attr.document.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[document] attribute",
+                    ));
+                } else {
+                    let mut text = false;
+
+                    match &attr.meta {
+                        // Bare `#[document]`.
+                        syn::Meta::Path(_) => {}
+                        // `#[document(text)]` and friends.
+                        syn::Meta::List(_) => {
+                            match attr.parse_args_with(
+                                syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated,
+                            ) {
+                                Ok(args) => {
+                                    for arg in &args {
+                                        if arg == "text" {
+                                            text = true;
+                                        } else {
+                                            errs.push(syn::Error::new_spanned(
+                                                arg,
+                                                "unsupported document argument; expected `text`",
+                                            ));
+                                        }
+                                    }
+                                }
+                                Err(e) => errs.push(e),
+                            }
+                        }
+                        syn::Meta::NameValue(_) => {
+                            errs.push(syn::Error::new_spanned(
+                                attr,
+                                "#[document] does not take a value; use `#[document]` or `#[document(text)]`",
+                            ));
+                        }
+                    }
+
+                    field_attr.document = Some(DocumentAttr {
+                        text,
+                        attr: attr.clone(),
+                    });
+                }
             }
         }
 
@@ -226,7 +313,10 @@ impl Field {
                     ));
                 } else {
                     ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
-                        attr, &field.ty, names,
+                        attr,
+                        field.ident.as_ref().unwrap(),
+                        &field.ty,
+                        names,
                     )?));
                 }
             } else if attr.path().is_ident("has_many") {
@@ -324,6 +414,59 @@ impl Field {
                 field,
                 "#[version] cannot be combined with #[auto]",
             ));
+        }
+
+        if let Some(doc) = &attrs.document {
+            // `#[document(text)]` is parsed but the text-encoding path is not
+            // yet implemented.
+            if doc.text {
+                errs.push(syn::Error::new_spanned(
+                    &doc.attr,
+                    "#[document(text)] is not yet supported",
+                ));
+            }
+
+            if ty.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with relation attributes",
+                ));
+            }
+
+            if attrs.key.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[key]",
+                ));
+            }
+
+            if attrs.versionable {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[version]",
+                ));
+            }
+
+            if attrs.auto.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[auto]",
+                ));
+            }
+
+            if attrs.is_indexed() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[index] / #[unique] on a #[document] field is not yet supported",
+                ));
+            }
+
+            if attrs.column.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[column] on a #[document] field is not yet supported",
+                ));
+            }
         }
 
         if let Some(err) = errs.collect() {

@@ -1,0 +1,5 @@
+error: #[shared] is only supported on enum variant fields; it declares a logical field shared across variants
+ --> tests/ui/shared_outside_enum.rs:8:14
+  |
+8 |     #[shared(name)]
+  |              ^^^^

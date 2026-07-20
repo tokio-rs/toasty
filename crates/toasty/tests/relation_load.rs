@@ -1,7 +1,5 @@
 use toasty::Deferred;
-use toasty::schema::{
-    self, CreateMeta, Load, Model, ModelSet, Register, RelationManyField, RelationOneField,
-};
+use toasty::schema::{self, Load, Model, ModelSet, RelationManyField, RelationOneField};
 use toasty::stmt::{Expr, Insert, IntoExpr, IntoInsert, Path};
 use toasty_core::stmt::{self, Value};
 
@@ -34,7 +32,16 @@ impl Load for Dummy {
     }
 }
 
-impl Register for Dummy {
+impl Model for Dummy {
+    type Query<T> = ();
+    type Create = DummyCreate;
+    type Update<'a> = ();
+    type UpdateQuery = ();
+    type Path<Origin> = Path<Origin, Self>;
+    type PrimaryKey = i64;
+    type ManyField<Origin> = ();
+    type OneField<Origin> = ();
+
     fn id() -> schema::app::ModelId {
         schema::app::ModelId(usize::MAX)
     }
@@ -44,28 +51,6 @@ impl Register for Dummy {
     }
 
     fn register(_model_set: &mut ModelSet) {}
-}
-
-impl Model for Dummy {
-    type Query = ();
-    type Create = DummyCreate;
-    type Update<'a> = ();
-    type UpdateQuery = ();
-    type Path<Origin> = Path<Origin, Self>;
-    type PrimaryKey = i64;
-    type Many = ();
-    type ViaMany = ();
-    type ManyField<Origin> = ();
-    type One = ();
-    type ViaOne = ();
-    type OneField<Origin> = ();
-    type OptionOne = ();
-    type ViaOptionOne = ();
-
-    const CREATE_META: CreateMeta = CreateMeta {
-        fields: &[],
-        model_name: "Dummy",
-    };
 
     fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
         path
@@ -77,7 +62,13 @@ impl Model for Dummy {
         panic!("not needed for relation lazy-slot decode tests")
     }
 
-    fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query {}
+    fn find_by_primary_key(_id: Expr<Self::PrimaryKey>) -> Self::Query<toasty::stmt::List<Self>> {}
+
+    fn wrap_query<T>(_stmt: toasty::stmt::Query<T>) -> Self::Query<T> {}
+
+    fn query_one(_query: Self::Query<toasty::stmt::List<Self>>) -> Self::Query<Self> {}
+
+    fn query_first(_query: Self::Query<toasty::stmt::List<Self>>) -> Self::Query<Option<Self>> {}
 }
 
 impl IntoInsert for DummyCreate {
@@ -98,9 +89,9 @@ impl IntoExpr<Dummy> for DummyCreate {
     }
 }
 
-fn assert_has_many_field<F: RelationManyField<Model = Dummy>>() {}
-fn assert_has_one_field<F: RelationOneField<Model = Dummy>>() {}
-fn assert_belongs_to_field<F: RelationOneField<Model = Dummy>>() {}
+fn assert_has_many_field<F: RelationManyField<Target = Dummy>>() {}
+fn assert_has_one_field<F: RelationOneField<Target = Dummy>>() {}
+fn assert_belongs_to_field<F: RelationOneField<Target = Dummy>>() {}
 
 #[test]
 fn deferred_relation_field_shapes_are_supported() {

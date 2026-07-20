@@ -10,7 +10,7 @@ use std::{
 };
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Connection, Driver, ExecResponse, Operation, Rows},
+    driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation, Rows},
     schema::{
         db::{AppliedMigration, Migration},
         diff,
@@ -23,6 +23,10 @@ use toasty_core::{
 /// past) the underlying driver.
 #[derive(Debug, Clone)]
 pub enum Fault {
+    /// Causes the next `exec` to return `Error::driver_operation_failed`
+    /// without touching the underlying connection or marking it invalid.
+    OperationFailed,
+
     /// Causes the next `exec` to return `Error::connection_lost` without
     /// touching the underlying connection. The wrapping
     /// `InstrumentedConnection`'s `is_valid` flips to `false`, mirroring
@@ -138,9 +142,9 @@ impl Driver for InstrumentedDriver {
         self.inner.capability()
     }
 
-    async fn connect(&self) -> Result<Box<dyn Connection>> {
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
         Ok(Box::new(InstrumentedConnection {
-            inner: self.inner.connect().await?,
+            inner: self.inner.connect(cx).await?,
             handle: self.handle.clone(),
             valid: AtomicBool::new(true),
         }))
@@ -186,6 +190,11 @@ impl Connection for InstrumentedConnection {
             .pop_front();
         if let Some(fault) = fault {
             match fault {
+                Fault::OperationFailed => {
+                    return Err(toasty_core::Error::driver_operation_failed(
+                        std::io::Error::other("injected operation failure"),
+                    ));
+                }
                 Fault::ConnectionLost => {
                     self.valid.store(false, Ordering::Release);
                     return Err(toasty_core::Error::connection_lost(std::io::Error::other(
@@ -249,6 +258,11 @@ impl Connection for InstrumentedConnection {
             .pop_front();
         if let Some(fault) = fault {
             match fault {
+                Fault::OperationFailed => {
+                    return Err(toasty_core::Error::driver_operation_failed(
+                        std::io::Error::other("injected operation failure"),
+                    ));
+                }
                 Fault::ConnectionLost => {
                     self.valid.store(false, Ordering::Release);
                     return Err(toasty_core::Error::connection_lost(std::io::Error::other(

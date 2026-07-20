@@ -14,6 +14,11 @@
 pub mod tag {
     pub struct Boolean;
 
+    /// Signed integer storage with a non-standard byte width.
+    pub struct Int<const BYTES: u8>;
+    /// Unsigned integer storage with a non-standard byte width.
+    pub struct UInt<const BYTES: u8>;
+
     pub struct I8;
     pub struct I16;
     pub struct I32;
@@ -52,10 +57,69 @@ pub mod tag {
 )]
 pub trait CompatibleWith<Storage> {}
 
+/// Marker implemented by the integer storage tags accepted for embedded enum
+/// discriminant columns.
+pub trait IntegerStorage {}
+
+impl IntegerStorage for tag::I8 {}
+impl IntegerStorage for tag::I16 {}
+impl IntegerStorage for tag::I32 {}
+impl IntegerStorage for tag::I64 {}
+impl IntegerStorage for tag::U8 {}
+impl IntegerStorage for tag::U16 {}
+impl IntegerStorage for tag::U32 {}
+impl IntegerStorage for tag::U64 {}
+impl<const BYTES: u8> IntegerStorage for tag::Int<BYTES> {}
+impl<const BYTES: u8> IntegerStorage for tag::UInt<BYTES> {}
+
 // `Option<T>` is compatible with the same storage tags as `T`. The schema
 // tracks nullability separately, so the storage type is unaffected by the
 // option wrapper.
 impl<T, S> CompatibleWith<S> for Option<T> where T: CompatibleWith<S> {}
+
+// Deferred fields and smart pointers are transparent storage wrappers.
+impl<T, S> CompatibleWith<S> for crate::Deferred<T> where T: CompatibleWith<S> {}
+impl<T, S> CompatibleWith<S> for Box<T> where T: CompatibleWith<S> {}
+impl<T, S> CompatibleWith<S> for std::rc::Rc<T> where T: CompatibleWith<S> {}
+impl<T, S> CompatibleWith<S> for std::sync::Arc<T> where T: CompatibleWith<S> {}
+
+// A unit enum is both `Embed` and `Scalar`. Integer storage selected on a
+// `Vec<unit-enum>` field describes each discriminant, not the collection as a
+// whole. Keep these implementations limited to enum collections so `Vec<u8>`
+// retains its binary-blob meaning.
+macro_rules! impl_integer_enum_collection_compat {
+    ($($storage:ty),* $(,)?) => {
+        $(
+            impl<T> CompatibleWith<$storage> for Vec<T>
+            where
+                T: crate::schema::Embed
+                    + crate::schema::Scalar
+                    + CompatibleWith<$storage>,
+            {}
+        )*
+    };
+}
+
+impl_integer_enum_collection_compat!(
+    tag::I8,
+    tag::I16,
+    tag::I32,
+    tag::I64,
+    tag::U8,
+    tag::U16,
+    tag::U32,
+    tag::U64,
+);
+
+impl<T, const BYTES: u8> CompatibleWith<tag::Int<BYTES>> for Vec<T> where
+    T: crate::schema::Embed + crate::schema::Scalar + CompatibleWith<tag::Int<BYTES>>
+{
+}
+
+impl<T, const BYTES: u8> CompatibleWith<tag::UInt<BYTES>> for Vec<T> where
+    T: crate::schema::Embed + crate::schema::Scalar + CompatibleWith<tag::UInt<BYTES>>
+{
+}
 
 impl CompatibleWith<tag::Boolean> for bool {}
 
@@ -68,6 +132,21 @@ impl CompatibleWith<tag::U8> for u8 {}
 impl CompatibleWith<tag::U16> for u16 {}
 impl CompatibleWith<tag::U32> for u32 {}
 impl CompatibleWith<tag::U64> for u64 {}
+
+// `int(N)` and `uint(N)` have no exact Rust counterpart when N is not a
+// power of two. Preserve the integer-family check while the engine performs
+// the value-level checked cast.
+macro_rules! impl_custom_integer_compat {
+    ($storage:ident => $($ty:ty),* $(,)?) => {
+        $(
+            #[diagnostic::do_not_recommend]
+            impl<const BYTES: u8> CompatibleWith<tag::$storage<BYTES>> for $ty {}
+        )*
+    };
+}
+
+impl_custom_integer_compat!(Int => i8, i16, i32, i64);
+impl_custom_integer_compat!(UInt => u8, u16, u32, u64);
 
 impl CompatibleWith<tag::F32> for f32 {}
 impl CompatibleWith<tag::F64> for f64 {}

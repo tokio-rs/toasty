@@ -19,10 +19,13 @@ members = [
     "crates/toasty-driver-integration-suite-macros",
 
     # Examples
-    "examples/composite-key",
-    "examples/hello-toasty",
-    "examples/todo-with-cli",
-    "examples/user-has-one-profile",
+    "examples/cms-article-fields",
+    "examples/crm-embedded",
+    "examples/forum-relationships",
+    "examples/product-search",
+    "examples/quickstart-blog",
+    "examples/service-ops",
+    "examples/store-operations",
 
     # Tests
     "tests",
@@ -41,10 +44,13 @@ default-members = [
     "crates/toasty-sql",
     "crates/toasty-driver-integration-suite",
     "crates/toasty-driver-integration-suite-macros",
-    "examples/composite-key",
-    "examples/hello-toasty",
-    "examples/todo-with-cli",
-    "examples/user-has-one-profile",
+    "examples/cms-article-fields",
+    "examples/crm-embedded",
+    "examples/forum-relationships",
+    "examples/product-search",
+    "examples/quickstart-blog",
+    "examples/service-ops",
+    "examples/store-operations",
     "tests",
     "tests/tests/fixtures/post",
     "tests/tests/fixtures/user",
@@ -66,21 +72,21 @@ unsafe_code = "deny"
 
 [workspace.dependencies]
 # Toasty crates
-toasty = { version = "0.6.1", path = "crates/toasty" }
-toasty-cli = { version = "0.6.1", path = "crates/toasty-cli" }
-toasty-core = { version = "0.6.1", path = "crates/toasty-core" }
-toasty-macros = { version = "0.6.1", path = "crates/toasty-macros" }
-toasty-sql = { version = "0.6.1", path = "crates/toasty-sql" }
+toasty = { version = "0.8.0", path = "crates/toasty" }
+toasty-cli = { version = "0.8.0", path = "crates/toasty-cli" }
+toasty-core = { version = "0.8.0", path = "crates/toasty-core" }
+toasty-macros = { version = "0.8.0", path = "crates/toasty-macros" }
+toasty-sql = { version = "0.8.0", path = "crates/toasty-sql" }
 # Driver implementations
-toasty-driver-dynamodb = { version = "0.6.1", path = "crates/toasty-driver-dynamodb" }
-toasty-driver-mysql = { version = "0.6.1", path = "crates/toasty-driver-mysql" }
-toasty-driver-postgresql = { version = "0.6.1", path = "crates/toasty-driver-postgresql" }
-toasty-driver-sqlite = { version = "0.6.1", path = "crates/toasty-driver-sqlite" }
-toasty-driver-turso = { version = "0.6.1", path = "crates/toasty-driver-turso" }
+toasty-driver-dynamodb = { version = "0.8.0", path = "crates/toasty-driver-dynamodb" }
+toasty-driver-mysql = { version = "0.8.0", path = "crates/toasty-driver-mysql" }
+toasty-driver-postgresql = { version = "0.8.0", path = "crates/toasty-driver-postgresql" }
+toasty-driver-sqlite = { version = "0.8.0", path = "crates/toasty-driver-sqlite" }
+toasty-driver-turso = { version = "0.8.0", path = "crates/toasty-driver-turso" }
 
 # Driver integration test suite dependencies
-toasty-driver-integration-suite = { version = "0.6.1", path = "crates/toasty-driver-integration-suite" }
-toasty-driver-integration-suite-macros = { version = "0.6.1", path = "crates/toasty-driver-integration-suite-macros" }
+toasty-driver-integration-suite = { version = "0.8.0", path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { version = "0.8.0", path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
 assert-struct = "0.4.2"

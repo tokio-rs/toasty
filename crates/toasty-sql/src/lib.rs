@@ -19,4 +19,4 @@ pub mod stmt;
 pub use stmt::Statement;
 
 /// JSON encoding for `stmt::Value`s stored in document-backed columns.
-pub mod value_json;
+pub mod json;

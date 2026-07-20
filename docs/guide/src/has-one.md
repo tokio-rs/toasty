@@ -394,9 +394,13 @@ generates:
 | Method | Returns | Description |
 |---|---|---|
 | `user.profile()` | Relation accessor | Accessor for the associated profile |
-| `.get(&mut db)` | `Result<Option<Profile>>` | Load the associated profile |
+| `.exec(&mut db)` | `Result<Option<Profile>>` | Load the associated profile |
 | `.create()` | Create builder | Create a profile with the foreign key pre-filled |
 | `toasty::create!(User { profile: { ... } })` | Create builder | Associate a profile on creation |
 | `user.update().profile(...)` | Update builder | Replace or associate a profile |
 | `user.update().profile(None)` | Update builder | Disassociate the profile |
 | `User::fields().profile()` | Field path | Used with `.include()` for preloading |
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

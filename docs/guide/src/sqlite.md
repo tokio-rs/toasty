@@ -137,26 +137,34 @@ mutations, [batch operations](./batch-operations.md),
 [pagination in both directions](./sorting-limits-and-pagination.md),
 [embedded types](./embedded-types.md),
 [`#[unique]`](./indexes-and-unique-constraints.md#unique-fields),
+[`upsert_by_*`](./upserting-records.md),
 [association preloading](./preloading-associations.md), and
 serializable [transactions](./transactions.md) all run natively. A few
 behaviors differ from the other SQL backends:
 
+**Targeted upsert.** SQLite executes `upsert_by_*` with `INSERT ... ON
+CONFLICT`. Primary keys and unique constraints can be conflict targets, and
+`on_create`, `on_update`, and `or_ignore` are supported. Turso uses the same
+upsert behavior.
+
 **`LIKE` is case-insensitive for ASCII.** SQLite's `LIKE` ignores case for ASCII
 characters but is case-sensitive for non-ASCII ones. A
 [`.like("Rust")`](./filtering-with-expressions.md#like) filter also matches
-`"rust"` and `"RUST"`, but `.like("café")` does not match `"CAFÉ"`. Use `GLOB`
-(which Toasty does not currently expose) or a `CHECK` against exact bytes if you
-need case-sensitive pattern matching.
+`"rust"` and `"RUST"`, but `.like("café")` does not match `"CAFÉ"`. For a
+case-sensitive prefix match, use
+[`.starts_with()`](./filtering-with-expressions.md#starts_with), which lowers to
+`GLOB`. Toasty exposes no operator for case-sensitive matching of an arbitrary
+pattern; use a `CHECK` against exact bytes if you need one.
 
 **No `ILIKE`.** SQLite has no `ILIKE` operator, so
 [`.ilike()`](./filtering-with-expressions.md#ilike) is rejected with an
 `unsupported_feature` error. Since SQLite's `LIKE` already folds ASCII case, use
 `.like()` for case-insensitive ASCII matching.
 
-**No native prefix-match operator.**
+**Prefix match via `GLOB`.**
 [`.starts_with("abc")`](./filtering-with-expressions.md#starts_with)
-lowers to `LIKE 'abc%'`. The optimizer can use a regular index for the
-common-prefix lookup.
+lowers to `col GLOB 'abc*'`, a case-sensitive prefix match. The optimizer can
+use a regular index for the common-prefix lookup.
 
 **Scalar arrays use JSON1.** A
 [`Vec<T>` field](./field-options.md#scalar-arrays) lives in a `TEXT`
@@ -262,3 +270,7 @@ The pool sizing knobs from
 [Database Setup](./database-setup.md#connection-pool) still apply for
 file-backed databases. In-memory mode pins the pool to a single
 connection regardless of `max_pool_size`.
+
+> **Runnable example:** [`quickstart-blog`] is the simplest of the examples; like all of them it runs on in-memory SQLite by default.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog

@@ -15,7 +15,7 @@ checking for null — use `Model::filter()` with field expressions.
 | [`.in_list([...])`](#membership-with-in_list) | Value in list | `IN (...)` |
 | [`.is_none()`](#null-checks) | Null check (`Option` fields) | `IS NULL` |
 | [`.is_some()`](#null-checks) | Not-null check (`Option` fields) | `IS NOT NULL` |
-| [`.starts_with(prefix)`](#starts_with) | Prefix match | `begins_with(field, prefix)` / `LIKE 'prefix%'` |
+| [`.starts_with(prefix)`](#starts_with) | Case-sensitive prefix match | `begins_with(field, prefix)` / `^@`, `GLOB`, `BINARY ... LIKE` |
 | [`.like(pattern)`](#like) | Pattern match, behavior per backend | `LIKE pattern` |
 | [`.ilike(pattern)`](#ilike) | Case-insensitive pattern match, PostgreSQL only | `ILIKE pattern` |
 | [`.and(expr)`](#combining-with-and) | Both conditions true | `AND` |
@@ -400,8 +400,17 @@ below.
 ### `starts_with`
 
 `.starts_with()` tests whether a string field starts with the given prefix. It
-works on all supported databases — SQL drivers translate it to `LIKE 'prefix%'`,
-and DynamoDB uses its native `begins_with` condition expression:
+works on all supported databases and is case-sensitive on every backend.
+DynamoDB uses its native `begins_with` condition expression; each SQL backend
+lowers to an operator that preserves case:
+
+| Backend | Operator |
+|---|---|
+| PostgreSQL | `col ^@ 'prefix'` |
+| SQLite | `col GLOB 'prefix*'` |
+| MySQL | `BINARY col LIKE 'prefix%'` |
+
+The match is exact: `.starts_with("Al")` matches `"Alice"` but not `"alice"`.
 
 ```rust
 # use toasty::Model;
@@ -577,6 +586,11 @@ The path `User::fields().todos()` refers to the HasMany relation. Calling
 `.any()` on it takes a filter expression on the child model (`Todo`) and
 produces a filter expression on the parent (`User`).
 
+`.any()` also works on a model-terminal `has_many(via = ...)` path. For a
+[many-to-many relationship](./many-to-many.md), call `.any()` on the derived
+relation to filter by the opposite endpoint, or on the direct join-model
+relation to filter by fields stored on the connection.
+
 ### `all` — every related record matches
 
 `.all()` on a `HasMany` path is the universal counterpart to `.any()`:
@@ -621,3 +635,9 @@ let users = User::filter(
 user with no todos matches `todos().all(...)` for any filter. This
 mirrors Rust's `[].iter().all(...)` semantics.
 
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

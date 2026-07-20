@@ -1,5 +1,6 @@
 //! Verifies the flavor-divergent serialization of `Assignments` in `UPDATE`
-//! statements: `Set`, `Append`, `Remove`, `Pop`, and `RemoveAt`.
+//! statements and upsert conflict actions: `Set`, `Append`, `Remove`, `Pop`,
+//! and `RemoveAt`.
 //!
 //! Plain `Set` renders the same shape across all flavors (with backend ident
 //! quoting). The collection operators (`Append`, `Remove`, `Pop`, `RemoveAt`)
@@ -14,7 +15,10 @@
 use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
-    stmt::{self, Assignments, Expr, Filter, Update, UpdateTarget},
+    stmt::{
+        self, Assignments, Expr, ExprColumn, ExprIncoming, Filter, Insert, InsertTable,
+        InsertTarget, Update, UpdateTarget, Values,
+    },
 };
 use toasty_sql::{Serializer, Statement as SqlStatement};
 
@@ -114,6 +118,42 @@ fn update_with(assignments: Assignments) -> stmt::Statement {
     .into()
 }
 
+/// Build an insert whose conflict action applies the supplied assignments.
+fn upsert_with(assignments: Assignments) -> stmt::Statement {
+    let columns = (0..3)
+        .map(|index| ColumnId {
+            table: TableId(0),
+            index,
+        })
+        .collect();
+
+    Insert {
+        target: InsertTarget::Table(InsertTable {
+            table: TableId(0),
+            columns,
+        }),
+        source: stmt::Query::values(Values::new(vec![Expr::record([
+            Expr::from(1i64),
+            Expr::from("a"),
+            Expr::list([Expr::from(7i64)]),
+        ])])),
+        upsert: Some(Box::new(stmt::Upsert {
+            target: stmt::UpsertTarget::Columns(vec![ColumnId {
+                table: TableId(0),
+                index: 0,
+            }]),
+            shared: assignments,
+            defaults: Assignments::default(),
+            update_defaults: Assignments::default(),
+            create: Assignments::default(),
+            update: Assignments::default(),
+            action: stmt::UpsertAction::Update,
+        })),
+        returning: None,
+    }
+    .into()
+}
+
 // -----------------------------------------------------------------------------
 // Set (plain assignment) — same shape across flavors, modulo ident quoting.
 // -----------------------------------------------------------------------------
@@ -159,7 +199,7 @@ fn set_assignment_sqlite() {
 
 // -----------------------------------------------------------------------------
 // Append — flavor-divergent: PG `||`, MySQL `JSON_MERGE_PRESERVE`, SQLite
-// `json_each` subquery.
+// scalar JSON-array splice.
 // -----------------------------------------------------------------------------
 
 #[test]
@@ -191,7 +231,44 @@ fn append_assignment_sqlite() {
     let mut assignments = Assignments::default();
     assignments.append(2usize, Expr::list([Expr::from(7i64)]));
 
-    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = (SELECT json_group_array(value) FROM (SELECT value FROM json_each("tags") UNION ALL SELECT value FROM json_each((7))));"#]].assert_eq(&render(Flavor::Sqlite, &schema, update_with(assignments)));
+    expect![[r#"UPDATE "users" AS tbl_0_0 SET "tags" = json(substr("tags", 1, length("tags") - 1) || CASE WHEN json_array_length("tags") > 0 AND json_array_length((7)) > 0 THEN ',' ELSE '' END || substr((7), 2));"#]].assert_eq(&render(Flavor::Sqlite, &schema, update_with(assignments)));
+}
+
+#[test]
+fn upsert_self_references_qualify_postgresql_target() {
+    let schema = users_schema();
+    let mut assignments = Assignments::default();
+    assignments.set(
+        1usize,
+        Expr::column(ExprColumn {
+            nesting: 0,
+            table: 0,
+            column: 1,
+        }),
+    );
+    assignments.append(2usize, Expr::list([Expr::from(7i64)]));
+
+    expect![[r#"INSERT INTO "users" ("id", "name", "tags") VALUES (1, 'a', (7)) ON CONFLICT ("id") DO UPDATE SET "name" = "users"."name", "tags" = "users"."tags" || (7);"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        upsert_with(assignments),
+    ));
+}
+
+#[test]
+fn upsert_incoming_projection_postgresql() {
+    let schema = users_schema();
+    let mut assignments = Assignments::default();
+    assignments.set(
+        1usize,
+        Expr::project(ExprIncoming::table(TableId(0)), [1usize]),
+    );
+
+    expect![[r#"INSERT INTO "users" ("id", "name", "tags") VALUES (1, 'a', (7)) ON CONFLICT ("id") DO UPDATE SET "name" = excluded."name";"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &schema,
+        upsert_with(assignments),
+    ));
 }
 
 // -----------------------------------------------------------------------------

@@ -6,6 +6,7 @@ mod lift_in_subquery;
 mod lift_update_query;
 mod paginate;
 mod relation;
+mod relation_path;
 mod returning;
 mod via_join;
 
@@ -28,7 +29,7 @@ use toasty_core::{
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, fold, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, hir, simplify::Simplify, upsert};
 
 /// Wrap a nullable single-relation subquery so a missing row passes through as
 /// `Null`, while a present row is transformed by `present`. Used when lowering
@@ -284,7 +285,9 @@ impl LowerStatement<'_, '_> {
     ///
     /// `Append` is supported on every backend; the removal operators are
     /// gated by per-backend capability flags and emit a clear error where
-    /// the native form is not available.
+    /// the native form is not available. On document collections the
+    /// removal operators are rejected outright: the per-backend renderings
+    /// are native-array forms that do not apply to a document column.
     fn lower_collection_op(
         &mut self,
         out: &mut stmt::Assignments,
@@ -311,21 +314,35 @@ impl LowerStatement<'_, '_> {
         };
 
         // `Append` is universally supported; the removal operators are
-        // gated per backend.
+        // gated per backend and rejected on document collections, where
+        // the capability flags speak for the native-array renderings only.
         let cap = self.capability();
+        let is_document = self
+            .expr_cx
+            .schema()
+            .mapping
+            .document_column_ty(prim.column)
+            .is_some();
         let unsupported = match &op {
             CollectionOp::Append(_) => None,
-            CollectionOp::Remove(_) if !cap.vec_remove => Some("stmt::remove"),
-            CollectionOp::Pop if !cap.vec_pop => Some("stmt::pop"),
-            CollectionOp::RemoveAt(_) if !cap.vec_remove_at => Some("stmt::remove_at"),
+            CollectionOp::Remove(_) if is_document || !cap.vec_remove => Some("stmt::remove"),
+            CollectionOp::Pop if is_document || !cap.vec_pop => Some("stmt::pop"),
+            CollectionOp::RemoveAt(_) if is_document || !cap.vec_remove_at => {
+                Some("stmt::remove_at")
+            }
             _ => None,
         };
 
         if let Some(op_name) = unsupported {
+            let target = if is_document {
+                "document collections"
+            } else {
+                "this backend"
+            };
             self.state
                 .errors
                 .push(crate::Error::invalid_statement(format!(
-                    "{op_name} is not yet supported on this backend"
+                    "{op_name} is not yet supported on {target}"
                 )));
             return;
         }
@@ -333,7 +350,20 @@ impl LowerStatement<'_, '_> {
         match op {
             CollectionOp::Append(expr) => {
                 self.visit_expr_mut(expr);
-                out.append(prim.column, expr.take());
+                let mut value = expr.take();
+
+                // A document collection's append operand (a list of elements,
+                // matching the column's document type) lowers through the
+                // same schema-directed cast a `Set` picks up from
+                // `model_to_table`; `Append` bypasses that template, so the
+                // cast is applied here.
+                let schema = self.expr_cx.schema();
+                if let Some(doc_ty) = schema.mapping.document_column_ty(prim.column) {
+                    let column_ty = &schema.db.column(prim.column).ty;
+                    value = stmt::Expr::cast_from(value, doc_ty, column_ty);
+                }
+
+                out.append(prim.column, value);
             }
             CollectionOp::Remove(expr) => {
                 self.visit_expr_mut(expr);
@@ -488,10 +518,7 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 
         // Two literal-list `Append`s concatenate. Non-literal Append
         // shapes fall through to a residual `Batch`.
-        (Append(a), Append(b)) => match try_concat_list_literals(a, b) {
-            Ok(merged) => Append(merged),
-            Err((a, b)) => Batch(vec![Append(a), Append(b)]),
-        },
+        (Append(a), Append(b)) => try_concat_list_literals_to_assignment(a, b),
 
         // A `Batch` accumulator absorbs the next entry as a tail. Arises
         // when a previous compose failed to reduce a pair; collecting the
@@ -507,23 +534,16 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 }
 
 /// Concatenate two list-shaped expressions if both are literals (either
-/// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
-/// on failure so the caller can preserve the un-folded shape.
-//
-// Err carries two owned `Expr`s by design: the caller wants the un-folded
-// pair back on failure, not a borrowed view, and boxing would allocate on
-// every failed concat attempt in a hot lowering path.
-#[allow(clippy::result_large_err)]
-fn try_concat_list_literals(
-    a: stmt::Expr,
-    b: stmt::Expr,
-) -> Result<stmt::Expr, (stmt::Expr, stmt::Expr)> {
+/// `Expr::List` or `Expr::Value(Value::List)`). Returns a residual `Batch`
+/// containing the original pair if either expression is not a literal.
+fn try_concat_list_literals_to_assignment(a: stmt::Expr, b: stmt::Expr) -> stmt::Assignment {
+    use stmt::Assignment::{Append, Batch};
     if !is_list_literal(&a) || !is_list_literal(&b) {
-        return Err((a, b));
+        return Batch(vec![Append(a), Append(b)]);
     }
     let mut items = take_list_items(a).expect("checked is_list_literal");
     items.extend(take_list_items(b).expect("checked is_list_literal"));
-    Ok(stmt::Expr::list_from_vec(items))
+    Append(stmt::Expr::list_from_vec(items))
 }
 
 fn is_list_literal(e: &stmt::Expr) -> bool {
@@ -785,6 +805,81 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
                 }
             }
+            stmt::Expr::Project(project)
+                if let stmt::Expr::Incoming(stmt::ExprIncoming::Model(model)) =
+                    project.base.as_ref() =>
+            {
+                let (table, column) = {
+                    let mapping = self.schema().mapping_for(*model);
+                    let mapped = mapping
+                        .resolve_field_mapping(&project.projection)
+                        .expect("incoming upsert field must map to a column");
+                    let mut columns = mapped.columns();
+                    let (column, _) = columns
+                        .next()
+                        .expect("incoming upsert field has no database column");
+                    assert!(
+                        columns.next().is_none(),
+                        "incoming() does not yet support column-expanded embedded fields"
+                    );
+                    (mapping.table, column)
+                };
+                debug_assert_eq!(table, column.table);
+                *project.base = stmt::ExprIncoming::table(table).into();
+                project.projection = stmt::Projection::from_index(column.index);
+            }
+            // A null-check on an `Option<Embed>` field reduces to a null-check on
+            // the embed's head column instead of distributing the check over
+            // every flattened column. The head column is `NULL` for `None`, so
+            // for `Account::fields().contact().is_none()` (an `Option<enum>`)
+            // this emits `contact IS NULL` rather than checking each variant
+            // column. `.is_some()` arrives as `Not(IsNull(..))`, so the
+            // surrounding `Not` yields `contact IS NOT NULL`. Scalar `Option`
+            // and non-nullable fields fall through to the normal reference
+            // lowering below.
+            //
+            // Only fires for WHERE-clause predicates (`Statement` context),
+            // where a field reference lowers to a column. The `model_to_table`
+            // encode wraps `is_not_null(field)` over the head column too; in the
+            // `InsertRow` encode context the field reference must resolve to the
+            // row value (and `is_null` then folds), so this rewrite must not
+            // intercept it. (The UPDATE encode substitutes the value before
+            // re-visiting, so the inner is no longer a field reference there.)
+            stmt::Expr::IsNull(e) => {
+                let head_column = match &*e.expr {
+                    stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index })
+                        if self.cx.is_statement() =>
+                    {
+                        // The head column whose null-ness is the option's
+                        // none-ness: a struct embed's presence column, or an
+                        // enum embed's (nullable) discriminant column. A
+                        // non-nullable embed's `is_null` is already folded to
+                        // `false` in simplify, so reaching here implies nullable.
+                        self.mapping_at_unwrap(*nesting)
+                            .fields
+                            .get(*index)
+                            .and_then(|f| match f {
+                                mapping::Field::Struct(fs) => fs.presence.map(|p| p.index),
+                                mapping::Field::Enum(fe) => Some(fe.discriminant.column.index),
+                                _ => None,
+                            })
+                            .map(|column| (*nesting, column))
+                    }
+                    _ => None,
+                };
+
+                if let Some((nesting, column)) = head_column {
+                    let mut col_ref = stmt::Expr::column(stmt::ExprColumn {
+                        nesting,
+                        table: 0,
+                        column,
+                    });
+                    self.visit_expr_mut(&mut col_ref);
+                    *expr = stmt::Expr::is_null(col_ref);
+                } else {
+                    stmt::visit_mut::visit_expr_mut(self, expr);
+                }
+            }
             stmt::Expr::Reference(expr_reference) => {
                 match expr_reference {
                     // A reference to a relation field inside a Returning
@@ -852,10 +947,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     visit_mut::visit_expr_stmt_mut(child, &mut expr_stmt);
                 });
 
-                // Cheap canonicalization is enough here: the parent statement's
-                // post-lowering simplify will recursively visit this embedded
-                // sub-statement and apply the heavyweight rules.
-                fold::fold_stmt(&mut *expr_stmt.stmt);
+                // Post-lower simplify. The sub-statement detaches into its own
+                // HIR entry (`new_sub_statement`), so the parent statement's
+                // post-lowering simplify never sees it — the heavyweight rules
+                // (e.g. the schema-directed `#[document]` cast folding) must
+                // run here.
+                self.state.engine.simplify_stmt(&mut *expr_stmt.stmt);
 
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
@@ -876,10 +973,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 });
 
                 let mut stmt = stmt::Statement::Query(*expr_exists.subquery);
-                // Cheap canonicalization is enough here: the parent statement's
-                // post-lowering simplify will recursively visit this embedded
-                // sub-statement and apply the heavyweight rules.
-                fold::fold_stmt(&mut stmt);
+                // Post-lower simplify. The sub-statement detaches into its own
+                // HIR entry (`new_sub_statement`), so the parent statement's
+                // post-lowering simplify never sees it — the heavyweight rules
+                // must run here.
+                self.state.engine.simplify_stmt(&mut stmt);
 
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
@@ -994,23 +1092,67 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
+        let sql = self.state.engine.capability.sql;
+        if let Err(err) = upsert::normalize(stmt, !sql) {
+            self.state.errors.push(err);
+            return;
+        }
+
         // Create a new expr scope for the statement, and lower all parts
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
+
+        if let Some(upsert) = &mut stmt.upsert {
+            if let stmt::UpsertTarget::Fields(fields) = &upsert.target {
+                let mapping = lower.mapping_unwrap();
+                let mut columns = Vec::new();
+                for field in fields {
+                    let mapped = mapping
+                        .resolve_field_mapping(field)
+                        .expect("upsert target must map to database columns");
+                    columns.extend(mapped.columns().map(|(column, _)| column));
+                }
+                upsert.target = stmt::UpsertTarget::Columns(columns);
+            }
+            if upsert.action == stmt::UpsertAction::Update {
+                let version = lower.inject_version_increment(&mut upsert.shared);
+                if !sql && let Some(projection) = version {
+                    upsert.defaults.set(projection, stmt::Value::U64(0));
+                }
+            }
+            lower.visit_assignments_mut(&mut upsert.shared);
+            lower.visit_assignments_mut(&mut upsert.defaults);
+            lower.visit_assignments_mut(&mut upsert.update_defaults);
+        }
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
         }
 
         // Preprocess the insertion source (values usually)
-        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning);
+        // `DO NOTHING RETURNING` legitimately produces zero rows. Keep its
+        // returning clause as a projection over the database result so the
+        // normal single-statement boundary can turn an empty list into
+        // `Value::Null` (and therefore `Option::None`). Converting it to an
+        // expression would project row zero eagerly and panic on conflict.
+        let preserve_returning_projection = stmt
+            .upsert
+            .as_ref()
+            .is_some_and(|upsert| upsert.action == stmt::UpsertAction::Ignore);
+        lower.preprocess_insert_values(
+            &mut stmt.source,
+            &mut stmt.returning,
+            preserve_returning_projection,
+        );
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
-            lower.constantize_insert_returning(returning, &stmt.source);
+            if stmt.upsert.is_none() {
+                lower.constantize_insert_returning(returning, &stmt.source);
+            }
 
             if stmt.source.single
                 && let stmt::Returning::Expr(expr) = &returning
@@ -1097,6 +1239,22 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             returning_changed,
         );
 
+        // A versionable model bumps its OCC counter on every update. The
+        // instance path sets the counter explicitly in generated code,
+        // alongside the `version == <last read>` condition — only it knows the
+        // value the caller last loaded. A query-based update leaves the counter
+        // unset, so the engine injects the relative `version = version + 1`
+        // here. Upsert conflict updates use the same injection helper from the
+        // insert lowering path.
+        //
+        // Injecting after the `Changed` returning projection is built above
+        // keeps the engine-managed counter out of the returning clause. A
+        // relative `+1` is not constantizable; leaving it in the returning
+        // would force a per-row read-back that the multi-row DynamoDB transact
+        // path cannot serve. The counter still advances in the database — a
+        // query update just doesn't read it back (it discards its result).
+        let _ = lower.inject_version_increment(&mut stmt.assignments);
+
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);
 
@@ -1107,7 +1265,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
             // Use the lowered assignments (which are now column-indexed)
-            lower.constantize_update_returning(returning, &stmt.assignments);
+            returning::constantize_update_returning(lower.expr_cx, returning, &stmt.assignments);
         }
 
         self.visit_update_target_mut(&mut stmt.target);
@@ -1212,7 +1370,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             (nesting, *pk_field_id)
         };
 
-        let pk = self.expr_cx.schema().app.field(pk_field_id);
+        let schema = self.expr_cx.schema();
+        let pk = schema.app.field(pk_field_id);
 
         // Sanity-check the RHS shape against the PK type.
         match &mut *expr.list {
@@ -1220,7 +1379,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 for item in &mut expr_list.items {
                     match item {
                         stmt::Expr::Value(value) => {
-                            assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                            assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                         }
                         _ => todo!("{item:#?}"),
                     }
@@ -1228,7 +1387,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             stmt::Expr::Value(stmt::Value::List(values)) => {
                 for value in values {
-                    assert!(value.is_a(&pk.ty.as_primitive_unwrap().ty));
+                    assert!(value.is_a(&schema.app, &pk.ty.as_primitive_unwrap().ty));
                 }
             }
             _ => todo!("expr={expr:#?}"),
@@ -1366,7 +1525,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     }
                     stmt::Expr::Value(stmt::Value::List(items)) => {
                         for item in items {
-                            *item = target_ty.cast(item.take()).expect("failed to cast value");
+                            *item = target_ty
+                                .cast(self.expr_cx.schema(), item.take())
+                                .expect("failed to cast value");
                         }
                     }
                     stmt::Expr::Arg(_) => {
@@ -1412,6 +1573,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
                 None
             }
+            (stmt::Expr::Project(_), list) => {
+                match list {
+                    stmt::Expr::Value(stmt::Value::List(_)) => {}
+                    stmt::Expr::List(list) => {
+                        for item in &list.items {
+                            assert!(item.is_value());
+                        }
+                    }
+                    _ => panic!("invalid; should have been caught earlier"),
+                }
+
+                None
+            }
             (expr, list) => todo!("expr={expr:#?}; list={list:#?}"),
         }
     }
@@ -1420,7 +1594,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
-            LoweringContext::Statement | LoweringContext::Returning(_) => {
+            LoweringContext::Statement
+            | LoweringContext::Returning(_)
+            | LoweringContext::Insert(..) => {
+                // Upsert update assignments are visited in the surrounding
+                // Insert context. Their field references read the stored row;
+                // proposed-row values use Expr::Incoming instead. Inserted
+                // value rows use the separate InsertRow branch below.
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
@@ -1434,7 +1614,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     row.entry(index).unwrap().to_expr()
                 }
             }
-            _ => todo!("cx={:#?}", self.cx),
         }
     }
 
@@ -1778,7 +1957,9 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             }
             stmt::Expr::Value(value) => {
                 // Cast the value to target_ty using existing cast method
-                let casted = target_ty.cast(value.take()).expect("failed to cast value");
+                let casted = target_ty
+                    .cast(self.expr_cx.schema(), value.take())
+                    .expect("failed to cast value");
                 *value = casted;
             }
             stmt::Expr::Project(_) => {
@@ -1803,6 +1984,10 @@ impl LoweringContext<'_> {
 
     fn is_returning(&self) -> bool {
         matches!(self, LoweringContext::Returning(_))
+    }
+
+    fn is_statement(&self) -> bool {
+        matches!(self, LoweringContext::Statement)
     }
 }
 
@@ -1854,7 +2039,20 @@ impl stmt::Input for AssignmentInput<'_> {
         if expr_projection.as_slice() == remaining_steps {
             Some(self.value.clone())
         } else {
-            self.value.entry(expr_projection).map(|e| e.to_expr())
+            // The column's encode template projects into variant-field
+            // positions of the assignment value. When a mixed enum is updated
+            // to a unit (or otherwise shorter) variant, the value record is
+            // narrower than a sibling variant's column expects, so the
+            // projection falls out of bounds and `entry` returns `None`. Those
+            // references live inside a discriminant-guarded match arm that is
+            // unreachable for this value, so resolving them to `null` is safe —
+            // the simplifier drops the dead arm.
+            Some(
+                self.value
+                    .entry(expr_projection)
+                    .map(|e| e.to_expr())
+                    .unwrap_or_else(stmt::Expr::null),
+            )
         }
     }
 }

@@ -190,6 +190,13 @@ pub(super) fn hash_value<H: Hasher>(v: &Value, state: &mut H) {
                 hash_value(v, state);
             }
         }
+        Value::Object(o) => {
+            o.entries.len().hash(state);
+            for (k, v) in &o.entries {
+                k.hash(state);
+                hash_value(v, state);
+            }
+        }
         Value::SparseRecord(r) => {
             r.fields.hash(state);
             r.values.len().hash(state);

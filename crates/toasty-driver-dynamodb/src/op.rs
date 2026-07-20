@@ -6,6 +6,7 @@ mod insert;
 mod query_pk;
 mod scan;
 mod update_by_key;
+mod upsert;
 
 use super::{
     AttributeDefinition, BillingMode, Connection, Delete, ExprAttrs, GlobalSecondaryIndex,

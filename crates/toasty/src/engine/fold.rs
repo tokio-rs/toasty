@@ -14,6 +14,7 @@ mod expr_in_list;
 mod expr_intersects;
 mod expr_is_null;
 mod expr_is_superset;
+mod expr_let;
 mod expr_list;
 mod expr_match;
 mod expr_not;
@@ -65,6 +66,7 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         Expr::Intersects(expr) => expr_intersects::fold_expr_intersects(expr),
         Expr::IsNull(expr) => expr_is_null::fold_expr_is_null(expr),
         Expr::IsSuperset(expr) => expr_is_superset::fold_expr_is_superset(expr),
+        Expr::Let(expr) => expr_let::fold_expr_let(expr),
         Expr::List(expr) => expr_list::fold_expr_list(expr),
         Expr::Match(expr) => expr_match::fold_expr_match(expr),
         Expr::Not(expr) => expr_not::fold_expr_not(expr),
@@ -77,15 +79,16 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::Any(_)
         | Expr::AnyOp(_)
         | Expr::Arg(_)
+        | Expr::Between(_)
         | Expr::Default
         | Expr::Error(_)
         | Expr::Exists(_)
         | Expr::Func(_)
         | Expr::Ident(_)
         | Expr::InSubquery(_)
+        | Expr::Incoming(_)
         | Expr::IsVariant(_)
         | Expr::Length(_)
-        | Expr::Let(_)
         | Expr::Like(_)
         | Expr::Map(_)
         | Expr::Project(_)

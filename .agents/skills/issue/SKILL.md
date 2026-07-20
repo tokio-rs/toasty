@@ -28,8 +28,9 @@ Issue templates live in
 [`.github/ISSUE_TEMPLATE/`](../../../.github/ISSUE_TEMPLATE):
 
 - [`bug_report.yml`](../../../.github/ISSUE_TEMPLATE/bug_report.yml) —
-  incorrect or unexpected behavior. Requires a reproducer, the affected
-  driver(s), and the Toasty version or commit SHA.
+  incorrect or unexpected behavior. Asks what you did, what you expected,
+  and what happened instead; the affected driver(s); the Toasty version;
+  and a reproducer.
 - [`feature_proposal.yml`](../../../.github/ISSUE_TEMPLATE/feature_proposal.yml) —
   new features, public-API changes, or anything that affects driver
   implementations. Requires the problem, proposed solution,
@@ -41,11 +42,23 @@ say so explicitly rather than leaving it blank.
 
 ## Bug reports
 
-A small, self-contained reproducer is the single most useful thing in a
-bug report. A failing test in
-`crates/toasty-driver-integration-suite/src/tests/` is ideal; a
-standalone snippet works too. Include the exact error, generated SQL,
-or backtrace when relevant.
+Report what you observed, not why you think it happened. A bug report
+has five parts:
+
+- **What you did** — the query or operation you ran.
+- **What you expected** — the result you expected.
+- **What actually happened** — the error, wrong result, or panic. Quote
+  the exact message, generated SQL, or backtrace.
+- **Additional context** — affected driver, Toasty version, related
+  issues.
+- **A minimal reproducer** — a failing test in
+  `crates/toasty-driver-integration-suite/src/tests/` is ideal; a small
+  standalone snippet works too. This is the single most useful thing in
+  the report.
+
+Leave out root-cause analysis. Diagnosing the bug is the maintainer's
+job, and a guess at the cause sends triage down the wrong path. Describe
+the behavior; the reproducer shows the rest.
 
 ## Feature proposals
 

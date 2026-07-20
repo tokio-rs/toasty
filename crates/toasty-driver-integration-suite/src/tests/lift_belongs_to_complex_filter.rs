@@ -46,7 +46,7 @@ pub async fn lift_belongs_to_preserves_embedded_field_filter(t: &mut Test) -> Re
         user: toasty::Deferred<User>,
     }
 
-    let mut db = t.setup_db(models!(User, Post, Address)).await;
+    let mut db = t.setup_db(models!(User, Post)).await;
 
     toasty::create!(Post::[
         {

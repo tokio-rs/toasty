@@ -46,7 +46,8 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, Driver, ExecResponse,
+        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
+        log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
     schema::{
@@ -205,7 +206,12 @@ impl Turso {
         let path = if url.path() == ":memory:" {
             TursoPath::InMemory
         } else {
-            TursoPath::File(PathBuf::from(url.path()))
+            TursoPath::File(PathBuf::from(
+                percent_encoding::percent_decode(url.path().as_bytes())
+                    .decode_utf8_lossy()
+                    .to_string()
+                    .as_str(),
+            ))
         };
         Ok(Self::with_path(path))
     }
@@ -362,7 +368,7 @@ impl Driver for Turso {
         &Capability::TURSO
     }
 
-    async fn connect(&self) -> Result<Box<dyn toasty_core::Connection>> {
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn toasty_core::Connection>> {
         let db = self.database().await?;
         let conn = db.connect().map_err(classify_turso_error)?;
 
@@ -383,6 +389,7 @@ impl Driver for Turso {
             } else {
                 "BEGIN"
             },
+            query_log: cx.query_log,
         }))
     }
 
@@ -423,6 +430,7 @@ pub struct Connection {
     /// needs to know which mode it was opened in; it just emits the
     /// pre-baked command.
     default_begin_sql: &'static str,
+    query_log: QueryLogConfig,
 }
 
 impl fmt::Debug for Connection {
@@ -438,8 +446,26 @@ impl Connection {
         typed_params: Vec<TypedValue>,
         ret: SqlReturn,
     ) -> Result<ExecResponse> {
-        tracing::debug!(db.system = "turso", db.statement = %sql_str, params = typed_params.len(), "executing SQL");
+        let mut log = QueryLog::sql(
+            &self.query_log,
+            "turso",
+            sql_str,
+            typed_params.iter().map(|tv| &tv.value),
+        );
+        let result = self
+            .exec_sql_inner(sql_str, typed_params, ret, &mut log)
+            .await;
+        log.finish(&result);
+        result
+    }
 
+    async fn exec_sql_inner(
+        &mut self,
+        sql_str: &str,
+        typed_params: Vec<TypedValue>,
+        ret: SqlReturn,
+        log: &mut QueryLog<'_>,
+    ) -> Result<ExecResponse> {
         let params: Vec<TursoValue> = typed_params
             .iter()
             .map(|tv| value::to_turso(&tv.value))
@@ -493,6 +519,7 @@ impl Connection {
             }
         }
 
+        log.rows(values.len() as u64);
         Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(
             values,
         )))
@@ -651,5 +678,49 @@ impl toasty_core::driver::Connection for Connection {
             .map_err(classify_turso_error)?;
 
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{Turso, TursoPath};
+    use std::path::PathBuf;
+
+    /// The file path `Turso::new` resolves out of a `turso:` URL.
+    fn file_path(url: &str) -> PathBuf {
+        match Turso::new(url).unwrap().path {
+            TursoPath::File(path) => path,
+            TursoPath::InMemory => panic!("expected a file-backed database for {url}"),
+        }
+    }
+
+    #[test]
+    fn new_decodes_percent_encoded_path() {
+        // `url::Url` stores the path percent-encoded: a space becomes `%20` and
+        // non-ASCII bytes become `%XX` sequences. The driver must decode it back
+        // before opening the file, otherwise it opens one whose name literally
+        // contains `%20`.
+        assert_eq!(
+            file_path("turso:/tmp/my db.sqlite"),
+            PathBuf::from("/tmp/my db.sqlite")
+        );
+        assert_eq!(
+            file_path("turso:///tmp/my%20db.sqlite"),
+            PathBuf::from("/tmp/my db.sqlite")
+        );
+        assert_eq!(
+            file_path("turso:/tmp/d%C3%A9j%C3%A0.db"),
+            PathBuf::from("/tmp/déjà.db")
+        );
+        // Percent-decoding, not form-decoding: a literal `+` must stay a `+`.
+        assert_eq!(file_path("turso:/tmp/a+b.db"), PathBuf::from("/tmp/a+b.db"));
+    }
+
+    #[test]
+    fn new_memory_url_stays_in_memory() {
+        assert!(matches!(
+            Turso::new("turso::memory:").unwrap().path,
+            TursoPath::InMemory
+        ));
     }
 }

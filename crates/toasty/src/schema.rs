@@ -1,10 +1,6 @@
 mod auto;
 pub use auto::Auto;
 
-/// Compile-time metadata and validation for `create!` macro field checking.
-pub mod create_meta;
-pub use create_meta::{CreateField, CreateMeta, ValidateCreate};
-
 mod deferred;
 pub use deferred::Deferred;
 
@@ -12,7 +8,7 @@ mod embed;
 pub use embed::Embed;
 
 mod field;
-pub use field::{Field, Scalar};
+pub use field::{Document, Field, Scalar};
 
 #[cfg(feature = "jiff")]
 mod jiff;
@@ -25,23 +21,27 @@ mod load;
 pub use load::Load;
 
 mod model;
-pub use model::Model;
+pub use model::{Model, QueryMany, QueryOne, QueryOptionOne};
 
 mod option;
 
 mod register;
 pub use register::inventory;
-pub use register::{DiscoverItem, Register, generate_unique_id};
+pub use register::{DiscoverItem, generate_unique_id};
 
 mod num;
 
 mod relation;
-pub use relation::{Direct, RelationManyField, RelationOneField, Via};
+pub use relation::RelationManyField;
 
 mod relation_one;
+pub use relation_one::RelationOneField;
 
 mod scope;
-pub use scope::{CreateScope, Scope};
+pub use scope::Scope;
+
+mod via;
+pub use via::{ViaMany, ViaManyField, ViaPath, ViaTarget};
 
 use crate::Result;
 

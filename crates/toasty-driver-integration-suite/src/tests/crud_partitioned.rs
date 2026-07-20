@@ -71,8 +71,9 @@ pub async fn update_by_partition_key(test: &mut Test) {
             values: Rows::Count(_),
         });
     } else {
-        // NoSQL: first a QueryPk to collect all matching PKs, then UpdateByKey
-        // for every matched record.
+        // NoSQL: first a QueryPk to collect all matching PKs, then one
+        // single-key UpdateByKey per matched record (the engine shreds
+        // multi-key updates so each key is adjudicated independently).
         let (op, _) = test.log().pop();
 
         assert_struct!(op, Operation::QueryPk({
@@ -81,20 +82,22 @@ pub async fn update_by_partition_key(test: &mut Test) {
             filter: None,
         }));
 
-        let (op, resp) = test.log().pop();
-
         // Column index 2 = title (id=0, user_id=1, title=2).
-        assert_struct!(op, Operation::UpdateByKey({
-            table: == todo_table_id,
-            keys.len(): 2,
-            assignments: #{ [2]: Assignment::Set(== "updated")},
-            filter: None,
-            returning: false,
-        }));
+        for _ in 0..2 {
+            let (op, resp) = test.log().pop();
 
-        assert_struct!(resp, {
-            values: Rows::Count(2),
-        });
+            assert_struct!(op, Operation::UpdateByKey({
+                table: == todo_table_id,
+                keys.len(): 1,
+                assignments: #{ [2]: Assignment::Set(== "updated")},
+                filter: None,
+                returning: None,
+            }));
+
+            assert_struct!(resp, {
+                values: Rows::Count(1),
+            });
+        }
     }
 
     assert!(test.log().is_empty(), "log should be empty after update");

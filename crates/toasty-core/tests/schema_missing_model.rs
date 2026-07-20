@@ -23,6 +23,7 @@ fn make_id_field(model_id: ModelId) -> Field {
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -40,7 +41,7 @@ fn make_root_model(id: ModelId, name: &str, extra_fields: Vec<Field>) -> Model {
                 index: 0,
             },
         },
-        table_name: None,
+        table_name: name.to_string(),
         indices: vec![],
         version_field: None,
     })
@@ -61,6 +62,7 @@ fn make_relation_field(model_id: ModelId, index: usize, name: &str, ty: FieldTy)
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 

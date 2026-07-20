@@ -31,6 +31,65 @@ pub(crate) struct Column {
     pub(crate) name: Option<syn::LitStr>,
     pub(crate) ty: Option<ColumnType>,
     pub(crate) variant: Option<VariantValue>,
+    pub(crate) rename_all: Option<RenameRule>,
+}
+
+/// A case-conversion rule applied to enum variant identifiers to derive their
+/// default string labels, spelled to match serde's `rename_all` vocabulary.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum RenameRule {
+    Lower,
+    Upper,
+    Pascal,
+    Camel,
+    Snake,
+    ScreamingSnake,
+    Kebab,
+    ScreamingKebab,
+}
+
+impl RenameRule {
+    fn from_lit(lit: &syn::LitStr) -> syn::Result<Self> {
+        Ok(match lit.value().as_str() {
+            "lowercase" => Self::Lower,
+            "UPPERCASE" => Self::Upper,
+            "PascalCase" => Self::Pascal,
+            "camelCase" => Self::Camel,
+            "snake_case" => Self::Snake,
+            "SCREAMING_SNAKE_CASE" => Self::ScreamingSnake,
+            "kebab-case" => Self::Kebab,
+            "SCREAMING-KEBAB-CASE" => Self::ScreamingKebab,
+            other => {
+                return Err(syn::Error::new_spanned(
+                    lit,
+                    format!(
+                        "unknown rename_all rule \"{other}\"; expected one of \
+                         \"lowercase\", \"UPPERCASE\", \"PascalCase\", \"camelCase\", \
+                         \"snake_case\", \"SCREAMING_SNAKE_CASE\", \"kebab-case\", \
+                         \"SCREAMING-KEBAB-CASE\""
+                    ),
+                ));
+            }
+        })
+    }
+
+    /// Applies the rule to a variant identifier, returning the derived label.
+    pub(crate) fn apply(self, ident: &str) -> String {
+        use heck::{
+            ToKebabCase, ToLowerCamelCase, ToShoutyKebabCase, ToShoutySnakeCase, ToSnakeCase,
+            ToUpperCamelCase,
+        };
+        match self {
+            Self::Lower => ident.to_lowercase(),
+            Self::Upper => ident.to_uppercase(),
+            Self::Pascal => ident.to_upper_camel_case(),
+            Self::Camel => ident.to_lower_camel_case(),
+            Self::Snake => ident.to_snake_case(),
+            Self::ScreamingSnake => ident.to_shouty_snake_case(),
+            Self::Kebab => ident.to_kebab_case(),
+            Self::ScreamingKebab => ident.to_shouty_kebab_case(),
+        }
+    }
 }
 
 impl Column {
@@ -45,6 +104,7 @@ impl syn::parse::Parse for Column {
             name: None,
             ty: None,
             variant: None,
+            rename_all: None,
         };
 
         // Loop through the list of comma separated arguments to fill in the result one by one.
@@ -55,6 +115,7 @@ impl syn::parse::Parse for Column {
         // #[column(type = <type>)]
         // #[column("name", type = <type>)]
         // #[column(type = <type>, "name")]
+        // #[column(rename_all = "<rule>")]
         loop {
             let lookahead = input.lookahead1();
 
@@ -63,6 +124,14 @@ impl syn::parse::Parse for Column {
                     return Err(syn::Error::new(input.span(), "duplicate column name"));
                 }
                 result.name = Some(input.parse()?);
+            } else if lookahead.peek(kw::rename_all) {
+                if result.rename_all.is_some() {
+                    return Err(syn::Error::new(input.span(), "duplicate rename_all"));
+                }
+                let _rename_all_token: kw::rename_all = input.parse()?;
+                let _eq_token: syn::Token![=] = input.parse()?;
+                let lit: syn::LitStr = input.parse()?;
+                result.rename_all = Some(RenameRule::from_lit(&lit)?);
             } else if lookahead.peek(kw::variant) {
                 if result.variant.is_some() {
                     return Err(syn::Error::new(
@@ -113,6 +182,7 @@ impl syn::parse::Parse for Column {
 
 mod kw {
     syn::custom_keyword!(variant);
+    syn::custom_keyword!(rename_all);
     syn::custom_keyword!(boolean);
 
     syn::custom_keyword!(int);
@@ -170,6 +240,15 @@ impl ColumnType {
     /// that opt out of native enum representation.
     pub(crate) fn is_string_like(&self) -> bool {
         matches!(self, Self::Text | Self::VarChar(_))
+    }
+
+    /// Returns the signedness and byte width of an integer storage type.
+    pub(crate) fn integer_spec(&self) -> Option<(bool, u8)> {
+        match self {
+            Self::Integer(size) => Some((true, *size)),
+            Self::UnsignedInteger(size) => Some((false, *size)),
+            _ => None,
+        }
     }
 }
 
@@ -291,6 +370,8 @@ impl ColumnType {
             Self::UnsignedInteger(2) => quote! { #tag::U16 },
             Self::UnsignedInteger(4) => quote! { #tag::U32 },
             Self::UnsignedInteger(8) => quote! { #tag::U64 },
+            Self::Integer(size @ 1..=8) => quote! { #tag::Int<#size> },
+            Self::UnsignedInteger(size @ 1..=8) => quote! { #tag::UInt<#size> },
             Self::Float(4) => quote! { #tag::F32 },
             Self::Float(8) => quote! { #tag::F64 },
             Self::Text => quote! { #tag::Text },

@@ -18,7 +18,10 @@ impl Simplify<'_> {
         // Those variants represent expressions that will be evaluated later,
         // not constant values that can be folded now.
         if let stmt::Expr::Value(value) = &*expr.base {
-            // Use the value's project method to follow the projection path
+            // Use the value's project method to follow the projection path.
+            // Projecting into a `Null` base (e.g. the `Some`-arm body of an
+            // `Option<Embed>` whose value is `None`) yields `Null` — see
+            // `Value::entry`.
             if let Some(result) = value.project(&expr.projection) {
                 return Some(result);
             }
@@ -49,6 +52,12 @@ impl Simplify<'_> {
             return Some(expr.base.take());
         }
 
+        // A path into a `#[document]` column lowers to a plain `ExprProject`
+        // and stays one — positional projection over a structured value, the
+        // same shape a column-expanded embed uses. The SQL serializer renders
+        // it to a JSON path extraction at the edge; the in-memory interpreter
+        // evaluates it directly via `Value::entry`. The engine itself never
+        // deals in JSON.
         None
     }
 }

@@ -19,7 +19,8 @@
 use crate::{
     Result,
     stmt::{
-        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, Limit, Projection, Statement, Value,
+        BinaryOp, ConstInput, Expr, ExprArg, ExprSet, Input, InputResolve, Limit, Projection,
+        Statement, Value,
     },
 };
 use std::cmp::Ordering;
@@ -213,7 +214,12 @@ impl Expr {
                     }),
                 }
             }
-            Expr::Cast(expr_cast) => expr_cast.ty.cast(expr_cast.expr.eval_ref(scope, input)?),
+            Expr::Cast(expr_cast) => {
+                let value = expr_cast.expr.eval_ref(scope, input)?;
+                expr_cast
+                    .ty
+                    .cast_from(&InputResolve(&*input), expr_cast.from.as_ref(), value)
+            }
             Expr::Default => Err(crate::Error::expression_evaluation_failed(
                 "DEFAULT can only be evaluated by the database",
             )),
@@ -408,8 +414,36 @@ impl Expr {
                 }
             }
             Expr::Value(value) | Expr::Static(value) => Ok(value.clone()),
+            // A document path read: navigate the named wire form
+            // (`Value::Object`) by key, then cast the leaf to the extraction's
+            // declared type. This is how a driver-side in-memory check (e.g.
+            // the DynamoDB conditional-write filter probe) evaluates a lowered
+            // document path against a decoded item.
+            Expr::Func(super::ExprFunc::JsonExtract(func)) => {
+                let mut value = func.base.eval_ref(scope, input)?;
+                for key in &func.path {
+                    value = match value {
+                        Value::Object(mut object) => {
+                            match object.entries.iter().position(|(k, _)| k == key) {
+                                Some(index) => object.entries.swap_remove(index).1,
+                                None => return Ok(Value::Null),
+                            }
+                        }
+                        Value::Null => return Ok(Value::Null),
+                        other => {
+                            return Err(crate::Error::expression_evaluation_failed(format!(
+                                "document path step `{key}` into non-object value {other:?}"
+                            )));
+                        }
+                    };
+                }
+                func.ty.cast(&InputResolve(&*input), value)
+            }
             Expr::Func(_) => Err(crate::Error::expression_evaluation_failed(
                 "database functions cannot be evaluated client-side",
+            )),
+            Expr::Incoming(_) => Err(crate::Error::expression_evaluation_failed(
+                "incoming values can only be evaluated by the database",
             )),
             _ => todo!("expr={self:#?}"),
         }

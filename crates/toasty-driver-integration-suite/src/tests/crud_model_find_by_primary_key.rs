@@ -70,7 +70,8 @@ pub async fn generic_by_primary_key(test: &mut Test) -> Result<()> {
     async fn fetch<M>(db: &mut toasty::Db, id: String) -> Result<Vec<M>>
     where
         M: toasty::schema::Model<PrimaryKey = String>,
-        M::Query: toasty::stmt::IntoStatement<Returning = toasty::stmt::List<M>>,
+        M::Query<toasty::stmt::List<M>>:
+            toasty::stmt::IntoStatement<Returning = toasty::stmt::List<M>>,
     {
         use toasty::stmt::IntoStatement;
         let stmt = M::find_by_primary_key(id.into_expr()).into_statement();

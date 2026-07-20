@@ -292,6 +292,9 @@ A [multi-step (`via`) relation](./has-many.md#multi-step-relations-via) reaches
 its target through a path of existing relations. Preload it with `.include()`
 the same way as a single-step relation:
 
+This includes [many-to-many relationships](./many-to-many.md), where the path
+crosses a join model to reach the opposite endpoint.
+
 ```rust,ignore
 let users = User::all()
     .include(User::fields().commented_articles())
@@ -368,3 +371,7 @@ for user in &users {
 | `model.relation` | Access an eager `Vec<T>`, `T`, or `Option<T>` relation field |
 | `model.relation.try_get()` | Non-panicking access; returns `None` if not preloaded |
 | `model.relation.is_unloaded()` | Check whether a `Deferred<_>` relation was preloaded |
+
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

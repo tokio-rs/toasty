@@ -1,5 +1,8 @@
 use crate::{
-    schema::app::{Model, ModelId, Schema},
+    schema::{
+        app::{Model, ModelId, Schema},
+        db,
+    },
     stmt,
 };
 
@@ -26,6 +29,11 @@ pub struct Embedded {
     /// The expression type of this embedded field from the application's
     /// perspective.
     pub expr_ty: stmt::Type,
+
+    /// Optional database type override for an embedded enum's discriminant
+    /// column. Embedded structs do not accept a type override because they may
+    /// map to more than one column.
+    pub storage_ty: Option<db::Type>,
 }
 
 impl Embedded {
