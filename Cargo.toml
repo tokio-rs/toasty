@@ -95,7 +95,7 @@ async-stream = "0.3.6"
 async-trait = "0.1.89"
 aws-config = "1"
 aws-sdk-dynamodb = { version = "1.110.0", features = ["test-util"] }
-bit-set = "0.10.0"
+bit-set = "0.11.0"
 by_address = "1.2.1"
 cfg-if = "1.0.4"
 clap = { version = "4.6.0", features = ["derive"] }
@@ -128,7 +128,7 @@ quote = "1.0.45"
 rand = "0.10"
 rust_decimal = "1.41.0"
 bigdecimal = "0.4.10"
-rusqlite = { version = "0.39", features = ["bundled"] }
+rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
 syn = { version = "2.0.117", features = ["full", "extra-traits", "visit-mut"] }
@@ -145,7 +145,7 @@ rustls-pemfile = "2"
 rustls-webpki = { version = "0.103", default-features = false, features = ["alloc", "std"] }
 tokio-stream = { version = "0.1.18", default-features = false }
 tracing = "0.1"
-turso = "0.6"
+turso = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"

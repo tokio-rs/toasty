@@ -6,16 +6,11 @@ error[E0277]: field type `bool` is not compatible with the requested auto strate
   |
   = help: the trait `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Uuid>` is not implemented for `bool`
   = note: see `toasty::codegen_support::auto` for the compatibility table
-  = help: the following other types implement trait `toasty::codegen_support::auto::AutoCompatible<Strategy>`:
-            `Option<T>` implements `toasty::codegen_support::auto::AutoCompatible<S>`
-            `i16` implements `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Increment>`
-            `i32` implements `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Increment>`
-            `i64` implements `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Increment>`
-            `i8` implements `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Increment>`
-            `isize` implements `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Increment>`
-            `u16` implements `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Increment>`
-            `u32` implements `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Increment>`
-          and $N others
+help: the trait `toasty::codegen_support::auto::AutoCompatible<toasty::codegen_support::auto::tag::Uuid>` is implemented for `uuid::Uuid`
+ --> $WORKSPACE/crates/toasty/src/codegen_support/auto.rs
+  |
+  | impl AutoCompatible<tag::Uuid> for uuid::Uuid {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 note: required by a bound in `_check`
  --> tests/ui/auto_uuid_on_bool.rs:5:17
   |
