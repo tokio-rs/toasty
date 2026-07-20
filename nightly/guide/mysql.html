@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -320,6 +320,11 @@ walks backwards from a page cursor.</p>
 <code>BINARY col LIKE 'prefix%'</code>. Casting the column to <code>BINARY</code> forces a byte
 comparison, so the match is case-sensitive regardless of the column’s collation.</p>
 <p>A few things that exist on PostgreSQL are absent here:</p>
+<p><strong>No targeted upsert.</strong> MySQL’s <code>ON DUPLICATE KEY UPDATE</code> reacts to any primary
+key or unique-index conflict; it cannot restrict the update to the constraint
+named by <a href="./upserting-records.html"><code>upsert_by_*</code></a>. Toasty returns
+<code>unsupported_feature</code> instead of updating a row selected by a different
+constraint.</p>
 <p><strong>No <code>ILIKE</code>.</strong> MySQL has no <code>ILIKE</code> operator, so
 <a href="./filtering-with-expressions.html#ilike"><code>.ilike()</code></a> is rejected with an
 <code>unsupported_feature</code> error. MySQL’s <code>LIKE</code> case sensitivity is set by the

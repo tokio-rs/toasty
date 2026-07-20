@@ -4,9 +4,9 @@ JSON encoding for <code>stmt::Value</code>s stored in document-backed columns
 for <code>#[document]</code>-marked fields).</p>
 <p>The conversion does <strong>not</strong> go through an intermediate <a href="https://docs.rs/serde_json/1.0.150/serde_json/value/enum.Value.html" title="enum serde_json::value::Value"><code>serde_json::Value</code></a>
 tree. Encoding streams a <code>stmt::Value</code> straight to JSON text via a
-<a href="https://docs.rs/serde_core/1.0.228/serde_core/ser/trait.Serialize.html" title="trait serde_core::ser::Serialize"><code>serde::Serialize</code></a> wrapper ([<code>Encode</code>]); decoding parses JSON tokens
+<a href="https://docs.rs/serde_core/1.0.229/serde_core/ser/trait.Serialize.html" title="trait serde_core::ser::Serialize"><code>serde::Serialize</code></a> wrapper ([<code>Encode</code>]); decoding parses JSON tokens
 straight into a correctly-typed <code>stmt::Value</code> via a type-directed
-<a href="https://docs.rs/serde_core/1.0.228/serde_core/de/trait.DeserializeSeed.html" title="trait serde_core::de::DeserializeSeed"><code>serde::de::DeserializeSeed</code></a> ([<code>Seed</code>]).</p>
+<a href="https://docs.rs/serde_core/1.0.229/serde_core/de/trait.DeserializeSeed.html" title="trait serde_core::de::DeserializeSeed"><code>serde::de::DeserializeSeed</code></a> ([<code>Seed</code>]).</p>
 <p>The serde impls live on <em>local wrappers</em>, not on <code>stmt::Value</code> itself. The
 encoding is opinionated (UUIDs / decimals / timestamps as JSON strings, to
 match the per-column TEXT encoding the same scalar has at the SQL level) and
@@ -23,7 +23,7 @@ wire key order, and its interior leaves take their wire shapes (strings
 stay strings, numbers decode by integer fit). The query engine — the only
 party that knows which embedded model the column stores — raises the wire
 object into a typed positional record; no schema is consulted here.</p>
-</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Encode.html" title="struct toasty_sql::json::Encode">Encode</a></dt><dd>A <a href="https://docs.rs/serde_core/1.0.228/serde_core/ser/trait.Serialize.html" title="trait serde_core::ser::Serialize"><code>serde::Serialize</code></a> wrapper that streams a <code>stmt::Value</code> as JSON.</dd><dt><a class="struct" href="struct.Seed.html" title="struct toasty_sql::json::Seed">Seed</a></dt><dd>A type-directed <a href="https://docs.rs/serde_core/1.0.228/serde_core/de/trait.DeserializeSeed.html" title="trait serde_core::de::DeserializeSeed"><code>serde::de::DeserializeSeed</code></a> that decodes JSON straight
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Encode.html" title="struct toasty_sql::json::Encode">Encode</a></dt><dd>A <a href="https://docs.rs/serde_core/1.0.229/serde_core/ser/trait.Serialize.html" title="trait serde_core::ser::Serialize"><code>serde::Serialize</code></a> wrapper that streams a <code>stmt::Value</code> as JSON.</dd><dt><a class="struct" href="struct.Seed.html" title="struct toasty_sql::json::Seed">Seed</a></dt><dd>A type-directed <a href="https://docs.rs/serde_core/1.0.229/serde_core/de/trait.DeserializeSeed.html" title="trait serde_core::de::DeserializeSeed"><code>serde::de::DeserializeSeed</code></a> that decodes JSON straight
 into a <code>stmt::Value</code> of the seed’s <code>stmt::Type</code> — no <code>serde_json::Value</code>
 intermediate. The type is required because the wire form is ambiguous for
 scalars (<code>Uuid</code>/<code>String</code> are both strings; the integer widths are all

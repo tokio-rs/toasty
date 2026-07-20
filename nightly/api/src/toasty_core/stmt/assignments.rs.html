@@ -297,118 +297,124 @@
 <a href=#297 id=297 data-nosnippet>297</a>        <span class="self">self</span>.assignments.remove(key.as_ref())
 <a href=#298 id=298 data-nosnippet>298</a>    }
 <a href=#299 id=299 data-nosnippet>299</a>
-<a href=#300 id=300 data-nosnippet>300</a>    <span class="doccomment">/// Returns an iterator over the assignment projections (keys).
-<a href=#301 id=301 data-nosnippet>301</a>    </span><span class="kw">pub fn </span>keys(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Projection&gt; + <span class="lifetime">'_ </span>{
-<a href=#302 id=302 data-nosnippet>302</a>        <span class="self">self</span>.assignments.keys()
-<a href=#303 id=303 data-nosnippet>303</a>    }
-<a href=#304 id=304 data-nosnippet>304</a>
-<a href=#305 id=305 data-nosnippet>305</a>    <span class="doccomment">/// Returns an iterator over `(projection, assignment)` pairs.
-<a href=#306 id=306 data-nosnippet>306</a>    </span><span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>Projection, <span class="kw-2">&amp;</span>Assignment)&gt; + <span class="lifetime">'_ </span>{
-<a href=#307 id=307 data-nosnippet>307</a>        <span class="self">self</span>.assignments.iter()
-<a href=#308 id=308 data-nosnippet>308</a>    }
-<a href=#309 id=309 data-nosnippet>309</a>
-<a href=#310 id=310 data-nosnippet>310</a>    <span class="doccomment">/// Returns a mutable iterator over `(projection, assignment)` pairs.
-<a href=#311 id=311 data-nosnippet>311</a>    </span><span class="kw">pub fn </span>iter_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>Projection, <span class="kw-2">&amp;mut </span>Assignment)&gt; + <span class="lifetime">'_ </span>{
-<a href=#312 id=312 data-nosnippet>312</a>        <span class="self">self</span>.assignments.iter_mut()
-<a href=#313 id=313 data-nosnippet>313</a>    }
-<a href=#314 id=314 data-nosnippet>314</a>}
+<a href=#300 id=300 data-nosnippet>300</a>    <span class="doccomment">/// Replaces assignments with entries from `other`, preserving entries
+<a href=#301 id=301 data-nosnippet>301</a>    /// whose projections do not appear in `other`.
+<a href=#302 id=302 data-nosnippet>302</a>    </span><span class="kw">pub fn </span>overlay(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="self">Self</span>) {
+<a href=#303 id=303 data-nosnippet>303</a>        <span class="self">self</span>.assignments.extend(other.assignments);
+<a href=#304 id=304 data-nosnippet>304</a>    }
+<a href=#305 id=305 data-nosnippet>305</a>
+<a href=#306 id=306 data-nosnippet>306</a>    <span class="doccomment">/// Returns an iterator over the assignment projections (keys).
+<a href=#307 id=307 data-nosnippet>307</a>    </span><span class="kw">pub fn </span>keys(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = <span class="kw-2">&amp;</span>Projection&gt; + <span class="lifetime">'_ </span>{
+<a href=#308 id=308 data-nosnippet>308</a>        <span class="self">self</span>.assignments.keys()
+<a href=#309 id=309 data-nosnippet>309</a>    }
+<a href=#310 id=310 data-nosnippet>310</a>
+<a href=#311 id=311 data-nosnippet>311</a>    <span class="doccomment">/// Returns an iterator over `(projection, assignment)` pairs.
+<a href=#312 id=312 data-nosnippet>312</a>    </span><span class="kw">pub fn </span>iter(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>Projection, <span class="kw-2">&amp;</span>Assignment)&gt; + <span class="lifetime">'_ </span>{
+<a href=#313 id=313 data-nosnippet>313</a>        <span class="self">self</span>.assignments.iter()
+<a href=#314 id=314 data-nosnippet>314</a>    }
 <a href=#315 id=315 data-nosnippet>315</a>
-<a href=#316 id=316 data-nosnippet>316</a><span class="kw">impl </span>IntoIterator <span class="kw">for </span>Assignments {
-<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">type </span>Item = (Projection, Assignment);
-<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw">type </span>IntoIter = std::collections::btree_map::IntoIter&lt;Projection, Assignment&gt;;
-<a href=#319 id=319 data-nosnippet>319</a>
-<a href=#320 id=320 data-nosnippet>320</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
-<a href=#321 id=321 data-nosnippet>321</a>        <span class="self">self</span>.assignments.into_iter()
-<a href=#322 id=322 data-nosnippet>322</a>    }
-<a href=#323 id=323 data-nosnippet>323</a>}
-<a href=#324 id=324 data-nosnippet>324</a>
-<a href=#325 id=325 data-nosnippet>325</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>Assignments {
-<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">type </span>Item = (<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Projection, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Assignment);
-<a href=#327 id=327 data-nosnippet>327</a>    <span class="kw">type </span>IntoIter = std::collections::btree_map::Iter&lt;<span class="lifetime">'a</span>, Projection, Assignment&gt;;
-<a href=#328 id=328 data-nosnippet>328</a>
-<a href=#329 id=329 data-nosnippet>329</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
-<a href=#330 id=330 data-nosnippet>330</a>        <span class="self">self</span>.assignments.iter()
-<a href=#331 id=331 data-nosnippet>331</a>    }
-<a href=#332 id=332 data-nosnippet>332</a>}
-<a href=#333 id=333 data-nosnippet>333</a>
-<a href=#334 id=334 data-nosnippet>334</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Assignments {
-<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">type </span>Item = (<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Projection, <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Assignment);
-<a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">type </span>IntoIter = std::collections::btree_map::IterMut&lt;<span class="lifetime">'a</span>, Projection, Assignment&gt;;
-<a href=#337 id=337 data-nosnippet>337</a>
-<a href=#338 id=338 data-nosnippet>338</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
-<a href=#339 id=339 data-nosnippet>339</a>        <span class="self">self</span>.assignments.iter_mut()
-<a href=#340 id=340 data-nosnippet>340</a>    }
-<a href=#341 id=341 data-nosnippet>341</a>}
-<a href=#342 id=342 data-nosnippet>342</a>
-<a href=#343 id=343 data-nosnippet>343</a><span class="doccomment">/// Indexes into the assignments by projection. Panics if no assignment exists
-<a href=#344 id=344 data-nosnippet>344</a>/// for the given key.
-<a href=#345 id=345 data-nosnippet>345</a>///
-<a href=#346 id=346 data-nosnippet>346</a>/// The index accepts any type that implements `AsRef&lt;[usize]&gt;`:
-<a href=#347 id=347 data-nosnippet>347</a>/// [`Projection`], `&amp;[usize]`, or `[usize; N]` arrays.
-<a href=#348 id=348 data-nosnippet>348</a></span><span class="kw">impl</span>&lt;Q&gt; ops::Index&lt;Q&gt; <span class="kw">for </span>Assignments
-<a href=#349 id=349 data-nosnippet>349</a><span class="kw">where
-<a href=#350 id=350 data-nosnippet>350</a>    </span>Q: AsRef&lt;[usize]&gt;,
-<a href=#351 id=351 data-nosnippet>351</a>{
-<a href=#352 id=352 data-nosnippet>352</a>    <span class="kw">type </span>Output = Assignment;
-<a href=#353 id=353 data-nosnippet>353</a>
-<a href=#354 id=354 data-nosnippet>354</a>    <span class="kw">fn </span>index(<span class="kw-2">&amp;</span><span class="self">self</span>, index: Q) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Output {
-<a href=#355 id=355 data-nosnippet>355</a>        <span class="kw">match </span><span class="self">self</span>.assignments.get(index.as_ref()) {
-<a href=#356 id=356 data-nosnippet>356</a>            <span class="prelude-val">Some</span>(ret) =&gt; ret,
-<a href=#357 id=357 data-nosnippet>357</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">panic!</span>(<span class="string">"no assignment for projection"</span>),
-<a href=#358 id=358 data-nosnippet>358</a>        }
-<a href=#359 id=359 data-nosnippet>359</a>    }
-<a href=#360 id=360 data-nosnippet>360</a>}
-<a href=#361 id=361 data-nosnippet>361</a>
-<a href=#362 id=362 data-nosnippet>362</a><span class="doccomment">/// Mutably indexes into the assignments by projection. Panics if no assignment
-<a href=#363 id=363 data-nosnippet>363</a>/// exists for the given key.
-<a href=#364 id=364 data-nosnippet>364</a>///
-<a href=#365 id=365 data-nosnippet>365</a>/// The index accepts any type that implements `AsRef&lt;[usize]&gt;`:
-<a href=#366 id=366 data-nosnippet>366</a>/// [`Projection`], `&amp;[usize]`, or `[usize; N]` arrays.
-<a href=#367 id=367 data-nosnippet>367</a></span><span class="kw">impl</span>&lt;Q&gt; ops::IndexMut&lt;Q&gt; <span class="kw">for </span>Assignments
-<a href=#368 id=368 data-nosnippet>368</a><span class="kw">where
-<a href=#369 id=369 data-nosnippet>369</a>    </span>Q: AsRef&lt;[usize]&gt;,
-<a href=#370 id=370 data-nosnippet>370</a>{
-<a href=#371 id=371 data-nosnippet>371</a>    <span class="kw">fn </span>index_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: Q) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Output {
-<a href=#372 id=372 data-nosnippet>372</a>        <span class="kw">match </span><span class="self">self</span>.assignments.get_mut(index.as_ref()) {
-<a href=#373 id=373 data-nosnippet>373</a>            <span class="prelude-val">Some</span>(ret) =&gt; ret,
-<a href=#374 id=374 data-nosnippet>374</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">panic!</span>(<span class="string">"no assignment for projection"</span>),
-<a href=#375 id=375 data-nosnippet>375</a>        }
-<a href=#376 id=376 data-nosnippet>376</a>    }
-<a href=#377 id=377 data-nosnippet>377</a>}
-<a href=#378 id=378 data-nosnippet>378</a>
-<a href=#379 id=379 data-nosnippet>379</a><span class="kw">impl </span>Assignment {
-<a href=#380 id=380 data-nosnippet>380</a>    <span class="doccomment">/// Returns `true` if this is the `Set` variant.
-<a href=#381 id=381 data-nosnippet>381</a>    </span><span class="kw">pub fn </span>is_set(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#382 id=382 data-nosnippet>382</a>        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Set(<span class="kw">_</span>))
-<a href=#383 id=383 data-nosnippet>383</a>    }
+<a href=#316 id=316 data-nosnippet>316</a>    <span class="doccomment">/// Returns a mutable iterator over `(projection, assignment)` pairs.
+<a href=#317 id=317 data-nosnippet>317</a>    </span><span class="kw">pub fn </span>iter_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>) -&gt; <span class="kw">impl </span>Iterator&lt;Item = (<span class="kw-2">&amp;</span>Projection, <span class="kw-2">&amp;mut </span>Assignment)&gt; + <span class="lifetime">'_ </span>{
+<a href=#318 id=318 data-nosnippet>318</a>        <span class="self">self</span>.assignments.iter_mut()
+<a href=#319 id=319 data-nosnippet>319</a>    }
+<a href=#320 id=320 data-nosnippet>320</a>}
+<a href=#321 id=321 data-nosnippet>321</a>
+<a href=#322 id=322 data-nosnippet>322</a><span class="kw">impl </span>IntoIterator <span class="kw">for </span>Assignments {
+<a href=#323 id=323 data-nosnippet>323</a>    <span class="kw">type </span>Item = (Projection, Assignment);
+<a href=#324 id=324 data-nosnippet>324</a>    <span class="kw">type </span>IntoIter = std::collections::btree_map::IntoIter&lt;Projection, Assignment&gt;;
+<a href=#325 id=325 data-nosnippet>325</a>
+<a href=#326 id=326 data-nosnippet>326</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+<a href=#327 id=327 data-nosnippet>327</a>        <span class="self">self</span>.assignments.into_iter()
+<a href=#328 id=328 data-nosnippet>328</a>    }
+<a href=#329 id=329 data-nosnippet>329</a>}
+<a href=#330 id=330 data-nosnippet>330</a>
+<a href=#331 id=331 data-nosnippet>331</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span>Assignments {
+<a href=#332 id=332 data-nosnippet>332</a>    <span class="kw">type </span>Item = (<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Projection, <span class="kw-2">&amp;</span><span class="lifetime">'a </span>Assignment);
+<a href=#333 id=333 data-nosnippet>333</a>    <span class="kw">type </span>IntoIter = std::collections::btree_map::Iter&lt;<span class="lifetime">'a</span>, Projection, Assignment&gt;;
+<a href=#334 id=334 data-nosnippet>334</a>
+<a href=#335 id=335 data-nosnippet>335</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+<a href=#336 id=336 data-nosnippet>336</a>        <span class="self">self</span>.assignments.iter()
+<a href=#337 id=337 data-nosnippet>337</a>    }
+<a href=#338 id=338 data-nosnippet>338</a>}
+<a href=#339 id=339 data-nosnippet>339</a>
+<a href=#340 id=340 data-nosnippet>340</a><span class="kw">impl</span>&lt;<span class="lifetime">'a</span>&gt; IntoIterator <span class="kw">for </span><span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Assignments {
+<a href=#341 id=341 data-nosnippet>341</a>    <span class="kw">type </span>Item = (<span class="kw-2">&amp;</span><span class="lifetime">'a </span>Projection, <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>Assignment);
+<a href=#342 id=342 data-nosnippet>342</a>    <span class="kw">type </span>IntoIter = std::collections::btree_map::IterMut&lt;<span class="lifetime">'a</span>, Projection, Assignment&gt;;
+<a href=#343 id=343 data-nosnippet>343</a>
+<a href=#344 id=344 data-nosnippet>344</a>    <span class="kw">fn </span>into_iter(<span class="self">self</span>) -&gt; <span class="self">Self</span>::IntoIter {
+<a href=#345 id=345 data-nosnippet>345</a>        <span class="self">self</span>.assignments.iter_mut()
+<a href=#346 id=346 data-nosnippet>346</a>    }
+<a href=#347 id=347 data-nosnippet>347</a>}
+<a href=#348 id=348 data-nosnippet>348</a>
+<a href=#349 id=349 data-nosnippet>349</a><span class="doccomment">/// Indexes into the assignments by projection. Panics if no assignment exists
+<a href=#350 id=350 data-nosnippet>350</a>/// for the given key.
+<a href=#351 id=351 data-nosnippet>351</a>///
+<a href=#352 id=352 data-nosnippet>352</a>/// The index accepts any type that implements `AsRef&lt;[usize]&gt;`:
+<a href=#353 id=353 data-nosnippet>353</a>/// [`Projection`], `&amp;[usize]`, or `[usize; N]` arrays.
+<a href=#354 id=354 data-nosnippet>354</a></span><span class="kw">impl</span>&lt;Q&gt; ops::Index&lt;Q&gt; <span class="kw">for </span>Assignments
+<a href=#355 id=355 data-nosnippet>355</a><span class="kw">where
+<a href=#356 id=356 data-nosnippet>356</a>    </span>Q: AsRef&lt;[usize]&gt;,
+<a href=#357 id=357 data-nosnippet>357</a>{
+<a href=#358 id=358 data-nosnippet>358</a>    <span class="kw">type </span>Output = Assignment;
+<a href=#359 id=359 data-nosnippet>359</a>
+<a href=#360 id=360 data-nosnippet>360</a>    <span class="kw">fn </span>index(<span class="kw-2">&amp;</span><span class="self">self</span>, index: Q) -&gt; <span class="kw-2">&amp;</span><span class="self">Self</span>::Output {
+<a href=#361 id=361 data-nosnippet>361</a>        <span class="kw">match </span><span class="self">self</span>.assignments.get(index.as_ref()) {
+<a href=#362 id=362 data-nosnippet>362</a>            <span class="prelude-val">Some</span>(ret) =&gt; ret,
+<a href=#363 id=363 data-nosnippet>363</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">panic!</span>(<span class="string">"no assignment for projection"</span>),
+<a href=#364 id=364 data-nosnippet>364</a>        }
+<a href=#365 id=365 data-nosnippet>365</a>    }
+<a href=#366 id=366 data-nosnippet>366</a>}
+<a href=#367 id=367 data-nosnippet>367</a>
+<a href=#368 id=368 data-nosnippet>368</a><span class="doccomment">/// Mutably indexes into the assignments by projection. Panics if no assignment
+<a href=#369 id=369 data-nosnippet>369</a>/// exists for the given key.
+<a href=#370 id=370 data-nosnippet>370</a>///
+<a href=#371 id=371 data-nosnippet>371</a>/// The index accepts any type that implements `AsRef&lt;[usize]&gt;`:
+<a href=#372 id=372 data-nosnippet>372</a>/// [`Projection`], `&amp;[usize]`, or `[usize; N]` arrays.
+<a href=#373 id=373 data-nosnippet>373</a></span><span class="kw">impl</span>&lt;Q&gt; ops::IndexMut&lt;Q&gt; <span class="kw">for </span>Assignments
+<a href=#374 id=374 data-nosnippet>374</a><span class="kw">where
+<a href=#375 id=375 data-nosnippet>375</a>    </span>Q: AsRef&lt;[usize]&gt;,
+<a href=#376 id=376 data-nosnippet>376</a>{
+<a href=#377 id=377 data-nosnippet>377</a>    <span class="kw">fn </span>index_mut(<span class="kw-2">&amp;mut </span><span class="self">self</span>, index: Q) -&gt; <span class="kw-2">&amp;mut </span><span class="self">Self</span>::Output {
+<a href=#378 id=378 data-nosnippet>378</a>        <span class="kw">match </span><span class="self">self</span>.assignments.get_mut(index.as_ref()) {
+<a href=#379 id=379 data-nosnippet>379</a>            <span class="prelude-val">Some</span>(ret) =&gt; ret,
+<a href=#380 id=380 data-nosnippet>380</a>            <span class="prelude-val">None </span>=&gt; <span class="macro">panic!</span>(<span class="string">"no assignment for projection"</span>),
+<a href=#381 id=381 data-nosnippet>381</a>        }
+<a href=#382 id=382 data-nosnippet>382</a>    }
+<a href=#383 id=383 data-nosnippet>383</a>}
 <a href=#384 id=384 data-nosnippet>384</a>
-<a href=#385 id=385 data-nosnippet>385</a>    <span class="doccomment">/// Returns `true` if this is the `Remove` variant.
-<a href=#386 id=386 data-nosnippet>386</a>    </span><span class="kw">pub fn </span>is_remove(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
-<a href=#387 id=387 data-nosnippet>387</a>        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Remove(<span class="kw">_</span>))
-<a href=#388 id=388 data-nosnippet>388</a>    }
-<a href=#389 id=389 data-nosnippet>389</a>
-<a href=#390 id=390 data-nosnippet>390</a>    <span class="doccomment">/// Appends another assignment, converting to `Batch` if needed.
-<a href=#391 id=391 data-nosnippet>391</a>    </span><span class="kw">pub fn </span>push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: Assignment) {
-<a href=#392 id=392 data-nosnippet>392</a>        <span class="kw">match </span><span class="self">self </span>{
-<a href=#393 id=393 data-nosnippet>393</a>            <span class="self">Self</span>::Batch(entries) =&gt; entries.push(other),
-<a href=#394 id=394 data-nosnippet>394</a>            <span class="kw">_ </span>=&gt; {
-<a href=#395 id=395 data-nosnippet>395</a>                <span class="kw">let </span>prev = std::mem::replace(<span class="self">self</span>, Assignment::Batch(Vec::new()));
-<a href=#396 id=396 data-nosnippet>396</a>                <span class="kw">if let </span>Assignment::Batch(entries) = <span class="self">self </span>{
-<a href=#397 id=397 data-nosnippet>397</a>                    entries.push(prev);
-<a href=#398 id=398 data-nosnippet>398</a>                    entries.push(other);
-<a href=#399 id=399 data-nosnippet>399</a>                }
-<a href=#400 id=400 data-nosnippet>400</a>            }
-<a href=#401 id=401 data-nosnippet>401</a>        }
-<a href=#402 id=402 data-nosnippet>402</a>    }
-<a href=#403 id=403 data-nosnippet>403</a>}
-<a href=#404 id=404 data-nosnippet>404</a>
-<a href=#405 id=405 data-nosnippet>405</a><span class="kw">impl </span>Node <span class="kw">for </span>Assignment {
-<a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">fn </span>visit&lt;V: Visit&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>visit: V) {
-<a href=#407 id=407 data-nosnippet>407</a>        visit.visit_assignment(<span class="self">self</span>);
+<a href=#385 id=385 data-nosnippet>385</a><span class="kw">impl </span>Assignment {
+<a href=#386 id=386 data-nosnippet>386</a>    <span class="doccomment">/// Returns `true` if this is the `Set` variant.
+<a href=#387 id=387 data-nosnippet>387</a>    </span><span class="kw">pub fn </span>is_set(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#388 id=388 data-nosnippet>388</a>        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Set(<span class="kw">_</span>))
+<a href=#389 id=389 data-nosnippet>389</a>    }
+<a href=#390 id=390 data-nosnippet>390</a>
+<a href=#391 id=391 data-nosnippet>391</a>    <span class="doccomment">/// Returns `true` if this is the `Remove` variant.
+<a href=#392 id=392 data-nosnippet>392</a>    </span><span class="kw">pub fn </span>is_remove(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; bool {
+<a href=#393 id=393 data-nosnippet>393</a>        <span class="macro">matches!</span>(<span class="self">self</span>, <span class="self">Self</span>::Remove(<span class="kw">_</span>))
+<a href=#394 id=394 data-nosnippet>394</a>    }
+<a href=#395 id=395 data-nosnippet>395</a>
+<a href=#396 id=396 data-nosnippet>396</a>    <span class="doccomment">/// Appends another assignment, converting to `Batch` if needed.
+<a href=#397 id=397 data-nosnippet>397</a>    </span><span class="kw">pub fn </span>push(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: Assignment) {
+<a href=#398 id=398 data-nosnippet>398</a>        <span class="kw">match </span><span class="self">self </span>{
+<a href=#399 id=399 data-nosnippet>399</a>            <span class="self">Self</span>::Batch(entries) =&gt; entries.push(other),
+<a href=#400 id=400 data-nosnippet>400</a>            <span class="kw">_ </span>=&gt; {
+<a href=#401 id=401 data-nosnippet>401</a>                <span class="kw">let </span>prev = std::mem::replace(<span class="self">self</span>, Assignment::Batch(Vec::new()));
+<a href=#402 id=402 data-nosnippet>402</a>                <span class="kw">if let </span>Assignment::Batch(entries) = <span class="self">self </span>{
+<a href=#403 id=403 data-nosnippet>403</a>                    entries.push(prev);
+<a href=#404 id=404 data-nosnippet>404</a>                    entries.push(other);
+<a href=#405 id=405 data-nosnippet>405</a>                }
+<a href=#406 id=406 data-nosnippet>406</a>            }
+<a href=#407 id=407 data-nosnippet>407</a>        }
 <a href=#408 id=408 data-nosnippet>408</a>    }
-<a href=#409 id=409 data-nosnippet>409</a>
-<a href=#410 id=410 data-nosnippet>410</a>    <span class="kw">fn </span>visit_mut&lt;V: VisitMut&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>visit: V) {
-<a href=#411 id=411 data-nosnippet>411</a>        visit.visit_assignment_mut(<span class="self">self</span>);
-<a href=#412 id=412 data-nosnippet>412</a>    }
-<a href=#413 id=413 data-nosnippet>413</a>}
+<a href=#409 id=409 data-nosnippet>409</a>}
+<a href=#410 id=410 data-nosnippet>410</a>
+<a href=#411 id=411 data-nosnippet>411</a><span class="kw">impl </span>Node <span class="kw">for </span>Assignment {
+<a href=#412 id=412 data-nosnippet>412</a>    <span class="kw">fn </span>visit&lt;V: Visit&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, <span class="kw-2">mut </span>visit: V) {
+<a href=#413 id=413 data-nosnippet>413</a>        visit.visit_assignment(<span class="self">self</span>);
+<a href=#414 id=414 data-nosnippet>414</a>    }
+<a href=#415 id=415 data-nosnippet>415</a>
+<a href=#416 id=416 data-nosnippet>416</a>    <span class="kw">fn </span>visit_mut&lt;V: VisitMut&gt;(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>visit: V) {
+<a href=#417 id=417 data-nosnippet>417</a>        visit.visit_assignment_mut(<span class="self">self</span>);
+<a href=#418 id=418 data-nosnippet>418</a>    }
+<a href=#419 id=419 data-nosnippet>419</a>}
 </code></pre></div></section></main></body></html>

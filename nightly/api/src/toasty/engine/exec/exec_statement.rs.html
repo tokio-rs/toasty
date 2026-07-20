@@ -325,7 +325,7 @@
 <a href=#325 id=325 data-nosnippet>325</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#326 id=326 data-nosnippet>326</a>        stmt: <span class="kw-2">&amp;mut </span>stmt::Statement,
 <a href=#327 id=327 data-nosnippet>327</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;MySQLUpdateReturning&gt; {
-<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">if </span><span class="self">self</span>.engine.capability().returning_from_mutation {
+<a href=#328 id=328 data-nosnippet>328</a>        <span class="kw">if </span><span class="self">self</span>.engine.capability().returning_from_mutation || !<span class="self">self</span>.engine.capability().sql {
 <a href=#329 id=329 data-nosnippet>329</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
 <a href=#330 id=330 data-nosnippet>330</a>        }
 <a href=#331 id=331 data-nosnippet>331</a>
@@ -386,7 +386,7 @@
 <a href=#386 id=386 data-nosnippet>386</a>        <span class="kw-2">&amp;</span><span class="self">self</span>,
 <a href=#387 id=387 data-nosnippet>387</a>        stmt: <span class="kw-2">&amp;mut </span>stmt::Statement,
 <a href=#388 id=388 data-nosnippet>388</a>    ) -&gt; <span class="prelude-ty">Option</span>&lt;MySQLInsertReturning&gt; {
-<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw">if </span><span class="self">self</span>.engine.capability().returning_from_mutation {
+<a href=#389 id=389 data-nosnippet>389</a>        <span class="kw">if </span>!<span class="self">self</span>.engine.capability().sql || <span class="self">self</span>.engine.capability().returning_from_mutation {
 <a href=#390 id=390 data-nosnippet>390</a>            <span class="kw">return </span><span class="prelude-val">None</span>;
 <a href=#391 id=391 data-nosnippet>391</a>        }
 <a href=#392 id=392 data-nosnippet>392</a>

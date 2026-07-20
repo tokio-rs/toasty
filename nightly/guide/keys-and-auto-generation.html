@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -208,6 +208,9 @@ struct User {
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
+<p>The same key generates <code>User::upsert_by_id()</code>, which creates or updates the
+record for a supplied ID. See <a href="./upserting-records.html">Upserting Records</a> for
+the builder’s assignment and return behavior.</p>
 <h3 id="keys-without-auto"><a class="header" href="#keys-without-auto">Keys without <code>#[auto]</code></a></h3>
 <p>The <code>#[auto]</code> attribute is optional. Without it, you are responsible for
 providing the key value when creating a record and for ensuring uniqueness:</p>
@@ -547,13 +550,16 @@ let todos = Todo::filter_by_user_id(&amp;1)
 <tr><th>Attribute</th><th>Generated methods</th></tr>
 </thead>
 <tbody>
-<tr><td><code>#[key]</code> on single field</td><td><code>get_by_&lt;field&gt;()</code>, <code>filter_by_&lt;field&gt;()</code>, <code>delete_by_&lt;field&gt;()</code></td></tr>
-<tr><td><code>#[key]</code> on multiple fields</td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
+<tr><td><code>#[key]</code> on single field</td><td><code>get_by_&lt;field&gt;()</code>, <code>filter_by_&lt;field&gt;()</code>, <code>upsert_by_&lt;field&gt;()</code>, <code>delete_by_&lt;field&gt;()</code></td></tr>
+<tr><td><code>#[key]</code> on multiple fields</td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>upsert_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
 <tr><td><code>#[key(a, b)]</code> on struct</td><td>Same generated methods as <code>#[key]</code> on multiple fields; <code>a</code> is the partition key, <code>b</code> is the local (sort) key</td></tr>
-<tr><td><code>#[key(partition = a, local = b)]</code></td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
+<tr><td><code>#[key(partition = a, local = b)]</code></td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>upsert_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
 </tbody>
 </table>
 </div>
+<p>An upsert requires every primary-key field so it can identify one conflict.
+See <a href="./upserting-records.html">Upserting Records</a> for assignment and backend
+behavior.</p>
 <blockquote>
 <p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
 </blockquote>

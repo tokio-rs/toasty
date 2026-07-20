@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -224,8 +224,9 @@ flags, construct the driver directly.</p>
 <p>The Turso driver uses the same type mapping and SQL serializer as the
 <a href="./sqlite.html">SQLite driver</a> — see that chapter for the column-type
 table and notes on UUIDs as <code>BLOB</code>, ISO 8601 temporal types, decimals
-stored as <code>TEXT</code>, and so on. The list of Turso-specific behaviors
-below is everything that differs from the SQLite chapter.</p>
+stored as <code>TEXT</code>, and targeted <a href="./upserting-records.html"><code>upsert_by_*</code></a>.
+The list of Turso-specific behaviors below is everything that differs from the
+SQLite chapter.</p>
 <h2 id="in-memory-databases-share-state-across-the-pool"><a class="header" href="#in-memory-databases-share-state-across-the-pool">In-memory databases share state across the pool</a></h2>
 <p>Unlike the SQLite driver — which caps the pool at one connection
 because each <code>Connection::open(":memory:")</code> returns a private,

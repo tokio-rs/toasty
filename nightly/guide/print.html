@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -183,7 +183,7 @@ PostgreSQL, MySQL) and NoSQL databases (DynamoDB).</p>
 annotated structs — field types map to column types, and attributes like
 <code>#[key]</code>, <code>#[unique]</code>, and <code>#[index]</code> control the schema. You can customize the
 mapping with attributes for table names, column names, and column types. Toasty’s
-derive macro also generates query builders, create/update builders, and
+derive macro also generates query builders, create/update/upsert builders, and
 relationship accessors at compile time.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -222,6 +222,7 @@ transactions.</p>
 <li><strong><a href="#creating-records">Creating Records</a></strong> — insert one or many records</li>
 <li><strong><a href="#querying-records">Querying Records</a></strong> — find, filter, and iterate over results</li>
 <li><strong><a href="#updating-records">Updating Records</a></strong> — modify existing records</li>
+<li><strong><a href="#upserting-records">Upserting Records</a></strong> — create or update atomically by a key or unique constraint</li>
 <li><strong><a href="#deleting-records">Deleting Records</a></strong> — remove records</li>
 <li><strong><a href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a></strong> — add indexes and unique constraints</li>
 <li><strong><a href="#field-options">Field Options</a></strong> — column names, types, defaults, and JSON serialization</li>
@@ -672,6 +673,9 @@ struct User {
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
+<p>The same key generates <code>User::upsert_by_id()</code>, which creates or updates the
+record for a supplied ID. See <a href="#upserting-records">Upserting Records</a> for
+the builder’s assignment and return behavior.</p>
 <h3 id="keys-without-auto"><a class="header" href="#keys-without-auto">Keys without <code>#[auto]</code></a></h3>
 <p>The <code>#[auto]</code> attribute is optional. Without it, you are responsible for
 providing the key value when creating a record and for ensuring uniqueness:</p>
@@ -1011,13 +1015,16 @@ let todos = Todo::filter_by_user_id(&amp;1)
 <tr><th>Attribute</th><th>Generated methods</th></tr>
 </thead>
 <tbody>
-<tr><td><code>#[key]</code> on single field</td><td><code>get_by_&lt;field&gt;()</code>, <code>filter_by_&lt;field&gt;()</code>, <code>delete_by_&lt;field&gt;()</code></td></tr>
-<tr><td><code>#[key]</code> on multiple fields</td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
+<tr><td><code>#[key]</code> on single field</td><td><code>get_by_&lt;field&gt;()</code>, <code>filter_by_&lt;field&gt;()</code>, <code>upsert_by_&lt;field&gt;()</code>, <code>delete_by_&lt;field&gt;()</code></td></tr>
+<tr><td><code>#[key]</code> on multiple fields</td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>upsert_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
 <tr><td><code>#[key(a, b)]</code> on struct</td><td>Same generated methods as <code>#[key]</code> on multiple fields; <code>a</code> is the partition key, <code>b</code> is the local (sort) key</td></tr>
-<tr><td><code>#[key(partition = a, local = b)]</code></td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
+<tr><td><code>#[key(partition = a, local = b)]</code></td><td><code>get_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>filter_by_&lt;a&gt;()</code>, <code>filter_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>upsert_by_&lt;a&gt;_and_&lt;b&gt;()</code>, <code>delete_by_&lt;a&gt;_and_&lt;b&gt;()</code></td></tr>
 </tbody>
 </table>
 </div>
+<p>An upsert requires every primary-key field so it can identify one conflict.
+See <a href="#upserting-records">Upserting Records</a> for assignment and backend
+behavior.</p>
 <blockquote>
 <p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog"><code>quickstart-blog</code></a> walks the full create → query → update → delete cycle over a <code>has_many</code>/<code>belongs_to</code> relationship.</p>
 </blockquote>
@@ -1027,6 +1034,8 @@ let todos = Todo::filter_by_user_id(&amp;1)
 the create builder. The macro uses a syntax inspired by struct literals and expands to builder
 calls under the hood. Most code uses the macro; the builder is there when you
 need programmatic control (e.g., conditional fields).</p>
+<p>Use an <a href="#upserting-records">upsert</a> when the same operation must create a
+missing record or update the record selected by a key or unique constraint.</p>
 <h2 id="creating-a-single-record"><a class="header" href="#creating-a-single-record">Creating a single record</a></h2>
 <p>With the macro:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
@@ -1709,7 +1718,9 @@ The macro takes a target — a loaded model instance or a query that
 selects which records to change — and a list of field assignments. It
 returns a builder; call <code>.exec(&amp;mut db)</code> to execute the update.</p>
 <p>To load an instance to update, see <a href="#querying-records">Querying Records</a>.
-To insert new records, see <a href="#creating-records">Creating Records</a>.</p>
+To insert new records, see <a href="#creating-records">Creating Records</a>.
+To create or update by a key in one atomic operation, see
+<a href="#upserting-records">Upserting Records</a>.</p>
 <h2 id="updating-an-instance"><a class="header" href="#updating-an-instance">Updating an instance</a></h2>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
@@ -2097,6 +2108,224 @@ statement includes only the fields you set.</p>
 <p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
 </blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
+<h1 id="upserting-records"><a class="header" href="#upserting-records">Upserting Records</a></h1>
+<p>An upsert creates a record when its selected key is absent and updates the
+matching record when that key is present. The database chooses the branch in
+one atomic operation, so another writer cannot insert or update the record
+between a preliminary read and the write.</p>
+<h2 id="creating-or-updating-by-a-unique-field"><a class="header" href="#creating-or-updating-by-a-unique-field">Creating or updating by a unique field</a></h2>
+<p><code>#[derive(Model)]</code> generates <code>upsert_by_*</code> methods for primary keys and unique
+constraints. Pass the conflict-target value to the method, set the remaining
+fields, and call <code>.exec(&amp;mut db)</code>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct User {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    #[unique]
+</span><span class="boring">    email: String,
+</span><span class="boring">    name: String,
+</span><span class="boring">    login_count: i64,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span>let user = User::upsert_by_email("alice@example.com")
+    .name("Alice")
+    .login_count(1)
+    .exec(&amp;mut db)
+    .await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>If the email is absent, Toasty creates a <code>User</code> with the supplied values. If
+the email already exists, Toasty replaces that user’s <code>name</code> and <code>login_count</code>.
+The operation returns the record stored by the database in either case,
+including generated fields such as <code>id</code>.</p>
+<p>The conflict-target argument supplies the create value and never changes on
+the update branch. The builder therefore has no <code>email</code> setter. Toasty does not
+generate <code>upsert_by_*</code> for an ordinary <code>#[index]</code> because an indexed value can
+match multiple records.</p>
+<p>A composite unique constraint generates a method containing every target
+field:</p>
+<pre><code class="language-rust ignore">let membership = Membership::upsert_by_org_id_and_user_id(org_id, user_id)
+    .role(Role::Admin)
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>Toasty does not provide an unqualified <code>User::upsert()</code> method. Naming the
+target prevents a new unique constraint from changing which conflict the
+operation handles.</p>
+<h2 id="applying-one-assignment-to-both-branches"><a class="header" href="#applying-one-assignment-to-both-branches">Applying one assignment to both branches</a></h2>
+<p>An ordinary replacement setter supplies the value for both branches. A shared
+mutation such as <code>increment</code>, <code>subtract</code>, or <code>push</code> reads the existing field
+value on update. Add <code>#[default]</code> to define the value that the mutation reads
+when Toasty creates the record:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct Counter {
+</span><span class="boring">    #[key]
+</span><span class="boring">    name: String,
+</span><span class="boring">    #[default(0)]
+</span><span class="boring">    count: i64,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span>let counter = Counter::upsert_by_name("requests")
+    .count(toasty::stmt::increment())
+    .exec(&amp;mut db)
+    .await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>This applies <code>increment</code> to the declared zero when <code>requests</code> is absent, so the
+inserted count is one. On conflict, it atomically increments the stored count.
+All shared mutations follow the same rule. For example, <code>#[default(10)]</code> with
+<code>subtract(3)</code> inserts seven, and a list default with <code>pop()</code> inserts that list
+without its last element.</p>
+<p>A shared mutation on a field without <code>#[default]</code> returns
+<code>invalid_statement</code>. Put a complete value in <code>on_create</code> and the mutation in
+<code>on_update</code> when the model has no general default for that field. Replacement
+assignments, including <code>set</code> and <code>clear</code>, do not read an existing value and do
+not require <code>#[default]</code>.</p>
+<h2 id="setting-different-values-on-create-and-update"><a class="header" href="#setting-different-values-on-create-and-update">Setting different values on create and update</a></h2>
+<p><code>on_create</code> adds assignments that run only when Toasty inserts a record.
+<code>on_update</code> adds assignments that run only when the selected constraint
+matches:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct User {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    #[unique]
+</span><span class="boring">    email: String,
+</span><span class="boring">    name: String,
+</span><span class="boring">    login_count: i64,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span>let user = User::upsert_by_email("alice@example.com")
+    .on_create(|user| {
+        user.name("Alice")
+            .login_count(0)
+    })
+    .on_update(|user| {
+        user.login_count(toasty::stmt::increment())
+    })
+    .exec(&amp;mut db)
+    .await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>The create branch stores the initial name and a zero count. The update branch
+preserves the stored name and increments the stored count. A branch-specific
+assignment overrides an ordinary setter for the same field on that branch.</p>
+<p>The <code>on_update</code> builder accepts the same assignment operators as a normal
+update. Its <code>incoming()</code> method references values proposed by the create
+branch, while model field paths reference stored values:</p>
+<pre><code class="language-rust ignore">User::upsert_by_email(email)
+    .name(proposed_name)
+    .login_count(1)
+    .on_update(|user| {
+        let incoming = user.incoming();
+        user.name(incoming.name())
+            .login_count(toasty::stmt::increment())
+    })
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>Ordinary setters already use the incoming value on update. Call <code>incoming()</code>
+when an update expression needs to refer to a proposed field explicitly.</p>
+<h2 id="inserting-or-ignoring-a-conflict"><a class="header" href="#inserting-or-ignoring-a-conflict">Inserting or ignoring a conflict</a></h2>
+<p>Call <code>or_ignore()</code> when the selected conflict should leave the existing record
+unchanged:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct User {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: u64,
+</span><span class="boring">    #[unique]
+</span><span class="boring">    email: String,
+</span><span class="boring">    name: String,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span>let inserted: Option&lt;User&gt; = User::upsert_by_email("alice@example.com")
+    .name("Alice")
+    .or_ignore()
+    .exec(&amp;mut db)
+    .await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>The result is <code>Some(user)</code> when Toasty creates the record and <code>None</code> when the
+selected target conflicts. <code>or_ignore()</code> suppresses only that target’s
+conflict; a foreign-key failure, a missing required value, or a conflict on a
+different unique constraint remains an error.</p>
+<h2 id="defaults-and-omitted-fields"><a class="header" href="#defaults-and-omitted-fields">Defaults and omitted fields</a></h2>
+<p>Upsert applies builder values and model attributes according to the selected
+branch:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Value source</th><th style="text-align: right">Create branch</th><th style="text-align: right">Update branch</th></tr>
+</thead>
+<tbody>
+<tr><td>Conflict-target argument</td><td style="text-align: right">Applied</td><td style="text-align: right">Unchanged</td></tr>
+<tr><td>Ordinary replacement setter</td><td style="text-align: right">Applied</td><td style="text-align: right">Applied</td></tr>
+<tr><td>Ordinary mutation</td><td style="text-align: right">Applied to <code>#[default]</code></td><td style="text-align: right">Applied to stored value</td></tr>
+<tr><td><code>on_create</code> setter</td><td style="text-align: right">Applied</td><td style="text-align: right">Unchanged</td></tr>
+<tr><td><code>on_update</code> setter</td><td style="text-align: right">Omitted</td><td style="text-align: right">Applied</td></tr>
+<tr><td><code>#[default]</code></td><td style="text-align: right">Applied</td><td style="text-align: right">Unchanged</td></tr>
+<tr><td><code>#[update]</code></td><td style="text-align: right">Applied</td><td style="text-align: right">Applied</td></tr>
+</tbody>
+</table>
+</div>
+<p>Fields omitted from the builder use their normal create behavior when the row
+is inserted and remain unchanged when an existing row is updated. The create
+branch must still supply every required field that has no automatic value or
+default.</p>
+<p>A regular upsert must contain at least one update assignment. Call
+<code>or_ignore()</code> when the conflict branch should make no changes; Toasty rejects
+an empty update branch instead of generating a self-assignment that could run
+database update behavior.</p>
+<h2 id="database-support"><a class="header" href="#database-support">Database support</a></h2>
+<p>Upsert support depends on whether a backend can identify the selected conflict
+without changing Toasty’s semantics:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Backend</th><th style="text-align: right">Primary key</th><th style="text-align: right">Unique constraint</th><th style="text-align: right"><code>on_create</code> / <code>on_update</code></th><th style="text-align: right"><code>or_ignore</code></th></tr>
+</thead>
+<tbody>
+<tr><td>PostgreSQL</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td></tr>
+<tr><td>SQLite</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td></tr>
+<tr><td>Turso</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td><td style="text-align: right">Yes</td></tr>
+<tr><td>DynamoDB</td><td style="text-align: right">Yes</td><td style="text-align: right">No</td><td style="text-align: right">Required fields / No</td><td style="text-align: right">Yes</td></tr>
+<tr><td>MySQL</td><td style="text-align: right">No</td><td style="text-align: right">No</td><td style="text-align: right">No</td><td style="text-align: right">No</td></tr>
+</tbody>
+</table>
+</div>
+<p>DynamoDB executes a regular primary-key upsert with one <code>UpdateItem</code> request.
+It lowers a create-only assignment on a required field to <code>if_not_exists</code>.
+For a shared arithmetic or append mutation, the declared <code>#[default]</code> is the
+<code>if_not_exists</code> operand, so DynamoDB uses the same default as SQL drivers.
+Nullable create-only assignments and all update-only assignments return
+<code>unsupported_feature</code>. DynamoDB also rejects regular upserts that assign a
+Toasty-managed <code>#[unique]</code> field. Its <code>or_ignore()</code> form can initialize unique
+fields because that form only has a create branch.</p>
+<p>MySQL’s <code>ON DUPLICATE KEY UPDATE</code> reacts to any unique conflict instead of the
+target named by <code>upsert_by_*</code>. Toasty returns <code>unsupported_feature</code> rather than
+updating a row selected by a different constraint.</p>
+<p>Every supporting driver sends one atomic database operation. An upsert inside
+a transaction also follows that transaction’s isolation and commit behavior.</p>
+<p>Upsert handles one record at a time and exposes setters for scalar and embedded
+fields. It does not generate relation setters or nested-create builders.</p>
+<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="deleting-records"><a class="header" href="#deleting-records">Deleting Records</a></h1>
 <p>Toasty provides several ways to delete records: from an instance, by primary
 key, or through a query.</p>
@@ -2296,7 +2525,8 @@ let user = User::get_by_email(&amp;mut db, "alice@example.com").await?;
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<p>Toasty also generates <code>filter_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code> methods:</p>
+<p>Toasty also generates <code>filter_by_*</code>, <code>update_by_*</code>, <code>upsert_by_*</code>, and
+<code>delete_by_*</code> methods:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -2317,6 +2547,12 @@ let user = User::filter_by_email("alice@example.com")
 
 // Update by email
 User::update_by_email("alice@example.com")
+    .name("Alice Smith")
+    .exec(&amp;mut db)
+    .await?;
+
+// Create by email, or update the matching user
+let user = User::upsert_by_email("alice@example.com")
     .name("Alice Smith")
     .exec(&amp;mut db)
     .await?;
@@ -2590,7 +2826,9 @@ may share a <code>coa_id</code> or a <code>combination_hash</code>, but not both
 duplicates an existing <code>(coa_id, combination_hash)</code> pair returns an error.</p>
 <p>Toasty generates the same prefix query methods as a composite <code>#[index(...)]</code>:
 <code>filter_by_coa_id</code>, <code>filter_by_coa_id_and_combination_hash</code>, and the matching
-<code>get_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code> methods.</p>
+<code>get_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code> methods. It also generates
+<code>upsert_by_coa_id_and_combination_hash</code>, which requires every field in the
+unique constraint so the database can select one conflict target.</p>
 <p>DynamoDB does not support composite unique constraints. Toasty backs each unique
 index with a dedicated index table guarded by an <code>attribute_not_exists</code>
 condition, and that mechanism enforces a single column. Declaring a multi-column
@@ -2623,8 +2861,10 @@ parent field because the column ordering within the index is ambiguous. Index
 individual fields inside the embedded struct instead (see
 <a href="#indexing-embedded-fields">Embedded Types — Indexing embedded fields</a>).</p>
 <h2 id="choosing-between-unique-and-index"><a class="header" href="#choosing-between-unique-and-index">Choosing between <code>#[unique]</code> and <code>#[index]</code></a></h2>
-<p>Both attributes tell Toasty that a field is a query target and generate the same
-set of methods: <code>get_by_*</code>, <code>filter_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code>.</p>
+<p>Both attributes tell Toasty that a field is a query target and generate
+<code>get_by_*</code>, <code>filter_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code>. Only <code>#[unique]</code>
+also generates <code>upsert_by_*</code>, because an upsert conflict must identify at most
+one record.</p>
 <p>The difference is in the constraint they express:</p>
 <div class="table-wrapper">
 <table>
@@ -2651,6 +2891,7 @@ naturally repeat — country, status, category.</p>
 <tr><td><code>User::get_by_email(&amp;mut db, email)</code></td><td>One record by unique field</td></tr>
 <tr><td><code>User::filter_by_email(email)</code></td><td>Query builder for unique field</td></tr>
 <tr><td><code>User::update_by_email(email)</code></td><td>Update builder for unique field</td></tr>
+<tr><td><code>User::upsert_by_email(email)</code></td><td>Create or update by unique field</td></tr>
 <tr><td><code>User::delete_by_email(&amp;mut db, email)</code></td><td>Delete by unique field</td></tr>
 <tr><td><code>User::get_by_country(&amp;mut db, country)</code></td><td>One record by indexed field</td></tr>
 <tr><td><code>User::filter_by_country(country)</code></td><td>Query builder for indexed field</td></tr>
@@ -2661,7 +2902,8 @@ naturally repeat — country, status, category.</p>
 </div>
 <p>These methods follow the same patterns as key-generated methods. See
 <a href="#querying-records">Querying Records</a>,
-<a href="#updating-records">Updating Records</a>, and
+<a href="#updating-records">Updating Records</a>,
+<a href="#upserting-records">Upserting Records</a>, and
 <a href="#deleting-records">Deleting Records</a> for details on terminal methods and
 builders.</p>
 <blockquote>
@@ -2807,11 +3049,16 @@ assert_eq!(post.view_count, 100);
 </span><span class="boring">}</span></code></pre>
 <p>The expression inside <code>#[default(...)]</code> is any valid Rust expression. It runs at
 insert time, not at compile time.</p>
-<p><code>#[default]</code> only applies on create. It has no effect on updates.</p>
+<p><code>#[default]</code> applies to a create builder and to the create branch of an
+<a href="#upserting-records">upsert</a>. It does not change an existing record on the
+update branch. A shared upsert mutation applies to this value when it creates a
+record; for example, <code>#[default(10)]</code> with <code>subtract(3)</code> inserts seven.</p>
 <h2 id="update-expressions"><a class="header" href="#update-expressions">Update expressions</a></h2>
 <p>Use <code>#[update(expr)]</code> to set an expression that applies on both create and
 update. Each time the record is created or updated, Toasty evaluates the
 expression and sets the field — unless you explicitly override it.</p>
+<p>An <a href="#upserting-records">upsert</a> applies <code>#[update]</code> on both its create and
+update branches.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -2881,7 +3128,8 @@ assert_eq!(post.updated_at, explicit_ts);
 </span><span class="boring">}</span></code></pre>
 <h3 id="combining-default-and-update"><a class="header" href="#combining-default-and-update">Combining <code>#[default]</code> and <code>#[update]</code></a></h3>
 <p>You can use both attributes on the same field. <code>#[default]</code> applies on create,
-<code>#[update]</code> applies on update:</p>
+and <code>#[update]</code> applies on update. An upsert selects the corresponding value for
+each branch:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -3113,10 +3361,10 @@ querying, and updates — see <a href="#vecscalar-fields"><code>Vec&lt;scalar&gt
 <tbody>
 <tr><td><code>#[column("name")]</code></td><td>Custom column name</td><td>—</td></tr>
 <tr><td><code>#[column(type = ...)]</code></td><td>Explicit column type</td><td>—</td></tr>
-<tr><td><code>#[default(expr)]</code></td><td>Default value</td><td>Create only</td></tr>
-<tr><td><code>#[update(expr)]</code></td><td>Automatic value</td><td>Create and update</td></tr>
-<tr><td><code>#[auto]</code> on <code>created_at</code></td><td>Shorthand for <code>#[default(jiff::Timestamp::now())]</code></td><td>Create only</td></tr>
-<tr><td><code>#[auto]</code> on <code>updated_at</code></td><td>Shorthand for <code>#[update(jiff::Timestamp::now())]</code></td><td>Create and update</td></tr>
+<tr><td><code>#[default(expr)]</code></td><td>Default value</td><td>Create and the create branch of upsert</td></tr>
+<tr><td><code>#[update(expr)]</code></td><td>Automatic value</td><td>Create, update, and both upsert branches</td></tr>
+<tr><td><code>#[auto]</code> on <code>created_at</code></td><td>Shorthand for <code>#[default(jiff::Timestamp::now())]</code></td><td>Create and the create branch of upsert</td></tr>
+<tr><td><code>#[auto]</code> on <code>updated_at</code></td><td>Shorthand for <code>#[update(jiff::Timestamp::now())]</code></td><td>Create, update, and both upsert branches</td></tr>
 </tbody>
 </table>
 </div>
@@ -8403,6 +8651,10 @@ want native <code>NUMERIC</code>.</p>
 <h2 id="behavior-specific-to-postgresql"><a class="header" href="#behavior-specific-to-postgresql">Behavior specific to PostgreSQL</a></h2>
 <p>Toasty enables these features automatically when the driver is
 PostgreSQL. No configuration is required.</p>
+<p><strong>Targeted upsert.</strong> PostgreSQL executes
+<a href="#upserting-records"><code>upsert_by_*</code></a> with <code>INSERT ... ON CONFLICT</code>.
+Primary keys and unique constraints can be conflict targets, and
+<code>on_create</code>, <code>on_update</code>, and <code>or_ignore</code> are supported.</p>
 <p><strong>Native arrays for <a href="#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a>.</strong>
 A <code>tags: Vec&lt;String&gt;</code> field is a <code>text[]</code> column. The array predicates
 (<code>contains</code>, <code>is_superset</code>, <code>intersects</code>, <code>len</code>, <code>is_empty</code>) lower to
@@ -8625,6 +8877,11 @@ walks backwards from a page cursor.</p>
 <code>BINARY col LIKE 'prefix%'</code>. Casting the column to <code>BINARY</code> forces a byte
 comparison, so the match is case-sensitive regardless of the column’s collation.</p>
 <p>A few things that exist on PostgreSQL are absent here:</p>
+<p><strong>No targeted upsert.</strong> MySQL’s <code>ON DUPLICATE KEY UPDATE</code> reacts to any primary
+key or unique-index conflict; it cannot restrict the update to the constraint
+named by <a href="#upserting-records"><code>upsert_by_*</code></a>. Toasty returns
+<code>unsupported_feature</code> instead of updating a row selected by a different
+constraint.</p>
 <p><strong>No <code>ILIKE</code>.</strong> MySQL has no <code>ILIKE</code> operator, so
 <a href="#ilike"><code>.ilike()</code></a> is rejected with an
 <code>unsupported_feature</code> error. MySQL’s <code>LIKE</code> case sensitivity is set by the
@@ -8813,9 +9070,13 @@ mutations, <a href="#batch-operations">batch operations</a>,
 <a href="#sorting-limits-and-pagination">pagination in both directions</a>,
 <a href="#embedded-types">embedded types</a>,
 <a href="#unique-fields"><code>#[unique]</code></a>,
+<a href="#upserting-records"><code>upsert_by_*</code></a>,
 <a href="#preloading-associations">association preloading</a>, and
 serializable <a href="#transactions">transactions</a> all run natively. A few
 behaviors differ from the other SQL backends:</p>
+<p><strong>Targeted upsert.</strong> SQLite executes <code>upsert_by_*</code> with <code>INSERT ... ON CONFLICT</code>. Primary keys and unique constraints can be conflict targets, and
+<code>on_create</code>, <code>on_update</code>, and <code>or_ignore</code> are supported. Turso uses the same
+upsert behavior.</p>
 <p><strong><code>LIKE</code> is case-insensitive for ASCII.</strong> SQLite’s <code>LIKE</code> ignores case for ASCII
 characters but is case-sensitive for non-ASCII ones. A
 <a href="#like"><code>.like("Rust")</code></a> filter also matches
@@ -8983,8 +9244,9 @@ flags, construct the driver directly.</p>
 <p>The Turso driver uses the same type mapping and SQL serializer as the
 <a href="#sqlite">SQLite driver</a> — see that chapter for the column-type
 table and notes on UUIDs as <code>BLOB</code>, ISO 8601 temporal types, decimals
-stored as <code>TEXT</code>, and so on. The list of Turso-specific behaviors
-below is everything that differs from the SQLite chapter.</p>
+stored as <code>TEXT</code>, and targeted <a href="#upserting-records"><code>upsert_by_*</code></a>.
+The list of Turso-specific behaviors below is everything that differs from the
+SQLite chapter.</p>
 <h2 id="in-memory-databases-share-state-across-the-pool"><a class="header" href="#in-memory-databases-share-state-across-the-pool">In-memory databases share state across the pool</a></h2>
 <p>Unlike the SQLite driver — which caps the pool at one connection
 because each <code>Connection::open(":memory:")</code> returns a private,
@@ -9299,6 +9561,25 @@ an <code>unsupported_feature</code> error when the schema is created. SQL backen
 support them via <code>CREATE UNIQUE INDEX</code>.</p>
 <p>See <a href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a>
 for the model-level syntax.</p>
+<h3 id="upsert"><a class="header" href="#upsert">Upsert</a></h3>
+<p>DynamoDB supports <a href="#upserting-records"><code>upsert_by_*</code></a> only when the
+conflict target is the primary key. A regular upsert uses one <code>UpdateItem</code>
+request, which creates a missing item or applies the same update expression to
+an existing item. Shared mutations use the field’s <code>#[default]</code> value with
+<code>if_not_exists</code>; for example, <code>add</code> lowers to <code>SET field = if_not_exists(field, :default) + :value</code>. <code>on_create</code> supports required fields
+by using <code>if_not_exists</code>; nullable create-only assignments return
+<code>unsupported_feature</code> because an existing item may omit the attribute.
+<code>on_update</code> also returns <code>unsupported_feature</code> because <code>UpdateItem</code> cannot
+choose an expression based on whether the item existed before the request.</p>
+<p><code>or_ignore()</code> uses a conditional put and returns <code>None</code> when the primary key
+already exists. If the new item also contains <code>#[unique]</code> fields, Toasty uses
+<code>TransactWriteItems</code> to create the item and its managed unique-index entries
+atomically.</p>
+<p>A regular upsert cannot assign a <code>#[unique]</code> secondary field because creating
+and updating the managed index require different writes. DynamoDB also rejects
+a nullable <code>#[default]</code> value and a field that combines <code>#[default]</code> with
+<code>#[update]</code> inside a regular upsert; attribute absence cannot reliably
+distinguish a new item from an existing item whose optional field is absent.</p>
 <h3 id="billing-mode"><a class="header" href="#billing-mode">Billing mode</a></h3>
 <p>Tables and GSIs are created with on-demand (PAY_PER_REQUEST) billing.
 Toasty does not currently expose a knob to switch to provisioned

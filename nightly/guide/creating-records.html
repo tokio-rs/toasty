@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -179,6 +179,8 @@
 the create builder. The macro uses a syntax inspired by struct literals and expands to builder
 calls under the hood. Most code uses the macro; the builder is there when you
 need programmatic control (e.g., conditional fields).</p>
+<p>Use an <a href="./upserting-records.html">upsert</a> when the same operation must create a
+missing record or update the record selected by a key or unique constraint.</p>
 <h2 id="creating-a-single-record"><a class="header" href="#creating-a-single-record">Creating a single record</a></h2>
 <p>With the macro:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]

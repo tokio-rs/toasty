@@ -52,20 +52,23 @@
 <a href=#52 id=52 data-nosnippet>52</a><span class="kw">mod </span>update_by_key;
 <a href=#53 id=53 data-nosnippet>53</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>update_by_key::UpdateByKey;
 <a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a><span class="kw">use </span>toasty_core::stmt;
-<a href=#56 id=56 data-nosnippet>56</a>
-<a href=#57 id=57 data-nosnippet>57</a><span class="doccomment">/// Extracts the per-row column types from a node's return type. A node
-<a href=#58 id=58 data-nosnippet>58</a>/// returning rows has type `List&lt;Record&lt;...&gt;&gt;` — the record field types tell
-<a href=#59 id=59 data-nosnippet>59</a>/// the driver how to decode each row. `Unit` means the node returns only a row
-<a href=#60 id=60 data-nosnippet>60</a>/// count, so there are no column types.
-<a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>row_field_types(ty: <span class="kw-2">&amp;</span>stmt::Type) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;stmt::Type&gt;&gt; {
-<a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">match </span>ty {
-<a href=#63 id=63 data-nosnippet>63</a>        stmt::Type::List(rows) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>rows {
-<a href=#64 id=64 data-nosnippet>64</a>            stmt::Type::Record(fields) =&gt; <span class="prelude-val">Some</span>(fields.clone()),
-<a href=#65 id=65 data-nosnippet>65</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"row_field_types: ty={ty:#?}"</span>),
-<a href=#66 id=66 data-nosnippet>66</a>        },
-<a href=#67 id=67 data-nosnippet>67</a>        stmt::Type::Unit =&gt; <span class="prelude-val">None</span>,
-<a href=#68 id=68 data-nosnippet>68</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"row_field_types: ty={ty:#?}"</span>),
-<a href=#69 id=69 data-nosnippet>69</a>    }
-<a href=#70 id=70 data-nosnippet>70</a>}
+<a href=#55 id=55 data-nosnippet>55</a><span class="kw">mod </span>upsert;
+<a href=#56 id=56 data-nosnippet>56</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">use </span>upsert::Upsert;
+<a href=#57 id=57 data-nosnippet>57</a>
+<a href=#58 id=58 data-nosnippet>58</a><span class="kw">use </span>toasty_core::stmt;
+<a href=#59 id=59 data-nosnippet>59</a>
+<a href=#60 id=60 data-nosnippet>60</a><span class="doccomment">/// Extracts the per-row column types from a node's return type. A node
+<a href=#61 id=61 data-nosnippet>61</a>/// returning rows has type `List&lt;Record&lt;...&gt;&gt;` — the record field types tell
+<a href=#62 id=62 data-nosnippet>62</a>/// the driver how to decode each row. `Unit` means the node returns only a row
+<a href=#63 id=63 data-nosnippet>63</a>/// count, so there are no column types.
+<a href=#64 id=64 data-nosnippet>64</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>row_field_types(ty: <span class="kw-2">&amp;</span>stmt::Type) -&gt; <span class="prelude-ty">Option</span>&lt;Vec&lt;stmt::Type&gt;&gt; {
+<a href=#65 id=65 data-nosnippet>65</a>    <span class="kw">match </span>ty {
+<a href=#66 id=66 data-nosnippet>66</a>        stmt::Type::List(rows) =&gt; <span class="kw">match </span><span class="kw-2">&amp;**</span>rows {
+<a href=#67 id=67 data-nosnippet>67</a>            stmt::Type::Record(fields) =&gt; <span class="prelude-val">Some</span>(fields.clone()),
+<a href=#68 id=68 data-nosnippet>68</a>            <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"row_field_types: ty={ty:#?}"</span>),
+<a href=#69 id=69 data-nosnippet>69</a>        },
+<a href=#70 id=70 data-nosnippet>70</a>        stmt::Type::Unit =&gt; <span class="prelude-val">None</span>,
+<a href=#71 id=71 data-nosnippet>71</a>        <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"row_field_types: ty={ty:#?}"</span>),
+<a href=#72 id=72 data-nosnippet>72</a>    }
+<a href=#73 id=73 data-nosnippet>73</a>}
 </code></pre></div></section></main></body></html>

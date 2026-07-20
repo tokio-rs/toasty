@@ -461,11 +461,12 @@
 <a href=#461 id=461 data-nosnippet>461</a>    <span class="kw">let </span>insert = stmt::Insert {
 <a href=#462 id=462 data-nosnippet>462</a>        target: stmt::InsertTarget::Model(&lt;M <span class="kw">as </span>toasty::schema::Model&gt;::id()),
 <a href=#463 id=463 data-nosnippet>463</a>        source: stmt::Query::new_single(<span class="macro">vec!</span>[stmt::Expr::record(fields)]),
-<a href=#464 id=464 data-nosnippet>464</a>        returning: <span class="prelude-val">None</span>,
-<a href=#465 id=465 data-nosnippet>465</a>    };
-<a href=#466 id=466 data-nosnippet>466</a>
-<a href=#467 id=467 data-nosnippet>467</a>    toasty::Statement::&lt;()&gt;::from_untyped_stmt(insert.into())
-<a href=#468 id=468 data-nosnippet>468</a>        .exec(db)
-<a href=#469 id=469 data-nosnippet>469</a>        .<span class="kw">await
-<a href=#470 id=470 data-nosnippet>470</a></span>}
+<a href=#464 id=464 data-nosnippet>464</a>        upsert: <span class="prelude-val">None</span>,
+<a href=#465 id=465 data-nosnippet>465</a>        returning: <span class="prelude-val">None</span>,
+<a href=#466 id=466 data-nosnippet>466</a>    };
+<a href=#467 id=467 data-nosnippet>467</a>
+<a href=#468 id=468 data-nosnippet>468</a>    toasty::Statement::&lt;()&gt;::from_untyped_stmt(insert.into())
+<a href=#469 id=469 data-nosnippet>469</a>        .exec(db)
+<a href=#470 id=470 data-nosnippet>470</a>        .<span class="kw">await
+<a href=#471 id=471 data-nosnippet>471</a></span>}
 </code></pre></div></section></main></body></html>

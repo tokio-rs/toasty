@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a>
 <a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>super::{
 <a href=#8 id=8 data-nosnippet>8</a>    Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Node,
-<a href=#9 id=9 data-nosnippet>9</a>    Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey,
+<a href=#9 id=9 data-nosnippet>9</a>    Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey, Upsert,
 <a href=#10 id=10 data-nosnippet>10</a>};
 <a href=#11 id=11 data-nosnippet>11</a>
 <a href=#12 id=12 data-nosnippet>12</a><span class="doccomment">/// A step in the query execution plan.
@@ -53,40 +53,44 @@
 <a href=#53 id=53 data-nosnippet>53</a>    </span>Scan(Scan),
 <a href=#54 id=54 data-nosnippet>54</a>
 <a href=#55 id=55 data-nosnippet>55</a>    UpdateByKey(UpdateByKey),
-<a href=#56 id=56 data-nosnippet>56</a>}
-<a href=#57 id=57 data-nosnippet>57</a>
-<a href=#58 id=58 data-nosnippet>58</a><span class="kw">impl </span>From&lt;Operation&gt; <span class="kw">for </span>Node {
-<a href=#59 id=59 data-nosnippet>59</a>    <span class="kw">fn </span>from(value: Operation) -&gt; <span class="self">Self </span>{
-<a href=#60 id=60 data-nosnippet>60</a>        <span class="kw">let </span>deps = <span class="kw">match </span><span class="kw-2">&amp;</span>value {
-<a href=#61 id=61 data-nosnippet>61</a>            Operation::Const(_m) =&gt; IndexSet::new(),
-<a href=#62 id=62 data-nosnippet>62</a>            Operation::DeleteByKey(m) =&gt; <span class="macro">indexset!</span>[m.input],
-<a href=#63 id=63 data-nosnippet>63</a>            Operation::Eval(m) =&gt; m.inputs.clone(),
-<a href=#64 id=64 data-nosnippet>64</a>            Operation::ExecStatement(m) =&gt; m.inputs.clone(),
-<a href=#65 id=65 data-nosnippet>65</a>            Operation::Filter(m) =&gt; <span class="macro">indexset!</span>[m.input],
-<a href=#66 id=66 data-nosnippet>66</a>            Operation::FindPkByIndex(m) =&gt; m.inputs.clone(),
-<a href=#67 id=67 data-nosnippet>67</a>            Operation::GetByKey(m) =&gt; {
-<a href=#68 id=68 data-nosnippet>68</a>                <span class="macro">indexset!</span>[m.input]
-<a href=#69 id=69 data-nosnippet>69</a>            }
-<a href=#70 id=70 data-nosnippet>70</a>            Operation::Guard(m) =&gt; {
-<a href=#71 id=71 data-nosnippet>71</a>                <span class="kw">let </span><span class="kw-2">mut </span>deps = <span class="macro">indexset!</span>[m.input];
-<a href=#72 id=72 data-nosnippet>72</a>                deps.extend(m.guard_inputs.iter().copied());
-<a href=#73 id=73 data-nosnippet>73</a>                deps
-<a href=#74 id=74 data-nosnippet>74</a>            }
-<a href=#75 id=75 data-nosnippet>75</a>            Operation::NestedMerge(m) =&gt; m.inputs.clone(),
-<a href=#76 id=76 data-nosnippet>76</a>            Operation::Project(m) =&gt; <span class="macro">indexset!</span>[m.input],
-<a href=#77 id=77 data-nosnippet>77</a>            Operation::ReadModifyWrite(m) =&gt; m.inputs.clone(),
-<a href=#78 id=78 data-nosnippet>78</a>            Operation::QueryPk(m) =&gt; m.input.into_iter().collect(),
-<a href=#79 id=79 data-nosnippet>79</a>            Operation::Scan(m) =&gt; m.input.into_iter().collect(),
-<a href=#80 id=80 data-nosnippet>80</a>            Operation::UpdateByKey(m) =&gt; <span class="macro">indexset!</span>[m.input],
-<a href=#81 id=81 data-nosnippet>81</a>        };
-<a href=#82 id=82 data-nosnippet>82</a>
-<a href=#83 id=83 data-nosnippet>83</a>        Node {
-<a href=#84 id=84 data-nosnippet>84</a>            op: value,
-<a href=#85 id=85 data-nosnippet>85</a>            deps,
-<a href=#86 id=86 data-nosnippet>86</a>            var: Cell::new(<span class="prelude-val">None</span>),
-<a href=#87 id=87 data-nosnippet>87</a>            num_uses: Cell::new(<span class="number">0</span>),
-<a href=#88 id=88 data-nosnippet>88</a>            visited: Cell::new(<span class="bool-val">false</span>),
-<a href=#89 id=89 data-nosnippet>89</a>        }
-<a href=#90 id=90 data-nosnippet>90</a>    }
-<a href=#91 id=91 data-nosnippet>91</a>}
+<a href=#56 id=56 data-nosnippet>56</a>
+<a href=#57 id=57 data-nosnippet>57</a>    <span class="doccomment">/// Atomically insert or update one record on a non-SQL database.
+<a href=#58 id=58 data-nosnippet>58</a>    </span>Upsert(Box&lt;Upsert&gt;),
+<a href=#59 id=59 data-nosnippet>59</a>}
+<a href=#60 id=60 data-nosnippet>60</a>
+<a href=#61 id=61 data-nosnippet>61</a><span class="kw">impl </span>From&lt;Operation&gt; <span class="kw">for </span>Node {
+<a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">fn </span>from(value: Operation) -&gt; <span class="self">Self </span>{
+<a href=#63 id=63 data-nosnippet>63</a>        <span class="kw">let </span>deps = <span class="kw">match </span><span class="kw-2">&amp;</span>value {
+<a href=#64 id=64 data-nosnippet>64</a>            Operation::Const(_m) =&gt; IndexSet::new(),
+<a href=#65 id=65 data-nosnippet>65</a>            Operation::DeleteByKey(m) =&gt; <span class="macro">indexset!</span>[m.input],
+<a href=#66 id=66 data-nosnippet>66</a>            Operation::Eval(m) =&gt; m.inputs.clone(),
+<a href=#67 id=67 data-nosnippet>67</a>            Operation::ExecStatement(m) =&gt; m.inputs.clone(),
+<a href=#68 id=68 data-nosnippet>68</a>            Operation::Filter(m) =&gt; <span class="macro">indexset!</span>[m.input],
+<a href=#69 id=69 data-nosnippet>69</a>            Operation::FindPkByIndex(m) =&gt; m.inputs.clone(),
+<a href=#70 id=70 data-nosnippet>70</a>            Operation::GetByKey(m) =&gt; {
+<a href=#71 id=71 data-nosnippet>71</a>                <span class="macro">indexset!</span>[m.input]
+<a href=#72 id=72 data-nosnippet>72</a>            }
+<a href=#73 id=73 data-nosnippet>73</a>            Operation::Guard(m) =&gt; {
+<a href=#74 id=74 data-nosnippet>74</a>                <span class="kw">let </span><span class="kw-2">mut </span>deps = <span class="macro">indexset!</span>[m.input];
+<a href=#75 id=75 data-nosnippet>75</a>                deps.extend(m.guard_inputs.iter().copied());
+<a href=#76 id=76 data-nosnippet>76</a>                deps
+<a href=#77 id=77 data-nosnippet>77</a>            }
+<a href=#78 id=78 data-nosnippet>78</a>            Operation::NestedMerge(m) =&gt; m.inputs.clone(),
+<a href=#79 id=79 data-nosnippet>79</a>            Operation::Project(m) =&gt; <span class="macro">indexset!</span>[m.input],
+<a href=#80 id=80 data-nosnippet>80</a>            Operation::ReadModifyWrite(m) =&gt; m.inputs.clone(),
+<a href=#81 id=81 data-nosnippet>81</a>            Operation::QueryPk(m) =&gt; m.input.into_iter().collect(),
+<a href=#82 id=82 data-nosnippet>82</a>            Operation::Scan(m) =&gt; m.input.into_iter().collect(),
+<a href=#83 id=83 data-nosnippet>83</a>            Operation::UpdateByKey(m) =&gt; <span class="macro">indexset!</span>[m.input],
+<a href=#84 id=84 data-nosnippet>84</a>            Operation::Upsert(m) =&gt; m.inputs.clone(),
+<a href=#85 id=85 data-nosnippet>85</a>        };
+<a href=#86 id=86 data-nosnippet>86</a>
+<a href=#87 id=87 data-nosnippet>87</a>        Node {
+<a href=#88 id=88 data-nosnippet>88</a>            op: value,
+<a href=#89 id=89 data-nosnippet>89</a>            deps,
+<a href=#90 id=90 data-nosnippet>90</a>            var: Cell::new(<span class="prelude-val">None</span>),
+<a href=#91 id=91 data-nosnippet>91</a>            num_uses: Cell::new(<span class="number">0</span>),
+<a href=#92 id=92 data-nosnippet>92</a>            visited: Cell::new(<span class="bool-val">false</span>),
+<a href=#93 id=93 data-nosnippet>93</a>        }
+<a href=#94 id=94 data-nosnippet>94</a>    }
+<a href=#95 id=95 data-nosnippet>95</a>}
 </code></pre></div></section></main></body></html>

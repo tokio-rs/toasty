@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -262,7 +262,8 @@ let user = User::get_by_email(&amp;mut db, "alice@example.com").await?;
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
-<p>Toasty also generates <code>filter_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code> methods:</p>
+<p>Toasty also generates <code>filter_by_*</code>, <code>update_by_*</code>, <code>upsert_by_*</code>, and
+<code>delete_by_*</code> methods:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -283,6 +284,12 @@ let user = User::filter_by_email("alice@example.com")
 
 // Update by email
 User::update_by_email("alice@example.com")
+    .name("Alice Smith")
+    .exec(&amp;mut db)
+    .await?;
+
+// Create by email, or update the matching user
+let user = User::upsert_by_email("alice@example.com")
     .name("Alice Smith")
     .exec(&amp;mut db)
     .await?;
@@ -556,7 +563,9 @@ may share a <code>coa_id</code> or a <code>combination_hash</code>, but not both
 duplicates an existing <code>(coa_id, combination_hash)</code> pair returns an error.</p>
 <p>Toasty generates the same prefix query methods as a composite <code>#[index(...)]</code>:
 <code>filter_by_coa_id</code>, <code>filter_by_coa_id_and_combination_hash</code>, and the matching
-<code>get_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code> methods.</p>
+<code>get_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code> methods. It also generates
+<code>upsert_by_coa_id_and_combination_hash</code>, which requires every field in the
+unique constraint so the database can select one conflict target.</p>
 <p>DynamoDB does not support composite unique constraints. Toasty backs each unique
 index with a dedicated index table guarded by an <code>attribute_not_exists</code>
 condition, and that mechanism enforces a single column. Declaring a multi-column
@@ -589,8 +598,10 @@ parent field because the column ordering within the index is ambiguous. Index
 individual fields inside the embedded struct instead (see
 <a href="./embedded-types.html#indexing-embedded-fields">Embedded Types — Indexing embedded fields</a>).</p>
 <h2 id="choosing-between-unique-and-index"><a class="header" href="#choosing-between-unique-and-index">Choosing between <code>#[unique]</code> and <code>#[index]</code></a></h2>
-<p>Both attributes tell Toasty that a field is a query target and generate the same
-set of methods: <code>get_by_*</code>, <code>filter_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code>.</p>
+<p>Both attributes tell Toasty that a field is a query target and generate
+<code>get_by_*</code>, <code>filter_by_*</code>, <code>update_by_*</code>, and <code>delete_by_*</code>. Only <code>#[unique]</code>
+also generates <code>upsert_by_*</code>, because an upsert conflict must identify at most
+one record.</p>
 <p>The difference is in the constraint they express:</p>
 <div class="table-wrapper">
 <table>
@@ -617,6 +628,7 @@ naturally repeat — country, status, category.</p>
 <tr><td><code>User::get_by_email(&amp;mut db, email)</code></td><td>One record by unique field</td></tr>
 <tr><td><code>User::filter_by_email(email)</code></td><td>Query builder for unique field</td></tr>
 <tr><td><code>User::update_by_email(email)</code></td><td>Update builder for unique field</td></tr>
+<tr><td><code>User::upsert_by_email(email)</code></td><td>Create or update by unique field</td></tr>
 <tr><td><code>User::delete_by_email(&amp;mut db, email)</code></td><td>Delete by unique field</td></tr>
 <tr><td><code>User::get_by_country(&amp;mut db, country)</code></td><td>One record by indexed field</td></tr>
 <tr><td><code>User::filter_by_country(country)</code></td><td>Query builder for indexed field</td></tr>
@@ -627,7 +639,8 @@ naturally repeat — country, status, category.</p>
 </div>
 <p>These methods follow the same patterns as key-generated methods. See
 <a href="./querying-records.html">Querying Records</a>,
-<a href="./updating-records.html">Updating Records</a>, and
+<a href="./updating-records.html">Updating Records</a>,
+<a href="./upserting-records.html">Upserting Records</a>, and
 <a href="./deleting-records.html">Deleting Records</a> for details on terminal methods and
 builders.</p>
 <blockquote>

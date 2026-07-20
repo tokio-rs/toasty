@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -313,11 +313,16 @@ assert_eq!(post.view_count, 100);
 </span><span class="boring">}</span></code></pre>
 <p>The expression inside <code>#[default(...)]</code> is any valid Rust expression. It runs at
 insert time, not at compile time.</p>
-<p><code>#[default]</code> only applies on create. It has no effect on updates.</p>
+<p><code>#[default]</code> applies to a create builder and to the create branch of an
+<a href="./upserting-records.html">upsert</a>. It does not change an existing record on the
+update branch. A shared upsert mutation applies to this value when it creates a
+record; for example, <code>#[default(10)]</code> with <code>subtract(3)</code> inserts seven.</p>
 <h2 id="update-expressions"><a class="header" href="#update-expressions">Update expressions</a></h2>
 <p>Use <code>#[update(expr)]</code> to set an expression that applies on both create and
 update. Each time the record is created or updated, Toasty evaluates the
 expression and sets the field — unless you explicitly override it.</p>
+<p>An <a href="./upserting-records.html">upsert</a> applies <code>#[update]</code> on both its create and
+update branches.</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -387,7 +392,8 @@ assert_eq!(post.updated_at, explicit_ts);
 </span><span class="boring">}</span></code></pre>
 <h3 id="combining-default-and-update"><a class="header" href="#combining-default-and-update">Combining <code>#[default]</code> and <code>#[update]</code></a></h3>
 <p>You can use both attributes on the same field. <code>#[default]</code> applies on create,
-<code>#[update]</code> applies on update:</p>
+and <code>#[update]</code> applies on update. An upsert selects the corresponding value for
+each branch:</p>
 <pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
 </span><span class="boring">fn main() {
 </span><span class="boring">use toasty::Model;
@@ -619,10 +625,10 @@ querying, and updates — see <a href="./vec-scalar-fields.html"><code>Vec&lt;sc
 <tbody>
 <tr><td><code>#[column("name")]</code></td><td>Custom column name</td><td>—</td></tr>
 <tr><td><code>#[column(type = ...)]</code></td><td>Explicit column type</td><td>—</td></tr>
-<tr><td><code>#[default(expr)]</code></td><td>Default value</td><td>Create only</td></tr>
-<tr><td><code>#[update(expr)]</code></td><td>Automatic value</td><td>Create and update</td></tr>
-<tr><td><code>#[auto]</code> on <code>created_at</code></td><td>Shorthand for <code>#[default(jiff::Timestamp::now())]</code></td><td>Create only</td></tr>
-<tr><td><code>#[auto]</code> on <code>updated_at</code></td><td>Shorthand for <code>#[update(jiff::Timestamp::now())]</code></td><td>Create and update</td></tr>
+<tr><td><code>#[default(expr)]</code></td><td>Default value</td><td>Create and the create branch of upsert</td></tr>
+<tr><td><code>#[update(expr)]</code></td><td>Automatic value</td><td>Create, update, and both upsert branches</td></tr>
+<tr><td><code>#[auto]</code> on <code>created_at</code></td><td>Shorthand for <code>#[default(jiff::Timestamp::now())]</code></td><td>Create and the create branch of upsert</td></tr>
+<tr><td><code>#[auto]</code> on <code>updated_at</code></td><td>Shorthand for <code>#[update(jiff::Timestamp::now())]</code></td><td>Create, update, and both upsert branches</td></tr>
 </tbody>
 </table>
 </div>

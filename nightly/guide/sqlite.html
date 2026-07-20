@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-baf47f78.js";
+            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-a253e6fc.js"></script>
+        <script src="toc-1785f50e.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -293,9 +293,13 @@ mutations, <a href="./batch-operations.html">batch operations</a>,
 <a href="./sorting-limits-and-pagination.html">pagination in both directions</a>,
 <a href="./embedded-types.html">embedded types</a>,
 <a href="./indexes-and-unique-constraints.html#unique-fields"><code>#[unique]</code></a>,
+<a href="./upserting-records.html"><code>upsert_by_*</code></a>,
 <a href="./preloading-associations.html">association preloading</a>, and
 serializable <a href="./transactions.html">transactions</a> all run natively. A few
 behaviors differ from the other SQL backends:</p>
+<p><strong>Targeted upsert.</strong> SQLite executes <code>upsert_by_*</code> with <code>INSERT ... ON CONFLICT</code>. Primary keys and unique constraints can be conflict targets, and
+<code>on_create</code>, <code>on_update</code>, and <code>or_ignore</code> are supported. Turso uses the same
+upsert behavior.</p>
 <p><strong><code>LIKE</code> is case-insensitive for ASCII.</strong> SQLite’s <code>LIKE</code> ignores case for ASCII
 characters but is case-sensitive for non-ASCII ones. A
 <a href="./filtering-with-expressions.html#like"><code>.like("Rust")</code></a> filter also matches
