@@ -1,5 +1,5 @@
 (function() {
-    const implementors = Object.fromEntries([["toasty_core",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.95.0/core/cmp/trait.Ord.html\" title=\"trait core::cmp::Ord\">Ord</a> for <a class=\"struct\" href=\"toasty_core/stmt/struct.Projection.html\" title=\"struct toasty_core::stmt::Projection\">Projection</a>",0]]]]);
+    const implementors = Object.fromEntries([["toasty_core",[["impl <a class=\"trait\" href=\"https://doc.rust-lang.org/1.97.1/core/cmp/trait.Ord.html\" title=\"trait core::cmp::Ord\">Ord</a> for <a class=\"struct\" href=\"toasty_core/stmt/struct.Projection.html\" title=\"struct toasty_core::stmt::Projection\">Projection</a>",0]]]]);
     if (window.register_implementors) {
         window.register_implementors(implementors);
     } else {
