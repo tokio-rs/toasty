@@ -6,47 +6,29 @@ use crate::prelude::*;
 pub async fn preload_has_many_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let alice = toasty::create!(User {
-        name: "alice",
-        todos: [{ title: "a" }, { title: "b" }, { title: "c" }]
-    })
+    toasty::create!(User::[
+        {
+            name: "alice",
+            todos: [{ title: "a" }, { title: "b" }, { title: "c" }]
+        },
+        { name: "bob", todos: [{ title: "x" }] },
+    ])
     .exec(&mut db)
     .await?;
 
-    // Bob has no matching todos.
-    let bob = toasty::create!(User {
-        name: "bob",
-        todos: [{ title: "x" }]
-    })
-    .exec(&mut db)
-    .await?;
-
-    let alice_loaded = User::filter_by_id(alice.id)
+    let users: Vec<User> = User::all()
         .include(
             User::fields()
                 .todos()
                 .filter(Todo::fields().title().eq("b")),
         )
-        .get(&mut db)
+        .exec(&mut db)
         .await?;
 
-    let titles: Vec<&str> = alice_loaded
-        .todos
-        .get()
-        .iter()
-        .map(|t| t.title.as_str())
-        .collect();
-    assert_eq!(titles, vec!["b"]);
-
-    let bob_loaded = User::filter_by_id(bob.id)
-        .include(
-            User::fields()
-                .todos()
-                .filter(Todo::fields().title().eq("b")),
-        )
-        .get(&mut db)
-        .await?;
-    assert!(bob_loaded.todos.get().is_empty());
+    assert_struct!(users, #(
+        { name: "alice", todos.get(): [{ title: "b" }] },
+        { name: "bob", todos.get(): [] },
+    ));
 
     Ok(())
 }
@@ -58,18 +40,13 @@ pub async fn preload_has_many_with_filter(test: &mut Test) -> Result<()> {
 pub async fn preload_has_many_filter_independent_of_parent_any(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let _alice = toasty::create!(User {
-        name: "alice",
-        todos: [{ title: "keep" }, { title: "drop" }]
-    })
-    .exec(&mut db)
-    .await?;
-
-    // Bob has no `keep` todo, so the parent-side `any` excludes him.
-    let _bob = toasty::create!(User {
-        name: "bob",
-        todos: [{ title: "drop" }]
-    })
+    toasty::create!(User::[
+        {
+            name: "alice",
+            todos: [{ title: "keep" }, { title: "drop" }]
+        },
+        { name: "bob", todos: [{ title: "drop" }] },
+    ])
     .exec(&mut db)
     .await?;
 
@@ -87,11 +64,10 @@ pub async fn preload_has_many_filter_independent_of_parent_any(test: &mut Test) 
         .exec(&mut db)
         .await?;
 
-    assert_eq!(1, users.len());
-    let alice = &users[0];
-    assert_eq!("alice", alice.name);
-    let titles: Vec<&str> = alice.todos.get().iter().map(|t| t.title.as_str()).collect();
-    assert_eq!(titles, vec!["keep"]);
+    assert_struct!(users, [{
+        name: "alice",
+        todos.get(): [{ title: "keep" }],
+    }]);
 
     Ok(())
 }
@@ -122,13 +98,10 @@ pub async fn preload_has_many_repeated_filters_ored(test: &mut Test) -> Result<(
         .get(&mut db)
         .await?;
 
-    let titles: Vec<&str> = alice_loaded
-        .todos
-        .get()
-        .iter()
-        .map(|t| t.title.as_str())
-        .collect();
-    assert_eq!(titles, vec!["aab", "bbb"]);
+    assert_struct!(alice_loaded.todos.get(), #(
+        { title: "aab" },
+        { title: "bbb" },
+    ));
 
     Ok(())
 }
@@ -146,7 +119,6 @@ pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    // Filter excludes the row → loaded None.
     let loaded = User::filter_by_id(user.id)
         .include(
             User::fields()
@@ -155,9 +127,8 @@ pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
         )
         .get(&mut db)
         .await?;
-    assert!(loaded.profile.get().is_none());
+    assert_struct!(loaded, { profile.get(): None });
 
-    // Filter matches → loaded Some.
     let loaded = User::filter_by_id(user.id)
         .include(
             User::fields()
@@ -166,7 +137,7 @@ pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
         )
         .get(&mut db)
         .await?;
-    assert_eq!("public bio", loaded.profile.get().as_ref().unwrap().bio);
+    assert_struct!(loaded, { profile.get(): Some({ bio: "public bio" }) });
 
     Ok(())
 }
@@ -178,17 +149,15 @@ pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
 pub async fn preload_belongs_to_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let _user = toasty::create!(User {
+    toasty::create!(User {
         name: "alice",
         profile: { bio: "public bio" }
     })
     .exec(&mut db)
     .await?;
 
-    let mut profiles: Vec<Profile> = Profile::all().exec(&mut db).await?;
-    let profile = profiles.remove(0);
+    let profile = Profile::all().get(&mut db).await?;
 
-    // Filter excludes the parent → loaded None.
     let loaded = Profile::filter_by_id(profile.id)
         .include(
             Profile::fields()
@@ -197,9 +166,8 @@ pub async fn preload_belongs_to_with_filter(test: &mut Test) -> Result<()> {
         )
         .get(&mut db)
         .await?;
-    assert!(loaded.user.get().is_none());
+    assert_struct!(loaded, { user.get(): None });
 
-    // Filter matches → loaded Some.
     let loaded = Profile::filter_by_id(profile.id)
         .include(
             Profile::fields()
@@ -208,7 +176,7 @@ pub async fn preload_belongs_to_with_filter(test: &mut Test) -> Result<()> {
         )
         .get(&mut db)
         .await?;
-    assert_eq!("alice", loaded.user.get().as_ref().unwrap().name);
+    assert_struct!(loaded, { user.get(): Some({ name: "alice" }) });
 
     Ok(())
 }
@@ -239,16 +207,9 @@ pub async fn preload_nested_relation_with_filter(test: &mut Test) -> Result<()> 
         .get(&mut db)
         .await?;
 
-    // The post loads regardless of the filter; only its comments are filtered.
-    let posts = loaded.posts.get();
-    assert_eq!(1, posts.len());
-    let bodies: Vec<&str> = posts[0]
-        .comments
-        .get()
-        .iter()
-        .map(|c| c.body.as_str())
-        .collect();
-    assert_eq!(bodies, vec!["keep"]);
+    assert_struct!(loaded.posts.get(), [{
+        comments.get(): [{ body: "keep" }],
+    }]);
 
     Ok(())
 }
@@ -275,13 +236,11 @@ pub async fn preload_has_many_bare_and_filtered_loads_all(test: &mut Test) -> Re
         .get(&mut db)
         .await?;
 
-    let titles: Vec<&str> = alice_loaded
-        .todos
-        .get()
-        .iter()
-        .map(|t| t.title.as_str())
-        .collect();
-    assert_eq!(titles, vec!["a", "b", "c"]);
+    assert_struct!(alice_loaded.todos.get(), #(
+        { title: "a" },
+        { title: "b" },
+        { title: "c" },
+    ));
 
     Ok(())
 }
@@ -322,16 +281,10 @@ pub async fn preload_nested_relation_filters_at_both_levels(test: &mut Test) -> 
         .get(&mut db)
         .await?;
 
-    let posts = loaded.posts.get();
-    assert_eq!(1, posts.len());
-    assert_eq!("keep", posts[0].title);
-    let bodies: Vec<&str> = posts[0]
-        .comments
-        .get()
-        .iter()
-        .map(|c| c.body.as_str())
-        .collect();
-    assert_eq!(bodies, vec!["keep"]);
+    assert_struct!(loaded.posts.get(), [{
+        title: "keep",
+        comments.get(): [{ body: "keep" }],
+    }]);
 
     Ok(())
 }
@@ -370,9 +323,6 @@ pub async fn preload_eager_has_many_filter_still_loads_all(test: &mut Test) -> R
     .exec(&mut db)
     .await?;
 
-    let loaded = User::filter_by_id(alice.id).get(&mut db).await?;
-    assert_eq!(3, loaded.todos.len());
-
     let loaded = User::filter_by_id(alice.id)
         .include(
             User::fields()
@@ -381,16 +331,16 @@ pub async fn preload_eager_has_many_filter_still_loads_all(test: &mut Test) -> R
         )
         .get(&mut db)
         .await?;
-    let titles: Vec<&str> = loaded.todos.iter().map(|t| t.title.as_str()).collect();
-    assert_eq!(titles, vec!["a", "b", "c"]);
+    assert_struct!(loaded.todos, #(
+        { title: "a" },
+        { title: "b" },
+        { title: "c" },
+    ));
 
     Ok(())
 }
 
-/// Filtering a non-optional 1-1 relation is rejected upfront: there is no
-/// `None` to load a non-matching row into, so whether the query would
-/// succeed would depend on the data. The query fails with
-/// `invalid_statement` regardless of whether the predicate matches.
+/// Filtering a required one-to-one relation is rejected.
 #[driver_test]
 pub async fn preload_required_has_one_filter_rejected(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -424,16 +374,16 @@ pub async fn preload_required_has_one_filter_rejected(test: &mut Test) -> Result
     .exec(&mut db)
     .await?;
 
-    // Rejected even when the predicate would match every row.
-    let err = User::filter_by_id(user.id)
-        .include(
-            User::fields()
-                .profile()
-                .filter(Profile::fields().bio().eq("real bio")),
-        )
-        .get(&mut db)
-        .await
-        .unwrap_err();
+    let err = assert_err!(
+        User::filter_by_id(user.id)
+            .include(
+                User::fields()
+                    .profile()
+                    .filter(Profile::fields().bio().eq("real bio")),
+            )
+            .get(&mut db)
+            .await
+    );
     assert!(
         err.is_invalid_statement(),
         "expected invalid_statement error, got: {err:?}"
@@ -442,32 +392,30 @@ pub async fn preload_required_has_one_filter_rejected(test: &mut Test) -> Result
     Ok(())
 }
 
-/// Filtering the include of a required `BelongsTo` is rejected for the same
-/// reason as a required `HasOne`: the loaded value cannot represent a
-/// non-matching parent row.
+/// Filtering a required `BelongsTo` relation is rejected.
 #[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn preload_required_belongs_to_filter_rejected(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let _alice = toasty::create!(User {
+    toasty::create!(User {
         name: "alice",
         todos: [{ title: "a" }]
     })
     .exec(&mut db)
     .await?;
 
-    let mut todos: Vec<Todo> = Todo::all().exec(&mut db).await?;
-    let todo = todos.remove(0);
+    let todo = Todo::all().get(&mut db).await?;
 
-    let err = Todo::filter_by_id(todo.id)
-        .include(
-            Todo::fields()
-                .user()
-                .filter(User::fields().name().eq("alice")),
-        )
-        .get(&mut db)
-        .await
-        .unwrap_err();
+    let err = assert_err!(
+        Todo::filter_by_id(todo.id)
+            .include(
+                Todo::fields()
+                    .user()
+                    .filter(User::fields().name().eq("alice")),
+            )
+            .get(&mut db)
+            .await
+    );
     assert!(
         err.is_invalid_statement(),
         "expected invalid_statement error, got: {err:?}"
