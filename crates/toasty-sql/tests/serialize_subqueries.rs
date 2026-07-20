@@ -174,6 +174,7 @@ fn values_inside_insert_no_row_wrapper_on_mysql() {
     let stmt: stmt::Statement = Insert {
         target,
         source: stmt::Query::values(values),
+        upsert: None,
         returning: None,
     }
     .into();

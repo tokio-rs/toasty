@@ -8,9 +8,11 @@ mod query;
 mod relation;
 mod schema;
 mod update;
+mod upsert;
 mod util;
 
 use filters::Filter;
+use upsert::Upsert;
 
 use super::schema::{FieldTy, Model, ModelKind};
 
@@ -24,6 +26,9 @@ struct Expand<'a> {
     /// Model filter methods
     filters: Vec<Filter>,
 
+    /// Model upsert builders
+    upserts: Vec<Upsert>,
+
     /// Path prefix for toasty types
     toasty: TokenStream,
 }
@@ -36,6 +41,7 @@ impl Expand<'_> {
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
+        let upsert_builders = self.expand_upsert_builders();
         let storage_compat_checks = self.expand_storage_compat_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
         let version_compat_checks = self.expand_version_compat_checks();
@@ -48,6 +54,7 @@ impl Expand<'_> {
             #query_struct
             #create_builder
             #update_builder
+            #upsert_builders
             #storage_compat_checks
             #auto_compat_checks
             #version_compat_checks
@@ -62,6 +69,7 @@ pub(super) fn root_model(model: &Model) -> TokenStream {
     Expand {
         model,
         filters: Filter::build_model_filters(model),
+        upserts: Upsert::build_model_upserts(model),
         toasty,
     }
     .expand()
@@ -78,6 +86,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let expand = Expand {
         model,
         filters: vec![],
+        upserts: vec![],
         toasty: toasty.clone(),
     };
 
@@ -159,12 +168,13 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
             }
 
             fn field_ty(
-                _storage_ty: Option<#toasty::core::schema::db::Type>,
+                storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
+                        storage_ty,
                     }
                 )
             }
@@ -219,6 +229,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let e = Expand {
         model,
         filters: vec![],
+        upserts: vec![],
         toasty: toasty.clone(),
     };
 
@@ -245,6 +256,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
+    let discriminant_storage_compat_impls = e.expand_enum_discriminant_compat_impls();
     let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
 
@@ -265,6 +277,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #enum_field_list_struct
 
         #storage_compat_checks
+        #discriminant_storage_compat_impls
         #shared_column_checks
         #indexable_checks
         #unit_enum_impls
@@ -292,7 +305,6 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
                     }
                 )
             }
-
         }
 
         #load_impl
@@ -319,12 +331,13 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
             }
 
             fn field_ty(
-                _storage_ty: Option<#toasty::core::schema::db::Type>,
+                storage_ty: Option<#toasty::core::schema::db::Type>,
             ) -> #toasty::core::schema::app::FieldTy {
                 #toasty::core::schema::app::FieldTy::Embedded(
                     #toasty::core::schema::app::Embedded {
                         target: <Self as #toasty::Embed>::id(),
                         expr_ty: <Self as #toasty::Load>::ty(),
+                        storage_ty,
                     }
                 )
             }

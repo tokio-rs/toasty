@@ -461,6 +461,7 @@ async fn insert_row<M: Model>(db: &mut toasty::Db, fields: Vec<stmt::Expr>) -> R
     let insert = stmt::Insert {
         target: stmt::InsertTarget::Model(<M as toasty::schema::Model>::id()),
         source: stmt::Query::new_single(vec![stmt::Expr::record(fields)]),
+        upsert: None,
         returning: None,
     };
 

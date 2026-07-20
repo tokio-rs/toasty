@@ -105,6 +105,9 @@ pub use expr_in_list::ExprInList;
 mod expr_in_subquery;
 pub use expr_in_subquery::ExprInSubquery;
 
+mod expr_incoming;
+pub use expr_incoming::ExprIncoming;
+
 mod expr_intersects;
 pub use expr_intersects::ExprIntersects;
 
@@ -184,7 +187,7 @@ mod func_unnest;
 pub use func_unnest::{FuncUnnest, FuncUnnestArg};
 
 mod insert;
-pub use insert::Insert;
+pub use insert::{Insert, Upsert, UpsertAction, UpsertTarget};
 
 mod insert_table;
 pub use insert_table::InsertTable;

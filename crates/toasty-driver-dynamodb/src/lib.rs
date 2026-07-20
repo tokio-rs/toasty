@@ -168,6 +168,7 @@ fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
         Operation::QueryPk(op) => op.table,
         Operation::DeleteByKey(op) => op.table,
         Operation::UpdateByKey(op) => op.table,
+        Operation::Upsert(op) => op.stmt.target.as_table_unwrap().table,
         Operation::FindPkByIndex(op) => op.table,
         Operation::Scan(op) => op.table,
         _ => return None,
@@ -220,6 +221,7 @@ impl Connection {
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
             Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
             Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
+            Operation::Upsert(op) => self.exec_upsert(&schema.db, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(

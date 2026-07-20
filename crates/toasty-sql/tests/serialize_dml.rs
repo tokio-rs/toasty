@@ -118,6 +118,7 @@ fn insert_basic(returning: Option<Returning>) -> stmt::Statement {
     Insert {
         target,
         source,
+        upsert: None,
         returning,
     }
     .into()
@@ -253,6 +254,7 @@ fn insert_unnest(returning: Option<Returning>) -> stmt::Statement {
         target,
         source,
         returning,
+        upsert: None,
     }
     .into()
 }

@@ -250,9 +250,10 @@ fn into_raw_sql(
     capability: &Capability,
 ) -> Result<RawSql> {
     if !capability.sql {
-        return Err(Error::unsupported_feature(
-            "raw SQL is only supported by SQL drivers",
-        ));
+        return Err(Error::unsupported_feature(format!(
+            "{} does not support raw SQL",
+            capability.driver_name
+        )));
     }
 
     Ok(RawSql {

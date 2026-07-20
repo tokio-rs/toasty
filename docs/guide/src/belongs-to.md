@@ -86,6 +86,11 @@ CREATE INDEX idx_posts_user_id ON posts (user_id);
 The parent model (`User`) typically declares a `#[has_many]` field pointing back
 at the child. See [HasMany](./has-many.md) for details.
 
+A [many-to-many relationship](./many-to-many.md) uses a join model with two
+`BelongsTo` fields, one for each endpoint. The endpoint models each declare a
+`HasMany` to the join model and can add a derived `has_many(via = ...)` field for
+direct traversal to the other endpoint.
+
 Use a plain relation field when every loaded child should also load its parent:
 
 ```rust,ignore

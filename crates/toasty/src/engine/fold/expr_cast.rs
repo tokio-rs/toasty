@@ -9,6 +9,13 @@ use toasty_core::stmt::{self, Expr};
 /// instead (`simplify/expr_cast.rs`), which also owns the other heavyweight
 /// rewrites (redundant-cast elimination on field references).
 pub(super) fn fold_expr_cast(expr: &mut stmt::ExprCast) -> Option<Expr> {
+    // `DEFAULT` is a SQL sentinel rather than a typed value. A storage bridge
+    // may wrap it when an auto-increment column's database type differs from
+    // its application type, but the cast must not reach SQL serialization.
+    if matches!(*expr.expr, stmt::Expr::Default) {
+        return Some(stmt::Expr::Default);
+    }
+
     if expr.from.is_some() || expr.ty.contains_model() {
         return None;
     }

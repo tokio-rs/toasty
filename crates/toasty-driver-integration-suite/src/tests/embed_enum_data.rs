@@ -100,6 +100,77 @@ pub async fn data_carrying_enum_db_schema(test: &mut Test) {
     ]);
 }
 
+/// An integer-discriminant enum can request a narrower database column while
+/// keeping its application-level discriminant representation as `i64`.
+#[driver_test]
+pub async fn integer_discriminant_storage_type(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    #[column(type = u16)]
+    enum ContactMethod {
+        #[column(variant = 1)]
+        Email { address: String },
+        #[column(variant = 2)]
+        Phone { number: String },
+        #[column(variant = 3)]
+        DoNotContact,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Contact {
+        #[key]
+        id: String,
+        #[column(type = u8)]
+        method: ContactMethod,
+    }
+
+    let mut db = test.setup_db(models!(Contact)).await;
+
+    assert_struct!(db.schema().db.tables, [
+        {
+            name: =~ r"contacts$",
+            columns: [
+                { name: "id" },
+                {
+                    name: "method",
+                    ty: toasty_core::stmt::Type::U8,
+                    storage_ty: toasty_core::schema::db::Type::UnsignedInteger(1),
+                },
+                { name: "method_address" },
+                { name: "method_number" },
+            ],
+        },
+    ]);
+
+    let dana = toasty::create!(Contact {
+        id: "dana",
+        method: ContactMethod::Email {
+            address: "d@e.com".to_string(),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let anonymous = toasty::create!(Contact {
+        id: "anonymous",
+        method: ContactMethod::DoNotContact,
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(
+        Contact::get_by_id(&mut db, &dana.id).await?.method,
+        ContactMethod::Email {
+            address: "d@e.com".to_string(),
+        }
+    );
+    assert_eq!(
+        Contact::get_by_id(&mut db, &anonymous.id).await?.method,
+        ContactMethod::DoNotContact
+    );
+
+    Ok(())
+}
+
 /// End-to-end CRUD test for a data-carrying enum (all variants have fields).
 /// Creates records with different variants, reads them back, and verifies roundtrip.
 #[driver_test(scenario(crate::scenarios::user_contact_info))]

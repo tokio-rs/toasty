@@ -147,13 +147,19 @@ assert_eq!(post.view_count, 100);
 The expression inside `#[default(...)]` is any valid Rust expression. It runs at
 insert time, not at compile time.
 
-`#[default]` only applies on create. It has no effect on updates.
+`#[default]` applies to a create builder and to the create branch of an
+[upsert](./upserting-records.md). It does not change an existing record on the
+update branch. A shared upsert mutation applies to this value when it creates a
+record; for example, `#[default(10)]` with `subtract(3)` inserts seven.
 
 ## Update expressions
 
 Use `#[update(expr)]` to set an expression that applies on both create and
 update. Each time the record is created or updated, Toasty evaluates the
 expression and sets the field — unless you explicitly override it.
+
+An [upsert](./upserting-records.md) applies `#[update]` on both its create and
+update branches.
 
 ```rust
 # use toasty::Model;
@@ -226,7 +232,8 @@ assert_eq!(post.updated_at, explicit_ts);
 ### Combining `#[default]` and `#[update]`
 
 You can use both attributes on the same field. `#[default]` applies on create,
-`#[update]` applies on update:
+and `#[update]` applies on update. An upsert selects the corresponding value for
+each branch:
 
 ```rust
 # use toasty::Model;
@@ -475,10 +482,10 @@ querying, and updates — see [`Vec<scalar>` Fields](./vec-scalar-fields.md).
 |---|---|---|
 | `#[column("name")]` | Custom column name | — |
 | `#[column(type = ...)]` | Explicit column type | — |
-| `#[default(expr)]` | Default value | Create only |
-| `#[update(expr)]` | Automatic value | Create and update |
-| `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create only |
-| `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
+| `#[default(expr)]` | Default value | Create and the create branch of upsert |
+| `#[update(expr)]` | Automatic value | Create, update, and both upsert branches |
+| `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create and the create branch of upsert |
+| `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create, update, and both upsert branches |
 
 JSON storage is handled by the [`toasty::Json<T>`][json-doc] field
 wrapper — see [JSON serialization](#json-serialization) above. Use

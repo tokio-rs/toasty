@@ -22,6 +22,12 @@ use crate::{
 /// [`terminal`](Self::terminal) holds the terminal field's index on
 /// [`target`](Self::target) (the model the relation chain reaches), and
 /// [`path`](Self::path) still includes that terminal step as its last element.
+///
+/// A common model-terminal use is many-to-many traversal through a join model.
+/// If `User` has many `Membership` records and each membership belongs to a
+/// `Group`, `#[has_many(via = memberships.group)]` exposes the distinct groups
+/// reachable from a user. The join model owns the foreign keys and any fields
+/// that describe the connection.
 #[derive(Debug, Clone)]
 pub struct Via {
     /// The [`ModelId`] of the model the relation chain reaches. For a relation

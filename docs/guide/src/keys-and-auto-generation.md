@@ -37,6 +37,10 @@ let user = User::get_by_id(&mut db, &1).await?;
 # }
 ```
 
+The same key generates `User::upsert_by_id()`, which creates or updates the
+record for a supplied ID. See [Upserting Records](./upserting-records.md) for
+the builder's assignment and return behavior.
+
 ### Keys without `#[auto]`
 
 The `#[auto]` attribute is optional. Without it, you are responsible for
@@ -411,10 +415,14 @@ For a model with `#[key]`, Toasty generates these methods:
 
 | Attribute | Generated methods |
 |---|---|
-| `#[key]` on single field | `get_by_<field>()`, `filter_by_<field>()`, `delete_by_<field>()` |
-| `#[key]` on multiple fields | `get_by_<a>_and_<b>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
+| `#[key]` on single field | `get_by_<field>()`, `filter_by_<field>()`, `upsert_by_<field>()`, `delete_by_<field>()` |
+| `#[key]` on multiple fields | `get_by_<a>_and_<b>()`, `filter_by_<a>_and_<b>()`, `upsert_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
 | `#[key(a, b)]` on struct | Same generated methods as `#[key]` on multiple fields; `a` is the partition key, `b` is the local (sort) key |
-| `#[key(partition = a, local = b)]` | `get_by_<a>_and_<b>()`, `filter_by_<a>()`, `filter_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
+| `#[key(partition = a, local = b)]` | `get_by_<a>_and_<b>()`, `filter_by_<a>()`, `filter_by_<a>_and_<b>()`, `upsert_by_<a>_and_<b>()`, `delete_by_<a>_and_<b>()` |
+
+An upsert requires every primary-key field so it can identify one conflict.
+See [Upserting Records](./upserting-records.md) for assignment and backend
+behavior.
 
 > **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
 

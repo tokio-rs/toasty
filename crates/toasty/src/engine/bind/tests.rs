@@ -30,6 +30,7 @@ fn extract_scalar_from_simple_insert() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("abc"), Value::from("hello")]),
         ))])),
+        upsert: None,
         returning: None,
     });
 
@@ -72,6 +73,7 @@ fn null_values_not_extracted() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("abc"), Value::Null]),
         ))])),
+        upsert: None,
         returning: None,
     });
 
@@ -104,6 +106,7 @@ fn two_row_item_insert(schema: &toasty_core::Schema) -> stmt::Statement {
                 Value::from("n2"),
             ]))),
         ])),
+        upsert: None,
         returning: None,
     })
 }
@@ -183,6 +186,7 @@ fn multi_row_insert_with_null_cell_binds_one_array_per_column() {
                 Value::Null,
             ]))),
         ])),
+        upsert: None,
         returning: None,
     });
 
@@ -228,6 +232,7 @@ fn multi_row_insert_all_null_column_typed_from_schema() {
                 Value::Null,
             ]))),
         ])),
+        upsert: None,
         returning: None,
     });
 
@@ -329,6 +334,7 @@ fn enum_insert_refines_type_to_enum() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("task-1"), Value::from("active")]),
         ))])),
+        upsert: None,
         returning: None,
     });
 
@@ -364,6 +370,7 @@ fn non_enum_insert_keeps_default_types() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("item-1"), Value::from(42i64)]),
         ))])),
+        upsert: None,
         returning: None,
     });
 

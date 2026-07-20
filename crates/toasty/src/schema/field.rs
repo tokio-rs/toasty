@@ -1,6 +1,9 @@
 use super::{Embed, Load};
 use crate::stmt::{self, Expr, List};
-use toasty_core::schema::app::ModelSet;
+use toasty_core::schema::{
+    app::{Model, ModelSet},
+    db,
+};
 
 /// Schema and runtime information for a field type.
 ///
@@ -196,10 +199,10 @@ impl Field for Vec<u8> {
 }
 
 /// A `Vec<T>` of embedded structs (`T: Embed`) is a `#[document]` collection —
-/// stored as a single JSON array of objects. There is no override for
-/// `field_ty`: the default returns `Primitive(<Self as Load>::ty())`, which is
-/// `List(Model(T::id()))`, which the schema builder stores as a single JSON
-/// document column.
+/// `Primitive(List(Model(T::id())))`, stored by the schema builder as a single
+/// JSON array of objects. The `field_ty` override below derives the storage
+/// type configured for unit-enum discriminants; for struct embeds it matches
+/// the trait default.
 ///
 /// This is the only *blanket* `Field for Vec<_>` impl. A blanket
 /// `impl<T: Scalar> Field for Vec<T>` cannot coexist with it: the compiler
@@ -232,6 +235,29 @@ where
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    /// Lifts a field-level element override into a list storage type, then
+    /// falls back to the unit enum's discriminant storage.
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        let storage_ty = storage_ty.map(db::Type::list).or_else(|| {
+            let Model::EmbeddedEnum(embed) = <T as Embed>::schema() else {
+                return None;
+            };
+
+            if embed.has_data_variants() {
+                return None;
+            }
+
+            embed.discriminant.storage_ty.map(db::Type::list)
+        });
+        toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
+            ty: <Self as super::Load>::ty(),
+            storage_ty,
+            serialize: None,
+        })
     }
 
     fn key_constraint<Origin>(&self, _target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
@@ -422,6 +448,12 @@ impl<T: Field> Field for std::sync::Arc<T> {
     ) -> Self::Update<'a> {
     }
 
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
+    }
+
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         T::key_constraint(self, target)
     }
@@ -454,6 +486,12 @@ impl<T: Field> Field for std::rc::Rc<T> {
     ) -> Self::Update<'a> {
     }
 
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
+    }
+
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
         T::key_constraint(self, target)
     }
@@ -484,6 +522,12 @@ impl<T: Field> Field for Box<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
     }
 
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
