@@ -10,16 +10,21 @@ help: the trait `toasty::codegen_support::storage::CompatibleWith<toasty::codege
  2 | enum Status {
    | ^^^^^^^^^^^
    = note: see `toasty::codegen_support::storage` for the compatibility table
-   = help: the following other types implement trait `toasty::codegen_support::storage::CompatibleWith<Storage>`:
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::I16>`
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::I32>`
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::I64>`
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<3>>`
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<5>>`
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<6>>`
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<7>>`
-             `Status` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::U16>`
-           and $N others
+   = help: `Status` implements trait `toasty::codegen_support::storage::CompatibleWith<Storage>`:
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::I16>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::I32>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::I64>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<3>>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<5>>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<6>>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Int<7>>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::U16>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::U32>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::U64>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::UInt<3>>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::UInt<5>>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::UInt<6>>
+             toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::UInt<7>>
    = note: required for `Vec<Status>` to implement `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::U8>`
 note: required by a bound in `_check`
   --> tests/ui/enum_collection_field_storage_out_of_range.rs:7:10

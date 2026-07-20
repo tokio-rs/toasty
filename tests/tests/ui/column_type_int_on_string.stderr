@@ -6,13 +6,13 @@ error[E0277]: field type `std::string::String` is not compatible with the reques
    |
    = help: the trait `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::I64>` is not implemented for `std::string::String`
    = note: see `toasty::codegen_support::storage` for the compatibility table
-help: the following other types implement trait `toasty::codegen_support::storage::CompatibleWith<Storage>`
+help: `std::string::String` implements trait `toasty::codegen_support::storage::CompatibleWith<Storage>`
   --> $WORKSPACE/crates/toasty/src/codegen_support/storage.rs
    |
    | impl CompatibleWith<tag::Text> for String {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `std::string::String` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Text>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::Text>`
    | impl CompatibleWith<tag::VarChar> for String {}
-   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `std::string::String` implements `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::VarChar>`
+   | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^ `toasty::codegen_support::storage::CompatibleWith<toasty::codegen_support::storage::tag::VarChar>`
 note: required by a bound in `_check`
   --> tests/ui/column_type_int_on_string.rs:4:17
    |
