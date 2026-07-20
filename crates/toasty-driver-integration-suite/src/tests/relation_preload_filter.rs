@@ -219,24 +219,12 @@ pub async fn preload_belongs_to_with_filter(test: &mut Test) -> Result<()> {
 pub async fn preload_nested_relation_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let user = toasty::create!(User { name: "alice" })
-        .exec(&mut db)
-        .await?;
-    let post = toasty::create!(Post {
-        title: "p1",
-        user: &user
-    })
-    .exec(&mut db)
-    .await?;
-    toasty::create!(Comment {
-        body: "keep",
-        post: &post
-    })
-    .exec(&mut db)
-    .await?;
-    toasty::create!(Comment {
-        body: "drop",
-        post: &post
+    let user = toasty::create!(User {
+        name: "alice",
+        posts: [{
+            title: "p1",
+            comments: [{ body: "keep" }, { body: "drop" }]
+        }]
     })
     .exec(&mut db)
     .await?;
@@ -303,26 +291,19 @@ pub async fn preload_has_many_bare_and_filtered_loads_all(test: &mut Test) -> Re
 pub async fn preload_nested_relation_filters_at_both_levels(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    let user = toasty::create!(User { name: "alice" })
-        .exec(&mut db)
-        .await?;
-    let keep_post = toasty::create!(Post {
-        title: "keep",
-        user: &user
+    let user = toasty::create!(User {
+        name: "alice",
+        posts: [
+            {
+                title: "keep",
+                comments: [{ body: "keep" }, { body: "drop" }]
+            },
+            {
+                title: "drop",
+                comments: [{ body: "keep" }]
+            },
+        ]
     })
-    .exec(&mut db)
-    .await?;
-    let drop_post = toasty::create!(Post {
-        title: "drop",
-        user: &user
-    })
-    .exec(&mut db)
-    .await?;
-    toasty::create!(Comment::[
-        { body: "keep", post: &keep_post },
-        { body: "drop", post: &keep_post },
-        { body: "keep", post: &drop_post },
-    ])
     .exec(&mut db)
     .await?;
 
