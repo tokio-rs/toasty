@@ -475,7 +475,7 @@ impl Turso {
     /// Set the remote base URL for sync HTTP requests. Mirrors
     /// `turso::sync::Builder::with_remote_url`.
     ///
-    /// Accepts `https://`, `http://`, `turso://`, and `libsql://` URLs (`libsql://` is
+    /// Accepts `https://`, `http://` and `libsql://` URLs (`libsql://` is
     /// translated to `https://`). If omitted on a file-backed database that
     /// was previously synced, Turso loads the URL from on-disk metadata.
     #[cfg(feature = "sync")]

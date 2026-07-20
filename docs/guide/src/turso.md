@@ -130,7 +130,7 @@ let driver = Turso::file("./app.db")
     .with_remote_url("http://127.0.0.1:8080");
 ```
 
-`with_remote_url` accepts `https://`, `http://`, `turso://`, and `libsql://`
+`with_remote_url` accepts `https://`, `http://` and `libsql://`
 (`libsql://` becomes `https://`). On a file-backed database that was
 synced before, omitting the URL loads it from on-disk metadata
 (`./app.db-info` and related files).
