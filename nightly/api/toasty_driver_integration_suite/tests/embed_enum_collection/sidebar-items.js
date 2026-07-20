@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["native_enum_vec_create_get","native_enum_vec_stores_as_enum_array","vec_enum_contains_and_len","vec_enum_create_get"]};
+window.SIDEBAR_ITEMS = {"fn":["enum_storage_propagates_through_nested_embed","enum_storage_propagates_through_wrappers","native_enum_vec_create_get","native_enum_vec_stores_as_enum_array","vec_enum_contains_and_len","vec_enum_create_get","vec_enum_uses_discriminant_storage"]};

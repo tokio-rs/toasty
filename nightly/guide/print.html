@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-01c4eb3c.js";
+            window.path_to_searchindex_js = "searchindex-df6528ed.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1785f50e.js"></script>
@@ -3383,9 +3383,9 @@ attribute.</p>
 scalar values in a single column — <code>tags: Vec&lt;String&gt;</code>, <code>scores: Vec&lt;i64&gt;</code>, <code>weights: Vec&lt;f64&gt;</code>. Toasty stores the collection directly;
 you do not wrap it in JSON by hand or manage a separate join table.</p>
 <p>The element type must be a scalar: any primitive other than <code>u8</code>, plus
-<code>String</code>, <code>Uuid</code>, the decimal types, and the <code>jiff</code> date/time types.
-<code>Vec&lt;u8&gt;</code> keeps its existing meaning — a single binary blob, not a
-collection of one-byte integers.</p>
+<code>String</code>, <code>Uuid</code>, the decimal types, the <code>jiff</code> date/time types, and a unit
+enum derived with <code>toasty::Embed</code>. <code>Vec&lt;u8&gt;</code> keeps its existing meaning — a
+single binary blob, not a collection of one-byte integers.</p>
 <p>Storage depends on the driver:</p>
 <div class="table-wrapper">
 <table>
@@ -3424,6 +3424,29 @@ struct Article {
 <span class="boring">}</span></code></pre>
 <p>A <code>Vec&lt;scalar&gt;</code> field is always present — there is no unset state. A
 row with no elements holds an empty list, not <code>NULL</code>.</p>
+<h3 id="unit-enum-collections"><a class="header" href="#unit-enum-collections">Unit enum collections</a></h3>
+<p>A unit enum is a scalar because each value consists only of its discriminant:</p>
+<pre><code class="language-rust ignore">#[derive(Clone, Copy, Debug, toasty::Embed)]
+#[column(type = u16)]
+enum Priority {
+    #[column(variant = 10)]
+    Low,
+    #[column(variant = 20)]
+    High,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Task {
+    #[key]
+    id: u64,
+    priorities: Vec&lt;Priority&gt;,
+    #[column(type = u8)]
+    compact_priorities: Vec&lt;Priority&gt;,
+}</code></pre>
+<p><code>priorities</code> uses the enum-level <code>u16</code> type for every element.
+<code>compact_priorities</code> uses its field-level <code>u8</code> override. Every discriminant
+must fit the selected element type. Enums with data fields span multiple
+columns and cannot be used as scalar collection elements.</p>
 <h2 id="creating-records-1"><a class="header" href="#creating-records-1">Creating records</a></h2>
 <p>The field accepts any value that converts into a list: a <code>Vec&lt;T&gt;</code>, an
 array literal <code>[T; N]</code>, or a slice. The <code>create!</code> macro and the create
@@ -6944,8 +6967,8 @@ storage or a plain <code>text</code> or <code>varchar</code> column.</p>
 <h4 id="integer-discriminants"><a class="header" href="#integer-discriminants">Integer discriminants</a></h4>
 <p>To store integer discriminants, set <code>#[column(variant = N)]</code> on every variant.
 Toasty does not auto-assign integers. The values do not need to be sequential;
-you can choose any <code>i64</code> values. This lets you add variants to an existing
-schema without renumbering:</p>
+you can choose any non-negative <code>i64</code> values. This lets you add variants to an
+existing schema without renumbering:</p>
 <pre><code class="language-rust ignore">#[derive(toasty::Embed)]
 enum Priority {
     #[column(variant = 10)]
@@ -6955,6 +6978,40 @@ enum Priority {
     #[column(variant = 30)]
     High,
 }</code></pre>
+<p>Integer discriminants use <code>i64</code> storage by default. Add an integer
+<code>#[column(type = ...)]</code> to the enum to request a narrower database type for
+each flattened discriminant column and each <code>Vec&lt;unit-enum&gt;</code> element:</p>
+<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
+#[column(type = u8)]
+enum Priority {
+    #[column(variant = 10)]
+    Low,
+    #[column(variant = 20)]
+    Normal,
+    #[column(variant = 30)]
+    High,
+}</code></pre>
+<p>This requests unsigned 8-bit storage. MySQL uses <code>TINYINT UNSIGNED</code>; databases
+without an unsigned 8-bit integer use their closest supported representation.
+The type follows the enum through flattened embedded structs and transparent
+field wrappers such as <code>Option</code>, <code>Deferred</code>, <code>Box</code>, <code>Arc</code>, and <code>Rc</code>.</p>
+<p>Place the attribute on a model field to override the enum-level default for
+that use. On <code>Vec&lt;unit-enum&gt;</code>, the field-level type describes each element:</p>
+<pre><code class="language-rust ignore">#[derive(toasty::Model)]
+struct Task {
+    #[key]
+    id: u64,
+
+    #[column(type = u8)]
+    priority: Priority,
+
+    #[column(type = u16)]
+    recent_priorities: Vec&lt;Priority&gt;,
+}</code></pre>
+<p>Every discriminant must fit both the enum-level type and any narrower
+field-level override. <code>#[document]</code> is outside these rules: Toasty currently
+rejects enum embeds inside document-stored structs because enum document
+encoding is not supported.</p>
 <p>An enum cannot mix string and integer discriminants. Integer-discriminant enums
 do not support <code>rename_all</code>.</p>
 <h2 id="filtering-on-embedded-fields"><a class="header" href="#filtering-on-embedded-fields">Filtering on embedded fields</a></h2>
