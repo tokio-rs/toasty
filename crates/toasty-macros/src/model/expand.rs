@@ -12,6 +12,7 @@ mod upsert;
 mod util;
 
 use filters::Filter;
+use upsert::Upsert;
 
 use super::schema::{FieldTy, Model, ModelKind};
 
@@ -24,6 +25,9 @@ struct Expand<'a> {
 
     /// Model filter methods
     filters: Vec<Filter>,
+
+    /// Model upsert builders
+    upserts: Vec<Upsert>,
 
     /// Path prefix for toasty types
     toasty: TokenStream,
@@ -65,6 +69,7 @@ pub(super) fn root_model(model: &Model) -> TokenStream {
     Expand {
         model,
         filters: Filter::build_model_filters(model),
+        upserts: Upsert::build_model_upserts(model),
         toasty,
     }
     .expand()
@@ -81,6 +86,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let expand = Expand {
         model,
         filters: vec![],
+        upserts: vec![],
         toasty: toasty.clone(),
     };
 
@@ -222,6 +228,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let e = Expand {
         model,
         filters: vec![],
+        upserts: vec![],
         toasty: toasty.clone(),
     };
 

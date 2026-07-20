@@ -1,58 +1,110 @@
 use super::{Expand, util};
-use crate::model::schema::FieldTy;
+use crate::model::schema::{FieldTy, Model};
 use heck::ToUpperCamelCase;
-use proc_macro2::TokenStream;
-use quote::{format_ident, quote};
+use proc_macro2::{Span, TokenStream};
+use quote::quote;
 
-impl Expand<'_> {
-    pub(super) fn expand_upsert_builders(&self) -> TokenStream {
-        self.model
+#[derive(Debug)]
+pub(super) struct Upsert {
+    target_fields: Vec<usize>,
+    method_ident: syn::Ident,
+    builder_ident: syn::Ident,
+    create_ident: syn::Ident,
+    update_ident: syn::Ident,
+    incoming_ident: syn::Ident,
+    ignore_ident: syn::Ident,
+}
+
+impl Upsert {
+    pub(super) fn build_model_upserts(model: &Model) -> Vec<Self> {
+        model
             .indices
             .iter()
             .filter(|index| index.unique)
             .filter_map(|index| {
-                if index.fields.iter().any(|field| {
-                    !matches!(self.model.fields[field.field].ty, FieldTy::Primitive(_))
-                }) {
+                let target_fields = index
+                    .fields
+                    .iter()
+                    .map(|field| field.field)
+                    .collect::<Vec<_>>();
+
+                if target_fields
+                    .iter()
+                    .any(|&field| !matches!(model.fields[field].ty, FieldTy::Primitive(_)))
+                {
                     return None;
                 }
 
-                Some(
-                    self.expand_upsert_builder(
-                        &index
-                            .fields
-                            .iter()
-                            .map(|field| field.field)
-                            .collect::<Vec<_>>(),
+                let target_name = target_fields
+                    .iter()
+                    .map(|&field| model.fields[field].name.ident.to_string())
+                    .collect::<Vec<_>>()
+                    .join("_and_");
+                let suffix = target_fields
+                    .iter()
+                    .map(|&field| {
+                        model.fields[field]
+                            .name
+                            .ident
+                            .to_string()
+                            .to_upper_camel_case()
+                    })
+                    .collect::<Vec<_>>()
+                    .join("And");
+                let model_ident = &model.ident;
+                let model_span = model_ident.span();
+
+                Some(Self {
+                    target_fields,
+                    method_ident: syn::Ident::new(
+                        &format!("upsert_by_{target_name}"),
+                        Span::call_site(),
                     ),
-                )
+                    builder_ident: syn::Ident::new(
+                        &format!("{model_ident}UpsertBy{suffix}"),
+                        model_span,
+                    ),
+                    create_ident: syn::Ident::new(
+                        &format!("{model_ident}UpsertBy{suffix}Create"),
+                        model_span,
+                    ),
+                    update_ident: syn::Ident::new(
+                        &format!("{model_ident}UpsertBy{suffix}Update"),
+                        model_span,
+                    ),
+                    incoming_ident: syn::Ident::new(
+                        &format!("{model_ident}UpsertBy{suffix}Incoming"),
+                        model_span,
+                    ),
+                    ignore_ident: syn::Ident::new(
+                        &format!("{model_ident}UpsertBy{suffix}OrIgnore"),
+                        model_span,
+                    ),
+                })
             })
             .collect()
     }
+}
 
-    fn expand_upsert_builder(&self, target_fields: &[usize]) -> TokenStream {
+impl Expand<'_> {
+    pub(super) fn expand_upsert_builders(&self) -> TokenStream {
+        self.upserts
+            .iter()
+            .map(|upsert| self.expand_upsert_builder(upsert))
+            .collect()
+    }
+
+    fn expand_upsert_builder(&self, upsert: &Upsert) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
-        let suffix = target_fields
-            .iter()
-            .map(|&field| {
-                self.model.fields[field]
-                    .name
-                    .ident
-                    .to_string()
-                    .to_upper_camel_case()
-            })
-            .collect::<Vec<_>>()
-            .join("And");
-        let method_name = format_ident!(
-            "upsert_by_{}",
-            target_fields
-                .iter()
-                .map(|&field| self.model.fields[field].name.ident.to_string())
-                .collect::<Vec<_>>()
-                .join("_and_")
-        );
+        let target_fields = &upsert.target_fields;
+        let method_ident = &upsert.method_ident;
+        let builder_ident = &upsert.builder_ident;
+        let create_ident = &upsert.create_ident;
+        let update_ident = &upsert.update_ident;
+        let incoming_ident = &upsert.incoming_ident;
+        let ignore_ident = &upsert.ignore_ident;
         let target_name = target_fields
             .iter()
             .map(|&field| self.model.fields[field].name.ident.to_string())
@@ -76,11 +128,6 @@ impl Expand<'_> {
         let ignore_doc = format!(
             "Builds an insert-or-ignore operation for `{model_ident}` using the `{target_name}` conflict target."
         );
-        let builder_ident = format_ident!("{}UpsertBy{}", model_ident, suffix);
-        let create_ident = format_ident!("{}UpsertBy{}Create", model_ident, suffix);
-        let update_ident = format_ident!("{}UpsertBy{}Update", model_ident, suffix);
-        let incoming_ident = format_ident!("{}UpsertBy{}Incoming", model_ident, suffix);
-        let ignore_ident = format_ident!("{}UpsertBy{}OrIgnore", model_ident, suffix);
 
         let target_args = target_fields.iter().map(|&field_index| {
             let field = &self.model.fields[field_index];
@@ -163,7 +210,7 @@ impl Expand<'_> {
         quote! {
             impl #model_ident {
                 #[doc = #method_doc]
-                #vis fn #method_name(#(#target_args),*) -> #builder_ident {
+                #vis fn #method_ident(#(#target_args),*) -> #builder_ident {
                     let mut stmt = #toasty::stmt::Upsert::<#model_ident>::blank([#(#target_indices),*]);
                     #(#target_sets)*
                     {
