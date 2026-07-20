@@ -9,11 +9,19 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Get turso version
+      shell: bash
+      run: |
+        TURSO_VERSION=$(cargo metadata --format-version=1 \
+          | jq -r '.packages[] | select(.name == "turso") | .version')
+
+        echo "TURSO_VERSION=$TURSO_VERSION" >> $GITHUB_ENV
+
     - name: Install tursodb
       shell: bash
       run: |
         curl --proto '=https' --tlsv1.2 -LsSf \
-          https://github.com/tursodatabase/turso/releases/download/v0.6.1/turso_cli-installer.sh | sh
+          https://github.com/tursodatabase/turso/releases/download/v$TURSO_VERSION/turso_cli-installer.sh | sh
         echo "$HOME/.turso" >> "$GITHUB_PATH"
 
     - name: Start sync server
