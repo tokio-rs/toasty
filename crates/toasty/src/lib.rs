@@ -42,7 +42,8 @@
 //!
 //! Contains the typed wrappers around the statement AST:
 //! [`Query`](stmt::Query), [`Insert`](stmt::Insert),
-//! [`Update`](stmt::Update), [`Delete`](stmt::Delete), and
+//! [`Update`](stmt::Update), [`Upsert`](stmt::Upsert),
+//! [`Delete`](stmt::Delete), and
 //! [`Statement`]. Also includes expression helpers like [`Expr`](stmt::Expr),
 //! [`Path`](stmt::Path), and the [`in_list`](stmt::in_list) function.
 //! Generated query builders (e.g. `find_by_*`, `filter_by_*`) produce these
@@ -80,8 +81,8 @@
 //! # Derive macros
 //!
 //! - [`#[derive(Model)]`](derive@Model) — generates the
-//!   [`Model`](schema::Model) impl, query builders, create/update builders,
-//!   relation accessors, and schema registration for a struct.
+//!   [`Model`](schema::Model) impl, query builders, create/update/upsert
+//!   builders, relation accessors, and schema registration for a struct.
 //! - [`#[derive(Embed)]`](derive@Embed) — generates the
 //!   [`Embed`](schema::Embed) impl for a type whose fields are stored inline
 //!   in a parent model's table.

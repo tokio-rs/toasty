@@ -12,6 +12,7 @@
 - [Creating Records](./creating-records.md)
 - [Querying Records](./querying-records.md)
 - [Updating Records](./updating-records.md)
+- [Upserting Records](./upserting-records.md)
 - [Deleting Records](./deleting-records.md)
 
 # Schema Features

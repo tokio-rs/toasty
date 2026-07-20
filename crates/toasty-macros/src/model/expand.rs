@@ -8,9 +8,11 @@ mod query;
 mod relation;
 mod schema;
 mod update;
+mod upsert;
 mod util;
 
 use filters::Filter;
+use upsert::Upsert;
 
 use super::schema::{FieldTy, Model, ModelKind};
 
@@ -24,6 +26,9 @@ struct Expand<'a> {
     /// Model filter methods
     filters: Vec<Filter>,
 
+    /// Model upsert builders
+    upserts: Vec<Upsert>,
+
     /// Path prefix for toasty types
     toasty: TokenStream,
 }
@@ -36,6 +41,7 @@ impl Expand<'_> {
         let query_struct = self.expand_query_struct();
         let create_builder = self.expand_create_builder();
         let update_builder = self.expand_update_builder();
+        let upsert_builders = self.expand_upsert_builders();
         let storage_compat_checks = self.expand_storage_compat_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
         let version_compat_checks = self.expand_version_compat_checks();
@@ -48,6 +54,7 @@ impl Expand<'_> {
             #query_struct
             #create_builder
             #update_builder
+            #upsert_builders
             #storage_compat_checks
             #auto_compat_checks
             #version_compat_checks
@@ -62,6 +69,7 @@ pub(super) fn root_model(model: &Model) -> TokenStream {
     Expand {
         model,
         filters: Filter::build_model_filters(model),
+        upserts: Upsert::build_model_upserts(model),
         toasty,
     }
     .expand()
@@ -78,6 +86,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let expand = Expand {
         model,
         filters: vec![],
+        upserts: vec![],
         toasty: toasty.clone(),
     };
 
@@ -219,6 +228,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let e = Expand {
         model,
         filters: vec![],
+        upserts: vec![],
         toasty: toasty.clone(),
     };
 

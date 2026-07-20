@@ -31,8 +31,8 @@ use proc_macro::TokenStream;
 /// - A [`Load`] implementation for deserializing rows from the database.
 /// - The [`Model`] trait's schema-registration methods (`id`, `schema`,
 ///   `register`) used to register the model at runtime.
-/// - Static query methods such as `all()`, `filter(expr)`,
-///   `filter_by_<field>()`, and `get_by_<key>()`.
+/// - Static query and mutation methods such as `all()`, `filter(expr)`,
+///   `filter_by_<field>()`, `get_by_<key>()`, and `upsert_by_<field>()`.
 /// - Instance methods `update()` and `delete()`.
 /// - A `Fields` struct returned by `<Model>::fields()` for building typed
 ///   filter expressions.
@@ -48,6 +48,8 @@ use proc_macro::TokenStream;
 ///
 /// Defines the primary key at the struct level. Mutually exclusive with
 /// field-level `#[key]`.
+///
+/// Toasty generates an `upsert_by_*` method that takes every primary-key field.
 ///
 /// **Simple form** — every listed field becomes a partition key:
 ///
@@ -117,6 +119,8 @@ use proc_macro::TokenStream;
 /// fields each becomes a partition key column (equivalent to listing them
 /// in `#[key(...)]` at the struct level).
 ///
+/// Toasty generates an `upsert_by_*` method that takes every primary-key field.
+///
 /// Cannot be combined with a struct-level `#[key(...)]` attribute.
 ///
 /// ```
@@ -153,7 +157,8 @@ use proc_macro::TokenStream;
 /// ## `#[default(expr)]` — default value on create
 ///
 /// Sets a default value that is used when the field is not explicitly
-/// provided during creation. The expression is any valid Rust expression.
+/// provided during creation or on an upsert's create branch. The expression is
+/// any valid Rust expression.
 ///
 /// ```
 /// # use toasty::Model;
@@ -179,8 +184,9 @@ use proc_macro::TokenStream;
 ///
 /// ## `#[update(expr)]` — value applied on create and update
 ///
-/// Sets a value that Toasty applies every time a record is created or
-/// updated, unless the field is explicitly set on the builder.
+/// Sets a value that Toasty applies every time a record is created or updated,
+/// including both branches of an upsert, unless the field is explicitly set on
+/// the builder.
 ///
 /// ```
 /// # use toasty::Model;
@@ -216,7 +222,9 @@ use proc_macro::TokenStream;
 /// ## `#[unique]` — add a unique constraint
 ///
 /// Creates a unique index on the field. Like `#[index]`, this generates
-/// `filter_by_<field>`. The database enforces uniqueness.
+/// `filter_by_<field>`. It also generates `upsert_by_<field>`, which creates a
+/// record or updates the record selected by this constraint. The database
+/// enforces uniqueness.
 ///
 /// ```
 /// # use toasty::Model;

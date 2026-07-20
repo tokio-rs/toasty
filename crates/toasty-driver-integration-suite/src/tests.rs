@@ -22,6 +22,7 @@ pub mod crud_sort_limit;
 pub mod crud_update_arithmetic;
 pub mod crud_update_field_order;
 pub mod crud_update_macro;
+pub mod crud_upsert;
 pub mod deferred_embed;
 pub mod deferred_field;
 pub mod dynamodb_update_batch_filter;

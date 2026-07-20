@@ -32,6 +32,7 @@ pub mod task_with_status;
 pub mod task_with_string_status;
 pub mod two_models;
 pub mod two_models_unique_title;
+pub mod upsert_models;
 pub mod user_account_subscription;
 pub mod user_comment_article;
 pub mod user_contact_info;

@@ -357,9 +357,39 @@ impl ToSql for &stmt::Insert {
 
         f.in_insert = true;
 
+        let upsert = self.upsert.as_ref().map(|_| UpsertClause(self));
+
         fmt!(
-            &mut f, "INSERT INTO " self.target " " self.source returning
+            &mut f, "INSERT INTO " self.target " " self.source upsert returning
         );
+    }
+}
+
+struct UpsertClause<'a>(&'a stmt::Insert);
+
+impl ToSql for UpsertClause<'_> {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        let insert = self.0;
+        let upsert = insert.upsert.as_ref().unwrap();
+        let target = insert.target.as_table_unwrap();
+        let stmt::UpsertTarget::Columns(columns) = &upsert.target else {
+            panic!("upsert target must be lowered before SQL serialization")
+        };
+        let columns = Comma(
+            columns
+                .iter()
+                .map(|column| f.serializer.column_name(*column)),
+        );
+
+        fmt!(f, " ON CONFLICT (" columns ")");
+        match upsert.action {
+            stmt::UpsertAction::Ignore => fmt!(f, " DO NOTHING"),
+            stmt::UpsertAction::Update => {
+                let table = f.serializer.table(target.table);
+                let assignments = AssignmentList::upsert(table, &upsert.shared);
+                fmt!(f, " DO UPDATE SET " assignments);
+            }
+        }
     }
 }
 
@@ -636,7 +666,7 @@ impl ToSql for &TableAlias {
 impl ToSql for &stmt::Update {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         let table = f.serializer.schema.table(self.target.as_table_unwrap());
-        let assignments = (table, &self.assignments);
+        let assignments = AssignmentList::update(table, &self.assignments);
 
         // Create a new expression scope to serialize the statement
         let mut f = f.scope(self);
@@ -667,17 +697,59 @@ impl ToSql for &stmt::Update {
     }
 }
 
-impl ToSql for (&db::Table, &stmt::Assignments) {
+struct AssignmentList<'a> {
+    table: &'a db::Table,
+    assignments: &'a stmt::Assignments,
+    qualify_existing: bool,
+}
+
+impl<'a> AssignmentList<'a> {
+    fn update(table: &'a db::Table, assignments: &'a stmt::Assignments) -> Self {
+        Self {
+            table,
+            assignments,
+            qualify_existing: false,
+        }
+    }
+
+    fn upsert(table: &'a db::Table, assignments: &'a stmt::Assignments) -> Self {
+        Self {
+            table,
+            assignments,
+            qualify_existing: true,
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct AssignmentColumn(db::ColumnId);
+
+impl ToSql for AssignmentColumn {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
-        let assignments: Vec<_> = self.1.iter().collect();
+        if matches!(f.serializer.flavor, Flavor::Postgresql)
+            && f.assignment_table == Some(self.0.table)
+        {
+            fmt!(f, f.serializer.table_name(self.0.table) "." f.serializer.column_name(self.0))
+        } else {
+            fmt!(f, f.serializer.column_name(self.0))
+        }
+    }
+}
+
+impl ToSql for AssignmentList<'_> {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        let previous_assignment_table = f.assignment_table;
+        f.assignment_table = self.qualify_existing.then_some(self.table.id);
+        let assignments: Vec<_> = self.assignments.iter().collect();
 
         for (i, (projection, assignment)) in assignments.iter().enumerate() {
             if i > 0 {
                 f.dst.push_str(", ");
             }
 
-            let column = self.0.resolve(projection);
+            let column = self.table.resolve(projection);
             let column_name = Ident(&column.name);
+            let existing_column = AssignmentColumn(column.id);
 
             // Serialize column name and equals sign
             column_name.to_sql(f);
@@ -686,28 +758,30 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
             match assignment {
                 stmt::Assignment::Set(expr) => expr.to_sql(f),
                 stmt::Assignment::Append(expr) => {
-                    serialize_append(f, &column.name, expr);
+                    serialize_append(f, existing_column, expr);
                 }
                 stmt::Assignment::Remove(expr) => {
-                    serialize_remove(f, &column.name, expr);
+                    serialize_remove(f, existing_column, expr);
                 }
                 stmt::Assignment::Pop => {
-                    serialize_pop(f, &column.name);
+                    serialize_pop(f, existing_column);
                 }
                 stmt::Assignment::RemoveAt(expr) => {
-                    serialize_remove_at(f, &column.name, expr);
+                    serialize_remove_at(f, existing_column, expr);
                 }
                 stmt::Assignment::Add(expr) => {
-                    fmt!(f, Ident(&column.name) " + " expr);
+                    fmt!(f, existing_column " + " expr);
                 }
                 stmt::Assignment::Subtract(expr) => {
-                    fmt!(f, Ident(&column.name) " - " expr);
+                    fmt!(f, existing_column " - " expr);
                 }
                 _ => todo!(
                     "only SET / APPEND / REMOVE / POP / REMOVE_AT / ADD / SUBTRACT supported in SQL serialization; got {assignment:#?}"
                 ),
             }
         }
+
+        f.assignment_table = previous_assignment_table;
     }
 }
 
@@ -718,27 +792,27 @@ impl ToSql for (&db::Table, &stmt::Assignments) {
 /// serializer renders the dialect's native append operator:
 ///
 /// - PostgreSQL: `col || $1` — `text[] || text[]` concatenates arrays.
+///   During an upsert, `col` is table-qualified to distinguish the stored
+///   value from `excluded.col`.
 /// - MySQL: `JSON_MERGE_PRESERVE(col, $1)` — preserves duplicates and
 ///   appends every element of the right-hand array to the left-hand one.
-/// - SQLite: a `json_group_array` subquery over the `json_each` rows of both
-///   arrays, concatenating them while preserving element order and types.
-///   `json_each.value` returns object and array elements as plain TEXT, which
-///   `json_group_array` would re-encode as JSON strings, so those elements
-///   pass through `json()` to keep their structure (a document collection's
-///   elements are objects); scalar elements pass through `json_quote`, since
-///   `json()` rejects a bare string like `a`.
-fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
+/// - SQLite: a scalar expression removes the closing bracket from the stored
+///   array and the opening bracket from the appended array, then joins them
+///   with a comma when both contain elements. `json()` validates and
+///   canonicalizes the result. This form also works in SQLite-compatible
+///   engines that reject subqueries inside an upsert assignment.
+fn serialize_append(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
     match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(f, Ident(column_name) " || " expr),
+        Flavor::Postgresql => fmt!(f, column " || " expr),
         Flavor::Mysql => {
-            fmt!(f, "JSON_MERGE_PRESERVE(" Ident(column_name) ", " expr ")")
+            fmt!(f, "JSON_MERGE_PRESERVE(" column ", " expr ")")
         }
         Flavor::Sqlite => fmt!(
             f,
-            "(SELECT json_group_array(json(CASE WHEN type IN ('object', 'array') \
-             THEN value ELSE json_quote(value) END)) \
-             FROM (SELECT type, value FROM json_each("
-            Ident(column_name) ") UNION ALL SELECT type, value FROM json_each(" expr ")))"
+            "json(substr(" column ", 1, length(" column ") - 1) || \
+             CASE WHEN json_array_length(" column ") > 0 \
+             AND json_array_length(" expr ") > 0 THEN ',' ELSE '' END || \
+             substr(" expr ", 2))"
         ),
     }
 }
@@ -749,9 +823,9 @@ fn serialize_append(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt
 ///   to `$value` from a `T[]` column. Atomic.
 /// - MySQL / SQLite: not yet supported — `vec_remove` is gated off and the
 ///   lowering rejects these backends before reaching here.
-fn serialize_remove(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
+fn serialize_remove(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
     match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(f, "array_remove(" Ident(column_name) ", " expr ")"),
+        Flavor::Postgresql => fmt!(f, "array_remove(" column ", " expr ")"),
         Flavor::Mysql | Flavor::Sqlite => panic!(
             "stmt::remove on a Vec<scalar> field is not yet implemented for this SQL flavor; \
              the lowering should have rejected this before reaching the serializer",
@@ -765,12 +839,9 @@ fn serialize_remove(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt
 ///   element via 1-based PG array slicing. Atomic.
 /// - MySQL / SQLite: not yet supported — `vec_pop` is gated off and the
 ///   lowering rejects these backends before reaching here.
-fn serialize_pop(f: &mut super::Formatter<'_>, column_name: &str) {
+fn serialize_pop(f: &mut super::Formatter<'_>, column: AssignmentColumn) {
     match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(
-            f,
-            Ident(column_name) "[1:cardinality(" Ident(column_name) ") - 1]"
-        ),
+        Flavor::Postgresql => fmt!(f, column "[1:cardinality(" column ") - 1]"),
         Flavor::Mysql | Flavor::Sqlite => panic!(
             "stmt::pop on a Vec<scalar> field is not yet implemented for this SQL flavor; \
              the lowering should have rejected this before reaching the serializer",
@@ -792,11 +863,11 @@ fn serialize_pop(f: &mut super::Formatter<'_>, column_name: &str) {
 ///
 /// - MySQL / SQLite: not yet supported — `vec_remove_at` is gated off
 ///   and the lowering rejects these backends before reaching here.
-fn serialize_remove_at(f: &mut super::Formatter<'_>, column_name: &str, expr: &stmt::Expr) {
+fn serialize_remove_at(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
     match f.serializer.flavor {
         Flavor::Postgresql => fmt!(
             f,
-            Ident(column_name) "[1:" expr "] || " Ident(column_name) "[" expr " + 2:cardinality(" Ident(column_name) ")]"
+            column "[1:" expr "] || " column "[" expr " + 2:cardinality(" column ")]"
         ),
         Flavor::Mysql | Flavor::Sqlite => panic!(
             "stmt::remove_at on a Vec<scalar> field is not yet implemented for this SQL flavor; \
