@@ -11,7 +11,7 @@ use super::{Path, Query};
 /// predicate — to `.include(...)`.
 pub struct Include<Origin, T> {
     pub(crate) untyped: stmt::Include,
-    _p: PhantomData<fn() -> (Origin, T)>,
+    _p: PhantomData<(Origin, T)>,
 }
 
 impl<Origin, T> Include<Origin, T> {
