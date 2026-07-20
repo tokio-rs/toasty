@@ -384,6 +384,121 @@ fn shared_enum_type_created_once() {
     );
 }
 
+// --- PostgreSQL: enum array column (`status[]`) ---
+
+#[test]
+fn create_table_with_enum_array_postgresql() {
+    let status_enum = make_enum_type("status", &["pending", "active", "done"]);
+
+    let from = Schema::default();
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "statuses", Type::list(Type::Enum(status_enum))),
+            ],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    // The enum type must be created even though it only appears as an array
+    // element.
+    assert_eq!(sql.len(), 2);
+    assert_eq!(
+        sql[0],
+        "CREATE TYPE \"status\" AS ENUM ('pending', 'active', 'done');"
+    );
+    assert!(
+        sql[1].contains("\"statuses\" status[] NOT NULL"),
+        "got: {}",
+        sql[1]
+    );
+}
+
+// --- PostgreSQL: add variant to an enum used only by an array column ---
+
+#[test]
+fn add_variant_enum_array_postgresql() {
+    let status_v1 = make_enum_type("status", &["pending", "active", "done"]);
+    let status_v2 = make_enum_type("status", &["pending", "active", "done", "cancelled"]);
+
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "statuses", Type::list(Type::Enum(status_v1))),
+            ],
+        )],
+    };
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "statuses", Type::list(Type::Enum(status_v2))),
+            ],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    // Variant-only change: a single ALTER TYPE, no column-level DDL.
+    assert_eq!(sql.len(), 1, "got: {sql:?}");
+    assert_eq!(sql[0], "ALTER TYPE \"status\" ADD VALUE 'cancelled';");
+}
+
+// --- PostgreSQL: scalar → array is a real column type change ---
+
+#[test]
+fn enum_scalar_to_array_is_column_change() {
+    let status = make_enum_type("status", &["pending", "active"]);
+
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "status", Type::Enum(status.clone())),
+            ],
+        )],
+    };
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "status", Type::list(Type::Enum(status))),
+            ],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    // Same enum name on both sides, but the shape changed — column DDL must
+    // be emitted (not swallowed by the variant-only guard).
+    assert!(
+        sql.iter().any(|s| s.contains("ALTER TABLE")),
+        "expected column-level DDL, got: {sql:?}"
+    );
+}
+
 // --- MySQL: add variant emits ALTER TABLE MODIFY COLUMN ---
 
 #[test]

@@ -86,6 +86,7 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::Func(_)
         | Expr::Ident(_)
         | Expr::InSubquery(_)
+        | Expr::Incoming(_)
         | Expr::IsVariant(_)
         | Expr::Length(_)
         | Expr::Like(_)

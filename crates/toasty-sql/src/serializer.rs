@@ -80,6 +80,10 @@ struct Formatter<'a> {
     /// INSERT).
     in_insert: bool,
 
+    /// Target table whose stored columns must be qualified inside a PostgreSQL
+    /// upsert assignment to distinguish them from `excluded` columns.
+    assignment_table: Option<db::TableId>,
+
     /// Collects `Expr::Arg(n)` positions in the order they appear in the SQL.
     /// Used by MySQL (which uses positional `?` without indices) to reorder
     /// the params vec to match placeholder occurrence order. Borrowed so a
@@ -103,6 +107,7 @@ impl<'a> Formatter<'a> {
             depth: self.depth,
             alias: self.alias,
             in_insert: self.in_insert,
+            assignment_table: self.assignment_table,
             arg_positions: &mut *self.arg_positions,
         }
     }
@@ -142,6 +147,7 @@ impl<'a> Serializer<'a> {
                 depth: 0,
                 alias: false,
                 in_insert: false,
+                assignment_table: None,
                 arg_positions: &mut arg_positions,
             };
 
@@ -168,6 +174,7 @@ impl<'a> Serializer<'a> {
                 depth: 0,
                 alias: false,
                 in_insert: false,
+                assignment_table: None,
                 arg_positions: &mut arg_positions,
             };
 

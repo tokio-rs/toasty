@@ -144,6 +144,31 @@ impl Type {
         }
     }
 
+    /// The named enum this storage type carries: a scalar [`Type::Enum`] or the
+    /// element of an enum array (`List(Enum)`).
+    pub fn named_enum(&self) -> Option<&TypeEnum> {
+        match self {
+            Type::Enum(type_enum) => Some(type_enum),
+            Type::List(elem) => match elem.as_ref() {
+                Type::Enum(type_enum) => Some(type_enum),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Mutable counterpart to [`named_enum`](Self::named_enum).
+    pub fn named_enum_mut(&mut self) -> Option<&mut TypeEnum> {
+        match self {
+            Type::Enum(type_enum) => Some(type_enum),
+            Type::List(elem) => match elem.as_mut() {
+                Type::Enum(type_enum) => Some(type_enum),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,
@@ -224,10 +249,28 @@ impl Type {
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
+            // Collections use the same application-to-storage conversion as
+            // their elements. For example, an integer-discriminant enum is
+            // `I64` in the application schema, while `#[column(type = u8)]`
+            // stores `Vec<Enum>` as `List(U8)`.
+            (Self::List(storage), stmt::Type::List(app)) => {
+                stmt::Type::List(Box::new(storage.bridge_type(app)))
+            }
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             // Enum values are always strings at the application level
             (Self::Enum(_), _) => stmt::Type::String,
+            // Integer-discriminant enums use I64 at the application level.
+            // An explicit storage width bridges through the corresponding
+            // statement type so lowering inserts checked casts in both
+            // directions.
+            (Self::Integer(1), stmt::Type::I64) => stmt::Type::I8,
+            (Self::Integer(2), stmt::Type::I64) => stmt::Type::I16,
+            (Self::Integer(3..=4), stmt::Type::I64) => stmt::Type::I32,
+            (Self::UnsignedInteger(1), stmt::Type::I64) => stmt::Type::U8,
+            (Self::UnsignedInteger(2), stmt::Type::I64) => stmt::Type::U16,
+            (Self::UnsignedInteger(3..=4), stmt::Type::I64) => stmt::Type::U32,
+            (Self::UnsignedInteger(5..=8), stmt::Type::I64) => stmt::Type::U64,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,

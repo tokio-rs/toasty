@@ -55,6 +55,9 @@ pub(crate) use set_var::SetVar;
 mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;
 
+mod upsert;
+pub(crate) use upsert::Upsert;
+
 mod var;
 pub(crate) use var::{VarDecls, VarId, VarStore};
 
@@ -177,6 +180,7 @@ impl Exec<'_> {
             Action::Project(action) => self.action_project(action).await,
             Action::SetVar(action) => self.action_set_var(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
+            Action::Upsert(action) => self.action_upsert(action).await,
         }
     }
 

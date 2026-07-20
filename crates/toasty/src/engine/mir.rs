@@ -52,6 +52,9 @@ pub(crate) use store::{NodeId, Store};
 mod update_by_key;
 pub(crate) use update_by_key::UpdateByKey;
 
+mod upsert;
+pub(crate) use upsert::Upsert;
+
 use toasty_core::stmt;
 
 /// Extracts the per-row column types from a node's return type. A node

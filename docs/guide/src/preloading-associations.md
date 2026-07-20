@@ -292,6 +292,9 @@ A [multi-step (`via`) relation](./has-many.md#multi-step-relations-via) reaches
 its target through a path of existing relations. Preload it with `.include()`
 the same way as a single-step relation:
 
+This includes [many-to-many relationships](./many-to-many.md), where the path
+crosses a join model to reach the opposite endpoint.
+
 ```rust,ignore
 let users = User::all()
     .include(User::fields().commented_articles())

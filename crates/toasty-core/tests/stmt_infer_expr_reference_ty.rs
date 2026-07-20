@@ -1,17 +1,20 @@
-//! Type-inference tests for `Expr::Reference`, covering all three
-//! `ExprReference` variants (Column, Field, Model) in each relevant
-//! `ExprTarget` context, at both nesting=0 and nesting>0.
+//! Type-inference tests for row and field references. These cover all three
+//! `ExprReference` variants and fields projected from `Expr::Incoming` before
+//! and after lowering.
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::IndexId as AppIndexId;
 use toasty_core::schema::app::{
-    Field, FieldName, FieldPrimitive, FieldTy, ModelId, ModelRoot, PrimaryKey as AppPrimaryKey,
+    Field, FieldName, FieldPrimitive, FieldTy, Model, ModelId, ModelRoot,
+    PrimaryKey as AppPrimaryKey, Schema as AppSchema,
 };
 use toasty_core::schema::db::Type as DbType;
 use toasty_core::schema::db::{
     Column, ColumnId, IndexId as DbIndexId, PrimaryKey as DbPrimaryKey, Schema, Table, TableId,
 };
-use toasty_core::stmt::{Expr, ExprColumn, ExprContext, ExprReference, ExprTarget, Type};
+use toasty_core::stmt::{
+    Expr, ExprColumn, ExprContext, ExprIncoming, ExprReference, ExprTarget, Type,
+};
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -293,4 +296,30 @@ fn model_ref_nesting1_resolves_from_parent() {
         child.infer_expr_ty(&model_ref(1), &[]),
         Type::Model(ModelId(42))
     );
+}
+
+// ---------------------------------------------------------------------------
+// Expr::Project(Expr::Incoming, projection)
+// ---------------------------------------------------------------------------
+
+#[test]
+fn incoming_model_projection_uses_field_type() {
+    let schema = AppSchema::from_macro([Model::Root(model_root(
+        0,
+        &[(Type::I64, "id"), (Type::String, "name")],
+    ))])
+    .unwrap();
+    let model = schema.model(ModelId(0)).as_root_unwrap();
+    let cx = ExprContext::new_with_target(&schema, model);
+    let expr = Expr::project(ExprIncoming::model(ModelId(0)), [1usize]);
+
+    assert_eq!(cx.infer_expr_ty(&expr, &[]), Type::String);
+}
+
+#[test]
+fn incoming_table_projection_uses_column_type() {
+    let schema = db_schema(&[(Type::I64, "id"), (Type::String, "name")]);
+    let expr = Expr::project(ExprIncoming::table(TableId(0)), [1usize]);
+
+    assert_eq!(table_cx(&schema).infer_expr_ty(&expr, &[]), Type::String);
 }

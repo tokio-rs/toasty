@@ -7,6 +7,8 @@ returns a builder; call `.exec(&mut db)` to execute the update.
 
 To load an instance to update, see [Querying Records](./querying-records.md).
 To insert new records, see [Creating Records](./creating-records.md).
+To create or update by a key in one atomic operation, see
+[Upserting Records](./upserting-records.md).
 
 ## Updating an instance
 

@@ -66,6 +66,9 @@ pub use scope::IntoScope;
 mod update;
 pub use update::Update;
 
+mod upsert;
+pub use upsert::Upsert;
+
 pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
 
 use toasty_core::stmt;
@@ -87,12 +90,15 @@ use std::{fmt, marker::PhantomData};
 /// | Single-row query (`.one()`) | `M` | `M` |
 /// | Optional query (`.first()`) | `Option<M>` | `Option<M>` |
 /// | Insert (create) | `M` | `M` |
+/// | Upsert (create or update) | `M` | `M` |
+/// | Upsert with `or_ignore()` | `Option<M>` | `Option<M>` |
 /// | Delete | `()` | `()` |
 /// | Update | `()` | `()` |
 ///
 /// You rarely construct `Statement` directly. Instead, use the [`From`]
-/// implementations to convert from [`Query`], [`Insert`], [`Update`], or
-/// [`Delete`], or call [`IntoStatement::into_statement`] on a query builder.
+/// implementations to convert from [`Query`], [`Insert`], [`Update`],
+/// [`Upsert`], or [`Delete`], or call [`IntoStatement::into_statement`] on a
+/// query builder.
 pub struct Statement<T> {
     pub(crate) untyped: stmt::Statement,
     _p: PhantomData<T>,
@@ -145,7 +151,7 @@ impl<T> Statement<T> {
     /// Try to extract the inner [`Query`] from this statement.
     ///
     /// Returns `Some(query)` if the statement is a query, or `None` for
-    /// inserts, updates, and deletes.
+    /// inserts, upserts, updates, and deletes.
     ///
     /// # Examples
     ///

@@ -95,6 +95,8 @@ pub(crate) enum EnumStorageStrategy {
     NativeEnum(Option<String>),
     /// Plain text/varchar column, no database-level enum enforcement.
     PlainString(ColumnType),
+    /// Explicit integer storage type for an integer-discriminant enum.
+    Integer(ColumnType),
 }
 
 #[derive(Debug)]
@@ -108,8 +110,8 @@ pub(crate) struct ModelEmbeddedEnum {
     /// The enum's variants with their names and discriminant values
     pub(crate) variants: Vec<Variant>,
 
-    /// Storage strategy for string-discriminant enums. `None` means integer
-    /// discriminants (no enum-level storage strategy applies).
+    /// Explicit storage strategy. `None` means an integer-discriminant enum
+    /// using the default `i64` storage type.
     pub(crate) storage_strategy: Option<EnumStorageStrategy>,
 }
 
@@ -585,13 +587,6 @@ impl Model {
                 }
             }
         } else {
-            // Integer discriminants: enum-level type override is not applicable.
-            if enum_column_type.is_some() {
-                return Err(syn::Error::new_spanned(
-                    ast,
-                    "#[column(type = ...)] is not supported for integer-discriminant enums",
-                ));
-            }
             // `rename_all` derives string labels, so it is meaningless when the
             // enum stores integer discriminants.
             if rename_all.is_some() {
@@ -600,7 +595,56 @@ impl Model {
                     "#[column(rename_all = ...)] is not supported for integer-discriminant enums",
                 ));
             }
-            None
+
+            match enum_column_type {
+                Some(ty) => {
+                    let Some((signed, size)) = ty.integer_spec() else {
+                        return Err(syn::Error::new_spanned(
+                            ast,
+                            "unsupported #[column(type = ...)] for integer-discriminant enum; \
+                             use `i8`, `i16`, `i32`, `i64`, `u8`, `u16`, `u32`, or `u64`",
+                        ));
+                    };
+
+                    if !(1..=8).contains(&size) {
+                        return Err(syn::Error::new_spanned(
+                            ast,
+                            "integer enum storage width must be between 1 and 8 bytes",
+                        ));
+                    }
+
+                    let max = if signed {
+                        if size == 8 {
+                            i64::MAX
+                        } else {
+                            (1_i64 << (u32::from(size) * 8 - 1)) - 1
+                        }
+                    } else if size == 8 {
+                        i64::MAX
+                    } else {
+                        (1_i64 << (u32::from(size) * 8)) - 1
+                    };
+
+                    for variant in &variants {
+                        let VariantValue::Integer(value) = variant.attrs.discriminant else {
+                            unreachable!("integer-discriminant enum has a string variant")
+                        };
+
+                        if value < 0 || value > max {
+                            return Err(syn::Error::new_spanned(
+                                &variant.ident,
+                                format!(
+                                    "variant discriminant {value} does not fit the requested \
+                                     integer column type"
+                                ),
+                            ));
+                        }
+                    }
+
+                    Some(EnumStorageStrategy::Integer(ty))
+                }
+                None => None,
+            }
         };
 
         collect_field_indices(&all_fields, &mut indices);
