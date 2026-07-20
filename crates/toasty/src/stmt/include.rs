@@ -16,9 +16,9 @@ pub struct Include<Origin, T> {
 
 impl<Origin, T> Include<Origin, T> {
     #[doc(hidden)]
-    pub fn from_path_and_filter<U>(path: Path<Origin, T>, filter: Query<U>) -> Self {
+    pub fn from_path_and_query<U>(path: Path<Origin, T>, query: Query<U>) -> Self {
         Self {
-            untyped: stmt::Include::with_filter(path.untyped, filter.untyped),
+            untyped: stmt::Include::with_query(path.untyped, query.untyped),
             _p: PhantomData,
         }
     }

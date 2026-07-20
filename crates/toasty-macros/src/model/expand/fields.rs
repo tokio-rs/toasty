@@ -194,13 +194,9 @@ impl Expand<'_> {
             return TokenStream::new();
         }
         quote! {
-            /// Restrict which related rows preload when this path is passed
-            /// to `.include(...)`. The predicate is evaluated in the relation
-            /// target's scope; a filtered `HasOne`/`BelongsTo` loads `None`
-            /// when the related row does not match. Repeated includes of the
-            /// same relation AND their predicates.
+            /// Restricts the related rows loaded by `.include(...)`.
             #vis fn filter(self, predicate: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Include<__Origin, #target_ty> {
-                #toasty::stmt::Include::from_path_and_filter(
+                #toasty::stmt::Include::from_path_and_query(
                     self.path,
                     #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all().filter(predicate),
                 )

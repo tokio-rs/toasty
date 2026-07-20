@@ -318,7 +318,11 @@ impl Verify<'_, '_> {
     /// resolvable here and pass through unchecked.
     fn verify_include_filters(&mut self, i: &stmt::Select) {
         for include in i.returning.model_includes() {
-            if include.filter.is_none() {
+            let has_filter = match &include.query.body {
+                stmt::ExprSet::Select(select) => select.filter.expr.is_some(),
+                _ => false,
+            };
+            if !has_filter {
                 continue;
             }
             let Some(model_id) = include.path.root.as_model() else {

@@ -12,9 +12,8 @@
 //! deferred sub-field of an embed struct nested inside an enum variant —
 //! the masked `Null` lives inside a `Match` expression, not a `Record`.
 //!
-//! Include entries arrive as [`stmt::Include`] values (path + optional
-//! filter query over the relation target). The first thing we do is flatten
-//! any `PathRoot::Variant` chain
+//! Include entries arrive as [`stmt::Include`] values. The first thing we do
+//! is flatten any `PathRoot::Variant` chain
 //! into a plain projection of the form `[…parent_steps, variant_idx,
 //! …local_var_field_steps]`. This LOCAL form mirrors the IR's `Match` arm
 //! record (where each arm is `[disc, field_0, field_1, …]`), so descent
@@ -33,10 +32,7 @@
 //!         └──────────────────────────────────  └── enum   → process_enum_arms
 //! ```
 //!
-//! Relations don't currently live inside embedded types, so
-//! `build_include_subquery` only fires from `process_fields` at the
-//! top-level model. When relations-in-embeds eventually lands, the same
-//! function will fire from any depth without further restructuring.
+//! Relations only live on top-level models.
 
 use toasty_core::{
     schema::{app, mapping},
@@ -46,12 +42,9 @@ use toasty_core::{
 use crate::engine::lower::LowerStatement;
 use crate::schema::lazy_slot;
 
-/// A flattened include: the projection (with variant roots folded in) plus
-/// the optional per-relation filter. The filter stays in its scope-carrying
-/// `Query` form until it is AND-ed onto the subquery at its own level.
 struct FlatInclude {
     projection: stmt::Projection,
-    filter: Option<stmt::Query>,
+    query: stmt::Query,
 }
 
 /// The include entries that target a single field, partitioned by whether
@@ -62,8 +55,8 @@ struct FlatInclude {
 struct FieldIncludes {
     /// At least one include path equals `[i]` — the field is named directly.
     include_self: bool,
-    /// Combined top-level filter for this field (multiple `.filter()` calls
-    /// are AND-ed together).
+    /// Combined top-level filter for this field (multiple `.include()` calls
+    /// are OR-ed together).
     top_filter: Option<stmt::Expr>,
     /// Tails of every `[i, …]` include path, with the leading index stripped.
     sub_paths: Vec<FlatInclude>,
@@ -93,9 +86,7 @@ impl LowerStatement<'_, '_> {
     /// embedded struct). For each field, partition matching include paths via
     /// [`FieldIncludes`] and dispatch:
     ///
-    /// - Relation → splice a subquery via [`build_include_subquery`]
-    ///   (relations live only at the top level today; a future "relations in
-    ///   embeds" feature will fire this from any depth).
+    /// - Relation → splice a subquery via [`build_include_subquery`].
     /// - Anything else → [`process_field`].
     fn process_fields(
         &mut self,
@@ -270,7 +261,7 @@ impl LowerStatement<'_, '_> {
                     let (first, rest) = fi.projection.as_slice().split_first()?;
                     (*first == variant_idx).then(|| FlatInclude {
                         projection: stmt::Projection::from(rest),
-                        filter: fi.filter.clone(),
+                        query: fi.query.clone(),
                     })
                 })
                 .collect();
@@ -347,7 +338,11 @@ impl LowerStatement<'_, '_> {
             }
             // `via` lowering does not thread per-relation filters through its
             // JOIN chain yet; reject rather than silently drop them.
-            if top_filter.is_some() || nested.iter().any(|fi| fi.filter.is_some()) {
+            if top_filter.is_some()
+                || nested
+                    .iter()
+                    .any(|fi| query_filter_expr(&fi.query).is_some())
+            {
                 todo!("`.filter(...)` on a multi-step `via` relation include is not yet supported");
             }
             let nested_projections: Vec<stmt::Projection> =
@@ -422,7 +417,7 @@ impl LowerStatement<'_, '_> {
                         root: stmt::PathRoot::Model(target_model_id),
                         projection: fi.projection.clone(),
                     },
-                    filter: fi.filter.clone(),
+                    query: fi.query.clone(),
                 });
             }
         }
@@ -441,11 +436,10 @@ impl FieldIncludes {
     }
 }
 
-/// Find the include entries that target field index `i` and split them by
-/// whether they name the field itself or a sub-path within it. Filters on
-/// entries that name the field directly are AND-ed into `top_filter`.
+/// Partitions includes for a field and ORs filters on the field itself.
 fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
     let mut include_self = false;
+    let mut unfiltered_self = false;
     let mut top_filter: Option<stmt::Expr> = None;
     let mut sub_paths = Vec::new();
     for fi in includes {
@@ -454,16 +448,23 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
         {
             if rest.is_empty() {
                 include_self = true;
-                if let Some(f) = fi.filter.as_ref().and_then(query_filter_expr) {
-                    top_filter = Some(match top_filter.take() {
-                        Some(prev) => stmt::Expr::and(prev, f),
-                        None => f,
-                    });
+                match query_filter_expr(&fi.query) {
+                    Some(f) if !unfiltered_self => {
+                        top_filter = Some(match top_filter.take() {
+                            Some(prev) => stmt::Expr::or(prev, f),
+                            None => f,
+                        });
+                    }
+                    Some(_) => {}
+                    None => {
+                        unfiltered_self = true;
+                        top_filter = None;
+                    }
                 }
             } else {
                 sub_paths.push(FlatInclude {
                     projection: stmt::Projection::from(rest),
-                    filter: fi.filter.clone(),
+                    query: fi.query.clone(),
                 });
             }
         }
@@ -475,16 +476,13 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
     }
 }
 
-/// Flatten an [`stmt::Include`] into a [`FlatInclude`], folding any
-/// `PathRoot::Variant` chain into discriminant-index steps.
 fn flatten_include(include: &stmt::Include) -> FlatInclude {
     FlatInclude {
         projection: flatten_path(&include.path),
-        filter: include.filter.clone(),
+        query: include.query.clone(),
     }
 }
 
-/// Extract the `WHERE` predicate from an include filter query.
 fn query_filter_expr(query: &stmt::Query) -> Option<stmt::Expr> {
     match &query.body {
         stmt::ExprSet::Select(select) => select.filter.expr.clone(),

@@ -1,32 +1,27 @@
 use super::{Node, Path, Query, Visit, VisitMut};
 
 /// An association preload entry on a `Returning::Model` clause.
-///
-/// The filter is stored as a bare `SELECT` over the relation target rather
-/// than an `Expr` so the predicate's scope travels with it (the same
-/// mechanism `Path::any` relies on); lowering extracts the `WHERE` clause
-/// and ignores everything else.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Include {
     /// The relation path to preload.
     pub path: Path,
 
-    /// Optional filter restricting which related rows load.
-    pub filter: Option<Query>,
+    /// Query applied to the related rows.
+    pub query: Query,
 }
 
 impl Include {
-    /// Creates an `Include` with no filter.
+    /// Creates an unfiltered `Include`.
     pub fn new(path: Path) -> Self {
-        Self { path, filter: None }
-    }
-
-    /// Creates an `Include` with the given filter query.
-    pub fn with_filter(path: Path, filter: Query) -> Self {
         Self {
             path,
-            filter: Some(filter),
+            query: Query::unit(),
         }
+    }
+
+    /// Creates an `Include` with a relation query.
+    pub fn with_query(path: Path, query: Query) -> Self {
+        Self { path, query }
     }
 }
 

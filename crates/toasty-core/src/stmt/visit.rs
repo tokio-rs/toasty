@@ -1443,17 +1443,13 @@ where
     }
 }
 
-/// Default traversal for [`Include`] nodes. Visits the path and the optional
-/// filter query.
+/// Visits an [`Include`].
 pub fn visit_include<V>(v: &mut V, node: &Include)
 where
     V: Visit + ?Sized,
 {
     v.visit_path(&node.path);
-
-    if let Some(filter) = &node.filter {
-        v.visit_stmt_query(filter);
-    }
+    v.visit_stmt_query(&node.query);
 }
 
 /// Default traversal for [`Source`] nodes. Dispatches to model or table source visitor.
