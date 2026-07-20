@@ -2,7 +2,7 @@
 JSON encoding for <code>stmt::Value</code>s stored in document-backed columns
 (MySQL <code>JSON</code>, SQLite TEXT via the JSON1 extension, and PostgreSQL <code>jsonb</code>
 for <code>#[document]</code>-marked fields).</p>
-<p>The conversion does <strong>not</strong> go through an intermediate <a href="https://docs.rs/serde_json/1.0.150/serde_json/value/enum.Value.html" title="enum serde_json::value::Value"><code>serde_json::Value</code></a>
+<p>The conversion does <strong>not</strong> go through an intermediate <a href="https://docs.rs/serde_json/1.0.151/serde_json/value/enum.Value.html" title="enum serde_json::value::Value"><code>serde_json::Value</code></a>
 tree. Encoding streams a <code>stmt::Value</code> straight to JSON text via a
 <a href="https://docs.rs/serde_core/1.0.229/serde_core/ser/trait.Serialize.html" title="trait serde_core::ser::Serialize"><code>serde::Serialize</code></a> wrapper ([<code>Encode</code>]); decoding parses JSON tokens
 straight into a correctly-typed <code>stmt::Value</code> via a type-directed
