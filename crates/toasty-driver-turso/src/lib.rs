@@ -262,9 +262,6 @@ impl BuilderOptions {
         if let Some(timeout) = self.sync_options.long_poll_timeout {
             b = b.with_long_poll_timeout(timeout)
         }
-        if self.sync_options.bootstrap_if_empty {
-            b = b.bootstrap_if_empty(true);
-        }
         if let Some(opts) = &self.sync_options.partial_sync_config_experimental {
             b = b.with_partial_sync_opts_experimental(opts.clone())
         }
@@ -281,7 +278,9 @@ impl BuilderOptions {
         if self.index_method {
             b = b.experimental_index_method(true);
         }
-        b = b.bootstrap_if_empty(self.sync_options.bootstrap_if_empty);
+        let bootstrap =
+            self.sync_options.remote_url.is_some() && self.sync_options.bootstrap_if_empty;
+        b = b.bootstrap_if_empty(bootstrap);
         b
     }
 }
@@ -1153,5 +1152,14 @@ mod sync_tests {
             }
         }
         assert_eq!(values, vec!["test", "test-2", "test-3"]);
+    }
+
+    #[tokio::test]
+    async fn test_local_db_without_remote_url() {
+        let server = TursoTestServer::new().await;
+        server.run_sql("DROP TABLE IF EXISTS t").await;
+
+        let driver = Turso::in_memory();
+        let _ = driver.database().await.unwrap().connect().await.unwrap();
     }
 }
