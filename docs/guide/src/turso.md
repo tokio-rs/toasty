@@ -65,8 +65,9 @@ flags, construct the driver directly.
 The Turso driver uses the same type mapping and SQL serializer as the
 [SQLite driver](./sqlite.md) — see that chapter for the column-type
 table and notes on UUIDs as `BLOB`, ISO 8601 temporal types, decimals
-stored as `TEXT`, and so on. The list of Turso-specific behaviors
-below is everything that differs from the SQLite chapter.
+stored as `TEXT`, and targeted [`upsert_by_*`](./upserting-records.md).
+The list of Turso-specific behaviors below is everything that differs from the
+SQLite chapter.
 
 ## In-memory databases share state across the pool
 

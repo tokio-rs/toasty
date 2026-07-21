@@ -2,10 +2,11 @@ use crate::stmt::{ExprExists, Input};
 
 use super::{
     Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBetween,
-    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects,
-    ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap,
-    ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith, ExprStmt, Node,
-    Projection, Resolve, Substitute, Type, Value, Visit, VisitMut, expr_reference::ExprReference,
+    ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming,
+    ExprIntersects, ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike,
+    ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith,
+    ExprStmt, Node, Projection, Resolve, Substitute, Type, Value, Visit, VisitMut,
+    expr_reference::ExprReference,
 };
 use std::fmt;
 
@@ -87,6 +88,9 @@ pub enum Expr {
     /// `expr IN (SELECT ...)` membership test. See [`ExprInSubquery`].
     InSubquery(ExprInSubquery),
 
+    /// The row proposed by an upsert's create branch. See [`ExprIncoming`].
+    Incoming(ExprIncoming),
+
     /// Boolean: two array operands share at least one element
     /// (PostgreSQL `&&`). See [`ExprIntersects`].
     Intersects(ExprIntersects),
@@ -145,8 +149,16 @@ pub enum Expr {
     /// Embedded sub-statement (e.g., a subquery). See [`ExprStmt`].
     Stmt(ExprStmt),
 
-    /// Constant value. See [`Value`].
+    /// Constant value rendered as a bind parameter.  The default for
+    /// user-supplied leaves; `extract_params` replaces this with
+    /// `Expr::Arg(n)`.
     Value(Value),
+
+    /// Constant value rendered inline as a SQL literal. The query builder uses
+    /// this for the fixed `LIMIT 1` emitted by `.first()`.
+    /// Survives `extract_params` and reaches the SQL serializer
+    /// unchanged.  See `docs/dev/design/static-sql-values.md`.
+    Static(Value),
 }
 
 impl Expr {
@@ -359,7 +371,7 @@ impl Expr {
     pub fn is_stable(&self) -> bool {
         match self {
             // Always stable - constant values
-            Self::Value(_) => true,
+            Self::Value(_) | Self::Static(_) => true,
 
             // Unresolved identifiers refer to external state (e.g. a column)
             Self::Ident(_) => false,
@@ -406,7 +418,7 @@ impl Expr {
             }
 
             // References and statements - stable (they reference existing data)
-            Self::Reference(_) | Self::Arg(_) => true,
+            Self::Reference(_) | Self::Incoming(_) | Self::Arg(_) => true,
 
             // Array predicates and length — stable if all operands are stable.
             Self::IsSuperset(e) => e.lhs.is_stable() && e.rhs.is_stable(),
@@ -455,7 +467,7 @@ impl Expr {
     fn is_const_at_depth(&self, map_depth: usize) -> bool {
         match self {
             // Always constant
-            Self::Value(_) => true,
+            Self::Value(_) | Self::Static(_) => true,
 
             // Unresolved identifiers reference external data
             Self::Ident(_) => false,
@@ -468,6 +480,7 @@ impl Expr {
 
             // Never constant - references external data
             Self::Reference(_)
+            | Self::Incoming(_)
             | Self::Stmt(_)
             | Self::InSubquery(_)
             | Self::Exists(_)
@@ -560,7 +573,7 @@ impl Expr {
     pub fn is_eval(&self) -> bool {
         match self {
             // Always evaluable
-            Self::Value(_) => true,
+            Self::Value(_) | Self::Static(_) => true,
 
             // Unresolved identifiers cannot be evaluated
             Self::Ident(_) => false,
@@ -574,6 +587,7 @@ impl Expr {
             // Never evaluable - references external data or requires a database driver
             Self::Default
             | Self::Reference(_)
+            | Self::Incoming(_)
             | Self::Stmt(_)
             | Self::InSubquery(_)
             | Self::Exists(_)
@@ -780,6 +794,7 @@ impl fmt::Debug for Expr {
             Self::Ident(e) => write!(f, "Ident({e:?})"),
             Self::InList(e) => e.fmt(f),
             Self::InSubquery(e) => e.fmt(f),
+            Self::Incoming(e) => write!(f, "Incoming({e:?})"),
             Self::Intersects(e) => e.fmt(f),
             Self::IsNull(e) => e.fmt(f),
             Self::IsSuperset(e) => e.fmt(f),
@@ -798,6 +813,7 @@ impl fmt::Debug for Expr {
             Self::StartsWith(e) => e.fmt(f),
             Self::Stmt(e) => e.fmt(f),
             Self::Value(e) => e.fmt(f),
+            Self::Static(e) => write!(f, "Static({e:?})"),
         }
     }
 }

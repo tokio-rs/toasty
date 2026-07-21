@@ -475,6 +475,24 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     self.extract_data_load_args_from_expr(expr, Some(i));
                 });
             }
+
+            if let Some(upsert) = &insert.upsert {
+                for (_, assignment) in upsert.shared.iter() {
+                    stmt::visit::for_each_expr(assignment, |expr| {
+                        self.extract_data_load_args_from_expr(expr, None);
+                    });
+                }
+                for (_, assignment) in upsert.defaults.iter() {
+                    stmt::visit::for_each_expr(assignment, |expr| {
+                        self.extract_data_load_args_from_expr(expr, None);
+                    });
+                }
+                for (_, assignment) in upsert.update_defaults.iter() {
+                    stmt::visit::for_each_expr(assignment, |expr| {
+                        self.extract_data_load_args_from_expr(expr, None);
+                    });
+                }
+            }
         }
 
         if let stmt::Statement::Update(update) = stmt {
@@ -684,6 +702,36 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         for row in &mut values.rows {
             self.rewrite_arg_dependencies(row);
         }
+
+        if let Some(upsert) = &mut stmt.upsert {
+            for (_, assignment) in upsert.shared.iter_mut() {
+                self.rewrite_assignment_arg_dependencies(assignment);
+            }
+            for (_, assignment) in upsert.defaults.iter_mut() {
+                self.rewrite_assignment_arg_dependencies(assignment);
+            }
+            for (_, assignment) in upsert.update_defaults.iter_mut() {
+                self.rewrite_assignment_arg_dependencies(assignment);
+            }
+        }
+    }
+
+    fn rewrite_assignment_arg_dependencies(&mut self, assignment: &mut stmt::Assignment) {
+        match assignment {
+            stmt::Assignment::Set(expr)
+            | stmt::Assignment::Insert(expr)
+            | stmt::Assignment::Remove(expr)
+            | stmt::Assignment::Append(expr)
+            | stmt::Assignment::RemoveAt(expr)
+            | stmt::Assignment::Add(expr)
+            | stmt::Assignment::Subtract(expr) => self.rewrite_arg_dependencies(expr),
+            stmt::Assignment::Pop => {}
+            stmt::Assignment::Batch(assignments) => {
+                for assignment in assignments {
+                    self.rewrite_assignment_arg_dependencies(assignment);
+                }
+            }
+        }
     }
 
     fn rewrite_stmt_update_arg_dependencies(&mut self, stmt: &mut stmt::Update) {
@@ -751,9 +799,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         if self.load_data.select_items.contains(&SelectItem::CountStar)
             && !self.planner.engine.capability().sql
         {
-            return Err(toasty_core::Error::unsupported_feature(
-                "count() queries are only supported with SQL drivers",
-            ));
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support count() queries",
+                self.planner.engine.capability().driver_name
+            )));
         }
 
         if let Some(node_id) = self.plan_const_or_empty_statement(&stmt, returning) {
@@ -763,7 +812,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt
             );
             Ok(node_id)
-        } else if self.planner.engine.capability().sql || stmt.is_insert() {
+        } else if stmt.is_insert() {
+            self.plan_insert(stmt)
+        } else if self.planner.engine.capability().sql {
             self.plan_data_loading_sql(stmt)
         } else {
             self.plan_data_loading_nosql(stmt)
@@ -807,10 +858,67 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         None
     }
 
+    // ===== Insert execution =====
+
+    fn plan_insert(&mut self, mut stmt: stmt::Statement) -> Result<mir::NodeId> {
+        debug_assert!(stmt.is_insert(), "stmt={stmt:#?}");
+
+        let const_returning = self.extract_insert_returning_as_const(&stmt);
+
+        if !self.load_data.select_items.is_empty() {
+            stmt.set_returning_project(stmt::Expr::record(
+                self.load_data
+                    .select_items
+                    .iter()
+                    .map(|item| item.to_expr()),
+            ));
+        }
+
+        let input_args: Vec<_> = self
+            .load_data
+            .inputs
+            .iter()
+            .map(|input| self.planner.mir.ty(*input).clone())
+            .collect();
+        let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
+        let inputs = mem::take(&mut self.load_data.inputs);
+
+        let node = if !self.planner.engine.capability().sql && stmt.is_upsert() {
+            mir::Operation::Upsert(Box::new(mir::Upsert {
+                inputs,
+                stmt: stmt.into_insert_unwrap(),
+                ty,
+            }))
+        } else {
+            mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
+                inputs,
+                stmt,
+                ty,
+                conditional: exec::ConditionalOutput::None,
+                pagination: None,
+            }))
+        };
+
+        let mut load_data_node = self.insert_mir_with_deps(node);
+
+        if let Some((const_value, const_ty)) = const_returning {
+            load_data_node = self.planner.mir.insert_with_deps(
+                mir::Const {
+                    value: const_value,
+                    ty: const_ty,
+                },
+                [load_data_node],
+            );
+        }
+
+        Ok(load_data_node)
+    }
+
     // ===== SQL execution =====
 
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> Result<mir::NodeId> {
-        let const_returning = self.extract_insert_returning_as_const(&stmt);
+        debug_assert!(self.planner.engine.capability().sql, "stmt={stmt:#?}");
+        debug_assert!(!stmt.is_insert(), "stmt={stmt:#?}");
 
         // Phase 1: Detect pagination and add ORDER BY columns to load_data
         let pagination_info = self.plan_pagination_sql(&stmt)?;
@@ -871,32 +979,20 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     .unwrap_or(true),
                 "stmt={stmt:#?}"
             );
+            let inputs = mem::take(&mut self.load_data.inputs);
+
             // With SQL capability, we can just punt the details of execution to
             // the database's query planner.
             mir::Operation::ExecStatement(Box::new(mir::ExecStatement {
-                inputs: mem::take(&mut self.load_data.inputs),
+                inputs,
                 stmt,
                 ty,
                 conditional: exec::ConditionalOutput::None,
-                pagination: pagination_config.clone(),
+                pagination: pagination_config,
             }))
         };
 
-        // With SQL capability, we can just punt the details of execution to
-        // the database's query planner.
-        let mut exec_statement_node = self.insert_mir_with_deps(node);
-
-        if let Some((const_value, const_ty)) = const_returning {
-            exec_statement_node = self.planner.mir.insert_with_deps(
-                mir::Const {
-                    value: const_value,
-                    ty: const_ty,
-                },
-                [exec_statement_node],
-            );
-        }
-
-        Ok(exec_statement_node)
+        Ok(self.insert_mir_with_deps(node))
     }
 
     fn extract_insert_returning_as_const(
@@ -906,6 +1002,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let stmt::Statement::Insert(insert) = stmt else {
             return None;
         };
+
+        if insert.upsert.is_some() {
+            return None;
+        }
 
         if self.load_data.select_items.is_empty() {
             return None;
@@ -974,9 +1074,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // SQL cursor pagination requires ORDER BY to produce a deterministic cursor.
         let order_by = query.order_by.as_ref().ok_or_else(|| {
-            toasty_core::Error::unsupported_feature(
-                "cursor-based pagination requires an ORDER BY clause on SQL drivers",
-            )
+            toasty_core::Error::unsupported_feature(format!(
+                "cursor-based pagination on {} requires an ORDER BY clause",
+                self.planner.engine.capability().driver_name
+            ))
         })?;
 
         // Extract page_size
@@ -1336,10 +1437,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             && query.order_by.is_some()
             && !self.planner.engine.capability().scan_supports_sort
         {
-            return Err(toasty_core::Error::unsupported_feature(
-                "ORDER BY is not supported on full-table scans for this database. \
-                     Consider adding an index on the sort field or removing the ORDER BY clause.",
-            ));
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support ORDER BY on full-table scans. Consider adding an index on \
+                 the sort field or removing the ORDER BY clause.",
+                self.planner.engine.capability().driver_name
+            )));
         }
 
         let mut row_filter = {
@@ -1972,10 +2074,10 @@ fn conditional_probe_projection(condition: stmt::Expr) -> stmt::Expr {
 /// `QueryPk` on NoSQL drivers. Returns `None` when the statement has no limit
 /// clause.
 ///
-/// Assumes `page_size`, `limit`, and `offset` fields are `Value::I64` literals.
-/// Builders normalize to `I64`, and `verify::verify_limit_is_integer_literal`
-/// enforces this invariant on the AST — so any other shape reaching here is a
-/// bug upstream.
+/// Assumes `page_size`, `limit`, and `offset` fields are `I64` literals. Runtime
+/// values use `Expr::Value`; the fixed limit emitted by `.first()` uses
+/// `Expr::Static`. `verify::verify_limit_is_integer_literal` enforces this
+/// invariant on the AST, so any other shape reaching here is a bug upstream.
 fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
     let query = stmt.as_query()?;
     match query.limit.as_ref()? {
@@ -1995,11 +2097,11 @@ fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
     }
 }
 
-/// Extracts an `i64` from a `Value::I64` literal expression. Panics on any
-/// other shape — an invariant violation that `verify` should have caught.
+/// Extracts an `i64` from a bound or static `I64` literal expression. Panics on
+/// any other shape — an invariant violation that `verify` should have caught.
 fn as_i64_literal(expr: &stmt::Expr) -> i64 {
     match expr {
-        stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
         _ => panic!("limit/offset must be an i64 literal; got {expr:#?}"),
     }
 }

@@ -6,6 +6,7 @@ mod lift_in_subquery;
 mod lift_update_query;
 mod paginate;
 mod relation;
+mod relation_path;
 mod returning;
 mod via_join;
 
@@ -28,7 +29,7 @@ use toasty_core::{
     stmt::{self, IntoExprTarget, VisitMut, visit_mut},
 };
 
-use crate::engine::{Engine, HirStatement, hir, simplify::Simplify};
+use crate::engine::{Engine, HirStatement, hir, simplify::Simplify, upsert};
 
 /// Wrap a nullable single-relation subquery so a missing row passes through as
 /// `Null`, while a present row is transformed by `present`. Used when lowering
@@ -533,8 +534,8 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 }
 
 /// Concatenate two list-shaped expressions if both are literals (either
-/// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
-/// on failure so the caller can preserve the un-folded shape.
+/// `Expr::List` or `Expr::Value(Value::List)`). Returns a residual `Batch`
+/// containing the original pair if either expression is not a literal.
 fn try_concat_list_literals_to_assignment(a: stmt::Expr, b: stmt::Expr) -> stmt::Assignment {
     use stmt::Assignment::{Append, Batch};
     if !is_list_literal(&a) || !is_list_literal(&b) {
@@ -804,6 +805,29 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
                 }
             }
+            stmt::Expr::Project(project)
+                if let stmt::Expr::Incoming(stmt::ExprIncoming::Model(model)) =
+                    project.base.as_ref() =>
+            {
+                let (table, column) = {
+                    let mapping = self.schema().mapping_for(*model);
+                    let mapped = mapping
+                        .resolve_field_mapping(&project.projection)
+                        .expect("incoming upsert field must map to a column");
+                    let mut columns = mapped.columns();
+                    let (column, _) = columns
+                        .next()
+                        .expect("incoming upsert field has no database column");
+                    assert!(
+                        columns.next().is_none(),
+                        "incoming() does not yet support column-expanded embedded fields"
+                    );
+                    (mapping.table, column)
+                };
+                debug_assert_eq!(table, column.table);
+                *project.base = stmt::ExprIncoming::table(table).into();
+                project.projection = stmt::Projection::from_index(column.index);
+            }
             // A null-check on an `Option<Embed>` field reduces to a null-check on
             // the embed's head column instead of distributing the check over
             // every flattened column. The head column is `NULL` for `None`, so
@@ -1068,23 +1092,67 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
+        let sql = self.state.engine.capability.sql;
+        if let Err(err) = upsert::normalize(stmt, !sql) {
+            self.state.errors.push(err);
+            return;
+        }
+
         // Create a new expr scope for the statement, and lower all parts
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
+
+        if let Some(upsert) = &mut stmt.upsert {
+            if let stmt::UpsertTarget::Fields(fields) = &upsert.target {
+                let mapping = lower.mapping_unwrap();
+                let mut columns = Vec::new();
+                for field in fields {
+                    let mapped = mapping
+                        .resolve_field_mapping(field)
+                        .expect("upsert target must map to database columns");
+                    columns.extend(mapped.columns().map(|(column, _)| column));
+                }
+                upsert.target = stmt::UpsertTarget::Columns(columns);
+            }
+            if upsert.action == stmt::UpsertAction::Update {
+                let version = lower.inject_version_increment(&mut upsert.shared);
+                if !sql && let Some(projection) = version {
+                    upsert.defaults.set(projection, stmt::Value::U64(0));
+                }
+            }
+            lower.visit_assignments_mut(&mut upsert.shared);
+            lower.visit_assignments_mut(&mut upsert.defaults);
+            lower.visit_assignments_mut(&mut upsert.update_defaults);
+        }
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
         }
 
         // Preprocess the insertion source (values usually)
-        lower.preprocess_insert_values(&mut stmt.source, &mut stmt.returning);
+        // `DO NOTHING RETURNING` legitimately produces zero rows. Keep its
+        // returning clause as a projection over the database result so the
+        // normal single-statement boundary can turn an empty list into
+        // `Value::Null` (and therefore `Option::None`). Converting it to an
+        // expression would project row zero eagerly and panic on conflict.
+        let preserve_returning_projection = stmt
+            .upsert
+            .as_ref()
+            .is_some_and(|upsert| upsert.action == stmt::UpsertAction::Ignore);
+        lower.preprocess_insert_values(
+            &mut stmt.source,
+            &mut stmt.returning,
+            preserve_returning_projection,
+        );
 
         // Lower the insertion source
         lower.visit_stmt_query_mut(&mut stmt.source);
 
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
-            lower.constantize_insert_returning(returning, &stmt.source);
+            if stmt.upsert.is_none() {
+                lower.constantize_insert_returning(returning, &stmt.source);
+            }
 
             if stmt.source.single
                 && let stmt::Returning::Expr(expr) = &returning
@@ -1176,8 +1244,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // alongside the `version == <last read>` condition — only it knows the
         // value the caller last loaded. A query-based update leaves the counter
         // unset, so the engine injects the relative `version = version + 1`
-        // here. This is the single place that guarantees every update advances
-        // the counter, regardless of how the statement was built.
+        // here. Upsert conflict updates use the same injection helper from the
+        // insert lowering path.
         //
         // Injecting after the `Changed` returning projection is built above
         // keeps the engine-managed counter out of the returning clause. A
@@ -1185,21 +1253,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // would force a per-row read-back that the multi-row DynamoDB transact
         // path cannot serve. The counter still advances in the database — a
         // query update just doesn't read it back (it discards its result).
-        if let Some(version_id) = lower.model().and_then(|m| m.version_field()).map(|f| f.id) {
-            // Skip when the version field is already being written: the
-            // instance path sets the whole field (and pairs it with the
-            // `version == <last read>` condition). Match any assignment rooted
-            // at the field — the instance `Set` sits at the field itself, while
-            // an injected increment lands on the leaf primitive (`[field, 0]`).
-            let already_assigned = stmt
-                .assignments
-                .keys()
-                .any(|p| p.as_slice().first() == Some(&version_id.index));
-            if !already_assigned {
-                let (projection, delta) = lower.version_increment_target(version_id);
-                stmt.assignments.add(projection, delta);
-            }
-        }
+        let _ = lower.inject_version_increment(&mut stmt.assignments);
 
         lower.visit_assignments_mut(&mut stmt.assignments);
         lower.visit_filter_mut(&mut stmt.filter);
@@ -1540,7 +1594,13 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
 
     fn lower_expr_field(&self, nesting: usize, index: usize) -> stmt::Expr {
         match self.cx {
-            LoweringContext::Statement | LoweringContext::Returning(_) => {
+            LoweringContext::Statement
+            | LoweringContext::Returning(_)
+            | LoweringContext::Insert(..) => {
+                // Upsert update assignments are visited in the surrounding
+                // Insert context. Their field references read the stored row;
+                // proposed-row values use Expr::Incoming instead. Inserted
+                // value rows use the separate InsertRow branch below.
                 let mapping = self.mapping_at_unwrap(nesting);
                 mapping.table_to_model.lower_expr_reference(nesting, index)
             }
@@ -1554,7 +1614,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     row.entry(index).unwrap().to_expr()
                 }
             }
-            _ => todo!("cx={:#?}", self.cx),
         }
     }
 

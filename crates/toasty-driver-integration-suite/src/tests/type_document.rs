@@ -106,6 +106,49 @@ pub async fn vec_struct_without_attr(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+/// Enum embeds are column-expanded values and are not accepted inside a
+/// `#[document]` struct. A discriminant storage hint therefore never implies
+/// an integer-width guarantee inside JSON.
+#[driver_test(id(ID), requires(document_collections))]
+pub async fn enum_inside_document_rejected(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    #[column(type = u8)]
+    enum Status {
+        #[column(variant = 1)]
+        Active,
+        #[column(variant = 2)]
+        Archived,
+    }
+
+    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
+    struct Metadata {
+        status: Status,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        #[document]
+        metadata: Metadata,
+    }
+
+    let result = t.try_setup_db(models!(Item)).await;
+    match result {
+        Err(err) => {
+            let msg = err.to_string();
+            assert!(
+                msg.contains("#[document]") && msg.contains("structs"),
+                "expected document storage to reject the nested enum, got: {msg}"
+            );
+        }
+        Ok(_) => panic!("expected document storage to reject a nested enum"),
+    }
+
+    Ok(())
+}
+
 /// An `Option` field inside a document element round-trips both `Some` and
 /// `None`. `None` is omitted from the JSON object entirely and decodes back
 /// from the missing key.

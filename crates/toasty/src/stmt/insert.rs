@@ -63,6 +63,7 @@ impl<M: Model> Insert<M> {
                     )
                     .into(),
                 ]),
+                upsert: None,
                 returning: Some(stmt::Returning::Model { include: vec![] }),
             },
             _p: PhantomData,
@@ -89,6 +90,7 @@ impl<M: Model> Insert<M> {
     ///         <User as Model>::id(),
     ///     ),
     ///     source: toasty_core::stmt::Query::unit(),
+    ///     upsert: None,
     ///     returning: None,
     /// };
     /// let _typed = Insert::<User>::from_untyped(raw);

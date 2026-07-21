@@ -247,27 +247,6 @@ fn pop_select(t: &mut Test) -> QuerySql {
     panic!("expected a SELECT QuerySql op in the log");
 }
 
-/// Look up the storage type of a column from the schema. Drives element-
-/// type assertions per driver, since the same model maps to different
-/// storage types (e.g. `String` → `Text` on PG/SQLite vs. `VarChar(191)`
-/// on MySQL).
-fn column_storage_ty(db: &toasty::Db, table_name: &str, column_name: &str) -> db::Type {
-    let schema = db.schema();
-    let table = schema
-        .db
-        .tables
-        .iter()
-        .find(|t| t.name == table_name || t.name.ends_with(table_name))
-        .unwrap_or_else(|| panic!("table '{table_name}' not in schema"));
-    table
-        .columns
-        .iter()
-        .find(|c| c.name == column_name)
-        .unwrap_or_else(|| panic!("column '{column_name}' not in table '{table_name}'"))
-        .storage_ty
-        .clone()
-}
-
 /// Assert that an `IN`-list query was bound according to the driver's
 /// capabilities. With both `bind_list_param` and `predicate_match_any` on
 /// (PostgreSQL), expects a single `Value::List` param typed

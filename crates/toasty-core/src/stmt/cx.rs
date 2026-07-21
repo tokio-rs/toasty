@@ -526,6 +526,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                         // (rather than rewritten to a JSON function) until the
                         // SQL edge.
                         Type::Model(id) => match self.schema.model(id) {
+                            Some(Model::Root(model)) => model.fields[*step].expr_ty().clone(),
                             Some(Model::EmbeddedStruct(embedded)) => {
                                 embedded.fields[*step].expr_ty().clone()
                             }
@@ -578,6 +579,21 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Func(ExprFunc::Count(_)) => Type::U64,
             Expr::Func(ExprFunc::LastInsertId(_)) => Type::I64,
             Expr::Func(ExprFunc::JsonExtract(func)) => func.ty.clone(),
+            Expr::Incoming(incoming) => match incoming {
+                super::ExprIncoming::Model(model) => Type::Model(*model),
+                super::ExprIncoming::Table(table) => {
+                    let table = self.schema.table(*table).unwrap_or_else(|| {
+                        panic!("incoming table {table:?} is not present in the schema")
+                    });
+                    Type::Record(
+                        table
+                            .columns
+                            .iter()
+                            .map(|column| column.ty.clone())
+                            .collect(),
+                    )
+                }
+            },
             _ => todo!("{expr:#?}"),
         }
     }

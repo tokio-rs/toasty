@@ -1,4 +1,4 @@
-use toasty_core::stmt::ResolvedRef;
+use toasty_core::{schema::db::ColumnId, stmt::ResolvedRef};
 
 use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
@@ -25,6 +25,22 @@ impl ToSql for &stmt::Expr {
                 f.depth -= 1;
             }
             stmt::Expr::Func(func) => func.to_sql(f),
+            stmt::Expr::Project(project)
+                if let stmt::Expr::Incoming(incoming) = project.base.as_ref() =>
+            {
+                let stmt::ExprIncoming::Table(table) = incoming else {
+                    panic!("incoming projection was not lowered")
+                };
+                let [column] = project.projection.as_slice() else {
+                    panic!("lowered incoming projection must reference one column")
+                };
+                let column = ColumnId {
+                    table: *table,
+                    index: *column,
+                };
+                fmt!(f, "excluded." f.serializer.column_name(column));
+            }
+            stmt::Expr::Incoming(_) => panic!("incoming row must be projected"),
             stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
                 // The rhs Value::List is bound as one JSON string. MySQL's
@@ -172,7 +188,14 @@ impl ToSql for &stmt::Expr {
                     let column =
                         f.cx.resolve_expr_reference(expr_reference)
                             .as_column_unwrap();
-                    fmt!(f, Ident(&column.name))
+                    if matches!(f.serializer.flavor, Flavor::Postgresql)
+                        && expr_column.nesting == 0
+                        && f.assignment_table == Some(column.id.table)
+                    {
+                        fmt!(f, f.serializer.table_name(column.id.table) "." Ident(&column.name))
+                    } else {
+                        fmt!(f, Ident(&column.name))
+                    }
                 }
             }
             stmt::Expr::Stmt(expr) => {
@@ -184,6 +207,10 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, "(" items ")");
             }
             stmt::Expr::Value(expr) => expr.to_sql(f),
+            // Schema-fixed leaf rendered inline as a SQL literal.  Reuses
+            // the same `Value::to_sql` path the inline DDL serializer uses,
+            // which escapes `String` defensively.
+            stmt::Expr::Static(expr) => expr.to_sql(f),
             stmt::Expr::Arg(arg) => {
                 // Pre-extracted bind parameter placeholder — render as a
                 // positional parameter. The arg position is 0-based; the

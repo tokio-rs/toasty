@@ -71,6 +71,29 @@ pub fn columns(
         .collect()
 }
 
+/// Helper function to look up the storage type of a column from the schema
+/// (handles database-specific table prefixes)
+pub fn column_storage_ty(
+    db: &toasty::Db,
+    table_name: &str,
+    column_name: &str,
+) -> toasty_core::schema::db::Type {
+    let schema = db.schema();
+    let table = schema
+        .db
+        .tables
+        .iter()
+        .find(|t| t.name == table_name || t.name.ends_with(table_name))
+        .unwrap_or_else(|| panic!("table '{table_name}' not in schema"));
+    table
+        .columns
+        .iter()
+        .find(|c| c.name == column_name)
+        .unwrap_or_else(|| panic!("column '{column_name}' not in table '{table_name}'"))
+        .storage_ty
+        .clone()
+}
+
 use std::collections::BTreeMap;
 
 use toasty_core::{

@@ -82,7 +82,7 @@ fn collect_named_enums(schema: &db::Schema) -> HashMap<&str, &db::TypeEnum> {
     let mut result = HashMap::new();
     for table in &schema.tables {
         for column in &table.columns {
-            if let db::Type::Enum(type_enum) = &column.storage_ty
+            if let Some(type_enum) = column.storage_ty.named_enum()
                 && let Some(name) = &type_enum.name
             {
                 result.entry(name.as_str()).or_insert(type_enum);

@@ -5,6 +5,9 @@ the create builder. The macro uses a syntax inspired by struct literals and expa
 calls under the hood. Most code uses the macro; the builder is there when you
 need programmatic control (e.g., conditional fields).
 
+Use an [upsert](./upserting-records.md) when the same operation must create a
+missing record or update the record selected by a key or unique constraint.
+
 ## Creating a single record
 
 With the macro:
@@ -215,6 +218,11 @@ let todo = user.todos().create()
 
 You don't need to set `user_id` — Toasty fills it in from the parent
 because the create builder is scoped to `user.todos()`.
+
+For a [many-to-many relationship](./many-to-many.md), create the join-model
+record instead of creating through the derived `has_many(via = ...)` accessor.
+The join record sets both endpoint relations and can store fields that describe
+the connection.
 
 ## Nested creation
 

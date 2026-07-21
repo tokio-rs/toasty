@@ -445,7 +445,7 @@ fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
     query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
-        limit: stmt::Expr::from(1i64),
+        limit: stmt::Expr::Static(stmt::Value::I64(1)),
         offset: None,
     }));
 }

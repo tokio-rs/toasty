@@ -18,6 +18,7 @@ mod select_item;
 pub(crate) use select_item::{SelectItem, SelectItems};
 mod simplify;
 mod ty;
+mod upsert;
 mod verify;
 
 use crate::Result;
@@ -73,9 +74,10 @@ impl Engine {
     pub(crate) async fn exec(
         &self,
         connection: &mut dyn Connection,
-        stmt: Statement,
+        mut stmt: Statement,
         in_transaction: bool,
     ) -> Result<toasty_core::driver::ExecResponse> {
+        upsert::apply_defaults(&mut stmt)?;
         self.verify(&stmt)?;
 
         // Lower the statement to High-level intermediate representation
@@ -102,9 +104,10 @@ impl Engine {
         raw: RawSql,
     ) -> Result<toasty_core::driver::ExecResponse> {
         if !self.capability.sql {
-            return Err(toasty_core::Error::unsupported_feature(
-                "raw SQL is only supported by SQL drivers",
-            ));
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support raw SQL",
+                self.capability.driver_name
+            )));
         }
 
         connection.exec(&self.schema, raw.into()).await

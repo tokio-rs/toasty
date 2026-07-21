@@ -30,6 +30,7 @@ fn extract_scalar_from_simple_insert() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("abc"), Value::from("hello")]),
         ))])),
+        upsert: None,
         returning: None,
     });
 
@@ -72,6 +73,7 @@ fn null_values_not_extracted() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("abc"), Value::Null]),
         ))])),
+        upsert: None,
         returning: None,
     });
 
@@ -104,6 +106,7 @@ fn two_row_item_insert(schema: &toasty_core::Schema) -> stmt::Statement {
                 Value::from("n2"),
             ]))),
         ])),
+        upsert: None,
         returning: None,
     })
 }
@@ -190,6 +193,7 @@ fn multi_row_insert_with_null_cell_binds_one_array_per_column() {
                 Value::Null,
             ]))),
         ])),
+        upsert: None,
         returning: None,
     });
 
@@ -236,6 +240,7 @@ fn multi_row_insert_all_null_column_typed_from_schema() {
                 Value::Null,
             ]))),
         ])),
+        upsert: None,
         returning: None,
     });
 
@@ -337,6 +342,7 @@ fn enum_insert_refines_type_to_enum() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("task-1"), Value::from("active")]),
         ))])),
+        upsert: None,
         returning: None,
     });
 
@@ -372,6 +378,7 @@ fn non_enum_insert_keeps_default_types() {
         source: stmt::Query::values(stmt::Values::new(vec![Expr::from(Value::Record(
             stmt::ValueRecord::from_vec(vec![Value::from("item-1"), Value::from(42i64)]),
         ))])),
+        upsert: None,
         returning: None,
     });
 
@@ -679,4 +686,65 @@ fn binary_like_glob_wildcards_are_literal() {
     // `*` and `?` are GLOB metacharacters but not LIKE metacharacters.
     assert_eq!(binary_like_prefix_pattern("foo*"), "foo*%");
     assert_eq!(binary_like_prefix_pattern("a?b"), "a?b%");
+}
+
+// ============================================================================
+// Expr::Static survives binding
+// ============================================================================
+
+#[test]
+fn static_value_in_insert_row_is_not_extracted() {
+    // Mixed row: one user-supplied `Expr::Value` (extracted) and one
+    // synthetic `Expr::Static` (passes through). Confirms the bind pass
+    // keys on the variant, not the value content.
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: String,
+    }
+
+    let schema = test_schema_with(&[Item::schema()]);
+
+    let mut stmt = stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(&schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![Expr::Record(stmt::ExprRecord {
+            fields: vec![
+                Expr::Static(Value::from("static-key")),
+                Expr::Value(Value::from("user-name")),
+            ],
+        })])),
+        upsert: None,
+        returning: None,
+    });
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
+
+    // Only the `Expr::Value` is extracted; the `Expr::Static` passes through.
+    assert_eq!(params.len(), 1);
+    assert_eq!(params[0].value, Value::from("user-name"));
+
+    let stmt::Statement::Insert(insert) = &stmt else {
+        unreachable!()
+    };
+    let stmt::ExprSet::Values(values) = &insert.source.body else {
+        unreachable!()
+    };
+    let Expr::Record(record) = &values.rows[0] else {
+        unreachable!()
+    };
+    assert!(
+        matches!(&record.fields[0], Expr::Static(Value::String(s)) if s == "static-key"),
+        "Static leaf should survive binding, got {:#?}",
+        record.fields[0]
+    );
+    assert!(
+        matches!(&record.fields[1], Expr::Arg(_)),
+        "Value leaf should be extracted to Arg, got {:#?}",
+        record.fields[1]
+    );
 }

@@ -12,7 +12,7 @@ env:
   RUST_BACKTRACE: 1
   # Pinned so a new Rust release cannot break CI on its own. Bumped
   # automatically by Renovate; see .github/renovate.json5.
-  RUST_STABLE_VERSION: "1.95.0"
+  RUST_STABLE_VERSION: "1.97.1"
   # The MySQL service container eats into the 16 GB runner budget, and
   # the integration test crate currently expands a lot of generated
   # code per inline test model. With 4 parallel rustc instances the

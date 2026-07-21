@@ -106,7 +106,8 @@ impl Expand<'_> {
 
     pub(super) fn doc_has_many_via(&self, field_ident: &syn::Ident) -> String {
         format!(
-            "Returns a query over the `{field_ident}` reached from this `{}` through its relations.",
+            "Returns a read-only query over the `{field_ident}` reached from this `{}` through its relations.\n\n\
+             For a join-model many-to-many relation, create, update, or delete the join record to change the connection.",
             self.model.ident
         )
     }
