@@ -221,6 +221,10 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, "(" items ")");
             }
             stmt::Expr::Value(expr) => expr.to_sql(f),
+            // Schema-fixed leaf rendered inline as a SQL literal.  Reuses
+            // the same `Value::to_sql` path the inline DDL serializer uses,
+            // which escapes `String` defensively.
+            stmt::Expr::Static(expr) => expr.to_sql(f),
             stmt::Expr::Arg(arg) => {
                 // Pre-extracted bind parameter placeholder — render as a
                 // positional parameter. The arg position is 0-based; the

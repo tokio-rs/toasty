@@ -534,8 +534,8 @@ fn compose_assignment(acc: stmt::Assignment, next: stmt::Assignment) -> stmt::As
 }
 
 /// Concatenate two list-shaped expressions if both are literals (either
-/// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
-/// on failure so the caller can preserve the un-folded shape.
+/// `Expr::List` or `Expr::Value(Value::List)`). Returns a residual `Batch`
+/// containing the original pair if either expression is not a literal.
 fn try_concat_list_literals_to_assignment(a: stmt::Expr, b: stmt::Expr) -> stmt::Assignment {
     use stmt::Assignment::{Append, Batch};
     if !is_list_literal(&a) || !is_list_literal(&b) {

@@ -2074,10 +2074,10 @@ fn conditional_probe_projection(condition: stmt::Expr) -> stmt::Expr {
 /// `QueryPk` on NoSQL drivers. Returns `None` when the statement has no limit
 /// clause.
 ///
-/// Assumes `page_size`, `limit`, and `offset` fields are `Value::I64` literals.
-/// Builders normalize to `I64`, and `verify::verify_limit_is_integer_literal`
-/// enforces this invariant on the AST — so any other shape reaching here is a
-/// bug upstream.
+/// Assumes `page_size`, `limit`, and `offset` fields are `I64` literals. Runtime
+/// values use `Expr::Value`; the fixed limit emitted by `.first()` uses
+/// `Expr::Static`. `verify::verify_limit_is_integer_literal` enforces this
+/// invariant on the AST, so any other shape reaching here is a bug upstream.
 fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
     let query = stmt.as_query()?;
     match query.limit.as_ref()? {
@@ -2097,11 +2097,11 @@ fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
     }
 }
 
-/// Extracts an `i64` from a `Value::I64` literal expression. Panics on any
-/// other shape — an invariant violation that `verify` should have caught.
+/// Extracts an `i64` from a bound or static `I64` literal expression. Panics on
+/// any other shape — an invariant violation that `verify` should have caught.
 fn as_i64_literal(expr: &stmt::Expr) -> i64 {
     match expr {
-        stmt::Expr::Value(stmt::Value::I64(n)) => *n,
+        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
         _ => panic!("limit/offset must be an i64 literal; got {expr:#?}"),
     }
 }

@@ -318,25 +318,24 @@ impl Verify<'_, '_> {
         }
     }
 
-    /// Assert that every field inside a `LIMIT` clause is a `Value::I64` literal.
+    /// Assert that every field inside a `LIMIT` clause is an `I64` literal.
     ///
-    /// Builders always normalize integer limits to `I64`, and downstream
-    /// consumers (e.g. `extract_query_pk_limit`) rely on this invariant. Any
-    /// other variant here means either a builder regressed or the AST was
-    /// hand-constructed with a non-canonical shape — both bugs we want to catch
-    /// loudly instead of silently degrading to an unbounded scan.
+    /// Runtime pagination fields use `Expr::Value`; the fixed limit from
+    /// `.first()` uses `Expr::Static`. Downstream consumers rely on this
+    /// invariant. Any other form means either a builder regressed or the AST was
+    /// hand-constructed with a non-canonical shape.
     fn verify_limit_is_integer_literal(&self, i: &stmt::Query) {
         let Some(limit) = i.limit.as_ref() else {
             return;
         };
         match limit {
             stmt::Limit::Cursor(c) => {
-                assert_i64_literal(&c.page_size, "Cursor page_size");
+                assert_i64_value(&c.page_size, "Cursor page_size");
             }
             stmt::Limit::Offset(o) => {
                 assert_i64_literal(&o.limit, "Offset limit");
                 if let Some(off) = o.offset.as_ref() {
-                    assert_i64_literal(off, "Offset offset");
+                    assert_i64_value(off, "Offset offset");
                 }
             }
         }
@@ -345,6 +344,17 @@ impl Verify<'_, '_> {
 
 #[track_caller]
 fn assert_i64_literal(expr: &stmt::Expr, what: &str) {
+    assert!(
+        matches!(
+            expr,
+            stmt::Expr::Value(stmt::Value::I64(_)) | stmt::Expr::Static(stmt::Value::I64(_))
+        ),
+        "{what} must be an I64 literal; got {expr:#?}"
+    );
+}
+
+#[track_caller]
+fn assert_i64_value(expr: &stmt::Expr, what: &str) {
     assert!(
         matches!(expr, stmt::Expr::Value(stmt::Value::I64(_))),
         "{what} must be a Value::I64 literal; got {expr:#?}"

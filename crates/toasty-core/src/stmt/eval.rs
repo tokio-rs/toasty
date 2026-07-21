@@ -413,7 +413,7 @@ impl Expr {
                     _ => todo!("ExprExists with non-Values body"),
                 }
             }
-            Expr::Value(value) => Ok(value.clone()),
+            Expr::Value(value) | Expr::Static(value) => Ok(value.clone()),
             // A document path read: navigate the named wire form
             // (`Value::Object`) by key, then cast the leaf to the extraction's
             // declared type. This is how a driver-side in-memory check (e.g.
