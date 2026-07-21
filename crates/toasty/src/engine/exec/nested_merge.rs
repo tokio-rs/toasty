@@ -327,13 +327,13 @@ impl Exec<'_> {
                     }
                 }
                 MergeQualification::HashLookup { index, lookup_key } => {
-                    let key_val = lookup_key.eval(row_stack)?;
+                    let key_val = lookup_key.eval(&self.engine.schema, row_stack)?;
                     if let Some(row) = indices.hash[*index].find(key_as_slice(&key_val)) {
                         process(row)?;
                     }
                 }
                 MergeQualification::SortLookup { index, lookup_key } => {
-                    let key_val = lookup_key.eval(row_stack)?;
+                    let key_val = lookup_key.eval(&self.engine.schema, row_stack)?;
                     let key = key_as_slice(&key_val);
                     for row in indices.sort[*index].find_range(
                         std::ops::Bound::Included(key),
@@ -349,7 +349,7 @@ impl Exec<'_> {
                             row,
                             position: row_stack.position + 1,
                         };
-                        if func.eval_bool(&stack)? {
+                        if func.eval_bool(&self.engine.schema, &stack)? {
                             process(row)?;
                         }
                     }
@@ -375,7 +375,7 @@ impl Exec<'_> {
             nested: &nested[..],
         };
 
-        level.projection.eval(&eval_input)
+        level.projection.eval(&self.engine.schema, &eval_input)
     }
 }
 

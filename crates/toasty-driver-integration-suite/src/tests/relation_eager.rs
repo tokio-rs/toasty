@@ -459,8 +459,9 @@ pub async fn eager_relation_long_cycle_is_rejected(t: &mut Test) -> Result<()> {
 
 async fn insert_row<M: Model>(db: &mut toasty::Db, fields: Vec<stmt::Expr>) -> Result<()> {
     let insert = stmt::Insert {
-        target: stmt::InsertTarget::Model(<M as toasty::schema::Register>::id()),
+        target: stmt::InsertTarget::Model(<M as toasty::schema::Model>::id()),
         source: stmt::Query::new_single(vec![stmt::Expr::record(fields)]),
+        upsert: None,
         returning: None,
     };
 

@@ -5,6 +5,9 @@ the create builder. The macro uses a syntax inspired by struct literals and expa
 calls under the hood. Most code uses the macro; the builder is there when you
 need programmatic control (e.g., conditional fields).
 
+Use an [upsert](./upserting-records.md) when the same operation must create a
+missing record or update the record selected by a key or unique constraint.
+
 ## Creating a single record
 
 With the macro:
@@ -216,6 +219,11 @@ let todo = user.todos().create()
 You don't need to set `user_id` — Toasty fills it in from the parent
 because the create builder is scoped to `user.todos()`.
 
+For a [many-to-many relationship](./many-to-many.md), create the join-model
+record instead of creating through the derived `has_many(via = ...)` accessor.
+The join record sets both endpoint relations and can store fields that describe
+the connection.
+
 ## Nested creation
 
 When models have relationships, you can create a parent and its children in a
@@ -346,6 +354,9 @@ let (user, todo) = toasty::create!((
 .await?;
 ```
 
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+
 ### Dynamic batches with `toasty::batch()`
 
 When the number of records is determined at runtime, collect create builders
@@ -418,3 +429,8 @@ The create builder's setter methods accept flexible input types through the
 `&String`. For numeric fields, you can pass the value directly or by reference.
 See [Defining Models — What types can you pass to setters?](./defining-models.md#what-types-can-you-pass-to-setters)
 for details.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

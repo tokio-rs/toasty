@@ -6,7 +6,6 @@ mod expr_exists;
 mod expr_intersects;
 mod expr_is_null;
 mod expr_is_superset;
-mod expr_let;
 mod expr_list;
 mod expr_map;
 mod expr_or;
@@ -72,7 +71,6 @@ impl VisitMut for Simplify<'_> {
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
             Expr::Intersects(expr) => self.simplify_expr_intersects(expr),
             Expr::IsSuperset(expr) => self.simplify_expr_is_superset(expr),
-            Expr::Let(expr) => self.simplify_expr_let(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),
             Expr::Map(_) => self.simplify_expr_map(i),
             Expr::Or(expr) => self.simplify_expr_or(expr),
@@ -158,6 +156,14 @@ impl VisitMut for Simplify<'_> {
 
         // First, simplify the source
         s.visit_stmt_query_mut(&mut stmt.source);
+
+        if let Some(upsert) = &mut stmt.upsert {
+            s.visit_assignments_mut(&mut upsert.shared);
+            s.visit_assignments_mut(&mut upsert.defaults);
+            s.visit_assignments_mut(&mut upsert.update_defaults);
+            s.visit_assignments_mut(&mut upsert.create);
+            s.visit_assignments_mut(&mut upsert.update);
+        }
 
         if let Some(returning) = &mut stmt.returning {
             s.visit_returning_mut(returning);

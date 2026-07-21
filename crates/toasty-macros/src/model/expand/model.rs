@@ -3,7 +3,6 @@ use crate::model::schema::{FieldTy, ModelKind};
 
 use proc_macro2::TokenStream;
 use quote::quote;
-use std::collections::HashSet;
 
 impl Expand<'_> {
     pub(super) fn expand_model_impls(&self) -> TokenStream {
@@ -42,11 +41,16 @@ impl Expand<'_> {
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
-        let create_meta_fields = self.expand_create_meta_fields();
-        let check_required_fn = self.expand_check_required_fn();
         let version_update_stmts = self.expand_version_update_stmts();
         let primary_key_ty = self.expand_primary_key_ty();
         let find_by_primary_key_body = self.expand_find_by_primary_key_body();
+
+        let doc_create = self.doc_create();
+        let doc_create_many = self.doc_create_many();
+        let doc_update = self.doc_update();
+        let doc_all = self.doc_all();
+        let doc_filter = self.doc_filter();
+        let doc_delete = self.doc_delete();
 
         quote! {
             impl #model_ident {
@@ -54,17 +58,17 @@ impl Expand<'_> {
                 #filter_methods
                 #relation_methods
 
-                #[doc(hidden)]
-                #check_required_fn
-
+                #[doc = #doc_create]
                 #vis fn create() -> #create_struct_ident {
                     #create_struct_ident::default()
                 }
 
+                #[doc = #doc_create_many]
                 #vis fn create_many() -> #toasty::stmt::CreateMany<#model_ident> {
                     #toasty::stmt::CreateMany::default()
                 }
 
+                #[doc = #doc_update]
                 #vis fn update(&mut self) -> #update_struct_ident<&mut Self> {
                     let mut s = #update_struct_ident {
                         assignments: #toasty::core::stmt::Assignments::default(),
@@ -76,40 +80,26 @@ impl Expand<'_> {
                     s
                 }
 
+                #[doc = #doc_all]
                 #vis fn all() -> #query_struct_ident {
                     #query_struct_ident::default()
                 }
 
+                #[doc = #doc_filter]
                 #vis fn filter(expr: #toasty::stmt::Expr<bool>) -> #query_struct_ident {
-                    #query_struct_ident::from_stmt(#toasty::stmt::Query::filter(expr))
+                    #query_struct_ident::from_stmt(#toasty::stmt::Query::all().filter(expr))
                 }
 
+                #[doc = #doc_delete]
                 #vis fn delete(self) -> #toasty::stmt::Delete<()> {
                     #into_delete_body
-                }
-            }
-
-            impl #toasty::Register for #model_ident {
-                fn id() -> #toasty::core::schema::app::ModelId {
-                    static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
-                    *ID.get_or_init(|| #toasty::generate_unique_id())
-                }
-
-                #model_schema
-
-                fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
-                    if model_set.contains(Self::id()) {
-                        return;
-                    }
-                    model_set.add(Self::schema());
-                    #( #field_register_calls )*
                 }
             }
 
             #toasty::inventory::submit! {
                 #toasty::DiscoverItem::new(
                     env!("CARGO_PKG_NAME"),
-                    |model_set| { <#model_ident as #toasty::Register>::register(model_set); },
+                    |model_set| { <#model_ident as #toasty::Model>::register(model_set); },
                 )
             }
 
@@ -117,7 +107,7 @@ impl Expand<'_> {
                 type Output = Self;
 
                 fn ty() -> #toasty::core::stmt::Type {
-                    #toasty::core::stmt::Type::Model(<Self as #toasty::Register>::id())
+                    #toasty::core::stmt::Type::Model(<Self as #toasty::Model>::id())
                 }
 
                 fn load(value: #toasty::core::stmt::Value) -> #toasty::Result<Self> {
@@ -128,25 +118,29 @@ impl Expand<'_> {
             }
 
             impl #toasty::Model for #model_ident {
-                type Query = #query_struct_ident;
+                type Query<__T> = #query_struct_ident<__T>;
                 type Create = #create_struct_ident;
                 type Update<'a> = #update_struct_ident<&'a mut Self>;
                 type UpdateQuery = #update_struct_ident;
                 type Path<__Origin> = #field_struct_ident<__Origin>;
                 type PrimaryKey = #primary_key_ty;
-                type Many = Many<#toasty::Direct>;
-                type ViaMany = Many<#toasty::Via>;
                 type ManyField<__Origin> = #field_list_struct_ident<__Origin>;
-                type One = One<#toasty::Direct>;
-                type ViaOne = One<#toasty::Via>;
                 type OneField<__Origin> = #field_struct_ident<__Origin>;
-                type OptionOne = OptionOne<#toasty::Direct>;
-                type ViaOptionOne = OptionOne<#toasty::Via>;
 
-                const CREATE_META: #toasty::CreateMeta = #toasty::CreateMeta {
-                    fields: &[ #create_meta_fields ],
-                    model_name: stringify!(#model_ident),
-                };
+                fn id() -> #toasty::core::schema::app::ModelId {
+                    static ID: std::sync::OnceLock<#toasty::core::schema::app::ModelId> = std::sync::OnceLock::new();
+                    *ID.get_or_init(|| #toasty::generate_unique_id())
+                }
+
+                #model_schema
+
+                fn register(model_set: &mut #toasty::core::schema::app::ModelSet) {
+                    if model_set.contains(<Self as #toasty::Model>::id()) {
+                        return;
+                    }
+                    model_set.add(<Self as #toasty::Model>::schema());
+                    #( #field_register_calls )*
+                }
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
                     #field_struct_ident::from_path(path)
@@ -158,11 +152,60 @@ impl Expand<'_> {
                     #field_list_struct_ident::from_path(path)
                 }
 
-                fn find_by_primary_key(id: #toasty::stmt::Expr<Self::PrimaryKey>) -> Self::Query {
+                fn find_by_primary_key(
+                    id: #toasty::stmt::Expr<Self::PrimaryKey>,
+                ) -> Self::Query<#toasty::List<Self>> {
                     #find_by_primary_key_body
                 }
 
+                fn wrap_query<__T>(
+                    stmt: #toasty::stmt::Query<__T>,
+                ) -> Self::Query<__T> {
+                    #query_struct_ident::from_stmt(stmt)
+                }
+
+                fn query_one(
+                    query: Self::Query<#toasty::List<Self>>,
+                ) -> Self::Query<Self> {
+                    query.one()
+                }
+
+                fn query_first(
+                    query: Self::Query<#toasty::List<Self>>,
+                ) -> Self::Query<#toasty::Option<Self>> {
+                    query.first()
+                }
+
                 #field_name_to_id
+            }
+
+            // A relation-terminal `#[has_many(via = …)]` reaching this model
+            // keeps its rich per-model query builder. Scalar terminals route
+            // through the per-primitive `ViaTarget` impls instead.
+            impl #toasty::ViaTarget for #model_ident {
+                type Query = #query_struct_ident<#toasty::List<#model_ident>>;
+                type Path<__Origin> = <#model_ident as #toasty::Model>::ManyField<__Origin>;
+
+                fn new_path<__Origin>(
+                    path: #toasty::Path<__Origin, #toasty::List<#model_ident>>,
+                ) -> Self::Path<__Origin> {
+                    // A model terminal keeps navigating, so hand back its
+                    // chainable `ManyField`.
+                    <#model_ident as #toasty::Model>::new_many_field(path)
+                }
+
+                fn via_field_ty(
+                    singular: #toasty::core::schema::Name,
+                    path: #toasty::core::stmt::Path,
+                ) -> #toasty::core::schema::app::FieldTy {
+                    #toasty::via::model_via_field_ty::<#model_ident>(singular, path)
+                }
+
+                fn make_via_query(
+                    assoc: #toasty::stmt::Association<#toasty::List<#model_ident>>,
+                ) -> Self::Query {
+                    <#query_struct_ident<#toasty::List<#model_ident>>>::from_assoc_many(assoc)
+                }
             }
 
             impl #toasty::stmt::IntoExpr<#model_ident> for #model_ident {
@@ -558,7 +601,13 @@ impl Expand<'_> {
                     }
                     FieldTy::HasMany(rel) => {
                         let ty = &rel.ty;
-                        quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
+                        if rel.via.is_some() {
+                            // A via field has no `RelationManyField` impl (its
+                            // element may be a scalar); reload through `Load`.
+                            quote!(#i => <#ty as #toasty::Load>::reload(&mut #field_access, value)?,)
+                        } else {
+                            quote!(#i => <#ty as #toasty::RelationManyField>::reload(&mut #field_access, value)?,)
+                        }
                     }
                     FieldTy::HasOne(rel) => {
                         let ty = &rel.ty;
@@ -592,93 +641,6 @@ impl Expand<'_> {
                     *target = <Self as #toasty::Load>::load(value)?;
                     Ok(())
                 }
-            }
-        }
-    }
-
-    /// Collect the fields that participate in `CREATE_META`.
-    ///
-    /// Returns `(field_ident_name_str, field_rust_type)` pairs for primitive
-    /// fields that are not auto, default, update, or FK source.
-    fn create_meta_field_entries(&self) -> Vec<(String, &syn::Type)> {
-        let fk_sources: HashSet<usize> = self
-            .model
-            .fields
-            .iter()
-            .filter_map(|f| match &f.ty {
-                FieldTy::BelongsTo(rel) => Some(rel.foreign_key.iter().map(|fk| fk.source)),
-                _ => None,
-            })
-            .flatten()
-            .collect();
-
-        self.model
-            .fields
-            .iter()
-            .filter_map(|field| {
-                let ty = match &field.ty {
-                    FieldTy::Primitive(ty) => ty,
-                    _ => return None,
-                };
-
-                if field.attrs.auto.is_some()
-                    || field.attrs.default_expr.is_some()
-                    || field.attrs.update_expr.is_some()
-                    || field.attrs.versionable
-                {
-                    return None;
-                }
-
-                if fk_sources.contains(&field.id) {
-                    return None;
-                }
-
-                Some((field.name.ident.to_string(), ty))
-            })
-            .collect()
-    }
-
-    /// Generate the `CreateField` entries for `CREATE_META`.
-    fn expand_create_meta_fields(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let entries = self.create_meta_field_entries();
-
-        let fields = entries.iter().map(|(name, ty)| {
-            quote! {
-                #toasty::CreateField {
-                    name: #name,
-                    required: !<#ty as #toasty::Field>::NULLABLE,
-                },
-            }
-        });
-
-        quote! { #( #fields )* }
-    }
-
-    /// Generate a `pub const fn __check_create_fields(provided: &[&str])` that
-    /// panics with a field-specific literal message for each missing required field.
-    ///
-    /// Each `panic!` uses a pre-formatted string literal so it works in const
-    /// context (where formatted panics are unavailable on stable Rust).
-    fn expand_check_required_fn(&self) -> TokenStream {
-        let toasty = &self.toasty;
-        let model_name = self.model.ident.to_string();
-        let entries = self.create_meta_field_entries();
-
-        let checks = entries.iter().map(|(name, ty)| {
-            let msg = format!("missing required field `{name}` in create! for `{model_name}`");
-            quote! {
-                if !<#ty as #toasty::Field>::NULLABLE
-                    && !#toasty::const_contains(__provided, #name)
-                {
-                    panic!(#msg);
-                }
-            }
-        });
-
-        quote! {
-            pub const fn __check_create_fields(__provided: &[&str]) {
-                #( #checks )*
             }
         }
     }

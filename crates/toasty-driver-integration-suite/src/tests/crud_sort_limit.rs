@@ -4,7 +4,7 @@ use crate::prelude::*;
 use toasty::stmt::Page;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{ExprSet, Statement},
+    stmt::{Expr, ExprSet, Limit, Statement, Value},
 };
 
 #[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
@@ -213,6 +213,7 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
     ])
     .exec(&mut db)
     .await?;
+    t.log().clear();
 
     // Regression for https://github.com/tokio-rs/toasty/issues/692:
     // `.first()` on a query with multiple matching rows must return the first
@@ -223,6 +224,17 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
     assert_struct!(youngest, Some(_ { name: "Bob", .. }));
+
+    let (op, _) = t.log().pop();
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            limit: Some(Limit::Offset({
+                limit: Expr::Static(== Value::I64(1)),
+                offset: None,
+            })),
+        }),
+        params: [{ value: == true }],
+    }));
 
     let oldest = User::all()
         .order_by(User::fields().age().desc())
@@ -259,6 +271,32 @@ pub async fn order_by_multiple_columns_composes(t: &mut Test) -> Result<()> {
     let names: Vec<&str> = users.iter().map(|u| u.name.as_str()).collect();
     assert_eq!(names, ["Dave", "Carol", "Bob", "Alice"]);
 
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn set_order_by_overwrites(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob",   age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // `set_order_by` replaces the existing sort rather than appending to it.
+    // Overwriting an ascending sort with a descending one must produce a
+    // descending result, not an asc-then-desc tie-break.
+    use toasty::stmt::{List, Query};
+    let mut q = Query::<List<User>>::all().order_by(User::fields().age().asc());
+    q.set_order_by(User::fields().age().desc());
+
+    let users = q.exec(&mut db).await?;
+
+    let ages: Vec<i64> = users.iter().map(|u| u.age).collect();
+    assert_eq!(ages, [40, 30, 20]);
     Ok(())
 }
 

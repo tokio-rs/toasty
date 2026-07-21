@@ -1,4 +1,4 @@
-use toasty_core::stmt::ResolvedRef;
+use toasty_core::{schema::db::ColumnId, stmt::ResolvedRef};
 
 use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
@@ -8,7 +8,10 @@ impl ToSql for &stmt::Expr {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
             stmt::Expr::And(expr) => {
-                fmt!(f, Delimited(&expr.operands, " AND "));
+                fmt!(f, Delimited(expr.operands.iter().map(AndOperand), " AND "));
+            }
+            stmt::Expr::Between(expr) => {
+                fmt!(f, expr.expr " BETWEEN " expr.low " AND " expr.high);
             }
             stmt::Expr::BinaryOp(expr) => {
                 assert!(!expr.lhs.is_value_null());
@@ -33,6 +36,25 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::Func(stmt::ExprFunc::LastInsertId(_)) => {
                 fmt!(f, "LAST_INSERT_ID()")
             }
+            stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
+                serialize_json_extract(f, func);
+            }
+            stmt::Expr::Project(project)
+                if let stmt::Expr::Incoming(incoming) = project.base.as_ref() =>
+            {
+                let stmt::ExprIncoming::Table(table) = incoming else {
+                    panic!("incoming projection was not lowered")
+                };
+                let [column] = project.projection.as_slice() else {
+                    panic!("lowered incoming projection must reference one column")
+                };
+                let column = ColumnId {
+                    table: *table,
+                    index: *column,
+                };
+                fmt!(f, "excluded." f.serializer.column_name(column));
+            }
+            stmt::Expr::Incoming(_) => panic!("incoming row must be projected"),
             stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
                 Flavor::Postgresql => fmt!(f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
                 // The rhs Value::List is bound as one JSON string. MySQL's
@@ -116,7 +138,12 @@ impl ToSql for &stmt::Expr {
                     };
                 fmt!(f, expr.expr op expr.pattern);
                 if let Some(escape) = expr.escape {
-                    let escape = &stmt::Value::String(escape.to_string());
+                    let escape = if f.serializer.is_mysql() && escape == '\\' {
+                        stmt::Value::String("\\\\".to_string())
+                    } else {
+                        stmt::Value::String(escape.to_string())
+                    };
+                    let escape = &escape;
                     fmt!(f, " ESCAPE " escape);
                 }
             }
@@ -175,7 +202,14 @@ impl ToSql for &stmt::Expr {
                     let column =
                         f.cx.resolve_expr_reference(expr_reference)
                             .as_column_unwrap();
-                    fmt!(f, Ident(&column.name))
+                    if matches!(f.serializer.flavor, Flavor::Postgresql)
+                        && expr_column.nesting == 0
+                        && f.assignment_table == Some(column.id.table)
+                    {
+                        fmt!(f, f.serializer.table_name(column.id.table) "." Ident(&column.name))
+                    } else {
+                        fmt!(f, Ident(&column.name))
+                    }
                 }
             }
             stmt::Expr::Stmt(expr) => {
@@ -187,6 +221,10 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, "(" items ")");
             }
             stmt::Expr::Value(expr) => expr.to_sql(f),
+            // Schema-fixed leaf rendered inline as a SQL literal.  Reuses
+            // the same `Value::to_sql` path the inline DDL serializer uses,
+            // which escapes `String` defensively.
+            stmt::Expr::Static(expr) => expr.to_sql(f),
             stmt::Expr::Arg(arg) => {
                 // Pre-extracted bind parameter placeholder — render as a
                 // positional parameter. The arg position is 0-based; the
@@ -203,6 +241,175 @@ impl ToSql for &stmt::Expr {
             _ => todo!("expr={:#?}", self),
         }
     }
+}
+
+/// A single operand of an `AND` chain.
+///
+/// `OR` binds looser than `AND` in SQL, so an `Or` operand must be
+/// parenthesized: `a AND (b OR c)` would otherwise serialize as
+/// `a AND b OR c`, which parses as `(a AND b) OR c` and silently changes the
+/// query's meaning. Operands of other kinds bind at least as tightly as `AND`
+/// (comparisons, `IS NULL`, `NOT (..)`, nested `AND`), so they need no parens.
+struct AndOperand<'a>(&'a stmt::Expr);
+
+impl ToSql for AndOperand<'_> {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        if matches!(self.0, stmt::Expr::Or(_)) {
+            fmt!(f, "(" self.0 ")");
+        } else {
+            fmt!(f, self.0);
+        }
+    }
+}
+
+/// Serializes a document path extraction per dialect: `json_extract(col,
+/// '$.a.b')` on SQLite, `CAST(JSON_UNQUOTE(JSON_EXTRACT(col, '$.a.b')) AS ...)`
+/// on MySQL, and `(col->'a'->>'b')::cast` on PostgreSQL — the latter two unwrap
+/// the leaf to text and cast it to match the bound parameter's type.
+fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
+    match f.serializer.flavor {
+        Flavor::Sqlite => {
+            // SQLite's `json_extract` returns SQL-native scalars (unquoted text,
+            // integers, reals), so a path read compares directly against a bound
+            // parameter with no cast. The path is a single-quoted JSONPath like
+            // `$.a.b`.
+            fmt!(
+                f,
+                "json_extract(" func.base.as_ref() ", '$"
+                Delimited(func.path.iter().map(|key| (".", key.as_str())), "")
+                "')"
+            );
+        }
+        Flavor::Mysql => serialize_mysql_json_extract(f, func),
+        Flavor::Postgresql => {
+            // Descend with `->`, take the leaf as text with `->>`, then cast the
+            // text to the leaf type so it compares against a bound parameter.
+            let (leaf, parents) = func
+                .path
+                .split_last()
+                .expect("json extract path has at least one key");
+            fmt!(
+                f,
+                "(" func.base.as_ref()
+                Delimited(parents.iter().map(|key| ("->'", key.as_str(), "'")), "")
+                "->>'" leaf.as_str() "')"
+                pg_json_cast(&func.ty).map(|cast| ("::", cast))
+            );
+        }
+    }
+}
+
+/// Serializes a MySQL document path read. `JSON_EXTRACT` yields a *JSON-typed*
+/// value, which compares against a bound SQL parameter only by luck — a JSON
+/// string (e.g. an ISO timestamp) never equals a native `DATETIME`, and JSON
+/// string comparison is `utf8mb4_bin` (case-sensitive), unlike a `VARCHAR`
+/// column. So unwrap the leaf to text with `JSON_UNQUOTE` and `CAST` it to the
+/// leaf's SQL type (`CHAR` for strings, to recover a `VARCHAR`-matching
+/// collation — see [`mysql_json_cast`]), mirroring the `->>`-plus-cast
+/// PostgreSQL path. Booleans are the exception: the unquoted text
+/// `'true'`/`'false'` casts to `0`, so cast the *bare* JSON boolean to
+/// `UNSIGNED` instead (`true` -> 1, `false` -> 0), matching a bound bool param.
+fn serialize_mysql_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
+    if matches!(func.ty, stmt::Type::Bool) {
+        fmt!(f, "CAST(");
+        mysql_json_extract(f, func);
+        fmt!(f, " AS UNSIGNED)");
+    } else if let Some(cast) = mysql_json_cast(&func.ty) {
+        fmt!(f, "CAST(JSON_UNQUOTE(");
+        mysql_json_extract(f, func);
+        fmt!(f, ") AS " cast ")");
+    } else {
+        fmt!(f, "JSON_UNQUOTE(");
+        mysql_json_extract(f, func);
+        fmt!(f, ")");
+    }
+}
+
+/// Emits the bare `JSON_EXTRACT(col, '$.a.b')` every MySQL path read is built
+/// on, with the path as a single-quoted JSONPath argument.
+fn mysql_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
+    fmt!(
+        f,
+        "JSON_EXTRACT(" func.base.as_ref() ", '$"
+        Delimited(func.path.iter().map(|key| (".", key.as_str())), "")
+        "')"
+    );
+}
+
+/// The MySQL `CAST(... AS <type>)` target wrapped around a
+/// `JSON_UNQUOTE(JSON_EXTRACT(...))` text extraction so it compares against a
+/// bound parameter of the leaf type. Mirrors [`pg_json_cast`]; `None` leaves the
+/// extraction as bare unquoted text (only floats, which compare via numeric
+/// coercion). `Bool` is absent because it is cast separately — see
+/// [`serialize_mysql_json_extract`].
+///
+/// `String`/`Uuid` cast to `CHAR` not for the type but for the *collation*:
+/// `JSON_UNQUOTE` yields `utf8mb4_bin` (case-sensitive), while `CAST(... AS
+/// CHAR)` adopts the connection's default collation — the same one a bound
+/// literal and a `VARCHAR` column use — so a string filter on a document leaf
+/// matches the case sensitivity of a plain column. `AS CHAR` (no length) does
+/// not truncate, and inheriting the server default keeps it portable across
+/// server collation configs rather than hardcoding a collation name.
+///
+/// The temporal targets carry `(6)` precision: a bare `CAST(... AS DATETIME)`
+/// truncates to whole seconds, which would drop the microseconds the JSON codec
+/// writes and break an equality filter on a sub-second value.
+fn mysql_json_cast(ty: &stmt::Type) -> Option<&'static str> {
+    use crate::stmt::Type;
+    Some(match ty {
+        Type::String | Type::Uuid => "CHAR",
+        Type::I8 | Type::I16 | Type::I32 | Type::I64 => "SIGNED",
+        Type::U8 | Type::U16 | Type::U32 | Type::U64 => "UNSIGNED",
+        #[cfg(feature = "rust_decimal")]
+        Type::Decimal => "DECIMAL(65, 30)",
+        #[cfg(feature = "bigdecimal")]
+        Type::BigDecimal => "DECIMAL(65, 30)",
+        #[cfg(feature = "jiff")]
+        Type::Timestamp => "DATETIME(6)",
+        #[cfg(feature = "jiff")]
+        Type::Date => "DATE",
+        #[cfg(feature = "jiff")]
+        Type::Time => "TIME(6)",
+        #[cfg(feature = "jiff")]
+        Type::DateTime => "DATETIME(6)",
+        _ => return None,
+    })
+}
+
+/// The PostgreSQL cast applied to a `->>'` text extraction so it compares
+/// against a bound parameter of the leaf type. `String` (and any non-scalar
+/// leaf) needs no cast — `->>` already yields text.
+///
+/// Every scalar a `#[document]` leaf can hold must appear here: an unlisted
+/// scalar falls through to `None` and renders as an *uncast* text extraction,
+/// which PostgreSQL then refuses to compare against a typed parameter
+/// (`operator does not exist: text = ...`). The temporal casts pair with the
+/// microsecond-truncated text the JSON codec writes (see `toasty_sql::json`),
+/// so the extracted value parses cleanly into the SQL temporal type. `Zoned` is
+/// intentionally absent: it is rejected at schema-build because jiff renders it
+/// with an RFC 9557 `[IANA]` annotation that no PostgreSQL cast can parse.
+fn pg_json_cast(ty: &stmt::Type) -> Option<&'static str> {
+    use crate::stmt::Type;
+    Some(match ty {
+        Type::Bool => "boolean",
+        Type::I8 | Type::I16 | Type::I32 | Type::I64 => "bigint",
+        Type::U8 | Type::U16 | Type::U32 | Type::U64 => "bigint",
+        Type::F32 | Type::F64 => "double precision",
+        Type::Uuid => "uuid",
+        #[cfg(feature = "rust_decimal")]
+        Type::Decimal => "numeric",
+        #[cfg(feature = "bigdecimal")]
+        Type::BigDecimal => "numeric",
+        #[cfg(feature = "jiff")]
+        Type::Timestamp => "timestamptz",
+        #[cfg(feature = "jiff")]
+        Type::Date => "date",
+        #[cfg(feature = "jiff")]
+        Type::Time => "time",
+        #[cfg(feature = "jiff")]
+        Type::DateTime => "timestamp",
+        _ => return None,
+    })
 }
 
 impl ToSql for &stmt::BinaryOp {

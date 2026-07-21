@@ -178,7 +178,7 @@ fn ident_quoting_postgresql_double_quote() {
     let stmt = select_id_from_users();
     let sql = Serializer::postgresql(&schema).serialize(&SqlStatement::from(stmt));
 
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&sql);
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0;"#]].assert_eq(&sql);
 }
 
 #[test]
@@ -187,7 +187,7 @@ fn ident_quoting_sqlite_double_quote() {
     let stmt = select_id_from_users();
     let sql = Serializer::sqlite(&schema).serialize(&SqlStatement::from(stmt));
 
-    expect![[r#"SELECT tbl_0_0."id" FROM "users" AS tbl_0_0;"#]].assert_eq(&sql);
+    expect![[r#"SELECT tbl_0_0."id" AS column1 FROM "users" AS tbl_0_0;"#]].assert_eq(&sql);
 }
 
 #[test]
@@ -196,7 +196,7 @@ fn ident_quoting_mysql_backtick() {
     let stmt = select_id_from_users();
     let sql = Serializer::mysql(&schema).serialize(&SqlStatement::from(stmt));
 
-    expect!["SELECT tbl_0_0.`id` FROM `users` AS tbl_0_0;"].assert_eq(&sql);
+    expect!["SELECT tbl_0_0.`id` AS column_0 FROM `users` AS tbl_0_0;"].assert_eq(&sql);
 }
 
 // -----------------------------------------------------------------------------
@@ -281,13 +281,13 @@ fn column_alias_format_per_flavor() {
     let sql_stmt = SqlStatement::from(stmt);
 
     let pg = Serializer::postgresql(&schema).serialize(&sql_stmt);
-    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&pg);
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 AS column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&pg);
 
     let sqlite = Serializer::sqlite(&schema).serialize(&sql_stmt);
-    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&sqlite);
+    expect![[r#"WITH cte_0_0 as (SELECT tbl_1_0."id" AS column1 FROM "users" AS tbl_1_0) SELECT tbl_0_0.column1 AS column1 FROM cte_0_0 AS tbl_0_0;"#]].assert_eq(&sqlite);
 
     let mysql = Serializer::mysql(&schema).serialize(&sql_stmt);
-    expect!["WITH cte_0_0 as (SELECT tbl_1_0.`id` FROM `users` AS tbl_1_0) SELECT tbl_0_0.column_0 FROM cte_0_0 AS tbl_0_0;"].assert_eq(&mysql);
+    expect!["WITH cte_0_0 as (SELECT tbl_1_0.`id` AS column_0 FROM `users` AS tbl_1_0) SELECT tbl_0_0.column_0 AS column_0 FROM cte_0_0 AS tbl_0_0;"].assert_eq(&mysql);
 }
 
 // -----------------------------------------------------------------------------

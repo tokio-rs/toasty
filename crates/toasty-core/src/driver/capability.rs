@@ -23,6 +23,9 @@ use crate::{schema::db, stmt};
 /// ```
 #[derive(Debug)]
 pub struct Capability {
+    /// Human-readable driver name used in diagnostics.
+    pub driver_name: &'static str,
+
     /// When `true`, the database uses a SQL-based query language and the
     /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
@@ -52,6 +55,33 @@ pub struct Capability {
     /// SQL: Mysql doesn't support returning clauses from insert / update queries
     pub returning_from_mutation: bool,
 
+    /// Whether an upsert may target the table's primary key.
+    ///
+    /// When `false`, the verifier returns `unsupported_feature` before
+    /// dispatching a primary-key upsert to the driver.
+    pub upsert_primary_key: bool,
+
+    /// Whether an upsert may target a secondary unique constraint.
+    ///
+    /// The driver must match the exact lowered target columns rather than
+    /// reacting to an arbitrary unique conflict.
+    pub upsert_unique: bool,
+
+    /// Whether an upsert can apply arbitrary separate `on_create` and
+    /// `on_update` assignments.
+    ///
+    /// A driver with this capability must select the branch atomically within
+    /// the database operation; it cannot read first and choose a second write.
+    /// Drivers without this capability may still accept branch patterns that
+    /// map to native conditional assignments.
+    pub upsert_branch_assignments: bool,
+
+    /// Whether an insert-or-ignore upsert suppresses only the selected target's
+    /// conflict.
+    ///
+    /// Other uniqueness conflicts and validation errors must remain errors.
+    pub upsert_targeted_ignore: bool,
+
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
 
@@ -66,6 +96,19 @@ pub struct Capability {
     /// `AUTOINCREMENT`; Toasty's SQLite serializer emits that spelling for
     /// `Integer(4)`.
     pub max_auto_increment_integer_width: Option<u8>,
+
+    /// Maximum byte length for a database identifier (table name, index name,
+    /// column name, etc.).
+    ///
+    /// When `Some(n)`, auto-generated index names that exceed `n` bytes are
+    /// truncated and a short stable hash suffix is appended so names remain
+    /// unique and deterministic across builds. User-supplied `#[index(name =
+    /// "...")]` names are left untouched.
+    ///
+    /// - MySQL: `Some(64)` — hard error on longer names
+    /// - PostgreSQL: `Some(63)` — silently truncates, risking collisions
+    /// - SQLite / DynamoDB: `None` — no enforced limit
+    pub max_identifier_length: Option<usize>,
 
     /// Whether the database supports `VARCHAR(n)` column types natively.
     ///
@@ -219,6 +262,16 @@ pub struct Capability {
     /// all.
     pub backward_pagination: bool,
 
+    /// Whether the backend supports `BOOL` as a key attribute type.
+    ///
+    /// DynamoDB only allows `S`, `N`, or `B` for primary-key and GSI key
+    /// attribute types; `BOOL` is rejected at the API level. SQL backends
+    /// have no such restriction. When `false`, the schema builder overrides
+    /// `storage_ty` for any `Bool` key/index field to `db::Type::Integer(1)`,
+    /// letting the engine cast `Bool ↔ I8` and the driver handle it as a
+    /// plain number — no driver-level bool-to-number special-casing needed.
+    pub bool_key_type: bool,
+
     /// The driver's bind layer accepts a single parameter whose value is
     /// `Value::List(items)` and type is `Type::List(elem)`, sending it as
     /// one protocol-level parameter (not N separate scalars).
@@ -247,6 +300,12 @@ pub struct Capability {
     /// list attribute, ...). Used by the schema builder as the gate for
     /// accepting `stmt::Type::List(_)` fields.
     pub vec_scalar: bool,
+
+    /// Whether the driver can store a `#[document]` collection field — a
+    /// `Vec<T>` of an embedded struct — as a single document column
+    /// (`jsonb` / `JSON` on the SQL backends). Used by the schema builder as
+    /// the gate for accepting `stmt::Type::List(Document(_))` fields.
+    pub document_collections: bool,
 
     /// Whether the driver natively renders `IsSuperset` / `Intersects` array
     /// predicates over an arbitrary right-hand-side expression.
@@ -507,6 +566,7 @@ impl Capability {
 
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
+        driver_name: "SQLite",
         sql: true,
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
@@ -514,10 +574,16 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: true,
+        upsert_primary_key: true,
+        upsert_unique: true,
+        upsert_branch_assignments: true,
+        upsert_targeted_ignore: true,
         primary_key_ne_predicate: true,
         auto_increment: true,
         max_auto_increment_integer_width: Some(4),
         bigdecimal_implemented: false,
+        bool_key_type: true,
+        max_identifier_length: None,
 
         native_varchar: true,
 
@@ -575,6 +641,7 @@ impl Capability {
         // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
         vec_scalar: true,
+        document_collections: true,
 
         // SQLite renders `IsSuperset` / `Intersects` as `json_each`
         // subqueries that accept any rhs expression.
@@ -590,6 +657,7 @@ impl Capability {
 
     /// PostgreSQL capabilities
     pub const POSTGRESQL: Self = Self {
+        driver_name: "PostgreSQL",
         cte_with_update: true,
         sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
@@ -598,6 +666,7 @@ impl Capability {
         auto_increment: true,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
+        max_identifier_length: Some(63),
 
         // PostgreSQL has the `^@` prefix-match operator.
         native_starts_with: true,
@@ -635,6 +704,7 @@ impl Capability {
         // representation for `Vec<scalar>` model fields.
         native_array: true,
         vec_scalar: true,
+        document_collections: true,
 
         // PostgreSQL: all three collection removals are atomic via native
         // array operators / slicing.
@@ -647,15 +717,21 @@ impl Capability {
 
     /// MySQL capabilities
     pub const MYSQL: Self = Self {
+        driver_name: "MySQL",
         cte_with_update: false,
         sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
+        upsert_primary_key: false,
+        upsert_unique: false,
+        upsert_branch_assignments: false,
+        upsert_targeted_ignore: false,
         auto_increment: true,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: true,
+        max_identifier_length: Some(64),
 
         // MySQL has inline ENUM('a', 'b') column types
         native_enum: true,
@@ -684,6 +760,7 @@ impl Capability {
         // not regress the IN-list rendering).
         bind_list_param: true,
         vec_scalar: true,
+        document_collections: true,
 
         // MySQL uses BINARY col LIKE ? ESCAPE '!' for case-sensitive starts_with.
         glob_starts_with: false,
@@ -708,12 +785,14 @@ impl Capability {
     ///   unchanged, so callers can still request the classic locking
     ///   strategies per transaction.
     pub const TURSO: Self = Self {
+        driver_name: "Turso",
         test_connection_pool: true,
         ..Self::SQLITE
     };
 
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
+        driver_name: "DynamoDB",
         sql: false,
         sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
@@ -721,10 +800,18 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: false,
+        upsert_primary_key: true,
+        upsert_unique: false,
+        upsert_branch_assignments: false,
+        upsert_targeted_ignore: true,
         primary_key_ne_predicate: false,
         auto_increment: false,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: false,
+        max_identifier_length: None,
+        // DynamoDB key attributes (primary key and GSI keys) only support
+        // S, N, or B — BOOL is not a valid key attribute type.
+        bool_key_type: false,
         native_varchar: false,
         native_enum: false,
         named_enum_types: false,
@@ -769,6 +856,11 @@ impl Capability {
         // `AttributeValue` encoding.
         native_array: false,
         vec_scalar: true,
+        // `#[document]` embeds store as a native Map `M` attribute (a
+        // `Vec<embed>` collection as a List `L` of Maps). DynamoDB caps
+        // attribute nesting at 32 levels; documents deeper than that are not
+        // rejected up front — the write surfaces DynamoDB's own error.
+        document_collections: true,
 
         // DynamoDB emulates `IsSuperset` / `Intersects` by expanding the rhs
         // into one `contains(path, vN)` clause per element. The expansion

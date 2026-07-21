@@ -3,6 +3,10 @@ pub(crate) struct KeyAttr {
     pub(crate) partition: Vec<syn::Ident>,
     pub(crate) local: Vec<syn::Ident>,
     pub(crate) name: Option<String>,
+
+    /// When `true`, the index enforces uniqueness. Set for `#[unique(...)]`
+    /// attributes; always `false` for `#[key(...)]` and `#[index(...)]`.
+    pub(crate) unique: bool,
 }
 
 impl KeyAttr {
@@ -114,8 +118,12 @@ impl KeyAttr {
         })?;
 
         if !simple_fields.is_empty() {
-            // Simple mode: all fields become partition keys
-            partition = simple_fields;
+            // Simple mode (e.g. `#[key(a, b, c)]`): first field is the partition
+            // (hash) key, rest are local (sort) keys. Matches `#[index(a, b, c)]`
+            // so the simple form is equivalent to `#[key(partition = a, local = [b, c])]`.
+            let mut iter = simple_fields.into_iter();
+            partition = iter.next().into_iter().collect();
+            local = iter.collect();
         } else {
             // Named mode: require both partition and local
             if partition.is_empty() {
@@ -137,6 +145,7 @@ impl KeyAttr {
             partition,
             local,
             name,
+            unique: false,
         })
     }
 }

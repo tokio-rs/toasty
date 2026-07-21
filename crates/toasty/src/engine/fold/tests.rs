@@ -5,6 +5,7 @@ mod expr_in_list;
 mod expr_intersects;
 mod expr_is_null;
 mod expr_is_superset;
+mod expr_let;
 mod expr_list;
 mod expr_match;
 mod expr_not;

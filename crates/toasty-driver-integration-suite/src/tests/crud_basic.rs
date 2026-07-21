@@ -144,7 +144,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
             keys.len(): 1,
             assignments: #{ [1]: Assignment::Set(== "updated!")},
             filter: None,
-            returning: false,
+            returning: None,
         }));
     }
     assert_struct!(resp, { values: Rows::Count(1) });

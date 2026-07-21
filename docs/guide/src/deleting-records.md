@@ -120,3 +120,7 @@ For a model with `#[key]` on `id` and `#[unique]` on `email`, Toasty generates:
   given email. Executes immediately.
 - Any query builder's `.delete()` method — converts the query into a delete
   statement.
+
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

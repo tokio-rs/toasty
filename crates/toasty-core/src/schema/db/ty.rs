@@ -114,11 +114,61 @@ pub enum Type {
     /// parameters that the engine sends as a single PG array operand.
     List(Box<Type>),
 
+    /// A document column storing a structured value as a single unit:
+    /// `jsonb` / `json` on PostgreSQL, `JSON` on MySQL, JSON1 text on SQLite,
+    /// BSON on MongoDB, a Map attribute on DynamoDB. `binary` selects the
+    /// binary encoding (`jsonb`) over the text encoding (`json`) where the
+    /// backend distinguishes them.
+    Document {
+        /// Selects the binary document encoding (`jsonb`) over the text
+        /// encoding (`json`) where the backend distinguishes them.
+        binary: bool,
+    },
+
     /// User-specified unrecognized type
     Custom(String),
 }
 
 impl Type {
+    /// Construct a list storage type, collapsing a list of documents into a
+    /// single document.
+    ///
+    /// A `#[document]` collection (`Vec<embed>`) is stored as one JSON blob,
+    /// never a native array, so `db::Type` must never nest a [`Type::Document`]
+    /// inside a [`Type::List`]. Routing list construction through here makes
+    /// that invariant hold by construction: the list *is* the document.
+    pub fn list(elem: Type) -> Type {
+        match elem {
+            Type::Document { binary } => Type::Document { binary },
+            elem => Type::List(Box::new(elem)),
+        }
+    }
+
+    /// The named enum this storage type carries: a scalar [`Type::Enum`] or the
+    /// element of an enum array (`List(Enum)`).
+    pub fn named_enum(&self) -> Option<&TypeEnum> {
+        match self {
+            Type::Enum(type_enum) => Some(type_enum),
+            Type::List(elem) => match elem.as_ref() {
+                Type::Enum(type_enum) => Some(type_enum),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
+    /// Mutable counterpart to [`named_enum`](Self::named_enum).
+    pub fn named_enum_mut(&mut self) -> Option<&mut TypeEnum> {
+        match self {
+            Type::Enum(type_enum) => Some(type_enum),
+            Type::List(elem) => match elem.as_mut() {
+                Type::Enum(type_enum) => Some(type_enum),
+                _ => None,
+            },
+            _ => None,
+        }
+    }
+
     /// Maps an application-level type to a database-level storage type.
     pub fn from_app(
         ty: &stmt::Type,
@@ -160,7 +210,13 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
-                stmt::Type::List(elem) => Ok(Type::List(Box::new(Self::from_app(elem, None, db)?))),
+                // An embedded model column is stored as a single document
+                // (`jsonb` on PG, `JSON` elsewhere) — never a native array.
+                // `Type::list` collapses a list-of-documents back to one
+                // document, so a `#[document]` collection (`List(Model)`) lands
+                // here as a plain `Document`.
+                stmt::Type::Model(_) => Ok(Type::Document { binary: true }),
+                stmt::Type::List(elem) => Ok(Type::list(Self::from_app(elem, None, db)?)),
                 _ => Err(crate::Error::unsupported_feature(format!(
                     "type {:?} is not supported by this database",
                     ty
@@ -193,13 +249,47 @@ impl Type {
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
+            // Collections use the same application-to-storage conversion as
+            // their elements. For example, an integer-discriminant enum is
+            // `I64` in the application schema, while `#[column(type = u8)]`
+            // stores `Vec<Enum>` as `List(U8)`.
+            (Self::List(storage), stmt::Type::List(app)) => {
+                stmt::Type::List(Box::new(storage.bridge_type(app)))
+            }
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             // Enum values are always strings at the application level
             (Self::Enum(_), _) => stmt::Type::String,
+            // Integer-discriminant enums use I64 at the application level.
+            // An explicit storage width bridges through the corresponding
+            // statement type so lowering inserts checked casts in both
+            // directions.
+            (Self::Integer(1), stmt::Type::I64) => stmt::Type::I8,
+            (Self::Integer(2), stmt::Type::I64) => stmt::Type::I16,
+            (Self::Integer(3..=4), stmt::Type::I64) => stmt::Type::I32,
+            (Self::UnsignedInteger(1), stmt::Type::I64) => stmt::Type::U8,
+            (Self::UnsignedInteger(2), stmt::Type::I64) => stmt::Type::U16,
+            (Self::UnsignedInteger(3..=4), stmt::Type::I64) => stmt::Type::U32,
+            (Self::UnsignedInteger(5..=8), stmt::Type::I64) => stmt::Type::U64,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
+            // Bool key/index fields stored as 1-byte integer (e.g. DynamoDB N("1"/"0")).
+            // The engine casts Bool <-> I8 transparently via encode_column /
+            // map_table_column_to_model; the driver handles them as plain numbers.
+            (Self::Integer(1), stmt::Type::Bool) => stmt::Type::I8,
+            // A `#[document]` column stores a structural document: the column
+            // is typed by `Type::Object` (mirroring `Value::Object`), not by
+            // the embedded model. The model identity stays an app/engine
+            // concept, carried by `mapping::Mapping::document_columns`. A
+            // document collection (`List(Model)`, whose storage collapses to
+            // one document) keeps its list shape with `Object` elements.
+            (Self::Document { .. }, stmt::Type::Model(_)) => stmt::Type::Object,
+            (Self::Document { .. }, stmt::Type::List(elem))
+                if matches!(**elem, stmt::Type::Model(_)) =>
+            {
+                stmt::Type::List(Box::new(stmt::Type::Object))
+            }
             _ => ty.clone(),
         }
     }

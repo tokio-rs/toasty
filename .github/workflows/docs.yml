@@ -26,7 +26,7 @@ concurrency:
 env:
   # Pinned so a new Rust release cannot break docs builds on its own.
   # Bumped automatically by Renovate; see .github/renovate.json5.
-  RUST_STABLE_VERSION: "1.95.0"
+  RUST_STABLE_VERSION: "1.97.1"
 
 jobs:
   build:
@@ -54,7 +54,7 @@ jobs:
             echo "ref=$GITHUB_REF" >> "$GITHUB_OUTPUT"
           fi
 
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
         with:
           ref: ${{ steps.target.outputs.ref }}
 

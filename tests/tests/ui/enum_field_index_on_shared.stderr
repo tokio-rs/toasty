@@ -1,0 +1,11 @@
+error: #[unique] on a field declaring #[shared(name)] would constrain rows of every variant sharing the column; declare the index on the enum instead: #[unique(name)]
+  --> tests/ui/enum_field_index_on_shared.rs:11:9
+   |
+11 |         name: String,
+   |         ^^^^
+
+error: #[index] on a field declaring #[shared(name)] would constrain rows of every variant sharing the column; declare the index on the enum instead: #[index(name)]
+  --> tests/ui/enum_field_index_on_shared.rs:17:9
+   |
+17 |         name: String,
+   |         ^^^^

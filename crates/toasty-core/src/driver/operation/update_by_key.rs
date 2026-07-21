@@ -1,6 +1,9 @@
 use super::Operation;
 
-use crate::{schema::db::TableId, stmt};
+use crate::{
+    schema::db::{ColumnId, TableId},
+    stmt,
+};
 
 /// Updates one or more records identified by primary key.
 ///
@@ -19,7 +22,7 @@ use crate::{schema::db::TableId, stmt};
 ///     assignments: assignments,
 ///     filter: None,
 ///     condition: None,
-///     returning: true,
+///     returning: None,
 /// };
 /// let operation: Operation = op.into();
 /// ```
@@ -43,9 +46,14 @@ pub struct UpdateByKey {
     /// than silently skipping the row.
     pub condition: Option<stmt::Expr>,
 
-    /// When `true`, the driver returns the full record for each updated row
-    /// in the [`ExecResponse`](super::super::ExecResponse).
-    pub returning: bool,
+    /// The columns to return for each updated row.
+    ///
+    /// `None` returns the affected-row count. `Some(columns)` returns one
+    /// record per updated row containing exactly these columns, in this order,
+    /// in the [`ExecResponse`](super::super::ExecResponse). The engine builds
+    /// this list explicitly, so the driver never has to infer which columns to
+    /// return from the assignments.
+    pub returning: Option<Vec<ColumnId>>,
 }
 
 impl From<UpdateByKey> for Operation {

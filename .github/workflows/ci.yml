@@ -12,7 +12,7 @@ env:
   RUST_BACKTRACE: 1
   # Pinned so a new Rust release cannot break CI on its own. Bumped
   # automatically by Renovate; see .github/renovate.json5.
-  RUST_STABLE_VERSION: "1.95.0"
+  RUST_STABLE_VERSION: "1.97.1"
   # The MySQL service container eats into the 16 GB runner budget, and
   # the integration test crate currently expands a lot of generated
   # code per inline test model. With 4 parallel rustc instances the
@@ -33,7 +33,7 @@ jobs:
     name: cargo check
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -50,7 +50,7 @@ jobs:
     name: cargo clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -82,16 +82,8 @@ jobs:
             extra_args: ""
           - package: toasty-driver-postgresql
             extra_args: ""
-          - package: example-composite-key
-            extra_args: ""
-          - package: example-hello-toasty
-            extra_args: ""
-          - package: example-todo-with-cli
-            extra_args: ""
-          - package: example-user-has-one-profile
-            extra_args: ""
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -108,7 +100,7 @@ jobs:
     name: Check MSRV
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - name: Read MSRV from Cargo.toml
         id: msrv
         run: |
@@ -132,7 +124,7 @@ jobs:
     name: Run tests for Sqlite
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -168,7 +160,7 @@ jobs:
       TOASTY_CONNECTION_URL: mysql://toasty:toasty@localhost:3306/toasty
       TOASTY_TEST_MYSQL_URL: mysql://toasty:toasty@localhost/toasty
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -179,8 +171,8 @@ jobs:
         run: cargo test --no-default-features --features mysql
       - name: cargo test -p toasty-driver-mysql
         run: cargo test -p toasty-driver-mysql
-      - name: cargo run --bin example-hello-toasty
-        run: cargo run --bin example-hello-toasty --features mysql
+      - name: cargo run example against MySQL
+        run: cargo run -p example-quickstart-blog --features mysql
 
   test-postgresql:
     needs: check
@@ -201,7 +193,7 @@ jobs:
       TOASTY_TEST_POSTGRES_URL: postgresql://toasty:toasty@localhost/toasty
       TOASTY_TEST_POSTGRES_TLS_URL: postgresql://toasty:toasty@localhost:5433/toasty
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -222,8 +214,8 @@ jobs:
         run: cargo test --no-default-features --features postgresql
       - name: cargo test -p toasty-driver-postgresql
         run: cargo test -p toasty-driver-postgresql
-      - name: cargo run --bin example-hello-toasty
-        run: cargo run --bin example-hello-toasty --features postgresql
+      - name: cargo run example against PostgreSQL
+        run: cargo run -p example-quickstart-blog --features postgresql
 
   test-postgresql-uds:
     needs: check
@@ -236,7 +228,7 @@ jobs:
     env:
       TOASTY_TEST_POSTGRES_UDS_URL: postgresql:///runner?host=/var/run/postgresql&user=runner
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -256,7 +248,7 @@ jobs:
     name: Run tests for DynamoDB
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -281,7 +273,7 @@ jobs:
           - ubuntu-latest
           - macos-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@v7
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: ${{ env.RUST_STABLE_VERSION }}
@@ -291,4 +283,17 @@ jobs:
       - name: cargo test
         run: cargo test --workspace
       - name: Run examples
-        run: scripts/gen-examples run
+        shell: bash
+        run: |
+          # Run every example that works on the default in-memory SQLite config,
+          # discovered from examples/ so new examples need no CI wiring. Backend-specific
+          # examples (default features other than sqlite) are skipped here; they run in
+          # their own backend jobs.
+          for dir in examples/*/; do
+            [ -f "${dir}Cargo.toml" ] || continue
+            grep -qE '^\s*default\s*=\s*\[[^]]*"sqlite"' "${dir}Cargo.toml" || continue
+            pkg="example-$(basename "$dir")"
+            echo "::group::cargo run -p $pkg"
+            cargo run -p "$pkg"
+            echo "::endgroup::"
+          done

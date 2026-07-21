@@ -1,11 +1,11 @@
-use super::{Deferred, Load, Model, Register, RelationManyField};
+use super::{Deferred, Load, Model, RelationManyField};
 
 use toasty_core::schema::Name;
 use toasty_core::schema::app::{self, FieldId, FieldTy, ModelId};
 use toasty_core::stmt;
 
 impl<M: Model> RelationManyField for Vec<M> {
-    type Model = M;
+    type Target = M;
 
     const DEFERRED: bool = false;
 
@@ -23,7 +23,7 @@ impl<M: Model> RelationManyField for Vec<M> {
 }
 
 impl<M: Model> RelationManyField for Deferred<Vec<M>> {
-    type Model = M;
+    type Target = M;
 
     const DEFERRED: bool = true;
 
@@ -46,12 +46,12 @@ fn many_relation_field_ty<M: Model>(
     pair: Option<FieldId>,
     via: Option<stmt::Path>,
 ) -> FieldTy {
-    let target = <M as Register>::id();
+    let target = <M as Model>::id();
     let expr_ty = stmt::Type::List(Box::new(stmt::Type::Model(target)));
     let cardinality = app::Cardinality::Many { singular };
 
     match via {
-        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path)),
+        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path, None)),
         None => FieldTy::Has(app::Has {
             target,
             expr_ty,

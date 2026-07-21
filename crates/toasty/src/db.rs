@@ -11,7 +11,7 @@ pub use connect::Connect;
 pub use connection::Connection;
 pub use executor::Executor;
 pub use pool::{Pool, PoolStatus};
-pub use toasty_core::driver::{Capability, Driver, SqlPlaceholder};
+pub use toasty_core::driver::{Capability, ConnectContext, Driver, SqlPlaceholder};
 pub use tx::{Transaction, TransactionBuilder};
 
 /// Response from executing a statement, including pagination metadata.

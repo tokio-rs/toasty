@@ -48,6 +48,8 @@ aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 
 # Utilities
+tracing.workspace = true
+tracing-subscriber.workspace = true
 trybuild.workspace = true
 url.workspace = true
 

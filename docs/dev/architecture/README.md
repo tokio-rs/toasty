@@ -24,12 +24,11 @@ This produces two rules for query methods:
   `Capability::native_ilike`) rather than emulated.
 
 Toasty implements an operation on every backend only when it can give the
-operation identical semantics on all of them. `.starts_with()` is meant to be
+operation identical semantics on all of them. `.starts_with()` is exactly
 that: a case-sensitive prefix match has one meaning that every backend can
-express (DynamoDB's `begins_with`, a prefix match on SQL), so it is offered
-everywhere. A uniform `.ilike()` would not qualify, because the backends
-disagree on how to fold case. (The SQL lowering of `.starts_with()` is not yet
-case-sensitive on SQLite and MySQL; see issue #936.)
+express (DynamoDB's `begins_with`, PostgreSQL's `^@`, SQLite's `GLOB`, MySQL's
+`BINARY ... LIKE`), so it is offered everywhere. A uniform `.ilike()` would not
+qualify, because the backends disagree on how to fold case.
 
 ## Crates
 

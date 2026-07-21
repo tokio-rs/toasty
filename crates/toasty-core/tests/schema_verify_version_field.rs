@@ -27,6 +27,7 @@ fn make_field(model_id: ModelId, index: usize, name: &str, versionable: bool) ->
         deferred: false,
         constraints: vec![],
         variant: None,
+        shared: None,
     }
 }
 
@@ -44,7 +45,7 @@ fn build_model(fields: Vec<Field>, version_field: Option<FieldId>) -> Model {
             fields: vec![id.field(0)],
             index: pk_index_id,
         },
-        table_name: None,
+        table_name: "things".to_string(),
         indices: vec![Index {
             id: pk_index_id,
             name: None,

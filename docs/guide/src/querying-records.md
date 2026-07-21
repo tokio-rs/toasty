@@ -30,6 +30,9 @@ The method name matches the key field name. A model with `#[key] code: String`
 generates `get_by_code()`. Composite keys generate combined names like
 `get_by_student_id_and_course_id()`.
 
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+
 ## Get all records
 
 `<YourModel>::all()` returns a query for all records of that model.
@@ -264,7 +267,8 @@ let name: Option<String> = User::filter_by_email("alice@example.com")
 `.select()` can also project a [multi-step (`via`)
 relation](./has-many.md#multi-step-relations-via), returning the related
 records per row — a `Vec<T>` for a `has_many` `via`, or a single optional
-record for a `has_one` `via`:
+record for a `has_one` `via`. A [many-to-many relation](./many-to-many.md) uses
+the same projection to return the opposite endpoints for each source record:
 
 ```rust,ignore
 // The distinct articles each user has commented on.
@@ -325,3 +329,8 @@ Query builders support these terminal methods:
 | `.exec(&mut db)` | `Result<Vec<User>>` |
 | `.first().exec(&mut db)` | `Result<Option<User>>` |
 | `.get(&mut db)` | `Result<User>` |
+
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog

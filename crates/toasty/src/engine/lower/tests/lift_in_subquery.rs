@@ -5,7 +5,7 @@
 
 use crate as toasty;
 use crate::engine::lower::lift_in_subquery::lift_in_subquery;
-use crate::schema::Register;
+use crate::schema::Model;
 use toasty_core::{
     driver::Capability,
     schema::{

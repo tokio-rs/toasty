@@ -4,7 +4,7 @@ use crate::{
 };
 use toasty_core::{
     driver::{ExecResponse, Rows, operation},
-    schema::db::TableId,
+    schema::db::{ColumnId, TableId},
     stmt::{self, ValueStream},
 };
 
@@ -28,9 +28,9 @@ pub(crate) struct UpdateByKey {
     /// Fail the update if the condition is not met
     pub condition: Option<stmt::Expr>,
 
-    /// When `true` return the record being updated *after* the update. When
-    /// `false`, just return the count of updated rows.
-    pub returning: bool,
+    /// The columns to return for each updated row *after* the update. When
+    /// `None`, just return the count of updated rows.
+    pub returning: Option<Vec<ColumnId>>,
 }
 
 impl Exec<'_> {
@@ -44,27 +44,27 @@ impl Exec<'_> {
             .await?
             .into_list_unwrap();
 
-        let res = if keys.is_empty() {
-            if action.returning {
-                Rows::value_stream(ValueStream::default())
-            } else {
-                Rows::Count(0)
+        // Shred a multi-key update into one single-key op per key so each key's
+        // filter is adjudicated independently — matching SQL's per-row
+        // semantics, and mirroring how delete fans out. These updates are not
+        // atomic.
+        let mut total_count = 0u64;
+        let mut rows = vec![];
+
+        for key in keys {
+            match self.exec_update_one(action, key).await? {
+                Rows::Count(n) => total_count += n,
+                other => rows.extend(other.into_value_stream().collect().await?),
             }
+        }
+
+        // The output shape is a property of the action, not the results: with
+        // zero keys there is nothing to match on, yet a `returning` update must
+        // still yield an (empty) stream rather than a count.
+        let res = if action.returning.is_some() {
+            Rows::value_stream(ValueStream::from_vec(rows))
         } else {
-            let op = operation::UpdateByKey {
-                table: action.table,
-                keys,
-                assignments: action.assignments.clone(),
-                filter: action.filter.clone(),
-                condition: action.condition.clone(),
-                returning: action.returning,
-            };
-
-            let res = self.connection.exec(&self.engine.schema, op.into()).await?;
-
-            debug_assert_eq!(!res.values.is_count(), action.returning);
-
-            res.values
+            Rows::Count(total_count)
         };
 
         self.vars.store(
@@ -74,6 +74,24 @@ impl Exec<'_> {
         );
 
         Ok(())
+    }
+
+    /// Execute a single-key `UpdateByKey` op for one resolved key.
+    async fn exec_update_one(&mut self, action: &UpdateByKey, key: stmt::Value) -> Result<Rows> {
+        let op = operation::UpdateByKey {
+            table: action.table,
+            keys: vec![key],
+            assignments: action.assignments.clone(),
+            filter: action.filter.clone(),
+            condition: action.condition.clone(),
+            returning: action.returning.clone(),
+        };
+
+        let res = self.connection.exec(&self.engine.schema, op.into()).await?;
+
+        debug_assert_eq!(!res.values.is_count(), action.returning.is_some());
+
+        Ok(res.values)
     }
 }
 

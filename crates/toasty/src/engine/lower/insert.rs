@@ -62,6 +62,7 @@ impl LowerStatement<'_, '_> {
         &mut self,
         source: &mut stmt::Query,
         returning: &mut Option<stmt::Returning>,
+        preserve_returning_projection: bool,
     ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
             todo!()
@@ -83,7 +84,9 @@ impl LowerStatement<'_, '_> {
         // If there are any has_n associations included in the insertion, the
         // statement returning has to be transformed to accomodate the nested
         // structure.
-        self.convert_returning_for_insert(values, returning, source.single);
+        if !preserve_returning_projection {
+            self.convert_returning_for_insert(values, returning, source.single);
+        }
 
         for (index, row) in values.rows.iter_mut().enumerate() {
             self.lower_insert_with_row(index, |lower| {
@@ -333,6 +336,51 @@ impl<'b> LowerStatement<'_, 'b> {
                 _ => panic!("#[auto] not allowed on non-primitive fields"),
             }
         }
+    }
+
+    /// The target projection and per-row delta for a versionable field's update
+    /// assignment, used to build an atomic `version = version + 1` via
+    /// [`Assignment::Add`](stmt::Assignment::Add).
+    ///
+    /// The projection walks past any embed-newtype layers (`Version(u64)`) to
+    /// the leaf primitive column — `[field, 0, …]` — and the delta is the bare
+    /// literal `1`. Arithmetic operators apply only to primitive columns, so
+    /// unlike the whole-record `Set` the instance path uses, the increment must
+    /// reach the leaf rather than sit on the embed field.
+    pub(super) fn version_increment_target(
+        &self,
+        field_id: app::FieldId,
+    ) -> (stmt::Projection, stmt::Expr) {
+        let target = self.auto_target(field_id);
+
+        // `[field_id.index]` then one `0` per embed layer, reaching the leaf.
+        let mut steps = vec![field_id.index];
+        steps.resize(1 + target.wrap_depth, 0);
+
+        (
+            stmt::Projection::from(steps.as_slice()),
+            stmt::Expr::Value(stmt::Value::U64(1)),
+        )
+    }
+
+    /// Adds an atomic version increment unless the statement already assigns
+    /// the version field.
+    pub(super) fn inject_version_increment(
+        &self,
+        assignments: &mut stmt::Assignments,
+    ) -> Option<stmt::Projection> {
+        let version_id = self.model().and_then(|m| m.version_field()).map(|f| f.id)?;
+
+        let already_assigned = assignments
+            .keys()
+            .any(|projection| projection.as_slice().first() == Some(&version_id.index));
+        if already_assigned {
+            return None;
+        }
+
+        let (projection, delta) = self.version_increment_target(version_id);
+        assignments.add(projection.clone(), delta);
+        Some(projection)
     }
 }
 

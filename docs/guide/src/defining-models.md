@@ -65,6 +65,9 @@ Enable feature flags in your `Cargo.toml`:
 toasty = { version = "{{toasty_version}}", features = ["sqlite", "jiff"] }
 ```
 
+> **Runnable example:** [`crm-embedded`] flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.
+
+
 ## Optional fields
 
 Wrap a field in `Option<T>` to make it nullable. An `Option<T>` field maps to a
@@ -134,6 +137,9 @@ struct User {
 ```
 
 This maps to a table named `people` instead of the default `users`.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
 
 ## What gets generated
 
@@ -245,8 +251,7 @@ user.delete();
   ```
 
 - The **query builder** returned by `User::all()` or `User::filter()` has
-  methods like `.exec()`, `.first()`, `.get()`, and `.collect::<Vec<_>>()` to
-  execute the query.
+  methods like `.exec()`, `.get()`, and `.first()` to execute the query.
 
 ### What types can you pass to setters?
 
@@ -286,3 +291,9 @@ pass the value in whatever form you have it.
 
 Additional methods are generated when you add attributes like `#[key]`,
 `#[unique]`, and `#[index]`. The next chapters cover these.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`crm-embedded`]: https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields

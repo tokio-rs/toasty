@@ -23,6 +23,49 @@ pub struct Association<T> {
     _p: PhantomData<T>,
 }
 
+impl<T> Association<T> {
+    /// Borrow the underlying untyped association.
+    pub fn untyped(&self) -> &stmt::Association {
+        &self.untyped
+    }
+
+    /// Construct a typed association from a raw untyped one. Used by
+    /// generated code that re-types an association after carrying it through
+    /// an untyped storage slot.
+    #[doc(hidden)]
+    pub fn from_untyped(untyped: stmt::Association) -> Self {
+        Self {
+            untyped,
+            _p: PhantomData,
+        }
+    }
+
+    /// Construct an association from `source` following `path`, without
+    /// requiring the returning type `T` to be a model.
+    ///
+    /// Used by generated `#[has_many(via = …)]` navigation methods, whose
+    /// terminal may be a scalar (`Path<S, List<String>>`). The [`many`](Self::many) /
+    /// [`one`](Self::one) constructors bound the element on [`Model`]; this one
+    /// only bounds the *source* model `S`, so it works for both relation- and
+    /// scalar-terminal vias.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the root of `path` does not match the model id of `S`.
+    #[doc(hidden)]
+    pub fn from_source_and_path<S: Model>(source: super::Query<List<S>>, path: Path<S, T>) -> Self {
+        assert_eq!(path.untyped.root.as_model_unwrap(), S::id());
+
+        Self {
+            untyped: stmt::Association {
+                source: Box::new(source.untyped),
+                path: path.untyped,
+            },
+            _p: PhantomData,
+        }
+    }
+}
+
 impl<M: Model> Association<List<M>> {
     /// Create a has-many association from `source` following `path`.
     ///
@@ -46,10 +89,11 @@ impl<M: Model> Association<List<M>> {
     /// #     user_id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Association, Path, List, Query};
+    /// use toasty::stmt::{Association, List, Query};
+    /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
-    /// let path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let source = Query::<List<User>>::all().filter(User::fields().id().eq(1));
+    /// let path = User::path_field::<List<Todo>>(2);
     /// let _assoc = Association::many(source, path);
     /// ```
     pub fn many<T: Model>(source: super::Query<List<T>>, path: Path<T, List<M>>) -> Self {
@@ -88,10 +132,11 @@ impl<M: Model> Association<List<M>> {
     /// #     user_id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Association, Path, List, Query};
+    /// use toasty::stmt::{Association, List, Query};
+    /// use toasty::schema::Model;
     ///
     /// let source = Query::<List<Todo>>::all();
-    /// let path = Path::<Todo, User>::from_field_index(1);
+    /// let path = Todo::path_field::<User>(1);
     /// let _assoc: Association<List<User>> = Association::many_via_one(source, path);
     /// ```
     pub fn many_via_one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {
@@ -127,10 +172,11 @@ impl<M: Model> Association<List<M>> {
     /// #     user_id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Association, Expr, Path, List, Query};
+    /// use toasty::stmt::{Association, Expr, List, Query};
+    /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
-    /// let path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let source = Query::<List<User>>::all().filter(User::fields().id().eq(1));
+    /// let path = User::path_field::<List<Todo>>(2);
     /// let assoc = Association::many(source, path);
     ///
     /// let todo_expr = Expr::<Todo>::from_untyped(
@@ -173,10 +219,11 @@ impl<M: Model> Association<List<M>> {
     /// #     user_id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Association, Expr, Path, List, Query};
+    /// use toasty::stmt::{Association, Expr, List, Query};
+    /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<User>>::filter(User::fields().id().eq(1));
-    /// let path = Path::<User, List<Todo>>::from_field_index(2);
+    /// let source = Query::<List<User>>::all().filter(User::fields().id().eq(1));
+    /// let path = User::path_field::<List<Todo>>(2);
     /// let assoc = Association::many(source, path);
     ///
     /// // Remove a todo by its expression
@@ -254,10 +301,11 @@ impl<M: Model> Association<M> {
     /// #     user_id: i64,
     /// #     title: String,
     /// # }
-    /// use toasty::stmt::{Association, List, Path, Query};
+    /// use toasty::stmt::{Association, List, Query};
+    /// use toasty::schema::Model;
     ///
-    /// let source = Query::<List<Todo>>::filter(Todo::fields().id().eq(1));
-    /// let path = Path::<Todo, User>::from_field_index(1);
+    /// let source = Query::<List<Todo>>::all().filter(Todo::fields().id().eq(1));
+    /// let path = Todo::path_field::<User>(1);
     /// let _assoc = Association::one(source, path);
     /// ```
     pub fn one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {

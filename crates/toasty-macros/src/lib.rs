@@ -29,9 +29,10 @@ use proc_macro::TokenStream;
 /// - A [`Model`] trait implementation, including the associated `Query`,
 ///   `Create`, and `Update` builder types.
 /// - A [`Load`] implementation for deserializing rows from the database.
-/// - A [`Register`] implementation for schema registration at runtime.
-/// - Static query methods such as `all()`, `filter(expr)`,
-///   `filter_by_<field>()`, and `get_by_<key>()`.
+/// - The [`Model`] trait's schema-registration methods (`id`, `schema`,
+///   `register`) used to register the model at runtime.
+/// - Static query and mutation methods such as `all()`, `filter(expr)`,
+///   `filter_by_<field>()`, `get_by_<key>()`, and `upsert_by_<field>()`.
 /// - Instance methods `update()` and `delete()`.
 /// - A `Fields` struct returned by `<Model>::fields()` for building typed
 ///   filter expressions.
@@ -40,7 +41,6 @@ use proc_macro::TokenStream;
 ///
 /// [`Model`]: toasty::schema::Model
 /// [`Load`]: toasty::schema::Load
-/// [`Register`]: toasty::schema::Register
 ///
 /// # Struct-level attributes
 ///
@@ -48,6 +48,8 @@ use proc_macro::TokenStream;
 ///
 /// Defines the primary key at the struct level. Mutually exclusive with
 /// field-level `#[key]`.
+///
+/// Toasty generates an `upsert_by_*` method that takes every primary-key field.
 ///
 /// **Simple form** — every listed field becomes a partition key:
 ///
@@ -117,6 +119,8 @@ use proc_macro::TokenStream;
 /// fields each becomes a partition key column (equivalent to listing them
 /// in `#[key(...)]` at the struct level).
 ///
+/// Toasty generates an `upsert_by_*` method that takes every primary-key field.
+///
 /// Cannot be combined with a struct-level `#[key(...)]` attribute.
 ///
 /// ```
@@ -153,7 +157,8 @@ use proc_macro::TokenStream;
 /// ## `#[default(expr)]` — default value on create
 ///
 /// Sets a default value that is used when the field is not explicitly
-/// provided during creation. The expression is any valid Rust expression.
+/// provided during creation or on an upsert's create branch. The expression is
+/// any valid Rust expression.
 ///
 /// ```
 /// # use toasty::Model;
@@ -179,8 +184,9 @@ use proc_macro::TokenStream;
 ///
 /// ## `#[update(expr)]` — value applied on create and update
 ///
-/// Sets a value that Toasty applies every time a record is created or
-/// updated, unless the field is explicitly set on the builder.
+/// Sets a value that Toasty applies every time a record is created or updated,
+/// including both branches of an upsert, unless the field is explicitly set on
+/// the builder.
 ///
 /// ```
 /// # use toasty::Model;
@@ -216,7 +222,9 @@ use proc_macro::TokenStream;
 /// ## `#[unique]` — add a unique constraint
 ///
 /// Creates a unique index on the field. Like `#[index]`, this generates
-/// `filter_by_<field>`. The database enforces uniqueness.
+/// `filter_by_<field>`. It also generates `upsert_by_<field>`, which creates a
+/// record or updates the record selected by this constraint. The database
+/// enforces uniqueness.
 ///
 /// ```
 /// # use toasty::Model;
@@ -547,6 +555,67 @@ use proc_macro::TokenStream;
 /// with `.select()` is supported on SQL backends; both are not yet available on
 /// DynamoDB.
 ///
+/// #### Many-to-many through a join model
+///
+/// Model a many-to-many relationship with a join model that belongs to both
+/// endpoints. Each endpoint has a direct `has_many` relation to the join model
+/// and a derived `has_many(via = ...)` relation to the opposite endpoint:
+///
+/// ```
+/// # use toasty::Model;
+/// #[derive(Debug, toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     #[has_many]
+///     memberships: toasty::Deferred<Vec<Membership>>,
+///
+///     #[has_many(via = memberships.group)]
+///     groups: toasty::Deferred<Vec<Group>>,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// struct Group {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     #[has_many]
+///     memberships: toasty::Deferred<Vec<Membership>>,
+///
+///     #[has_many(via = memberships.user)]
+///     users: toasty::Deferred<Vec<User>>,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// #[key(user_id, group_id)]
+/// struct Membership {
+///     #[index]
+///     user_id: i64,
+///
+///     #[belongs_to(key = user_id, references = id)]
+///     user: toasty::Deferred<User>,
+///
+///     #[index]
+///     group_id: i64,
+///
+///     #[belongs_to(key = group_id, references = id)]
+///     group: toasty::Deferred<Group>,
+///
+///     role: String,
+/// }
+/// ```
+///
+/// The composite key prevents duplicate user-group links. Fields such as
+/// `role` belong on the join model because they describe one connection. The
+/// derived `groups` and `users` relations return distinct endpoints and are
+/// read-only; create, update, or delete `Membership` records to change links.
+/// Call `.any()` on a derived field to filter by the opposite endpoint, or on
+/// `memberships` to filter by join-model fields. Traversing, filtering,
+/// preloading, or projecting the derived `via` fields requires a SQL backend.
+///
 /// ## `#[has_one]` — one-to-one association
 ///
 /// Declares a single related model. The target model must have a
@@ -713,7 +782,7 @@ use proc_macro::TokenStream;
     Model,
     attributes(
         key, auto, default, update, column, index, unique, table, has_many, has_one, belongs_to,
-        version
+        version, shared, document
     )
 )]
 pub fn derive_model(input: TokenStream) -> TokenStream {
@@ -757,7 +826,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// Applying `#[derive(Embed)]` to a struct generates:
 ///
-/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct returned by `<Type>::fields()` for building
 ///   filter expressions on individual fields.
 /// - An `Update` struct used by the parent model's update builder for
@@ -789,34 +858,31 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// # Enums
 ///
 /// An embedded enum stores a discriminant value identifying the active
-/// variant. Each variant must have a `#[column(variant = N)]` attribute
-/// assigning a stable integer discriminant.
+/// variant. By default, Toasty derives a string label for each variant by
+/// converting its Rust name to `snake_case`. Use
+/// `#[column(rename_all = "...")]` on the enum to select another naming
+/// convention, or `#[column(variant = "...")]` on a variant to set one label.
 ///
 /// **Unit-only enum:**
 ///
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
-///     #[column(variant = 1)]
 ///     Pending,
-///     #[column(variant = 2)]
-///     Active,
-///     #[column(variant = 3)]
+///     InProgress,
 ///     Archived,
 /// }
 /// ```
 ///
 /// A unit-only enum occupies a single column in the parent table. The
-/// column stores the discriminant as an integer.
+/// example stores the labels `pending`, `in_progress`, and `archived`.
 ///
 /// **Data-carrying enum:**
 ///
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum ContactInfo {
-///     #[column(variant = 1)]
 ///     Email { address: String },
-///     #[column(variant = 2)]
 ///     Phone { number: String },
 /// }
 /// ```
@@ -832,18 +898,15 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 /// #[derive(toasty::Embed)]
 /// enum Status {
-///     #[column(variant = 1)]
 ///     Pending,
-///     #[column(variant = 2)]
 ///     Failed { reason: String },
-///     #[column(variant = 3)]
 ///     Done,
 /// }
 /// ```
 ///
 /// Applying `#[derive(Embed)]` to an enum generates:
 ///
-/// - An [`Embed`] trait implementation (which extends [`Register`]).
+/// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct with `is_<variant>()` methods and comparison
 ///   methods (`eq`, `ne`, `in_list`).
 /// - For data-carrying variants, per-variant handle types with a
@@ -872,7 +935,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// Newtypes wrapping non-`Auto` types stay non-`Auto`; nesting works
 /// transparently (`Outer(Inner(u64))` proxies through both layers).
 ///
-/// # Field-level attributes
+/// # Attributes
 ///
 /// ## `#[column(...)]` — customize the database column
 ///
@@ -892,19 +955,78 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// See [`Model`][`derive@Model`] for the full list of supported column
 /// types.
 ///
-/// **On enum variants**, `#[column(variant = N)]` is **required** and
-/// assigns the integer discriminant stored in the database:
+/// **Changing stored enum discriminants.** On an enum,
+/// `#[column(rename_all = "...")]` changes how Toasty derives string labels
+/// for variants without an explicit label:
 ///
 /// ```
-/// # #[derive(toasty::Embed)]
-/// # enum Example {
-/// #[column(variant = 1)]
-/// Pending,
-/// # }
+/// #[derive(toasty::Embed)]
+/// #[column(rename_all = "SCREAMING_SNAKE_CASE")]
+/// enum PartyKind {
+///     Customer,
+///     PreferredSupplier,
+/// }
 /// ```
 ///
-/// Discriminant values must be unique across all variants of the enum.
-/// They are stored as `i64`.
+/// This example uses the labels `CUSTOMER` and `PREFERRED_SUPPLIER`. Without
+/// `rename_all`, Toasty uses `snake_case`.
+///
+/// The supported rules and their result for `PreferredSupplier` are:
+///
+/// | Rule | Label |
+/// | --- | --- |
+/// | `lowercase` | `preferredsupplier` |
+/// | `UPPERCASE` | `PREFERREDSUPPLIER` |
+/// | `PascalCase` | `PreferredSupplier` |
+/// | `camelCase` | `preferredSupplier` |
+/// | `snake_case` | `preferred_supplier` |
+/// | `SCREAMING_SNAKE_CASE` | `PREFERRED_SUPPLIER` |
+/// | `kebab-case` | `preferred-supplier` |
+/// | `SCREAMING-KEBAB-CASE` | `PREFERRED-SUPPLIER` |
+///
+/// Use `#[column(variant = "...")]` to set individual labels:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum PartyKind {
+///     #[column(variant = "customer")]
+///     Customer,
+///     #[column(variant = "preferred-supplier")]
+///     PreferredSupplier,
+/// }
+/// ```
+///
+/// An explicit variant label takes precedence over `rename_all` when an enum
+/// uses both attributes.
+///
+/// String-label enums use Toasty's enum storage by default. Use
+/// `#[column(type = enum("type_name"))]` to set the database enum type name,
+/// or `#[column(type = text)]` or `#[column(type = varchar(N))]` to use a
+/// plain string column. `rename_all` changes variant labels only; it does not
+/// change the enum type name.
+///
+/// To store integers instead, assign an integer to every variant:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum Priority {
+///     #[column(variant = 10)]
+///     Low,
+///     #[column(variant = 20)]
+///     High,
+/// }
+/// ```
+///
+/// An enum cannot mix string and integer discriminants. Integer discriminants
+/// use `i64` storage by default. Add an integer enum-level override such as
+/// `#[column(type = u8)]` to request narrower storage. The type applies to
+/// flattened discriminant columns, through transparent field wrappers, and to
+/// each element of `Vec<unit-enum>`. The same attribute on a model field
+/// overrides the enum default for that use; on a collection it selects the
+/// element type. Every discriminant must fit the selected type. Enum embeds
+/// inside `#[document]` fields are not supported. Integer-discriminant enums do
+/// not support `rename_all`. All discriminant values must be unique. String
+/// labels may contain at most 63 bytes.
 ///
 /// ## `#[index]` — add a database index
 ///
@@ -930,6 +1052,84 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///     email: String,
 /// }
 /// ```
+///
+/// ## `#[shared(ident)]` — share a column across enum variants
+///
+/// Declares a shared logical field on the enum. Variant fields declaring
+/// the same identifier are backed by a single nullable column instead of
+/// one column per variant. The identifier — not the Rust field names,
+/// which may differ per variant — names the field: the column name derives
+/// from it (`{enum_field}_{ident}`), and enum-level `#[index]` /
+/// `#[unique]` attributes reference it.
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// enum Creature {
+///     #[column(variant = 1)]
+///     Human {
+///         #[shared(name)]
+///         full_name: String,
+///         profession: String,
+///     },
+///     #[column(variant = 2)]
+///     Animal {
+///         #[shared(name)]
+///         nickname: String,
+///         species: String,
+///     },
+/// }
+/// // Columns: creature, creature_name (shared), creature_profession,
+/// // creature_species
+/// ```
+///
+/// Fields sharing an identifier must have the same type. To rename the
+/// shared column, add `#[column("...")]` to any one member of the group
+/// (if several declare it, they must agree):
+///
+/// ```
+/// # #[derive(toasty::Embed)]
+/// # enum Example {
+/// # #[column(variant = 1)]
+/// # V {
+/// #[shared(name)]
+/// #[column("legacy_name")]
+/// name: String,
+/// # },
+/// # }
+/// ```
+///
+/// ## Enum-level `#[index(...)]` / `#[unique(...)]`
+///
+/// On the enum itself, `#[index(...)]` and `#[unique(...)]` create an
+/// index over variant-field columns. Each reference is a shared field
+/// identifier or a `variant::field` path naming a variant field that owns
+/// its column; the two forms compose into composite indices.
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// #[unique(name)]
+/// #[index(name, human::profession)]
+/// enum Creature {
+///     #[column(variant = 1)]
+///     Human {
+///         #[shared(name)]
+///         name: String,
+///         profession: String,
+///     },
+///     #[column(variant = 2)]
+///     Animal {
+///         #[shared(name)]
+///         name: String,
+///     },
+/// }
+/// ```
+///
+/// An index on a shared column covers rows of **every** variant: with
+/// `#[unique(name)]` above, a `Human` named "Bob" and an `Animal` named
+/// "Bob" conflict. Rows of variants that do not declare the shared field
+/// store `NULL` and never conflict. For this reason, field-level
+/// `#[index]` / `#[unique]` on a `#[shared]` field is a compile error
+/// pointing at the enum-level form.
 ///
 /// # Using embedded types in a model
 ///
@@ -991,8 +1191,9 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - Embedded structs must have named fields (tuple structs are not
 ///   supported).
 /// - Generic parameters are not supported.
-/// - Every enum variant must have a `#[column(variant = N)]` attribute
-///   with a unique discriminant value.
+/// - Enum discriminants must all be strings or all be integers. Integer
+///   discriminants must be specified on every variant.
+/// - `#[column(rename_all = "...")]` applies only to string labels.
 /// - Enum variants may be unit variants or have named fields. Tuple
 ///   variants are not supported.
 /// - Embedded types cannot have primary keys, relations, `#[auto]`,
@@ -1003,12 +1204,10 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```no_run
 /// # async fn example(mut db: toasty::Db) -> toasty::Result<()> {
 /// #[derive(Debug, PartialEq, toasty::Embed)]
+/// #[column(rename_all = "SCREAMING_SNAKE_CASE")]
 /// enum Priority {
-///     #[column(variant = 1)]
 ///     Low,
-///     #[column(variant = 2)]
 ///     Normal,
-///     #[column(variant = 3)]
 ///     High,
 /// }
 ///
@@ -1062,8 +1261,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
-/// [`Register`]: toasty::Register
-#[proc_macro_derive(Embed, attributes(column, index, unique))]
+#[proc_macro_derive(Embed, attributes(column, document, index, unique, shared))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
@@ -1947,6 +2145,23 @@ pub fn create(input: TokenStream) -> TokenStream {
 /// Instance targets do not consume the binding — the macro expands to
 /// `user.update()`, which auto-borrows `&mut user` the same way the
 /// chain form does. `user` stays owned after the macro returns.
+///
+/// Value expressions are evaluated before the target is borrowed, so
+/// they may read the target's own fields:
+///
+/// ```no_run
+/// # #[derive(toasty::Model)]
+/// # struct Todo {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     done: bool,
+/// # }
+/// # async fn example(mut db: toasty::Db, mut todo: Todo) -> toasty::Result<()> {
+/// toasty::update!(todo { done: !todo.done }).exec(&mut db).await?;
+/// # Ok(())
+/// # }
+/// ```
 ///
 /// # Field shapes
 ///

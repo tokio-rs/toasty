@@ -7,6 +7,40 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.7.0...toasty-cli-v0.8.0) - 2026-07-06
+
+### Added
+
+- Emit one toasty::query event per statement and propagate caller spans ([#1071])
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+
+### Fixed
+
+- Include the path in Toasty config load errors ([#1036])
+
+[#1036]: https://github.com/tokio-rs/toasty/pull/1036
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1071]: https://github.com/tokio-rs/toasty/pull/1071
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.6.1...toasty-cli-v0.7.0) - 2026-05-29
+
+### Added
+
+- Expose migration core as a public API from toasty ([#944])
+- Add Turso driver with TransactionMode-aware concurrent writes ([#938])
+
+### Changed
+
+- [**breaking**] Require explicit Deferred for relation fields ([#954])
+- [**breaking**] Move schema diff types to schema::diff module ([#929])
+- Reorganize db::diff API and consolidate migration types in toasty crate ([#928])
+
+[#928]: https://github.com/tokio-rs/toasty/pull/928
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#944]: https://github.com/tokio-rs/toasty/pull/944
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.6.0...toasty-cli-v0.6.1) - 2026-05-16
 
 - Internal improvements only.

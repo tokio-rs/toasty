@@ -7,6 +7,80 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.7.0...toasty-macros-v0.8.0) - 2026-07-06
+
+### Added
+
+- Infer `key` and `references` in `#[belongs_to]` ([#1063])
+- Share columns across enum variants via `#[column("name")]` ([#1064])
+- Index unit enum types ([#1027])
+- Between operator for queries ([#1029])
+- Composite unique indices ([#1018])
+- Support scalar terminal fields in `has_many` ([#1012])
+
+### Changed
+
+- [**breaking**] Derive default table names at compile time ([#1070])
+- [**breaking**] Rename `RelationManyField`/`RelationOneField` associated type to `Target` ([#1015])
+- [**breaking**] Align `stmt::Query` with per-model `Query` ([#1011])
+- [**breaking**] Unify per-model query structs into `Query<T>` ([#995])
+- [**breaking**] Remove the `Register` trait ([#1006])
+- Remove compile-time field validation from `create!` macro ([#997])
+
+[#995]: https://github.com/tokio-rs/toasty/pull/995
+[#997]: https://github.com/tokio-rs/toasty/pull/997
+[#1006]: https://github.com/tokio-rs/toasty/pull/1006
+[#1011]: https://github.com/tokio-rs/toasty/pull/1011
+[#1012]: https://github.com/tokio-rs/toasty/pull/1012
+[#1015]: https://github.com/tokio-rs/toasty/pull/1015
+[#1018]: https://github.com/tokio-rs/toasty/pull/1018
+[#1027]: https://github.com/tokio-rs/toasty/pull/1027
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1064]: https://github.com/tokio-rs/toasty/pull/1064
+[#1070]: https://github.com/tokio-rs/toasty/pull/1070
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.6.1...toasty-macros-v0.7.0) - 2026-05-29
+
+### Added
+
+- Generate field projection methods on Query/Many/One ([#987])
+- Add update! macro for concise field updates ([#980])
+- Reject create() on multi-step relation scopes at compile time ([#978])
+- [**breaking**] Remove singular has-many create-builder methods ([#977])
+- Remove `#[deferred]` field attribute in favor of `Deferred<T>` ([#961])
+- Support eager relation fields ([#958])
+- Support `.include()` of multi-step `via` relations ([#946])
+- Add Turso driver with TransactionMode-aware concurrent writes ([#938])
+- Allow #[version] on tuple-newtype embeds of u64 ([#930])
+- [**breaking**] Replace `#[serialize(json)]` with `toasty::Json<T>` wrapper ([#926])
+- Expose primary-key type via Model::PrimaryKey ([#921])
+- Add multi-step (via) has_many and has_one relations ([#890])
+- [**breaking**] Delete Relation trait and tighten relation field shapes ([#967])
+- [**breaking**] Merge relation field traits ([#971])
+- [**breaking**] Require Deferred for relation fields ([#954])
+
+### Fixed
+
+- Respect `pair` attribute in `#[has_one]` macro ([#927])
+
+[#890]: https://github.com/tokio-rs/toasty/pull/890
+[#921]: https://github.com/tokio-rs/toasty/pull/921
+[#926]: https://github.com/tokio-rs/toasty/pull/926
+[#927]: https://github.com/tokio-rs/toasty/pull/927
+[#930]: https://github.com/tokio-rs/toasty/pull/930
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#946]: https://github.com/tokio-rs/toasty/pull/946
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#958]: https://github.com/tokio-rs/toasty/pull/958
+[#961]: https://github.com/tokio-rs/toasty/pull/961
+[#967]: https://github.com/tokio-rs/toasty/pull/967
+[#971]: https://github.com/tokio-rs/toasty/pull/971
+[#977]: https://github.com/tokio-rs/toasty/pull/977
+[#978]: https://github.com/tokio-rs/toasty/pull/978
+[#980]: https://github.com/tokio-rs/toasty/pull/980
+[#987]: https://github.com/tokio-rs/toasty/pull/987
+
 ## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.6.0...toasty-macros-v0.6.1) - 2026-05-16
 
 ### Added

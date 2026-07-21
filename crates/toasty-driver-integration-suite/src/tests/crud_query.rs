@@ -244,6 +244,30 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(id(ID), scenario(crate::scenarios::user_with_age))]
+pub async fn set_filter_overwrites(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 20 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // `set_filter` replaces the existing filter rather than AND-combining it.
+    // If it combined, `name = "Alice" AND name = "Bob"` would match nothing.
+    use toasty::stmt::{List, Query};
+    let mut q = Query::<List<User>>::all().filter(User::fields().name().eq("Alice"));
+    q.set_filter(User::fields().name().eq("Bob"));
+
+    let users = q.exec(&mut db).await?;
+
+    assert_eq!(1, users.len());
+    assert_eq!("Bob", users[0].name);
+    Ok(())
+}
+
+#[driver_test(id(ID), scenario(crate::scenarios::user_with_age))]
 pub async fn query_or_basic(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
     let _name_column = db.schema().table_for(User::id()).columns[1].id;

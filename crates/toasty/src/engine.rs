@@ -6,7 +6,7 @@ pub(crate) mod effect;
 pub(crate) mod eval;
 pub(crate) mod exec;
 
-mod extract_params;
+mod bind;
 #[cfg(test)]
 pub(crate) mod test_util;
 
@@ -15,6 +15,7 @@ mod hir;
 use hir::HirStatement;
 
 mod index;
+mod legalize;
 mod lower;
 mod mir;
 mod plan;
@@ -22,6 +23,7 @@ mod select_item;
 pub(crate) use select_item::{SelectItem, SelectItems};
 mod simplify;
 mod ty;
+mod upsert;
 mod verify;
 
 use crate::Result;
@@ -45,7 +47,10 @@ use toasty_core::{
 ///    the driver does not support.
 /// 2. **Lowering.** Convert to HIR with dependency tracking.
 /// 3. **Planning.** Build MIR operation graph.
-/// 4. **Execution.** Run actions against the database driver.
+/// 4. **Execution.** Run actions against the database driver. Each
+///    driver-bound statement is legalized for the target backend and its
+///    bind parameters extracted ([`prepare_for_driver`](Self::prepare_for_driver))
+///    immediately before it crosses to the driver.
 #[derive(Debug, Clone)]
 pub(crate) struct Engine {
     /// The schema being managed by this database instance.
@@ -74,11 +79,10 @@ impl Engine {
     pub(crate) async fn exec(
         &self,
         connection: &mut dyn Connection,
-        stmt: Statement,
+        mut stmt: Statement,
         in_transaction: bool,
     ) -> Result<toasty_core::driver::ExecResponse> {
-        tracing::debug!(stmt.kind = stmt.name(), "executing statement");
-
+        upsert::apply_defaults(&mut stmt)?;
         self.verify(&stmt)?;
 
         // Lower the statement to High-level intermediate representation
@@ -105,12 +109,11 @@ impl Engine {
         raw: RawSql,
     ) -> Result<toasty_core::driver::ExecResponse> {
         if !self.capability.sql {
-            return Err(toasty_core::Error::unsupported_feature(
-                "raw SQL is only supported by SQL drivers",
-            ));
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support raw SQL",
+                self.capability.driver_name
+            )));
         }
-
-        tracing::debug!("executing raw SQL");
 
         connection.exec(&self.schema, raw.into()).await
     }

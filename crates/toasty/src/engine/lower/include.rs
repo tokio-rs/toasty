@@ -182,8 +182,21 @@ impl LowerStatement<'_, '_> {
     ) {
         match (self.schema().app.model(target), mapping) {
             (app::Model::EmbeddedStruct(em), mapping::Field::Struct(fs)) => {
-                let stmt::Expr::Record(record) = returning else {
-                    return;
+                // A nullable struct embed (`Option<Embed>`) wraps its record in
+                // a presence `Match`; descend into the `Some` arm's record so
+                // its deferred sub-fields are still processed (e.g. loaded on
+                // `INSERT … RETURNING`). A non-nullable embed is a bare record.
+                let record = match returning {
+                    stmt::Expr::Record(record) => record,
+                    stmt::Expr::Match(match_expr) => {
+                        let Some(stmt::Expr::Record(record)) =
+                            match_expr.arms.first_mut().map(|arm| &mut arm.expr)
+                        else {
+                            return;
+                        };
+                        record
+                    }
+                    _ => return,
                 };
                 self.process_fields(
                     record,
@@ -343,7 +356,7 @@ impl LowerStatement<'_, '_> {
 
                     for fk_field in &rel.foreign_key.fields {
                         source_fk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
-                        target_pk_fields.push(stmt::Expr::ref_parent_field(fk_field.source));
+                        target_pk_fields.push(stmt::Expr::ref_self_field(fk_field.target));
                     }
 
                     source_fk = stmt::Expr::record_from_vec(source_fk_fields);

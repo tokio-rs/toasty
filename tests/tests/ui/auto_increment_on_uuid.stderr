@@ -2,7 +2,7 @@ error[E0277]: field type `uuid::Uuid` is not compatible with the requested auto 
  --> tests/ui/auto_increment_on_uuid.rs:8:9
   |
 8 |     id: uuid::Uuid,
-  |         ^^^^^^^^^^ incompatible Rust type for `#[auto(...)]`
+  |         ^^^^ incompatible Rust type for `#[auto(...)]`
   |
   = note: see `toasty::codegen_support::auto` for the compatibility table
 help: the trait `AutoCompatible<toasty::codegen_support::auto::tag::Increment>` is not implemented for `uuid::Uuid`

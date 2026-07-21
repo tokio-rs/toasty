@@ -26,12 +26,14 @@ Guide-level design documents for specific features. Use
 
 - [Design Overview](./design/README.md)
 - [Per-Call Column Projection](./design/column-projection.md)
+- [DynamoDB Driver Error-Handling Convention](./design/ddb-error-handling.md)
 - [DynamoDB Scan Support](./design/ddb-scan.md)
 - [Document and Collection Fields](./design/document-fields.md)
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
 - [Optimistic Concurrency with `#[version]`](./design/field-version.md)
 - [`query!` Macro](./design/query-macro.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
+- [Upsert](./design/upsert.md)
 
 ## Roadmap
 

@@ -300,6 +300,11 @@ fields, read left to right from this model. This expresses a relationship that
 exists only *through* a third model — a user has many comments, each comment
 belongs to an article, so a user has many commented articles:
 
+A [many-to-many relationship](./many-to-many.md) uses this mechanism: each
+endpoint has a direct `HasMany` to a join model and a derived
+`has_many(via = ...)` to the opposite endpoint. The example below follows the
+same kind of path with `Comment` as the intermediate model.
+
 ```rust
 # use toasty::Model;
 #[derive(Debug, toasty::Model)]
@@ -383,6 +388,9 @@ Preload a `via` relation with `.include()` to avoid the N+1 — see
 projecting a `via` relation is supported on SQL backends; both are not yet
 available on DynamoDB.
 
+> **Runnable example:** [`forum-relationships`] loads and traverses relations — `has_one`, preloading with `.include()`, `via` relations, and association filters.
+
+
 ## What gets generated
 
 For a `User` model with `#[has_many] posts: Deferred<Vec<Post>>`, Toasty generates:
@@ -411,3 +419,8 @@ For a `User` model with `#[has_many] posts: Deferred<Vec<Post>>`, Toasty generat
 |---|---|
 | `User::fields().posts()` | Field path for preloading and filtering |
 | `User::fields().posts().any(expr)` | Filter parents by child conditions |
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`forum-relationships`]: https://github.com/tokio-rs/toasty/tree/main/examples/forum-relationships

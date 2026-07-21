@@ -155,12 +155,11 @@ impl Connection {
 
         let mut update_expression_set = String::new();
         let mut update_expression_remove = String::new();
-        let mut ret = vec![];
-        // Indices in `ret` whose stored value is a placeholder (the appended
-        // elements, not the post-update column value). After the UpdateItem
-        // call we refresh these from the `UPDATED_NEW` response so the engine
-        // sees the actual new column value.
-        let mut refresh_after_update: Vec<(usize, &db::Column)> = vec![];
+
+        // Bound value per assigned column index. Used below to seed the
+        // returning-row placeholders; only the transact path (which can't
+        // fetch `UPDATED_NEW`) actually surfaces these seeds.
+        let mut bound_values: HashMap<usize, &stmt::Value> = HashMap::new();
 
         for (projection, assignment) in op.assignments.iter() {
             enum AssignKind {
@@ -197,19 +196,7 @@ impl Connection {
             };
 
             let column_ref = table.resolve(projection);
-
-            // `ret` carries the post-update column values back to the
-            // engine. `lower::returning::constantize_returning` inlines
-            // `Set` values at plan time, so the engine's returning
-            // projection covers only the columns that need a driver
-            // round-trip — `Append` / `Add` / `Subtract`. Skip `Set` here
-            // to keep the row shape aligned with that projection. The
-            // non-Set kinds push a placeholder then `refresh_after_update`
-            // fills in the post-update value from `UPDATED_NEW`.
-            if !matches!(kind, AssignKind::Set) {
-                refresh_after_update.push((ret.len(), column_ref));
-                ret.push(value.clone());
-            }
+            bound_values.insert(column_ref.id.index, value);
 
             let column = expr_attrs.column(column_ref).to_string();
 
@@ -283,118 +270,88 @@ impl Connection {
             write!(update_expression, " REMOVE {update_expression_remove}").unwrap();
         }
 
-        // When any assignment is relative (`Append`), the placeholder values
-        // in `ret` are not the post-update column values. Request
-        // `UPDATED_NEW` so the response carries the actual new attribute
-        // values and we can replace the placeholders below.
+        // Build the returning row from the explicit column list the engine
+        // requested — exactly these columns, in this order. The engine inlines
+        // `Set` values at plan time and injects the engine-managed `#[version]`
+        // bump outside the returning projection, so neither appears in
+        // `op.returning`; the driver no longer has to infer the row shape from
+        // the assignments. Each column is seeded with a placeholder, then
+        // refreshed below from the `UPDATED_NEW` response with its post-update
+        // value.
+        let mut ret = vec![];
+        let mut refresh_after_update: Vec<(usize, &db::Column)> = vec![];
+
+        if let Some(columns) = &op.returning {
+            for column_id in columns {
+                let column = schema.column(*column_id);
+                let placeholder = bound_values
+                    .get(&column_id.index)
+                    .map(|value| (*value).clone())
+                    .unwrap_or(stmt::Value::Null);
+                refresh_after_update.push((ret.len(), column));
+                ret.push(placeholder);
+            }
+        }
+
+        // The seeded placeholders are not the post-update column values.
+        // Request `UPDATED_NEW` so the response carries the actual new
+        // attribute values and we can replace the placeholders below.
         let needs_updated_new = !refresh_after_update.is_empty();
 
         match &unique_indices[..] {
             [] => {
-                if op.keys.len() == 1 {
-                    let key = &op.keys[0];
+                // The engine shreds multi-key updates into one op per key, so a
+                // non-unique-index update always carries exactly one key.
+                let [key] = &op.keys[..] else {
+                    panic!("expected exactly 1 key, got {}", op.keys.len());
+                };
 
-                    let res = self
-                        .client
-                        .update_item()
-                        .table_name(&table.name)
-                        .set_key(Some(ddb_key(table, key)))
-                        .set_update_expression(Some(update_expression))
-                        .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                        .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
-                            Some(expr_attrs.attr_values)
-                        } else {
-                            None
-                        })
-                        .set_condition_expression(filter_expression)
-                        .return_values_on_condition_check_failure(
-                            ReturnValuesOnConditionCheckFailure::AllOld,
-                        )
-                        .set_return_values(needs_updated_new.then_some(ReturnValue::UpdatedNew))
-                        .send()
-                        .await;
+                let res = self
+                    .client
+                    .update_item()
+                    .table_name(&table.name)
+                    .set_key(Some(ddb_key(table, key)))
+                    .set_update_expression(Some(update_expression))
+                    .set_expression_attribute_names(Some(expr_attrs.attr_names))
+                    .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
+                        Some(expr_attrs.attr_values)
+                    } else {
+                        None
+                    })
+                    .set_condition_expression(filter_expression)
+                    .return_values_on_condition_check_failure(
+                        ReturnValuesOnConditionCheckFailure::AllOld,
+                    )
+                    .set_return_values(needs_updated_new.then_some(ReturnValue::UpdatedNew))
+                    .send()
+                    .await;
 
-                    let output = match res {
-                        Ok(output) => output,
-                        Err(SdkError::ServiceError(e)) => {
-                            if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
-                                return on_update_item_condition_failed(
-                                    cce.item(),
-                                    cce.message.as_deref(),
-                                    table,
-                                    op.filter.as_ref(),
-                                    op.returning,
-                                );
-                            }
-                            return Err(toasty_core::Error::driver_operation_failed(
-                                SdkError::ServiceError(e),
-                            ));
-                        }
-                        Err(other) => {
-                            return Err(toasty_core::Error::driver_operation_failed(other));
-                        }
-                    };
-
-                    if needs_updated_new && let Some(attrs) = output.attributes() {
-                        for (idx, column) in &refresh_after_update {
-                            if let Some(attr) = attrs.get(&column.name) {
-                                ret[*idx] = Value::from_ddb(&column.ty, attr).into_inner();
-                            }
-                        }
-                    }
-                } else {
-                    let mut transact_items = vec![];
-
-                    for key in &op.keys {
-                        transact_items.push(
-                            TransactWriteItem::builder()
-                                .update(
-                                    Update::builder()
-                                        .table_name(&table.name)
-                                        .set_key(Some(ddb_key(table, key)))
-                                        .set_update_expression(Some(update_expression.clone()))
-                                        .set_expression_attribute_names(Some(
-                                            expr_attrs.attr_names.clone(),
-                                        ))
-                                        .set_expression_attribute_values(
-                                            if !expr_attrs.attr_values.is_empty() {
-                                                Some(expr_attrs.attr_values.clone())
-                                            } else {
-                                                None
-                                            },
-                                        )
-                                        .set_condition_expression(filter_expression.clone())
-                                        .return_values_on_condition_check_failure(
-                                            ReturnValuesOnConditionCheckFailure::AllOld,
-                                        )
-                                        .build()
-                                        .unwrap(),
-                                )
-                                .build(),
-                        );
-                    }
-
-                    let res = self
-                        .client
-                        .transact_write_items()
-                        .set_transact_items(Some(transact_items))
-                        .send()
-                        .await;
-
-                    if let Err(SdkError::ServiceError(e)) = res {
-                        if let TransactWriteItemsError::TransactionCanceledException(tce) = e.err()
-                        {
-                            return on_transaction_cancelled(
-                                tce.cancellation_reasons(),
-                                tce.message(),
+                let output = match res {
+                    Ok(output) => output,
+                    Err(SdkError::ServiceError(e)) => {
+                        if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
+                            return on_update_item_condition_failed(
+                                cce.item(),
+                                cce.message.as_deref(),
                                 table,
                                 op.filter.as_ref(),
-                                op.returning,
+                                op.returning.is_some(),
                             );
                         }
                         return Err(toasty_core::Error::driver_operation_failed(
                             SdkError::ServiceError(e),
                         ));
+                    }
+                    Err(other) => {
+                        return Err(toasty_core::Error::driver_operation_failed(other));
+                    }
+                };
+
+                if needs_updated_new && let Some(attrs) = output.attributes() {
+                    for (idx, column) in &refresh_after_update {
+                        if let Some(attr) = attrs.get(&column.name) {
+                            ret[*idx] = Value::from_ddb(&column.ty, attr).into_inner();
+                        }
                     }
                 }
             }
@@ -566,7 +523,7 @@ impl Connection {
                                 cce.message.as_deref(),
                                 table,
                                 op.filter.as_ref(),
-                                op.returning,
+                                op.returning.is_some(),
                             );
                         }
                         return Err(toasty_core::Error::driver_operation_failed(
@@ -696,7 +653,7 @@ impl Connection {
                                 tce.message(),
                                 table,
                                 op.filter.as_ref(),
-                                op.returning,
+                                op.returning.is_some(),
                             );
                         }
                         return Err(toasty_core::Error::driver_operation_failed(
@@ -708,8 +665,8 @@ impl Connection {
             _ => todo!(),
         }
 
-        // If we get here, then returning should be false
-        Ok(if op.returning {
+        // If we get here, then returning should be None
+        Ok(if op.returning.is_some() {
             let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
             ExecResponse::value_stream(values)
         } else {

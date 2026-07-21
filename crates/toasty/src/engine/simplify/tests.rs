@@ -8,7 +8,6 @@ mod expr_exists;
 mod expr_intersects;
 mod expr_is_null;
 mod expr_is_superset;
-mod expr_let;
 mod expr_map;
 mod expr_match;
 mod expr_or;

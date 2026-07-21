@@ -2,27 +2,9 @@ use crate::prelude::*;
 
 /// Filtering by a field within a specific enum variant using the closure-based
 /// `.matches()` API: `contact().email().matches(|e| e.address().eq("x"))`.
-#[driver_test(requires(scan))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
 pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = setup(t).await;
 
     User::create()
         .name("Alice")
@@ -111,7 +93,7 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     User::create()
         .group("eng")
@@ -158,15 +140,13 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
     Ok(())
 }
 
-/// Filtering directly via a variant-rooted path comparison (no `matches`
-/// closure). The implicit gate on filter methods means
-/// `email().address().eq("x")` is equivalent to
-/// `email().matches(|e| e.address().eq("x"))` — the variant predicate is
-/// added automatically, so Phone-variant rows are excluded.
+/// OR of two variant-rooted field predicates — one per variant. Each predicate
+/// on its own works; only the `OR` used to panic in the SQL serializer with
+/// "unexpected enum discriminant" (issue #1061).
 #[driver_test(requires(scan))]
-pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
+pub async fn cross_variant_or(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
+    enum Contact {
         #[column(variant = 1)]
         Email { address: String },
         #[column(variant = 2)]
@@ -179,11 +159,47 @@ pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
         #[key]
         #[auto]
         id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
+        contact: Contact,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User)).await;
+
+    User::create()
+        .contact(Contact::Email {
+            address: "x".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    User::create()
+        .contact(Contact::Phone {
+            number: "x".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+
+    let rows = User::filter(
+        User::fields()
+            .contact()
+            .email()
+            .address()
+            .eq("x")
+            .or(User::fields().contact().phone().number().eq("x")),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(rows.len(), 2);
+    Ok(())
+}
+
+/// Filtering directly via a variant-rooted path comparison (no `matches`
+/// closure). The implicit gate on filter methods means
+/// `email().address().eq("x")` is equivalent to
+/// `email().matches(|e| e.address().eq("x"))` — the variant predicate is
+/// added automatically, so Phone-variant rows are excluded.
+#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
+pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
     User::create()
         .name("Alice")

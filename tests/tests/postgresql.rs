@@ -126,9 +126,12 @@ async fn url_encoding() {
     );
 
     let driver = PostgreSQL::new(&test_url).expect("driver creation failed");
-    let conn = toasty_core::driver::Driver::connect(&driver)
-        .await
-        .expect("connection with percent-encoded URL failed");
+    let conn = toasty_core::driver::Driver::connect(
+        &driver,
+        &toasty_core::driver::ConnectContext::default(),
+    )
+    .await
+    .expect("connection with percent-encoded URL failed");
     drop(conn);
 
     // Cleanup

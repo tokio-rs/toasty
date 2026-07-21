@@ -181,19 +181,19 @@ impl Verify<'_> {
     fn verify_table_indices_and_nullable(&self) {
         for table in &self.schema.db.tables {
             for index in &table.indices {
-                let nullable = index
-                    .columns
-                    .iter()
-                    .any(|index_column| table.column(index_column.column).nullable);
-
-                if nullable {
-                    // If there are nullable columns, then (for now) the index
-                    // should only have one column
-                    assert_eq!(
-                        index.columns.len(),
-                        1,
-                        "table index with multiple columns includes a nullable column"
-                    );
+                // A nullable column is permitted in any index, including
+                // composite ones (e.g. an embedded enum's variant columns,
+                // which are nullable by construction). SQL treats NULLs as
+                // distinct in unique indices, so rows lacking a value never
+                // conflict. The primary key is the exception: its columns
+                // must be non-nullable.
+                if index.primary_key {
+                    for index_column in &index.columns {
+                        assert!(
+                            !table.column(index_column.column).nullable,
+                            "primary key includes a nullable column"
+                        );
+                    }
                 }
             }
         }
@@ -247,7 +247,7 @@ impl Verify<'_> {
 
         for table in &self.schema.db.tables {
             for column in &table.columns {
-                if let super::db::Type::Enum(type_enum) = &column.storage_ty
+                if let Some(type_enum) = column.storage_ty.named_enum()
                     && let Some(name) = &type_enum.name
                 {
                     match seen.get(name.as_str()) {

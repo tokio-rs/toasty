@@ -79,6 +79,64 @@ pub async fn index_custom_name_default_unchanged(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Auto-generated index names that exceed the backend's identifier limit are
+/// truncated and given a stable 5-character hash suffix (`_XXXX`). The table
+/// can still be created and the index is usable for queries.
+///
+/// The bare auto-generated name for this model is:
+/// `index_organization_memberships_by_organization_id_and_member_user_id`
+/// (69 chars), which exceeds MySQL's 64-char and PostgreSQL's 63-char limits.
+/// With the test harness table prefix it is longer still.
+#[driver_test]
+pub async fn index_long_name_is_truncated(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[index(organization_id, member_user_id)]
+    struct OrganizationMembership {
+        // String key avoids auto-increment, which DynamoDB does not support.
+        #[key]
+        id: String,
+        organization_id: i64,
+        member_user_id: i64,
+    }
+
+    let mut db = t.setup_db(models!(OrganizationMembership)).await;
+
+    let limit = db.capability().max_identifier_length;
+    let table = &db.schema().db.tables[0];
+    let auto_idx = table
+        .indices
+        .iter()
+        .find(|i| !i.primary_key)
+        .expect("non-PK index should exist");
+
+    if let Some(limit) = limit {
+        assert!(
+            auto_idx.name.len() <= limit,
+            "index name `{}` ({} chars) exceeds limit {}",
+            auto_idx.name,
+            auto_idx.name.len(),
+            limit
+        );
+    }
+
+    // The index must be usable regardless of name length.
+    toasty::create!(OrganizationMembership::[
+        { id: "m1", organization_id: 1_i64, member_user_id: 10_i64 },
+        { id: "m2", organization_id: 1_i64, member_user_id: 20_i64 },
+        { id: "m3", organization_id: 2_i64, member_user_id: 10_i64 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let members: Vec<OrganizationMembership> =
+        OrganizationMembership::filter_by_organization_id(1_i64)
+            .exec(&mut db)
+            .await?;
+    assert_eq!(members.len(), 2);
+
+    Ok(())
+}
+
 /// `#[key(name = "...", ...)]` records the custom name on the primary-key
 /// index in the DB schema. SQL backends emit primary keys inline today, so
 /// this verifies the schema-internal wiring rather than DDL output.

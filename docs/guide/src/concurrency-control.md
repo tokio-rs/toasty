@@ -36,6 +36,13 @@ the record since you last loaded it, the update returns an error.
 current version. If the record has been updated since you last loaded it, the
 delete returns an error.
 
+**Query-based update.** `Document::filter_by_id(id).update()...exec()`
+atomically increments the version on every matched row (`version = version +
+1`), but does not condition the write on a prior version — a query-based update
+is atomic at the database level and may span many rows. Advancing the counter
+is enough to make a concurrent instance update or delete from a stale snapshot
+fail its version check instead of overwriting the query update.
+
 ```rust
 # use toasty::Model;
 # #[derive(Debug, toasty::Model)]
@@ -68,9 +75,22 @@ assert!(result.is_err());
 # }
 ```
 
-Query-based updates (`Document::filter_by_id(id).update()...`) neither check
-nor increment the version. OCC applies only to instance updates and instance
-deletes.
+Only instance updates and instance deletes *check* the version and fail on
+conflict. Query-based updates increment the version but apply unconditionally —
+they never fail on a version mismatch.
 
-> **Note:** `#[version]` is supported by the DynamoDB driver only. SQL drivers
-> do not yet implement OCC.
+## Driver support
+
+`#[version]` works on every driver: DynamoDB, SQLite, PostgreSQL, and MySQL. How
+Toasty applies the version check varies by backend, but the behavior is the
+same everywhere:
+
+- DynamoDB conditions the write on the version value in a single request.
+- PostgreSQL bundles the check and the update into one statement.
+- SQLite and MySQL run the check and the write inside a transaction, reading the
+  current version (locking the row where the database supports it) before
+  applying the write.
+
+A conflicting write returns `Error::condition_failed`; recover by reloading the
+record and retrying. If the record has been deleted since it was loaded, the
+write returns `Error::record_not_found` instead.
