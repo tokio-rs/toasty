@@ -187,8 +187,8 @@
 <a href=#187 id=187 data-nosnippet>187</a>    /// // Include the field at index 1 (name)
 <a href=#188 id=188 data-nosnippet>188</a>    /// let q = Query::&lt;List&lt;User&gt;&gt;::all().include(User::path_field::&lt;String&gt;(1));
 <a href=#189 id=189 data-nosnippet>189</a>    /// ```
-<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="kw">pub fn </span>include(<span class="kw-2">mut </span><span class="self">self</span>, path: <span class="kw">impl </span>Into&lt;stmt::Path&gt;) -&gt; <span class="self">Self </span>{
-<a href=#191 id=191 data-nosnippet>191</a>        <span class="self">self</span>.untyped.include(path.into());
+<a href=#190 id=190 data-nosnippet>190</a>    </span><span class="kw">pub fn </span>include(<span class="kw-2">mut </span><span class="self">self</span>, include: <span class="kw">impl </span>Into&lt;stmt::Include&gt;) -&gt; <span class="self">Self </span>{
+<a href=#191 id=191 data-nosnippet>191</a>        <span class="self">self</span>.untyped.include(include.into());
 <a href=#192 id=192 data-nosnippet>192</a>        <span class="self">self
 <a href=#193 id=193 data-nosnippet>193</a>    </span>}
 <a href=#194 id=194 data-nosnippet>194</a>

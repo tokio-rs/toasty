@@ -891,7 +891,7 @@
 <a href=#891 id=891 data-nosnippet>891</a>                        <span class="kw">if </span><span class="macro">matches!</span>(<span class="self">self</span>.cx, LoweringContext::Returning(<span class="kw">_</span>))
 <a href=#892 id=892 data-nosnippet>892</a>                            &amp;&amp; <span class="self">self</span>.model_unwrap().fields[<span class="kw-2">*</span>index].ty.is_relation() =&gt;
 <a href=#893 id=893 data-nosnippet>893</a>                    {
-<a href=#894 id=894 data-nosnippet>894</a>                        <span class="kw-2">*</span>expr = <span class="self">self</span>.build_relation_subquery(<span class="kw-2">*</span>index, <span class="kw-2">&amp;</span>[]);
+<a href=#894 id=894 data-nosnippet>894</a>                        <span class="kw-2">*</span>expr = <span class="self">self</span>.build_relation_subquery(<span class="kw-2">*</span>index);
 <a href=#895 id=895 data-nosnippet>895</a>                    }
 <a href=#896 id=896 data-nosnippet>896</a>                    stmt::ExprReference::Field { nesting, index } =&gt; {
 <a href=#897 id=897 data-nosnippet>897</a>                        <span class="kw-2">*</span>expr = <span class="self">self</span>.lower_expr_field(<span class="kw-2">*</span>nesting, <span class="kw-2">*</span>index);
