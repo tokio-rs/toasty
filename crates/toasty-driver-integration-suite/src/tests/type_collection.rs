@@ -41,7 +41,7 @@ pub async fn vec_zoned_create_get(t: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: u64,
+        id: uuid::Uuid,
         values: Vec<jiff::Zoned>,
     }
 
