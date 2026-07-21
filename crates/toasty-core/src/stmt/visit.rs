@@ -6,11 +6,11 @@ use super::{
     ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming, ExprIntersects, ExprIsNull,
     ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
     ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
-    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Insert, InsertTarget, Join,
-    JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query,
-    Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived,
-    TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values,
-    With,
+    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include, Insert, InsertTarget,
+    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
+    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
+    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
+    ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -414,6 +414,13 @@ pub trait Visit {
         visit_path(self, i);
     }
 
+    /// Visits an [`Include`] node.
+    ///
+    /// The default implementation delegates to [`visit_include`].
+    fn visit_include(&mut self, i: &Include) {
+        visit_include(self, i);
+    }
+
     /// Visits a [`Projection`] node.
     ///
     /// The default implementation delegates to [`visit_projection`].
@@ -772,6 +779,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_path(&mut self, i: &Path) {
         Visit::visit_path(&mut **self, i);
+    }
+
+    fn visit_include(&mut self, i: &Include) {
+        Visit::visit_include(&mut **self, i);
     }
 
     fn visit_projection(&mut self, i: &Projection) {
@@ -1423,13 +1434,24 @@ where
 {
     match node {
         Returning::Model { include } => {
-            for path in include {
-                v.visit_path(path);
+            for inc in include {
+                v.visit_include(inc);
             }
         }
         Returning::Changed => {}
         Returning::Project(expr) => v.visit_expr(expr),
         Returning::Expr(expr) => v.visit_expr(expr),
+    }
+}
+
+/// Visits an [`Include`].
+pub fn visit_include<V>(v: &mut V, node: &Include)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_path(&node.path);
+    if let Some(query) = &node.query {
+        v.visit_stmt_query(query);
     }
 }
 

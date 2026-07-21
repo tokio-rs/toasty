@@ -303,6 +303,12 @@ impl Expand<'_> {
                 }
             }
 
+            impl<__Origin> Into<#toasty::stmt::Include<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
+                fn into(self) -> #toasty::stmt::Include<__Origin, #model_ident> {
+                    self.path.into()
+                }
+            }
+
             #( #variant_field_structs )*
         }
     }

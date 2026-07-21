@@ -183,6 +183,9 @@ pub use func_json_extract::FuncJsonExtract;
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
+mod include;
+pub use include::Include;
+
 mod insert;
 pub use insert::{Insert, Upsert, UpsertAction, UpsertTarget};
 

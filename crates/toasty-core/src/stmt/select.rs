@@ -1,4 +1,4 @@
-use super::{Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
+use super::{Include, Node, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
 use crate::{
     schema::db::TableId,
     stmt::{ExprSet, Filter},
@@ -52,14 +52,14 @@ impl Select {
         }
     }
 
-    /// Adds an association include path to the returning clause.
+    /// Adds an association include to the returning clause.
     ///
     /// # Panics
     ///
     /// Panics if the returning clause is not `Returning::Model`.
-    pub(crate) fn include(&mut self, path: impl Into<Path>) {
+    pub(crate) fn include(&mut self, include: impl Into<Include>) {
         match &mut self.returning {
-            Returning::Model { include } => include.push(path.into()),
+            Returning::Model { include: includes } => includes.push(include.into()),
             _ => panic!("Expected Returning::Model for include operation"),
         }
     }
