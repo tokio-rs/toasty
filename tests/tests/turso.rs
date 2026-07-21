@@ -35,6 +35,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_array: false,
     native_ilike: false,
     native_enum: false,
+    insert_values_unnest: false,
     vec_scalar: true,
     vec_remove: false,
     vec_pop: false,
