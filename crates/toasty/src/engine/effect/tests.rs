@@ -42,6 +42,16 @@ fn simple_delete() -> Delete {
     }
 }
 
+fn query_with_cte(body: impl Into<stmt::ExprSet>) -> Statement {
+    let mut query = simple_query();
+    query.with = Some(With {
+        ctes: vec![stmt::Cte {
+            query: Query::new(body),
+        }],
+    });
+    Statement::Query(query)
+}
+
 // --- top-level variants ---
 
 #[test]
@@ -133,17 +143,22 @@ fn query_with_nested_query_only_is_read_only() {
 #[test]
 fn query_with_cte_insert_is_mutating() {
     // WITH ins AS (INSERT ... RETURNING *) SELECT * FROM ins
-    // The mutation lives in the WITH clause as an Expr::Stmt(Insert).
-    let mut query = simple_query();
-    query.with = Some(With {
-        ctes: vec![stmt::Cte {
-            query: Query::values(stmt::Values::new(vec![Expr::Stmt(ExprStmt {
-                stmt: Box::new(Statement::Insert(simple_insert())),
-            })])),
-        }],
-    });
+    let stmt = query_with_cte(simple_insert());
 
-    let stmt = Statement::Query(query);
+    assert_eq!(classify(&stmt), Effect::Mutating);
+}
+
+#[test]
+fn query_with_cte_update_is_mutating() {
+    let stmt = query_with_cte(simple_update());
+
+    assert_eq!(classify(&stmt), Effect::Mutating);
+}
+
+#[test]
+fn query_with_cte_delete_is_mutating() {
+    let stmt = query_with_cte(simple_delete());
+
     assert_eq!(classify(&stmt), Effect::Mutating);
 }
 

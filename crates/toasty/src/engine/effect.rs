@@ -12,19 +12,19 @@
 //! [`Statement`]: toasty_core::stmt::Statement
 //! [`docs/dev/design/retry-safe-recovery.md`]: ../../../docs/dev/design/retry-safe-recovery.md
 
-use toasty_core::stmt::{self, ExprStmt, Statement, Visit};
+use toasty_core::stmt::{Delete, Insert, Statement, Update, Visit};
 
 /// Whether a statement mutates database state.
 ///
 /// A statement is [`Effect::ReadOnly`] if it is a [`Statement::Query`]
-/// and contains no embedded mutation sub-statement (`Expr::Stmt` whose
-/// wrapped statement is an `Insert`, `Update`, or `Delete`) anywhere
-/// in its tree.  Otherwise it is [`Effect::Mutating`].
+/// and contains no `Insert`, `Update`, or `Delete` anywhere in its
+/// tree. Otherwise it is [`Effect::Mutating`].
 ///
 /// CTE-with-mutation queries (e.g.
 /// `WITH ins AS (INSERT ... RETURNING *) SELECT * FROM ins`) parse as
-/// `Statement::Query` shapes that carry an `Expr::Stmt(Insert)` in the
-/// `WITH` clause and are correctly classified as `Mutating`.
+/// `Statement::Query` values whose `WITH` clauses contain an
+/// `ExprSet::Insert`, `ExprSet::Update`, or `ExprSet::Delete` and are
+/// correctly classified as `Mutating`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub(crate) enum Effect {
     /// The statement reads but does not mutate state.  Safe to retry
@@ -60,15 +60,16 @@ struct Walker {
 }
 
 impl Visit for Walker {
-    fn visit_expr_stmt(&mut self, i: &ExprStmt) {
-        match &*i.stmt {
-            Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_) => {
-                self.mutating = true;
-            }
-            Statement::Query(_) => {
-                stmt::visit::visit_expr_stmt(self, i);
-            }
-        }
+    fn visit_stmt_delete(&mut self, _: &Delete) {
+        self.mutating = true;
+    }
+
+    fn visit_stmt_insert(&mut self, _: &Insert) {
+        self.mutating = true;
+    }
+
+    fn visit_stmt_update(&mut self, _: &Update) {
+        self.mutating = true;
     }
 }
 
