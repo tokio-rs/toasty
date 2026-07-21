@@ -81,7 +81,7 @@ impl<M> Paginate<M> {
 
         let per_page = i64::try_from(per_page).expect("per_page exceeds i64::MAX");
         query.untyped.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
-            page_size: stmt::Expr::Static(stmt::Value::from(per_page)),
+            page_size: stmt::Value::from(per_page).into(),
             after: None,
         }));
 

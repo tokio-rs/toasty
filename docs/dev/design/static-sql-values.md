@@ -6,7 +6,7 @@ Add a new `Expr::Static(Value)` AST variant alongside `Expr::Value`.
 `Expr::Value` is extracted as a bind parameter (today's behavior);
 `Expr::Static` survives `extract_params` and renders inline as a SQL
 literal.  The engine and the model derive emit `Expr::Static` for
-schema-fixed leaves (`LIMIT n` from the builder, enum discriminants,
+schema-fixed leaves (`LIMIT 1` from `.first()`, enum discriminants,
 `#[auto]` defaults).  User-supplied values stay `Expr::Value` and
 flow through the bind path unchanged.
 
@@ -19,19 +19,16 @@ today, so escaping is the driver's concern.  The remaining
 question is *rendering* — whether a leaf belongs in the SQL text
 or in the parameter list.  Three concrete payoffs:
 
-1. **Bind-parameter inflation.**  `extract_values`
-   (`crates/toasty/src/engine/extract_params.rs:91`) replaces every
-   `Expr::Value` with `Expr::Arg(n)`.  `LIMIT 10` becomes
-   `LIMIT $1` with `[I64(10)]` as a bind.  Plan caches in
-   PostgreSQL, MySQL, and SQLite key on SQL text; inlining
-   schema-fixed leaves widens the universe of query shapes the
-   cache recognizes as the same.
+1. **Fixed SQL literals.**  `extract_values` replaces every
+   `Expr::Value` with `Expr::Arg(n)`, including values fixed by the
+   engine or schema.  `Expr::Static` lets those fixed values remain
+   in the SQL text.  Runtime values remain parameters so queries with
+   different inputs reuse the same SQL-keyed statement-cache entry.
 
-2. **Runtime-only literal invariants.**  `verify.rs:165` panics
-   if `LIMIT`/`OFFSET` is anything other than `Expr::Value(I64(_))`.
-   With `Expr::Static`, the check tightens to "is `Expr::Static`
-   carrying `Value::I64`," and a future contributor who threads a
-   user-supplied bind into pagination fails at the AST level.
+2. **Literal invariants.**  Limit verification accepts
+   `Expr::Value(Value::I64)` for runtime pagination values and
+   `Expr::Static(Value::I64)` for fixed engine-generated limits.
+   Other value types fail verification before planning.
 
 3. **DDL inline-literal contexts.**
    `crates/toasty-sql/src/serializer/value.rs:30` already inlines
@@ -47,21 +44,22 @@ No new user-facing API.  Existing queries compile and execute
 unchanged.
 
 The observable change is in the rendered SQL.  A query like
-`User::all().limit(10).exec(&mut db)` that today emits
+`User::all().first().exec(&mut db)` that today emits
 
 ```sql
 SELECT id, name FROM users LIMIT ?1
--- params: [I64(10)]
+-- params: [I64(1)]
 ```
 
 emits
 
 ```sql
-SELECT id, name FROM users LIMIT 10
+SELECT id, name FROM users LIMIT 1
 -- params: []
 ```
 
-after this lands.
+after this lands.  Runtime pagination methods such as `.limit(n)`,
+`.offset(n)`, and `.paginate(n)` continue to bind `n` as a parameter.
 
 ## Proposed changes
 
@@ -80,7 +78,7 @@ pub enum Expr {
 
     /// Constant value rendered inline as a SQL literal.  Set by
     /// the engine and the model derive for schema-fixed leaves
-    /// (`LIMIT n` from the builder, enum discriminants, `#[auto]`
+    /// (`LIMIT 1` from `.first()`, enum discriminants, `#[auto]`
     /// defaults).  Survives `extract_params` and reaches the
     /// serializer unchanged.
     Static(Value),
@@ -123,7 +121,7 @@ DDL path and is reused here.
 Sites that synthesize schema-fixed leaves switch from `Expr::Value`
 to `Expr::Static`.  The set for iteration 1:
 
-- `LIMIT n` / `OFFSET n` from the builder
+- The fixed `LIMIT 1` emitted by `.first()`
   (`crates/toasty/src/stmt/query.rs`).
 - Enum discriminants emitted during lowering
   (`crates/toasty/src/engine/lower/`).
@@ -132,7 +130,8 @@ to `Expr::Static`.  The set for iteration 1:
 - Variant-encoded `None` markers in embedded enums (same call
   sites as discriminants).
 
-Every other `Expr::Value` construction stays `Value`.
+Every other `Expr::Value` construction stays `Value`, including runtime
+limits, offsets, and cursor page sizes.
 
 ### Engine passes
 
@@ -169,8 +168,8 @@ does not need a new visitor.
 Nothing changes for drivers.  SQL drivers receive a SQL string and
 `Vec<TypedValue>`; the render decision is consumed entirely
 upstream of the driver call.  A driver that previously received
-`("SELECT ... LIMIT ?1", [TypedValue { value: I64(10), ty: I64 }])`
-now receives `("SELECT ... LIMIT 10", [])`.
+`("SELECT ... LIMIT ?1", [TypedValue { value: I64(1), ty: I64 }])`
+for `.first()` now receives `("SELECT ... LIMIT 1", [])`.
 
 DynamoDB is unaffected: the driver has no SQL-text-vs-bind
 distinction, and every `Expr::Static` leaf flows through the same
