@@ -233,7 +233,7 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
                 offset: None,
             })),
         }),
-        params: [],
+        params: [{ value: == true }],
     }));
 
     let oldest = User::all()
