@@ -4,7 +4,7 @@ use crate::prelude::*;
 use toasty::stmt::Page;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{ExprSet, Statement},
+    stmt::{Expr, ExprSet, Limit, Statement, Value},
 };
 
 #[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
@@ -213,6 +213,7 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
     ])
     .exec(&mut db)
     .await?;
+    t.log().clear();
 
     // Regression for https://github.com/tokio-rs/toasty/issues/692:
     // `.first()` on a query with multiple matching rows must return the first
@@ -223,6 +224,17 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
     assert_struct!(youngest, Some(_ { name: "Bob", .. }));
+
+    let (op, _) = t.log().pop();
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            limit: Some(Limit::Offset({
+                limit: Expr::Static(== Value::I64(1)),
+                offset: None,
+            })),
+        }),
+        params: [],
+    }));
 
     let oldest = User::all()
         .order_by(User::fields().age().desc())

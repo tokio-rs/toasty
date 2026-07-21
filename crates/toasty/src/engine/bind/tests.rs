@@ -447,14 +447,14 @@ fn binary_like_glob_wildcards_are_literal() {
 }
 
 // ============================================================================
-// Expr::Static (schema-fixed leaves) survives binding
+// Expr::Static survives binding
 // ============================================================================
 
 #[test]
 fn static_value_in_insert_row_is_not_extracted() {
     // Mixed row: one user-supplied `Expr::Value` (extracted) and one
-    // engine-emitted `Expr::Static` (passes through). Confirms the
-    // bind pass keys on the variant, not the value content.
+    // synthetic `Expr::Static` (passes through). Confirms the bind pass
+    // keys on the variant, not the value content.
     #[derive(toasty::Model)]
     struct Item {
         #[key]

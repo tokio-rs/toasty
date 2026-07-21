@@ -154,9 +154,8 @@ pub enum Expr {
     /// `Expr::Arg(n)`.
     Value(Value),
 
-    /// Constant value rendered inline as a SQL literal.  Set by the
-    /// engine and the model derive for schema-fixed leaves (`LIMIT 1`
-    /// from `.first()`, enum discriminants, `#[auto]` defaults).
+    /// Constant value rendered inline as a SQL literal. The query builder uses
+    /// this for the fixed `LIMIT 1` emitted by `.first()`.
     /// Survives `extract_params` and reaches the SQL serializer
     /// unchanged.  See `docs/dev/design/static-sql-values.md`.
     Static(Value),
