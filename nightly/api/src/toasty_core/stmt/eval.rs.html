@@ -413,7 +413,7 @@
 <a href=#413 id=413 data-nosnippet>413</a>                    <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"ExprExists with non-Values body"</span>),
 <a href=#414 id=414 data-nosnippet>414</a>                }
 <a href=#415 id=415 data-nosnippet>415</a>            }
-<a href=#416 id=416 data-nosnippet>416</a>            Expr::Value(value) =&gt; <span class="prelude-val">Ok</span>(value.clone()),
+<a href=#416 id=416 data-nosnippet>416</a>            Expr::Value(value) | Expr::Static(value) =&gt; <span class="prelude-val">Ok</span>(value.clone()),
 <a href=#417 id=417 data-nosnippet>417</a>            <span class="comment">// A document path read: navigate the named wire form
 <a href=#418 id=418 data-nosnippet>418</a>            // (`Value::Object`) by key, then cast the leaf to the extraction's
 <a href=#419 id=419 data-nosnippet>419</a>            // declared type. This is how a driver-side in-memory check (e.g.

@@ -445,7 +445,7 @@
 <a href=#445 id=445 data-nosnippet>445</a>    <span class="macro">assert!</span>(!query.single, <span class="string">"query is single"</span>);
 <a href=#446 id=446 data-nosnippet>446</a>    query.single = <span class="bool-val">true</span>;
 <a href=#447 id=447 data-nosnippet>447</a>    query.limit = <span class="prelude-val">Some</span>(stmt::Limit::Offset(stmt::LimitOffset {
-<a href=#448 id=448 data-nosnippet>448</a>        limit: stmt::Expr::from(<span class="number">1i64</span>),
+<a href=#448 id=448 data-nosnippet>448</a>        limit: stmt::Expr::Static(stmt::Value::I64(<span class="number">1</span>)),
 <a href=#449 id=449 data-nosnippet>449</a>        offset: <span class="prelude-val">None</span>,
 <a href=#450 id=450 data-nosnippet>450</a>    }));
 <a href=#451 id=451 data-nosnippet>451</a>}

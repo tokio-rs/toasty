@@ -2074,10 +2074,10 @@
 <a href=#2074 id=2074 data-nosnippet>2074</a>/// `QueryPk` on NoSQL drivers. Returns `None` when the statement has no limit
 <a href=#2075 id=2075 data-nosnippet>2075</a>/// clause.
 <a href=#2076 id=2076 data-nosnippet>2076</a>///
-<a href=#2077 id=2077 data-nosnippet>2077</a>/// Assumes `page_size`, `limit`, and `offset` fields are `Value::I64` literals.
-<a href=#2078 id=2078 data-nosnippet>2078</a>/// Builders normalize to `I64`, and `verify::verify_limit_is_integer_literal`
-<a href=#2079 id=2079 data-nosnippet>2079</a>/// enforces this invariant on the AST — so any other shape reaching here is a
-<a href=#2080 id=2080 data-nosnippet>2080</a>/// bug upstream.
+<a href=#2077 id=2077 data-nosnippet>2077</a>/// Assumes `page_size`, `limit`, and `offset` fields are `I64` literals. Runtime
+<a href=#2078 id=2078 data-nosnippet>2078</a>/// values use `Expr::Value`; the fixed limit emitted by `.first()` uses
+<a href=#2079 id=2079 data-nosnippet>2079</a>/// `Expr::Static`. `verify::verify_limit_is_integer_literal` enforces this
+<a href=#2080 id=2080 data-nosnippet>2080</a>/// invariant on the AST, so any other shape reaching here is a bug upstream.
 <a href=#2081 id=2081 data-nosnippet>2081</a></span><span class="kw">fn </span>extract_pagination(stmt: <span class="kw-2">&amp;</span>stmt::Statement) -&gt; <span class="prelude-ty">Option</span>&lt;Pagination&gt; {
 <a href=#2082 id=2082 data-nosnippet>2082</a>    <span class="kw">let </span>query = stmt.as_query()<span class="question-mark">?</span>;
 <a href=#2083 id=2083 data-nosnippet>2083</a>    <span class="kw">match </span>query.limit.as_ref()<span class="question-mark">? </span>{
@@ -2097,11 +2097,11 @@
 <a href=#2097 id=2097 data-nosnippet>2097</a>    }
 <a href=#2098 id=2098 data-nosnippet>2098</a>}
 <a href=#2099 id=2099 data-nosnippet>2099</a>
-<a href=#2100 id=2100 data-nosnippet>2100</a><span class="doccomment">/// Extracts an `i64` from a `Value::I64` literal expression. Panics on any
-<a href=#2101 id=2101 data-nosnippet>2101</a>/// other shape — an invariant violation that `verify` should have caught.
+<a href=#2100 id=2100 data-nosnippet>2100</a><span class="doccomment">/// Extracts an `i64` from a bound or static `I64` literal expression. Panics on
+<a href=#2101 id=2101 data-nosnippet>2101</a>/// any other shape — an invariant violation that `verify` should have caught.
 <a href=#2102 id=2102 data-nosnippet>2102</a></span><span class="kw">fn </span>as_i64_literal(expr: <span class="kw-2">&amp;</span>stmt::Expr) -&gt; i64 {
 <a href=#2103 id=2103 data-nosnippet>2103</a>    <span class="kw">match </span>expr {
-<a href=#2104 id=2104 data-nosnippet>2104</a>        stmt::Expr::Value(stmt::Value::I64(n)) =&gt; <span class="kw-2">*</span>n,
+<a href=#2104 id=2104 data-nosnippet>2104</a>        stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) =&gt; <span class="kw-2">*</span>n,
 <a href=#2105 id=2105 data-nosnippet>2105</a>        <span class="kw">_ </span>=&gt; <span class="macro">panic!</span>(<span class="string">"limit/offset must be an i64 literal; got {expr:#?}"</span>),
 <a href=#2106 id=2106 data-nosnippet>2106</a>    }
 <a href=#2107 id=2107 data-nosnippet>2107</a>}

@@ -534,8 +534,8 @@
 <a href=#534 id=534 data-nosnippet>534</a>}
 <a href=#535 id=535 data-nosnippet>535</a>
 <a href=#536 id=536 data-nosnippet>536</a><span class="doccomment">/// Concatenate two list-shaped expressions if both are literals (either
-<a href=#537 id=537 data-nosnippet>537</a>/// `Expr::List` or `Expr::Value(Value::List)`). Returns the original pair
-<a href=#538 id=538 data-nosnippet>538</a>/// on failure so the caller can preserve the un-folded shape.
+<a href=#537 id=537 data-nosnippet>537</a>/// `Expr::List` or `Expr::Value(Value::List)`). Returns a residual `Batch`
+<a href=#538 id=538 data-nosnippet>538</a>/// containing the original pair if either expression is not a literal.
 <a href=#539 id=539 data-nosnippet>539</a></span><span class="kw">fn </span>try_concat_list_literals_to_assignment(a: stmt::Expr, b: stmt::Expr) -&gt; stmt::Assignment {
 <a href=#540 id=540 data-nosnippet>540</a>    <span class="kw">use </span>stmt::Assignment::{Append, Batch};
 <a href=#541 id=541 data-nosnippet>541</a>    <span class="kw">if </span>!is_list_literal(<span class="kw-2">&amp;</span>a) || !is_list_literal(<span class="kw-2">&amp;</span>b) {
