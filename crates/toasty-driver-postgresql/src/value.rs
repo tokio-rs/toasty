@@ -459,6 +459,18 @@ fn decode_array_element(elem_pg_ty: &Type, bytes: &[u8], elem_ty: &stmt::Type) -
             f64::from_sql(elem_pg_ty, bytes).expect("decode FLOAT8 array element"),
             elem_ty,
         )
+    } else if elem_pg_ty == &Type::NUMERIC {
+        #[cfg(feature = "rust_decimal")]
+        {
+            stmt::Value::Decimal(
+                rust_decimal::Decimal::from_sql(elem_pg_ty, bytes)
+                    .expect("decode NUMERIC array element"),
+            )
+        }
+        #[cfg(not(feature = "rust_decimal"))]
+        {
+            panic!("NUMERIC array elements require rust_decimal feature to be enabled")
+        }
     } else if elem_pg_ty == &Type::UUID {
         stmt::Value::Uuid(
             uuid::Uuid::from_sql(elem_pg_ty, bytes).expect("decode UUID array element"),
