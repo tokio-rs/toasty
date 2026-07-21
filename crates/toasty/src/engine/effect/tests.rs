@@ -18,6 +18,7 @@ fn simple_insert() -> Insert {
     Insert {
         target: InsertTarget::Model(model()),
         source: Query::unit(),
+        upsert: None,
         returning: None,
     }
 }
