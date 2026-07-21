@@ -318,9 +318,9 @@ impl Verify<'_, '_> {
     /// resolvable here and pass through unchecked.
     fn verify_include_filters(&mut self, i: &stmt::Select) {
         for include in i.returning.model_includes() {
-            let has_filter = match &include.query.body {
-                stmt::ExprSet::Select(select) => select.filter.expr.is_some(),
-                _ => false,
+            let has_filter = match include.query.as_ref().map(|query| &query.body) {
+                Some(stmt::ExprSet::Select(select)) => select.filter.expr.is_some(),
+                Some(_) | None => false,
             };
             if !has_filter {
                 continue;

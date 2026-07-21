@@ -1451,7 +1451,9 @@ where
     V: VisitMut + ?Sized,
 {
     v.visit_path_mut(&mut node.path);
-    v.visit_stmt_query_mut(&mut node.query);
+    if let Some(query) = &mut node.query {
+        v.visit_stmt_query_mut(query);
+    }
 }
 
 /// Default mutable traversal for [`Source`] nodes. Dispatches to the model or table source visitor.

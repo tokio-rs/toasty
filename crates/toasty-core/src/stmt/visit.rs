@@ -1449,7 +1449,9 @@ where
     V: Visit + ?Sized,
 {
     v.visit_path(&node.path);
-    v.visit_stmt_query(&node.query);
+    if let Some(query) = &node.query {
+        v.visit_stmt_query(query);
+    }
 }
 
 /// Default traversal for [`Source`] nodes. Dispatches to model or table source visitor.

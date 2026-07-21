@@ -44,7 +44,7 @@ use crate::schema::lazy_slot;
 
 struct FlatInclude {
     projection: stmt::Projection,
-    query: stmt::Query,
+    query: Option<stmt::Query>,
 }
 
 /// The include entries that target a single field, partitioned by whether
@@ -483,8 +483,8 @@ fn flatten_include(include: &stmt::Include) -> FlatInclude {
     }
 }
 
-fn query_filter_expr(query: &stmt::Query) -> Option<stmt::Expr> {
-    match &query.body {
+fn query_filter_expr(query: &Option<stmt::Query>) -> Option<stmt::Expr> {
+    match &query.as_ref()?.body {
         stmt::ExprSet::Select(select) => select.filter.expr.clone(),
         _ => None,
     }
