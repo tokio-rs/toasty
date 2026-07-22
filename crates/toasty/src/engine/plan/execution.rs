@@ -1,4 +1,5 @@
 use crate::engine::{
+    effect::Effect,
     exec::{ExecPlan, VarStore},
     plan::ExecPlanner,
 };
@@ -13,8 +14,9 @@ impl ExecPlanner<'_> {
 
         let returning = self.logical_plan.completion().var.get();
 
-        let needs_transaction =
-            self.use_transactions && self.actions.iter().filter(|a| a.is_db_op()).count() > 1;
+        let needs_transaction = self.use_transactions
+            && self.actions.iter().filter(|a| a.is_db_op()).count() > 1
+            && self.actions.iter().any(|a| a.effect() == Effect::Mutating);
 
         ExecPlan {
             vars: VarStore::new(self.var_decls, self.schema),

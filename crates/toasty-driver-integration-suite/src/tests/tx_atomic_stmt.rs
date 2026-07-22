@@ -1,6 +1,9 @@
 use crate::prelude::*;
 
-use toasty_core::driver::{Operation, operation::Transaction};
+use toasty_core::{
+    driver::{Operation, operation::Transaction},
+    stmt::Statement,
+};
 
 // ===== Transaction wrapping =====
 
@@ -50,6 +53,36 @@ pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
 
     // Only the INSERT — no Transaction::Start { isolation: None, read_only: false } bookending it
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
+/// A read-only include executes its parent and relation queries without an
+/// implicit transaction.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn read_only_include_skips_transaction(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+    let user = toasty::create!(User {
+        name: "Alice",
+        todos: [{ title: "task" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user.todos.get().len(), 1);
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+        stmt: Statement::Query(_),
+    }));
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+        stmt: Statement::Query(_),
+    }));
     assert!(t.log().is_empty());
 
     Ok(())
