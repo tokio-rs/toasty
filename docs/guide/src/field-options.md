@@ -409,8 +409,7 @@ struct Post {
 Toasty serializes the value to a JSON string on insert and update, and
 deserializes it back when reading. Use `#[column(type = text)]` for text-backed
 JSON, `#[column(type = varchar(1000))]` for bounded text on databases that
-support `varchar`, or a custom type such as `#[column(type = "jsonb")]` when
-the target driver supports native JSON storage.
+support `varchar`.
 
 ```rust,ignore
 # use toasty::Model;
