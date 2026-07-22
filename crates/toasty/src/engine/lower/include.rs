@@ -456,10 +456,10 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
         {
             if rest.is_empty() {
                 include_self = true;
-                if let Some(query) = &fi.query {
-                    if let Some(order_by) = &query.order_by {
-                        top_order_by = Some(order_by.clone());
-                    }
+                if let Some(query) = &fi.query
+                    && let Some(order_by) = &query.order_by
+                {
+                    top_order_by = Some(order_by.clone());
                 }
                 match query_filter_expr(&fi.query) {
                     Some(f) if !unfiltered_self => {

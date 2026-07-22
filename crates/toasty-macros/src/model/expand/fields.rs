@@ -4,10 +4,26 @@ use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
-const FIELD_STRUCT_RESERVED_METHODS: &[&str] =
-    &["from_path", "path", "eq", "in_query", "into_root", "create"];
+const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
+    "from_path",
+    "path",
+    "eq",
+    "in_query",
+    "into_root",
+    "filter",
+    "order_by",
+    "create",
+];
 
-const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["from_path", "path", "any", "all", "create"];
+const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &[
+    "from_path",
+    "path",
+    "any",
+    "all",
+    "filter",
+    "order_by",
+    "create",
+];
 
 impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
@@ -184,16 +200,7 @@ impl Expand<'_> {
             return TokenStream::new();
         }
 
-        let has_field = |name| {
-            self.model
-                .fields
-                .iter()
-                .any(|field| util::bare_ident_name(&field.name.ident) == name)
-        };
-
-        // A field with the same name keeps its accessor; the include modifier
-        // is skipped for this model rather than colliding.
-        let filter = (!has_field("filter")).then(|| quote! {
+        quote! {
             /// Restricts the related rows loaded by `.include(...)`.
             #vis fn filter(self, predicate: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Include<__Origin, #target_ty> {
                 #toasty::stmt::Include::from_path_and_query(
@@ -201,8 +208,7 @@ impl Expand<'_> {
                     #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
                 ).filter(predicate)
             }
-        });
-        let order_by = (!has_field("order_by")).then(|| quote! {
+
             /// Orders the related rows loaded by `.include(...)`.
             #vis fn order_by(self, order_by: impl Into<#toasty::core::stmt::OrderBy>) -> #toasty::stmt::Include<__Origin, #target_ty> {
                 #toasty::stmt::Include::from_path_and_query(
@@ -210,10 +216,6 @@ impl Expand<'_> {
                     #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
                 ).order_by(order_by)
             }
-        });
-        quote! {
-            #filter
-            #order_by
         }
     }
 

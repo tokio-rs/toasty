@@ -360,12 +360,6 @@ impl Verify<'_, '_> {
                 )));
                 continue;
             }
-            if has_order_by && matches!(field.ty, app::FieldTy::Via(_)) {
-                self.record(Error::unsupported_feature(format!(
-                    "include ordering is not yet supported on multi-step relation `{}`",
-                    field.name,
-                )));
-            }
         }
     }
 
