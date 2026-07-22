@@ -312,8 +312,7 @@ use proc_macro::TokenStream;
 /// Wrap a serde-typed value in [`toasty::Json<T>`](toasty::stmt::Json) to
 /// serialize it as JSON in the database. Every JSON field must select its
 /// database column type with `#[column(type = ...)]`. Use `text` for
-/// text-backed JSON, or a custom type such as `"jsonb"` when the target driver
-/// supports native JSON storage. JSON fields require the `serde` feature and
+/// text-backed JSON. JSON fields require the `serde` feature and
 /// `T: serde::Serialize + serde::Deserialize`.
 ///
 /// ```
