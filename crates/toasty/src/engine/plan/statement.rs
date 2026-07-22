@@ -90,6 +90,7 @@
 use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
+use toasty_core::schema::db;
 use toasty_core::stmt::{self, visit_mut};
 
 use toasty_core::driver::operation::Pagination;
@@ -1590,14 +1591,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // For mutations, unique indexes, or other cases, use FindPkByIndex + GetByKey
         // - Mutations only need primary keys, not full records
         // - Unique indexes don't have full column projections in DynamoDB
-        let index_key_ty = self.index_key_ty(index_plan);
+        let primary_key_ty = self.table_primary_key_ty(index_plan.index.on);
 
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
             inputs,
             table: index_plan.index.on,
             index: index_plan.index.id,
             filter: index_plan.index_filter.take(),
-            ty: index_key_ty,
+            ty: primary_key_ty,
         });
 
         self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
@@ -2008,6 +2009,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // Type of the index key. Value for single index keys, record for
         // composite.
         stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index))
+    }
+
+    fn table_primary_key_ty(&self, table: db::TableId) -> stmt::Type {
+        let table = self.planner.engine.schema.db.table(table);
+        let primary_key = self.planner.engine.schema.db.index(table.primary_key.index);
+
+        stmt::Type::list(self.planner.engine.index_key_record_ty(primary_key))
     }
 
     fn stmt(&self) -> &stmt::Statement {
