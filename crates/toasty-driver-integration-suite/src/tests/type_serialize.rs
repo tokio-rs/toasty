@@ -39,6 +39,7 @@ pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         tags: Json<Vec<String>>,
     }
 
@@ -98,6 +99,7 @@ pub async fn json_option_outside_sql_null(t: &mut Test) -> Result<(), BoxError> 
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         data: Option<Json<HashMap<String, String>>>,
     }
 
@@ -146,6 +148,7 @@ pub async fn json_option_inside_json_null(t: &mut Test) -> Result<(), BoxError> 
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         extra: Json<Option<String>>,
     }
 
@@ -199,6 +202,7 @@ pub async fn json_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         meta: Json<Metadata>,
     }
 

@@ -419,6 +419,46 @@ impl Expand<'_> {
         quote! { #( #checks )* }
     }
 
+    /// Reject field types that require an explicit `#[column(type = ...)]`
+    /// when the attribute is absent.
+    ///
+    /// The field type communicates the requirement through `Field` trait
+    /// dispatch. The macro only checks whether the attribute supplied a type;
+    /// it never inspects the Rust type syntax. This also makes aliases and
+    /// transparent wrappers behave the same as the underlying field type.
+    pub(super) fn expand_column_type_requirement_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            let FieldTy::Primitive(ty) = &field.ty else {
+                return None;
+            };
+
+            if field
+                .attrs
+                .column
+                .as_ref()
+                .and_then(|column| column.ty.as_ref())
+                .is_some()
+            {
+                return None;
+            }
+
+            Some(quote_spanned! { ty.span()=>
+                const _: () = {
+                    if <#ty as #toasty::Field>::REQUIRES_EXPLICIT_COLUMN_TYPE {
+                        panic!(
+                            "`toasty::Json<T>` fields require `#[column(type = ...)]`; use \
+                             `#[column(type = text)]` for text-backed JSON storage"
+                        );
+                    }
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
     /// Emit one obligation per field with an explicit `#[auto(...)]` strategy
     /// that the field's Rust type implements
     /// `codegen_support::auto::AutoCompatible<Tag>` for the matching tag.

@@ -429,7 +429,9 @@ impl ColumnType {
                     "ColumnType::Enum should be expanded via expand_enum_storage_ty, not expand_with"
                 )
             }
-            Self::Custom(custom) => quote! { #toasty::core::schema::db::Type::Custom(#custom) },
+            Self::Custom(custom) => {
+                quote! { #toasty::core::schema::db::Type::Custom(#custom.to_string()) }
+            }
         }
     }
 }

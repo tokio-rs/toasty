@@ -145,6 +145,8 @@ impl<T: Load<Output = T>> Load for Deferred<T> {
 }
 
 impl<T: Field> Field for Deferred<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = T::ExprTarget;
     type Path<Origin> = T::Path<Origin>;
     type ListPath<Origin> = T::ListPath<Origin>;
