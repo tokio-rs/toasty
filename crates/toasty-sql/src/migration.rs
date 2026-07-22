@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use toasty_core::{
     driver::Capability,
     schema::{
-        db::{Column, Schema, Table, Type, TypeEnum},
+        db::{Column, Schema, Table, TableId, Type, TypeEnum},
         diff,
     },
 };
@@ -154,7 +154,13 @@ impl<'a> MigrationStatement<'a> {
                             capability,
                         );
                     } else {
-                        Self::emit_column_changes(&mut result, schema, columns, capability);
+                        Self::emit_column_changes(
+                            &mut result,
+                            schema,
+                            previous.id,
+                            columns,
+                            capability,
+                        );
                     }
 
                     // Indices diff
@@ -289,6 +295,7 @@ impl<'a> MigrationStatement<'a> {
     fn emit_column_changes(
         result: &mut Vec<Self>,
         schema: Cow<'a, Schema>,
+        table: TableId,
         columns: &[diff::Column<'_>],
         capability: &Capability,
     ) {
@@ -296,7 +303,7 @@ impl<'a> MigrationStatement<'a> {
             match item {
                 diff::Column::Add(column) => {
                     result.push(Self::new(
-                        Statement::add_column(column, capability),
+                        Statement::add_column(table, column, capability),
                         schema.clone(),
                     ));
                 }
