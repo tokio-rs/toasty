@@ -361,6 +361,12 @@ in the database. The inner `T` must implement `serde::Serialize` and
 `serde::Deserialize`. Each `Json<T>` field must select its database column
 type with `#[column(type = ...)]`.
 
+> [!IMPORTANT]
+> The requirement to write `#[column(type = ...)]` is temporary. A future
+> Toasty release will select each database's native JSON column type by
+> default. Explicit overrides will remain available for models that need a
+> different representation.
+
 [json-doc]: https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html
 
 Reach for `Json<T>` when the field is a serde-typed value that Toasty
