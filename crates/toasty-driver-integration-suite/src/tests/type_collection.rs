@@ -7,6 +7,146 @@
 
 use crate::prelude::*;
 
+#[driver_test(requires(and(native_array, native_timestamp)))]
+pub async fn vec_timestamp_create_get(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        values: Vec<jiff::Timestamp>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let values = vec![
+        "2023-11-14T22:13:20.123456Z".parse()?,
+        "2020-01-02T03:04:05.654321Z".parse()?,
+    ];
+
+    let item = toasty::create!(Item {
+        values: values.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
+#[driver_test(requires(vec_scalar))]
+pub async fn vec_zoned_create_get(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        values: Vec<jiff::Zoned>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let values = vec![
+        "2021-06-15T14:30:00-04:00[America/New_York]".parse()?,
+        "2025-12-31T23:59:59+09:00[Asia/Tokyo]".parse()?,
+    ];
+
+    let item = toasty::create!(Item {
+        values: values.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
+#[driver_test(requires(and(native_array, native_date)))]
+pub async fn vec_date_create_get(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        values: Vec<jiff::civil::Date>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let values = vec![
+        jiff::civil::date(2025, 6, 15),
+        jiff::civil::date(2020, 1, 2),
+    ];
+
+    let item = toasty::create!(Item {
+        values: values.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
+#[driver_test(requires(and(native_array, native_time)))]
+pub async fn vec_time_create_get(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        values: Vec<jiff::civil::Time>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let values = vec![
+        jiff::civil::time(9, 30, 45, 123_456_000),
+        jiff::civil::time(3, 4, 5, 654_321_000),
+    ];
+
+    let item = toasty::create!(Item {
+        values: values.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
+#[driver_test(requires(and(native_array, native_datetime)))]
+pub async fn vec_datetime_create_get(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        values: Vec<jiff::civil::DateTime>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let values = vec![
+        jiff::civil::datetime(2025, 6, 15, 9, 30, 45, 123_456_000),
+        jiff::civil::datetime(2020, 1, 2, 3, 4, 5, 654_321_000),
+    ];
+
+    let item = toasty::create!(Item {
+        values: values.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
 /// `Vec<String>` round-trips through INSERT, RETURNING, and a fresh fetch
 /// — covers both the PG bind path (driver receives `Value::List` as one
 /// `text[]` parameter) and the read path (`text[]` decoded back to

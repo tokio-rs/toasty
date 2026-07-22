@@ -379,6 +379,15 @@ impl_scalar!(rust_decimal::Decimal);
 #[cfg(feature = "bigdecimal")]
 impl_scalar!(bigdecimal::BigDecimal);
 
+#[cfg(feature = "jiff")]
+impl_scalar!(
+    jiff::Timestamp,
+    jiff::Zoned,
+    jiff::civil::Date,
+    jiff::civil::Time,
+    jiff::civil::DateTime
+);
+
 impl<T: Field> Field for Option<T> {
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;

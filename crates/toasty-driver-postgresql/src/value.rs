@@ -475,6 +475,52 @@ fn decode_array_element(elem_pg_ty: &Type, bytes: &[u8], elem_ty: &stmt::Type) -
         stmt::Value::Uuid(
             uuid::Uuid::from_sql(elem_pg_ty, bytes).expect("decode UUID array element"),
         )
+    } else if elem_pg_ty == &Type::TIMESTAMPTZ {
+        #[cfg(feature = "jiff")]
+        {
+            stmt::Value::Timestamp(
+                jiff::Timestamp::from_sql(elem_pg_ty, bytes)
+                    .expect("decode TIMESTAMPTZ array element"),
+            )
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("TIMESTAMPTZ requires jiff feature to be enabled")
+        }
+    } else if elem_pg_ty == &Type::TIMESTAMP {
+        #[cfg(feature = "jiff")]
+        {
+            stmt::Value::DateTime(
+                jiff::civil::DateTime::from_sql(elem_pg_ty, bytes)
+                    .expect("decode TIMESTAMP array element"),
+            )
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("TIMESTAMP requires jiff feature to be enabled")
+        }
+    } else if elem_pg_ty == &Type::DATE {
+        #[cfg(feature = "jiff")]
+        {
+            stmt::Value::Date(
+                jiff::civil::Date::from_sql(elem_pg_ty, bytes).expect("decode DATE array element"),
+            )
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("DATE requires jiff feature to be enabled")
+        }
+    } else if elem_pg_ty == &Type::TIME {
+        #[cfg(feature = "jiff")]
+        {
+            stmt::Value::Time(
+                jiff::civil::Time::from_sql(elem_pg_ty, bytes).expect("decode TIME array element"),
+            )
+        }
+        #[cfg(not(feature = "jiff"))]
+        {
+            panic!("TIME requires jiff feature to be enabled")
+        }
     } else if matches!(elem_pg_ty.kind(), Kind::Enum(_)) {
         // Enum labels are plain UTF-8; `EnumString` accepts `Kind::Enum` where
         // `String` won't.
