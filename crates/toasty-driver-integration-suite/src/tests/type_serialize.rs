@@ -39,6 +39,7 @@ pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         tags: Json<Vec<String>>,
     }
 
@@ -98,6 +99,7 @@ pub async fn json_option_outside_sql_null(t: &mut Test) -> Result<(), BoxError> 
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         data: Option<Json<HashMap<String, String>>>,
     }
 
@@ -146,6 +148,7 @@ pub async fn json_option_inside_json_null(t: &mut Test) -> Result<(), BoxError> 
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         extra: Json<Option<String>>,
     }
 
@@ -199,6 +202,7 @@ pub async fn json_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         #[key]
         #[auto]
         id: ID,
+        #[column(type = text)]
         meta: Json<Metadata>,
     }
 
@@ -217,6 +221,44 @@ pub async fn json_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, Json(meta));
+
+    Ok(())
+}
+
+#[driver_test(id(ID))]
+pub async fn json_data_enum_field(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Payload {
+        Data {
+            #[column(type = text)]
+            tags: Json<Vec<String>>,
+        },
+        Empty,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        payload: Payload,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let tags = vec!["rust".to_string(), "toasty".to_string()];
+
+    let item = toasty::create!(Item {
+        payload: Payload::Data {
+            tags: Json(tags.clone()),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(
+        Item::get_by_id(&mut db, &item.id).await?.payload,
+        Payload::Data { tags: Json(tags) }
+    );
 
     Ok(())
 }

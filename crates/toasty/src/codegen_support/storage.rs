@@ -158,6 +158,15 @@ impl CompatibleWith<tag::F64> for f32 {}
 impl CompatibleWith<tag::Text> for String {}
 impl CompatibleWith<tag::VarChar> for String {}
 
+// `Json<T>` serializes through Toasty's string expression type, so users may
+// explicitly select either standard string storage type. Driver-native JSON
+// types use the custom string form of `#[column(type = ...)]`, which does not
+// have a portable compatibility marker.
+#[cfg(feature = "serde")]
+impl<T> CompatibleWith<tag::Text> for crate::Json<T> {}
+#[cfg(feature = "serde")]
+impl<T> CompatibleWith<tag::VarChar> for crate::Json<T> {}
+
 impl CompatibleWith<tag::Binary> for Vec<u8> {}
 impl CompatibleWith<tag::Blob> for Vec<u8> {}
 
