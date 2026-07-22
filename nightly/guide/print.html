@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-df6528ed.js";
+            window.path_to_searchindex_js = "searchindex-a63479f6.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1785f50e.js"></script>
@@ -3251,9 +3251,17 @@ struct Event {
 }
 <span class="boring">}</span></code></pre>
 <h2 id="json-serialization"><a class="header" href="#json-serialization">JSON serialization</a></h2>
-<p>Wrap a field type in <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> to store it as a JSON
-string in the database. The inner <code>T</code> must implement <code>serde::Serialize</code>
-and <code>serde::Deserialize</code>.</p>
+<p>Wrap a field type in <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> to serialize it as JSON
+in the database. The inner <code>T</code> must implement <code>serde::Serialize</code> and
+<code>serde::Deserialize</code>. Each <code>Json&lt;T&gt;</code> field must select its database column
+type with <code>#[column(type = ...)]</code>.</p>
+<blockquote class="blockquote-tag blockquote-tag-important">
+<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Important</p>
+<p>The requirement to write <code>#[column(type = ...)]</code> is temporary. A future
+Toasty release will select each database’s native JSON column type by
+default. Explicit overrides will remain available for models that need a
+different representation.</p>
+</blockquote>
 <p>Reach for <code>Json&lt;T&gt;</code> when the field is a serde-typed value that Toasty
 doesn’t natively support — for example, a third-party type or a struct
 you don’t want to declare as <code>#[derive(toasty::Embed)]</code>. For
@@ -3284,13 +3292,13 @@ struct Post {
 
     // Arbitrary serde type — `Json&lt;T&gt;` stores it as one opaque JSON
     // column. Toasty cannot query into it.
+    #[column(type = text)]
     meta: toasty::Json&lt;Metadata&gt;,
 }</code></pre>
 <p>Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The default database column type is <code>TEXT</code>.
-You can override this with <code>#[column(type = ...)]</code> if needed — for example,
-<code>#[column(type = varchar(1000))]</code> to limit the stored JSON size on databases
-that support <code>varchar</code>.</p>
+deserializes it back when reading. Use <code>#[column(type = text)]</code> for text-backed
+JSON, <code>#[column(type = varchar(1000))]</code> for bounded text on databases that
+support <code>varchar</code>.</p>
 <pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
 </span><span class="boring">use serde::{Serialize, Deserialize};
 </span><span class="boring">#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -3305,6 +3313,7 @@ that support <code>varchar</code>.</p>
 </span><span class="boring">    id: u64,
 </span><span class="boring">    title: String,
 </span><span class="boring">    tags: Vec&lt;String&gt;,
+</span><span class="boring">    #[column(type = text)]
 </span><span class="boring">    meta: toasty::Json&lt;Metadata&gt;,
 </span><span class="boring">}
 </span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
@@ -3337,11 +3346,13 @@ encoded inside the JSON itself:</p>
 </span><span class="boring">    #[auto]
 </span><span class="boring">    id: u64,
 </span><span class="boring">    title: String,
-</span>// `None` maps to SQL `NULL`; `Some(v)` to a JSON string.
+</span>// `None` maps to SQL `NULL`; `Some(v)` to encoded JSON.
+#[column(type = text)]
 metadata: Option&lt;toasty::Json&lt;HashMap&lt;String, String&gt;&gt;&gt;,
 
-// `None` maps to the JSON literal `"null"` (still a non-null string);
-// `Some(v)` to a JSON string.
+// `None` maps to the JSON literal `"null"` (still a non-null column value);
+// `Some(v)` to encoded JSON.
+#[column(type = text)]
 labels: toasty::Json&lt;Option&lt;Vec&lt;String&gt;&gt;&gt;,
 <span class="boring">}</span></code></pre>
 <p><code>Option&lt;Json&lt;T&gt;&gt;</code> is the common case — pick it when the database should

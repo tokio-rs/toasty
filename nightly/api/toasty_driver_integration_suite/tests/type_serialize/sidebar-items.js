@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["json_custom_struct","json_option_inside_json_null","json_option_outside_sql_null","json_vec_string"]};
+window.SIDEBAR_ITEMS = {"mod":["json_custom_struct","json_data_enum_field","json_option_inside_json_null","json_option_outside_sql_null","json_vec_string"]};

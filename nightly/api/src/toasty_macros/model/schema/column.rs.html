@@ -429,8 +429,10 @@
 <a href=#429 id=429 data-nosnippet>429</a>                    <span class="string">"ColumnType::Enum should be expanded via expand_enum_storage_ty, not expand_with"
 <a href=#430 id=430 data-nosnippet>430</a>                </span>)
 <a href=#431 id=431 data-nosnippet>431</a>            }
-<a href=#432 id=432 data-nosnippet>432</a>            <span class="self">Self</span>::Custom(custom) =&gt; <span class="macro">quote!</span> { #toasty::core::schema::db::Type::Custom(#custom) },
-<a href=#433 id=433 data-nosnippet>433</a>        }
-<a href=#434 id=434 data-nosnippet>434</a>    }
-<a href=#435 id=435 data-nosnippet>435</a>}
+<a href=#432 id=432 data-nosnippet>432</a>            <span class="self">Self</span>::Custom(custom) =&gt; {
+<a href=#433 id=433 data-nosnippet>433</a>                <span class="macro">quote!</span> { #toasty::core::schema::db::Type::Custom(#custom.to_string()) }
+<a href=#434 id=434 data-nosnippet>434</a>            }
+<a href=#435 id=435 data-nosnippet>435</a>        }
+<a href=#436 id=436 data-nosnippet>436</a>    }
+<a href=#437 id=437 data-nosnippet>437</a>}
 </code></pre></div></section></main></body></html>
