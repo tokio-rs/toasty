@@ -323,8 +323,7 @@ unchanged — a bare path is an unfiltered include.
   embedded predicate, and the interaction with `.any` / `.all` on the
   named relation each need their own treatment. Include filters land
   first; named filtered relations follow.
-- **`.limit` / `.order_by` on includes** — see
-  [Ordering and limiting included relations](./include-ordering-and-limits.md).
+- **`.limit` / `.order_by` on includes** — separate design.
 - **Cross-scope predicates.** A filter like
   `Todo::fields().user_id().eq(User::fields().id())` (referencing
   parent fields) is not supported. `.any` / `.all` do not support it

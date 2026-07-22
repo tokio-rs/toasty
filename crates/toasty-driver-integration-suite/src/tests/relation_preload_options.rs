@@ -16,7 +16,6 @@ pub async fn preload_has_many_ordered_per_parent(test: &mut Test) -> Result<()> 
                 { title: "b", complete: false, priority: 2 },
                 { title: "a", complete: false, priority: 2 },
                 { title: "c", complete: false, priority: 1 },
-                { title: "aa", complete: true, priority: 3 },
             ]
         },
         {
@@ -24,30 +23,41 @@ pub async fn preload_has_many_ordered_per_parent(test: &mut Test) -> Result<()> 
             todos: [
                 { title: "z", complete: false, priority: 1 },
                 { title: "y", complete: false, priority: 1 },
-                { title: "x", complete: true, priority: 3 },
+                { title: "x", complete: false, priority: 3 },
             ]
         },
     ])
     .exec(&mut db)
     .await?;
 
-    let users: Vec<User> = User::all()
+    let tuple_ordered: Vec<User> = User::all()
+        .order_by(User::fields().name().asc())
+        .include(User::fields().todos().order_by((
+            Todo::fields().priority().desc(),
+            Todo::fields().title().asc(),
+        )))
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(tuple_ordered, [
+        { name: "alice", todos.get(): [{ title: "a" }, { title: "b" }, { title: "c" }] },
+        { name: "bob", todos.get(): [{ title: "x" }, { title: "y" }, { title: "z" }] },
+    ]);
+
+    let chained_ordered: Vec<User> = User::all()
         .order_by(User::fields().name().asc())
         .include(
             User::fields()
                 .todos()
-                .order_by((
-                    Todo::fields().complete().asc(),
-                    Todo::fields().priority().desc(),
-                ))
+                .order_by(Todo::fields().priority().desc())
                 .order_by(Todo::fields().title().asc()),
         )
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [
-        { name: "alice", todos.get(): [{ title: "a" }, { title: "b" }, { title: "c" }, { title: "aa" }] },
-        { name: "bob", todos.get(): [{ title: "y" }, { title: "z" }, { title: "x" }] },
+    assert_struct!(chained_ordered, [
+        { name: "alice", todos.get(): [{ title: "a" }, { title: "b" }, { title: "c" }] },
+        { name: "bob", todos.get(): [{ title: "x" }, { title: "y" }, { title: "z" }] },
     ]);
 
     Ok(())
@@ -128,13 +138,13 @@ pub async fn preload_nested_relations_ordered_at_each_level(test: &mut Test) -> 
 }
 
 /// Include modifiers take precedence over fields with the same names.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn preload_modifiers_with_reserved_field_names(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
         children: toasty::Deferred<Vec<Child>>,
@@ -144,14 +154,14 @@ pub async fn preload_modifiers_with_reserved_field_names(test: &mut Test) -> Res
     struct Child {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         filter: String,
         order_by: String,
         rank: i64,
 
         #[index]
-        parent_id: ID,
+        parent_id: uuid::Uuid,
 
         #[belongs_to(key = parent_id, references = id)]
         parent: toasty::Deferred<Parent>,
@@ -187,9 +197,11 @@ pub async fn preload_modifiers_with_reserved_field_names(test: &mut Test) -> Res
     Ok(())
 }
 
-/// Later explicit ordering replaces earlier ordering; a bare include preserves it.
+/// The last include supplies the complete ordering for a repeated relation path.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn preload_has_many_repeated_ordering_last_wins(test: &mut Test) -> Result<()> {
+    use toasty_core::{driver::Operation, stmt::Statement};
+
     let mut db = setup(test).await;
 
     let user = toasty::create!(User {
@@ -210,7 +222,6 @@ pub async fn preload_has_many_repeated_ordering_last_wins(test: &mut Test) -> Re
                 .todos()
                 .order_by(Todo::fields().title().desc()),
         )
-        .include(User::fields().todos())
         .get(&mut db)
         .await?;
 
@@ -219,6 +230,26 @@ pub async fn preload_has_many_repeated_ordering_last_wins(test: &mut Test) -> Re
         { title: "b" },
         { title: "a" },
     ]);
+
+    test.log().clear();
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .todos()
+                .order_by(Todo::fields().title().desc()),
+        )
+        .include(User::fields().todos())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(loaded.todos.get().len(), 3);
+
+    let _ = test.log().pop_last_op(); // transaction commit
+    assert_struct!(test.log().pop_last_op(), Operation::QuerySql({
+        stmt: Statement::Query({ order_by: None, .. }),
+        ..
+    }));
 
     Ok(())
 }

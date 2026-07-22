@@ -36,7 +36,7 @@ impl<Origin, T> Include<Origin, T> {
         let order_by = order_by.into();
         match &mut self.query_mut().order_by {
             Some(existing) => existing.exprs.extend(order_by.exprs),
-            None => self.query_mut().order_by = Some(order_by),
+            slot @ None => *slot = Some(order_by),
         }
         self
     }
