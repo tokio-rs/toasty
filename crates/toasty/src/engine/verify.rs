@@ -218,7 +218,7 @@ impl stmt::Visit for Verify<'_, '_> {
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
         stmt::visit::visit_stmt_select(self, i);
 
-        self.verify_include_filters(i);
+        self.verify_include_modifiers(i);
 
         VerifyExpr {
             schema: self.schema,
@@ -310,19 +310,20 @@ impl Verify<'_, '_> {
         }
     }
 
-    /// Reject include filters on required (non-nullable) 1-1 relations: the
-    /// loaded value has no way to represent a non-matching row, so the whole
-    /// query would fail with `RecordNotFound` depending on the data.
-    ///
-    /// Variant-rooted paths (relations inside embedded enums) are not
-    /// resolvable here and pass through unchecked.
-    fn verify_include_filters(&mut self, i: &stmt::Select) {
+    /// Reject include ordering on singular relations and preserve the existing
+    /// rule that filters are rejected only on required singular relations.
+    /// Variant-rooted paths are not resolvable here and pass through unchecked.
+    fn verify_include_modifiers(&mut self, i: &stmt::Select) {
         for include in i.returning.model_includes() {
-            let has_filter = match include.query.as_ref().map(|query| &query.body) {
-                Some(stmt::ExprSet::Select(select)) => select.filter.expr.is_some(),
-                Some(_) | None => false,
+            let Some(query) = &include.query else {
+                continue;
             };
-            if !has_filter {
+            let has_filter = match &query.body {
+                stmt::ExprSet::Select(select) => select.filter.expr.is_some(),
+                _ => false,
+            };
+            let has_order_by = query.order_by.is_some();
+            if !has_filter && !has_order_by {
                 continue;
             }
             let Some(model_id) = include.path.root.as_model() else {
@@ -336,15 +337,32 @@ impl Verify<'_, '_> {
             else {
                 continue;
             };
-            let required_one = match &field.ty {
-                app::FieldTy::Has(rel) => rel.is_one() && !field.nullable,
-                app::FieldTy::BelongsTo(_) => !field.nullable,
-                _ => false,
+            let singular = match &field.ty {
+                app::FieldTy::Has(rel) => rel.is_one(),
+                app::FieldTy::BelongsTo(_) => true,
+                app::FieldTy::Via(via) => via.is_one(),
+                _ => continue,
             };
-            if required_one {
+            if has_order_by && singular {
+                self.record(Error::invalid_statement(format!(
+                    "cannot order the include of singular relation `{}`; \
+                     include ordering requires a many-valued relation",
+                    field.name,
+                )));
+                continue;
+            }
+            let required_one = singular && !field.nullable;
+            if has_filter && required_one {
                 self.record(Error::invalid_statement(format!(
                     "cannot filter the include of required relation `{}`; \
                      filter the parent query instead",
+                    field.name,
+                )));
+                continue;
+            }
+            if has_order_by && matches!(field.ty, app::FieldTy::Via(_)) {
+                self.record(Error::unsupported_feature(format!(
+                    "include ordering is not yet supported on multi-step relation `{}`",
                     field.name,
                 )));
             }
