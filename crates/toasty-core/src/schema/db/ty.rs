@@ -86,7 +86,7 @@ pub enum Type {
     /// Decimal number with optional precision and scale.
     /// - `None`: Arbitrary-precision decimal
     /// - `Some((precision, scale))`: Fixed precision and scale
-    Numeric(Option<(u32, u32)>),
+    Numeric(#[cfg_attr(feature = "serde", serde(with = "numeric_serde"))] Option<(u32, u32)>),
 
     /// Unconstrained binary type
     Blob,
@@ -127,6 +127,37 @@ pub enum Type {
 
     /// User-specified unrecognized type
     Custom(String),
+}
+
+#[cfg(feature = "serde")]
+mod numeric_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
+
+    pub(super) fn serialize<S>(value: &Option<(u32, u32)>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some((precision, scale)) => [*precision, *scale].serialize(serializer),
+            None => <[u32; 0]>::default().serialize(serializer),
+        }
+    }
+
+    pub(super) fn deserialize<'de, D>(deserializer: D) -> Result<Option<(u32, u32)>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let values = Vec::<u32>::deserialize(deserializer)?;
+
+        match values.as_slice() {
+            [] => Ok(None),
+            &[precision, scale] => Ok(Some((precision, scale))),
+            _ => Err(de::Error::invalid_length(
+                values.len(),
+                &"zero or two numeric type parameters",
+            )),
+        }
+    }
 }
 
 impl Type {

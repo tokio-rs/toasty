@@ -63,3 +63,35 @@ fn generate_returns_migration_and_next_snapshot() {
     assert!(sql.contains("CREATE TABLE"));
     assert!(sql.contains("users"));
 }
+
+#[cfg(feature = "rust_decimal")]
+#[test]
+fn snapshot_round_trips_decimal_column() {
+    let mut schema = users_schema();
+    schema.tables[0].columns.push(db::Column {
+        id: db::ColumnId {
+            table: db::TableId(0),
+            index: 1,
+        },
+        name: "weight".to_string(),
+        ty: stmt::Type::Decimal,
+        storage_ty: db::Type::Numeric(None),
+        nullable: false,
+        primary_key: false,
+        auto_increment: false,
+        versionable: false,
+    });
+
+    let snapshot = migration::Snapshot::new(schema);
+    let dir = tempfile::tempdir().unwrap();
+    let path = dir.path().join("snapshot.toml");
+
+    snapshot.save(&path).unwrap();
+    let loaded = migration::Snapshot::load(path).unwrap();
+
+    assert_eq!(loaded.schema.tables[0].columns[1].ty, stmt::Type::Decimal);
+    assert_eq!(
+        loaded.schema.tables[0].columns[1].storage_ty,
+        db::Type::Numeric(None)
+    );
+}

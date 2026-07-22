@@ -36,7 +36,8 @@ impl Snapshot {
 
     /// Save the snapshot to a TOML file.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        std::fs::write(path.as_ref(), self.to_string())?;
+        let doc = self.to_toml_document()?;
+        std::fs::write(path.as_ref(), doc.to_string())?;
         Ok(())
     }
 
@@ -61,8 +62,10 @@ impl Snapshot {
                                 if item.is_array() {
                                     let mut placeholder = Item::None;
                                     std::mem::swap(item, &mut placeholder);
-                                    let array = placeholder.into_array_of_tables().unwrap();
-                                    *item = array.into();
+                                    *item = match placeholder.into_array_of_tables() {
+                                        Ok(array) => array.into(),
+                                        Err(item) => item,
+                                    };
                                 }
                             }
                         }
