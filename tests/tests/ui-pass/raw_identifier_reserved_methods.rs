@@ -9,13 +9,16 @@ struct Item {
     r#all: i64,
 
     #[has_many(pair = item)]
-    r#filter: toasty::Deferred<Vec<Comment>>,
+    comments: toasty::Deferred<Vec<Comment>>,
 }
 
 #[derive(Debug, toasty::Model)]
 struct Comment {
     #[key]
     id: i64,
+
+    r#filter: i64,
+    r#order_by: i64,
 
     #[index]
     item_id: i64,
@@ -27,8 +30,8 @@ struct Comment {
 fn main() {
     let _ = Item::fields().r#count();
     let _ = Item::fields().r#all();
-    let _ = Item::fields().r#filter();
     let _ = Item::fields()
-        .r#filter()
-        .filter(Comment::fields().id().eq(1));
+        .comments()
+        .filter(Comment::fields().id().eq(1))
+        .order_by(Comment::fields().id().asc());
 }
