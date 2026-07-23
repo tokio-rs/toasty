@@ -125,6 +125,12 @@ pub enum Type {
         binary: bool,
     },
 
+    /// A native SQL `JSON` column.
+    Json,
+
+    /// A native SQL `JSONB` column.
+    Jsonb,
+
     /// User-specified unrecognized type
     Custom(String),
 }
@@ -296,6 +302,14 @@ impl Type {
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         match *self {
+            Type::Json if !db.native_json => Err(crate::Error::unsupported_feature(format!(
+                "JSON column type is not supported by {}",
+                db.driver_name
+            ))),
+            Type::Jsonb if !db.native_jsonb => Err(crate::Error::unsupported_feature(format!(
+                "JSONB column type is not supported by {}",
+                db.driver_name
+            ))),
             Type::VarChar(size) => match db.storage_types.varchar {
                 Some(max) if size > max => Err(crate::Error::unsupported_feature(format!(
                     "VARCHAR({}) exceeds database maximum of {}",

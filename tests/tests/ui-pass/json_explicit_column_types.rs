@@ -14,6 +14,9 @@ struct Item {
 
     #[column(type = "jsonb")]
     deferred: toasty::Deferred<Payload>,
+
+    #[column(type = json)]
+    native: Payload,
 }
 
 fn main() {}

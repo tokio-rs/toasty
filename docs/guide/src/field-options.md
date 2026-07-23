@@ -407,9 +407,24 @@ struct Post {
 ```
 
 Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. Use `#[column(type = text)]` for text-backed
-JSON, `#[column(type = varchar(1000))]` for bounded text on databases that
-support `varchar`.
+deserializes it back when reading. The selected column type determines how the
+database stores that JSON:
+
+| Column type | Support |
+|---|---|
+| `text` or `varchar(...)` | SQL databases with the selected text type |
+| `json` | PostgreSQL and MySQL native JSON |
+| `jsonb` | PostgreSQL JSONB |
+
+For example, this field uses PostgreSQL or MySQL native JSON storage:
+
+```rust,ignore
+#[column(type = json)]
+meta: toasty::Json<Metadata>,
+```
+
+Toasty rejects `json` or `jsonb` during schema construction when the selected
+database does not support that column type.
 
 ```rust,ignore
 # use toasty::Model;

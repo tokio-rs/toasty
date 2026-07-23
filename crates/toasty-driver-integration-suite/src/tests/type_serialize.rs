@@ -5,6 +5,7 @@ use serde::{Deserialize, Serialize};
 use toasty::Json;
 use toasty_core::{
     driver::{Operation, Rows},
+    schema::db,
     stmt::{Assignment, Expr, ExprSet, Statement, Value},
 };
 
@@ -221,6 +222,114 @@ pub async fn json_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
     assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, Json(meta));
+
+    Ok(())
+}
+
+#[driver_test(requires(native_json))]
+pub async fn json_native_round_trip(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct Metadata {
+        title: String,
+        labels: Vec<String>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = json)]
+        metadata: Json<Metadata>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    assert_eq!(column_storage_ty(&db, "items", "metadata"), db::Type::Json);
+
+    let metadata = Metadata {
+        title: "quoted \"text\" and 日本語".to_string(),
+        labels: vec!["one".to_string(), "two".to_string()],
+    };
+    let mut item = toasty::create!(Item {
+        metadata: Json(metadata.clone()),
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(
+        Item::get_by_id(&mut db, &item.id).await?.metadata,
+        Json(metadata)
+    );
+
+    let updated = Metadata {
+        title: "updated".to_string(),
+        labels: vec![],
+    };
+    item.update()
+        .metadata(updated.clone())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(
+        Item::get_by_id(&mut db, &item.id).await?.metadata,
+        Json(updated)
+    );
+
+    Ok(())
+}
+
+#[driver_test(requires(native_json))]
+pub async fn json_native_nulls(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = json)]
+        sql_null: Option<Json<String>>,
+        #[column(type = json)]
+        json_null: Json<Option<String>>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let item = toasty::create!(Item {
+        sql_null: None,
+        json_null: Json(None),
+    })
+    .exec(&mut db)
+    .await?;
+    let item = Item::get_by_id(&mut db, &item.id).await?;
+
+    assert_eq!(item.sql_null, None);
+    assert_eq!(item.json_null, Json(None));
+
+    Ok(())
+}
+
+#[driver_test(requires(native_jsonb))]
+pub async fn jsonb_native_round_trip(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = "jsonb")]
+        payload: Json<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    assert_eq!(column_storage_ty(&db, "items", "payload"), db::Type::Jsonb);
+
+    let payload = "quoted \"text\" and 日本語".to_string();
+    let item = toasty::create!(Item {
+        payload: Json(payload.clone()),
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(
+        Item::get_by_id(&mut db, &item.id).await?.payload,
+        Json(payload)
+    );
 
     Ok(())
 }
