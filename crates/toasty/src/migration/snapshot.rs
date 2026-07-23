@@ -34,14 +34,10 @@ impl Snapshot {
         contents.parse()
     }
 
-    /// Serialize the snapshot as TOML.
-    pub fn to_toml_string(&self) -> Result<String> {
-        Ok(self.to_toml_document()?.to_string())
-    }
-
     /// Save the snapshot to a TOML file.
     pub fn save(&self, path: impl AsRef<Path>) -> Result<()> {
-        std::fs::write(path.as_ref(), self.to_toml_string()?)?;
+        let doc = self.to_toml_document()?;
+        std::fs::write(path.as_ref(), doc.to_string())?;
         Ok(())
     }
 
@@ -53,25 +49,13 @@ impl Snapshot {
             if item.is_inline_table() {
                 let mut placeholder = Item::None;
                 std::mem::swap(item, &mut placeholder);
-                let mut table = match placeholder.into_table() {
-                    Ok(table) => table,
-                    Err(original) => {
-                        *item = original;
-                        continue;
-                    }
-                };
+                let mut table = placeholder.into_table().unwrap();
 
                 for (_key, item) in table.iter_mut() {
                     if item.is_array() {
                         let mut placeholder = Item::None;
                         std::mem::swap(item, &mut placeholder);
-                        let mut array = match placeholder.into_array_of_tables() {
-                            Ok(array) => array,
-                            Err(original) => {
-                                *item = original;
-                                continue;
-                            }
-                        };
+                        let mut array = placeholder.into_array_of_tables().unwrap();
 
                         for table in array.iter_mut() {
                             for (_key, item) in table.iter_mut() {

@@ -137,16 +137,9 @@ pub enum Type {
 
 #[cfg(feature = "serde")]
 mod numeric_serde {
-    use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de};
 
-    #[derive(Deserialize)]
-    #[serde(untagged)]
-    enum Repr {
-        Values(Vec<u32>),
-        Legacy(Option<(u32, u32)>),
-    }
-
-    pub fn serialize<S>(value: &Option<(u32, u32)>, serializer: S) -> Result<S::Ok, S::Error>
+    pub(super) fn serialize<S>(value: &Option<(u32, u32)>, serializer: S) -> Result<S::Ok, S::Error>
     where
         S: Serializer,
     {
@@ -160,15 +153,15 @@ mod numeric_serde {
     where
         D: Deserializer<'de>,
     {
-        match Repr::deserialize(deserializer)? {
-            Repr::Values(values) => match values.as_slice() {
-                [] => Ok(None),
-                [precision, scale] => Ok(Some((*precision, *scale))),
-                _ => Err(D::Error::custom(
-                    "numeric storage type requires zero or two parameters",
-                )),
-            },
-            Repr::Legacy(value) => Ok(value),
+        let values = Vec::<u32>::deserialize(deserializer)?;
+
+        match values.as_slice() {
+            [] => Ok(None),
+            &[precision, scale] => Ok(Some((precision, scale))),
+            _ => Err(de::Error::invalid_length(
+                values.len(),
+                &"zero or two numeric type parameters",
+            )),
         }
     }
 }
