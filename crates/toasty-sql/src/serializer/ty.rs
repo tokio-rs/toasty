@@ -144,6 +144,8 @@ impl ToSql for &db::Type {
                 Flavor::Mysql => fmt!(f, "JSON"),
                 Flavor::Sqlite => fmt!(f, "TEXT"),
             },
+            db::Type::Json => fmt!(f, "JSON"),
+            db::Type::Jsonb => fmt!(f, "JSONB"),
             db::Type::Custom(custom) => fmt!(f, custom.as_str()),
         }
     }

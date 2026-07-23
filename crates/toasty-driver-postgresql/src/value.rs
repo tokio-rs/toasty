@@ -168,9 +168,6 @@ impl Value {
                 None => return Self(stmt::Value::Null),
             }
         } else if column.type_() == &Type::JSONB || column.type_() == &Type::JSON {
-            // `#[document]` columns. Decode the raw JSON wire bytes
-            // shape-directed to the named `Value::Object` wire form; the
-            // engine raises it to the embed's positional record.
             let raw = match row.get::<usize, Option<RawBytes<'_>>>(index) {
                 Some(RawBytes(raw)) => raw,
                 None => return Self(stmt::Value::Null),
@@ -178,12 +175,26 @@ impl Value {
             // `jsonb` wire format: a 1-byte version header, then UTF-8 JSON
             // text. `json` is plain UTF-8 text.
             let json_bytes = if column.type_() == &Type::JSONB {
+                assert_eq!(raw.first(), Some(&1), "unsupported jsonb wire version");
                 &raw[1..]
             } else {
                 raw
             };
-            toasty_sql::json::from_slice(json_bytes, expected_ty)
-                .expect("invalid JSON in document column")
+
+            if expected_ty == &stmt::Type::String {
+                // `Json<T>` is opaque to the engine. Preserve the serialized
+                // JSON so `Json<T>::load` can deserialize it directly into T.
+                // `String::from_utf8` reuses this single allocation.
+                stmt::Value::String(
+                    String::from_utf8(json_bytes.to_vec())
+                        .expect("PostgreSQL returned non-UTF-8 JSON"),
+                )
+            } else {
+                // `#[document]` columns are queryable by the engine, so decode
+                // them to their structural `Value::Object` representation.
+                toasty_sql::json::from_slice(json_bytes, expected_ty)
+                    .expect("invalid JSON in document column")
+            }
         } else if let Kind::Array(_) = column.type_().kind() {
             // Native array column (e.g. `text[]`, `int8[]`) — decoded
             // directly into `Vec<stmt::Value>` via `array_from_sql`. The
@@ -616,6 +627,17 @@ fn value_to_sql(
         (stmt::Value::F64(value), &Type::FLOAT4) => (*value as f32).to_sql(ty, out),
         (stmt::Value::F64(value), &Type::FLOAT8) => value.to_sql(ty, out),
         (stmt::Value::Null, _) => Ok(IsNull::Yes),
+        // `Json<T>` values are already serialized once by serde. Bind their
+        // bytes directly instead of decoding and re-encoding a JSON tree.
+        (stmt::Value::String(value), &Type::JSONB) => {
+            out.extend_from_slice(&[1]);
+            out.extend_from_slice(value.as_bytes());
+            Ok(IsNull::No)
+        }
+        (stmt::Value::String(value), &Type::JSON) => {
+            out.extend_from_slice(value.as_bytes());
+            Ok(IsNull::No)
+        }
         // PG enums are wire-encoded as plain UTF-8 text. `String::ToSql::accepts`
         // rejects `Kind::Enum`, so write the bytes directly.
         (stmt::Value::String(value), _) if matches!(ty.kind(), Kind::Enum(_)) => {

@@ -15,7 +15,8 @@ use std::fmt;
 /// insert and update, and decoded on read.
 ///
 /// Every `Json<T>` field must select its database column type with
-/// `#[column(type = ...)]`. Use `#[column(type = text)]` for text-backed JSON.
+/// `#[column(type = ...)]`. Use `text` or `varchar(...)` for text-backed JSON,
+/// `json` for PostgreSQL or MySQL native JSON, and `jsonb` for PostgreSQL JSONB.
 ///
 /// # Two nullable variants
 ///

@@ -16,10 +16,7 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use mysql_async::{
-    Conn, OptsBuilder,
-    prelude::{Queryable, ToValue},
-};
+use mysql_async::{Conn, OptsBuilder, prelude::Queryable};
 use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
@@ -361,11 +358,6 @@ impl toasty_core::driver::Connection for Connection {
                 op.last_insert_id_hack,
             ),
             Operation::RawSql(op) => {
-                let args = op
-                    .params
-                    .iter()
-                    .map(|tv| Value::from(tv.value.clone()).to_value())
-                    .collect();
                 let ret = match op.ret {
                     RawSqlRet::None => SqlReturn::Count {
                         last_insert_id_hack: None,
@@ -380,6 +372,11 @@ impl toasty_core::driver::Connection for Connection {
                     &op.sql,
                     op.params.iter().map(|tv| &tv.value),
                 );
+                let args = op
+                    .params
+                    .into_iter()
+                    .map(|tv| Value::from(tv.value).into_mysql())
+                    .collect();
                 let result = self.exec_sql(&op.sql, args, ret, &mut log).await;
                 log.finish(&result);
                 return result;
@@ -410,15 +407,39 @@ impl toasty_core::driver::Connection for Connection {
         let (sql_as_str, arg_order) =
             sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
 
+        let mut log = QueryLog::sql(
+            &self.query_log,
+            "mysql",
+            &sql_as_str,
+            arg_order.iter().map(|&pos| &typed_params[pos].value),
+        );
+
         // MySQL uses positional `?` without indices, so params must be reordered
         // to match the order `Expr::Arg(n)` placeholders appear in the SQL.
-        let params: Vec<_> = arg_order
-            .iter()
-            .map(|&pos| Value::from(typed_params[pos].value.clone()))
-            .collect();
-        let args = params
-            .iter()
-            .map(|param| param.to_value())
+        // Move a parameter on its final use; repeated placeholders clone only
+        // the earlier occurrences that require distinct protocol values.
+        let mut remaining = vec![0usize; typed_params.len()];
+        for &pos in &arg_order {
+            remaining[pos] += 1;
+        }
+        let mut values = typed_params
+            .into_iter()
+            .map(|param| Some(param.value))
+            .collect::<Vec<_>>();
+        let args = arg_order
+            .into_iter()
+            .map(|pos| {
+                remaining[pos] -= 1;
+                let value = if remaining[pos] == 0 {
+                    values[pos].take().expect("MySQL parameter already moved")
+                } else {
+                    values[pos]
+                        .as_ref()
+                        .expect("MySQL parameter missing")
+                        .clone()
+                };
+                Value::from(value).into_mysql()
+            })
             .collect::<Vec<_>>();
 
         let ret = match ret {
@@ -429,12 +450,6 @@ impl toasty_core::driver::Connection for Connection {
             },
         };
 
-        let mut log = QueryLog::sql(
-            &self.query_log,
-            "mysql",
-            &sql_as_str,
-            params.iter().map(|value| value.inner()),
-        );
         let result = self.exec_sql(&sql_as_str, args, ret, &mut log).await;
         log.finish(&result);
         result
