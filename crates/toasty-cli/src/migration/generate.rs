@@ -295,6 +295,7 @@ impl GenerateCommand {
             checksum: None,
         });
 
+        let snapshot = generated.snapshot.to_toml_string()?;
         let migration = generated.migration;
         let Migration::Sql(sql) = migration;
         std::fs::write(&migration_path, format!("{sql}\n"))?;
@@ -304,7 +305,7 @@ impl GenerateCommand {
             style(format!("Created migration file: {}", migration_name)).dim()
         );
 
-        generated.snapshot.save(&snapshot_path)?;
+        std::fs::write(&snapshot_path, snapshot)?;
         println!(
             "  {} {}",
             style("✓").green().bold(),

@@ -45,9 +45,10 @@ The classifier also unblocks two adjacent items:
 
 CTE-with-mutation queries (Postgres `WITH ins AS (INSERT ...
 RETURNING *) SELECT * FROM ins`) make a static-only classifier
-unsound: a `Statement::Query` can carry an `Expr::Stmt(Insert)` in
-its `WITH` clause or anywhere else in the tree.  The walk is the
-load-bearing piece; everything else is policy.
+unsound: a `Statement::Query` can carry an `ExprSet::Insert` in its
+`WITH` clause, and mutations can appear as `Expr::Stmt` elsewhere in
+the tree.  The walk is the load-bearing piece; everything else is
+policy.
 
 [PR #861]: https://github.com/tokio-rs/toasty/pull/861
 [#863]: https://github.com/tokio-rs/toasty/issues/863
@@ -85,8 +86,8 @@ let db = Db::builder(driver)
 ## Behavior
 
 - **Classification.**  A statement is `ReadOnly` if it is a
-  `Statement::Query` and contains no `Expr::Stmt(Insert | Update |
-  Delete)` anywhere in its tree (filter, returning, CTE bindings,
+  `Statement::Query` and contains no `Insert`, `Update`, or `Delete`
+  statement anywhere in its tree (filter, returning, CTE bindings,
   set-op operands, embedded subqueries).  Otherwise `Mutating`.
 
 - **When the classifier runs.**  At exec time, on the statement
@@ -122,8 +123,8 @@ let db = Db::builder(driver)
 
 - **CTE with mutation.**  `WITH ins AS (INSERT INTO t ... RETURNING
   *) SELECT * FROM ins` parses as `Statement::Query` whose `with`
-  carries an `Expr::Stmt(Insert)`.  The classifier walks `with` and
-  classifies the whole statement as `Mutating`.
+  carries a CTE with an `ExprSet::Insert` body.  The classifier walks
+  `with` and classifies the whole statement as `Mutating`.
 
 - **Mutation sub-statements in expressions.**  Same handling — any
   `Expr::Stmt(Insert | Update | Delete)` reached during the tree

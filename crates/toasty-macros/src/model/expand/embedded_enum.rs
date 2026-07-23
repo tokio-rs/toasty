@@ -417,6 +417,18 @@ impl Expand<'_> {
                     None => quote! { None },
                 };
                 let ty = primitive_ty_unwrap(field);
+                let storage_ty = match field
+                    .attrs
+                    .column
+                    .as_ref()
+                    .and_then(|column| column.ty.as_ref())
+                {
+                    Some(column_ty) => {
+                        let expanded = column_ty.expand_with(toasty);
+                        quote! { Some(#expanded) }
+                    }
+                    None => quote! { None },
+                };
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
                 quote! {
@@ -429,7 +441,7 @@ impl Expand<'_> {
                             app: Some(#app_name.to_string()),
                             storage: #storage_name,
                         },
-                        ty: <#ty as #toasty::Field>::field_ty(None),
+                        ty: <#ty as #toasty::Field>::field_ty(#storage_ty),
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,
                         auto: None,
