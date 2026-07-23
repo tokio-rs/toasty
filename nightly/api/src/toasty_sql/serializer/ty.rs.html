@@ -144,8 +144,10 @@
 <a href=#144 id=144 data-nosnippet>144</a>                Flavor::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
 <a href=#145 id=145 data-nosnippet>145</a>                Flavor::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
 <a href=#146 id=146 data-nosnippet>146</a>            },
-<a href=#147 id=147 data-nosnippet>147</a>            db::Type::Custom(custom) =&gt; <span class="macro">fmt!</span>(f, custom.as_str()),
-<a href=#148 id=148 data-nosnippet>148</a>        }
-<a href=#149 id=149 data-nosnippet>149</a>    }
-<a href=#150 id=150 data-nosnippet>150</a>}
+<a href=#147 id=147 data-nosnippet>147</a>            db::Type::Json =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
+<a href=#148 id=148 data-nosnippet>148</a>            db::Type::Jsonb =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSONB"</span>),
+<a href=#149 id=149 data-nosnippet>149</a>            db::Type::Custom(custom) =&gt; <span class="macro">fmt!</span>(f, custom.as_str()),
+<a href=#150 id=150 data-nosnippet>150</a>        }
+<a href=#151 id=151 data-nosnippet>151</a>    }
+<a href=#152 id=152 data-nosnippet>152</a>}
 </code></pre></div></section></main></body></html>

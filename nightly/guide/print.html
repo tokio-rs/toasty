@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-a63479f6.js";
+            window.path_to_searchindex_js = "searchindex-68045554.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-1785f50e.js"></script>
@@ -3296,9 +3296,25 @@ struct Post {
     meta: toasty::Json&lt;Metadata&gt;,
 }</code></pre>
 <p>Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. Use <code>#[column(type = text)]</code> for text-backed
-JSON, <code>#[column(type = varchar(1000))]</code> for bounded text on databases that
-support <code>varchar</code>.</p>
+deserializes it back when reading. The selected column type determines how the
+database stores that JSON:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Column type</th><th>Support</th></tr>
+</thead>
+<tbody>
+<tr><td><code>text</code> or <code>varchar(...)</code></td><td>SQL databases with the selected text type</td></tr>
+<tr><td><code>json</code></td><td>PostgreSQL and MySQL native JSON</td></tr>
+<tr><td><code>jsonb</code></td><td>PostgreSQL JSONB</td></tr>
+</tbody>
+</table>
+</div>
+<p>For example, this field uses PostgreSQL or MySQL native JSON storage:</p>
+<pre><code class="language-rust ignore">#[column(type = json)]
+meta: toasty::Json&lt;Metadata&gt;,</code></pre>
+<p>Toasty rejects <code>json</code> or <code>jsonb</code> during schema construction when the selected
+database does not support that column type.</p>
 <pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
 </span><span class="boring">use serde::{Serialize, Deserialize};
 </span><span class="boring">#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
