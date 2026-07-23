@@ -23,6 +23,10 @@ use toasty_core::{
 /// past) the underlying driver.
 #[derive(Debug, Clone)]
 pub enum Fault {
+    /// Causes the next `exec` to return `Error::driver_operation_failed`
+    /// without touching the underlying connection or marking it invalid.
+    OperationFailed,
+
     /// Causes the next `exec` to return `Error::connection_lost` without
     /// touching the underlying connection. The wrapping
     /// `InstrumentedConnection`'s `is_valid` flips to `false`, mirroring
@@ -186,6 +190,11 @@ impl Connection for InstrumentedConnection {
             .pop_front();
         if let Some(fault) = fault {
             match fault {
+                Fault::OperationFailed => {
+                    return Err(toasty_core::Error::driver_operation_failed(
+                        std::io::Error::other("injected operation failure"),
+                    ));
+                }
                 Fault::ConnectionLost => {
                     self.valid.store(false, Ordering::Release);
                     return Err(toasty_core::Error::connection_lost(std::io::Error::other(
@@ -249,6 +258,11 @@ impl Connection for InstrumentedConnection {
             .pop_front();
         if let Some(fault) = fault {
             match fault {
+                Fault::OperationFailed => {
+                    return Err(toasty_core::Error::driver_operation_failed(
+                        std::io::Error::other("injected operation failure"),
+                    ));
+                }
                 Fault::ConnectionLost => {
                     self.valid.store(false, Ordering::Release);
                     return Err(toasty_core::Error::connection_lost(std::io::Error::other(

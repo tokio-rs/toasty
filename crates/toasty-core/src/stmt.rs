@@ -105,6 +105,9 @@ pub use expr_in_list::ExprInList;
 mod expr_in_subquery;
 pub use expr_in_subquery::ExprInSubquery;
 
+mod expr_incoming;
+pub use expr_incoming::ExprIncoming;
+
 mod expr_intersects;
 pub use expr_intersects::ExprIntersects;
 
@@ -180,8 +183,11 @@ pub use func_json_extract::FuncJsonExtract;
 mod func_last_insert_id;
 pub use func_last_insert_id::FuncLastInsertId;
 
+mod include;
+pub use include::Include;
+
 mod insert;
-pub use insert::Insert;
+pub use insert::{Insert, Upsert, UpsertAction, UpsertTarget};
 
 mod insert_table;
 pub use insert_table::InsertTable;

@@ -6,9 +6,9 @@ Vec<i64>`, `weights: Vec<f64>`. Toasty stores the collection directly;
 you do not wrap it in JSON by hand or manage a separate join table.
 
 The element type must be a scalar: any primitive other than `u8`, plus
-`String`, `Uuid`, the decimal types, and the `jiff` date/time types.
-`Vec<u8>` keeps its existing meaning — a single binary blob, not a
-collection of one-byte integers.
+`String`, `Uuid`, the decimal types, the `jiff` date/time types, and a unit
+enum derived with `toasty::Embed`. `Vec<u8>` keeps its existing meaning — a
+single binary blob, not a collection of one-byte integers.
 
 Storage depends on the driver:
 
@@ -46,6 +46,35 @@ struct Article {
 
 A `Vec<scalar>` field is always present — there is no unset state. A
 row with no elements holds an empty list, not `NULL`.
+
+### Unit enum collections
+
+A unit enum is a scalar because each value consists only of its discriminant:
+
+```rust,ignore
+#[derive(Clone, Copy, Debug, toasty::Embed)]
+#[column(type = u16)]
+enum Priority {
+    #[column(variant = 10)]
+    Low,
+    #[column(variant = 20)]
+    High,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Task {
+    #[key]
+    id: u64,
+    priorities: Vec<Priority>,
+    #[column(type = u8)]
+    compact_priorities: Vec<Priority>,
+}
+```
+
+`priorities` uses the enum-level `u16` type for every element.
+`compact_priorities` uses its field-level `u8` override. Every discriminant
+must fit the selected element type. Enums with data fields span multiple
+columns and cannot be used as scalar collection elements.
 
 ## Creating records
 

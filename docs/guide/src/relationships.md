@@ -29,13 +29,42 @@ users                    posts
 The `posts` table holds the foreign key (`user_id`). Each post points to exactly
 one user. A user can have many posts.
 
-This single pattern — a foreign key column in one table referencing the primary
-key of another — underlies all three relationship types in Toasty.
+This foreign-key pattern underlies each direct relationship type in Toasty. A
+many-to-many relationship uses two direct relationships joined through a third
+model.
+
+## Many-to-many uses a join model
+
+A many-to-many relationship lets each record on either side connect to multiple
+records on the other side. Users can join multiple groups, and groups can contain
+multiple users. A `memberships` table represents each user-group connection as a
+row with foreign keys to both endpoint tables:
+
+```text
+users              memberships                 groups
+┌────┬───────┐     ┌─────────┬──────────┐      ┌────┬───────────┐
+│ id │ name  │     │ user_id │ group_id │      │ id │ name      │
+├────┼───────┤     ├─────────┼──────────┤      ├────┼───────────┤
+│  1 │ Alice │◄────│       1 │       10 │─────►│ 10 │ Rust      │
+│  2 │ Bob   │◄────│       2 │       10 │─────►│ 20 │ Databases │
+└────┴───────┘     │       1 │       20 │─────►└────┴───────────┘
+                   └─────────┴──────────┘
+```
+
+In Toasty, the join table is a normal model such as `Membership`. Each endpoint
+has a direct `#[has_many]` relation to the join model and a derived
+`#[has_many(via = ...)]` relation to the opposite endpoint. Code creates,
+updates, and deletes join-model records to change the connections; the derived
+relation provides read-only traversal. The [Many-to-Many](./many-to-many.md)
+chapter shows the model definition, traversal, filtering, preloading, and link
+mutation.
 
 ## Relationship types
 
-Toasty supports three relationship types. They differ in how many records each
-side of the relationship holds, and which model contains the foreign key.
+Toasty supports three direct relationship types. They differ in how many records
+each side holds and which model contains the foreign key. Many-to-many is a
+modeling pattern composed from these types rather than a fourth relation
+attribute.
 
 | Type | Foreign key on | Parent has | Child has | Example |
 |---|---|---|---|---|
@@ -245,6 +274,7 @@ generates the appropriate cascade deletes or null-setting updates automatically.
 | A post has one author | `Post` → `Deferred<User>` or `User` + `User` → `Deferred<Vec<Post>>` or `Vec<Post>` | `posts.user_id` |
 | A user has one profile | `User` → `Deferred<Profile>` or `Profile` + `Profile` → `Deferred<User>` or `User` | `profiles.user_id` |
 | A comment belongs to a post | `Comment` → `Deferred<Post>` or `Post` + `Post` → `Deferred<Vec<Comment>>` or `Vec<Comment>` | `comments.post_id` |
+| Users join many groups and groups contain many users | Join model with two `BelongsTo` relations plus `has_many(via = ...)` on the endpoints | `memberships.user_id` and `memberships.group_id` |
 
 When deciding between `HasOne` and `HasMany`, ask: "Can the parent have more
 than one?" If yes, use `HasMany`. If exactly one (or zero), use `HasOne`. The
@@ -308,6 +338,8 @@ querying, creating, and updating:
   parent, setting the relation on create
 - [**HasMany**](./has-many.md) — querying children, creating through the
   relation, inserting and removing, scoped queries
+- [**Many-to-Many**](./many-to-many.md) — defining a join model, traversing in
+  both directions, filtering by endpoints or join metadata, and changing links
 - [**HasOne**](./has-one.md) — required vs optional, creating and updating the
   child, replace and unset behavior
 - [**Preloading Associations**](./preloading-associations.md) — avoiding extra

@@ -86,7 +86,7 @@ pub enum Type {
     /// Decimal number with optional precision and scale.
     /// - `None`: Arbitrary-precision decimal
     /// - `Some((precision, scale))`: Fixed precision and scale
-    Numeric(Option<(u32, u32)>),
+    Numeric(#[cfg_attr(feature = "serde", serde(with = "numeric_serde"))] Option<(u32, u32)>),
 
     /// Unconstrained binary type
     Blob,
@@ -125,8 +125,52 @@ pub enum Type {
         binary: bool,
     },
 
+    /// A native SQL `JSON` column.
+    Json,
+
+    /// A native SQL `JSONB` column.
+    Jsonb,
+
     /// User-specified unrecognized type
     Custom(String),
+}
+
+#[cfg(feature = "serde")]
+mod numeric_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Values(Vec<u32>),
+        Legacy(Option<(u32, u32)>),
+    }
+
+    pub fn serialize<S>(value: &Option<(u32, u32)>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some((precision, scale)) => [*precision, *scale].serialize(serializer),
+            None => <[u32; 0]>::default().serialize(serializer),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<(u32, u32)>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match Repr::deserialize(deserializer)? {
+            Repr::Values(values) => match values.as_slice() {
+                [] => Ok(None),
+                [precision, scale] => Ok(Some((*precision, *scale))),
+                _ => Err(D::Error::custom(
+                    "numeric storage type requires zero or two parameters",
+                )),
+            },
+            Repr::Legacy(value) => Ok(value),
+        }
+    }
 }
 
 impl Type {
@@ -249,10 +293,28 @@ impl Type {
     /// as an intermediate conversion step to lessen the work done by each individual driver.
     pub fn bridge_type(&self, ty: &stmt::Type) -> stmt::Type {
         match (self, ty) {
+            // Collections use the same application-to-storage conversion as
+            // their elements. For example, an integer-discriminant enum is
+            // `I64` in the application schema, while `#[column(type = u8)]`
+            // stores `Vec<Enum>` as `List(U8)`.
+            (Self::List(storage), stmt::Type::List(app)) => {
+                stmt::Type::List(Box::new(storage.bridge_type(app)))
+            }
             (Self::Blob | Self::Binary(_), stmt::Type::Uuid) => stmt::Type::Bytes,
             (Self::Text | Self::VarChar(_), _) => stmt::Type::String,
             // Enum values are always strings at the application level
             (Self::Enum(_), _) => stmt::Type::String,
+            // Integer-discriminant enums use I64 at the application level.
+            // An explicit storage width bridges through the corresponding
+            // statement type so lowering inserts checked casts in both
+            // directions.
+            (Self::Integer(1), stmt::Type::I64) => stmt::Type::I8,
+            (Self::Integer(2), stmt::Type::I64) => stmt::Type::I16,
+            (Self::Integer(3..=4), stmt::Type::I64) => stmt::Type::I32,
+            (Self::UnsignedInteger(1), stmt::Type::I64) => stmt::Type::U8,
+            (Self::UnsignedInteger(2), stmt::Type::I64) => stmt::Type::U16,
+            (Self::UnsignedInteger(3..=4), stmt::Type::I64) => stmt::Type::U32,
+            (Self::UnsignedInteger(5..=8), stmt::Type::I64) => stmt::Type::U64,
             // Let engine handle UTC conversion
             #[cfg(feature = "jiff")]
             (Self::Timestamp(_) | Self::DateTime(_), stmt::Type::Zoned) => stmt::Type::Timestamp,
@@ -278,6 +340,14 @@ impl Type {
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         match *self {
+            Type::Json if !db.native_json => Err(crate::Error::unsupported_feature(format!(
+                "JSON column type is not supported by {}",
+                db.driver_name
+            ))),
+            Type::Jsonb if !db.native_jsonb => Err(crate::Error::unsupported_feature(format!(
+                "JSONB column type is not supported by {}",
+                db.driver_name
+            ))),
             Type::VarChar(size) => match db.storage_types.varchar {
                 Some(max) if size > max => Err(crate::Error::unsupported_feature(format!(
                     "VARCHAR({}) exceeds database maximum of {}",

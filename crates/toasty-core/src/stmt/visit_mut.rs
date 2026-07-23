@@ -3,13 +3,14 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
     ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
-    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
-    ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
-    FuncCount, FuncJsonExtract, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
-    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
-    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
-    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming, ExprIntersects, ExprIsNull,
+    ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
+    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
+    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include, Insert, InsertTarget,
+    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
+    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
+    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
+    ValueRecord, Values, With,
 };
 
 /// Mutable visitor trait for the statement AST.
@@ -203,6 +204,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_expr_in_subquery_mut`].
     fn visit_expr_in_subquery_mut(&mut self, i: &mut ExprInSubquery) {
         visit_expr_in_subquery_mut(self, i);
+    }
+
+    /// Visits an [`ExprIncoming`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_expr_incoming_mut`].
+    fn visit_expr_incoming_mut(&mut self, i: &mut ExprIncoming) {
+        visit_expr_incoming_mut(self, i);
     }
 
     /// Visits an [`ExprIntersects`] node mutably.
@@ -406,6 +414,13 @@ pub trait VisitMut {
     /// The default implementation delegates to [`visit_path_mut`].
     fn visit_path_mut(&mut self, i: &mut Path) {
         visit_path_mut(self, i);
+    }
+
+    /// Visits an [`Include`] node mutably.
+    ///
+    /// The default implementation delegates to [`visit_include_mut`].
+    fn visit_include_mut(&mut self, i: &mut Include) {
+        visit_include_mut(self, i);
     }
 
     /// Visits a [`Projection`] node mutably.
@@ -648,6 +663,10 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_expr_in_subquery_mut(&mut **self, i);
     }
 
+    fn visit_expr_incoming_mut(&mut self, i: &mut ExprIncoming) {
+        VisitMut::visit_expr_incoming_mut(&mut **self, i);
+    }
+
     fn visit_expr_intersects_mut(&mut self, i: &mut ExprIntersects) {
         VisitMut::visit_expr_intersects_mut(&mut **self, i);
     }
@@ -762,6 +781,10 @@ impl<V: VisitMut> VisitMut for &mut V {
 
     fn visit_path_mut(&mut self, i: &mut Path) {
         VisitMut::visit_path_mut(&mut **self, i);
+    }
+
+    fn visit_include_mut(&mut self, i: &mut Include) {
+        VisitMut::visit_include_mut(&mut **self, i);
     }
 
     fn visit_projection_mut(&mut self, i: &mut Projection) {
@@ -924,6 +947,7 @@ where
         Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list_mut(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery_mut(expr),
+        Expr::Incoming(expr) => v.visit_expr_incoming_mut(expr),
         Expr::Intersects(expr) => v.visit_expr_intersects_mut(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null_mut(expr),
         Expr::IsSuperset(expr) => v.visit_expr_is_superset_mut(expr),
@@ -942,6 +966,7 @@ where
         Expr::StartsWith(expr) => v.visit_expr_starts_with_mut(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt_mut(expr),
         Expr::Value(expr) => v.visit_value_mut(expr),
+        Expr::Static(expr) => v.visit_value_mut(expr),
     }
 }
 
@@ -1046,6 +1071,13 @@ where
         ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract_mut(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id_mut(func),
     }
+}
+
+/// Default mutable traversal for [`ExprIncoming`] nodes. This is a leaf node with no children to visit.
+pub fn visit_expr_incoming_mut<V>(_v: &mut V, _node: &mut ExprIncoming)
+where
+    V: VisitMut + ?Sized,
+{
 }
 
 /// Default mutable traversal for [`FuncJsonExtract`] nodes. Visits the base expression.
@@ -1404,13 +1436,24 @@ where
 {
     match node {
         Returning::Model { include } => {
-            for path in include {
-                v.visit_path_mut(path);
+            for inc in include {
+                v.visit_include_mut(inc);
             }
         }
         Returning::Changed => {}
         Returning::Project(expr) => v.visit_expr_mut(expr),
         Returning::Expr(expr) => v.visit_expr_mut(expr),
+    }
+}
+
+/// Visits an [`Include`].
+pub fn visit_include_mut<V>(v: &mut V, node: &mut Include)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_path_mut(&mut node.path);
+    if let Some(query) = &mut node.query {
+        v.visit_stmt_query_mut(query);
     }
 }
 
@@ -1500,6 +1543,14 @@ where
 {
     v.visit_insert_target_mut(&mut node.target);
     v.visit_stmt_query_mut(&mut node.source);
+
+    if let Some(upsert) = &mut node.upsert {
+        v.visit_assignments_mut(&mut upsert.shared);
+        v.visit_assignments_mut(&mut upsert.defaults);
+        v.visit_assignments_mut(&mut upsert.update_defaults);
+        v.visit_assignments_mut(&mut upsert.create);
+        v.visit_assignments_mut(&mut upsert.update);
+    }
 
     if let Some(returning) = &mut node.returning {
         v.visit_returning_mut(returning);

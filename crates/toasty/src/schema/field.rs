@@ -21,6 +21,15 @@ use toasty_core::schema::{
             …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`)."
 )]
 pub trait Field: Load<Output = Self> {
+    /// Whether this field type requires `#[column(type = ...)]`.
+    ///
+    /// Generated model code evaluates this constant when a field omits an
+    /// explicit column type. Wrapper implementations propagate the value from
+    /// their inner field type, which lets the Rust type checker resolve aliases
+    /// and nested wrappers without the derive macro inspecting type syntax.
+    #[doc(hidden)]
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = false;
+
     /// The expression-level type of this field.
     ///
     /// This drives both the field's path target (the second parameter of
@@ -201,7 +210,8 @@ impl Field for Vec<u8> {
 /// A `Vec<T>` of embedded structs (`T: Embed`) is a `#[document]` collection —
 /// `Primitive(List(Model(T::id())))`, stored by the schema builder as a single
 /// JSON array of objects. The `field_ty` override below derives the storage
-/// type for native unit enums; for struct embeds it matches the trait default.
+/// type configured for unit-enum discriminants; for struct embeds it matches
+/// the trait default.
 ///
 /// This is the only *blanket* `Field for Vec<_>` impl. A blanket
 /// `impl<T: Scalar> Field for Vec<T>` cannot coexist with it: the compiler
@@ -236,11 +246,12 @@ where
     ) -> Self::Update<'a> {
     }
 
-    /// Derives a `List(Enum)` storage hint for native unit enums.
+    /// Lifts a field-level element override into a list storage type, then
+    /// falls back to the unit enum's discriminant storage.
     fn field_ty(
         storage_ty: Option<toasty_core::schema::db::Type>,
     ) -> toasty_core::schema::app::FieldTy {
-        let storage_ty = storage_ty.or_else(|| {
+        let storage_ty = storage_ty.map(db::Type::list).or_else(|| {
             let Model::EmbeddedEnum(embed) = <T as Embed>::schema() else {
                 return None;
             };
@@ -249,10 +260,7 @@ where
                 return None;
             }
 
-            match embed.discriminant.storage_ty {
-                Some(ty @ db::Type::Enum(_)) => Some(db::Type::list(ty)),
-                _ => None,
-            }
+            embed.discriminant.storage_ty.map(db::Type::list)
         });
         toasty_core::schema::app::FieldTy::Primitive(toasty_core::schema::app::FieldPrimitive {
             ty: <Self as super::Load>::ty(),
@@ -380,7 +388,18 @@ impl_scalar!(rust_decimal::Decimal);
 #[cfg(feature = "bigdecimal")]
 impl_scalar!(bigdecimal::BigDecimal);
 
+#[cfg(feature = "jiff")]
+impl_scalar!(
+    jiff::Timestamp,
+    jiff::Zoned,
+    jiff::civil::Date,
+    jiff::civil::Time,
+    jiff::civil::DateTime
+);
+
 impl<T: Field> Field for Option<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -427,6 +446,8 @@ impl<T: Field> Field for Option<T> {
 }
 
 impl<T: Field> Field for std::sync::Arc<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -447,6 +468,12 @@ impl<T: Field> Field for std::sync::Arc<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
     }
 
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
@@ -459,6 +486,8 @@ impl<T: Field> Field for std::sync::Arc<T> {
 }
 
 impl<T: Field> Field for std::rc::Rc<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -479,6 +508,12 @@ impl<T: Field> Field for std::rc::Rc<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
     }
 
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {
@@ -491,6 +526,8 @@ impl<T: Field> Field for std::rc::Rc<T> {
 }
 
 impl<T: Field> Field for Box<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -511,6 +548,12 @@ impl<T: Field> Field for Box<T> {
         _assignments: &'a mut toasty_core::stmt::Assignments,
         _projection: toasty_core::stmt::Projection,
     ) -> Self::Update<'a> {
+    }
+
+    fn field_ty(
+        storage_ty: Option<toasty_core::schema::db::Type>,
+    ) -> toasty_core::schema::app::FieldTy {
+        T::field_ty(storage_ty)
     }
 
     fn key_constraint<Origin>(&self, target: stmt::Path<Origin, Self::Inner>) -> Expr<bool> {

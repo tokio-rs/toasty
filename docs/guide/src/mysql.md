@@ -172,6 +172,12 @@ comparison, so the match is case-sensitive regardless of the column's collation.
 
 A few things that exist on PostgreSQL are absent here:
 
+**No targeted upsert.** MySQL's `ON DUPLICATE KEY UPDATE` reacts to any primary
+key or unique-index conflict; it cannot restrict the update to the constraint
+named by [`upsert_by_*`](./upserting-records.md). Toasty returns
+`unsupported_feature` instead of updating a row selected by a different
+constraint.
+
 **No `ILIKE`.** MySQL has no `ILIKE` operator, so
 [`.ilike()`](./filtering-with-expressions.md#ilike) is rejected with an
 `unsupported_feature` error. MySQL's `LIKE` case sensitivity is set by the

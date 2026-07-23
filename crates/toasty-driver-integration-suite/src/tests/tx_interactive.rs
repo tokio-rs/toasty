@@ -1,3 +1,4 @@
+use crate::Fault;
 use crate::prelude::*;
 
 use toasty_core::driver::{Operation, operation::IsolationLevel, operation::Transaction};
@@ -48,6 +49,111 @@ pub async fn drop_without_finalize_rolls_back(t: &mut Test) -> Result<()> {
 
     let users = User::all().exec(&mut db).await?;
     assert!(users.is_empty());
+
+    Ok(())
+}
+
+/// A failed commit rolls back before the connection returns to the pool.
+#[driver_test(requires(sql))]
+pub async fn commit_failure_rolls_back_before_connection_reuse(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    t.log().clear();
+
+    let tx = db.transaction().await?;
+    t.inject_fault(Fault::OperationFailed);
+    let err = tx.commit().await.unwrap_err();
+    assert!(err.is_driver_operation_failed());
+
+    let tx = db.transaction().await?;
+    tx.rollback().await?;
+
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false,
+            ..
+        })
+    );
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Rollback)
+    );
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: None,
+            read_only: false,
+            ..
+        })
+    );
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Rollback)
+    );
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
+/// A failed rollback is retried before the connection returns to the pool.
+#[driver_test(requires(sql))]
+pub async fn rollback_failure_retries_before_connection_reuse(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let tx = db.transaction().await?;
+    t.inject_fault(Fault::OperationFailed);
+    let err = tx.rollback().await.unwrap_err();
+    assert!(err.is_driver_operation_failed());
+
+    let tx = db.transaction().await?;
+    tx.rollback().await?;
+
+    Ok(())
+}
+
+/// Cancelling a queued commit keeps the connection reusable.
+#[driver_test(requires(sql))]
+pub async fn cancel_queued_commit_keeps_connection_reusable(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    t.log().clear();
+
+    let tx = db.transaction().await?;
+    let mut commit = Box::pin(tx.commit());
+
+    tokio::select! {
+        biased;
+        _ = async {
+            while t.log().len() < 2 {
+                tokio::task::yield_now().await;
+            }
+        } => {}
+        result = &mut commit => panic!("commit completed before cancellation: {result:?}"),
+    }
+    drop(commit);
+
+    let tx = db.transaction().await?;
+    tx.rollback().await?;
 
     Ok(())
 }

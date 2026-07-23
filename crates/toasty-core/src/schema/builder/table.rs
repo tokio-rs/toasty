@@ -577,11 +577,8 @@ impl BuildMapping<'_> {
         mapping: &mut mapping::FieldEnum,
         nullable: bool,
     ) -> Result<stmt::Expr> {
-        let disc_col_ref = stmt::Expr::column(stmt::ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: mapping.discriminant.column.index,
-        });
+        let disc_col_ref =
+            self.map_table_column_to_model(mapping.discriminant.column, &model.discriminant);
 
         if !model.has_data_variants() {
             return Ok(disc_col_ref);
@@ -651,11 +648,8 @@ impl BuildMapping<'_> {
         mapping: &mapping::FieldEnum,
         nullable: bool,
     ) -> Result<stmt::Expr> {
-        let disc_col_ref = stmt::Expr::column(stmt::ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: mapping.discriminant.column.index,
-        });
+        let disc_col_ref =
+            self.map_table_column_to_model(mapping.discriminant.column, &model.discriminant);
 
         if !model.has_data_variants() {
             return Ok(disc_col_ref);
@@ -937,10 +931,20 @@ impl<'a, 'b> MapField<'a, 'b> {
                 let target = lookup_embedded_model(self.build.app, embedded.target, field)?;
 
                 match target {
-                    app::Model::EmbeddedEnum(embedded_enum) => {
-                        self.map_field_enum(index, field, embedded_enum)
-                    }
+                    app::Model::EmbeddedEnum(embedded_enum) => self.map_field_enum(
+                        index,
+                        field,
+                        embedded_enum,
+                        embedded.storage_ty.as_ref(),
+                    ),
                     app::Model::EmbeddedStruct(embedded_struct) => {
+                        if embedded.storage_ty.is_some() {
+                            return Err(Error::invalid_schema(format!(
+                                "field `{}` sets a database type on an embedded struct; \
+                                 type overrides are supported only on embedded enum fields",
+                                field.name,
+                            )));
+                        }
                         self.map_field_struct(index, field, embedded.target, embedded_struct)
                     }
                     _ => unreachable!(),
@@ -1082,9 +1086,42 @@ impl<'a, 'b> MapField<'a, 'b> {
         field_index: usize,
         field: &app::Field,
         embedded_enum: &app::EmbeddedEnum,
+        storage_ty: Option<&db::Type>,
     ) -> Result<mapping::Field> {
+        let mut discriminant = embedded_enum.discriminant.clone();
+        if let Some(storage_ty) = storage_ty {
+            let Some(max) = integer_storage_max(storage_ty) else {
+                return Err(Error::invalid_schema(format!(
+                    "field `{}` sets a database type incompatible with its \
+                     embedded enum discriminant",
+                    field.name,
+                )));
+            };
+            if embedded_enum.discriminant.ty != stmt::Type::I64 {
+                return Err(Error::invalid_schema(format!(
+                    "field `{}` sets an integer database type on a \
+                     non-integer embedded enum",
+                    field.name,
+                )));
+            }
+
+            for variant in &embedded_enum.variants {
+                let stmt::Value::I64(value) = variant.discriminant else {
+                    unreachable!("integer enum has a non-integer discriminant")
+                };
+                if value < 0 || value > max {
+                    return Err(Error::invalid_schema(format!(
+                        "variant `{}` has discriminant {value}, which does not fit \
+                         the database type requested for field `{}`",
+                        variant.name, field.name,
+                    )));
+                }
+            }
+            discriminant.storage_ty = Some(storage_ty.clone());
+        }
+
         // Create the discriminant column. It inherits nullability from the enum field.
-        let column_id = self.create_column(field, &embedded_enum.discriminant);
+        let column_id = self.create_column(field, &discriminant);
         let field_expr = self.field_expr(field, field_index);
 
         // A nested enum's discriminant column lives in the parent enum's
@@ -1110,9 +1147,9 @@ impl<'a, 'b> MapField<'a, 'b> {
             field_expr.clone()
         };
 
-        let lowering_index =
-            self.build
-                .push_lowering(column_id, &embedded_enum.discriminant.ty, disc_expr);
+        let lowering_index = self
+            .build
+            .push_lowering(column_id, &discriminant.ty, disc_expr);
 
         let bit = self.build.next_bit();
         let sub_projection = self.sub_projection(field_index);
@@ -1176,7 +1213,7 @@ impl<'a, 'b> MapField<'a, 'b> {
 
         let disc_column_expr = self
             .build
-            .map_table_column_to_model(column_id, &embedded_enum.discriminant);
+            .map_table_column_to_model(column_id, &discriminant);
 
         Ok(mapping::Field::Enum(mapping::FieldEnum {
             discriminant: mapping::FieldPrimitive {
@@ -1657,6 +1694,18 @@ fn into_match_arms(expr: stmt::Expr) -> Option<Vec<stmt::MatchArm>> {
     match expr {
         stmt::Expr::Match(m) => Some(m.arms),
         stmt::Expr::Cast(c) => into_match_arms(*c.expr),
+        _ => None,
+    }
+}
+
+/// Maximum non-negative discriminant representable by an integer storage
+/// type. Enum discriminants use `i64` in the app schema, so unsigned 8-byte
+/// storage has the same effective maximum as signed 8-byte storage.
+fn integer_storage_max(ty: &db::Type) -> Option<i64> {
+    match ty {
+        db::Type::Integer(size @ 1..=7) => Some((1_i64 << (u32::from(*size) * 8 - 1)) - 1),
+        db::Type::Integer(8) | db::Type::UnsignedInteger(8) => Some(i64::MAX),
+        db::Type::UnsignedInteger(size @ 1..=7) => Some((1_i64 << (u32::from(*size) * 8)) - 1),
         _ => None,
     }
 }

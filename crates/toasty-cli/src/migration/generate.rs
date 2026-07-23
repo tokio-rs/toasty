@@ -277,12 +277,12 @@ impl GenerateCommand {
                 jiff::Timestamp::now().strftime("%Y%m%d_%H%M%S").to_string()
             }
         };
-        let snapshot_name = format!("{:04}_snapshot.toml", &migration_prefix);
+        let snapshot_name = format!("{migration_prefix:04}_snapshot.toml");
         let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
 
         let migration_name = format!(
             "{:04}_{}.sql",
-            &migration_prefix,
+            migration_prefix,
             self.name.as_deref().unwrap_or("migration")
         );
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
@@ -295,6 +295,7 @@ impl GenerateCommand {
             checksum: None,
         });
 
+        let snapshot = generated.snapshot.to_toml_string()?;
         let migration = generated.migration;
         let Migration::Sql(sql) = migration;
         std::fs::write(&migration_path, format!("{sql}\n"))?;
@@ -304,7 +305,7 @@ impl GenerateCommand {
             style(format!("Created migration file: {}", migration_name)).dim()
         );
 
-        generated.snapshot.save(&snapshot_path)?;
+        std::fs::write(&snapshot_path, snapshot)?;
         println!(
             "  {} {}",
             style("✓").green().bold(),

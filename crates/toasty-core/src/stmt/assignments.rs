@@ -297,6 +297,12 @@ impl Assignments {
         self.assignments.remove(key.as_ref())
     }
 
+    /// Replaces assignments with entries from `other`, preserving entries
+    /// whose projections do not appear in `other`.
+    pub fn overlay(&mut self, other: Self) {
+        self.assignments.extend(other.assignments);
+    }
+
     /// Returns an iterator over the assignment projections (keys).
     pub fn keys(&self) -> impl Iterator<Item = &Projection> + '_ {
         self.assignments.keys()

@@ -17,11 +17,6 @@ impl Value {
         self.0
     }
 
-    /// Returns a reference to the wrapped core Toasty value.
-    pub(crate) fn inner(&self) -> &CoreValue {
-        &self.0
-    }
-
     /// Converts a MySQL value within a row to a Toasty value.
     pub(crate) fn from_sql(i: usize, row: &mut Row, column: &Column, ty: &stmt::Type) -> Self {
         let value = take_mysql_value(row, i);
@@ -228,7 +223,10 @@ fn typed_mysql_value_to_core(
         },
 
         CT::MYSQL_TYPE_JSON => match ty {
-            stmt::Type::String => convert_or_null(value, stmt::Value::String),
+            // `Json<T>` is opaque to the engine. Reuse the protocol byte
+            // buffer as a String, then let `Json<T>::load` deserialize it
+            // directly into T.
+            stmt::Type::String => bytes_to_string_value(value),
             stmt::Type::List(elem) => convert_or_null(value, |bytes: Vec<u8>| {
                 json_bytes_to_value_list(&bytes, elem)
             }),
@@ -373,9 +371,14 @@ where
     }
 }
 
-impl ToValue for Value {
-    fn to_value(&self) -> mysql_async::Value {
-        match &self.0 {
+impl Value {
+    /// Converts an owned Toasty value into an owned MySQL parameter.
+    ///
+    /// String and byte buffers move into the MySQL value without another
+    /// allocation. This matters for `Json<T>`, whose string is already the
+    /// final serialized JSON representation.
+    pub(crate) fn into_mysql(self) -> mysql_async::Value {
+        match self.0 {
             CoreValue::Bool(value) => value.to_value(),
             CoreValue::I8(value) => value.to_value(),
             CoreValue::I16(value) => value.to_value(),
@@ -388,13 +391,15 @@ impl ToValue for Value {
             CoreValue::F32(value) => value.to_value(),
             CoreValue::F64(value) => value.to_value(),
             CoreValue::Null => mysql_async::Value::NULL,
-            CoreValue::String(value) => value.to_value(),
-            CoreValue::Bytes(value) => value.to_value(),
+            CoreValue::String(value) => mysql_async::Value::Bytes(value.into_bytes()),
+            CoreValue::Bytes(value) => mysql_async::Value::Bytes(value),
             CoreValue::Uuid(value) => value.to_value(),
             #[cfg(feature = "rust_decimal")]
-            CoreValue::Decimal(value) => value.to_string().to_value(),
+            CoreValue::Decimal(value) => mysql_async::Value::Bytes(value.to_string().into_bytes()),
             #[cfg(feature = "bigdecimal")]
-            CoreValue::BigDecimal(value) => value.to_string().to_value(),
+            CoreValue::BigDecimal(value) => {
+                mysql_async::Value::Bytes(value.to_string().into_bytes())
+            }
             #[cfg(feature = "jiff")]
             CoreValue::Timestamp(value) => {
                 // Convert jiff::Timestamp to MySQL TIMESTAMP
@@ -442,21 +447,21 @@ impl ToValue for Value {
                     (value.subsec_nanosecond() / 1000) as u32, // Convert nanoseconds to microseconds
                 )
             }
-            CoreValue::List(_) => {
+            value @ CoreValue::List(_) => {
                 // Bound to a MySQL `JSON` column — a `Vec<scalar>` field or a
                 // `#[document]` collection. Serialize the list to a JSON
                 // document and send it as bytes. MySQL accepts JSON as string
                 // or bytes; bytes avoids any utf8 round-trip.
                 mysql_async::Value::Bytes(
-                    toasty_sql::json::to_vec(&self.0).expect("serialize JSON list column"),
+                    toasty_sql::json::to_vec(&value).expect("serialize JSON list column"),
                 )
             }
-            CoreValue::Object(_) => {
+            value @ CoreValue::Object(_) => {
                 // Bound to a MySQL `JSON` column — a bare `#[document]` embed
                 // (`Value::Object`). Serialize the named object to JSON bytes,
                 // the same way the list arm handles a document collection.
                 mysql_async::Value::Bytes(
-                    toasty_sql::json::to_vec(&self.0).expect("serialize JSON document column"),
+                    toasty_sql::json::to_vec(&value).expect("serialize JSON document column"),
                 )
             }
             value => todo!("{:#?}", value),

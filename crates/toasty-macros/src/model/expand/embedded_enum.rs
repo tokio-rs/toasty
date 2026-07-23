@@ -29,6 +29,73 @@ impl Expand<'_> {
             .uses_string_discriminants()
     }
 
+    /// Implements compatibility with every integer storage marker that can
+    /// represent all of this enum's discriminants. This lets field-level
+    /// overrides fail during type checking, including overrides on transparent
+    /// wrappers and `Vec<unit-enum>` fields whose app-schema type no longer
+    /// carries the enum model id.
+    pub(super) fn expand_enum_discriminant_compat_impls(&self) -> TokenStream {
+        if self.uses_string_discriminants() {
+            return quote! {};
+        }
+
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        let max_discriminant = self
+            .model
+            .kind
+            .as_embedded_enum_unwrap()
+            .variants
+            .iter()
+            .map(|variant| match variant.attrs.discriminant {
+                VariantValue::Integer(value) => value,
+                VariantValue::String(_) => unreachable!("integer enum has a string discriminant"),
+            })
+            .max()
+            .unwrap_or(0);
+
+        let mut markers = Vec::new();
+        if max_discriminant <= i8::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::I8 });
+        }
+        if max_discriminant <= i16::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::I16 });
+        }
+        if max_discriminant <= i32::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::I32 });
+        }
+        markers.push(quote! { #toasty::storage::tag::I64 });
+        if max_discriminant <= u8::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::U8 });
+        }
+        if max_discriminant <= u16::MAX.into() {
+            markers.push(quote! { #toasty::storage::tag::U16 });
+        }
+        if max_discriminant <= i64::from(u32::MAX) {
+            markers.push(quote! { #toasty::storage::tag::U32 });
+        }
+        markers.push(quote! { #toasty::storage::tag::U64 });
+
+        for size in [3_u8, 5, 6, 7] {
+            let signed_max = (1_i64 << (u32::from(size) * 8 - 1)) - 1;
+            if max_discriminant <= signed_max {
+                markers.push(quote! { #toasty::storage::tag::Int<#size> });
+            }
+
+            let unsigned_max = (1_i64 << (u32::from(size) * 8)) - 1;
+            if max_discriminant <= unsigned_max {
+                markers.push(quote! { #toasty::storage::tag::UInt<#size> });
+            }
+        }
+
+        quote! {
+            #(
+                impl #toasty::storage::CompatibleWith<#markers> for #model_ident {}
+            )*
+        }
+    }
+
     /// Generates tokens for an `is_variant(path, variant_id)` expression.
     /// Reused by `is_{variant}()` methods and the `matches()` method.
     fn expand_is_variant_expr(&self, variant_idx: &TokenStream) -> TokenStream {
@@ -236,6 +303,12 @@ impl Expand<'_> {
                 }
             }
 
+            impl<__Origin> Into<#toasty::stmt::Include<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
+                fn into(self) -> #toasty::stmt::Include<__Origin, #model_ident> {
+                    self.path.into()
+                }
+            }
+
             #( #variant_field_structs )*
         }
     }
@@ -344,6 +417,18 @@ impl Expand<'_> {
                     None => quote! { None },
                 };
                 let ty = primitive_ty_unwrap(field);
+                let storage_ty = match field
+                    .attrs
+                    .column
+                    .as_ref()
+                    .and_then(|column| column.ty.as_ref())
+                {
+                    Some(column_ty) => {
+                        let expanded = column_ty.expand_with(toasty);
+                        quote! { Some(#expanded) }
+                    }
+                    None => quote! { None },
+                };
                 let variant_index = field.variant.expect("enum field must have variant");
                 let variant_idx = util::int(variant_index);
                 quote! {
@@ -356,7 +441,7 @@ impl Expand<'_> {
                             app: Some(#app_name.to_string()),
                             storage: #storage_name,
                         },
-                        ty: <#ty as #toasty::Field>::field_ty(None),
+                        ty: <#ty as #toasty::Field>::field_ty(#storage_ty),
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,
                         auto: None,
@@ -701,7 +786,8 @@ impl Expand<'_> {
     ///
     /// - Native enum: `Some(db::Type::Enum(TypeEnum { ... }))`
     /// - Plain string (`#[column(type = text)]`): `Some(db::Type::Text)`
-    /// - Integer discriminants: `None`
+    /// - Explicit integer type: the requested integer storage type
+    /// - Default integer discriminants: `None`
     pub(super) fn expand_enum_storage_ty(&self) -> TokenStream {
         let toasty = &self.toasty;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
@@ -743,6 +829,10 @@ impl Expand<'_> {
                 }
             }
             Some(EnumStorageStrategy::PlainString(col_ty)) => {
+                let ty_tokens = col_ty.expand_with(toasty);
+                quote! { ::std::option::Option::Some(#ty_tokens) }
+            }
+            Some(EnumStorageStrategy::Integer(col_ty)) => {
                 let ty_tokens = col_ty.expand_with(toasty);
                 quote! { ::std::option::Option::Some(#ty_tokens) }
             }

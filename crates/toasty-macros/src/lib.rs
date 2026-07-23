@@ -46,8 +46,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// - A [`Load`] implementation for deserializing rows from the database.
 /// - The [`Model`] trait's schema-registration methods (`id`, `schema`,
 ///   `register`) used to register the model at runtime.
-/// - Static query methods such as `all()`, `filter(expr)`,
-///   `filter_by_<field>()`, and `get_by_<key>()`.
+/// - Static query and mutation methods such as `all()`, `filter(expr)`,
+///   `filter_by_<field>()`, `get_by_<key>()`, and `upsert_by_<field>()`.
 /// - Instance methods `update()` and `delete()`.
 /// - A `Fields` struct returned by `<Model>::fields()` for building typed
 ///   filter expressions.
@@ -63,6 +63,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 ///
 /// Defines the primary key at the struct level. Mutually exclusive with
 /// field-level `#[key]`.
+///
+/// Toasty generates an `upsert_by_*` method that takes every primary-key field.
 ///
 /// **Simple form** — every listed field becomes a partition key:
 ///
@@ -132,6 +134,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// fields each becomes a partition key column (equivalent to listing them
 /// in `#[key(...)]` at the struct level).
 ///
+/// Toasty generates an `upsert_by_*` method that takes every primary-key field.
+///
 /// Cannot be combined with a struct-level `#[key(...)]` attribute.
 ///
 /// ```
@@ -168,7 +172,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// ## `#[default(expr)]` — default value on create
 ///
 /// Sets a default value that is used when the field is not explicitly
-/// provided during creation. The expression is any valid Rust expression.
+/// provided during creation or on an upsert's create branch. The expression is
+/// any valid Rust expression.
 ///
 /// ```
 /// # use toasty::Model;
@@ -194,8 +199,9 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 ///
 /// ## `#[update(expr)]` — value applied on create and update
 ///
-/// Sets a value that Toasty applies every time a record is created or
-/// updated, unless the field is explicitly set on the builder.
+/// Sets a value that Toasty applies every time a record is created or updated,
+/// including both branches of an upsert, unless the field is explicitly set on
+/// the builder.
 ///
 /// ```
 /// # use toasty::Model;
@@ -231,7 +237,9 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// ## `#[unique]` — add a unique constraint
 ///
 /// Creates a unique index on the field. Like `#[index]`, this generates
-/// `filter_by_<field>`. The database enforces uniqueness.
+/// `filter_by_<field>`. It also generates `upsert_by_<field>`, which creates a
+/// record or updates the record selected by this constraint. The database
+/// enforces uniqueness.
 ///
 /// ```
 /// # use toasty::Model;
@@ -317,8 +325,10 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// ## JSON-encoded fields via [`Json<T>`](toasty::stmt::Json)
 ///
 /// Wrap a serde-typed value in [`toasty::Json<T>`](toasty::stmt::Json) to
-/// store it as a JSON string in the database. Requires the `serde` feature
-/// and that `T` implements `serde::Serialize` and `serde::Deserialize`.
+/// serialize it as JSON in the database. Every JSON field must select its
+/// database column type with `#[column(type = ...)]`. Use `text` for
+/// text-backed JSON. JSON fields require the `serde` feature and
+/// `T: serde::Serialize + serde::Deserialize`.
 ///
 /// ```
 /// # use toasty::Model;
@@ -327,6 +337,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
+/// #[column(type = text)]
 /// tags: toasty::Json<Vec<String>>,
 /// # }
 /// ```
@@ -342,6 +353,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
+/// #[column(type = text)]
 /// metadata: Option<toasty::Json<HashMap<String, String>>>,
 /// # }
 /// ```
@@ -562,6 +574,67 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// with `.select()` is supported on SQL backends; both are not yet available on
 /// DynamoDB.
 ///
+/// #### Many-to-many through a join model
+///
+/// Model a many-to-many relationship with a join model that belongs to both
+/// endpoints. Each endpoint has a direct `has_many` relation to the join model
+/// and a derived `has_many(via = ...)` relation to the opposite endpoint:
+///
+/// ```
+/// # use toasty::Model;
+/// #[derive(Debug, toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     #[has_many]
+///     memberships: toasty::Deferred<Vec<Membership>>,
+///
+///     #[has_many(via = memberships.group)]
+///     groups: toasty::Deferred<Vec<Group>>,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// struct Group {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///
+///     #[has_many]
+///     memberships: toasty::Deferred<Vec<Membership>>,
+///
+///     #[has_many(via = memberships.user)]
+///     users: toasty::Deferred<Vec<User>>,
+/// }
+///
+/// #[derive(Debug, toasty::Model)]
+/// #[key(user_id, group_id)]
+/// struct Membership {
+///     #[index]
+///     user_id: i64,
+///
+///     #[belongs_to(key = user_id, references = id)]
+///     user: toasty::Deferred<User>,
+///
+///     #[index]
+///     group_id: i64,
+///
+///     #[belongs_to(key = group_id, references = id)]
+///     group: toasty::Deferred<Group>,
+///
+///     role: String,
+/// }
+/// ```
+///
+/// The composite key prevents duplicate user-group links. Fields such as
+/// `role` belong on the join model because they describe one connection. The
+/// derived `groups` and `users` relations return distinct endpoints and are
+/// read-only; create, update, or delete `Membership` records to change links.
+/// Call `.any()` on a derived field to filter by the opposite endpoint, or on
+/// `memberships` to filter by join-model fields. Traversing, filtering,
+/// preloading, or projecting the derived `via` fields requires a SQL backend.
+///
 /// ## `#[has_one]` — one-to-one association
 ///
 /// Declares a single related model. The target model must have a
@@ -715,6 +788,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 ///
 ///     title: String,
 ///
+///     #[column(type = text)]
 ///     tags: toasty::Json<Vec<String>>,
 ///
 ///     #[index]
@@ -964,8 +1038,15 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// An enum cannot mix string and integer discriminants. Integer discriminants
-/// are stored as `i64` and do not support `rename_all`. All discriminant values
-/// must be unique. String labels may contain at most 63 bytes.
+/// use `i64` storage by default. Add an integer enum-level override such as
+/// `#[column(type = u8)]` to request narrower storage. The type applies to
+/// flattened discriminant columns, through transparent field wrappers, and to
+/// each element of `Vec<unit-enum>`. The same attribute on a model field
+/// overrides the enum default for that use; on a collection it selects the
+/// element type. Every discriminant must fit the selected type. Enum embeds
+/// inside `#[document]` fields are not supported. Integer-discriminant enums do
+/// not support `rename_all`. All discriminant values must be unique. String
+/// labels may contain at most 63 bytes.
 ///
 /// ## `#[index]` — add a database index
 ///

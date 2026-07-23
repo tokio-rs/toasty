@@ -12,13 +12,13 @@
 //! deferred sub-field of an embed struct nested inside an enum variant —
 //! the masked `Null` lives inside a `Match` expression, not a `Record`.
 //!
-//! Include paths arrive as [`stmt::Path`] values. The first thing we do is
-//! flatten any `PathRoot::Variant` chain into a plain projection of the form
-//! `[…parent_steps, variant_idx, …local_var_field_steps]`. This LOCAL form
-//! mirrors the IR's `Match` arm record (where each arm is `[disc, field_0,
-//! field_1, …]`), so descent through enum variants is just two index steps:
-//! one selecting the arm by variant index, the next addressing a local
-//! variant field.
+//! Include entries arrive as [`stmt::Include`] values. The first thing we do
+//! is flatten any `PathRoot::Variant` chain
+//! into a plain projection of the form `[…parent_steps, variant_idx,
+//! …local_var_field_steps]`. This LOCAL form mirrors the IR's `Match` arm
+//! record (where each arm is `[disc, field_0, field_1, …]`), so descent
+//! through enum variants is just two index steps: one selecting the arm by
+//! variant index, the next addressing a local variant field.
 //!
 //! The flow:
 //!
@@ -32,10 +32,7 @@
 //!         └──────────────────────────────────  └── enum   → process_enum_arms
 //! ```
 //!
-//! Relations don't currently live inside embedded types, so
-//! `build_include_subquery` only fires from `process_fields` at the
-//! top-level model. When relations-in-embeds eventually lands, the same
-//! function will fire from any depth without further restructuring.
+//! Relations only live on top-level models.
 
 use toasty_core::{
     schema::{app, mapping},
@@ -45,7 +42,12 @@ use toasty_core::{
 use crate::engine::lower::LowerStatement;
 use crate::schema::lazy_slot;
 
-/// The include paths that target a single field, partitioned by whether
+struct FlatInclude {
+    projection: stmt::Projection,
+    query: Option<stmt::Query>,
+}
+
+/// The include entries that target a single field, partitioned by whether
 /// they name the field itself or a sub-path within it.
 ///
 /// Either kind activates the field. Sub-paths only matter when the field
@@ -53,52 +55,58 @@ use crate::schema::lazy_slot;
 struct FieldIncludes {
     /// At least one include path equals `[i]` — the field is named directly.
     include_self: bool,
+    /// Combined top-level filter for this field (multiple `.include()` calls
+    /// are OR-ed together).
+    top_filter: Option<stmt::Expr>,
     /// Tails of every `[i, …]` include path, with the leading index stripped.
-    sub_paths: Vec<stmt::Projection>,
+    sub_paths: Vec<FlatInclude>,
 }
 
 impl LowerStatement<'_, '_> {
     /// Top-level entry from `visit_returning_mut` for a `Returning::Model`.
-    /// Flattens each include `Path` to its projection (folding any
+    /// Flattens each include to its projection (folding any
     /// `PathRoot::Variant` chain into discriminant-index steps), then runs
     /// the recursion against the model's fields.
     pub(super) fn process_top_level_includes(
         &mut self,
         returning: &mut stmt::Expr,
-        include_paths: &[stmt::Path],
+        includes: &[stmt::Include],
         is_insert: bool,
     ) {
         let stmt::Expr::Record(record) = returning else {
             return;
         };
-        let projections: Vec<stmt::Projection> = include_paths.iter().map(flatten_path).collect();
+        let flat: Vec<FlatInclude> = includes.iter().map(flatten_include).collect();
         let app_fields = &self.model_unwrap().fields;
         let mapping_fields = &self.mapping_unwrap().fields;
-        self.process_fields(record, app_fields, mapping_fields, &projections, is_insert);
+        self.process_fields(record, app_fields, mapping_fields, &flat, is_insert);
     }
 
     /// Process the fields of a struct-shaped record (top-level model or
     /// embedded struct). For each field, partition matching include paths via
     /// [`FieldIncludes`] and dispatch:
     ///
-    /// - Relation → splice a subquery via [`build_include_subquery`]
-    ///   (relations live only at the top level today; a future "relations in
-    ///   embeds" feature will fire this from any depth).
+    /// - Relation → splice a subquery via [`build_include_subquery`].
     /// - Anything else → [`process_field`].
     fn process_fields(
         &mut self,
         returning: &mut stmt::ExprRecord,
         app_fields: &[app::Field],
         mapping_fields: &[mapping::Field],
-        include_paths: &[stmt::Projection],
+        includes: &[FlatInclude],
         is_insert: bool,
     ) {
         for (i, (field, mapping)) in app_fields.iter().zip(mapping_fields).enumerate() {
-            let field_includes = partition_paths(include_paths, i);
+            let field_includes = partition_includes(includes, i);
 
             if field.ty.is_relation() {
                 if field_includes.self_included() {
-                    self.build_include_subquery(returning, i, &field_includes.sub_paths);
+                    self.build_include_subquery(
+                        returning,
+                        i,
+                        &field_includes.sub_paths,
+                        field_includes.top_filter,
+                    );
                 }
                 continue;
             }
@@ -177,7 +185,7 @@ impl LowerStatement<'_, '_> {
         returning: &mut stmt::Expr,
         target: app::ModelId,
         mapping: &mapping::Field,
-        sub_paths: &[stmt::Projection],
+        sub_includes: &[FlatInclude],
         is_insert: bool,
     ) {
         match (self.schema().app.model(target), mapping) {
@@ -202,12 +210,12 @@ impl LowerStatement<'_, '_> {
                     record,
                     em.fields.as_slice(),
                     fs.fields.as_slice(),
-                    sub_paths,
+                    sub_includes,
                     is_insert,
                 );
             }
             (app::Model::EmbeddedEnum(em), mapping::Field::Enum(fe)) => {
-                self.process_enum_arms(returning, em, fe, sub_paths, is_insert);
+                self.process_enum_arms(returning, em, fe, sub_includes, is_insert);
             }
             _ => {}
         }
@@ -228,7 +236,7 @@ impl LowerStatement<'_, '_> {
         returning: &mut stmt::Expr,
         app_enum: &app::EmbeddedEnum,
         mapping: &mapping::FieldEnum,
-        sub_paths: &[stmt::Projection],
+        sub_includes: &[FlatInclude],
         is_insert: bool,
     ) {
         let stmt::Expr::Match(match_expr) = returning else {
@@ -245,13 +253,16 @@ impl LowerStatement<'_, '_> {
             };
             let variant_mapping = &mapping.variants[variant_idx];
 
-            // Tails of every path that targets THIS arm — i.e., paths whose
+            // Tails of every include that targets THIS arm — i.e., paths whose
             // leading step equals `variant_idx`. The leading step is stripped.
-            let arm_sub_paths: Vec<stmt::Projection> = sub_paths
+            let arm_sub_includes: Vec<FlatInclude> = sub_includes
                 .iter()
-                .filter_map(|p| {
-                    let (first, rest) = p.as_slice().split_first()?;
-                    (*first == variant_idx).then(|| stmt::Projection::from(rest))
+                .filter_map(|fi| {
+                    let (first, rest) = fi.projection.as_slice().split_first()?;
+                    (*first == variant_idx).then(|| FlatInclude {
+                        projection: stmt::Projection::from(rest),
+                        query: fi.query.clone(),
+                    })
                 })
                 .collect();
 
@@ -260,7 +271,7 @@ impl LowerStatement<'_, '_> {
                 .zip(&variant_mapping.fields)
                 .enumerate()
             {
-                let field_includes = partition_paths(&arm_sub_paths, j);
+                let field_includes = partition_includes(&arm_sub_includes, j);
                 self.process_field(
                     &mut arm_record[j + 1],
                     var_field,
@@ -279,9 +290,10 @@ impl LowerStatement<'_, '_> {
         &mut self,
         returning: &mut stmt::ExprRecord,
         field_index: usize,
-        nested: &[stmt::Projection],
+        nested: &[FlatInclude],
+        top_filter: Option<stmt::Expr>,
     ) {
-        let value = self.build_relation_subquery(field_index, nested);
+        let value = self.build_relation_subquery_inner(field_index, nested, top_filter);
         returning[field_index] = if self.model_unwrap().fields[field_index].deferred {
             lazy_slot::loaded_expr(value)
         } else {
@@ -291,15 +303,19 @@ impl LowerStatement<'_, '_> {
 
     /// Build a subquery that loads the related model(s) for a
     /// `BelongsTo`/`HasOne`/`HasMany` field, run the canonical lowering
-    /// pipeline on it, and return it stitched onto the parent statement
-    /// as an `Expr::Arg`. Used both by `.include(...)` (which wraps the
-    /// result as a loaded lazy slot before splicing it into a record slot)
-    /// and by `.select(rel_field)` (which uses the raw result as the entire
-    /// projection expression).
-    pub(super) fn build_relation_subquery(
+    /// pipeline on it, and return it stitched onto the parent statement as an
+    /// `Expr::Arg`. This is the `.select(rel_field)` entry point;
+    /// `.include(...)` goes through [`build_relation_subquery_inner`] so it
+    /// can pass its nested includes and filter down.
+    pub(super) fn build_relation_subquery(&mut self, field_index: usize) -> stmt::Expr {
+        self.build_relation_subquery_inner(field_index, &[], None)
+    }
+
+    fn build_relation_subquery_inner(
         &mut self,
         field_index: usize,
-        nested: &[stmt::Projection],
+        nested: &[FlatInclude],
+        top_filter: Option<stmt::Expr>,
     ) -> stmt::Expr {
         let field = &self.model_unwrap().fields[field_index];
 
@@ -320,7 +336,18 @@ impl LowerStatement<'_, '_> {
                      supported on SQL backends; query the relation directly instead"
                 );
             }
-            return self.build_via_include_subquery(field_index, via, nested);
+            // `via` lowering does not thread per-relation filters through its
+            // JOIN chain yet; reject rather than silently drop them.
+            if top_filter.is_some()
+                || nested
+                    .iter()
+                    .any(|fi| query_filter_expr(&fi.query).is_some())
+            {
+                todo!("`.filter(...)` on a multi-step `via` relation include is not yet supported");
+            }
+            let nested_projections: Vec<stmt::Projection> =
+                nested.iter().map(|fi| fi.projection.clone()).collect();
+            return self.build_via_include_subquery(field_index, via, &nested_projections);
         }
 
         let (mut stmt, target_model_id) = match &field.ty {
@@ -371,16 +398,26 @@ impl LowerStatement<'_, '_> {
             _ => unreachable!("build_include_subquery called on non-relation field"),
         };
 
+        // AND the user-supplied filter (if any) onto the join predicate; the
+        // pipeline below lowers it like any other filter on the target.
+        if let Some(filter) = top_filter {
+            stmt.add_filter(filter);
+        }
+
         // Attach each non-empty remainder as a nested include on the
-        // subquery. Empty remainders (from a bare `.include(posts())`) need
-        // no nested include — the subquery itself satisfies them. The
-        // lowering pipeline will recursively group and process the nested
-        // includes when it encounters `Returning::Model` on this subquery.
-        for rest in nested {
-            if !rest.is_empty() {
-                stmt.include(stmt::Path {
-                    root: stmt::PathRoot::Model(target_model_id),
-                    projection: rest.clone(),
+        // subquery, carrying any deeper-level filter forward. Empty remainders
+        // (from a bare `.include(posts())`) need no nested include — the
+        // subquery itself satisfies them. The lowering pipeline will
+        // recursively group and process the nested includes when it encounters
+        // `Returning::Model` on this subquery.
+        for fi in nested {
+            if !fi.projection.is_empty() {
+                stmt.include(stmt::Include {
+                    path: stmt::Path {
+                        root: stmt::PathRoot::Model(target_model_id),
+                        projection: fi.projection.clone(),
+                    },
+                    query: fi.query.clone(),
                 });
             }
         }
@@ -399,25 +436,57 @@ impl FieldIncludes {
     }
 }
 
-/// Find the include paths that target field index `i` and split them by
-/// whether they name the field itself or a sub-path within it.
-fn partition_paths(paths: &[stmt::Projection], i: usize) -> FieldIncludes {
+/// Partitions includes for a field and ORs filters on the field itself.
+fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
     let mut include_self = false;
+    let mut unfiltered_self = false;
+    let mut top_filter: Option<stmt::Expr> = None;
     let mut sub_paths = Vec::new();
-    for path in paths {
-        if let Some((first, rest)) = path.as_slice().split_first()
+    for fi in includes {
+        if let Some((first, rest)) = fi.projection.as_slice().split_first()
             && *first == i
         {
             if rest.is_empty() {
                 include_self = true;
+                match query_filter_expr(&fi.query) {
+                    Some(f) if !unfiltered_self => {
+                        top_filter = Some(match top_filter.take() {
+                            Some(prev) => stmt::Expr::or(prev, f),
+                            None => f,
+                        });
+                    }
+                    Some(_) => {}
+                    None => {
+                        unfiltered_self = true;
+                        top_filter = None;
+                    }
+                }
             } else {
-                sub_paths.push(stmt::Projection::from(rest));
+                sub_paths.push(FlatInclude {
+                    projection: stmt::Projection::from(rest),
+                    query: fi.query.clone(),
+                });
             }
         }
     }
     FieldIncludes {
         include_self,
+        top_filter,
         sub_paths,
+    }
+}
+
+fn flatten_include(include: &stmt::Include) -> FlatInclude {
+    FlatInclude {
+        projection: flatten_path(&include.path),
+        query: include.query.clone(),
+    }
+}
+
+fn query_filter_expr(query: &Option<stmt::Query>) -> Option<stmt::Expr> {
+    match &query.as_ref()?.body {
+        stmt::ExprSet::Select(select) => select.filter.expr.clone(),
+        _ => None,
     }
 }
 

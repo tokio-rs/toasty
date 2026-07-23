@@ -147,13 +147,19 @@ assert_eq!(post.view_count, 100);
 The expression inside `#[default(...)]` is any valid Rust expression. It runs at
 insert time, not at compile time.
 
-`#[default]` only applies on create. It has no effect on updates.
+`#[default]` applies to a create builder and to the create branch of an
+[upsert](./upserting-records.md). It does not change an existing record on the
+update branch. A shared upsert mutation applies to this value when it creates a
+record; for example, `#[default(10)]` with `subtract(3)` inserts seven.
 
 ## Update expressions
 
 Use `#[update(expr)]` to set an expression that applies on both create and
 update. Each time the record is created or updated, Toasty evaluates the
 expression and sets the field — unless you explicitly override it.
+
+An [upsert](./upserting-records.md) applies `#[update]` on both its create and
+update branches.
 
 ```rust
 # use toasty::Model;
@@ -226,7 +232,8 @@ assert_eq!(post.updated_at, explicit_ts);
 ### Combining `#[default]` and `#[update]`
 
 You can use both attributes on the same field. `#[default]` applies on create,
-`#[update]` applies on update:
+and `#[update]` applies on update. An upsert selects the corresponding value for
+each branch:
 
 ```rust
 # use toasty::Model;
@@ -349,9 +356,16 @@ struct Event {
 
 ## JSON serialization
 
-Wrap a field type in [`toasty::Json<T>`][json-doc] to store it as a JSON
-string in the database. The inner `T` must implement `serde::Serialize`
-and `serde::Deserialize`.
+Wrap a field type in [`toasty::Json<T>`][json-doc] to serialize it as JSON
+in the database. The inner `T` must implement `serde::Serialize` and
+`serde::Deserialize`. Each `Json<T>` field must select its database column
+type with `#[column(type = ...)]`.
+
+> [!IMPORTANT]
+> The requirement to write `#[column(type = ...)]` is temporary. A future
+> Toasty release will select each database's native JSON column type by
+> default. Explicit overrides will remain available for models that need a
+> different representation.
 
 [json-doc]: https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html
 
@@ -387,15 +401,30 @@ struct Post {
 
     // Arbitrary serde type — `Json<T>` stores it as one opaque JSON
     // column. Toasty cannot query into it.
+    #[column(type = text)]
     meta: toasty::Json<Metadata>,
 }
 ```
 
 Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The default database column type is `TEXT`.
-You can override this with `#[column(type = ...)]` if needed — for example,
-`#[column(type = varchar(1000))]` to limit the stored JSON size on databases
-that support `varchar`.
+deserializes it back when reading. The selected column type determines how the
+database stores that JSON:
+
+| Column type | Support |
+|---|---|
+| `text` or `varchar(...)` | SQL databases with the selected text type |
+| `json` | PostgreSQL and MySQL native JSON |
+| `jsonb` | PostgreSQL JSONB |
+
+For example, this field uses PostgreSQL or MySQL native JSON storage:
+
+```rust,ignore
+#[column(type = json)]
+meta: toasty::Json<Metadata>,
+```
+
+Toasty rejects `json` or `jsonb` during schema construction when the selected
+database does not support that column type.
 
 ```rust,ignore
 # use toasty::Model;
@@ -412,6 +441,7 @@ that support `varchar`.
 #     id: u64,
 #     title: String,
 #     tags: Vec<String>,
+#     #[column(type = text)]
 #     meta: toasty::Json<Metadata>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -449,11 +479,13 @@ encoded inside the JSON itself:
 #     #[auto]
 #     id: u64,
 #     title: String,
-// `None` maps to SQL `NULL`; `Some(v)` to a JSON string.
+// `None` maps to SQL `NULL`; `Some(v)` to encoded JSON.
+#[column(type = text)]
 metadata: Option<toasty::Json<HashMap<String, String>>>,
 
-// `None` maps to the JSON literal `"null"` (still a non-null string);
-// `Some(v)` to a JSON string.
+// `None` maps to the JSON literal `"null"` (still a non-null column value);
+// `Some(v)` to encoded JSON.
+#[column(type = text)]
 labels: toasty::Json<Option<Vec<String>>>,
 # }
 ```
@@ -475,10 +507,10 @@ querying, and updates — see [`Vec<scalar>` Fields](./vec-scalar-fields.md).
 |---|---|---|
 | `#[column("name")]` | Custom column name | — |
 | `#[column(type = ...)]` | Explicit column type | — |
-| `#[default(expr)]` | Default value | Create only |
-| `#[update(expr)]` | Automatic value | Create and update |
-| `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create only |
-| `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
+| `#[default(expr)]` | Default value | Create and the create branch of upsert |
+| `#[update(expr)]` | Automatic value | Create, update, and both upsert branches |
+| `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create and the create branch of upsert |
+| `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create, update, and both upsert branches |
 
 JSON storage is handled by the [`toasty::Json<T>`][json-doc] field
 wrapper — see [JSON serialization](#json-serialization) above. Use

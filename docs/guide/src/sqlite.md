@@ -137,9 +137,15 @@ mutations, [batch operations](./batch-operations.md),
 [pagination in both directions](./sorting-limits-and-pagination.md),
 [embedded types](./embedded-types.md),
 [`#[unique]`](./indexes-and-unique-constraints.md#unique-fields),
+[`upsert_by_*`](./upserting-records.md),
 [association preloading](./preloading-associations.md), and
 serializable [transactions](./transactions.md) all run natively. A few
 behaviors differ from the other SQL backends:
+
+**Targeted upsert.** SQLite executes `upsert_by_*` with `INSERT ... ON
+CONFLICT`. Primary keys and unique constraints can be conflict targets, and
+`on_create`, `on_update`, and `or_ignore` are supported. Turso uses the same
+upsert behavior.
 
 **`LIKE` is case-insensitive for ASCII.** SQLite's `LIKE` ignores case for ASCII
 characters but is case-sensitive for non-ASCII ones. A

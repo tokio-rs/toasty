@@ -3,13 +3,14 @@
 use super::{
     Assignment, Assignments, Association, Condition, Cte, Delete, Expr, ExprAllOp, ExprAnd,
     ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
-    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIntersects, ExprIsNull, ExprIsSuperset,
-    ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch, ExprNot, ExprOr,
-    ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith, ExprStmt, Filter,
-    FuncCount, FuncJsonExtract, FuncLastInsertId, Insert, InsertTarget, Join, JoinOp, Limit,
-    LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection, Query, Returning,
-    Select, Source, SourceModel, SourceTable, SourceTableId, Statement, TableDerived, TableFactor,
-    TableRef, TableWithJoins, Type, Update, UpdateTarget, Value, ValueRecord, Values, With,
+    ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming, ExprIntersects, ExprIsNull,
+    ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
+    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
+    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include, Insert, InsertTarget,
+    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
+    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
+    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
+    ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -201,6 +202,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_in_subquery`].
     fn visit_expr_in_subquery(&mut self, i: &ExprInSubquery) {
         visit_expr_in_subquery(self, i);
+    }
+
+    /// Visits an [`ExprIncoming`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_incoming`].
+    fn visit_expr_incoming(&mut self, i: &ExprIncoming) {
+        visit_expr_incoming(self, i);
     }
 
     /// Visits an [`ExprIntersects`] node.
@@ -404,6 +412,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_path`].
     fn visit_path(&mut self, i: &Path) {
         visit_path(self, i);
+    }
+
+    /// Visits an [`Include`] node.
+    ///
+    /// The default implementation delegates to [`visit_include`].
+    fn visit_include(&mut self, i: &Include) {
+        visit_include(self, i);
     }
 
     /// Visits a [`Projection`] node.
@@ -646,6 +661,10 @@ impl<V: Visit> Visit for &mut V {
         Visit::visit_expr_in_subquery(&mut **self, i);
     }
 
+    fn visit_expr_incoming(&mut self, i: &ExprIncoming) {
+        Visit::visit_expr_incoming(&mut **self, i);
+    }
+
     fn visit_expr_intersects(&mut self, i: &ExprIntersects) {
         Visit::visit_expr_intersects(&mut **self, i);
     }
@@ -760,6 +779,10 @@ impl<V: Visit> Visit for &mut V {
 
     fn visit_path(&mut self, i: &Path) {
         Visit::visit_path(&mut **self, i);
+    }
+
+    fn visit_include(&mut self, i: &Include) {
+        Visit::visit_include(&mut **self, i);
     }
 
     fn visit_projection(&mut self, i: &Projection) {
@@ -922,6 +945,7 @@ where
         Expr::Ident(_) => {}
         Expr::InList(expr) => v.visit_expr_in_list(expr),
         Expr::InSubquery(expr) => v.visit_expr_in_subquery(expr),
+        Expr::Incoming(expr) => v.visit_expr_incoming(expr),
         Expr::Intersects(expr) => v.visit_expr_intersects(expr),
         Expr::IsNull(expr) => v.visit_expr_is_null(expr),
         Expr::IsSuperset(expr) => v.visit_expr_is_superset(expr),
@@ -940,6 +964,7 @@ where
         Expr::StartsWith(expr) => v.visit_expr_starts_with(expr),
         Expr::Stmt(expr) => v.visit_expr_stmt(expr),
         Expr::Value(expr) => v.visit_value(expr),
+        Expr::Static(expr) => v.visit_value(expr),
     }
 }
 
@@ -1044,6 +1069,13 @@ where
         ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id(func),
     }
+}
+
+/// Default traversal for [`ExprIncoming`] nodes. This is a leaf node with no children to visit.
+pub fn visit_expr_incoming<V>(_v: &mut V, _node: &ExprIncoming)
+where
+    V: Visit + ?Sized,
+{
 }
 
 /// Default traversal for [`FuncJsonExtract`] nodes. Visits the base expression.
@@ -1402,13 +1434,24 @@ where
 {
     match node {
         Returning::Model { include } => {
-            for path in include {
-                v.visit_path(path);
+            for inc in include {
+                v.visit_include(inc);
             }
         }
         Returning::Changed => {}
         Returning::Project(expr) => v.visit_expr(expr),
         Returning::Expr(expr) => v.visit_expr(expr),
+    }
+}
+
+/// Visits an [`Include`].
+pub fn visit_include<V>(v: &mut V, node: &Include)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_path(&node.path);
+    if let Some(query) = &node.query {
+        v.visit_stmt_query(query);
     }
 }
 
@@ -1500,6 +1543,14 @@ where
         v.visit_stmt_query(scope);
     }
     v.visit_stmt_query(&node.source);
+
+    if let Some(upsert) = &node.upsert {
+        v.visit_assignments(&upsert.shared);
+        v.visit_assignments(&upsert.defaults);
+        v.visit_assignments(&upsert.update_defaults);
+        v.visit_assignments(&upsert.create);
+        v.visit_assignments(&upsert.update);
+    }
 
     if let Some(returning) = &node.returning {
         v.visit_returning(returning);

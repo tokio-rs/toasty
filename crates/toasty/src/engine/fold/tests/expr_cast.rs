@@ -56,6 +56,17 @@ fn non_const_not_simplified() {
 }
 
 #[test]
+fn default_passes_through() {
+    let mut expr = ExprCast {
+        from: None,
+        expr: Box::new(Expr::Default),
+        ty: Type::I32,
+    };
+
+    assert_eq!(fold_expr_cast(&mut expr), Some(Expr::Default));
+}
+
+#[test]
 fn null_passes_through() {
     // `cast(null, String) → null`
     let mut expr = ExprCast {

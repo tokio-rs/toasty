@@ -23,6 +23,9 @@ use crate::{schema::db, stmt};
 /// ```
 #[derive(Debug)]
 pub struct Capability {
+    /// Human-readable driver name used in diagnostics.
+    pub driver_name: &'static str,
+
     /// When `true`, the database uses a SQL-based query language and the
     /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
     pub sql: bool,
@@ -51,6 +54,33 @@ pub struct Capability {
 
     /// SQL: Mysql doesn't support returning clauses from insert / update queries
     pub returning_from_mutation: bool,
+
+    /// Whether an upsert may target the table's primary key.
+    ///
+    /// When `false`, the verifier returns `unsupported_feature` before
+    /// dispatching a primary-key upsert to the driver.
+    pub upsert_primary_key: bool,
+
+    /// Whether an upsert may target a secondary unique constraint.
+    ///
+    /// The driver must match the exact lowered target columns rather than
+    /// reacting to an arbitrary unique conflict.
+    pub upsert_unique: bool,
+
+    /// Whether an upsert can apply arbitrary separate `on_create` and
+    /// `on_update` assignments.
+    ///
+    /// A driver with this capability must select the branch atomically within
+    /// the database operation; it cannot read first and choose a second write.
+    /// Drivers without this capability may still accept branch patterns that
+    /// map to native conditional assignments.
+    pub upsert_branch_assignments: bool,
+
+    /// Whether an insert-or-ignore upsert suppresses only the selected target's
+    /// conflict.
+    ///
+    /// Other uniqueness conflicts and validation errors must remain errors.
+    pub upsert_targeted_ignore: bool,
 
     /// DynamoDB does not support != predicates on the primary key.
     pub primary_key_ne_predicate: bool,
@@ -86,6 +116,12 @@ pub struct Capability {
     /// `varchar` must be `Some`; when `false`, `varchar` must be `None`.
     /// Use [`Capability::validate`] to check this invariant.
     pub native_varchar: bool,
+
+    /// Whether the database supports native `JSON` columns.
+    pub native_json: bool,
+
+    /// Whether the database supports native `JSONB` columns.
+    pub native_jsonb: bool,
 
     /// Whether the database has native support for Timestamp types.
     pub native_timestamp: bool,
@@ -536,6 +572,7 @@ impl Capability {
 
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
+        driver_name: "SQLite",
         sql: true,
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
@@ -543,6 +580,10 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: true,
+        upsert_primary_key: true,
+        upsert_unique: true,
+        upsert_branch_assignments: true,
+        upsert_targeted_ignore: true,
         primary_key_ne_predicate: true,
         auto_increment: true,
         max_auto_increment_integer_width: Some(4),
@@ -551,6 +592,8 @@ impl Capability {
         max_identifier_length: None,
 
         native_varchar: true,
+        native_json: false,
+        native_jsonb: false,
 
         // SQLite does not have native enum types; uses TEXT + CHECK
         native_enum: false,
@@ -622,6 +665,7 @@ impl Capability {
 
     /// PostgreSQL capabilities
     pub const POSTGRESQL: Self = Self {
+        driver_name: "PostgreSQL",
         cte_with_update: true,
         sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
@@ -643,6 +687,8 @@ impl Capability {
         // PostgreSQL has CREATE TYPE ... AS ENUM
         native_enum: true,
         named_enum_types: true,
+        native_json: true,
+        native_jsonb: true,
 
         // PostgreSQL has native date/time types
         native_timestamp: true,
@@ -681,12 +727,17 @@ impl Capability {
 
     /// MySQL capabilities
     pub const MYSQL: Self = Self {
+        driver_name: "MySQL",
         cte_with_update: false,
         sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
         returning_from_mutation: false,
+        upsert_primary_key: false,
+        upsert_unique: false,
+        upsert_branch_assignments: false,
+        upsert_targeted_ignore: false,
         auto_increment: true,
         max_auto_increment_integer_width: None,
         bigdecimal_implemented: true,
@@ -695,6 +746,7 @@ impl Capability {
         // MySQL has inline ENUM('a', 'b') column types
         native_enum: true,
         named_enum_types: false,
+        native_json: true,
 
         // MySQL has native date/time types
         native_timestamp: true,
@@ -744,12 +796,14 @@ impl Capability {
     ///   unchanged, so callers can still request the classic locking
     ///   strategies per transaction.
     pub const TURSO: Self = Self {
+        driver_name: "Turso",
         test_connection_pool: true,
         ..Self::SQLITE
     };
 
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
+        driver_name: "DynamoDB",
         sql: false,
         sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
@@ -757,6 +811,10 @@ impl Capability {
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: false,
+        upsert_primary_key: true,
+        upsert_unique: false,
+        upsert_branch_assignments: false,
+        upsert_targeted_ignore: true,
         primary_key_ne_predicate: false,
         auto_increment: false,
         max_auto_increment_integer_width: None,
@@ -766,6 +824,8 @@ impl Capability {
         // S, N, or B — BOOL is not a valid key attribute type.
         bool_key_type: false,
         native_varchar: false,
+        native_json: false,
+        native_jsonb: false,
         native_enum: false,
         named_enum_types: false,
 

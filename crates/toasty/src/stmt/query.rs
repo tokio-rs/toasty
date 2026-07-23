@@ -187,8 +187,8 @@ impl<T> Query<T> {
     /// // Include the field at index 1 (name)
     /// let q = Query::<List<User>>::all().include(User::path_field::<String>(1));
     /// ```
-    pub fn include(mut self, path: impl Into<stmt::Path>) -> Self {
-        self.untyped.include(path.into());
+    pub fn include(mut self, include: impl Into<stmt::Include>) -> Self {
+        self.untyped.include(include.into());
         self
     }
 
@@ -445,7 +445,7 @@ fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
     query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
-        limit: stmt::Expr::from(1i64),
+        limit: stmt::Expr::Static(stmt::Value::I64(1)),
         offset: None,
     }));
 }

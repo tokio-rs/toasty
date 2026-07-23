@@ -194,16 +194,65 @@ pub(super) fn lift_in_subquery(
         }
     };
 
-    // If the field is not a relation, abort. Multi-step (`via`) relations
-    // have no paired BelongsTo to lift through — they are already rewritten
-    // into nested IN subqueries by `RewriteVia` earlier in the lowering
-    // pipeline, so any reference reaching here that still names one is not
-    // something this pass can handle.
+    // If the field is not a relation, abort. Direct relations lift through
+    // their paired foreign keys. A `via` has no single pair, so normalize its
+    // relation chain into a projected path and use the projection lift.
     match &field.ty {
         FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
         FieldTy::Has(has) => lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query),
+        FieldTy::Via(via) => lift_via_in_subquery(cx, via, query),
         _ => None,
     }
+}
+
+/// Lift an `IN` subquery whose left side names a `via` relation.
+///
+/// For `User.groups.any(Group.name == "Rust")`, where `groups` follows
+/// `User.memberships.group`, this builds:
+///
+/// ```text
+/// User.id IN (
+///     SELECT Membership.user_id FROM Membership
+///     WHERE Membership.group_id IN (
+///         SELECT Group.id FROM Group WHERE Group.name == "Rust"
+///     )
+/// )
+/// ```
+///
+/// The path is expanded into direct relation fields, converted to the same
+/// projected expression produced by an explicit relation chain, and then
+/// handled by the regular projection lift.
+fn lift_via_in_subquery(
+    cx: &ExprContext,
+    via: &app::Via,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    if via.is_scalar() {
+        return None;
+    }
+
+    let fields = super::relation_path::flatten_via_path(cx.schema(), via)?;
+    let target = fields
+        .last()
+        .and_then(|field| cx.schema().app.field(*field).relation_target_id())?;
+
+    if target != via.target || target != query.body.as_select_unwrap().source.model_id_unwrap() {
+        return None;
+    }
+
+    let (base, projection) = fields.split_first()?;
+    let base = stmt::Expr::ref_self_field(*base);
+    let path = if projection.is_empty() {
+        base
+    } else {
+        let projection = projection
+            .iter()
+            .map(|field| field.index)
+            .collect::<Vec<_>>();
+        stmt::Expr::project(base, projection.as_slice())
+    };
+
+    lift_in_subquery(cx, &path, query)
 }
 
 /// Lifts an `IN`-subquery whose left side is a path through a relation field.
@@ -257,12 +306,7 @@ fn lift_projection_in_subquery(
         return None;
     };
 
-    let target_model_id = match &field.ty {
-        FieldTy::Has(rel) => rel.target,
-        FieldTy::Via(rel) => rel.target,
-        FieldTy::BelongsTo(rel) => rel.target,
-        _ => return None,
-    };
+    let target_model_id = field.relation_target_id()?;
 
     let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
 
@@ -378,12 +422,8 @@ fn try_fuse_paired_relations(
         }
     }
 
-    let mut fused_subquery = query.clone();
-    fused_subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(
-        super::key_field_refs(0, inner_pair.foreign_key.fields.iter().map(|fk| fk.source)),
-    );
-
-    Some(stmt::Expr::in_subquery(
+    lift_fk_in_subquery(
+        inner_has.target,
         super::key_field_refs(
             0,
             outer_belongs_to
@@ -392,8 +432,9 @@ fn try_fuse_paired_relations(
                 .iter()
                 .map(|fk| fk.source),
         ),
-        fused_subquery,
-    ))
+        super::key_field_refs(0, inner_pair.foreign_key.fields.iter().map(|fk| fk.source)),
+        query,
+    )
 }
 
 /// Rewrites a comparison that walks a relation field into a foreign-key
@@ -480,12 +521,7 @@ fn lift_relation_path_predicate(
         return None;
     };
 
-    let target_model_id = match &field.ty {
-        FieldTy::Has(rel) => rel.target,
-        FieldTy::Via(rel) => rel.target,
-        FieldTy::BelongsTo(rel) => rel.target,
-        _ => return None,
-    };
+    let target_model_id = field.relation_target_id()?;
 
     // The first step names the relation field on the source model; the
     // rest index into the target model. Drop the first step and re-root the
@@ -505,6 +541,26 @@ fn lift_relation_path_predicate(
         stmt::Query::new_select(stmt::Source::from(target_model_id), make_filter(target_lhs));
 
     lift_in_subquery(cx, &project_expr.base, &subquery)
+}
+
+/// Build a foreign-key `IN` subquery for one direct relation edge.
+///
+/// `lhs` references key fields on the current model. `returning` references
+/// the matching key fields on `target`, which is also the subquery source.
+fn lift_fk_in_subquery(
+    target: ModelId,
+    lhs: stmt::Expr,
+    returning: stmt::Expr,
+    query: &stmt::Query,
+) -> Option<stmt::Expr> {
+    if target != query.body.as_select_unwrap().source.model_id_unwrap() {
+        return None;
+    }
+
+    let mut subquery = query.clone();
+    subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
+
+    Some(stmt::Expr::in_subquery(lhs, subquery))
 }
 
 /// BelongsTo branch: try to lift the subquery's filter into direct FK
@@ -544,16 +600,12 @@ fn lift_belongs_to_in_subquery(
     let all_fks_matched = lift.fk_field_matches.iter().all(|m| *m);
 
     if lift.fail || !all_fks_matched {
-        let mut subquery = query.clone();
-
-        subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(
-            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
-        );
-
-        Some(stmt::Expr::in_subquery(
+        lift_fk_in_subquery(
+            belongs_to.target,
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
-            subquery,
-        ))
+            super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
+            query,
+        )
     } else {
         Some(if lift.operands.len() == 1 {
             lift.operands.into_iter().next().unwrap()
@@ -575,31 +627,11 @@ fn lift_has_n_in_subquery(
     pair: &BelongsTo,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
-    if target != query.body.as_select_unwrap().source.model_id_unwrap() {
-        return None;
-    }
-
-    let mut subquery = query.clone();
-
-    match &mut subquery.body {
-        stmt::ExprSet::Select(select) => {
-            select.returning = stmt::Returning::Project(super::key_field_refs(
-                0,
-                pair.foreign_key.fields.iter().map(|fk| fk.source),
-            ));
-        }
-        _ => todo!(),
-    }
-
-    Some(
-        stmt::ExprInSubquery {
-            expr: Box::new(super::key_field_refs(
-                0,
-                pair.foreign_key.fields.iter().map(|fk| fk.target),
-            )),
-            query: Box::new(subquery),
-        }
-        .into(),
+    lift_fk_in_subquery(
+        target,
+        super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.target)),
+        super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.source)),
+        query,
     )
 }
 

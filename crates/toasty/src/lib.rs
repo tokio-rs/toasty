@@ -30,6 +30,11 @@
 //! through `.include(...)` or generated relation accessors. Eager relations are
 //! loaded whenever the model is loaded.
 //!
+//! A many-to-many relationship uses a join model with one `BelongsTo` relation
+//! to each endpoint. Endpoint models can expose the opposite side with
+//! `#[has_many(via = memberships.group)]`; code mutates the join model and uses
+//! the derived `via` field for read-only traversal.
+//!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.
 //!
@@ -37,7 +42,8 @@
 //!
 //! Contains the typed wrappers around the statement AST:
 //! [`Query`](stmt::Query), [`Insert`](stmt::Insert),
-//! [`Update`](stmt::Update), [`Delete`](stmt::Delete), and
+//! [`Update`](stmt::Update), [`Upsert`](stmt::Upsert),
+//! [`Delete`](stmt::Delete), and
 //! [`Statement`]. Also includes expression helpers like [`Expr`](stmt::Expr),
 //! [`Path`](stmt::Path), and the [`in_list`](stmt::in_list) function.
 //! Generated query builders (e.g. `find_by_*`, `filter_by_*`) produce these
@@ -75,8 +81,8 @@
 //! # Derive macros
 //!
 //! - [`#[derive(Model)]`](derive@Model) — generates the
-//!   [`Model`](schema::Model) impl, query builders, create/update builders,
-//!   relation accessors, and schema registration for a struct.
+//!   [`Model`](schema::Model) impl, query builders, create/update/upsert
+//!   builders, relation accessors, and schema registration for a struct.
 //! - [`#[derive(Embed)]`](derive@Embed) — generates the
 //!   [`Embed`](schema::Embed) impl for a type whose fields are stored inline
 //!   in a parent model's table.
