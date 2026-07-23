@@ -245,9 +245,8 @@ pub async fn preload_has_many_repeated_ordering_last_wins(test: &mut Test) -> Re
 
     assert_eq!(loaded.todos.get().len(), 3);
 
-    let _ = test.log().pop_op(); // transaction begin
-    let _ = test.log().pop_op(); // parent query
-    assert_struct!(test.log().pop_op(), Operation::QuerySql({
+    let _ = test.log().pop_last_op(); // transaction commit
+    assert_struct!(test.log().pop_last_op(), Operation::QuerySql({
         stmt: Statement::Query({ order_by: None, .. }),
         ..
     }));
