@@ -8,7 +8,7 @@ model code still works — [`create!`](./creating-records.md),
 [`filter_by_<indexed>`](./querying-records.md#filtering-by-indexed-fields),
 [`#[unique]`](./indexes-and-unique-constraints.md#unique-fields),
 [`#[version]`](./concurrency-control.md),
-[`Vec<scalar>` fields](./field-options.md#scalar-arrays) — but the set
+[`Vec<scalar>` fields](./vec-scalar-fields.md) — but the set
 of queries you can write is narrower, and the chapter below catalogues
 the gaps so you can avoid building a model that the driver cannot
 serve.
@@ -262,7 +262,7 @@ The query builder methods that translate cleanly to DynamoDB:
   underlying operation.
 - [`.starts_with("prefix")`](./filtering-with-expressions.md#starts_with)
   on a string column — native `begins_with()`.
-- [`Vec<scalar>` predicates](./field-options.md#scalar-arrays):
+- [`Vec<scalar>` predicates](./vec-scalar-fields.md):
   `.contains(v)`, `.len()`, `.is_empty()` lower to DynamoDB's
   `contains()` and `size()` functions.
 
@@ -304,7 +304,7 @@ error at planning time. Order is only available on a `Query`, which
 means the partition key must be pinned.
 
 **`is_superset` / `intersects` with a non-literal right-hand side.**
-For [`Vec<scalar>` fields](./field-options.md#scalar-arrays) these
+For [`Vec<scalar>` fields](./vec-scalar-fields.md) these
 predicates expand to one `contains()` clause per element on the
 right-hand side, so the right-hand side has to be a concrete `Vec<T>`
 known at query-construction time. A column

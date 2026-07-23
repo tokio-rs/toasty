@@ -19,6 +19,9 @@
 
 - [Indexes and Unique Constraints](./indexes-and-unique-constraints.md)
 - [Field Options](./field-options.md)
+- [Embedded Types](./embedded-types.md)
+- [`#[document]` Fields](./document-fields.md)
+- [JSON Encoding](./json-encoding.md)
 - [`Vec<scalar>` Fields](./vec-scalar-fields.md)
 
 # Relationships
@@ -37,7 +40,6 @@
 
 # Advanced Features
 
-- [Embedded Types](./embedded-types.md)
 - [Deferred Fields](./deferred-fields.md)
 - [Batch Operations](./batch-operations.md)
 - [Transactions](./transactions.md)
