@@ -33,6 +33,7 @@ Guide-level design documents for specific features. Use
 - [Optimistic Concurrency with `#[version]`](./design/field-version.md)
 - [`query!` Macro](./design/query-macro.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
+- [Returning Models from Updates](./design/update-returning.md)
 - [Upsert](./design/upsert.md)
 
 ## Roadmap
