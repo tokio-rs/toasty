@@ -416,6 +416,17 @@ database stores that JSON:
 | `json` | PostgreSQL and MySQL native JSON |
 | `jsonb` | PostgreSQL JSONB |
 
+When the Rust field type is already `serde_json::Value`, use it directly
+without the `Json<T>` wrapper:
+
+```rust,ignore
+#[column(type = json)]
+payload: serde_json::Value,
+```
+
+`serde_json::Value::Null` stores the JSON literal `null`. Use
+`Option<serde_json::Value>` when `None` should store SQL `NULL`.
+
 For example, this field uses PostgreSQL or MySQL native JSON storage:
 
 ```rust,ignore
