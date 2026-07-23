@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
+            window.path_to_searchindex_js = "searchindex-2e917ce8.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -178,10 +178,11 @@
 <p><a href="https://turso.tech/">Turso</a> is a SQLite-compatible database engine with native async I/O.
 Toasty’s Turso driver speaks the same SQL dialect as the
 <a href="./sqlite.html">SQLite driver</a> and supports the same Rust types and
-queries. The differences from SQLite cover three areas: connection
+queries. The differences from SQLite cover four areas: connection
 pooling against an in-memory database, an opt-in concurrent-writes
-mode that uses Turso’s MVCC journal, and a set of toggles for Turso’s
-experimental engine features.</p>
+mode that uses Turso’s MVCC journal, toggles for Turso’s experimental
+engine features, and optional remote sync (Turso Cloud or
+<code>tursodb --sync-server</code>).</p>
 <h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
 <p>Add the <code>turso</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
@@ -218,8 +219,8 @@ let db = toasty::Db::builder()
 </table>
 </div>
 <p>The driver does not parse query parameters from the URL. To set
-options like <code>concurrent_writes()</code> or any of the <code>experimental_*</code>
-flags, construct the driver directly.</p>
+options like <code>concurrent_writes()</code>, remote sync, or any of the
+<code>experimental_*</code> flags, construct the driver directly.</p>
 <h2 id="type-mapping-and-sql-behavior"><a class="header" href="#type-mapping-and-sql-behavior">Type mapping and SQL behavior</a></h2>
 <p>The Turso driver uses the same type mapping and SQL serializer as the
 <a href="./sqlite.html">SQLite driver</a> — see that chapter for the column-type
@@ -238,6 +239,105 @@ are immediately visible to readers on another.</p>
 <p>This means the connection-pool tests in Toasty’s integration suite
 run against in-memory Turso, and you can use <code>turso::memory:</code> for
 multi-connection tests where in-memory SQLite would not work.</p>
+<h2 id="remote-sync"><a class="header" href="#remote-sync">Remote sync</a></h2>
+<p>Remote sync keeps a local Turso database in sync with Turso Cloud or a
+local <code>tursodb --sync-server</code>.</p>
+<p>Sync lives on <code>toasty-driver-turso</code>, not on <code>Db</code>: enable the feature,
+build the driver with a remote URL, pass it to <code>build()</code>, and call
+<code>push()</code> / <code>pull()</code> when you want to sync.</p>
+<p>Add the driver’s <code>sync</code> feature in <code>Cargo.toml</code>. Keep Toasty’s <code>turso</code>
+feature as well if you connect through <code>toasty::Db</code>:</p>
+<pre><code class="language-toml">[dependencies]
+toasty = { version = "0.8", features = ["turso"] }
+toasty-driver-turso = { version = "0.8", features = ["sync"] }
+</code></pre>
+<p>Construct the driver directly — sync options do not fit in a <code>turso:</code>
+URL — then pass it to <code>build()</code>:</p>
+<pre><code class="language-rust ignore">use toasty_driver_turso::Turso;
+
+let driver = Turso::file("./app.db")
+    .with_remote_url("https://your-db.turso.io")
+    .with_auth_token(std::env::var("TURSO_AUTH_TOKEN")?);
+
+let db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .build(driver.clone())
+    .await?;
+
+// Pull remote changes into the local file, then push local writes back.
+driver.pull().await?;
+// … use `db` as usual …
+driver.push().await?;</code></pre>
+<p>Local development against <code>tursodb --sync-server</code> omits the token:</p>
+<pre><code class="language-rust ignore">// Started with: tursodb :memory: --sync-server 127.0.0.1:8080
+let driver = Turso::file("./app.db")
+    .with_remote_url("http://127.0.0.1:8080");</code></pre>
+<p><code>with_remote_url</code> accepts <code>https://</code>, <code>http://</code> and <code>libsql://</code>
+(<code>libsql://</code> becomes <code>https://</code>). On a file-backed database that was
+synced before, omitting the URL loads it from on-disk metadata
+(<code>./app.db-info</code> and related files).</p>
+<h3 id="authentication"><a class="header" href="#authentication">Authentication</a></h3>
+<p><code>with_auth_token</code> sets a static auth token. Pass the token <strong>without</strong>
+a <code>Bearer </code> prefix — the driver adds that for you.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Environment</th><th>Token</th></tr>
+</thead>
+<tbody>
+<tr><td>Local <code>tursodb --sync-server</code> (no auth)</td><td>Omit <code>with_auth_token</code></td></tr>
+<tr><td>Turso Cloud</td><td>Database token from the Turso dashboard or <code>turso db tokens create</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>For rotating tokens (secrets manager, OAuth refresh), use
+<code>with_auth_token_fn</code>. The callback runs before every HTTP request; if
+it fails, that sync call fails.</p>
+<h3 id="bootstrap"><a class="header" href="#bootstrap">Bootstrap</a></h3>
+<p>When the local database is empty, Turso downloads schema and data from
+the remote on first open. That is Turso’s default. Call
+<code>bootstrap_if_empty(false)</code> to skip it — for example when opening an
+existing local file that should not be overwritten.</p>
+<h3 id="sync-operations"><a class="header" href="#sync-operations">Sync operations</a></h3>
+<p><code>push</code>, <code>pull</code>, <code>checkpoint</code>, and <code>stats</code> are methods on the <code>Turso</code>
+driver, not on <code>Db</code>. They use the driver’s shared database handle, so
+every connection in the pool sees the same pending changes.</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Method</th><th>Behavior</th></tr>
+</thead>
+<tbody>
+<tr><td><code>push()</code></td><td>Send local changes to the remote</td></tr>
+<tr><td><code>pull()</code></td><td>Fetch remote changes and apply them locally; returns <code>true</code> if anything changed</td></tr>
+<tr><td><code>checkpoint()</code></td><td>Checkpoint the local WAL</td></tr>
+<tr><td><code>stats()</code></td><td>Return sync stats (<code>DatabaseSyncStats</code>)</td></tr>
+</tbody>
+</table>
+</div>
+<p>Call <code>push()</code> and <code>pull()</code> yourself — sync is not automatic.</p>
+<h3 id="sync-builder-options"><a class="header" href="#sync-builder-options">Sync builder options</a></h3>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Builder method</th><th>Purpose</th></tr>
+</thead>
+<tbody>
+<tr><td><code>with_remote_url(url)</code></td><td>Remote URL</td></tr>
+<tr><td><code>with_auth_token(token)</code></td><td>Static auth token (no <code>Bearer </code> prefix)</td></tr>
+<tr><td><code>with_auth_token_fn(f)</code></td><td>Callback that returns a token for each request</td></tr>
+<tr><td><code>with_client_name(name)</code></td><td>Client name (default <code>turso-sync-rust</code>)</td></tr>
+<tr><td><code>with_long_poll_timeout(duration)</code></td><td>How long to wait when polling for remote changes</td></tr>
+<tr><td><code>bootstrap_if_empty(bool)</code></td><td>Download schema and data when the local database is empty (default <code>true</code>)</td></tr>
+<tr><td><code>with_remote_encryption(key, cipher)</code></td><td>Base64 key and cipher for an encrypted remote</td></tr>
+<tr><td><code>with_remote_encryption_key(key)</code></td><td>Base64 key only (prefer <code>with_remote_encryption</code> when bootstrapping)</td></tr>
+<tr><td><code>experimental_with_partial_sync_opts(opts)</code></td><td>Experimental partial sync (<code>PartialSyncOpts</code>)</td></tr>
+<tr><td><code>experimental_index_method(true)</code></td><td>Experimental index methods (works with or without sync)</td></tr>
+</tbody>
+</table>
+</div>
+<p><code>PartialSyncOpts</code>, <code>RemoteEncryptionCipher</code>, and <code>DatabaseSyncStats</code>
+come from <code>turso::sync</code> and are re-exported by <code>toasty_driver_turso</code>.</p>
 <h2 id="concurrent-writes"><a class="header" href="#concurrent-writes">Concurrent writes</a></h2>
 <p>A classic SQLite database serializes all writers on a single
 write lock: a second writer’s <code>BEGIN</code> succeeds but its first write
