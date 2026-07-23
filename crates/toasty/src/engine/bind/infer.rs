@@ -95,12 +95,6 @@ fn refine_insert(insert: &stmt::Insert, cx: &Cx<'_>, db_schema: &db::Schema, par
             }
         }
         stmt::ExprSet::Select(select) => {
-            let expected = table
-                .columns
-                .iter()
-                .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
-                .collect::<Vec<_>>();
-            refine_insert_source(&select.source, &expected, params);
             refine_source(&select.source, cx, params);
         }
         _ => {}
@@ -212,36 +206,6 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
         for cte in &with.ctes {
             refine_query(&cte.query, &cx, params);
         }
-    }
-}
-
-/// Apply an insert target's column types to a source composed only of
-/// `unnest` table functions. Each function produces one target column, so its
-/// argument must be an array of that column's storage type.
-fn refine_insert_source(source: &stmt::Source, expected: &[Ty], params: &mut [Param]) {
-    let stmt::Source::Table(source) = source else {
-        return;
-    };
-
-    let funcs = match source.tables.as_slice() {
-        [stmt::TableRef::Func(func)] => std::slice::from_ref(func),
-        [stmt::TableRef::RowsFrom(funcs)] => funcs.as_slice(),
-        _ => return,
-    };
-
-    if funcs.len() != expected.len()
-        || !funcs
-            .iter()
-            .all(|func| matches!(func, stmt::ExprFunc::Unnest(_)))
-    {
-        return;
-    }
-
-    for (func, expected) in funcs.iter().zip(expected) {
-        let stmt::ExprFunc::Unnest(unnest) = func else {
-            unreachable!()
-        };
-        check(&unnest.arg, &Ty::List(Box::new(expected.clone())), params);
     }
 }
 

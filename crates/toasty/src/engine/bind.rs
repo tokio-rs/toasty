@@ -161,9 +161,12 @@ fn transpose_insert_unnest(
 
     let funcs = columns
         .into_iter()
-        .map(|cells| {
+        .zip(&table.columns)
+        .map(|(cells, col_id)| {
             let value = stmt::Value::List(cells);
-            let ty = extract::infer_ty(&value);
+            let ty = Ty::List(Box::new(Ty::Column(
+                db_table.columns[col_id.index].storage_ty.clone(),
+            )));
             let position = params.len();
             params.push(Param { value, ty });
             stmt::FuncUnnest {
