@@ -262,6 +262,18 @@ jobs:
       - name: cargo test -p toasty-driver-dynamodb
         run: cargo test -p toasty-driver-dynamodb -- --test-threads 1
 
+  test-turso:
+    needs: check
+    name: Run tests for Turso
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup-turso-sync
+        id: turso-sync
+        env:
+          TOASTY_TEST_TURSO_SYNC_URL: ${{ steps.turso-sync.outputs.sync-url }}
+      - run: cargo test -p toasty-driver-turso --features sync
+
   test-all-os:
     needs: check
     name: Run tests on all operating systems
