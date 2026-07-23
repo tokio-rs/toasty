@@ -41,17 +41,12 @@ pub(crate) enum Effect {
 ///
 /// O(n) in the size of the statement tree; no schema access.
 pub(crate) fn classify(stmt: &Statement) -> Effect {
-    match stmt {
-        Statement::Insert(_) | Statement::Update(_) | Statement::Delete(_) => Effect::Mutating,
-        Statement::Query(query) => {
-            let mut walker = Walker { mutating: false };
-            walker.visit_stmt_query(query);
-            if walker.mutating {
-                Effect::Mutating
-            } else {
-                Effect::ReadOnly
-            }
-        }
+    let mut walker = Walker { mutating: false };
+    walker.visit_stmt(stmt);
+    if walker.mutating {
+        Effect::Mutating
+    } else {
+        Effect::ReadOnly
     }
 }
 
