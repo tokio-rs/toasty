@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-68045554.js";
+            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1785f50e.js"></script>
+        <script src="toc-bc94c3fa.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -285,7 +285,7 @@ PostgreSQL. No configuration is required.</p>
 <a href="./upserting-records.html"><code>upsert_by_*</code></a> with <code>INSERT ... ON CONFLICT</code>.
 Primary keys and unique constraints can be conflict targets, and
 <code>on_create</code>, <code>on_update</code>, and <code>or_ignore</code> are supported.</p>
-<p><strong>Native arrays for <a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a>.</strong>
+<p><strong>Native arrays for <a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code> fields</a>.</strong>
 A <code>tags: Vec&lt;String&gt;</code> field is a <code>text[]</code> column. The array predicates
 (<code>contains</code>, <code>is_superset</code>, <code>intersects</code>, <code>len</code>, <code>is_empty</code>) lower to
 PostgreSQL’s native operators (<code>= ANY(col)</code>, <code>@&gt;</code>, <code>&amp;&amp;</code>,

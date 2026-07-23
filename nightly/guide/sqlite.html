@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-68045554.js";
+            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1785f50e.js"></script>
+        <script src="toc-bc94c3fa.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -317,7 +317,7 @@ pattern; use a <code>CHECK</code> against exact bytes if you need one.</p>
 lowers to <code>col GLOB 'abc*'</code>, a case-sensitive prefix match. The optimizer can
 use a regular index for the common-prefix lookup.</p>
 <p><strong>Scalar arrays use JSON1.</strong> A
-<a href="./field-options.html#scalar-arrays"><code>Vec&lt;T&gt;</code> field</a> lives in a <code>TEXT</code>
+<a href="./vec-scalar-fields.html"><code>Vec&lt;T&gt;</code> field</a> lives in a <code>TEXT</code>
 column holding a JSON array. The array predicates lower to JSON1
 expressions:</p>
 <div class="table-wrapper">
@@ -335,7 +335,7 @@ expressions:</p>
 </div>
 <p>These subqueries scan the JSON document, so array predicates against
 a large table do not use an index. See
-<a href="./field-options.html#scalar-arrays">Field Options</a> for the model-level
+<a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code> Fields</a> for the model-level
 view.</p>
 <p><strong>No row-level locking.</strong> SQLite has no <code>SELECT ... FOR UPDATE</code>.
 Toasty’s <a href="./transactions.html">transaction</a> layer falls back to

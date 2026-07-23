@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-68045554.js";
+            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1785f50e.js"></script>
+        <script src="toc-bc94c3fa.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -175,9 +175,8 @@
                 <div id="mdbook-content" class="content">
                     <main>
                         <h1 id="field-options"><a class="header" href="#field-options">Field Options</a></h1>
-<p>Toasty provides several field-level attributes to control how fields map to
-database columns: custom column names, explicit types, default values, update
-expressions, and JSON serialization.</p>
+<p>Field-level attributes control column names, explicit types, default values,
+and update expressions.</p>
 <h2 id="custom-column-names"><a class="header" href="#custom-column-names">Custom column names</a></h2>
 <p>By default, a Rust field name maps directly to a column name. Use
 <code>#[column("name")]</code> to override this:</p>
@@ -245,6 +244,8 @@ struct User {
 <tr><td><code>uint</code>, <code>u8</code>, <code>u16</code>, <code>u32</code>, <code>u64</code></td><td>Unsigned integer</td></tr>
 <tr><td><code>text</code></td><td>Text</td></tr>
 <tr><td><code>varchar(N)</code></td><td>Variable-length string with max length</td></tr>
+<tr><td><code>json</code></td><td>Native JSON on PostgreSQL and MySQL</td></tr>
+<tr><td><code>jsonb</code></td><td>Native binary JSON on PostgreSQL</td></tr>
 <tr><td><code>numeric</code>, <code>numeric(P, S)</code></td><td>Decimal with optional precision and scale</td></tr>
 <tr><td><code>binary(N)</code>, <code>blob</code></td><td>Binary data</td></tr>
 <tr><td><code>timestamp(P)</code></td><td>Timestamp with precision</td></tr>
@@ -514,135 +515,11 @@ struct Event {
     reminder_time: jiff::civil::Time,
 }
 <span class="boring">}</span></code></pre>
-<h2 id="json-serialization"><a class="header" href="#json-serialization">JSON serialization</a></h2>
-<p>Wrap a field type in <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> to serialize it as JSON
-in the database. The inner <code>T</code> must implement <code>serde::Serialize</code> and
-<code>serde::Deserialize</code>. Each <code>Json&lt;T&gt;</code> field must select its database column
-type with <code>#[column(type = ...)]</code>.</p>
-<blockquote class="blockquote-tag blockquote-tag-important">
-<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Important</p>
-<p>The requirement to write <code>#[column(type = ...)]</code> is temporary. A future
-Toasty release will select each database’s native JSON column type by
-default. Explicit overrides will remain available for models that need a
-different representation.</p>
-</blockquote>
-<p>Reach for <code>Json&lt;T&gt;</code> when the field is a serde-typed value that Toasty
-doesn’t natively support — for example, a third-party type or a struct
-you don’t want to declare as <code>#[derive(toasty::Embed)]</code>. For
-<code>Vec&lt;scalar&gt;</code> fields, prefer the native form (<code>tags: Vec&lt;String&gt;</code>,
-documented in <a href="./defining-models.html">Defining Models</a>) which is
-queryable and supports collection mutations via <code>stmt::push</code>,
-<code>stmt::extend</code>, <code>stmt::pop</code>, <code>stmt::remove</code>, <code>stmt::remove_at</code>, and
-<code>stmt::clear</code>.</p>
-<pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
-</span>use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Metadata {
-    version: u32,
-    labels: Vec&lt;String&gt;,
-}
-
-#[derive(Debug, toasty::Model)]
-struct Post {
-    #[key]
-    #[auto]
-    id: u64,
-
-    title: String,
-
-    // Native `Vec&lt;scalar&gt;` storage — no wrapper needed.
-    tags: Vec&lt;String&gt;,
-
-    // Arbitrary serde type — `Json&lt;T&gt;` stores it as one opaque JSON
-    // column. Toasty cannot query into it.
-    #[column(type = text)]
-    meta: toasty::Json&lt;Metadata&gt;,
-}</code></pre>
-<p>Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The selected column type determines how the
-database stores that JSON:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Column type</th><th>Support</th></tr>
-</thead>
-<tbody>
-<tr><td><code>text</code> or <code>varchar(...)</code></td><td>SQL databases with the selected text type</td></tr>
-<tr><td><code>json</code></td><td>PostgreSQL and MySQL native JSON</td></tr>
-<tr><td><code>jsonb</code></td><td>PostgreSQL JSONB</td></tr>
-</tbody>
-</table>
-</div>
-<p>For example, this field uses PostgreSQL or MySQL native JSON storage:</p>
-<pre><code class="language-rust ignore">#[column(type = json)]
-meta: toasty::Json&lt;Metadata&gt;,</code></pre>
-<p>Toasty rejects <code>json</code> or <code>jsonb</code> during schema construction when the selected
-database does not support that column type.</p>
-<pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
-</span><span class="boring">use serde::{Serialize, Deserialize};
-</span><span class="boring">#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-</span><span class="boring">struct Metadata {
-</span><span class="boring">    version: u32,
-</span><span class="boring">    labels: Vec&lt;String&gt;,
-</span><span class="boring">}
-</span><span class="boring">#[derive(Debug, toasty::Model)]
-</span><span class="boring">struct Post {
-</span><span class="boring">    #[key]
-</span><span class="boring">    #[auto]
-</span><span class="boring">    id: u64,
-</span><span class="boring">    title: String,
-</span><span class="boring">    tags: Vec&lt;String&gt;,
-</span><span class="boring">    #[column(type = text)]
-</span><span class="boring">    meta: toasty::Json&lt;Metadata&gt;,
-</span><span class="boring">}
-</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
-</span>let post = toasty::create!(Post {
-    title: "Hello",
-    tags: vec!["rust".to_string(), "toasty".to_string()],
-    // The bare value is accepted via the `IntoExpr&lt;Json&lt;T&gt;&gt; for T`
-    // blanket — wrapping with `toasty::Json(...)` is optional.
-    meta: Metadata {
-        version: 1,
-        labels: vec!["alpha".to_string()],
-    },
-})
-.exec(&amp;mut db)
-.await?;
-
-assert_eq!(post.tags, vec!["rust", "toasty"]);
-assert_eq!(post.meta.version, 1);
-<span class="boring">Ok(())
-</span><span class="boring">}</span></code></pre>
-<h3 id="nullable-json-fields"><a class="header" href="#nullable-json-fields">Nullable JSON fields</a></h3>
-<p><code>Json&lt;T&gt;</code> composes with <code>Option</code> in two distinct, both-useful ways
-depending on whether <code>None</code> should land in a SQL <code>NULL</code> cell or be
-encoded inside the JSON itself:</p>
-<pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
-</span><span class="boring">use std::collections::HashMap;
-</span><span class="boring">#[derive(Debug, toasty::Model)]
-</span><span class="boring">struct Post {
-</span><span class="boring">    #[key]
-</span><span class="boring">    #[auto]
-</span><span class="boring">    id: u64,
-</span><span class="boring">    title: String,
-</span>// `None` maps to SQL `NULL`; `Some(v)` to encoded JSON.
-#[column(type = text)]
-metadata: Option&lt;toasty::Json&lt;HashMap&lt;String, String&gt;&gt;&gt;,
-
-// `None` maps to the JSON literal `"null"` (still a non-null column value);
-// `Some(v)` to encoded JSON.
-#[column(type = text)]
-labels: toasty::Json&lt;Option&lt;Vec&lt;String&gt;&gt;&gt;,
-<span class="boring">}</span></code></pre>
-<p><code>Option&lt;Json&lt;T&gt;&gt;</code> is the common case — pick it when the database should
-see a <code>NULL</code> for missing values. Use <code>Json&lt;Option&lt;T&gt;&gt;</code> when callers
-expect the column to always contain valid JSON.</p>
-<h2 id="scalar-arrays"><a class="header" href="#scalar-arrays">Scalar arrays</a></h2>
-<p>A <code>Vec&lt;T&gt;</code> field where <code>T</code> is a scalar type stores a homogeneous,
-ordered collection in a single column. These fields have their own
-guide page covering the element types, storage per driver, creation,
-querying, and updates — see <a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code> Fields</a>.</p>
+<h2 id="json-encoded-fields"><a class="header" href="#json-encoded-fields">JSON-encoded fields</a></h2>
+<p><code>toasty::Json&lt;T&gt;</code> and <code>serde_json::Value</code> fields require
+<code>#[column(type = text)]</code>, <code>varchar(...)</code>, <code>json</code>, or <code>jsonb</code>. See <a href="./json-encoding.html">JSON
+Encoding</a> for feature setup, storage support, null
+representations, setters, deferred loading, and query limitations.</p>
 <h2 id="attribute-summary"><a class="header" href="#attribute-summary">Attribute summary</a></h2>
 <div class="table-wrapper">
 <table>
@@ -659,10 +536,6 @@ querying, and updates — see <a href="./vec-scalar-fields.html"><code>Vec&lt;sc
 </tbody>
 </table>
 </div>
-<p>JSON storage is handled by the <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> field
-wrapper — see <a href="#json-serialization">JSON serialization</a> above. Use
-<code>Option&lt;Json&lt;T&gt;&gt;</code> to allow SQL <code>NULL</code>, or <code>Json&lt;Option&lt;T&gt;&gt;</code> to embed
-the JSON literal <code>"null"</code> instead.</p>
 <p>See <a href="./concurrency-control.html">Concurrency Control</a> for the <code>#[version]</code>
 attribute.</p>
 <blockquote>
@@ -677,7 +550,7 @@ attribute.</p>
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                             </a>
 
-                            <a rel="next prefetch" href="vec-scalar-fields.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                            <a rel="next prefetch" href="embedded-types.html" class="mobile-nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                                 <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                             </a>
 
@@ -691,7 +564,7 @@ attribute.</p>
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M41.4 233.4c-12.5 12.5-12.5 32.8 0 45.3l160 160c12.5 12.5 32.8 12.5 45.3 0s12.5-32.8 0-45.3L109.3 256 246.6 118.6c12.5-12.5 12.5-32.8 0-45.3s-32.8-12.5-45.3 0l-160 160z"/></svg></span>
                     </a>
 
-                    <a rel="next prefetch" href="vec-scalar-fields.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
+                    <a rel="next prefetch" href="embedded-types.html" class="nav-chapters next" title="Next chapter" aria-label="Next chapter" aria-keyshortcuts="Right">
                         <span class=fa-svg><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 320 512"><!--! Font Awesome Free 6.2.0 by @fontawesome - https://fontawesome.com License - https://fontawesome.com/license/free (Icons: CC BY 4.0, Fonts: SIL OFL 1.1, Code: MIT License) Copyright 2022 Fonticons, Inc. --><path d="M278.6 233.4c12.5 12.5 12.5 32.8 0 45.3l-160 160c-12.5 12.5-32.8 12.5-45.3 0s-12.5-32.8 0-45.3L210.7 256 73.4 118.6c-12.5-12.5-12.5-32.8 0-45.3s32.8-12.5 45.3 0l160 160z"/></svg></span>
                     </a>
             </nav>

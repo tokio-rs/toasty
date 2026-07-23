@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-68045554.js";
+            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1785f50e.js"></script>
+        <script src="toc-bc94c3fa.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -183,7 +183,7 @@ model code still works — <a href="./creating-records.html"><code>create!</code
 <a href="./querying-records.html#filtering-by-indexed-fields"><code>filter_by_&lt;indexed&gt;</code></a>,
 <a href="./indexes-and-unique-constraints.html#unique-fields"><code>#[unique]</code></a>,
 <a href="./concurrency-control.html"><code>#[version]</code></a>,
-<a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a> — but the set
+<a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code> fields</a> — but the set
 of queries you can write is narrower, and the chapter below catalogues
 the gaps so you can avoid building a model that the driver cannot
 serve.</p>
@@ -391,7 +391,7 @@ for column-narrow reads — projected to <code>ProjectionExpression</code> on th
 underlying operation.</li>
 <li><a href="./filtering-with-expressions.html#starts_with"><code>.starts_with("prefix")</code></a>
 on a string column — native <code>begins_with()</code>.</li>
-<li><a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> predicates</a>:
+<li><a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code> predicates</a>:
 <code>.contains(v)</code>, <code>.len()</code>, <code>.is_empty()</code> lower to DynamoDB’s
 <code>contains()</code> and <code>size()</code> functions.</li>
 </ul>
@@ -426,7 +426,7 @@ needs both a scan <em>and</em> an ordering returns an unsupported-feature
 error at planning time. Order is only available on a <code>Query</code>, which
 means the partition key must be pinned.</p>
 <p><strong><code>is_superset</code> / <code>intersects</code> with a non-literal right-hand side.</strong>
-For <a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a> these
+For <a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code> fields</a> these
 predicates expand to one <code>contains()</code> clause per element on the
 right-hand side, so the right-hand side has to be a concrete <code>Vec&lt;T&gt;</code>
 known at query-construction time. A column

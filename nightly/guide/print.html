@@ -36,10 +36,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-68045554.js";
+            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1785f50e.js"></script>
+        <script src="toc-bc94c3fa.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -225,7 +225,7 @@ transactions.</p>
 <li><strong><a href="#upserting-records">Upserting Records</a></strong> — create or update atomically by a key or unique constraint</li>
 <li><strong><a href="#deleting-records">Deleting Records</a></strong> — remove records</li>
 <li><strong><a href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a></strong> — add indexes and unique constraints</li>
-<li><strong><a href="#field-options">Field Options</a></strong> — column names, types, defaults, and JSON serialization</li>
+<li><strong><a href="#field-options">Field Options</a></strong> — column names, types, defaults, and update expressions</li>
 <li><strong><a href="#relationships">Relationships</a></strong> — overview of how models connect to each other</li>
 <li><strong><a href="#belongsto">BelongsTo</a></strong> — define and use many-to-one relationships</li>
 <li><strong><a href="#hasmany">HasMany</a></strong> — define and use one-to-many relationships</li>
@@ -235,6 +235,9 @@ transactions.</p>
 <li><strong><a href="#filtering-with-expressions-1">Filtering with Expressions</a></strong> — comparisons, AND/OR, and more</li>
 <li><strong><a href="#sorting-limits-and-pagination">Sorting, Limits, and Pagination</a></strong> — order results and paginate</li>
 <li><strong><a href="#embedded-types">Embedded Types</a></strong> — store structs and enums inline</li>
+<li><strong><a href="#document-fields"><code>#[document]</code> Fields</a></strong> — store an embedded struct in one document with queryable scalar leaves</li>
+<li><strong><a href="#json-encoding">JSON Encoding</a></strong> — store a serde type or <code>serde_json::Value</code> in one opaque column</li>
+<li><strong><a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> Fields</a></strong> — store and query a scalar collection in one field</li>
 <li><strong><a href="#batch-operations">Batch Operations</a></strong> — multiple queries in one round-trip</li>
 <li><strong><a href="#transactions">Transactions</a></strong> — atomic operations</li>
 <li><strong><a href="#database-setup">Database Setup</a></strong> — connection URLs, table creation, and supported databases</li>
@@ -396,9 +399,10 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <tr><td><code>f32</code>, <code>f64</code></td><td>Floating point</td></tr>
 <tr><td><code>uuid::Uuid</code></td><td>UUID</td></tr>
 <tr><td><code>Vec&lt;u8&gt;</code></td><td>Binary / Blob</td></tr>
-<tr><td><code>Vec&lt;T&gt;</code> (T scalar, not <code>u8</code>)</td><td>Native array column on PostgreSQL (<code>text[]</code>, <code>int8[]</code>, …); JSON on MySQL / SQLite; List <code>L</code> on DynamoDB. See <a href="#scalar-arrays">field-options.md</a>.</td></tr>
+<tr><td><code>Vec&lt;T&gt;</code> (T scalar, not <code>u8</code>)</td><td>Native array column on PostgreSQL (<code>text[]</code>, <code>int8[]</code>, …); JSON on MySQL / SQLite; List <code>L</code> on DynamoDB. See <a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> Fields</a>.</td></tr>
 <tr><td><code>Option&lt;T&gt;</code></td><td>Nullable version of <code>T</code></td></tr>
 <tr><td>Embedded types (<code>#[derive(toasty::Embed)]</code>)</td><td>Flattened into parent table columns (see <a href="#embedded-types">Embedded Types</a>)</td></tr>
+<tr><td>Document fields (<code>#[document]</code>)</td><td>One structured column whose scalar leaves remain queryable (see <a href="#document-fields"><code>#[document]</code> Fields</a>)</td></tr>
 </tbody>
 </table>
 </div>
@@ -415,6 +419,7 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Date</code></td><td>Date</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Time</code></td><td>Time</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::DateTime</code></td><td>DateTime</td></tr>
+<tr><td><code>serde</code></td><td><code>toasty::Json&lt;T&gt;</code>, <code>serde_json::Value</code></td><td>Explicit text, <code>json</code>, or <code>jsonb</code> column (see <a href="#json-encoding">JSON Encoding</a>)</td></tr>
 </tbody>
 </table>
 </div>
@@ -2911,9 +2916,8 @@ builders.</p>
 </blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="field-options"><a class="header" href="#field-options">Field Options</a></h1>
-<p>Toasty provides several field-level attributes to control how fields map to
-database columns: custom column names, explicit types, default values, update
-expressions, and JSON serialization.</p>
+<p>Field-level attributes control column names, explicit types, default values,
+and update expressions.</p>
 <h2 id="custom-column-names"><a class="header" href="#custom-column-names">Custom column names</a></h2>
 <p>By default, a Rust field name maps directly to a column name. Use
 <code>#[column("name")]</code> to override this:</p>
@@ -2981,6 +2985,8 @@ struct User {
 <tr><td><code>uint</code>, <code>u8</code>, <code>u16</code>, <code>u32</code>, <code>u64</code></td><td>Unsigned integer</td></tr>
 <tr><td><code>text</code></td><td>Text</td></tr>
 <tr><td><code>varchar(N)</code></td><td>Variable-length string with max length</td></tr>
+<tr><td><code>json</code></td><td>Native JSON on PostgreSQL and MySQL</td></tr>
+<tr><td><code>jsonb</code></td><td>Native binary JSON on PostgreSQL</td></tr>
 <tr><td><code>numeric</code>, <code>numeric(P, S)</code></td><td>Decimal with optional precision and scale</td></tr>
 <tr><td><code>binary(N)</code>, <code>blob</code></td><td>Binary data</td></tr>
 <tr><td><code>timestamp(P)</code></td><td>Timestamp with precision</td></tr>
@@ -3250,135 +3256,11 @@ struct Event {
     reminder_time: jiff::civil::Time,
 }
 <span class="boring">}</span></code></pre>
-<h2 id="json-serialization"><a class="header" href="#json-serialization">JSON serialization</a></h2>
-<p>Wrap a field type in <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> to serialize it as JSON
-in the database. The inner <code>T</code> must implement <code>serde::Serialize</code> and
-<code>serde::Deserialize</code>. Each <code>Json&lt;T&gt;</code> field must select its database column
-type with <code>#[column(type = ...)]</code>.</p>
-<blockquote class="blockquote-tag blockquote-tag-important">
-<p class="blockquote-tag-title"><svg viewbox="0 0 16 16" width="18" height="18"><path d="M0 1.75C0 .784.784 0 1.75 0h12.5C15.216 0 16 .784 16 1.75v9.5A1.75 1.75 0 0 1 14.25 13H8.06l-2.573 2.573A1.458 1.458 0 0 1 3 14.543V13H1.75A1.75 1.75 0 0 1 0 11.25Zm1.75-.25a.25.25 0 0 0-.25.25v9.5c0 .138.112.25.25.25h2a.75.75 0 0 1 .75.75v2.19l2.72-2.72a.749.749 0 0 1 .53-.22h6.5a.25.25 0 0 0 .25-.25v-9.5a.25.25 0 0 0-.25-.25Zm7 2.25v2.5a.75.75 0 0 1-1.5 0v-2.5a.75.75 0 0 1 1.5 0ZM9 9a1 1 0 1 1-2 0 1 1 0 0 1 2 0Z"></path></svg>Important</p>
-<p>The requirement to write <code>#[column(type = ...)]</code> is temporary. A future
-Toasty release will select each database’s native JSON column type by
-default. Explicit overrides will remain available for models that need a
-different representation.</p>
-</blockquote>
-<p>Reach for <code>Json&lt;T&gt;</code> when the field is a serde-typed value that Toasty
-doesn’t natively support — for example, a third-party type or a struct
-you don’t want to declare as <code>#[derive(toasty::Embed)]</code>. For
-<code>Vec&lt;scalar&gt;</code> fields, prefer the native form (<code>tags: Vec&lt;String&gt;</code>,
-documented in <a href="#defining-models">Defining Models</a>) which is
-queryable and supports collection mutations via <code>stmt::push</code>,
-<code>stmt::extend</code>, <code>stmt::pop</code>, <code>stmt::remove</code>, <code>stmt::remove_at</code>, and
-<code>stmt::clear</code>.</p>
-<pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
-</span>use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Metadata {
-    version: u32,
-    labels: Vec&lt;String&gt;,
-}
-
-#[derive(Debug, toasty::Model)]
-struct Post {
-    #[key]
-    #[auto]
-    id: u64,
-
-    title: String,
-
-    // Native `Vec&lt;scalar&gt;` storage — no wrapper needed.
-    tags: Vec&lt;String&gt;,
-
-    // Arbitrary serde type — `Json&lt;T&gt;` stores it as one opaque JSON
-    // column. Toasty cannot query into it.
-    #[column(type = text)]
-    meta: toasty::Json&lt;Metadata&gt;,
-}</code></pre>
-<p>Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The selected column type determines how the
-database stores that JSON:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Column type</th><th>Support</th></tr>
-</thead>
-<tbody>
-<tr><td><code>text</code> or <code>varchar(...)</code></td><td>SQL databases with the selected text type</td></tr>
-<tr><td><code>json</code></td><td>PostgreSQL and MySQL native JSON</td></tr>
-<tr><td><code>jsonb</code></td><td>PostgreSQL JSONB</td></tr>
-</tbody>
-</table>
-</div>
-<p>For example, this field uses PostgreSQL or MySQL native JSON storage:</p>
-<pre><code class="language-rust ignore">#[column(type = json)]
-meta: toasty::Json&lt;Metadata&gt;,</code></pre>
-<p>Toasty rejects <code>json</code> or <code>jsonb</code> during schema construction when the selected
-database does not support that column type.</p>
-<pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
-</span><span class="boring">use serde::{Serialize, Deserialize};
-</span><span class="boring">#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-</span><span class="boring">struct Metadata {
-</span><span class="boring">    version: u32,
-</span><span class="boring">    labels: Vec&lt;String&gt;,
-</span><span class="boring">}
-</span><span class="boring">#[derive(Debug, toasty::Model)]
-</span><span class="boring">struct Post {
-</span><span class="boring">    #[key]
-</span><span class="boring">    #[auto]
-</span><span class="boring">    id: u64,
-</span><span class="boring">    title: String,
-</span><span class="boring">    tags: Vec&lt;String&gt;,
-</span><span class="boring">    #[column(type = text)]
-</span><span class="boring">    meta: toasty::Json&lt;Metadata&gt;,
-</span><span class="boring">}
-</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
-</span>let post = toasty::create!(Post {
-    title: "Hello",
-    tags: vec!["rust".to_string(), "toasty".to_string()],
-    // The bare value is accepted via the `IntoExpr&lt;Json&lt;T&gt;&gt; for T`
-    // blanket — wrapping with `toasty::Json(...)` is optional.
-    meta: Metadata {
-        version: 1,
-        labels: vec!["alpha".to_string()],
-    },
-})
-.exec(&amp;mut db)
-.await?;
-
-assert_eq!(post.tags, vec!["rust", "toasty"]);
-assert_eq!(post.meta.version, 1);
-<span class="boring">Ok(())
-</span><span class="boring">}</span></code></pre>
-<h3 id="nullable-json-fields"><a class="header" href="#nullable-json-fields">Nullable JSON fields</a></h3>
-<p><code>Json&lt;T&gt;</code> composes with <code>Option</code> in two distinct, both-useful ways
-depending on whether <code>None</code> should land in a SQL <code>NULL</code> cell or be
-encoded inside the JSON itself:</p>
-<pre><code class="language-rust ignore"><span class="boring">use toasty::Model;
-</span><span class="boring">use std::collections::HashMap;
-</span><span class="boring">#[derive(Debug, toasty::Model)]
-</span><span class="boring">struct Post {
-</span><span class="boring">    #[key]
-</span><span class="boring">    #[auto]
-</span><span class="boring">    id: u64,
-</span><span class="boring">    title: String,
-</span>// `None` maps to SQL `NULL`; `Some(v)` to encoded JSON.
-#[column(type = text)]
-metadata: Option&lt;toasty::Json&lt;HashMap&lt;String, String&gt;&gt;&gt;,
-
-// `None` maps to the JSON literal `"null"` (still a non-null column value);
-// `Some(v)` to encoded JSON.
-#[column(type = text)]
-labels: toasty::Json&lt;Option&lt;Vec&lt;String&gt;&gt;&gt;,
-<span class="boring">}</span></code></pre>
-<p><code>Option&lt;Json&lt;T&gt;&gt;</code> is the common case — pick it when the database should
-see a <code>NULL</code> for missing values. Use <code>Json&lt;Option&lt;T&gt;&gt;</code> when callers
-expect the column to always contain valid JSON.</p>
-<h2 id="scalar-arrays"><a class="header" href="#scalar-arrays">Scalar arrays</a></h2>
-<p>A <code>Vec&lt;T&gt;</code> field where <code>T</code> is a scalar type stores a homogeneous,
-ordered collection in a single column. These fields have their own
-guide page covering the element types, storage per driver, creation,
-querying, and updates — see <a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> Fields</a>.</p>
+<h2 id="json-encoded-fields"><a class="header" href="#json-encoded-fields">JSON-encoded fields</a></h2>
+<p><code>toasty::Json&lt;T&gt;</code> and <code>serde_json::Value</code> fields require
+<code>#[column(type = text)]</code>, <code>varchar(...)</code>, <code>json</code>, or <code>jsonb</code>. See <a href="#json-encoding">JSON
+Encoding</a> for feature setup, storage support, null
+representations, setters, deferred loading, and query limitations.</p>
 <h2 id="attribute-summary"><a class="header" href="#attribute-summary">Attribute summary</a></h2>
 <div class="table-wrapper">
 <table>
@@ -3395,14 +3277,829 @@ querying, and updates — see <a href="#vecscalar-fields"><code>Vec&lt;scalar&gt
 </tbody>
 </table>
 </div>
-<p>JSON storage is handled by the <a href="https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html"><code>toasty::Json&lt;T&gt;</code></a> field
-wrapper — see <a href="#json-serialization">JSON serialization</a> above. Use
-<code>Option&lt;Json&lt;T&gt;&gt;</code> to allow SQL <code>NULL</code>, or <code>Json&lt;Option&lt;T&gt;&gt;</code> to embed
-the JSON literal <code>"null"</code> instead.</p>
 <p>See <a href="#concurrency-control-1">Concurrency Control</a> for the <code>#[version]</code>
 attribute.</p>
 <blockquote>
 <p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> covers field options — defaults, auto timestamps, <code>Json&lt;T&gt;</code>, a queryable <code>Vec&lt;scalar&gt;</code>, and deferred columns.</p>
+</blockquote>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="embedded-types"><a class="header" href="#embedded-types">Embedded Types</a></h1>
+<p>An embedded type is a struct or enum annotated with <code>#[derive(toasty::Embed)]</code>.
+Unlike models, embedded types do not get their own database table. Their fields
+are stored inline in the parent model’s table.</p>
+<p>Use embedded types to group related fields without creating a separate table.</p>
+<h2 id="newtype-structs"><a class="header" href="#newtype-structs">Newtype structs</a></h2>
+<p>A newtype struct is a single-field tuple struct like <code>struct Email(String)</code>.
+Annotate it with <code>#[derive(toasty::Embed)]</code> to use it as a model field:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Embed)]
+struct Email(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+    email: Email,
+}
+<span class="boring">}</span></code></pre>
+<p>Unlike multi-field embedded structs, a newtype maps to a single column with the
+parent field’s name — no prefix is added:</p>
+<pre><code class="language-sql">CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    email TEXT NOT NULL     -- not "email_0"
+);
+</code></pre>
+<p>Use newtypes to add type safety to primitive fields. An <code>Email</code> and a <code>Username</code>
+are both strings, but the type system prevents mixing them up:</p>
+<pre><code class="language-rust ignore">let user = toasty::create!(User {
+    name: "Alice",
+    email: Email("alice@example.com".into()),
+})
+.exec(&amp;mut db)
+.await?;
+
+assert_eq!(user.email.0, "alice@example.com");</code></pre>
+<p>Newtypes support the same operations as primitive fields — filtering, updating,
+<code>#[key]</code>, <code>#[unique]</code>, and <code>#[index]</code> all work:</p>
+<pre><code class="language-rust ignore">// Filter by newtype field
+let users = User::filter(User::fields().email().eq(Email("alice@example.com".into())))
+    .exec(&amp;mut db)
+    .await?;
+
+// Update a newtype field
+user.update()
+    .email(Email("new@example.com".into()))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>A newtype can also be used as a primary key:</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
+struct UserId(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    id: UserId,
+    name: String,
+}</code></pre>
+<h3 id="newtype-with-unique-and-index"><a class="header" href="#newtype-with-unique-and-index">Newtype with <code>#[unique]</code> and <code>#[index]</code></a></h3>
+<p>Place <code>#[unique]</code> or <code>#[index]</code> on the model field (not inside the newtype):</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
+struct Email(String);
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+
+    #[unique]
+    email: Email,
+}</code></pre>
+<p>This generates the same methods as a primitive unique field —
+<code>User::get_by_email()</code>, <code>User::filter_by_email()</code>, etc.</p>
+<h3 id="newtypes-inside-embedded-structs"><a class="header" href="#newtypes-inside-embedded-structs">Newtypes inside embedded structs</a></h3>
+<p>Newtypes can be nested inside multi-field embedded structs:</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
+struct ZipCode(String);
+
+#[derive(Debug, toasty::Embed)]
+struct Address {
+    city: String,
+    zip: ZipCode,
+}</code></pre>
+<p>The <code>ZipCode</code> field inside <code>Address</code> produces a single column (<code>address_zip</code>,
+not <code>address_zip_0</code>). Filtering works through the normal chained accessors:</p>
+<pre><code class="language-rust ignore">let users = User::filter(User::fields().address().zip().eq(ZipCode("98101".into())))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<h2 id="embedded-structs"><a class="header" href="#embedded-structs">Embedded structs</a></h2>
+<p>Define a struct with <code>#[derive(toasty::Embed)]</code> and use it as a field in a
+model:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+}
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+    address: Address,
+}
+<span class="boring">}</span></code></pre>
+<p>Toasty flattens the embedded struct’s fields into the parent table as individual
+columns, prefixed with the field name:</p>
+<pre><code class="language-sql">CREATE TABLE users (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    address_street TEXT NOT NULL,
+    address_city TEXT NOT NULL
+);
+</code></pre>
+<p>The <code>Address</code> struct has no table of its own. Its <code>street</code> and <code>city</code> fields
+become <code>address_street</code> and <code>address_city</code> columns in the <code>users</code> table.</p>
+<h3 id="creating-records-with-embedded-structs"><a class="header" href="#creating-records-with-embedded-structs">Creating records with embedded structs</a></h3>
+<p>Set the embedded field on the create builder by passing an instance of the
+struct:</p>
+<pre><code class="language-rust ignore">let user = toasty::create!(User {
+    name: "Alice",
+    address: Address {
+        street: "123 Main St".to_string(),
+        city: "Seattle".to_string(),
+    },
+})
+.exec(&amp;mut db)
+.await?;</code></pre>
+<h3 id="updating-embedded-fields-1"><a class="header" href="#updating-embedded-fields-1">Updating embedded fields</a></h3>
+<p>You can replace the entire embedded struct:</p>
+<pre><code class="language-rust ignore">user.update()
+    .address(Address {
+        street: "456 Oak Ave".to_string(),
+        city: "Portland".to_string(),
+    })
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>Or patch individual fields within the struct with <code>stmt::patch</code>:</p>
+<pre><code class="language-rust ignore">use toasty::stmt;
+
+user.update()
+    .address(stmt::patch(Address::fields().city(), "Portland"))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p><code>stmt::patch</code> targets a sub-field by its typed path and leaves the other
+fields of the embedded struct unchanged. Combine multiple sub-field updates
+with <code>stmt::apply</code>:</p>
+<pre><code class="language-rust ignore">user.update()
+    .address(stmt::apply([
+        stmt::patch(Address::fields().street(), "456 Oak Ave"),
+        stmt::patch(Address::fields().city(), "Portland"),
+    ]))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<h3 id="nested-embedding"><a class="header" href="#nested-embedding">Nested embedding</a></h3>
+<p>Embedded structs can contain other embedded structs. Each level of nesting adds
+another prefix to the column name:</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
+struct Coordinates {
+    lat: i64,
+    lng: i64,
+}
+
+#[derive(Debug, toasty::Embed)]
+struct Address {
+    street: String,
+    city: String,
+    coords: Coordinates,
+}</code></pre>
+<p>A <code>User</code> model with an <code>address: Address</code> field produces columns: <code>address_street</code>,
+<code>address_city</code>, <code>address_coords_lat</code>, <code>address_coords_lng</code>.</p>
+<h2 id="embedded-enums"><a class="header" href="#embedded-enums">Embedded enums</a></h2>
+<p>Enums annotated with <code>#[derive(toasty::Embed)]</code> store a variant discriminant in
+the database. By default, Toasty derives a string label for each variant by
+converting its Rust name to <code>snake_case</code>.</p>
+<h3 id="unit-enums"><a class="header" href="#unit-enums">Unit enums</a></h3>
+<p>A unit enum (all variants have no fields) maps to a single column:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, PartialEq, toasty::Embed)]
+enum Status {
+    Pending,
+    Active,
+    Done,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Task {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+    status: Status,
+}
+<span class="boring">}</span></code></pre>
+<p>The <code>status</code> column stores <code>pending</code>, <code>active</code>, or <code>done</code>. PostgreSQL uses a
+named enum type, MySQL uses <code>ENUM</code>, and SQLite uses <code>TEXT</code> with a check
+constraint. DynamoDB stores the label as a string attribute.</p>
+<p>Use it like any other field:</p>
+<pre><code class="language-rust ignore">let task = toasty::create!(Task {
+    title: "Write docs",
+    status: Status::Pending,
+})
+.exec(&amp;mut db)
+.await?;
+
+task.update().status(Status::Done).exec(&amp;mut db).await?;</code></pre>
+<h3 id="data-carrying-enums"><a class="header" href="#data-carrying-enums">Data-carrying enums</a></h3>
+<p>Enum variants can carry fields. Each variant’s fields become nullable columns in
+the parent table. Only the active variant’s columns are non-null for a given row:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, PartialEq, toasty::Embed)]
+enum ContactInfo {
+    Email { address: String },
+    Phone { number: String },
+}
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    name: String,
+    contact: ContactInfo,
+}
+<span class="boring">}</span></code></pre>
+<p>This produces three columns: one discriminant column containing <code>email</code> or
+<code>phone</code>, plus nullable <code>contact_address</code> and <code>contact_number</code> columns. Only the
+field for the active variant contains a value.</p>
+<p>Create records by passing enum values:</p>
+<pre><code class="language-rust ignore">let user = toasty::create!(User {
+    name: "Alice",
+    contact: ContactInfo::Email {
+        address: "alice@example.com".to_string(),
+    },
+})
+.exec(&amp;mut db)
+.await?;</code></pre>
+<h3 id="mixed-enums"><a class="header" href="#mixed-enums">Mixed enums</a></h3>
+<p>An enum can have both unit variants and data-carrying variants:</p>
+<pre><code class="language-rust ignore">#[derive(Debug, PartialEq, toasty::Embed)]
+enum ImportStatus {
+    Pending,
+    Failed { reason: String },
+    Done,
+}</code></pre>
+<p>Unit variants (<code>Pending</code>, <code>Done</code>) store only the discriminant. The <code>Failed</code>
+variant also stores its <code>reason</code> in a nullable column.</p>
+<h3 id="changing-stored-discriminants"><a class="header" href="#changing-stored-discriminants">Changing stored discriminants</a></h3>
+<p>Without additional attributes, Toasty converts each variant name to
+<code>snake_case</code>. For example, <code>PreferredSupplier</code> uses the label
+<code>preferred_supplier</code>.</p>
+<p>Add <code>#[column(rename_all = "...")]</code> to the enum to select another naming rule:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(toasty::Embed)]
+#[column(rename_all = "SCREAMING_SNAKE_CASE")]
+enum PartyKind {
+    Customer,
+    PreferredSupplier,
+}
+<span class="boring">}</span></code></pre>
+<p>This enum uses <code>CUSTOMER</code> and <code>PREFERRED_SUPPLIER</code>. Toasty accepts the following
+rules:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Rule</th><th><code>PreferredSupplier</code> label</th></tr>
+</thead>
+<tbody>
+<tr><td><code>lowercase</code></td><td><code>preferredsupplier</code></td></tr>
+<tr><td><code>UPPERCASE</code></td><td><code>PREFERREDSUPPLIER</code></td></tr>
+<tr><td><code>PascalCase</code></td><td><code>PreferredSupplier</code></td></tr>
+<tr><td><code>camelCase</code></td><td><code>preferredSupplier</code></td></tr>
+<tr><td><code>snake_case</code></td><td><code>preferred_supplier</code></td></tr>
+<tr><td><code>SCREAMING_SNAKE_CASE</code></td><td><code>PREFERRED_SUPPLIER</code></td></tr>
+<tr><td><code>kebab-case</code></td><td><code>preferred-supplier</code></td></tr>
+<tr><td><code>SCREAMING-KEBAB-CASE</code></td><td><code>PREFERRED-SUPPLIER</code></td></tr>
+</tbody>
+</table>
+</div>
+<p>Set individual labels with <code>#[column(variant = "...")]</code>:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span>#[derive(toasty::Embed)]
+enum PartyKind {
+    #[column(variant = "customer")]
+    Customer,
+    #[column(variant = "preferred-supplier")]
+    PreferredSupplier,
+}
+<span class="boring">}</span></code></pre>
+<p>An explicit variant label takes precedence over <code>rename_all</code> when an enum uses
+both attributes. <code>rename_all</code> changes variant labels only; it does not change
+the database enum type name. It applies whether the labels use native enum
+storage or a plain <code>text</code> or <code>varchar</code> column.</p>
+<h4 id="integer-discriminants"><a class="header" href="#integer-discriminants">Integer discriminants</a></h4>
+<p>To store integer discriminants, set <code>#[column(variant = N)]</code> on every variant.
+Toasty does not auto-assign integers. The values do not need to be sequential;
+you can choose any non-negative <code>i64</code> values. This lets you add variants to an
+existing schema without renumbering:</p>
+<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
+enum Priority {
+    #[column(variant = 10)]
+    Low,
+    #[column(variant = 20)]
+    Normal,
+    #[column(variant = 30)]
+    High,
+}</code></pre>
+<p>Integer discriminants use <code>i64</code> storage by default. Add an integer
+<code>#[column(type = ...)]</code> to the enum to request a narrower database type for
+each flattened discriminant column and each <code>Vec&lt;unit-enum&gt;</code> element:</p>
+<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
+#[column(type = u8)]
+enum Priority {
+    #[column(variant = 10)]
+    Low,
+    #[column(variant = 20)]
+    Normal,
+    #[column(variant = 30)]
+    High,
+}</code></pre>
+<p>This requests unsigned 8-bit storage. MySQL uses <code>TINYINT UNSIGNED</code>; databases
+without an unsigned 8-bit integer use their closest supported representation.
+The type follows the enum through flattened embedded structs and transparent
+field wrappers such as <code>Option</code>, <code>Deferred</code>, <code>Box</code>, <code>Arc</code>, and <code>Rc</code>.</p>
+<p>Place the attribute on a model field to override the enum-level default for
+that use. On <code>Vec&lt;unit-enum&gt;</code>, the field-level type describes each element:</p>
+<pre><code class="language-rust ignore">#[derive(toasty::Model)]
+struct Task {
+    #[key]
+    id: u64,
+
+    #[column(type = u8)]
+    priority: Priority,
+
+    #[column(type = u16)]
+    recent_priorities: Vec&lt;Priority&gt;,
+}</code></pre>
+<p>Every discriminant must fit both the enum-level type and any narrower
+field-level override. <a href="#document-fields"><code>#[document]</code> storage</a> currently
+rejects enum embeds because enum document encoding is not supported.</p>
+<p>An enum cannot mix string and integer discriminants. Integer-discriminant enums
+do not support <code>rename_all</code>.</p>
+<h2 id="filtering-on-embedded-fields"><a class="header" href="#filtering-on-embedded-fields">Filtering on embedded fields</a></h2>
+<h3 id="struct-fields"><a class="header" href="#struct-fields">Struct fields</a></h3>
+<p>Use chained field accessors to filter on embedded struct fields:</p>
+<pre><code class="language-rust ignore">// Find users in Seattle
+let users = User::filter(User::fields().address().city().eq("Seattle"))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p><code>User::fields().address()</code> returns the embedded struct’s field accessors.
+<code>.city()</code> returns a field path for the <code>address_city</code> column. All comparison
+operators (<code>.eq()</code>, <code>.ne()</code>, <code>.gt()</code>, etc.) work on embedded struct fields.</p>
+<p>Combine conditions on multiple embedded fields with <code>.and()</code>:</p>
+<pre><code class="language-rust ignore">let users = User::filter(
+    User::fields()
+        .address()
+        .city()
+        .eq("Seattle")
+        .and(User::fields().address().street().eq("123 Main St")),
+)
+.exec(&amp;mut db)
+.await?;</code></pre>
+<h3 id="enum-variants"><a class="header" href="#enum-variants">Enum variants</a></h3>
+<p>For embedded enums, Toasty generates <code>is_*()</code> methods to filter by variant:</p>
+<pre><code class="language-rust ignore">// Find all tasks with status = Active
+let tasks = Task::filter(Task::fields().status().is_active())
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>This filters on the stored <code>active</code> label (<code>WHERE status = 'active'</code> in SQL).</p>
+<p>For unit enums, you can also use <code>.eq()</code> directly:</p>
+<pre><code class="language-rust ignore">let tasks = Task::filter(Task::fields().status().eq(Status::Active))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>For data-carrying enums, use <code>.is_*()</code> to check the variant and <code>.matches()</code> to
+filter on the variant’s fields:</p>
+<pre><code class="language-rust ignore">// Find users whose contact is an email with a specific address
+let users = User::filter(
+    User::fields()
+        .contact()
+        .email()
+        .matches(|e| e.address().eq("alice@example.com")),
+)
+.exec(&amp;mut db)
+.await?;</code></pre>
+<p>The <code>.matches()</code> closure receives the variant’s field accessors. It checks both
+the discriminant and the field condition.</p>
+<h2 id="indexing-embedded-fields"><a class="header" href="#indexing-embedded-fields">Indexing embedded fields</a></h2>
+<p>Add <code>#[index]</code> or <code>#[unique]</code> to fields inside an embedded type. The index
+applies to the flattened column in the parent table:</p>
+<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
+struct Contact {
+    #[unique]
+    email: String,
+    #[index]
+    country: String,
+}
+
+#[derive(toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+    contact: Contact,
+}</code></pre>
+<p>This creates a unique index on the <code>contact_email</code> column and a non-unique index
+on <code>contact_country</code>. The same rules from
+<a href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a> apply.</p>
+<p>Indexes on data-carrying enum variant fields work the same way. The index is
+created on the nullable column for that variant’s field.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
+</blockquote>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="document-fields"><a class="header" href="#document-fields"><code>#[document]</code> Fields</a></h1>
+<p><code>#[document]</code> stores a <code>#[derive(toasty::Embed)]</code> struct in one
+structured column instead of expanding its fields into separate
+columns. Toasty retains the embedded schema, so queries can address
+scalar fields inside the stored object.</p>
+<p>Use document storage when a value belongs to its parent row but its
+fields still participate in filters. Use <a href="#json-encoding">JSON Encoding</a>
+for an opaque serde payload whose fields do not need generated query
+paths.</p>
+<h2 id="column-expansion-and-document-storage"><a class="header" href="#column-expansion-and-document-storage">Column expansion and document storage</a></h2>
+<p>An embedded struct expands into one column per leaf field by default:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Embed)]
+struct Address {
+    city: String,
+    postal_code: String,
+}
+
+#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    address: Address,
+}
+<span class="boring">}</span></code></pre>
+<p>This form creates columns such as <code>address_city</code> and
+<code>address_postal_code</code>. Adding <code>#[document]</code> stores the same <code>Address</code>
+value in one column:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Embed)]
+</span><span class="boring">struct Address {
+</span><span class="boring">    city: String,
+</span><span class="boring">    postal_code: String,
+</span><span class="boring">}
+</span>#[derive(Debug, toasty::Model)]
+struct User {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[document]
+    address: Address,
+}
+<span class="boring">}</span></code></pre>
+<p>The Rust field type and create API are unchanged. The attribute changes
+the database mapping and the way field paths lower into backend
+queries.</p>
+<h2 id="storage-by-backend"><a class="header" href="#storage-by-backend">Storage by backend</a></h2>
+<p>Each built-in driver chooses a document representation:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Driver</th><th>Stored representation</th></tr>
+</thead>
+<tbody>
+<tr><td>PostgreSQL</td><td><code>jsonb</code></td></tr>
+<tr><td>MySQL</td><td><code>JSON</code></td></tr>
+<tr><td>SQLite and Turso</td><td>JSON text</td></tr>
+<tr><td>DynamoDB</td><td>Map (<code>M</code>)</td></tr>
+</tbody>
+</table>
+</div>
+<p>Applications do not add <code>#[column(type = ...)]</code> to a document field.
+The driver capability selects the representation, and Toasty rejects a
+driver that cannot store document fields.</p>
+<h2 id="creating-and-reading-documents"><a class="header" href="#creating-and-reading-documents">Creating and reading documents</a></h2>
+<p>Create a record by passing the embedded value:</p>
+<pre><code class="language-rust ignore">let user = toasty::create!(User {
+    address: Address {
+        city: "Seattle".to_string(),
+        postal_code: "98101".to_string(),
+    },
+})
+.exec(&amp;mut db)
+.await?;
+
+assert_eq!(user.address.city, "Seattle");</code></pre>
+<p>The driver encodes the object using the embed’s named fields. Nested
+embedded structs become nested document objects rather than additional
+database columns.</p>
+<h2 id="filtering-document-fields"><a class="header" href="#filtering-document-fields">Filtering document fields</a></h2>
+<p>Generated field accessors keep the embedded structure:</p>
+<pre><code class="language-rust ignore">let users = User::filter(
+    User::fields().address().city().eq("Seattle"),
+)
+.exec(&amp;mut db)
+.await?;</code></pre>
+<p>The query engine lowers <code>address().city()</code> to the backend’s document
+path operation. PostgreSQL extracts a JSONB path, MySQL uses its JSON
+functions, SQLite and Turso use JSON1, and DynamoDB uses a document path
+expression.</p>
+<p>Equality, ordering, and optional-field checks work on supported scalar
+leaves. Comparing the entire document to an <code>Address</code> value is not yet
+supported.</p>
+<h2 id="updating-documents"><a class="header" href="#updating-documents">Updating documents</a></h2>
+<p>Assigning a new embedded value replaces the complete document:</p>
+<pre><code class="language-rust ignore">user.update()
+    .address(Address {
+        city: "Portland".to_string(),
+        postal_code: "97205".to_string(),
+    })
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p><code>stmt::patch</code> updates individual fields of a column-expanded embed, but
+it does not yet produce an in-place mutation for a <code>#[document]</code>
+column. Replace the document when one of its fields changes.</p>
+<h2 id="collections-of-documents"><a class="header" href="#collections-of-documents">Collections of documents</a></h2>
+<p>A <code>Vec&lt;T&gt;</code> where <code>T</code> is an embedded struct stores a document array. No
+attribute is required:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Embed)]
+struct LineItem {
+    sku: String,
+    quantity: i64,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Order {
+    #[key]
+    #[auto]
+    id: u64,
+
+    items: Vec&lt;LineItem&gt;,
+}
+<span class="boring">}</span></code></pre>
+<p>PostgreSQL, MySQL, SQLite, and Turso encode the field as an array of JSON
+objects. DynamoDB stores it as a List (<code>L</code>) of Map (<code>M</code>) values.</p>
+<p>Whole-value create, read, and replacement work for document
+collections. <code>stmt::push</code> appends one embedded value. Element predicates
+and the removal operations are not yet supported for document
+collections.</p>
+<h2 id="supported-document-fields"><a class="header" href="#supported-document-fields">Supported document fields</a></h2>
+<p>The document root must be a named embedded struct or a collection of
+named embedded structs. Document keys come from Rust field names.</p>
+<p>Nested embedded structs, scalar lists, optional scalar fields, decimal
+types, and supported <code>jiff</code> temporal types can appear inside a document.
+Toasty uses canonical text encodings for temporal and decimal leaves so
+filters compare the same values that reads reconstruct.</p>
+<p>Current restrictions:</p>
+<ul>
+<li>Embedded enums cannot be encoded inside a document.</li>
+<li>Tuple structs are rejected because their fields have no names for
+document keys.</li>
+<li>Relations cannot appear inside a document.</li>
+<li><code>jiff::Zoned</code> is rejected because its IANA time-zone annotation does
+not have a supported document representation.</li>
+<li><code>Vec&lt;u8&gt;</code> is rejected because JSON has no binary scalar type.</li>
+<li><code>#[column]</code> renames inside an embedded document are rejected because
+document keys use Rust field names.</li>
+<li><code>#[index]</code>, <code>#[unique]</code>, and <code>#[column]</code> cannot be placed on the
+<code>#[document]</code> field.</li>
+<li>An optional document root is not yet supported; optional fields inside
+the document are supported.</li>
+</ul>
+<p>Toasty validates these rules while building the schema, before the
+driver creates a table.</p>
+<h2 id="document-values-at-the-driver-boundary"><a class="header" href="#document-values-at-the-driver-boundary">Document values at the driver boundary</a></h2>
+<p>The query engine represents a document as a named object whose shape
+comes from the application schema. Before calling a driver, Toasty
+converts the embedded record into that object representation.</p>
+<p>Drivers encode and decode named objects without consulting the
+application schema. The schema-aware conversion remains in the engine,
+while the driver handles only the backend’s JSON, map, or list format.</p>
+<p>This differs from <a href="#json-encoding"><code>Json&lt;T&gt;</code></a>, which crosses the
+engine and driver boundary as an already serialized string. The
+document representation preserves typed field paths; JSON encoding
+accepts arbitrary serde types.</p>
+<div style="break-before: page; page-break-before: always;"></div>
+<h1 id="json-encoding"><a class="header" href="#json-encoding">JSON Encoding</a></h1>
+<p><code>toasty::Json&lt;T&gt;</code> stores a serde-compatible Rust value in one database
+column. Toasty serializes <code>T</code> before the query engine processes the value
+and deserializes it after the driver reads the column.</p>
+<p>Use JSON encoding for data that the application reads and writes as a
+whole. Toasty does not expose typed paths into a <code>Json&lt;T&gt;</code> field because
+the query engine sees the encoded value as a string rather than as the
+fields of <code>T</code>.</p>
+<h2 id="choosing-a-field-representation"><a class="header" href="#choosing-a-field-representation">Choosing a field representation</a></h2>
+<p>Toasty has three ways to store structured or collection data in one
+field:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Rust field</th><th>Use it for</th><th>Query support</th></tr>
+</thead>
+<tbody>
+<tr><td><code>toasty::Json&lt;T&gt;</code></td><td>Any <code>T</code> with serde serialization</td><td>No typed paths into <code>T</code></td></tr>
+<tr><td><code>#[document]</code> on an embedded struct</td><td>A fixed object whose fields Toasty knows</td><td>Filters on scalar fields inside the object</td></tr>
+<tr><td><code>Vec&lt;T&gt;</code> where <code>T</code> is a scalar</td><td>A homogeneous list</td><td>Collection predicates and incremental mutations</td></tr>
+</tbody>
+</table>
+</div>
+<p><a href="#document-fields"><code>#[document]</code> Fields</a> explains schema-aware
+document storage. <a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> Fields</a> covers
+typed lists. Use <code>Json&lt;T&gt;</code> when generated paths and collection operators
+are not required or when <code>T</code> cannot derive <code>toasty::Embed</code>.</p>
+<h2 id="enabling-json-encoding"><a class="header" href="#enabling-json-encoding">Enabling JSON encoding</a></h2>
+<p>Enable Toasty’s <code>serde</code> feature together with the selected database
+driver. The application also needs <code>serde</code> for typed payloads and
+<code>serde_json</code> when it constructs dynamic JSON values:</p>
+<pre><code class="language-toml">[dependencies]
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toasty = { version = "0.8", features = ["postgresql", "serde"] }
+</code></pre>
+<p>The inner <code>T</code> in <code>Json&lt;T&gt;</code> must implement <code>serde::Serialize</code> and
+<code>serde::Deserialize</code>.</p>
+<h2 id="encoding-a-typed-payload"><a class="header" href="#encoding-a-typed-payload">Encoding a typed payload</a></h2>
+<p>Wrap the model field in <code>toasty::Json&lt;T&gt;</code> and select a column type with
+<code>#[column(type = ...)]</code>:</p>
+<pre><code class="language-rust ignore">use serde::{Deserialize, Serialize};
+
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+struct Metadata {
+    version: u32,
+    labels: Vec&lt;String&gt;,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Post {
+    #[key]
+    #[auto]
+    id: u64,
+
+    title: String,
+
+    #[column(type = json)]
+    metadata: toasty::Json&lt;Metadata&gt;,
+}</code></pre>
+<p>Every <code>Json&lt;T&gt;</code> field requires an explicit column type. The Rust type
+determines how Toasty encodes and decodes the value; the column
+attribute determines how the database stores the encoded JSON.</p>
+<h2 id="column-types"><a class="header" href="#column-types">Column types</a></h2>
+<p>JSON fields accept these column types:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Column type</th><th>Database representation</th></tr>
+</thead>
+<tbody>
+<tr><td><code>text</code></td><td>JSON text in the backend’s string type</td></tr>
+<tr><td><code>varchar(N)</code></td><td>Length-limited JSON text on backends with native <code>VARCHAR</code></td></tr>
+<tr><td><code>json</code></td><td>Native JSON on PostgreSQL and MySQL</td></tr>
+<tr><td><code>jsonb</code></td><td>Native binary JSON on PostgreSQL</td></tr>
+</tbody>
+</table>
+</div>
+<p>Use <code>text</code> on SQLite, Turso, DynamoDB, or any backend where the database
+does not provide a native JSON column. Toasty’s serializer still emits
+valid JSON, but a text column does not ask the database to validate
+external writes.</p>
+<p>Use <code>json</code> when PostgreSQL or MySQL should validate the stored value as
+JSON. Use <code>jsonb</code> on PostgreSQL when its binary representation and JSONB
+operators are required outside Toasty’s typed query API.</p>
+<p>Toasty checks <code>json</code> and <code>jsonb</code> against the selected driver’s
+capabilities during schema construction. A model that requests <code>jsonb</code>
+on MySQL or SQLite fails before Toasty sends unsupported DDL.</p>
+<h2 id="creating-and-updating-values"><a class="header" href="#creating-and-updating-values">Creating and updating values</a></h2>
+<p>Create and update setters accept the inner <code>T</code>, so callers do not need
+to construct <code>Json(T)</code>:</p>
+<pre><code class="language-rust ignore">let mut post = toasty::create!(Post {
+    title: "Encoding data",
+    metadata: Metadata {
+        version: 1,
+        labels: vec!["rust".to_string()],
+    },
+})
+.exec(&amp;mut db)
+.await?;
+
+post.update()
+    .metadata(Metadata {
+        version: 2,
+        labels: vec!["rust".to_string(), "orm".to_string()],
+    })
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>The loaded model retains the wrapper. <code>Json&lt;T&gt;</code> implements <code>Deref</code> and
+<code>AsRef</code>, so code can read the inner value without moving it:</p>
+<pre><code class="language-rust ignore">assert_eq!(post.metadata.version, 2);
+let metadata: &amp;Metadata = post.metadata.as_ref();</code></pre>
+<p>An update replaces the entire encoded value. Toasty does not generate
+an assignment for one field inside <code>T</code> because <code>T</code> has no field paths in
+the statement schema.</p>
+<h2 id="dynamic-json-values"><a class="header" href="#dynamic-json-values">Dynamic JSON values</a></h2>
+<p>Use <code>serde_json::Value</code> directly when the application needs a dynamic
+JSON object or array:</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Model)]
+struct Event {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[column(type = jsonb)]
+    payload: serde_json::Value,
+}</code></pre>
+<p><code>serde_json::Value</code> uses the same encoding, storage types, and
+whole-value update behavior as <code>Json&lt;T&gt;</code>. The wrapper would add no type
+information because <code>serde_json::Value</code> already represents arbitrary
+JSON.</p>
+<pre><code class="language-rust ignore">let event = toasty::create!(Event {
+    payload: serde_json::json!({
+        "kind": "published",
+        "article_id": 42,
+        "tags": ["rust", "orm"],
+    }),
+})
+.exec(&amp;mut db)
+.await?;</code></pre>
+<h2 id="sql-null-and-json-null"><a class="header" href="#sql-null-and-json-null">SQL <code>NULL</code> and JSON <code>null</code></a></h2>
+<p>The position of <code>Option</code> determines whether absence belongs to the
+database column or to the JSON value:</p>
+<div class="table-wrapper">
+<table>
+<thead>
+<tr><th>Field type</th><th>Rust value</th><th>Stored value</th></tr>
+</thead>
+<tbody>
+<tr><td><code>Option&lt;Json&lt;T&gt;&gt;</code></td><td><code>None</code></td><td>SQL <code>NULL</code></td></tr>
+<tr><td><code>Json&lt;Option&lt;T&gt;&gt;</code></td><td><code>Json(None)</code></td><td>JSON <code>null</code> in a non-null column</td></tr>
+<tr><td><code>Option&lt;serde_json::Value&gt;</code></td><td><code>None</code></td><td>SQL <code>NULL</code></td></tr>
+<tr><td><code>serde_json::Value</code></td><td><code>Value::Null</code></td><td>JSON <code>null</code> in a non-null column</td></tr>
+</tbody>
+</table>
+</div>
+<p>Use <code>Option&lt;Json&lt;T&gt;&gt;</code> when the row may have no payload. Use
+<code>Json&lt;Option&lt;T&gt;&gt;</code> when every row must contain JSON and <code>null</code> is part of
+the payload’s data model.</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Model)]
+struct Import {
+    #[key]
+    #[auto]
+    id: u64,
+
+    #[column(type = json)]
+    result: Option&lt;toasty::Json&lt;ImportResult&gt;&gt;,
+
+    #[column(type = json)]
+    external_value: serde_json::Value,
+}</code></pre>
+<h2 id="deferring-a-json-field"><a class="header" href="#deferring-a-json-field">Deferring a JSON field</a></h2>
+<p>Wrap the JSON field in <code>toasty::Deferred</code> when ordinary queries should
+omit a large payload:</p>
+<pre><code class="language-rust ignore">#[column(type = jsonb)]
+payload: toasty::Deferred&lt;toasty::Json&lt;Payload&gt;&gt;,</code></pre>
+<p>The field follows the normal deferred loading rules. A regular query
+leaves it unloaded, <code>.include(Model::fields().payload())</code> adds the
+column to that query, and assigning a new payload leaves the in-memory
+field loaded with the assigned value. See <a href="#deferred-fields">Deferred
+Fields</a> for the loading API.</p>
+<p><code>toasty::Deferred&lt;serde_json::Value&gt;</code> is also supported and uses the
+same explicit column types.</p>
+<h2 id="query-architecture"><a class="header" href="#query-architecture">Query architecture</a></h2>
+<p>A <code>Json&lt;T&gt;</code> field registers an application-level string type plus JSON
+serialization metadata and the selected database storage type. Its
+<code>IntoExpr</code> implementation serializes <code>T</code> into one string expression
+before planning.</p>
+<p>SQL drivers bind that string directly to <code>text</code>, <code>json</code>, or <code>jsonb</code>.
+When a driver reads a native JSON column for a <code>Json&lt;T&gt;</code> or
+<code>serde_json::Value</code> field, it returns the JSON text rather than a
+structural Toasty value. DynamoDB stores text-backed JSON in an <code>S</code>
+attribute. The field’s <code>Load</code> implementation invokes <code>serde_json</code> to
+reconstruct the Rust value.</p>
+<p>This boundary makes arbitrary serde types possible without registering
+their fields in Toasty’s schema. It also explains why a path such as
+<code>Post::fields().metadata().version()</code> does not exist: the query engine
+knows the column and its storage type, but it does not know the shape of
+<code>Metadata</code>.</p>
+<p>Use <a href="#document-fields"><code>#[document]</code></a> when Toasty must retain the
+object’s field structure for filters. Use a relation when the nested
+data needs independent keys, indexes, or lifecycle.</p>
+<blockquote>
+<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields"><code>cms-article-fields</code></a> stores an SEO payload in
+<code>Json&lt;T&gt;</code> alongside a queryable <code>Vec&lt;scalar&gt;</code> and a deferred text
+column.</p>
 </blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="vecscalar-fields"><a class="header" href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> Fields</a></h1>
@@ -6676,442 +7373,6 @@ let page: Page&lt;_&gt; = Item::all()
 <p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/product-search"><code>product-search</code></a> builds filter expressions, sorts, cursor-paginates, and projects columns.</p>
 </blockquote>
 <div style="break-before: page; page-break-before: always;"></div>
-<h1 id="embedded-types"><a class="header" href="#embedded-types">Embedded Types</a></h1>
-<p>An embedded type is a struct or enum annotated with <code>#[derive(toasty::Embed)]</code>.
-Unlike models, embedded types do not get their own database table. Their fields
-are stored inline in the parent model’s table.</p>
-<p>Use embedded types to group related fields without creating a separate table.</p>
-<h2 id="newtype-structs"><a class="header" href="#newtype-structs">Newtype structs</a></h2>
-<p>A newtype struct is a single-field tuple struct like <code>struct Email(String)</code>.
-Annotate it with <code>#[derive(toasty::Embed)]</code> to use it as a model field:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span><span class="boring">use toasty::Model;
-</span>#[derive(Debug, toasty::Embed)]
-struct Email(String);
-
-#[derive(Debug, toasty::Model)]
-struct User {
-    #[key]
-    #[auto]
-    id: u64,
-
-    name: String,
-    email: Email,
-}
-<span class="boring">}</span></code></pre>
-<p>Unlike multi-field embedded structs, a newtype maps to a single column with the
-parent field’s name — no prefix is added:</p>
-<pre><code class="language-sql">CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    email TEXT NOT NULL     -- not "email_0"
-);
-</code></pre>
-<p>Use newtypes to add type safety to primitive fields. An <code>Email</code> and a <code>Username</code>
-are both strings, but the type system prevents mixing them up:</p>
-<pre><code class="language-rust ignore">let user = toasty::create!(User {
-    name: "Alice",
-    email: Email("alice@example.com".into()),
-})
-.exec(&amp;mut db)
-.await?;
-
-assert_eq!(user.email.0, "alice@example.com");</code></pre>
-<p>Newtypes support the same operations as primitive fields — filtering, updating,
-<code>#[key]</code>, <code>#[unique]</code>, and <code>#[index]</code> all work:</p>
-<pre><code class="language-rust ignore">// Filter by newtype field
-let users = User::filter(User::fields().email().eq(Email("alice@example.com".into())))
-    .exec(&amp;mut db)
-    .await?;
-
-// Update a newtype field
-user.update()
-    .email(Email("new@example.com".into()))
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<p>A newtype can also be used as a primary key:</p>
-<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
-struct UserId(String);
-
-#[derive(Debug, toasty::Model)]
-struct User {
-    #[key]
-    id: UserId,
-    name: String,
-}</code></pre>
-<h3 id="newtype-with-unique-and-index"><a class="header" href="#newtype-with-unique-and-index">Newtype with <code>#[unique]</code> and <code>#[index]</code></a></h3>
-<p>Place <code>#[unique]</code> or <code>#[index]</code> on the model field (not inside the newtype):</p>
-<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
-struct Email(String);
-
-#[derive(Debug, toasty::Model)]
-struct User {
-    #[key]
-    #[auto]
-    id: u64,
-
-    name: String,
-
-    #[unique]
-    email: Email,
-}</code></pre>
-<p>This generates the same methods as a primitive unique field —
-<code>User::get_by_email()</code>, <code>User::filter_by_email()</code>, etc.</p>
-<h3 id="newtypes-inside-embedded-structs"><a class="header" href="#newtypes-inside-embedded-structs">Newtypes inside embedded structs</a></h3>
-<p>Newtypes can be nested inside multi-field embedded structs:</p>
-<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
-struct ZipCode(String);
-
-#[derive(Debug, toasty::Embed)]
-struct Address {
-    city: String,
-    zip: ZipCode,
-}</code></pre>
-<p>The <code>ZipCode</code> field inside <code>Address</code> produces a single column (<code>address_zip</code>,
-not <code>address_zip_0</code>). Filtering works through the normal chained accessors:</p>
-<pre><code class="language-rust ignore">let users = User::filter(User::fields().address().zip().eq(ZipCode("98101".into())))
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<h2 id="embedded-structs"><a class="header" href="#embedded-structs">Embedded structs</a></h2>
-<p>Define a struct with <code>#[derive(toasty::Embed)]</code> and use it as a field in a
-model:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span><span class="boring">use toasty::Model;
-</span>#[derive(Debug, toasty::Embed)]
-struct Address {
-    street: String,
-    city: String,
-}
-
-#[derive(Debug, toasty::Model)]
-struct User {
-    #[key]
-    #[auto]
-    id: u64,
-
-    name: String,
-    address: Address,
-}
-<span class="boring">}</span></code></pre>
-<p>Toasty flattens the embedded struct’s fields into the parent table as individual
-columns, prefixed with the field name:</p>
-<pre><code class="language-sql">CREATE TABLE users (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL,
-    address_street TEXT NOT NULL,
-    address_city TEXT NOT NULL
-);
-</code></pre>
-<p>The <code>Address</code> struct has no table of its own. Its <code>street</code> and <code>city</code> fields
-become <code>address_street</code> and <code>address_city</code> columns in the <code>users</code> table.</p>
-<h3 id="creating-records-with-embedded-structs"><a class="header" href="#creating-records-with-embedded-structs">Creating records with embedded structs</a></h3>
-<p>Set the embedded field on the create builder by passing an instance of the
-struct:</p>
-<pre><code class="language-rust ignore">let user = toasty::create!(User {
-    name: "Alice",
-    address: Address {
-        street: "123 Main St".to_string(),
-        city: "Seattle".to_string(),
-    },
-})
-.exec(&amp;mut db)
-.await?;</code></pre>
-<h3 id="updating-embedded-fields-1"><a class="header" href="#updating-embedded-fields-1">Updating embedded fields</a></h3>
-<p>You can replace the entire embedded struct:</p>
-<pre><code class="language-rust ignore">user.update()
-    .address(Address {
-        street: "456 Oak Ave".to_string(),
-        city: "Portland".to_string(),
-    })
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<p>Or patch individual fields within the struct with <code>stmt::patch</code>:</p>
-<pre><code class="language-rust ignore">use toasty::stmt;
-
-user.update()
-    .address(stmt::patch(Address::fields().city(), "Portland"))
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<p><code>stmt::patch</code> targets a sub-field by its typed path and leaves the other
-fields of the embedded struct unchanged. Combine multiple sub-field updates
-with <code>stmt::apply</code>:</p>
-<pre><code class="language-rust ignore">user.update()
-    .address(stmt::apply([
-        stmt::patch(Address::fields().street(), "456 Oak Ave"),
-        stmt::patch(Address::fields().city(), "Portland"),
-    ]))
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<h3 id="nested-embedding"><a class="header" href="#nested-embedding">Nested embedding</a></h3>
-<p>Embedded structs can contain other embedded structs. Each level of nesting adds
-another prefix to the column name:</p>
-<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
-struct Coordinates {
-    lat: i64,
-    lng: i64,
-}
-
-#[derive(Debug, toasty::Embed)]
-struct Address {
-    street: String,
-    city: String,
-    coords: Coordinates,
-}</code></pre>
-<p>A <code>User</code> model with an <code>address: Address</code> field produces columns: <code>address_street</code>,
-<code>address_city</code>, <code>address_coords_lat</code>, <code>address_coords_lng</code>.</p>
-<h2 id="embedded-enums"><a class="header" href="#embedded-enums">Embedded enums</a></h2>
-<p>Enums annotated with <code>#[derive(toasty::Embed)]</code> store a variant discriminant in
-the database. By default, Toasty derives a string label for each variant by
-converting its Rust name to <code>snake_case</code>.</p>
-<h3 id="unit-enums"><a class="header" href="#unit-enums">Unit enums</a></h3>
-<p>A unit enum (all variants have no fields) maps to a single column:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span><span class="boring">use toasty::Model;
-</span>#[derive(Debug, PartialEq, toasty::Embed)]
-enum Status {
-    Pending,
-    Active,
-    Done,
-}
-
-#[derive(Debug, toasty::Model)]
-struct Task {
-    #[key]
-    #[auto]
-    id: u64,
-
-    title: String,
-    status: Status,
-}
-<span class="boring">}</span></code></pre>
-<p>The <code>status</code> column stores <code>pending</code>, <code>active</code>, or <code>done</code>. PostgreSQL uses a
-named enum type, MySQL uses <code>ENUM</code>, and SQLite uses <code>TEXT</code> with a check
-constraint. DynamoDB stores the label as a string attribute.</p>
-<p>Use it like any other field:</p>
-<pre><code class="language-rust ignore">let task = toasty::create!(Task {
-    title: "Write docs",
-    status: Status::Pending,
-})
-.exec(&amp;mut db)
-.await?;
-
-task.update().status(Status::Done).exec(&amp;mut db).await?;</code></pre>
-<h3 id="data-carrying-enums"><a class="header" href="#data-carrying-enums">Data-carrying enums</a></h3>
-<p>Enum variants can carry fields. Each variant’s fields become nullable columns in
-the parent table. Only the active variant’s columns are non-null for a given row:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span><span class="boring">use toasty::Model;
-</span>#[derive(Debug, PartialEq, toasty::Embed)]
-enum ContactInfo {
-    Email { address: String },
-    Phone { number: String },
-}
-
-#[derive(Debug, toasty::Model)]
-struct User {
-    #[key]
-    #[auto]
-    id: u64,
-
-    name: String,
-    contact: ContactInfo,
-}
-<span class="boring">}</span></code></pre>
-<p>This produces three columns: one discriminant column containing <code>email</code> or
-<code>phone</code>, plus nullable <code>contact_address</code> and <code>contact_number</code> columns. Only the
-field for the active variant contains a value.</p>
-<p>Create records by passing enum values:</p>
-<pre><code class="language-rust ignore">let user = toasty::create!(User {
-    name: "Alice",
-    contact: ContactInfo::Email {
-        address: "alice@example.com".to_string(),
-    },
-})
-.exec(&amp;mut db)
-.await?;</code></pre>
-<h3 id="mixed-enums"><a class="header" href="#mixed-enums">Mixed enums</a></h3>
-<p>An enum can have both unit variants and data-carrying variants:</p>
-<pre><code class="language-rust ignore">#[derive(Debug, PartialEq, toasty::Embed)]
-enum ImportStatus {
-    Pending,
-    Failed { reason: String },
-    Done,
-}</code></pre>
-<p>Unit variants (<code>Pending</code>, <code>Done</code>) store only the discriminant. The <code>Failed</code>
-variant also stores its <code>reason</code> in a nullable column.</p>
-<h3 id="changing-stored-discriminants"><a class="header" href="#changing-stored-discriminants">Changing stored discriminants</a></h3>
-<p>Without additional attributes, Toasty converts each variant name to
-<code>snake_case</code>. For example, <code>PreferredSupplier</code> uses the label
-<code>preferred_supplier</code>.</p>
-<p>Add <code>#[column(rename_all = "...")]</code> to the enum to select another naming rule:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(toasty::Embed)]
-#[column(rename_all = "SCREAMING_SNAKE_CASE")]
-enum PartyKind {
-    Customer,
-    PreferredSupplier,
-}
-<span class="boring">}</span></code></pre>
-<p>This enum uses <code>CUSTOMER</code> and <code>PREFERRED_SUPPLIER</code>. Toasty accepts the following
-rules:</p>
-<div class="table-wrapper">
-<table>
-<thead>
-<tr><th>Rule</th><th><code>PreferredSupplier</code> label</th></tr>
-</thead>
-<tbody>
-<tr><td><code>lowercase</code></td><td><code>preferredsupplier</code></td></tr>
-<tr><td><code>UPPERCASE</code></td><td><code>PREFERREDSUPPLIER</code></td></tr>
-<tr><td><code>PascalCase</code></td><td><code>PreferredSupplier</code></td></tr>
-<tr><td><code>camelCase</code></td><td><code>preferredSupplier</code></td></tr>
-<tr><td><code>snake_case</code></td><td><code>preferred_supplier</code></td></tr>
-<tr><td><code>SCREAMING_SNAKE_CASE</code></td><td><code>PREFERRED_SUPPLIER</code></td></tr>
-<tr><td><code>kebab-case</code></td><td><code>preferred-supplier</code></td></tr>
-<tr><td><code>SCREAMING-KEBAB-CASE</code></td><td><code>PREFERRED-SUPPLIER</code></td></tr>
-</tbody>
-</table>
-</div>
-<p>Set individual labels with <code>#[column(variant = "...")]</code>:</p>
-<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
-</span><span class="boring">fn main() {
-</span>#[derive(toasty::Embed)]
-enum PartyKind {
-    #[column(variant = "customer")]
-    Customer,
-    #[column(variant = "preferred-supplier")]
-    PreferredSupplier,
-}
-<span class="boring">}</span></code></pre>
-<p>An explicit variant label takes precedence over <code>rename_all</code> when an enum uses
-both attributes. <code>rename_all</code> changes variant labels only; it does not change
-the database enum type name. It applies whether the labels use native enum
-storage or a plain <code>text</code> or <code>varchar</code> column.</p>
-<h4 id="integer-discriminants"><a class="header" href="#integer-discriminants">Integer discriminants</a></h4>
-<p>To store integer discriminants, set <code>#[column(variant = N)]</code> on every variant.
-Toasty does not auto-assign integers. The values do not need to be sequential;
-you can choose any non-negative <code>i64</code> values. This lets you add variants to an
-existing schema without renumbering:</p>
-<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
-enum Priority {
-    #[column(variant = 10)]
-    Low,
-    #[column(variant = 20)]
-    Normal,
-    #[column(variant = 30)]
-    High,
-}</code></pre>
-<p>Integer discriminants use <code>i64</code> storage by default. Add an integer
-<code>#[column(type = ...)]</code> to the enum to request a narrower database type for
-each flattened discriminant column and each <code>Vec&lt;unit-enum&gt;</code> element:</p>
-<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
-#[column(type = u8)]
-enum Priority {
-    #[column(variant = 10)]
-    Low,
-    #[column(variant = 20)]
-    Normal,
-    #[column(variant = 30)]
-    High,
-}</code></pre>
-<p>This requests unsigned 8-bit storage. MySQL uses <code>TINYINT UNSIGNED</code>; databases
-without an unsigned 8-bit integer use their closest supported representation.
-The type follows the enum through flattened embedded structs and transparent
-field wrappers such as <code>Option</code>, <code>Deferred</code>, <code>Box</code>, <code>Arc</code>, and <code>Rc</code>.</p>
-<p>Place the attribute on a model field to override the enum-level default for
-that use. On <code>Vec&lt;unit-enum&gt;</code>, the field-level type describes each element:</p>
-<pre><code class="language-rust ignore">#[derive(toasty::Model)]
-struct Task {
-    #[key]
-    id: u64,
-
-    #[column(type = u8)]
-    priority: Priority,
-
-    #[column(type = u16)]
-    recent_priorities: Vec&lt;Priority&gt;,
-}</code></pre>
-<p>Every discriminant must fit both the enum-level type and any narrower
-field-level override. <code>#[document]</code> is outside these rules: Toasty currently
-rejects enum embeds inside document-stored structs because enum document
-encoding is not supported.</p>
-<p>An enum cannot mix string and integer discriminants. Integer-discriminant enums
-do not support <code>rename_all</code>.</p>
-<h2 id="filtering-on-embedded-fields"><a class="header" href="#filtering-on-embedded-fields">Filtering on embedded fields</a></h2>
-<h3 id="struct-fields"><a class="header" href="#struct-fields">Struct fields</a></h3>
-<p>Use chained field accessors to filter on embedded struct fields:</p>
-<pre><code class="language-rust ignore">// Find users in Seattle
-let users = User::filter(User::fields().address().city().eq("Seattle"))
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<p><code>User::fields().address()</code> returns the embedded struct’s field accessors.
-<code>.city()</code> returns a field path for the <code>address_city</code> column. All comparison
-operators (<code>.eq()</code>, <code>.ne()</code>, <code>.gt()</code>, etc.) work on embedded struct fields.</p>
-<p>Combine conditions on multiple embedded fields with <code>.and()</code>:</p>
-<pre><code class="language-rust ignore">let users = User::filter(
-    User::fields()
-        .address()
-        .city()
-        .eq("Seattle")
-        .and(User::fields().address().street().eq("123 Main St")),
-)
-.exec(&amp;mut db)
-.await?;</code></pre>
-<h3 id="enum-variants"><a class="header" href="#enum-variants">Enum variants</a></h3>
-<p>For embedded enums, Toasty generates <code>is_*()</code> methods to filter by variant:</p>
-<pre><code class="language-rust ignore">// Find all tasks with status = Active
-let tasks = Task::filter(Task::fields().status().is_active())
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<p>This filters on the stored <code>active</code> label (<code>WHERE status = 'active'</code> in SQL).</p>
-<p>For unit enums, you can also use <code>.eq()</code> directly:</p>
-<pre><code class="language-rust ignore">let tasks = Task::filter(Task::fields().status().eq(Status::Active))
-    .exec(&amp;mut db)
-    .await?;</code></pre>
-<p>For data-carrying enums, use <code>.is_*()</code> to check the variant and <code>.matches()</code> to
-filter on the variant’s fields:</p>
-<pre><code class="language-rust ignore">// Find users whose contact is an email with a specific address
-let users = User::filter(
-    User::fields()
-        .contact()
-        .email()
-        .matches(|e| e.address().eq("alice@example.com")),
-)
-.exec(&amp;mut db)
-.await?;</code></pre>
-<p>The <code>.matches()</code> closure receives the variant’s field accessors. It checks both
-the discriminant and the field condition.</p>
-<h2 id="indexing-embedded-fields"><a class="header" href="#indexing-embedded-fields">Indexing embedded fields</a></h2>
-<p>Add <code>#[index]</code> or <code>#[unique]</code> to fields inside an embedded type. The index
-applies to the flattened column in the parent table:</p>
-<pre><code class="language-rust ignore">#[derive(toasty::Embed)]
-struct Contact {
-    #[unique]
-    email: String,
-    #[index]
-    country: String,
-}
-
-#[derive(toasty::Model)]
-struct User {
-    #[key]
-    #[auto]
-    id: u64,
-    contact: Contact,
-}</code></pre>
-<p>This creates a unique index on the <code>contact_email</code> column and a non-unique index
-on <code>contact_country</code>. The same rules from
-<a href="#indexes-and-unique-constraints">Indexes and Unique Constraints</a> apply.</p>
-<p>Indexes on data-carrying enum variant fields work the same way. The index is
-created on the nullable column for that variant’s field.</p>
-<blockquote>
-<p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
-</blockquote>
-<div style="break-before: page; page-break-before: always;"></div>
 <h1 id="deferred-fields"><a class="header" href="#deferred-fields">Deferred Fields</a></h1>
 <p>A deferred field is a column Toasty omits from the default <code>SELECT</code>
 list. Records returned from a query have the field unloaded; loading
@@ -8739,7 +9000,7 @@ PostgreSQL. No configuration is required.</p>
 <a href="#upserting-records"><code>upsert_by_*</code></a> with <code>INSERT ... ON CONFLICT</code>.
 Primary keys and unique constraints can be conflict targets, and
 <code>on_create</code>, <code>on_update</code>, and <code>or_ignore</code> are supported.</p>
-<p><strong>Native arrays for <a href="#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a>.</strong>
+<p><strong>Native arrays for <a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> fields</a>.</strong>
 A <code>tags: Vec&lt;String&gt;</code> field is a <code>text[]</code> column. The array predicates
 (<code>contains</code>, <code>is_superset</code>, <code>intersects</code>, <code>len</code>, <code>is_empty</code>) lower to
 PostgreSQL’s native operators (<code>= ANY(col)</code>, <code>@&gt;</code>, <code>&amp;&amp;</code>,
@@ -8928,7 +9189,7 @@ scale; there is no arbitrary-precision mode. Set them with
 <p><strong><code>BigDecimal</code> works natively on MySQL.</strong> Toasty rides <code>DECIMAL(p, s)</code> for <code>bigdecimal::BigDecimal</code> here. PostgreSQL falls back to text
 for <code>BigDecimal</code>; MySQL is currently the only backend that exchanges
 it as a native decimal value over the wire.</p>
-<p><strong><a href="#scalar-arrays"><code>Vec&lt;scalar&gt;</code></a> goes in a <code>JSON</code>
+<p><strong><a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code></a> goes in a <code>JSON</code>
 column.</strong> Toasty serializes the list to a JSON array at bind time and
 parses it back on read. Array predicates (<code>contains</code>, <code>is_superset</code>,
 <code>intersects</code>, <code>len</code>, <code>is_empty</code>) lower to MySQL’s <code>JSON_CONTAINS</code>,
@@ -9178,7 +9439,7 @@ pattern; use a <code>CHECK</code> against exact bytes if you need one.</p>
 lowers to <code>col GLOB 'abc*'</code>, a case-sensitive prefix match. The optimizer can
 use a regular index for the common-prefix lookup.</p>
 <p><strong>Scalar arrays use JSON1.</strong> A
-<a href="#scalar-arrays"><code>Vec&lt;T&gt;</code> field</a> lives in a <code>TEXT</code>
+<a href="#vecscalar-fields"><code>Vec&lt;T&gt;</code> field</a> lives in a <code>TEXT</code>
 column holding a JSON array. The array predicates lower to JSON1
 expressions:</p>
 <div class="table-wrapper">
@@ -9196,7 +9457,7 @@ expressions:</p>
 </div>
 <p>These subqueries scan the JSON document, so array predicates against
 a large table do not use an index. See
-<a href="#scalar-arrays">Field Options</a> for the model-level
+<a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> Fields</a> for the model-level
 view.</p>
 <p><strong>No row-level locking.</strong> SQLite has no <code>SELECT ... FOR UPDATE</code>.
 Toasty’s <a href="#transactions">transaction</a> layer falls back to
@@ -9485,7 +9746,7 @@ model code still works — <a href="#creating-records"><code>create!</code></a>,
 <a href="#filtering-by-indexed-fields"><code>filter_by_&lt;indexed&gt;</code></a>,
 <a href="#unique-fields"><code>#[unique]</code></a>,
 <a href="#concurrency-control-1"><code>#[version]</code></a>,
-<a href="#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a> — but the set
+<a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> fields</a> — but the set
 of queries you can write is narrower, and the chapter below catalogues
 the gaps so you can avoid building a model that the driver cannot
 serve.</p>
@@ -9693,7 +9954,7 @@ for column-narrow reads — projected to <code>ProjectionExpression</code> on th
 underlying operation.</li>
 <li><a href="#starts_with"><code>.starts_with("prefix")</code></a>
 on a string column — native <code>begins_with()</code>.</li>
-<li><a href="#scalar-arrays"><code>Vec&lt;scalar&gt;</code> predicates</a>:
+<li><a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> predicates</a>:
 <code>.contains(v)</code>, <code>.len()</code>, <code>.is_empty()</code> lower to DynamoDB’s
 <code>contains()</code> and <code>size()</code> functions.</li>
 </ul>
@@ -9728,7 +9989,7 @@ needs both a scan <em>and</em> an ordering returns an unsupported-feature
 error at planning time. Order is only available on a <code>Query</code>, which
 means the partition key must be pinned.</p>
 <p><strong><code>is_superset</code> / <code>intersects</code> with a non-literal right-hand side.</strong>
-For <a href="#scalar-arrays"><code>Vec&lt;scalar&gt;</code> fields</a> these
+For <a href="#vecscalar-fields"><code>Vec&lt;scalar&gt;</code> fields</a> these
 predicates expand to one <code>contains()</code> clause per element on the
 right-hand side, so the right-hand side has to be a concrete <code>Vec&lt;T&gt;</code>
 known at query-construction time. A column

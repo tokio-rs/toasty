@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-68045554.js";
+            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1785f50e.js"></script>
+        <script src="toc-bc94c3fa.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -287,7 +287,7 @@ scale; there is no arbitrary-precision mode. Set them with
 <p><strong><code>BigDecimal</code> works natively on MySQL.</strong> Toasty rides <code>DECIMAL(p, s)</code> for <code>bigdecimal::BigDecimal</code> here. PostgreSQL falls back to text
 for <code>BigDecimal</code>; MySQL is currently the only backend that exchanges
 it as a native decimal value over the wire.</p>
-<p><strong><a href="./field-options.html#scalar-arrays"><code>Vec&lt;scalar&gt;</code></a> goes in a <code>JSON</code>
+<p><strong><a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code></a> goes in a <code>JSON</code>
 column.</strong> Toasty serializes the list to a JSON array at bind time and
 parses it back on read. Array predicates (<code>contains</code>, <code>is_superset</code>,
 <code>intersects</code>, <code>len</code>, <code>is_empty</code>) lower to MySQL’s <code>JSON_CONTAINS</code>,

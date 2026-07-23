@@ -35,10 +35,10 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-68045554.js";
+            window.path_to_searchindex_js = "searchindex-5098f3e8.js";
         </script>
         <!-- Start loading toc.js asap -->
-        <script src="toc-1785f50e.js"></script>
+        <script src="toc-bc94c3fa.js"></script>
     </head>
     <body>
     <div id="mdbook-help-container">
@@ -215,9 +215,10 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <tr><td><code>f32</code>, <code>f64</code></td><td>Floating point</td></tr>
 <tr><td><code>uuid::Uuid</code></td><td>UUID</td></tr>
 <tr><td><code>Vec&lt;u8&gt;</code></td><td>Binary / Blob</td></tr>
-<tr><td><code>Vec&lt;T&gt;</code> (T scalar, not <code>u8</code>)</td><td>Native array column on PostgreSQL (<code>text[]</code>, <code>int8[]</code>, …); JSON on MySQL / SQLite; List <code>L</code> on DynamoDB. See <a href="./field-options.html#scalar-arrays">field-options.md</a>.</td></tr>
+<tr><td><code>Vec&lt;T&gt;</code> (T scalar, not <code>u8</code>)</td><td>Native array column on PostgreSQL (<code>text[]</code>, <code>int8[]</code>, …); JSON on MySQL / SQLite; List <code>L</code> on DynamoDB. See <a href="./vec-scalar-fields.html"><code>Vec&lt;scalar&gt;</code> Fields</a>.</td></tr>
 <tr><td><code>Option&lt;T&gt;</code></td><td>Nullable version of <code>T</code></td></tr>
 <tr><td>Embedded types (<code>#[derive(toasty::Embed)]</code>)</td><td>Flattened into parent table columns (see <a href="./embedded-types.html">Embedded Types</a>)</td></tr>
+<tr><td>Document fields (<code>#[document]</code>)</td><td>One structured column whose scalar leaves remain queryable (see <a href="./document-fields.html"><code>#[document]</code> Fields</a>)</td></tr>
 </tbody>
 </table>
 </div>
@@ -234,6 +235,7 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Date</code></td><td>Date</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Time</code></td><td>Time</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::DateTime</code></td><td>DateTime</td></tr>
+<tr><td><code>serde</code></td><td><code>toasty::Json&lt;T&gt;</code>, <code>serde_json::Value</code></td><td>Explicit text, <code>json</code>, or <code>jsonb</code> column (see <a href="./json-encoding.html">JSON Encoding</a>)</td></tr>
 </tbody>
 </table>
 </div>
