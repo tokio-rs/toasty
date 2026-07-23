@@ -304,7 +304,7 @@
 <a href=#304 id=304 data-nosnippet>304</a>    <span class="kw">let </span>todos: Vec&lt;<span class="kw">_</span>&gt; = user.todos().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#305 id=305 data-nosnippet>305</a>
 <a href=#306 id=306 data-nosnippet>306</a>    t.log().clear();
-<a href=#307 id=307 data-nosnippet>307</a>    user.todos().remove(<span class="kw-2">&amp;mut </span>db, <span class="kw-2">&amp;</span>todos[<span class="number">0</span>]).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#307 id=307 data-nosnippet>307</a>    user.todos().remove(<span class="kw-2">&amp;</span>todos[<span class="number">0</span>]).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#308 id=308 data-nosnippet>308</a>
 <a href=#309 id=309 data-nosnippet>309</a>    <span class="kw">if </span>t.capability().cte_with_update {
 <a href=#310 id=310 data-nosnippet>310</a>        <span class="comment">// PostgreSQL: single CTE bundles the condition + update
@@ -351,7 +351,7 @@
 <a href=#351 id=351 data-nosnippet>351</a>
 <a href=#352 id=352 data-nosnippet>352</a>    t.log().clear();
 <a href=#353 id=353 data-nosnippet>353</a>    <span class="comment">// Remove u2's todo via user1 — condition (user_id = user1.id) won't match
-<a href=#354 id=354 data-nosnippet>354</a>    </span><span class="macro">assert_err!</span>(user1.todos().remove(<span class="kw-2">&amp;mut </span>db, <span class="kw-2">&amp;</span>u2_todos[<span class="number">0</span>]).<span class="kw">await</span>);
+<a href=#354 id=354 data-nosnippet>354</a>    </span><span class="macro">assert_err!</span>(user1.todos().remove(<span class="kw-2">&amp;</span>u2_todos[<span class="number">0</span>]).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span>);
 <a href=#355 id=355 data-nosnippet>355</a>
 <a href=#356 id=356 data-nosnippet>356</a>    <span class="kw">if </span>t.capability().cte_with_update {
 <a href=#357 id=357 data-nosnippet>357</a>        <span class="comment">// PostgreSQL: a single QuerySql; condition handled inside the CTE
