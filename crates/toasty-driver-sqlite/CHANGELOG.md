@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-sqlite-v0.8.0...toasty-driver-sqlite-v0.9.0) - 2026-07-23
+
+### Added
+
+- New #[document] attribute for storing embedded types with nested-path filtering ([#1028])
+
+[#1028]: https://github.com/tokio-rs/toasty/pull/1028
+
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-sqlite-v0.7.0...toasty-driver-sqlite-v0.8.0) - 2026-07-06
 
 ### Added

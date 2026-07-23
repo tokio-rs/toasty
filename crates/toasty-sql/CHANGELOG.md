@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.8.0...toasty-sql-v0.9.0) - 2026-07-23
+
+### Added
+
+- support native JSON and JSONB column storage ([#1114](https://github.com/tokio-rs/toasty/pull/1114))
+- introduce Expr::Static for inline SQL literals, hook up LIMIT/OFFSET ([#1001](https://github.com/tokio-rs/toasty/pull/1001))
+- add upsert support ([#1091](https://github.com/tokio-rs/toasty/pull/1091))
+- add #[document] storage for embedded types with nested-path filtering ([#1028](https://github.com/tokio-rs/toasty/pull/1028))
+
+### Fixed
+
+- *(sql)* target matched table when adding columns ([#1112](https://github.com/tokio-rs/toasty/pull/1112))
+- *(sql)* drop indexes before removing indexed columns ([#1111](https://github.com/tokio-rs/toasty/pull/1111))
+- *(postgres)* store Vec<native-enum> as a native enum array on Postgres ([#1092](https://github.com/tokio-rs/toasty/pull/1092))
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.7.0...toasty-sql-v0.8.0) - 2026-07-06
 
 ### Added
