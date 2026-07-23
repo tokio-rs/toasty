@@ -4,10 +4,26 @@ use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
-const FIELD_STRUCT_RESERVED_METHODS: &[&str] =
-    &["from_path", "path", "eq", "in_query", "into_root", "create"];
+const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
+    "from_path",
+    "path",
+    "eq",
+    "in_query",
+    "into_root",
+    "filter",
+    "order_by",
+    "create",
+];
 
-const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["from_path", "path", "any", "all", "create"];
+const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &[
+    "from_path",
+    "path",
+    "any",
+    "all",
+    "filter",
+    "order_by",
+    "create",
+];
 
 impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
@@ -112,7 +128,7 @@ impl Expand<'_> {
             }
         };
 
-        let filter_method = self.expand_filter_method(quote!(#model_ident));
+        let include_modifier_methods = self.expand_include_modifier_methods(quote!(#model_ident));
 
         quote!(
             #struct_def
@@ -145,7 +161,7 @@ impl Expand<'_> {
                     #field_struct_ident::from_path(<#model_ident as #schema_trait>::path_root())
                 }
 
-                #filter_method
+                #include_modifier_methods
 
                 #create_method
 
@@ -176,30 +192,29 @@ impl Expand<'_> {
         )
     }
 
-    fn expand_filter_method(&self, target_ty: TokenStream) -> TokenStream {
+    fn expand_include_modifier_methods(&self, target_ty: TokenStream) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         if !matches!(self.model.kind, ModelKind::Root(_)) {
             return TokenStream::new();
         }
-        // A field named `filter` keeps its accessor; the include-filter
-        // combinator is skipped for this model rather than colliding.
-        if self
-            .model
-            .fields
-            .iter()
-            .any(|field| util::bare_ident_name(&field.name.ident) == "filter")
-        {
-            return TokenStream::new();
-        }
+
         quote! {
             /// Restricts the related rows loaded by `.include(...)`.
             #vis fn filter(self, predicate: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Include<__Origin, #target_ty> {
                 #toasty::stmt::Include::from_path_and_query(
                     self.path,
-                    #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all().filter(predicate),
-                )
+                    #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
+                ).filter(predicate)
+            }
+
+            /// Orders the related rows loaded by `.include(...)`.
+            #vis fn order_by(self, order_by: impl Into<#toasty::core::stmt::OrderBy>) -> #toasty::stmt::Include<__Origin, #target_ty> {
+                #toasty::stmt::Include::from_path_and_query(
+                    self.path,
+                    #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
+                ).order_by(order_by)
             }
         }
     }
@@ -331,7 +346,8 @@ impl Expand<'_> {
             }
         };
 
-        let filter_method = self.expand_filter_method(quote!(#toasty::List<#model_ident>));
+        let include_modifier_methods =
+            self.expand_include_modifier_methods(quote!(#toasty::List<#model_ident>));
 
         quote!(
             #struct_def
@@ -347,7 +363,7 @@ impl Expand<'_> {
 
                 #any_method
 
-                #filter_method
+                #include_modifier_methods
 
                 #create_method
 

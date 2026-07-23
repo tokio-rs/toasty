@@ -47,6 +47,12 @@ struct FlatInclude {
     query: Option<stmt::Query>,
 }
 
+#[derive(Default)]
+struct IncludeQuery {
+    filter: Option<stmt::Expr>,
+    order_by: Option<stmt::OrderBy>,
+}
+
 /// The include entries that target a single field, partitioned by whether
 /// they name the field itself or a sub-path within it.
 ///
@@ -55,9 +61,8 @@ struct FlatInclude {
 struct FieldIncludes {
     /// At least one include path equals `[i]` — the field is named directly.
     include_self: bool,
-    /// Combined top-level filter for this field (multiple `.include()` calls
-    /// are OR-ed together).
-    top_filter: Option<stmt::Expr>,
+    /// Merged query modifiers for includes ending at this field.
+    top_query: IncludeQuery,
     /// Tails of every `[i, …]` include path, with the leading index stripped.
     sub_paths: Vec<FlatInclude>,
 }
@@ -105,7 +110,7 @@ impl LowerStatement<'_, '_> {
                         returning,
                         i,
                         &field_includes.sub_paths,
-                        field_includes.top_filter,
+                        field_includes.top_query,
                     );
                 }
                 continue;
@@ -291,9 +296,9 @@ impl LowerStatement<'_, '_> {
         returning: &mut stmt::ExprRecord,
         field_index: usize,
         nested: &[FlatInclude],
-        top_filter: Option<stmt::Expr>,
+        top_query: IncludeQuery,
     ) {
-        let value = self.build_relation_subquery_inner(field_index, nested, top_filter);
+        let value = self.build_relation_subquery_inner(field_index, nested, top_query);
         returning[field_index] = if self.model_unwrap().fields[field_index].deferred {
             lazy_slot::loaded_expr(value)
         } else {
@@ -308,14 +313,14 @@ impl LowerStatement<'_, '_> {
     /// `.include(...)` goes through [`build_relation_subquery_inner`] so it
     /// can pass its nested includes and filter down.
     pub(super) fn build_relation_subquery(&mut self, field_index: usize) -> stmt::Expr {
-        self.build_relation_subquery_inner(field_index, &[], None)
+        self.build_relation_subquery_inner(field_index, &[], IncludeQuery::default())
     }
 
     fn build_relation_subquery_inner(
         &mut self,
         field_index: usize,
         nested: &[FlatInclude],
-        top_filter: Option<stmt::Expr>,
+        top_query: IncludeQuery,
     ) -> stmt::Expr {
         let field = &self.model_unwrap().fields[field_index];
 
@@ -338,12 +343,13 @@ impl LowerStatement<'_, '_> {
             }
             // `via` lowering does not thread per-relation filters through its
             // JOIN chain yet; reject rather than silently drop them.
-            if top_filter.is_some()
-                || nested
-                    .iter()
-                    .any(|fi| query_filter_expr(&fi.query).is_some())
+            if top_query.filter.is_some()
+                || top_query.order_by.is_some()
+                || nested.iter().any(|fi| query_has_modifiers(&fi.query))
             {
-                todo!("`.filter(...)` on a multi-step `via` relation include is not yet supported");
+                todo!(
+                    "include query modifiers on a multi-step `via` relation are not yet supported"
+                );
             }
             let nested_projections: Vec<stmt::Projection> =
                 nested.iter().map(|fi| fi.projection.clone()).collect();
@@ -400,9 +406,10 @@ impl LowerStatement<'_, '_> {
 
         // AND the user-supplied filter (if any) onto the join predicate; the
         // pipeline below lowers it like any other filter on the target.
-        if let Some(filter) = top_filter {
+        if let Some(filter) = top_query.filter {
             stmt.add_filter(filter);
         }
+        stmt.order_by = top_query.order_by;
 
         // Attach each non-empty remainder as a nested include on the
         // subquery, carrying any deeper-level filter forward. Empty remainders
@@ -436,11 +443,12 @@ impl FieldIncludes {
     }
 }
 
-/// Partitions includes for a field and ORs filters on the field itself.
+/// Partitions includes for a field and merges modifiers on the field itself.
 fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
     let mut include_self = false;
     let mut unfiltered_self = false;
     let mut top_filter: Option<stmt::Expr> = None;
+    let mut top_order_by = None;
     let mut sub_paths = Vec::new();
     for fi in includes {
         if let Some((first, rest)) = fi.projection.as_slice().split_first()
@@ -448,6 +456,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
         {
             if rest.is_empty() {
                 include_self = true;
+                top_order_by = fi.query.as_ref().and_then(|query| query.order_by.clone());
                 match query_filter_expr(&fi.query) {
                     Some(f) if !unfiltered_self => {
                         top_filter = Some(match top_filter.take() {
@@ -471,7 +480,10 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
     }
     FieldIncludes {
         include_self,
-        top_filter,
+        top_query: IncludeQuery {
+            filter: top_filter,
+            order_by: top_order_by,
+        },
         sub_paths,
     }
 }
@@ -488,6 +500,12 @@ fn query_filter_expr(query: &Option<stmt::Query>) -> Option<stmt::Expr> {
         stmt::ExprSet::Select(select) => select.filter.expr.clone(),
         _ => None,
     }
+}
+
+fn query_has_modifiers(query: &Option<stmt::Query>) -> bool {
+    query.as_ref().is_some_and(|query| {
+        query_filter_expr(&Some(query.clone())).is_some() || query.order_by.is_some()
+    })
 }
 
 /// Flatten an include [`stmt::Path`] into a single projection, folding any
