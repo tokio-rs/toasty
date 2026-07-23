@@ -166,19 +166,21 @@ without changes.
 ## Embedding migrations
 
 Applications that ship as a single binary can compile generated migrations
-into that binary. Enable the `migration` feature and pass the directory that
-contains `history.toml` to `embed_migrations!`:
+into that binary. Enable the `migration` feature and call
+`embed_migrations!` to embed the default `toasty/` migration directory:
 
 ```rust,ignore
+static MIGRATIONS: toasty::migration::MigrationSet = toasty::embed_migrations!();
+
 async fn migrate(db: &toasty::Db) -> toasty::Result<()> {
-    let migrations = toasty::embed_migrations!("toasty");
-    let report = migrations.apply(db).await?;
+    let report = MIGRATIONS.apply(db).await?;
 
     println!("applied {} migrations", report.applied());
     Ok(())
 }
 ```
 
+Pass a path when the migrations live outside the default `toasty/` directory.
 The path is relative to your crate's `Cargo.toml`. The macro embeds
 `history.toml` and the files under `migrations/` that it names. Snapshot files
 are not needed when applying migrations and are not embedded.

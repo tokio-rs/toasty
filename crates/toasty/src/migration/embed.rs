@@ -1,27 +1,19 @@
-use std::{borrow::Cow, collections::HashSet};
+use std::collections::HashSet;
 
 use crate::{Db, Result, schema::db::Migration as DbMigration};
 
 /// A migration SQL file and its tracking metadata.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy)]
 pub struct MigrationFile {
     id: u64,
-    name: Cow<'static, str>,
-    sql: Cow<'static, str>,
+    name: &'static str,
+    sql: &'static str,
 }
 
 impl MigrationFile {
     /// Creates a migration file.
-    pub fn new(
-        id: u64,
-        name: impl Into<Cow<'static, str>>,
-        sql: impl Into<Cow<'static, str>>,
-    ) -> Self {
-        Self {
-            id,
-            name: name.into(),
-            sql: sql.into(),
-        }
+    pub const fn new(id: u64, name: &'static str, sql: &'static str) -> Self {
+        Self { id, name, sql }
     }
 
     /// Returns the migration ID recorded in the database.
@@ -31,32 +23,30 @@ impl MigrationFile {
 
     /// Returns the migration file name.
     pub fn name(&self) -> &str {
-        &self.name
+        self.name
     }
 
     /// Returns the migration SQL.
     pub fn sql(&self) -> &str {
-        &self.sql
+        self.sql
     }
 }
 
 /// An ordered collection of migrations that can be applied to a database.
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Copy, Default)]
 pub struct MigrationSet {
-    migrations: Vec<MigrationFile>,
+    migrations: &'static [MigrationFile],
 }
 
 impl MigrationSet {
     /// Creates a migration set in application order.
-    pub fn new(migrations: impl IntoIterator<Item = MigrationFile>) -> Self {
-        Self {
-            migrations: migrations.into_iter().collect(),
-        }
+    pub const fn new(migrations: &'static [MigrationFile]) -> Self {
+        Self { migrations }
     }
 
     /// Returns the migrations in application order.
     pub fn migrations(&self) -> &[MigrationFile] {
-        &self.migrations
+        self.migrations
     }
 
     /// Applies pending migrations to `db` in order.
@@ -73,7 +63,7 @@ impl MigrationSet {
             .collect::<HashSet<_>>();
         let mut report = MigrationReport::default();
 
-        for migration in &self.migrations {
+        for migration in self.migrations {
             if applied_ids.contains(&migration.id) {
                 report.skipped += 1;
                 continue;
@@ -81,7 +71,7 @@ impl MigrationSet {
 
             conn.apply_migration(
                 migration.id,
-                &migration.name,
+                migration.name,
                 DbMigration::new_sql(migration.sql.to_string()),
             )
             .await?;

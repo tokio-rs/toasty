@@ -24,7 +24,11 @@ struct HistoryEntry {
 }
 
 pub(crate) fn generate(input: TokenStream) -> syn::Result<TokenStream> {
-    let path = syn::parse2::<LitStr>(input)?;
+    let path = if input.is_empty() {
+        LitStr::new("toasty", Span::call_site())
+    } else {
+        syn::parse2::<LitStr>(input)?
+    };
     let root = resolve_root(&path)?;
     let history_path = root.join("history.toml");
     let history_content = read_utf8(&history_path, &path, "migration history")?;
@@ -66,7 +70,7 @@ pub(crate) fn generate(input: TokenStream) -> syn::Result<TokenStream> {
         }
 
         let sql_path = migrations_dir.join(&entry.name);
-        read_utf8(&sql_path, &path, "migration SQL")?;
+        ensure_exists(&sql_path, &path, "migration SQL")?;
         let sql_path = path_literal(&sql_path, path.span())?;
         let name = LitStr::new(&entry.name, path.span());
         let id = entry.id;
@@ -77,8 +81,9 @@ pub(crate) fn generate(input: TokenStream) -> syn::Result<TokenStream> {
 
     let history_path = path_literal(&history_path, path.span())?;
     Ok(quote! {{
-        let _ = include_str!(#history_path);
-        toasty::migration::MigrationSet::new([#(#migrations),*])
+        const _: &str = include_str!(#history_path);
+        const MIGRATIONS: &[toasty::migration::MigrationFile] = &[#(#migrations),*];
+        toasty::migration::MigrationSet::new(MIGRATIONS)
     }})
 }
 
@@ -121,6 +126,24 @@ fn read_utf8(path: &Path, input: &LitStr, description: &str) -> syn::Result<Stri
             format!("failed to read {description} {}: {error}", path.display()),
         )
     })
+}
+
+fn ensure_exists(path: &Path, input: &LitStr, description: &str) -> syn::Result<()> {
+    let exists = fs::exists(path).map_err(|error| {
+        syn::Error::new(
+            input.span(),
+            format!("failed to check {description} {}: {error}", path.display()),
+        )
+    })?;
+
+    if exists {
+        Ok(())
+    } else {
+        Err(syn::Error::new(
+            input.span(),
+            format!("missing {description} {}", path.display()),
+        ))
+    }
 }
 
 fn path_literal(path: &Path, span: Span) -> syn::Result<LitStr> {

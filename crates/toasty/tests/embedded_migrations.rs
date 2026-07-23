@@ -21,6 +21,10 @@ struct TestModel {
     id: u64,
 }
 
+static BASE_MIGRATIONS: toasty::migration::MigrationSet =
+    toasty::embed_migrations!("tests/fixtures/embedded_migrations/base");
+static DEFAULT_MIGRATIONS: toasty::migration::MigrationSet = toasty::embed_migrations!();
+
 #[derive(Debug, Default)]
 struct MigrationState {
     applied: Mutex<Vec<u64>>,
@@ -128,14 +132,27 @@ async fn setup_db() -> (toasty::Db, Arc<MigrationState>) {
     (db, state)
 }
 
+#[test]
+fn embedded_migrations_can_initialize_static_sets_and_default_to_toasty_directory() {
+    let base = BASE_MIGRATIONS.migrations();
+    assert_eq!(base.len(), 1);
+    assert_eq!(base[0].id(), 101);
+    assert_eq!(base[0].name(), "0000_base.sql");
+
+    let default = DEFAULT_MIGRATIONS.migrations();
+    assert_eq!(default.len(), 1);
+    assert_eq!(default[0].id(), 303);
+    assert_eq!(default[0].name(), "0000_default.sql");
+    assert!(default[0].sql().contains("default_embedded_items"));
+}
+
 #[tokio::test]
 async fn embedded_migrations_apply_per_database_and_skip_applied_ids() {
     let (base_db, base_state) = setup_db().await;
     let (log_db, log_state) = setup_db().await;
-    let base = toasty::embed_migrations!("tests/fixtures/embedded_migrations/base");
     let log = toasty::embed_migrations!("tests/fixtures/embedded_migrations/log");
 
-    let base_report = base.apply(&base_db).await.unwrap();
+    let base_report = BASE_MIGRATIONS.apply(&base_db).await.unwrap();
     let log_report = log.apply(&log_db).await.unwrap();
 
     assert_eq!(base_report.applied(), 1);
@@ -147,7 +164,7 @@ async fn embedded_migrations_apply_per_database_and_skip_applied_ids() {
     assert!(base_state.sql.lock().unwrap()[0].contains("base_embedded_items"));
     assert!(log_state.sql.lock().unwrap()[0].contains("log_embedded_items"));
 
-    let repeated = base.apply(&base_db).await.unwrap();
+    let repeated = BASE_MIGRATIONS.apply(&base_db).await.unwrap();
     assert_eq!(repeated.applied(), 0);
     assert_eq!(repeated.skipped(), 1);
 }

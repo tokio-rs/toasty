@@ -18,10 +18,11 @@ use proc_macro::TokenStream;
 
 /// Embeds a Toasty migration directory into the application binary.
 ///
-/// The path is relative to `CARGO_MANIFEST_DIR` and must contain
-/// `history.toml` plus the `migrations/*.sql` files named by that history.
-/// The macro is available through `toasty` when its `migration` feature is
-/// enabled.
+/// With no argument, the macro reads `toasty/` relative to
+/// `CARGO_MANIFEST_DIR`. Pass a string literal to embed a different directory
+/// that contains `history.toml` plus the `migrations/*.sql` files named by
+/// that history. The macro is available through `toasty` when its `migration`
+/// feature is enabled.
 #[proc_macro]
 pub fn embed_migrations(input: TokenStream) -> TokenStream {
     match embed_migrations::generate(input.into()) {

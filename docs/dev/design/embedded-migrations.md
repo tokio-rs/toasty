@@ -22,16 +22,26 @@ source naming and startup ordering to the application.
 ## User-facing API
 
 Enable Toasty's `migration` feature, generate migrations with `toasty-cli`,
-then embed the directory that contains `history.toml` and `migrations/`:
+then embed the generated `toasty/` directory:
 
 ```rust
-let migrations = toasty::embed_migrations!("toasty");
+static MIGRATIONS: toasty::migration::MigrationSet = toasty::embed_migrations!();
+
+let report = MIGRATIONS.apply(&db).await?;
+println!("applied {} migrations", report.applied());
+```
+
+Pass a path when the migrations live outside the default `toasty/`
+directory:
+
+```rust
+let migrations = toasty::embed_migrations!("db/primary");
 let report = migrations.apply(&db).await?;
 
 println!("applied {} migrations", report.applied());
 ```
 
-The path is relative to the invoking crate's `CARGO_MANIFEST_DIR`. The macro
+Paths are relative to the invoking crate's `CARGO_MANIFEST_DIR`. The macro
 reads the same directory layout as `toasty-cli`:
 
 ```text
@@ -61,11 +71,12 @@ The application controls which set applies to each database and when it runs.
 
 ## Behavior
 
-`embed_migrations!` validates the history file and referenced SQL files while
-compiling the application. A missing directory, unsupported history version,
-duplicate migration ID, duplicate migration name, missing SQL file, invalid
-UTF-8 file, or migration name containing path traversal produces a compiler
-error at the macro invocation.
+`embed_migrations!` defaults to the `toasty/` directory when called without an
+argument. It validates the history file and referenced SQL files while compiling
+the application. A missing directory, unsupported history version, duplicate
+migration ID, duplicate migration name, missing SQL file, invalid UTF-8 history
+file, or migration name containing path traversal produces a compiler error at
+the macro invocation.
 
 `MigrationSet::apply` acquires a pooled connection from the `Db` and asks it
 for applied migration IDs. It processes embedded entries in `history.toml` order, skips
