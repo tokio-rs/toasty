@@ -174,7 +174,7 @@ types, and supported `jiff` temporal types can appear inside a document.
 Toasty uses canonical text encodings for temporal and decimal leaves so
 filters compare the same values that reads reconstruct.
 
-Current restrictions are explicit:
+Current restrictions:
 
 - Embedded enums cannot be encoded inside a document.
 - Tuple structs are rejected because their fields have no names for
