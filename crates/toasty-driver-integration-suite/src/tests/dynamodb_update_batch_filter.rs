@@ -14,6 +14,29 @@
 
 use crate::prelude::*;
 
+#[driver_test(id(ID), requires(not(sql)), scenario(crate::scenarios::user_with_age))]
+pub async fn update_via_secondary_index_uses_primary_key_type(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User {
+        name: "Alice",
+        age: 7,
+    })
+    .exec(&mut db)
+    .await?;
+
+    User::filter_by_age(7)
+        .update()
+        .name("updated")
+        .exec(&mut db)
+        .await?;
+
+    let users = User::filter_by_age(7).exec(&mut db).await?;
+    assert_struct!(users, [{ name: "updated", age: 7 }]);
+
+    Ok(())
+}
+
 /// All items match the filter — every key is updated.
 #[driver_test(requires(not(sql)), scenario(crate::scenarios::tagged_item))]
 pub async fn batch_update_filter_all_match(t: &mut Test) -> Result<()> {
