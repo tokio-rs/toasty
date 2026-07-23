@@ -144,6 +144,26 @@ impl<'a> MigrationStatement<'a> {
                             )
                         });
 
+                    // Drop existing indices before changing columns because they may
+                    // reference a column that is being removed or altered.
+                    for item in indices.iter() {
+                        match item {
+                            diff::Index::Drop(index) => {
+                                result.push(Self::new(
+                                    Statement::drop_index(index),
+                                    Cow::Borrowed(schema_diff.previous()),
+                                ));
+                            }
+                            diff::Index::Alter { previous, .. } => {
+                                result.push(Self::new(
+                                    Statement::drop_index(previous),
+                                    Cow::Borrowed(schema_diff.previous()),
+                                ));
+                            }
+                            diff::Index::Create(_) => {}
+                        }
+                    }
+
                     if needs_recreation {
                         Self::emit_table_recreation(
                             &mut result,
@@ -157,7 +177,8 @@ impl<'a> MigrationStatement<'a> {
                         Self::emit_column_changes(&mut result, schema, columns, capability);
                     }
 
-                    // Indices diff
+                    // Create new indices after the column changes so they reference
+                    // the next schema's column definitions.
                     for item in indices.iter() {
                         match item {
                             diff::Index::Create(index) => {
@@ -166,22 +187,13 @@ impl<'a> MigrationStatement<'a> {
                                     Cow::Borrowed(schema_diff.next()),
                                 ));
                             }
-                            diff::Index::Drop(index) => {
-                                result.push(Self::new(
-                                    Statement::drop_index(index),
-                                    Cow::Borrowed(schema_diff.previous()),
-                                ));
-                            }
-                            diff::Index::Alter { previous, next } => {
-                                result.push(Self::new(
-                                    Statement::drop_index(previous),
-                                    Cow::Borrowed(schema_diff.previous()),
-                                ));
+                            diff::Index::Alter { next, .. } => {
                                 result.push(Self::new(
                                     Statement::create_index(next),
                                     Cow::Borrowed(schema_diff.next()),
                                 ));
                             }
+                            diff::Index::Drop(_) => {}
                         }
                     }
                 }
