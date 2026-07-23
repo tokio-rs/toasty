@@ -17,9 +17,9 @@
 <a href=#17 id=17 data-nosnippet>17</a>
 <a href=#18 id=18 data-nosnippet>18</a><span class="kw">impl </span>Statement {
 <a href=#19 id=19 data-nosnippet>19</a>    <span class="doccomment">/// Adds a column to a table.
-<a href=#20 id=20 data-nosnippet>20</a>    </span><span class="kw">pub fn </span>add_column(column: <span class="kw-2">&amp;</span>Column, capability: <span class="kw-2">&amp;</span>Capability) -&gt; <span class="self">Self </span>{
+<a href=#20 id=20 data-nosnippet>20</a>    </span><span class="kw">pub fn </span>add_column(table: TableId, column: <span class="kw-2">&amp;</span>Column, capability: <span class="kw-2">&amp;</span>Capability) -&gt; <span class="self">Self </span>{
 <a href=#21 id=21 data-nosnippet>21</a>        AddColumn {
-<a href=#22 id=22 data-nosnippet>22</a>            table: column.id.table,
+<a href=#22 id=22 data-nosnippet>22</a>            table,
 <a href=#23 id=23 data-nosnippet>23</a>            column: ColumnDef::from_schema(column, <span class="kw-2">&amp;</span>capability.storage_types, capability),
 <a href=#24 id=24 data-nosnippet>24</a>        }
 <a href=#25 id=25 data-nosnippet>25</a>        .into()
