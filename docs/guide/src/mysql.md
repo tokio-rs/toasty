@@ -128,7 +128,7 @@ s)` for `bigdecimal::BigDecimal` here. PostgreSQL falls back to text
 for `BigDecimal`; MySQL is currently the only backend that exchanges
 it as a native decimal value over the wire.
 
-**[`Vec<scalar>`](./field-options.md#scalar-arrays) goes in a `JSON`
+**[`Vec<scalar>`](./vec-scalar-fields.md) goes in a `JSON`
 column.** Toasty serializes the list to a JSON array at bind time and
 parses it back on read. Array predicates (`contains`, `is_superset`,
 `intersects`, `len`, `is_empty`) lower to MySQL's `JSON_CONTAINS`,

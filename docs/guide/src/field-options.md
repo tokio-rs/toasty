@@ -1,8 +1,7 @@
 # Field Options
 
-Toasty provides several field-level attributes to control how fields map to
-database columns: custom column names, explicit types, default values, update
-expressions, and JSON serialization.
+Field-level attributes control column names, explicit types, default values,
+and update expressions.
 
 ## Custom column names
 
@@ -77,6 +76,8 @@ Supported type values:
 | `uint`, `u8`, `u16`, `u32`, `u64` | Unsigned integer |
 | `text` | Text |
 | `varchar(N)` | Variable-length string with max length |
+| `json` | Native JSON on PostgreSQL and MySQL |
+| `jsonb` | Native binary JSON on PostgreSQL |
 | `numeric`, `numeric(P, S)` | Decimal with optional precision and scale |
 | `binary(N)`, `blob` | Binary data |
 | `timestamp(P)` | Timestamp with precision |
@@ -354,127 +355,12 @@ struct Event {
 }
 ```
 
-## JSON serialization
+## JSON-encoded fields
 
-Wrap a field type in [`toasty::Json<T>`][json-doc] to store it as a JSON
-string in the database. The inner `T` must implement `serde::Serialize`
-and `serde::Deserialize`.
-
-[json-doc]: https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html
-
-Reach for `Json<T>` when the field is a serde-typed value that Toasty
-doesn't natively support — for example, a third-party type or a struct
-you don't want to declare as `#[derive(toasty::Embed)]`. For
-`Vec<scalar>` fields, prefer the native form (`tags: Vec<String>`,
-documented in [Defining Models](./defining-models.md)) which is
-queryable and supports collection mutations via `stmt::push`,
-`stmt::extend`, `stmt::pop`, `stmt::remove`, `stmt::remove_at`, and
-`stmt::clear`.
-
-```rust,ignore
-# use toasty::Model;
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Metadata {
-    version: u32,
-    labels: Vec<String>,
-}
-
-#[derive(Debug, toasty::Model)]
-struct Post {
-    #[key]
-    #[auto]
-    id: u64,
-
-    title: String,
-
-    // Native `Vec<scalar>` storage — no wrapper needed.
-    tags: Vec<String>,
-
-    // Arbitrary serde type — `Json<T>` stores it as one opaque JSON
-    // column. Toasty cannot query into it.
-    meta: toasty::Json<Metadata>,
-}
-```
-
-Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The default database column type is `TEXT`.
-You can override this with `#[column(type = ...)]` if needed — for example,
-`#[column(type = varchar(1000))]` to limit the stored JSON size on databases
-that support `varchar`.
-
-```rust,ignore
-# use toasty::Model;
-# use serde::{Serialize, Deserialize};
-# #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-# struct Metadata {
-#     version: u32,
-#     labels: Vec<String>,
-# }
-# #[derive(Debug, toasty::Model)]
-# struct Post {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     title: String,
-#     tags: Vec<String>,
-#     meta: toasty::Json<Metadata>,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let post = toasty::create!(Post {
-    title: "Hello",
-    tags: vec!["rust".to_string(), "toasty".to_string()],
-    // The bare value is accepted via the `IntoExpr<Json<T>> for T`
-    // blanket — wrapping with `toasty::Json(...)` is optional.
-    meta: Metadata {
-        version: 1,
-        labels: vec!["alpha".to_string()],
-    },
-})
-.exec(&mut db)
-.await?;
-
-assert_eq!(post.tags, vec!["rust", "toasty"]);
-assert_eq!(post.meta.version, 1);
-# Ok(())
-# }
-```
-
-### Nullable JSON fields
-
-`Json<T>` composes with `Option` in two distinct, both-useful ways
-depending on whether `None` should land in a SQL `NULL` cell or be
-encoded inside the JSON itself:
-
-```rust,ignore
-# use toasty::Model;
-# use std::collections::HashMap;
-# #[derive(Debug, toasty::Model)]
-# struct Post {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     title: String,
-// `None` maps to SQL `NULL`; `Some(v)` to a JSON string.
-metadata: Option<toasty::Json<HashMap<String, String>>>,
-
-// `None` maps to the JSON literal `"null"` (still a non-null string);
-// `Some(v)` to a JSON string.
-labels: toasty::Json<Option<Vec<String>>>,
-# }
-```
-
-`Option<Json<T>>` is the common case — pick it when the database should
-see a `NULL` for missing values. Use `Json<Option<T>>` when callers
-expect the column to always contain valid JSON.
-
-## Scalar arrays
-
-A `Vec<T>` field where `T` is a scalar type stores a homogeneous,
-ordered collection in a single column. These fields have their own
-guide page covering the element types, storage per driver, creation,
-querying, and updates — see [`Vec<scalar>` Fields](./vec-scalar-fields.md).
+`toasty::Json<T>` and `serde_json::Value` fields require
+`#[column(type = text)]`, `varchar(...)`, `json`, or `jsonb`. See [JSON
+Encoding](./json-encoding.md) for feature setup, storage support, null
+representations, setters, deferred loading, and query limitations.
 
 ## Attribute summary
 
@@ -486,11 +372,6 @@ querying, and updates — see [`Vec<scalar>` Fields](./vec-scalar-fields.md).
 | `#[update(expr)]` | Automatic value | Create, update, and both upsert branches |
 | `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create and the create branch of upsert |
 | `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create, update, and both upsert branches |
-
-JSON storage is handled by the [`toasty::Json<T>`][json-doc] field
-wrapper — see [JSON serialization](#json-serialization) above. Use
-`Option<Json<T>>` to allow SQL `NULL`, or `Json<Option<T>>` to embed
-the JSON literal `"null"` instead.
 
 See [Concurrency Control](./concurrency-control.md) for the `#[version]`
 attribute.

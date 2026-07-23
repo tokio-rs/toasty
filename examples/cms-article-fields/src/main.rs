@@ -67,6 +67,7 @@ struct Article {
     // A large column omitted from the default SELECT; load it on demand with `.include()`.
     body: toasty::Deferred<String>,
 
+    #[column(type = text)]
     seo: toasty::Json<SeoMeta>,
 }
 

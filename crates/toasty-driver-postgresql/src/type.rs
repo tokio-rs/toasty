@@ -31,6 +31,8 @@ pub(crate) fn to_postgres_type(ty: &db::Type) -> &'static Type {
         // encoding (`#[document(text)]`) is not yet wired up.
         db::Type::Document { binary: true } => &Type::JSONB,
         db::Type::Document { binary: false } => &Type::JSON,
+        db::Type::Json => &Type::JSON,
+        db::Type::Jsonb => &Type::JSONB,
         _ => todo!("to_postgres_type; db_ty={ty:#?}"),
     }
 }

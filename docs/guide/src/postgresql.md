@@ -121,7 +121,7 @@ PostgreSQL. No configuration is required.
 Primary keys and unique constraints can be conflict targets, and
 `on_create`, `on_update`, and `or_ignore` are supported.
 
-**Native arrays for [`Vec<scalar>` fields](./field-options.md#scalar-arrays).**
+**Native arrays for [`Vec<scalar>` fields](./vec-scalar-fields.md).**
 A `tags: Vec<String>` field is a `text[]` column. The array predicates
 (`contains`, `is_superset`, `intersects`, `len`, `is_empty`) lower to
 PostgreSQL's native operators (`= ANY(col)`, `@>`, `&&`,

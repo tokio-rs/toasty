@@ -43,9 +43,10 @@ Toasty supports these Rust types as model fields:
 | `f32`, `f64` | Floating point |
 | `uuid::Uuid` | UUID |
 | `Vec<u8>` | Binary / Blob |
-| `Vec<T>` (T scalar, not `u8`) | Native array column on PostgreSQL (`text[]`, `int8[]`, …); JSON on MySQL / SQLite; List `L` on DynamoDB. See [field-options.md](./field-options.md#scalar-arrays). |
+| `Vec<T>` (T scalar, not `u8`) | Native array column on PostgreSQL (`text[]`, `int8[]`, …); JSON on MySQL / SQLite; List `L` on DynamoDB. See [`Vec<scalar>` Fields](./vec-scalar-fields.md). |
 | `Option<T>` | Nullable version of `T` |
 | Embedded types (`#[derive(toasty::Embed)]`) | Flattened into parent table columns (see [Embedded Types](./embedded-types.md)) |
+| Document fields (`#[document]`) | One structured column whose scalar leaves remain queryable (see [`#[document]` Fields](./document-fields.md)) |
 
 With optional feature flags:
 
@@ -57,6 +58,7 @@ With optional feature flags:
 | `jiff` | `jiff::civil::Date` | Date |
 | `jiff` | `jiff::civil::Time` | Time |
 | `jiff` | `jiff::civil::DateTime` | DateTime |
+| `serde` | `toasty::Json<T>`, `serde_json::Value` | Explicit text, `json`, or `jsonb` column (see [JSON Encoding](./json-encoding.md)) |
 
 Enable feature flags in your `Cargo.toml`:
 

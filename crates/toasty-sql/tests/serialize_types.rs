@@ -874,6 +874,39 @@ fn list_sqlite_text() {
     .assert_eq(&render_type("sqlite", Type::List(Box::new(Type::Integer(8)))).join("\n"));
 }
 
+#[test]
+fn native_json_postgresql() {
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" JSON NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Json).join("\n"));
+}
+
+#[test]
+fn native_json_mysql() {
+    expect![[r#"
+        CREATE TABLE `t` (
+            `id` BIGINT NOT NULL,
+            `col` JSON NOT NULL,
+            PRIMARY KEY (`id`)
+        );"#]]
+    .assert_eq(&render_type("mysql", Type::Json).join("\n"));
+}
+
+#[test]
+fn native_jsonb_postgresql() {
+    expect![[r#"
+        CREATE TABLE "t" (
+            "id" BIGINT NOT NULL,
+            "col" JSONB NOT NULL,
+            PRIMARY KEY ("id")
+        );"#]]
+    .assert_eq(&render_type("postgresql", Type::Jsonb).join("\n"));
+}
+
 // ---------------------------------------------------------------------------
 // Custom (pass-through)
 // ---------------------------------------------------------------------------

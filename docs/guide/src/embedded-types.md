@@ -459,9 +459,8 @@ struct Task {
 ```
 
 Every discriminant must fit both the enum-level type and any narrower
-field-level override. `#[document]` is outside these rules: Toasty currently
-rejects enum embeds inside document-stored structs because enum document
-encoding is not supported.
+field-level override. [`#[document]` storage](./document-fields.md) currently
+rejects enum embeds because enum document encoding is not supported.
 
 An enum cannot mix string and integer discriminants. Integer-discriminant enums
 do not support `rename_all`.
