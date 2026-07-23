@@ -21,6 +21,15 @@ use toasty_core::schema::{
             …) or a wrapper around one (`Option<_>`, `Vec<_>`, `Box<_>`, `Arc<_>`, `Rc<_>`)."
 )]
 pub trait Field: Load<Output = Self> {
+    /// Whether this field type requires `#[column(type = ...)]`.
+    ///
+    /// Generated model code evaluates this constant when a field omits an
+    /// explicit column type. Wrapper implementations propagate the value from
+    /// their inner field type, which lets the Rust type checker resolve aliases
+    /// and nested wrappers without the derive macro inspecting type syntax.
+    #[doc(hidden)]
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = false;
+
     /// The expression-level type of this field.
     ///
     /// This drives both the field's path target (the second parameter of
@@ -379,7 +388,18 @@ impl_scalar!(rust_decimal::Decimal);
 #[cfg(feature = "bigdecimal")]
 impl_scalar!(bigdecimal::BigDecimal);
 
+#[cfg(feature = "jiff")]
+impl_scalar!(
+    jiff::Timestamp,
+    jiff::Zoned,
+    jiff::civil::Date,
+    jiff::civil::Time,
+    jiff::civil::DateTime
+);
+
 impl<T: Field> Field for Option<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -426,6 +446,8 @@ impl<T: Field> Field for Option<T> {
 }
 
 impl<T: Field> Field for std::sync::Arc<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -464,6 +486,8 @@ impl<T: Field> Field for std::sync::Arc<T> {
 }
 
 impl<T: Field> Field for std::rc::Rc<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;
@@ -502,6 +526,8 @@ impl<T: Field> Field for std::rc::Rc<T> {
 }
 
 impl<T: Field> Field for Box<T> {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
+
     type ExprTarget = Self;
     type Path<Origin> = stmt::Path<Origin, Self>;
     type ListPath<Origin> = stmt::Path<Origin, List<Self::ExprTarget>>;

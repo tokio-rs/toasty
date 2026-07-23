@@ -891,7 +891,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         if matches!(self.cx, LoweringContext::Returning(_))
                             && self.model_unwrap().fields[*index].ty.is_relation() =>
                     {
-                        *expr = self.build_relation_subquery(*index, &[]);
+                        *expr = self.build_relation_subquery(*index);
                     }
                     stmt::ExprReference::Field { nesting, index } => {
                         *expr = self.lower_expr_field(*nesting, *index);

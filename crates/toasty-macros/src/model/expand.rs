@@ -43,6 +43,7 @@ impl Expand<'_> {
         let update_builder = self.expand_update_builder();
         let upsert_builders = self.expand_upsert_builders();
         let storage_compat_checks = self.expand_storage_compat_checks();
+        let column_type_requirement_checks = self.expand_column_type_requirement_checks();
         let auto_compat_checks = self.expand_auto_compat_checks();
         let version_compat_checks = self.expand_version_compat_checks();
         let indexable_checks = self.expand_indexable_checks();
@@ -56,6 +57,7 @@ impl Expand<'_> {
             #update_builder
             #upsert_builders
             #storage_compat_checks
+            #column_type_requirement_checks
             #auto_compat_checks
             #version_compat_checks
             #indexable_checks
@@ -101,6 +103,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
     let storage_compat_checks = expand.expand_storage_compat_checks();
+    let column_type_requirement_checks = expand.expand_column_type_requirement_checks();
     let indexable_checks = expand.expand_indexable_checks();
     let newtype_marker = expand.expand_embedded_newtype_marker();
     let newtype_indexable_impl = expand.expand_embedded_indexable_impl();
@@ -118,6 +121,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #embedded_model_impls
 
         #storage_compat_checks
+        #column_type_requirement_checks
         #indexable_checks
 
         impl #toasty::Embed for #model_ident {
@@ -256,6 +260,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
+    let column_type_requirement_checks = e.expand_column_type_requirement_checks();
     let discriminant_storage_compat_impls = e.expand_enum_discriminant_compat_impls();
     let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
@@ -277,6 +282,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #enum_field_list_struct
 
         #storage_compat_checks
+        #column_type_requirement_checks
         #discriminant_storage_compat_impls
         #shared_column_checks
         #indexable_checks

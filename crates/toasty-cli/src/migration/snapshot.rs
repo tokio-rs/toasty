@@ -27,7 +27,7 @@ impl SnapshotCommand {
         let snapshot = Snapshot::new(toasty::schema::db::Schema::clone(&db.schema().db));
 
         // Print the snapshot with nice formatting
-        let snapshot_str = snapshot.to_string();
+        let snapshot_str = snapshot.to_toml_string()?;
         for line in snapshot_str.lines() {
             if line.starts_with('[') {
                 println!("  {}", style(line).yellow().bold());

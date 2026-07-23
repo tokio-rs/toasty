@@ -310,8 +310,10 @@ use proc_macro::TokenStream;
 /// ## JSON-encoded fields via [`Json<T>`](toasty::stmt::Json)
 ///
 /// Wrap a serde-typed value in [`toasty::Json<T>`](toasty::stmt::Json) to
-/// store it as a JSON string in the database. Requires the `serde` feature
-/// and that `T` implements `serde::Serialize` and `serde::Deserialize`.
+/// serialize it as JSON in the database. Every JSON field must select its
+/// database column type with `#[column(type = ...)]`. Use `text` for
+/// text-backed JSON. JSON fields require the `serde` feature and
+/// `T: serde::Serialize + serde::Deserialize`.
 ///
 /// ```
 /// # use toasty::Model;
@@ -320,6 +322,7 @@ use proc_macro::TokenStream;
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
+/// #[column(type = text)]
 /// tags: toasty::Json<Vec<String>>,
 /// # }
 /// ```
@@ -335,6 +338,7 @@ use proc_macro::TokenStream;
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
+/// #[column(type = text)]
 /// metadata: Option<toasty::Json<HashMap<String, String>>>,
 /// # }
 /// ```
@@ -769,6 +773,7 @@ use proc_macro::TokenStream;
 ///
 ///     title: String,
 ///
+///     #[column(type = text)]
 ///     tags: toasty::Json<Vec<String>>,
 ///
 ///     #[index]

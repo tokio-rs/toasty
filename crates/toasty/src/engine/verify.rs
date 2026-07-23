@@ -218,6 +218,8 @@ impl stmt::Visit for Verify<'_, '_> {
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
         stmt::visit::visit_stmt_select(self, i);
 
+        self.verify_include_filters(i);
+
         VerifyExpr {
             schema: self.schema,
             model: i.source.model_id_unwrap(),
@@ -305,6 +307,47 @@ impl Verify<'_, '_> {
                 }
             }
             _ => todo!("unsupported offset expression; stmt={i:#?}"),
+        }
+    }
+
+    /// Reject include filters on required (non-nullable) 1-1 relations: the
+    /// loaded value has no way to represent a non-matching row, so the whole
+    /// query would fail with `RecordNotFound` depending on the data.
+    ///
+    /// Variant-rooted paths (relations inside embedded enums) are not
+    /// resolvable here and pass through unchecked.
+    fn verify_include_filters(&mut self, i: &stmt::Select) {
+        for include in i.returning.model_includes() {
+            let has_filter = match include.query.as_ref().map(|query| &query.body) {
+                Some(stmt::ExprSet::Select(select)) => select.filter.expr.is_some(),
+                Some(_) | None => false,
+            };
+            if !has_filter {
+                continue;
+            }
+            let Some(model_id) = include.path.root.as_model() else {
+                continue;
+            };
+            let root = self.schema.app.model(model_id);
+            let Some(field) = self
+                .schema
+                .app
+                .resolve_field(root, &include.path.projection)
+            else {
+                continue;
+            };
+            let required_one = match &field.ty {
+                app::FieldTy::Has(rel) => rel.is_one() && !field.nullable,
+                app::FieldTy::BelongsTo(_) => !field.nullable,
+                _ => false,
+            };
+            if required_one {
+                self.record(Error::invalid_statement(format!(
+                    "cannot filter the include of required relation `{}`; \
+                     filter the parent query instead",
+                    field.name,
+                )));
+            }
         }
     }
 

@@ -117,6 +117,12 @@ pub struct Capability {
     /// Use [`Capability::validate`] to check this invariant.
     pub native_varchar: bool,
 
+    /// Whether the database supports native `JSON` columns.
+    pub native_json: bool,
+
+    /// Whether the database supports native `JSONB` columns.
+    pub native_jsonb: bool,
+
     /// Whether the database has native support for Timestamp types.
     pub native_timestamp: bool,
 
@@ -592,6 +598,8 @@ impl Capability {
         max_identifier_length: None,
 
         native_varchar: true,
+        native_json: false,
+        native_jsonb: false,
 
         // SQLite does not have native enum types; uses TEXT + CHECK
         native_enum: false,
@@ -687,6 +695,8 @@ impl Capability {
         // PostgreSQL has CREATE TYPE ... AS ENUM
         native_enum: true,
         named_enum_types: true,
+        native_json: true,
+        native_jsonb: true,
 
         // PostgreSQL has native date/time types
         native_timestamp: true,
@@ -746,6 +756,7 @@ impl Capability {
         // MySQL has inline ENUM('a', 'b') column types
         native_enum: true,
         named_enum_types: false,
+        native_json: true,
 
         // MySQL has native date/time types
         native_timestamp: true,
@@ -823,6 +834,8 @@ impl Capability {
         // S, N, or B — BOOL is not a valid key attribute type.
         bool_key_type: false,
         native_varchar: false,
+        native_json: false,
+        native_jsonb: false,
         native_enum: false,
         named_enum_types: false,
 

@@ -34,6 +34,8 @@ pub mod tag {
 
     pub struct Text;
     pub struct VarChar;
+    pub struct Json;
+    pub struct Jsonb;
 
     pub struct Binary;
     pub struct Blob;
@@ -157,6 +159,17 @@ impl CompatibleWith<tag::F64> for f32 {}
 
 impl CompatibleWith<tag::Text> for String {}
 impl CompatibleWith<tag::VarChar> for String {}
+
+// `Json<T>` serializes through Toasty's string expression type. It supports
+// text storage and the native JSON types recognized by the SQL drivers.
+#[cfg(feature = "serde")]
+impl<T> CompatibleWith<tag::Text> for crate::Json<T> {}
+#[cfg(feature = "serde")]
+impl<T> CompatibleWith<tag::VarChar> for crate::Json<T> {}
+#[cfg(feature = "serde")]
+impl<T> CompatibleWith<tag::Json> for crate::Json<T> {}
+#[cfg(feature = "serde")]
+impl<T> CompatibleWith<tag::Jsonb> for crate::Json<T> {}
 
 impl CompatibleWith<tag::Binary> for Vec<u8> {}
 impl CompatibleWith<tag::Blob> for Vec<u8> {}

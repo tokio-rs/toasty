@@ -28,4 +28,7 @@ fn main() {
     let _ = Item::fields().r#count();
     let _ = Item::fields().r#all();
     let _ = Item::fields().r#filter();
+    let _ = Item::fields()
+        .r#filter()
+        .filter(Comment::fields().id().eq(1));
 }

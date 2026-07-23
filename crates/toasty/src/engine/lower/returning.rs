@@ -37,7 +37,7 @@ impl LowerStatement<'_, '_> {
     pub(super) fn prepare_model_returning_for_context(
         &self,
         returning: &mut stmt::Expr,
-        include_paths: &mut Vec<stmt::Path>,
+        includes: &mut Vec<stmt::Include>,
         is_insert: bool,
     ) {
         let model = self.model_unwrap();
@@ -46,8 +46,8 @@ impl LowerStatement<'_, '_> {
         };
 
         if is_insert {
-            include_paths.retain(|path| {
-                !first_model_field(path, model.id)
+            includes.retain(|inc| {
+                !first_model_field(&inc.path, model.id)
                     .is_some_and(|field| is_insert_local_eager_relation(&model.fields[field].ty))
             });
         }
@@ -68,7 +68,10 @@ impl LowerStatement<'_, '_> {
                 continue;
             }
 
-            include_paths.push(stmt::Path::field(model.id, field.id.index));
+            includes.push(stmt::Include::new(stmt::Path::field(
+                model.id,
+                field.id.index,
+            )));
         }
     }
 

@@ -202,6 +202,8 @@ mod kw {
 
     syn::custom_keyword!(text);
     syn::custom_keyword!(varchar);
+    syn::custom_keyword!(json);
+    syn::custom_keyword!(jsonb);
 
     syn::custom_keyword!(numeric);
 
@@ -221,6 +223,8 @@ pub enum ColumnType {
     Float(u8),
     Text,
     VarChar(u64),
+    Json,
+    Jsonb,
     Numeric(Option<(u32, u32)>),
     Binary(u64),
     Blob,
@@ -256,7 +260,12 @@ impl syn::parse::Parse for ColumnType {
     fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
         let lookahead = input.lookahead1();
         if lookahead.peek(syn::LitStr) {
-            return Ok(Self::Custom(input.parse()?));
+            let custom: syn::LitStr = input.parse()?;
+            return Ok(match custom.value().to_ascii_lowercase().as_str() {
+                "json" => Self::Json,
+                "jsonb" => Self::Jsonb,
+                _ => Self::Custom(custom),
+            });
         }
 
         macro_rules! peek_ident {
@@ -298,6 +307,8 @@ impl syn::parse::Parse for ColumnType {
 
         peek_ident!(text, Text);
         peek_ident_paren_int!(varchar, VarChar);
+        peek_ident!(json, Json);
+        peek_ident!(jsonb, Jsonb);
 
         // numeric or numeric(precision, scale)
         if lookahead.peek(kw::numeric) {
@@ -376,6 +387,8 @@ impl ColumnType {
             Self::Float(8) => quote! { #tag::F64 },
             Self::Text => quote! { #tag::Text },
             Self::VarChar(_) => quote! { #tag::VarChar },
+            Self::Json => quote! { #tag::Json },
+            Self::Jsonb => quote! { #tag::Jsonb },
             Self::Binary(_) => quote! { #tag::Binary },
             Self::Blob => quote! { #tag::Blob },
             Self::Timestamp(_) => quote! { #tag::Timestamp },
@@ -407,6 +420,8 @@ impl ColumnType {
             Self::Float(size) => quote! { #toasty::core::schema::db::Type::Float(#size) },
             Self::Text => quote! { #toasty::core::schema::db::Type::Text },
             Self::VarChar(size) => quote! { #toasty::core::schema::db::Type::VarChar(#size) },
+            Self::Json => quote! { #toasty::core::schema::db::Type::Json },
+            Self::Jsonb => quote! { #toasty::core::schema::db::Type::Jsonb },
             Self::Numeric(None) => quote! { #toasty::core::schema::db::Type::Numeric(None) },
             Self::Numeric(Some((precision, scale))) => {
                 quote! { #toasty::core::schema::db::Type::Numeric(Some((#precision, #scale))) }
@@ -429,7 +444,9 @@ impl ColumnType {
                     "ColumnType::Enum should be expanded via expand_enum_storage_ty, not expand_with"
                 )
             }
-            Self::Custom(custom) => quote! { #toasty::core::schema::db::Type::Custom(#custom) },
+            Self::Custom(custom) => {
+                quote! { #toasty::core::schema::db::Type::Custom(#custom.to_string()) }
+            }
         }
     }
 }

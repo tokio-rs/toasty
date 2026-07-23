@@ -186,6 +186,9 @@ pub use func_last_insert_id::FuncLastInsertId;
 mod func_unnest;
 pub use func_unnest::FuncUnnest;
 
+mod include;
+pub use include::Include;
+
 mod insert;
 pub use insert::{Insert, Upsert, UpsertAction, UpsertTarget};
 

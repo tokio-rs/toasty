@@ -5,7 +5,7 @@ use toasty_core::{schema::db, stmt};
 
 use std::fmt;
 
-/// A field wrapper that stores `T` as a JSON-encoded string in the database.
+/// A field wrapper that serializes `T` as JSON in a database column.
 ///
 /// Use `Json<T>` as a model field type when the column has no native database
 /// representation for `T` — for example, a serde-derived struct, a `HashMap`,
@@ -14,9 +14,9 @@ use std::fmt;
 /// [`serde::Deserialize`](serde::Deserialize). The value is JSON-encoded on
 /// insert and update, and decoded on read.
 ///
-/// The column is stored as `TEXT` (or the backend equivalent). Use a
-/// `#[column(type = "jsonb")]` annotation (or similar) on the field if a
-/// driver-native JSON column type is preferred.
+/// Every `Json<T>` field must select its database column type with
+/// `#[column(type = ...)]`. Use `text` or `varchar(...)` for text-backed JSON,
+/// `json` for PostgreSQL or MySQL native JSON, and `jsonb` for PostgreSQL JSONB.
 ///
 /// # Two nullable variants
 ///
@@ -54,6 +54,7 @@ use std::fmt;
 /// struct Repository {
 ///     #[key] #[auto]
 ///     id: uuid::Uuid,
+///     #[column(type = text)]
 ///     schema: toasty::Deferred<toasty::Json<MySchema>>,
 /// }
 /// ```
@@ -70,6 +71,7 @@ use std::fmt;
 /// struct Item {
 ///     #[key] #[auto]
 ///     id: i64,
+///     #[column(type = text)]
 ///     tags: toasty::Json<Tags>,
 /// }
 /// ```
@@ -141,6 +143,8 @@ impl<T> Field for Json<T>
 where
     T: serde_core::Serialize + for<'de> serde_core::Deserialize<'de>,
 {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = true;
+
     type ExprTarget = Self;
     type Path<Origin> = Path<Origin, Self>;
     type ListPath<Origin> = Path<Origin, List<Self::ExprTarget>>;
@@ -161,7 +165,7 @@ where
     ) -> Self::Update<'a> {
     }
 
-    /// Tag the schema entry as a JSON-serialized String column.
+    /// Tag the schema entry as JSON-serialized with explicit storage.
     ///
     /// The macro never inspects the wrapper at the AST level; the
     /// `serialize: Some(Json)` metadata flows through trait dispatch
@@ -169,9 +173,14 @@ where
     /// see that the column is JSON-typed even though the encoding itself is
     /// invisible to the macro.
     fn field_ty(storage_ty: Option<db::Type>) -> FieldTy {
+        let storage_ty = storage_ty.expect(
+            "`toasty::Json<T>` fields require `#[column(type = ...)]`; use \
+             `#[column(type = text)]` for text-backed JSON storage",
+        );
+
         FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
-            storage_ty,
+            storage_ty: Some(storage_ty),
             serialize: Some(SerializeFormat::Json),
         })
     }

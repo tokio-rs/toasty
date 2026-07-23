@@ -36,6 +36,34 @@ pub async fn ty_decimal(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+#[driver_test(requires(and(native_array, native_decimal)))]
+pub async fn ty_decimal_vec(test: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        values: Vec<Decimal>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let values = vec![
+        Decimal::from_str("123.456")?,
+        Decimal::from_str("-0.0000000001")?,
+    ];
+
+    let item = toasty::create!(Item {
+        values: values.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
 #[driver_test(id(ID))]
 pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     use rust_decimal::Decimal;

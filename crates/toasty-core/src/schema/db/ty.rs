@@ -86,7 +86,7 @@ pub enum Type {
     /// Decimal number with optional precision and scale.
     /// - `None`: Arbitrary-precision decimal
     /// - `Some((precision, scale))`: Fixed precision and scale
-    Numeric(Option<(u32, u32)>),
+    Numeric(#[cfg_attr(feature = "serde", serde(with = "numeric_serde"))] Option<(u32, u32)>),
 
     /// Unconstrained binary type
     Blob,
@@ -125,8 +125,52 @@ pub enum Type {
         binary: bool,
     },
 
+    /// A native SQL `JSON` column.
+    Json,
+
+    /// A native SQL `JSONB` column.
+    Jsonb,
+
     /// User-specified unrecognized type
     Custom(String),
+}
+
+#[cfg(feature = "serde")]
+mod numeric_serde {
+    use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Error as _};
+
+    #[derive(Deserialize)]
+    #[serde(untagged)]
+    enum Repr {
+        Values(Vec<u32>),
+        Legacy(Option<(u32, u32)>),
+    }
+
+    pub fn serialize<S>(value: &Option<(u32, u32)>, serializer: S) -> Result<S::Ok, S::Error>
+    where
+        S: Serializer,
+    {
+        match value {
+            Some((precision, scale)) => [*precision, *scale].serialize(serializer),
+            None => <[u32; 0]>::default().serialize(serializer),
+        }
+    }
+
+    pub fn deserialize<'de, D>(deserializer: D) -> Result<Option<(u32, u32)>, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        match Repr::deserialize(deserializer)? {
+            Repr::Values(values) => match values.as_slice() {
+                [] => Ok(None),
+                [precision, scale] => Ok(Some((*precision, *scale))),
+                _ => Err(D::Error::custom(
+                    "numeric storage type requires zero or two parameters",
+                )),
+            },
+            Repr::Legacy(value) => Ok(value),
+        }
+    }
 }
 
 impl Type {
@@ -296,6 +340,14 @@ impl Type {
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         match *self {
+            Type::Json if !db.native_json => Err(crate::Error::unsupported_feature(format!(
+                "JSON column type is not supported by {}",
+                db.driver_name
+            ))),
+            Type::Jsonb if !db.native_jsonb => Err(crate::Error::unsupported_feature(format!(
+                "JSONB column type is not supported by {}",
+                db.driver_name
+            ))),
             Type::VarChar(size) => match db.storage_types.varchar {
                 Some(max) if size > max => Err(crate::Error::unsupported_feature(format!(
                     "VARCHAR({}) exceeds database maximum of {}",

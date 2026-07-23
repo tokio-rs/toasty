@@ -356,9 +356,16 @@ struct Event {
 
 ## JSON serialization
 
-Wrap a field type in [`toasty::Json<T>`][json-doc] to store it as a JSON
-string in the database. The inner `T` must implement `serde::Serialize`
-and `serde::Deserialize`.
+Wrap a field type in [`toasty::Json<T>`][json-doc] to serialize it as JSON
+in the database. The inner `T` must implement `serde::Serialize` and
+`serde::Deserialize`. Each `Json<T>` field must select its database column
+type with `#[column(type = ...)]`.
+
+> [!IMPORTANT]
+> The requirement to write `#[column(type = ...)]` is temporary. A future
+> Toasty release will select each database's native JSON column type by
+> default. Explicit overrides will remain available for models that need a
+> different representation.
 
 [json-doc]: https://docs.rs/toasty/latest/toasty/stmt/struct.Json.html
 
@@ -394,15 +401,30 @@ struct Post {
 
     // Arbitrary serde type — `Json<T>` stores it as one opaque JSON
     // column. Toasty cannot query into it.
+    #[column(type = text)]
     meta: toasty::Json<Metadata>,
 }
 ```
 
 Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The default database column type is `TEXT`.
-You can override this with `#[column(type = ...)]` if needed — for example,
-`#[column(type = varchar(1000))]` to limit the stored JSON size on databases
-that support `varchar`.
+deserializes it back when reading. The selected column type determines how the
+database stores that JSON:
+
+| Column type | Support |
+|---|---|
+| `text` or `varchar(...)` | SQL databases with the selected text type |
+| `json` | PostgreSQL and MySQL native JSON |
+| `jsonb` | PostgreSQL JSONB |
+
+For example, this field uses PostgreSQL or MySQL native JSON storage:
+
+```rust,ignore
+#[column(type = json)]
+meta: toasty::Json<Metadata>,
+```
+
+Toasty rejects `json` or `jsonb` during schema construction when the selected
+database does not support that column type.
 
 ```rust,ignore
 # use toasty::Model;
@@ -419,6 +441,7 @@ that support `varchar`.
 #     id: u64,
 #     title: String,
 #     tags: Vec<String>,
+#     #[column(type = text)]
 #     meta: toasty::Json<Metadata>,
 # }
 # async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
@@ -456,11 +479,13 @@ encoded inside the JSON itself:
 #     #[auto]
 #     id: u64,
 #     title: String,
-// `None` maps to SQL `NULL`; `Some(v)` to a JSON string.
+// `None` maps to SQL `NULL`; `Some(v)` to encoded JSON.
+#[column(type = text)]
 metadata: Option<toasty::Json<HashMap<String, String>>>,
 
-// `None` maps to the JSON literal `"null"` (still a non-null string);
-// `Some(v)` to a JSON string.
+// `None` maps to the JSON literal `"null"` (still a non-null column value);
+// `Some(v)` to encoded JSON.
+#[column(type = text)]
 labels: toasty::Json<Option<Vec<String>>>,
 # }
 ```
