@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IsolationLevel","Operation","Pagination","RawSqlRet","Transaction","TransactionMode"],"struct":["DeleteByKey","FindPkByIndex","GetByKey","Insert","QueryPk","QuerySql","RawSql","Scan","TypedValue","UpdateByKey","Upsert"]};

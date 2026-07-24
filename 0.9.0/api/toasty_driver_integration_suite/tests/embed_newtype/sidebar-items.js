@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["basic_newtype_embed","newtype_as_primary_key","newtype_auto_increment_key","newtype_auto_nested_proxy","newtype_auto_uuid_key","newtype_column_name","newtype_key_and_predicate","newtype_uuid_get_by_id"],"mod":["crud_newtype_embed","nested_newtype","newtype_index","newtype_numeric","newtype_unique_constraint"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["crud_user_todos_categories"]};

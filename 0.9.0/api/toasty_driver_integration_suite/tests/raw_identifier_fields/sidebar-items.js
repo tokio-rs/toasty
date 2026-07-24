@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["create_filter_update_by_raw_identifier_field"]};

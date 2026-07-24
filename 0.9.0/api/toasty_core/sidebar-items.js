@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"macro":[["path",1]],"mod":["driver","schema","stmt"],"struct":["Error"],"type":["Result"]};

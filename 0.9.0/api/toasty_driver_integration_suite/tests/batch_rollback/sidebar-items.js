@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch_array_creates_rolls_back_on_failure","batch_create_and_update_rolls_back_on_update_failure","batch_different_models_rolls_back_on_failure","batch_two_creates_rolls_back_on_second_failure","batch_update_and_create_rolls_back_on_create_failure"]};

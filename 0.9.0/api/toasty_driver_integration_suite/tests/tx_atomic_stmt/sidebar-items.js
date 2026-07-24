@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["create_with_has_many_rolls_back_on_failure","create_with_has_one_rolls_back_on_failure"],"mod":["multi_op_create_wraps_in_transaction","rmw_condition_failure_issues_rollback_to_savepoint","rmw_uses_savepoints","single_op_skips_transaction","update_with_new_association_rolls_back_on_failure"]};

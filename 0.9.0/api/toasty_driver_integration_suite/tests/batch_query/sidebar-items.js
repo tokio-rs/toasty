@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["batch_both_empty","batch_one_empty","batch_same_model","batch_select_and_create","batch_three_queries","batch_two_models"]};

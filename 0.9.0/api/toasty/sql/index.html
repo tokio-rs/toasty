@@ -1,0 +1,39 @@
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Raw SQL execution helpers. Raw SQL execution helpers for SQL backends."><title>toasty::sql - Rust</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../static.files/rustdoc-17e0aaed.css"><meta name="rustdoc-vars" data-root-path="../../" data-static-root-path="../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.97.1 (8bab26f4f 2026-07-14)" data-channel="1.97.1" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../static.files/storage-41dd4d93.js"></script><script defer src="../sidebar-items.js"></script><script defer src="../../static.files/main-fcd733ba.js"></script><noscript><link rel="stylesheet" href="../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../static.files/favicon-044be391.svg"></head><body class="rustdoc mod"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><rustdoc-topbar><h2><a href="#">Module sql</a></h2></rustdoc-topbar><nav class="sidebar"><div class="sidebar-crate"><h2><a href="../../toasty/index.html">toasty</a><span class="version">0.9.0</span></h2></div><div class="sidebar-elems"><section id="rustdoc-toc"><h2 class="location"><a href="#">Module sql</a></h2><h3><a href="#">Sections</a></h3><ul class="block top-toc"><li><a href="#statements" title="Statements">Statements</a></li><li><a href="#queries" title="Queries">Queries</a></li></ul><h3><a href="#structs">Module Items</a></h3><ul class="block"><li><a href="#structs" title="Structs">Structs</a></li><li><a href="#functions" title="Functions">Functions</a></li></ul></section><div id="rustdoc-modnav"><h2 class="in-crate"><a href="../index.html">In crate toasty</a></h2></div></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><div class="width-limiter"><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><div class="rustdoc-breadcrumbs"><a href="../index.html">toasty</a></div><h1>Module <span>sql</span>&nbsp;<button id="copy-path" title="Copy item path to clipboard">Copy item path</button></h1><rustdoc-toolbar></rustdoc-toolbar><span class="sub-heading"><a class="src" href="../../src/toasty/sql.rs.html#1-288">Source</a> </span></div><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Raw SQL execution helpers.
+Raw SQL execution helpers for SQL backends.</p>
+<p>Use [<code>statement</code>] for SQL that returns an affected-row count and <a href="../macro.query.html" title="macro toasty::query"><code>query</code></a>
+for SQL that returns rows. Both builders execute through
+<a href="../db/trait.Executor.html" title="trait toasty::db::Executor"><code>Executor</code></a>, so they work with <a href="../db/struct.Db.html" title="struct toasty::db::Db"><code>Db</code></a>,
+<a href="../db/struct.Connection.html" title="struct toasty::db::Connection"><code>Connection</code></a>, and <a href="../db/struct.Transaction.html" title="struct toasty::db::Transaction"><code>Transaction</code></a>.</p>
+<p>Raw SQL is backend SQL. Toasty does not rewrite placeholders, quote
+identifiers, or hydrate models from raw query results. Use the placeholder
+syntax of the active driver. The syntax is exposed at runtime through
+<a href="../struct.Capability.html#structfield.sql_placeholder" title="field toasty::Capability::sql_placeholder"><code>Capability::sql_placeholder</code></a>:</p>
+<div><table><thead><tr><th>Backend</th><th><a href="../enum.SqlPlaceholder.html" title="enum toasty::SqlPlaceholder"><code>SqlPlaceholder</code></a></th></tr></thead><tbody>
+<tr><td>SQLite</td><td><code>NumberedQuestionMark</code> (<code>?1</code>, <code>?2</code>, …)</td></tr>
+<tr><td>Turso</td><td><code>NumberedQuestionMark</code> (<code>?1</code>, <code>?2</code>, …)</td></tr>
+<tr><td>PostgreSQL</td><td><code>DollarNumber</code> (<code>$1</code>, <code>$2</code>, …)</td></tr>
+<tr><td>MySQL</td><td><code>QuestionMark</code> (<code>?</code>, <code>?</code>, …)</td></tr>
+</tbody></table>
+</div><h2 id="statements"><a class="doc-anchor" href="#statements">§</a>Statements</h2>
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>updated = toasty::sql::statement(
+    <span class="string">"UPDATE users SET name = ?1 WHERE id = ?2"</span>,
+)
+.bind(<span class="string">"Alice"</span>)
+.bind(<span class="number">1_i64</span>)
+.exec(<span class="kw-2">&amp;mut </span>db)
+.<span class="kw">await</span><span class="question-mark">?</span>;
+
+<span class="macro">assert_eq!</span>(updated, <span class="number">1</span>);</code></pre></div><h2 id="queries"><a class="doc-anchor" href="#queries">§</a>Queries</h2>
+<p>Queries return dynamic [<code>Value</code>] rows. Each row is a [<code>Value::Record</code>] with
+fields in selected-column order.</p>
+
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>rows = toasty::sql::query(
+    <span class="string">"SELECT id, name FROM users WHERE active = ?1"</span>,
+)
+.bind(<span class="bool-val">true</span>)
+.exec(<span class="kw-2">&amp;mut </span>db)
+.<span class="kw">await</span><span class="question-mark">?</span>;</code></pre></div>
+<p>The driver infers result value types from database metadata by default. Use
+[<code>Query::column_types</code>] when a result column is ambiguous, such as a SQLite
+boolean stored as an integer or a UUID stored as bytes.</p>
+</div></details><h2 id="structs" class="section-header">Structs<a href="#structs" class="anchor">§</a></h2><dl class="item-table"><dt><a class="struct" href="struct.Query.html" title="struct toasty::sql::Query">Query</a></dt><dd>A raw SQL query that returns dynamic rows.</dd><dt><a class="struct" href="struct.Statement.html" title="struct toasty::sql::Statement">Statement</a></dt><dd>A raw SQL statement that returns an affected-row count.</dd></dl><h2 id="functions" class="section-header">Functions<a href="#functions" class="anchor">§</a></h2><dl class="item-table"><dt><a class="fn" href="fn.query.html" title="fn toasty::sql::query">query</a></dt><dd>Create a raw SQL query.</dd><dt><a class="fn" href="fn.statement.html" title="fn toasty::sql::statement">statement</a></dt><dd>Create a raw SQL statement.</dd></dl></section></div></main></body></html>

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"mod":["auto_on_timestamp_fields","default_and_update_on_same_field","default_expr_on_create","default_expr_override","update_expr_on_create","update_expr_on_update","update_expr_override_on_update"]};
