@@ -94,6 +94,11 @@ pub(crate) struct NestedChild {
 
     /// True if single value
     pub(crate) single: bool,
+
+    /// Per-parent cap on matching rows, from `.include(...).limit(n)`. Matches
+    /// are visited in the batched query's ORDER BY order, so stopping at `n`
+    /// keeps the top-n per parent.
+    pub(crate) limit: Option<usize>,
 }
 
 /// How to filter nested records for a parent record
@@ -304,8 +309,14 @@ impl Exec<'_> {
             };
             let mut nested_rows_projected = vec![];
 
-            // Process a single matching child row: recurse and collect the result.
-            let mut process = |nested_row: &stmt::Value| -> Result<()> {
+            // Process a single matching child row: recurse and collect the
+            // result. Returns `false` once this parent's per-include limit is
+            // reached, telling the caller to stop iterating matches.
+            let limit = nested_child.limit;
+            let mut process = |nested_row: &stmt::Value| -> Result<bool> {
+                if limit.is_some_and(|limit| nested_rows_projected.len() >= limit) {
+                    return Ok(false);
+                }
                 let nested_stack = RowStack {
                     parent: Some(row_stack),
                     row: nested_row,
@@ -317,13 +328,15 @@ impl Exec<'_> {
                     inputs,
                     indices,
                 )?);
-                Ok(())
+                Ok(true)
             };
 
             match &nested_child.qualification {
                 MergeQualification::All => {
                     for row in nested_input {
-                        process(row)?;
+                        if !process(row)? {
+                            break;
+                        }
                     }
                 }
                 MergeQualification::HashLookup { index, lookup_key } => {
@@ -339,7 +352,9 @@ impl Exec<'_> {
                         std::ops::Bound::Included(key),
                         std::ops::Bound::Included(key),
                     ) {
-                        process(row)?;
+                        if !process(row)? {
+                            break;
+                        }
                     }
                 }
                 MergeQualification::Scan(func) => {
@@ -349,8 +364,8 @@ impl Exec<'_> {
                             row,
                             position: row_stack.position + 1,
                         };
-                        if func.eval_bool(&self.engine.schema, &stack)? {
-                            process(row)?;
+                        if func.eval_bool(&self.engine.schema, &stack)? && !process(row)? {
+                            break;
                         }
                     }
                 }
