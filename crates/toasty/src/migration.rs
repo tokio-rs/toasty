@@ -8,10 +8,9 @@
 
 mod embed;
 mod generate;
-mod history;
 mod snapshot;
 
 pub use embed::{MigrationFile, MigrationReport, MigrationSet};
 pub use generate::{Generated, generate};
-pub use history::{History, HistoryEntry};
 pub use snapshot::Snapshot;
+pub use toasty_core::migration::{History, HistoryEntry};

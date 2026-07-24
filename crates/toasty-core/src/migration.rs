@@ -19,7 +19,7 @@ const HISTORY_VERSION: u32 = 1;
 /// # Examples
 ///
 /// ```
-/// use toasty::migration::{History, HistoryEntry};
+/// use toasty_core::migration::{History, HistoryEntry};
 ///
 /// let mut history = History::new();
 /// assert_eq!(history.next_migration_number(), 0);
@@ -57,7 +57,7 @@ pub struct History {
 /// # Examples
 ///
 /// ```
-/// use toasty::migration::HistoryEntry;
+/// use toasty_core::migration::HistoryEntry;
 ///
 /// let entry = HistoryEntry {
 ///     id: 42,
@@ -122,7 +122,7 @@ impl History {
     /// # Examples
     ///
     /// ```
-    /// use toasty::migration::{History, HistoryEntry};
+    /// use toasty_core::migration::{History, HistoryEntry};
     ///
     /// let mut history = History::new();
     /// assert!(history.entries().is_empty());

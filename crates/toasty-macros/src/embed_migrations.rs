@@ -6,22 +6,8 @@ use std::{
 
 use proc_macro2::{Span, TokenStream};
 use quote::quote;
-use serde::Deserialize;
 use syn::LitStr;
-
-const HISTORY_VERSION: u32 = 1;
-
-#[derive(Deserialize)]
-struct History {
-    version: u32,
-    migrations: Vec<HistoryEntry>,
-}
-
-#[derive(Deserialize)]
-struct HistoryEntry {
-    id: u64,
-    name: String,
-}
+use toasty_core::migration::History;
 
 pub(crate) fn generate(input: TokenStream) -> syn::Result<TokenStream> {
     let path = if input.is_empty() {
@@ -32,29 +18,19 @@ pub(crate) fn generate(input: TokenStream) -> syn::Result<TokenStream> {
     let root = resolve_root(&path)?;
     let history_path = root.join("history.toml");
     let history_content = read_utf8(&history_path, &path, "migration history")?;
-    let history: History = toml::from_str(&history_content).map_err(|error| {
+    let history: History = history_content.parse().map_err(|error| {
         syn::Error::new(
             path.span(),
             format!("failed to parse {}: {error}", history_path.display()),
         )
     })?;
 
-    if history.version != HISTORY_VERSION {
-        return Err(syn::Error::new(
-            path.span(),
-            format!(
-                "unsupported migration history version {}; expected {HISTORY_VERSION}",
-                history.version
-            ),
-        ));
-    }
-
     let migrations_dir = root.join("migrations");
     let mut ids = HashSet::new();
     let mut names = HashSet::new();
-    let mut migrations = Vec::with_capacity(history.migrations.len());
+    let mut migrations = Vec::with_capacity(history.entries().len());
 
-    for entry in history.migrations {
+    for entry in history.entries() {
         validate_name(&entry.name, &path)?;
         if !ids.insert(entry.id) {
             return Err(syn::Error::new(
@@ -62,7 +38,7 @@ pub(crate) fn generate(input: TokenStream) -> syn::Result<TokenStream> {
                 format!("duplicate migration id {}", entry.id),
             ));
         }
-        if !names.insert(entry.name.clone()) {
+        if !names.insert(entry.name.as_str()) {
             return Err(syn::Error::new(
                 path.span(),
                 format!("duplicate migration name {}", entry.name),

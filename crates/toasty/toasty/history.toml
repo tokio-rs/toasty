@@ -3,3 +3,4 @@ version = 1
 [[migrations]]
 id = 303
 name = "0000_default.sql"
+snapshot_name = "0000_snapshot.toml"
