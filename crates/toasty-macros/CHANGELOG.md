@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.8.0...toasty-macros-v0.9.0) - 2026-07-23
+
+### Added
+
+- Order-by support in includes ([#1109])
+- Relation link/unlink return a builder instead of executing eagerly ([#1118])
+- Support for serde_json::Value fields ([#1116])
+- Native JSON and JSONB column storage ([#1114])
+- [**breaking**] Explicit column types required for JSON fields ([#1106])
+- Filter associations in include ([#1089])
+- Integer storage for enum discriminants ([#1101])
+- Upsert support ([#1091])
+- Shared variant fields and enum-level index/unique attributes ([#1078])
+- Enum-level rename_all for embedded enum labels ([#1083])
+- Scalar implementation for unit enum embeds ([#1082])
+- Document storage for embedded types with nested-path filtering ([#1028])
+
+### Fixed
+
+- Support any() on many-to-many relations ([#1097])
+- Store Vec<native-enum> as native enum array on Postgres ([#1092])
+- Generate doc comments on model methods ([#1087])
+- Normalize raw identifiers in collision checks ([#1085])
+- Allow update! expressions to read target model fields ([#1074])
+
+[#1028]: https://github.com/tokio-rs/toasty/pull/1028
+[#1074]: https://github.com/tokio-rs/toasty/pull/1074
+[#1078]: https://github.com/tokio-rs/toasty/pull/1078
+[#1082]: https://github.com/tokio-rs/toasty/pull/1082
+[#1083]: https://github.com/tokio-rs/toasty/pull/1083
+[#1085]: https://github.com/tokio-rs/toasty/pull/1085
+[#1087]: https://github.com/tokio-rs/toasty/pull/1087
+[#1089]: https://github.com/tokio-rs/toasty/pull/1089
+[#1091]: https://github.com/tokio-rs/toasty/pull/1091
+[#1092]: https://github.com/tokio-rs/toasty/pull/1092
+[#1097]: https://github.com/tokio-rs/toasty/pull/1097
+[#1101]: https://github.com/tokio-rs/toasty/pull/1101
+[#1106]: https://github.com/tokio-rs/toasty/pull/1106
+[#1109]: https://github.com/tokio-rs/toasty/pull/1109
+[#1114]: https://github.com/tokio-rs/toasty/pull/1114
+[#1116]: https://github.com/tokio-rs/toasty/pull/1116
+[#1118]: https://github.com/tokio-rs/toasty/pull/1118
+
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.7.0...toasty-macros-v0.8.0) - 2026-07-06
 
 ### Added

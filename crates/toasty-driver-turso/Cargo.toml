@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-turso"
-version = "0.8.0"
+version = "0.9.0"
 description = "Turso (SQLite-compatible) driver for Toasty"
 authors.workspace = true
 edition.workspace = true
@@ -14,6 +14,8 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty-driver-turso"
 
 [features]
+default = []
+sync = ["turso/sync"]
 rust_decimal = ["toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
 bigdecimal = ["toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
 jiff = ["toasty-core/jiff", "toasty-sql/jiff"]
@@ -29,6 +31,10 @@ turso.workspace = true
 url.workspace = true
 uuid.workspace = true
 percent-encoding.workspace = true
+
+[dev-dependencies]
+reqwest = { version = "0.13.4", features = ["json"] }
+serde_json.workspace = true
 
 [lints]
 workspace = true

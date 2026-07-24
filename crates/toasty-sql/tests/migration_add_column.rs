@@ -191,3 +191,36 @@ fn add_multiple_columns() {
     assert!(sql.iter().any(|s| s.contains("\"email\"")));
     assert!(sql.iter().all(|s| s.contains("ADD COLUMN")));
 }
+
+#[test]
+fn add_column_after_reordering_tables() {
+    let from = Schema {
+        tables: vec![
+            make_table(0, "users", vec![make_column(0, 0, "id", Type::Integer(8))]),
+            make_table(1, "posts", vec![make_column(1, 0, "id", Type::Integer(8))]),
+        ],
+    };
+    let to = Schema {
+        tables: vec![
+            make_table(0, "posts", vec![make_column(0, 0, "id", Type::Integer(8))]),
+            make_table(
+                1,
+                "users",
+                vec![
+                    make_column(1, 0, "id", Type::Integer(8)),
+                    make_column(1, 1, "name", Type::Text),
+                ],
+            ),
+        ],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
+    let sql = serialize_migration(&stmts, "sqlite");
+
+    assert_eq!(
+        sql,
+        ["ALTER TABLE \"users\" ADD COLUMN \"name\" TEXT NOT NULL;"]
+    );
+}

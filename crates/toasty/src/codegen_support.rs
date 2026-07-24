@@ -21,7 +21,7 @@ pub use crate::{
         ViaPath, ViaTarget, generate_unique_id,
     },
     stmt::CreateMany,
-    stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
+    stmt::{self, Assign, Expr, IntoExpr, IntoInsert, IntoStatement, List, Path},
     update_target::UpdateTarget,
 };
 #[cfg(feature = "serde")]
@@ -63,61 +63,6 @@ pub fn create_in_scope<S: Scope>(scope: S) -> S::Create {
 pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     let expr: stmt::Expr<T> = value.into_expr();
     expr.into()
-}
-
-/// Insert `item` into the relation that produced this list query.
-///
-/// Generated code emits `Query<List<M>>::insert` as a one-line forward to
-/// this helper. The query must be scoped to a single-step relation
-/// traversal; multi-step traversals and unscoped queries return an
-/// `unsupported_feature` error.
-pub async fn relation_insert<M, E>(
-    mut query: stmt::Query<List<M>>,
-    executor: &mut dyn Executor,
-    item: E,
-) -> Result<()>
-where
-    M: Model,
-    E: IntoExpr<M>,
-{
-    match query.take_via_assoc() {
-        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
-            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
-            executor.exec(assoc.insert(item)).await
-        }
-        Some(_) => Err(Error::unsupported_feature(
-            "insert is not supported on multi-step relation traversals",
-        )),
-        None => Err(Error::unsupported_feature(
-            "insert requires a relation-scoped query",
-        )),
-    }
-}
-
-/// Remove `item` from the relation that produced this list query.
-///
-/// Counterpart to [`relation_insert`]; the same scoping rules apply.
-pub async fn relation_remove<M, E>(
-    mut query: stmt::Query<List<M>>,
-    executor: &mut dyn Executor,
-    item: E,
-) -> Result<()>
-where
-    M: Model,
-    E: IntoExpr<M>,
-{
-    match query.take_via_assoc() {
-        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
-            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
-            executor.exec(assoc.remove(item)).await
-        }
-        Some(_) => Err(Error::unsupported_feature(
-            "remove is not supported on multi-step relation traversals",
-        )),
-        None => Err(Error::unsupported_feature(
-            "remove requires a relation-scoped query",
-        )),
-    }
 }
 
 /// Continue a `has_many` traversal from `query` along `path`.

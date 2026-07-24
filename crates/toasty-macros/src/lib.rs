@@ -328,7 +328,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// Wrap a serde-typed value in [`toasty::Json<T>`](toasty::stmt::Json) to
 /// serialize it as JSON in the database. Every JSON field must select its
 /// database column type with `#[column(type = ...)]`. Use `text` for
-/// text-backed JSON. JSON fields require the `serde` feature and
+/// text-backed JSON, `json` for PostgreSQL or MySQL native JSON, and `jsonb`
+/// for PostgreSQL JSONB. JSON fields require the `serde` feature and
 /// `T: serde::Serialize + serde::Deserialize`.
 ///
 /// ```
@@ -340,6 +341,22 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// #     id: i64,
 /// #[column(type = text)]
 /// tags: toasty::Json<Vec<String>>,
+/// # }
+/// ```
+///
+/// Use `serde_json::Value` directly when the field already contains a
+/// dynamic JSON value:
+///
+/// ```
+/// # use toasty::Model;
+/// # use toasty::codegen_support::serde_json;
+/// # #[derive(Model)]
+/// # struct Example {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #[column(type = json)]
+/// payload: serde_json::Value,
 /// # }
 /// ```
 ///

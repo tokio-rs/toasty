@@ -160,7 +160,7 @@ impl CompatibleWith<tag::F64> for f32 {}
 impl CompatibleWith<tag::Text> for String {}
 impl CompatibleWith<tag::VarChar> for String {}
 
-// `Json<T>` serializes through Toasty's string expression type. It supports
+// JSON fields serialize through Toasty's string expression type. They support
 // text storage and the native JSON types recognized by the SQL drivers.
 #[cfg(feature = "serde")]
 impl<T> CompatibleWith<tag::Text> for crate::Json<T> {}
@@ -170,6 +170,14 @@ impl<T> CompatibleWith<tag::VarChar> for crate::Json<T> {}
 impl<T> CompatibleWith<tag::Json> for crate::Json<T> {}
 #[cfg(feature = "serde")]
 impl<T> CompatibleWith<tag::Jsonb> for crate::Json<T> {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::Text> for serde_json::Value {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::VarChar> for serde_json::Value {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::Json> for serde_json::Value {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::Jsonb> for serde_json::Value {}
 
 impl CompatibleWith<tag::Binary> for Vec<u8> {}
 impl CompatibleWith<tag::Blob> for Vec<u8> {}

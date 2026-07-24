@@ -43,11 +43,11 @@ pub async fn insert_on_multi_step_traversal_errors(test: &mut Test) -> Result<()
     // produces a query whose underlying association is two steps. `.insert`
     // requires a single-step scope, so the executor rejects it.
     let chained = user.organizations().projects();
-    let err = assert_err!(chained.insert(&mut db, &project).await);
+    let err = assert_err!(chained.insert(&project).exec(&mut db).await);
     assert!(err.to_string().to_lowercase().contains("multi-step"));
 
     let chained = user.organizations().projects();
-    let err = assert_err!(chained.remove(&mut db, &project).await);
+    let err = assert_err!(chained.remove(&project).exec(&mut db).await);
     assert!(err.to_string().to_lowercase().contains("multi-step"));
 
     Ok(())
