@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2e917ce8.js";
+            window.path_to_searchindex_js = "searchindex-1738c6ff.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -186,7 +186,7 @@ engine features, and optional remote sync (Turso Cloud or
 <h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
 <p>Add the <code>turso</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["turso"] }
+toasty = { version = "0.9", features = ["turso"] }
 </code></pre>
 <p>Then pass a <code>turso:</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -248,8 +248,8 @@ build the driver with a remote URL, pass it to <code>build()</code>, and call
 <p>Add the driver’s <code>sync</code> feature in <code>Cargo.toml</code>. Keep Toasty’s <code>turso</code>
 feature as well if you connect through <code>toasty::Db</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["turso"] }
-toasty-driver-turso = { version = "0.8", features = ["sync"] }
+toasty = { version = "0.9", features = ["turso"] }
+toasty-driver-turso = { version = "0.9", features = ["sync"] }
 </code></pre>
 <p>Construct the driver directly — sync options do not fit in a <code>turso:</code>
 URL — then pass it to <code>build()</code>:</p>

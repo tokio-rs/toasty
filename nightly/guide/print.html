@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2e917ce8.js";
+            window.path_to_searchindex_js = "searchindex-1738c6ff.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -256,7 +256,7 @@ cd my-app
 </code></pre>
 <p>Add the following dependencies to <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["sqlite"] }
+toasty = { version = "0.9", features = ["sqlite"] }
 tokio = { version = "1", features = ["full"] }
 </code></pre>
 <p>The <code>sqlite</code> feature enables the SQLite driver. Toasty also supports
@@ -425,7 +425,7 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 </div>
 <p>Enable feature flags in your <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["sqlite", "jiff"] }
+toasty = { version = "0.9", features = ["sqlite", "jiff"] }
 </code></pre>
 <blockquote>
 <p><strong>Runnable example:</strong> <a href="https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded"><code>crm-embedded</code></a> flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.</p>
@@ -3219,7 +3219,7 @@ field is set when the record is first inserted and never changes. The
 <code>updated_at</code> field is refreshed each time the record is updated.</p>
 <p>Timestamp fields require the <code>jiff</code> feature:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["sqlite", "jiff"] }
+toasty = { version = "0.9", features = ["sqlite", "jiff"] }
 </code></pre>
 <h2 id="date-and-time-fields"><a class="header" href="#date-and-time-fields">Date and time fields</a></h2>
 <p>With the <code>jiff</code> feature enabled, you can use these types for date and time
@@ -3928,7 +3928,7 @@ driver. The application also needs <code>serde</code> for typed payloads and
 <pre><code class="language-toml">[dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toasty = { version = "0.8", features = ["postgresql", "serde"] }
+toasty = { version = "0.9", features = ["postgresql", "serde"] }
 </code></pre>
 <p>The inner <code>T</code> in <code>Json&lt;T&gt;</code> must implement <code>serde::Serialize</code> and
 <code>serde::Deserialize</code>.</p>
@@ -8518,8 +8518,8 @@ parsing and all migration subcommands:</p>
 <h2 id="setting-up-the-cli"><a class="header" href="#setting-up-the-cli">Setting up the CLI</a></h2>
 <p>Add <code>toasty-cli</code> to your project:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["sqlite"] }
-toasty-cli = "0.8"
+toasty = { version = "0.9", features = ["sqlite"] }
+toasty-cli = "0.9"
 tokio = { version = "1", features = ["full"] }
 anyhow = "1"
 </code></pre>
@@ -8897,7 +8897,7 @@ integrates with Toasty’s connection pool for retry and recovery.</p>
 <h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
 <p>Add the <code>postgresql</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["postgresql"] }
+toasty = { version = "0.9", features = ["postgresql"] }
 </code></pre>
 <p>Then pass a <code>postgresql://</code> (or <code>postgres://</code>) URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -9085,7 +9085,7 @@ with Toasty’s connection pool for retry and recovery.</p>
 <h2 id="enabling-the-driver-1"><a class="header" href="#enabling-the-driver-1">Enabling the driver</a></h2>
 <p>Add the <code>mysql</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["mysql"] }
+toasty = { version = "0.9", features = ["mysql"] }
 </code></pre>
 <p>Then pass a <code>mysql://</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -9311,7 +9311,7 @@ writes, experimental flags).</p>
 <h2 id="enabling-the-driver-2"><a class="header" href="#enabling-the-driver-2">Enabling the driver</a></h2>
 <p>Add the <code>sqlite</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["sqlite"] }
+toasty = { version = "0.9", features = ["sqlite"] }
 </code></pre>
 <p>Then pass a <code>sqlite:</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -9551,7 +9551,7 @@ engine features, and optional remote sync (Turso Cloud or
 <h2 id="enabling-the-driver-3"><a class="header" href="#enabling-the-driver-3">Enabling the driver</a></h2>
 <p>Add the <code>turso</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["turso"] }
+toasty = { version = "0.9", features = ["turso"] }
 </code></pre>
 <p>Then pass a <code>turso:</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()
@@ -9613,8 +9613,8 @@ build the driver with a remote URL, pass it to <code>build()</code>, and call
 <p>Add the driver’s <code>sync</code> feature in <code>Cargo.toml</code>. Keep Toasty’s <code>turso</code>
 feature as well if you connect through <code>toasty::Db</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["turso"] }
-toasty-driver-turso = { version = "0.8", features = ["sync"] }
+toasty = { version = "0.9", features = ["turso"] }
+toasty-driver-turso = { version = "0.9", features = ["sync"] }
 </code></pre>
 <p>Construct the driver directly — sync options do not fit in a <code>turso:</code>
 URL — then pass it to <code>build()</code>:</p>
@@ -9853,7 +9853,7 @@ serve.</p>
 <h2 id="enabling-the-driver-4"><a class="header" href="#enabling-the-driver-4">Enabling the driver</a></h2>
 <p>Add the <code>dynamodb</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["dynamodb"] }
+toasty = { version = "0.9", features = ["dynamodb"] }
 </code></pre>
 <p>Then pass a <code>dynamodb://</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()

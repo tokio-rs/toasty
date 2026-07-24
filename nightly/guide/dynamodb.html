@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2e917ce8.js";
+            window.path_to_searchindex_js = "searchindex-1738c6ff.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -190,7 +190,7 @@ serve.</p>
 <h2 id="enabling-the-driver"><a class="header" href="#enabling-the-driver">Enabling the driver</a></h2>
 <p>Add the <code>dynamodb</code> feature to Toasty in <code>Cargo.toml</code>:</p>
 <pre><code class="language-toml">[dependencies]
-toasty = { version = "0.8", features = ["dynamodb"] }
+toasty = { version = "0.9", features = ["dynamodb"] }
 </code></pre>
 <p>Then pass a <code>dynamodb://</code> URL to <code>Db::builder</code>:</p>
 <pre><code class="language-rust ignore">let db = toasty::Db::builder()

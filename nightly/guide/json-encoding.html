@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-2e917ce8.js";
+            window.path_to_searchindex_js = "searchindex-1738c6ff.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -208,7 +208,7 @@ driver. The application also needs <code>serde</code> for typed payloads and
 <pre><code class="language-toml">[dependencies]
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
-toasty = { version = "0.8", features = ["postgresql", "serde"] }
+toasty = { version = "0.9", features = ["postgresql", "serde"] }
 </code></pre>
 <p>The inner <code>T</code> in <code>Json&lt;T&gt;</code> must implement <code>serde::Serialize</code> and
 <code>serde::Deserialize</code>.</p>
