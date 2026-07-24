@@ -303,6 +303,33 @@ pub async fn preload_has_many_limit_per_parent(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A bare include limit needs no SQL: truncation happens in the engine during
+/// the nested merge, so it runs on every driver. Without an order_by, *which*
+/// rows are kept is driver-dependent — assert only the per-parent counts.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn preload_has_many_limit_without_order(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[
+        { name: "alice", todos: [{ title: "a" }, { title: "b" }, { title: "c" }] },
+        { name: "bob", todos: [{ title: "x" }, { title: "y" }, { title: "z" }] },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::all()
+        .include(User::fields().todos().limit(2))
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [
+        _ { todos.get().len(): 2, .. },
+        _ { todos.get().len(): 2, .. },
+    ]);
+
+    Ok(())
+}
+
 /// Include filters run before the limit is applied.
 #[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn preload_has_many_limit_with_filter(test: &mut Test) -> Result<()> {
