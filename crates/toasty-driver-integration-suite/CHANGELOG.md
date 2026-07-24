@@ -7,6 +7,36 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.8.0...toasty-driver-integration-suite-v0.9.0) - 2026-07-23
+
+### Added
+
+- support order_by in includes ([#1109](https://github.com/tokio-rs/toasty/pull/1109))
+- relation link/unlink return a builder instead of executing eagerly ([#1118](https://github.com/tokio-rs/toasty/pull/1118))
+- support serde_json::Value fields ([#1116](https://github.com/tokio-rs/toasty/pull/1116))
+- support native JSON and JSONB column storage ([#1114](https://github.com/tokio-rs/toasty/pull/1114))
+- [**breaking**] require explicit column types for JSON fields ([#1106](https://github.com/tokio-rs/toasty/pull/1106))
+- support temporal Vec fields ([#1105](https://github.com/tokio-rs/toasty/pull/1105))
+- filter associations in include ([#1089](https://github.com/tokio-rs/toasty/pull/1089))
+- introduce Expr::Static for inline SQL literals, hook up LIMIT/OFFSET ([#1001](https://github.com/tokio-rs/toasty/pull/1001))
+- support integer storage for enum discriminants ([#1101](https://github.com/tokio-rs/toasty/pull/1101))
+- add upsert support ([#1091](https://github.com/tokio-rs/toasty/pull/1091))
+- add #[shared] variant fields and enum-level #[index]/#[unique] ([#1078](https://github.com/tokio-rs/toasty/pull/1078))
+- *(macros)* add enum-level rename_all for embedded enum labels ([#1083](https://github.com/tokio-rs/toasty/pull/1083))
+- implement Scalar for unit enum embeds ([#1082](https://github.com/tokio-rs/toasty/pull/1082))
+- add #[document] storage for embedded types with nested-path filtering ([#1028](https://github.com/tokio-rs/toasty/pull/1028))
+
+### Fixed
+
+- *(ddb)* type indexed key discovery as primary keys ([#1113](https://github.com/tokio-rs/toasty/pull/1113))
+- *(postgresql)* decode NUMERIC array elements ([#1104](https://github.com/tokio-rs/toasty/pull/1104))
+- roll back transactions when finalization fails ([#1102](https://github.com/tokio-rs/toasty/pull/1102))
+- support any() on many-to-many relations ([#1097](https://github.com/tokio-rs/toasty/pull/1097))
+- *(postgres)* store Vec<native-enum> as a native enum array on Postgres ([#1092](https://github.com/tokio-rs/toasty/pull/1092))
+- *(engine)* compare composite-FK include filter against target fields ([#1086](https://github.com/tokio-rs/toasty/pull/1086))
+- *(engine)* return None for optional belongs_to with NULL foreign key ([#1090](https://github.com/tokio-rs/toasty/pull/1090))
+- *(engine)* lower IN-list over an embedded-field projection ([#1084](https://github.com/tokio-rs/toasty/pull/1084))
+- *(macros)* let update! value expressions read the target's fields ([#1074](https://github.com/tokio-rs/toasty/pull/1074))
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.7.0...toasty-driver-integration-suite-v0.8.0) - 2026-07-06
 
 ### Added

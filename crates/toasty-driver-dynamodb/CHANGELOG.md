@@ -7,6 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.8.0...toasty-driver-dynamodb-v0.9.0) - 2026-07-23
+
+### Added
+
+- Upsert support ([#1091])
+- #[document] storage for embedded types with nested-path filtering ([#1028])
+
+[#1028]: https://github.com/tokio-rs/toasty/pull/1028
+[#1091]: https://github.com/tokio-rs/toasty/pull/1091
+
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-dynamodb-v0.7.0...toasty-driver-dynamodb-v0.8.0) - 2026-07-06
 
 ### Added

@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.8.0...toasty-driver-postgresql-v0.9.0) - 2026-07-23
+
+### Added
+
+- Native JSON and JSONB column storage ([#1114])
+- Temporal Vec fields ([#1105])
+- #[document] storage for embedded types with nested-path filtering ([#1028])
+
+### Fixed
+
+- *(postgresql)* NUMERIC array elements now decode correctly ([#1104])
+- *(postgres)* Vec<native-enum> fields stored as native enum arrays ([#1092])
+
+[#1028]: https://github.com/tokio-rs/toasty/pull/1028
+[#1092]: https://github.com/tokio-rs/toasty/pull/1092
+[#1104]: https://github.com/tokio-rs/toasty/pull/1104
+[#1105]: https://github.com/tokio-rs/toasty/pull/1105
+[#1114]: https://github.com/tokio-rs/toasty/pull/1114
+
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-postgresql-v0.7.0...toasty-driver-postgresql-v0.8.0) - 2026-07-06
 
 ### Added
