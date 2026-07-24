@@ -163,6 +163,49 @@ and records it in the tracking table.
 If all migrations are already applied, the command prints a message and exits
 without changes.
 
+## Embedding migrations
+
+Applications that ship as a single binary can compile generated migrations
+into that binary. Enable the `migration` feature and call
+`embed_migrations!` to embed the default `toasty/` migration directory:
+
+```rust,ignore
+static MIGRATIONS: toasty::migration::MigrationSet = toasty::embed_migrations!();
+
+async fn migrate(db: &toasty::Db) -> toasty::Result<()> {
+    let report = MIGRATIONS.apply(db).await?;
+
+    println!("applied {} migrations", report.applied());
+    Ok(())
+}
+```
+
+Pass a path when the migrations live outside the default `toasty/` directory.
+The path is relative to your crate's `Cargo.toml`. The macro embeds
+`history.toml` and the files under `migrations/` that it names. Snapshot files
+are not needed when applying migrations and are not embedded.
+
+The compiler reports an error when the history file is invalid, two entries
+use the same ID or name, or a referenced SQL file is missing. At runtime,
+`MigrationSet::apply` checks the database's `__toasty_migrations` table and
+skips migration IDs that are already present.
+
+For multiple databases, embed and apply one migration set per database:
+
+```rust,ignore
+async fn migrate_all(primary_db: &toasty::Db, audit_db: &toasty::Db) -> toasty::Result<()> {
+    let primary = toasty::embed_migrations!("toasty/primary");
+    let audit = toasty::embed_migrations!("toasty/audit");
+
+    primary.apply(primary_db).await?;
+    audit.apply(audit_db).await?;
+    Ok(())
+}
+```
+
+Toasty does not associate migration sets with data source names. The
+application decides which set applies to each `Db` and when to run it.
+
 ## Inspecting the current schema
 
 Print the schema snapshot derived from your current model definitions:

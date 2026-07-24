@@ -12,6 +12,8 @@ use std::sync::Arc;
 
 use toasty_core::driver::operation::RawSql;
 use toasty_core::driver::{Connection, Rows};
+#[cfg(feature = "migration")]
+use toasty_core::schema::db::{AppliedMigration, Migration};
 use toasty_core::stmt::Value;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -50,6 +52,21 @@ pub(crate) enum ConnectionOperation {
     },
     /// Push schema to the database.
     PushSchema {
+        span: tracing::Span,
+        tx: oneshot::Sender<crate::Result<()>>,
+    },
+    /// Read migration IDs recorded by the driver.
+    #[cfg(feature = "migration")]
+    AppliedMigrations {
+        span: tracing::Span,
+        tx: oneshot::Sender<crate::Result<Vec<AppliedMigration>>>,
+    },
+    /// Apply and record one migration.
+    #[cfg(feature = "migration")]
+    ApplyMigration {
+        id: u64,
+        name: String,
+        migration: Box<Migration>,
         span: tracing::Span,
         tx: oneshot::Sender<crate::Result<()>>,
     },
@@ -170,6 +187,26 @@ impl ConnectionTask {
                 let result = self
                     .connection
                     .push_schema(&self.engine.schema)
+                    .instrument(span)
+                    .await;
+                self.respond(tx, result)
+            }
+            #[cfg(feature = "migration")]
+            ConnectionOperation::AppliedMigrations { span, tx } => {
+                let result = self.connection.applied_migrations().instrument(span).await;
+                self.respond(tx, result)
+            }
+            #[cfg(feature = "migration")]
+            ConnectionOperation::ApplyMigration {
+                id,
+                name,
+                migration,
+                span,
+                tx,
+            } => {
+                let result = self
+                    .connection
+                    .apply_migration(id, &name, &migration)
                     .instrument(span)
                     .await;
                 self.respond(tx, result)
