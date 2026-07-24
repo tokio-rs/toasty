@@ -126,17 +126,24 @@ impl NestedMergePlanner<'_> {
 
         let ret = match stmt_state.stmt.as_deref().unwrap() {
             stmt::Statement::Query(query) => {
-                // Per-parent limit from `.include(...).limit(n)`. The HIR
-                // statement keeps the limit; only the batch-load clone has it
-                // stripped (see `rewrite_stmt_for_batch_load`).
-                let limit = query.limit.as_ref().map(|limit| {
-                    let stmt::Limit::Offset(lo) = limit else {
+                // Per-parent limit/offset from `.include(...).limit(n).offset(m)`.
+                // The HIR statement keeps them; only the batch-load clone has
+                // them stripped (see `rewrite_stmt_for_batch_load`).
+                let (limit, offset) = match query.limit.as_ref() {
+                    Some(stmt::Limit::Offset(lo)) => {
+                        let limit = usize::try_from(super::statement::as_i64_literal(&lo.limit))
+                            .expect("include limit must be non-negative");
+                        let offset = lo.offset.as_ref().map(|offset| {
+                            usize::try_from(super::statement::as_i64_literal(offset))
+                                .expect("include offset must be non-negative")
+                        });
+                        (Some(limit), offset)
+                    }
+                    Some(stmt::Limit::Cursor(_)) => {
                         todo!("cursor-based limits are not supported in includes")
-                    };
-                    assert!(lo.offset.is_none(), "include limits do not support offset");
-                    usize::try_from(super::statement::as_i64_literal(&lo.limit))
-                        .expect("include limit must be non-negative")
-                });
+                    }
+                    None => (None, None),
+                };
 
                 let filter_expr = self.build_filter_for_nested_child(stmt_id, selection, depth);
 
@@ -174,6 +181,7 @@ impl NestedMergePlanner<'_> {
                     qualification,
                     single: query.single,
                     limit,
+                    offset,
                 }
             }
             stmt::Statement::Insert(insert) => NestedChild {
@@ -181,6 +189,7 @@ impl NestedMergePlanner<'_> {
                 qualification: MergeQualification::All,
                 single: insert.source.single,
                 limit: None,
+                offset: None,
             },
             stmt => todo!("stmt={stmt:#?}"),
         };

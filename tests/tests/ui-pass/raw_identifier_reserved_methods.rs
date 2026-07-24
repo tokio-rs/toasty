@@ -35,5 +35,6 @@ fn main() {
         .comments()
         .filter(Comment::fields().id().eq(1))
         .order_by(Comment::fields().id().asc())
-        .limit(1);
+        .limit(1)
+        .offset(1);
 }

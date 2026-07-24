@@ -490,6 +490,254 @@ pub async fn preload_has_many_limit_not_pushed_to_batch_query(test: &mut Test) -
     Ok(())
 }
 
+/// An offset on an include skips rows per parent record, not globally.
+#[driver_test(
+    id(ID),
+    requires(sql),
+    scenario(crate::scenarios::has_many_belongs_to_with_flags)
+)]
+pub async fn preload_has_many_offset_per_parent(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[
+        {
+            name: "alice",
+            todos: [
+                { title: "b", complete: false, priority: 2 },
+                { title: "a", complete: false, priority: 2 },
+                { title: "c", complete: false, priority: 1 },
+            ]
+        },
+        {
+            name: "bob",
+            todos: [
+                { title: "z", complete: false, priority: 1 },
+                { title: "y", complete: false, priority: 1 },
+                { title: "x", complete: false, priority: 3 },
+            ]
+        },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::all()
+        .order_by(User::fields().name().asc())
+        .include(
+            User::fields()
+                .todos()
+                .order_by(Todo::fields().title().asc())
+                .limit(2)
+                .offset(1),
+        )
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [
+        { name: "alice", todos.get(): [{ title: "b" }, { title: "c" }] },
+        { name: "bob", todos.get(): [{ title: "y" }, { title: "z" }] },
+    ]);
+
+    Ok(())
+}
+
+/// A bare include offset needs no SQL: skipping happens in the engine during
+/// the nested merge, so it runs on every driver. Without an order_by, *which*
+/// rows are skipped is driver-dependent — assert only the per-parent counts.
+#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn preload_has_many_offset_without_order(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[
+        { name: "alice", todos: [{ title: "a" }, { title: "b" }, { title: "c" }] },
+        { name: "bob", todos: [{ title: "x" }, { title: "y" }, { title: "z" }] },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::all()
+        .include(User::fields().todos().limit(2).offset(2))
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [
+        _ { todos.get().len(): 1, .. },
+        _ { todos.get().len(): 1, .. },
+    ]);
+
+    Ok(())
+}
+
+/// Include filters run before the offset and limit are applied.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn preload_has_many_offset_with_filter(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }, { title: "c" }, { title: "b" }, { title: "d" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .todos()
+                .filter(Todo::fields().title().ne("c"))
+                .order_by(Todo::fields().title().desc())
+                .limit(2)
+                .offset(1),
+        )
+        .get(&mut db)
+        .await?;
+
+    assert_struct!(loaded.todos.get(), [
+        { title: "b" },
+        { title: "a" },
+    ]);
+
+    Ok(())
+}
+
+/// An offset past the end of the related rows returns none; an offset of zero
+/// is a no-op.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn preload_has_many_offset_bounds(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }, { title: "b" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .todos()
+                .order_by(Todo::fields().title().asc())
+                .limit(10)
+                .offset(10),
+        )
+        .get(&mut db)
+        .await?;
+
+    assert!(loaded.todos.get().is_empty());
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .todos()
+                .order_by(Todo::fields().title().asc())
+                .limit(10)
+                .offset(0),
+        )
+        .get(&mut db)
+        .await?;
+
+    assert_struct!(loaded.todos.get(), [
+        { title: "a" },
+        { title: "b" },
+    ]);
+
+    Ok(())
+}
+
+/// Offsets apply independently at each relation in a nested include path.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_post_comment))]
+pub async fn preload_nested_relations_offset_at_each_level(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = toasty::create!(User {
+        name: "alice",
+        posts: [
+            {
+                title: "a",
+                comments: [{ body: "a" }, { body: "c" }, { body: "b" }]
+            },
+            {
+                title: "b",
+                comments: [{ body: "x" }, { body: "z" }, { body: "y" }]
+            },
+            {
+                title: "c",
+                comments: [{ body: "q" }]
+            },
+        ]
+    })
+    .exec(&mut db)
+    .await?;
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .posts()
+                .order_by(Post::fields().title().asc())
+                .limit(2)
+                .offset(1),
+        )
+        .include(
+            User::fields()
+                .posts()
+                .comments()
+                .order_by(Comment::fields().body().asc())
+                .limit(2)
+                .offset(1),
+        )
+        .get(&mut db)
+        .await?;
+
+    assert_struct!(loaded.posts.get(), [
+        { title: "b", comments.get(): [{ body: "y" }, { body: "z" }] },
+        { title: "c", comments.get(): [] },
+    ]);
+
+    Ok(())
+}
+
+/// The batched child query issued for an offset include carries no
+/// database-level LIMIT/OFFSET — they would apply globally across all parents.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn preload_has_many_offset_not_pushed_to_batch_query(test: &mut Test) -> Result<()> {
+    use toasty_core::{driver::Operation, stmt::Statement};
+
+    let mut db = setup(test).await;
+
+    let user = toasty::create!(User {
+        name: "alice",
+        todos: [{ title: "a" }, { title: "c" }, { title: "b" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    test.log().clear();
+
+    let loaded = User::filter_by_id(user.id)
+        .include(
+            User::fields()
+                .todos()
+                .order_by(Todo::fields().title().asc())
+                .limit(2)
+                .offset(1),
+        )
+        .get(&mut db)
+        .await?;
+
+    assert_struct!(loaded.todos.get(), [
+        { title: "b" },
+        { title: "c" },
+    ]);
+
+    let _ = test.log().pop_last_op(); // transaction commit
+    assert_struct!(test.log().pop_last_op(), Operation::QuerySql({
+        stmt: Statement::Query({ limit: None, .. }),
+        ..
+    }));
+
+    Ok(())
+}
+
 /// Include ordering is rejected when the terminal relation is singular.
 #[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn preload_has_one_ordering_rejected(test: &mut Test) -> Result<()> {

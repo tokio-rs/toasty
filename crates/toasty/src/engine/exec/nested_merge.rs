@@ -99,6 +99,11 @@ pub(crate) struct NestedChild {
     /// are visited in the batched query's ORDER BY order, so stopping at `n`
     /// keeps the top-n per parent.
     pub(crate) limit: Option<usize>,
+
+    /// Per-parent count of matching rows to skip before collecting, from
+    /// `.include(...).offset(n)`. Applied before `limit` in the batched
+    /// query's ORDER BY order.
+    pub(crate) offset: Option<usize>,
 }
 
 /// How to filter nested records for a parent record
@@ -310,12 +315,19 @@ impl Exec<'_> {
             let mut nested_rows_projected = vec![];
 
             // Process a single matching child row: recurse and collect the
-            // result. Returns `false` once this parent's per-include limit is
-            // reached, telling the caller to stop iterating matches.
+            // result. The first `offset` matches are skipped without
+            // collecting. Returns `false` once this parent's per-include limit
+            // is reached, telling the caller to stop iterating matches.
             let limit = nested_child.limit;
+            let offset = nested_child.offset.unwrap_or(0);
+            let mut skipped = 0;
             let mut process = |nested_row: &stmt::Value| -> Result<bool> {
                 if limit.is_some_and(|limit| nested_rows_projected.len() >= limit) {
                     return Ok(false);
+                }
+                if skipped < offset {
+                    skipped += 1;
+                    return Ok(true);
                 }
                 let nested_stack = RowStack {
                     parent: Some(row_stack),
