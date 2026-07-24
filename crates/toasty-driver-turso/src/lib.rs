@@ -338,6 +338,13 @@ impl Turso {
     /// `turso:/path/to/db`).
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
+
+        // Not a valid WHATWG URL (an authority may not contain `:`), so
+        // match it before parsing.
+        if url_str == "turso://:memory:" {
+            return Ok(Self::with_path(TursoPath::InMemory));
+        }
+
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "turso" {
@@ -346,17 +353,25 @@ impl Turso {
             )));
         }
 
-        let path = if url.path() == ":memory:" {
-            TursoPath::InMemory
-        } else {
-            TursoPath::File(PathBuf::from(
-                percent_encoding::percent_decode(url.path().as_bytes())
-                    .decode_utf8_lossy()
-                    .to_string()
-                    .as_str(),
-            ))
-        };
-        Ok(Self::with_path(path))
+        if url.path() == ":memory:" {
+            return Ok(Self::with_path(TursoPath::InMemory));
+        }
+
+        // In `turso://name.db`, `name.db` parses as the URL host, not the
+        // path. Recombine host + path so it names the file instead of `""`.
+        let raw_path = format!("{}{}", url.host_str().unwrap_or(""), url.path());
+
+        if raw_path.is_empty() {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "connection URL does not name a database file; url={url_str}"
+            )));
+        }
+
+        Ok(Self::with_path(TursoPath::File(PathBuf::from(
+            percent_encoding::percent_decode(raw_path.as_bytes())
+                .decode_utf8_lossy()
+                .as_ref(),
+        ))))
     }
 
     /// Create an in-memory Turso database.
@@ -1048,6 +1063,33 @@ mod tests {
             Turso::new("turso::memory:").unwrap().path,
             TursoPath::InMemory
         ));
+        assert!(matches!(
+            Turso::new("turso://:memory:").unwrap().path,
+            TursoPath::InMemory
+        ));
+    }
+
+    #[test]
+    fn new_authority_form_names_a_relative_file() {
+        // Authority-form URLs: the host component is part of the file path.
+        assert_eq!(file_path("turso://todos.db"), PathBuf::from("todos.db"));
+        assert_eq!(file_path("turso://./todos.db"), PathBuf::from("./todos.db"));
+        assert_eq!(
+            file_path("turso://data/todos.db"),
+            PathBuf::from("data/todos.db")
+        );
+        // Non-special schemes have opaque hosts: case is preserved,
+        // unlike `http`.
+        assert_eq!(
+            file_path("turso://MyDatabase.db"),
+            PathBuf::from("MyDatabase.db")
+        );
+    }
+
+    #[test]
+    fn new_url_without_a_path_is_rejected() {
+        assert!(Turso::new("turso:").is_err());
+        assert!(Turso::new("turso://").is_err());
     }
 }
 

@@ -70,6 +70,13 @@ impl Sqlite {
     /// Create a new SQLite driver with an arbitrary connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
+
+        // Not a valid WHATWG URL (an authority may not contain `:`), so
+        // match it before parsing.
+        if url_str == "sqlite://:memory:" {
+            return Ok(Self::InMemory);
+        }
+
         let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
 
         if url.scheme() != "sqlite" {
@@ -80,15 +87,25 @@ impl Sqlite {
         }
 
         if url.path() == ":memory:" {
-            Ok(Self::InMemory)
-        } else {
-            Ok(Self::File(PathBuf::from(
-                percent_encoding::percent_decode(url.path().as_bytes())
-                    .decode_utf8_lossy()
-                    .to_string()
-                    .as_str(),
-            )))
+            return Ok(Self::InMemory);
         }
+
+        // In `sqlite://name.db`, `name.db` parses as the URL host, not the
+        // path. Recombine host + path so it names the file instead of `""`,
+        // which SQLite opens as a private temporary database per connection.
+        let raw_path = format!("{}{}", url.host_str().unwrap_or(""), url.path());
+
+        if raw_path.is_empty() {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "connection URL does not name a database file; url={url_str}"
+            )));
+        }
+
+        Ok(Self::File(PathBuf::from(
+            percent_encoding::percent_decode(raw_path.as_bytes())
+                .decode_utf8_lossy()
+                .as_ref(),
+        )))
     }
 
     /// Create an in-memory SQLite database
@@ -505,5 +522,35 @@ mod tests {
             Sqlite::new("sqlite::memory:").unwrap(),
             Sqlite::InMemory
         ));
+        assert!(matches!(
+            Sqlite::new("sqlite://:memory:").unwrap(),
+            Sqlite::InMemory
+        ));
+    }
+
+    #[test]
+    fn new_authority_form_names_a_relative_file() {
+        // Authority-form URLs: the host component is part of the file path.
+        assert_eq!(file_path("sqlite://todos.db"), PathBuf::from("todos.db"));
+        assert_eq!(
+            file_path("sqlite://./todos.db"),
+            PathBuf::from("./todos.db")
+        );
+        assert_eq!(
+            file_path("sqlite://data/todos.db"),
+            PathBuf::from("data/todos.db")
+        );
+        // Non-special schemes have opaque hosts: case is preserved,
+        // unlike `http`.
+        assert_eq!(
+            file_path("sqlite://MyDatabase.db"),
+            PathBuf::from("MyDatabase.db")
+        );
+    }
+
+    #[test]
+    fn new_url_without_a_path_is_rejected() {
+        assert!(Sqlite::new("sqlite:").is_err());
+        assert!(Sqlite::new("sqlite://").is_err());
     }
 }
