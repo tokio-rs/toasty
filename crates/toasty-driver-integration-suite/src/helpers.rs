@@ -120,6 +120,10 @@ fn params_of(params: Vec<TypedValue>) -> Vec<Value> {
 /// Pop the next logged op (a create) and return `column index -> inserted
 /// value`, normalizing SQL (`QuerySql`) vs key-value (`Insert`) ops and inlining
 /// bound params. Useful for asserting exactly what an `INSERT` writes.
+///
+/// Single-row inserts only: on PostgreSQL a multi-row insert is transposed to
+/// per-column arrays (`Capability::insert_values_unnest`), so each column
+/// would map to an array, not a scalar.
 pub fn pop_insert(test: &mut Test) -> BTreeMap<usize, Value> {
     let (op, _) = test.log().pop();
     let (stmt, params) = match op {

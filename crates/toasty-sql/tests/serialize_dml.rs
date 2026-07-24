@@ -212,6 +212,89 @@ fn insert_returning_panics_on_mysql() {
     render(Flavor::Mysql, &schema, insert_basic(returning));
 }
 
+fn unnest_func(position: usize) -> stmt::ExprFunc {
+    stmt::FuncUnnest {
+        arg: Box::new(Expr::arg(position)),
+    }
+    .into()
+}
+
+fn insert_unnest(returning: Option<Returning>) -> stmt::Statement {
+    let target = InsertTarget::Table(InsertTable {
+        table: TableId(0),
+        columns: vec![
+            ColumnId {
+                table: TableId(0),
+                index: 0,
+            },
+            ColumnId {
+                table: TableId(0),
+                index: 1,
+            },
+        ],
+    });
+    let source = stmt::Query::new(stmt::Select {
+        returning: Returning::Star,
+        source: Source::table(stmt::TableRef::RowsFrom(vec![
+            unnest_func(0),
+            unnest_func(1),
+        ])),
+        filter: Filter::ALL,
+        distinct: false,
+    });
+
+    Insert {
+        target,
+        source,
+        upsert: None,
+        returning,
+    }
+    .into()
+}
+
+#[test]
+fn select_unnest_expression() {
+    let select = stmt::Select {
+        returning: Returning::Project(Expr::record([Expr::Func(unnest_func(0))])),
+        source: Source::Table(stmt::SourceTable {
+            tables: vec![],
+            from: vec![],
+        }),
+        filter: Filter::ALL,
+        distinct: false,
+    };
+    expect![[r#"SELECT unnest($1) AS column1;"#]].assert_eq(&render(
+        Flavor::Postgresql,
+        &users_schema(),
+        stmt::Query::new(select).into(),
+    ));
+}
+
+#[test]
+fn insert_unnest_arrays() {
+    let schema = users_schema();
+    expect![[
+        r#"INSERT INTO "users" ("id", "name") SELECT * FROM ROWS FROM (unnest($1), unnest($2)) AS tbl_0_0;"#
+    ]]
+    .assert_eq(&render(Flavor::Postgresql, &schema, insert_unnest(None)));
+}
+
+#[test]
+fn insert_unnest_with_returning() {
+    let schema = users_schema();
+    let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
+    expect![[
+        r#"INSERT INTO "users" ("id", "name") SELECT * FROM ROWS FROM (unnest($1), unnest($2)) AS tbl_0_0 RETURNING "id" AS column1;"#
+    ]]
+    .assert_eq(&render(Flavor::Postgresql, &schema, insert_unnest(returning)));
+}
+
+#[test]
+#[should_panic(expected = "unnest is only supported on PostgreSQL")]
+fn insert_unnest_panics_on_sqlite() {
+    render(Flavor::Sqlite, &users_schema(), insert_unnest(None));
+}
+
 // -----------------------------------------------------------------------------
 // UPDATE
 // -----------------------------------------------------------------------------

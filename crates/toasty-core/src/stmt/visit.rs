@@ -6,11 +6,11 @@ use super::{
     ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming, ExprIntersects, ExprIsNull,
     ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
     ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
-    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include, Insert, InsertTarget,
-    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
-    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
-    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
-    ValueRecord, Values, With,
+    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, FuncUnnest, Include, Insert,
+    InsertTarget, Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path,
+    Projection, Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId,
+    Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget,
+    Value, ValueRecord, Values, With,
 };
 
 /// Immutable visitor trait for the statement AST.
@@ -188,6 +188,13 @@ pub trait Visit {
     /// The default implementation delegates to [`visit_expr_func_last_insert_id`].
     fn visit_expr_func_last_insert_id(&mut self, i: &FuncLastInsertId) {
         visit_expr_func_last_insert_id(self, i);
+    }
+
+    /// Visits a [`FuncUnnest`] node.
+    ///
+    /// The default implementation delegates to [`visit_expr_func_unnest`].
+    fn visit_expr_func_unnest(&mut self, i: &FuncUnnest) {
+        visit_expr_func_unnest(self, i);
     }
 
     /// Visits an [`ExprInList`] node.
@@ -1068,6 +1075,7 @@ where
         ExprFunc::Count(func) => v.visit_expr_func_count(func),
         ExprFunc::JsonExtract(func) => v.visit_expr_func_json_extract(func),
         ExprFunc::LastInsertId(func) => v.visit_expr_func_last_insert_id(func),
+        ExprFunc::Unnest(func) => v.visit_expr_func_unnest(func),
     }
 }
 
@@ -1106,6 +1114,14 @@ where
     V: Visit + ?Sized,
 {
     // FuncLastInsertId has no fields to visit
+}
+
+/// Default traversal for [`FuncUnnest`] nodes. Visits the array argument.
+pub fn visit_expr_func_unnest<V>(v: &mut V, node: &FuncUnnest)
+where
+    V: Visit + ?Sized,
+{
+    v.visit_expr(&node.arg);
 }
 
 /// Default traversal for [`ExprBetween`] nodes. Visits the expression, low, and high bounds.
@@ -1439,6 +1455,7 @@ where
             }
         }
         Returning::Changed => {}
+        Returning::Star => {}
         Returning::Project(expr) => v.visit_expr(expr),
         Returning::Expr(expr) => v.visit_expr(expr),
     }
@@ -1615,6 +1632,12 @@ where
         TableRef::Cte { .. } => {}
         TableRef::Derived(table_derived) => v.visit_table_derived(table_derived),
         TableRef::Table(_) => {}
+        TableRef::Func(func) => v.visit_expr_func(func),
+        TableRef::RowsFrom(funcs) => {
+            for func in funcs {
+                v.visit_expr_func(func);
+            }
+        }
         TableRef::Arg(expr_arg) => v.visit_expr_arg(expr_arg),
     }
 }

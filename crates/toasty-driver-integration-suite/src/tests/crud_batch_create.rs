@@ -2,7 +2,11 @@
 
 use crate::prelude::*;
 
-use toasty_core::driver::{Operation, operation::Transaction};
+use toasty_core::{
+    driver::{Operation, operation::Transaction},
+    schema::db,
+    stmt::{Expr, ExprFunc, ExprSet, Statement, TableRef, Value},
+};
 
 #[driver_test(id(ID), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
@@ -65,6 +69,89 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
         assert_eq!(1, reloaded.len());
         assert_eq!(reloaded[0].id, post.id);
     }
+    Ok(())
+}
+
+/// On PostgreSQL this exercises the INSERT → `unnest` transpose with a NULL
+/// cell inside a column array bind.
+#[driver_test(id(ID))]
+pub async fn batch_create_with_null_field(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        name: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let res = Item::create_many()
+        .item(Item::create().name("n1"))
+        .item(Item::create())
+        .item(Item::create().name("n3"))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(3, res.len());
+    assert_eq!(res[0].name.as_deref(), Some("n1"));
+    assert_eq!(res[1].name, None);
+    assert_eq!(res[2].name.as_deref(), Some("n3"));
+
+    let reloaded = Item::get_by_id(&mut db, &res[1].id).await?;
+    assert_eq!(reloaded.name, None);
+    Ok(())
+}
+
+#[driver_test(requires(insert_values_unnest))]
+pub async fn batch_create_uses_unnest_array_params(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    test.log().clear();
+    Item::create_many()
+        .item(Item::create().id("item-1").name("n1"))
+        .item(Item::create().id("item-2"))
+        .exec(&mut db)
+        .await?;
+
+    let Operation::QuerySql(query) = test.log().pop_op() else {
+        panic!("expected QuerySql operation");
+    };
+    let Statement::Insert(insert) = query.stmt else {
+        panic!("expected Insert statement");
+    };
+    let ExprSet::Select(select) = insert.source.body else {
+        panic!("expected Select insert source");
+    };
+    let [TableRef::RowsFrom(funcs)] = select.source.as_table_unwrap().tables.as_slice() else {
+        panic!("expected ROWS FROM table source");
+    };
+    let [ExprFunc::Unnest(ids), ExprFunc::Unnest(names)] = funcs.as_slice() else {
+        panic!("expected one unnest function per inserted column");
+    };
+
+    assert_eq!(ids.arg.as_ref(), &Expr::arg(0));
+    assert_eq!(names.arg.as_ref(), &Expr::arg(1));
+    assert_eq!(query.params.len(), 2);
+    assert_eq!(
+        query.params[0].value,
+        Value::List(vec![Value::from("item-1"), Value::from("item-2")])
+    );
+    assert_eq!(query.params[0].ty, db::Type::list(db::Type::Text));
+    assert_eq!(
+        query.params[1].value,
+        Value::List(vec![Value::from("n1"), Value::Null])
+    );
+    assert_eq!(query.params[1].ty, db::Type::list(db::Type::Text));
+    assert!(test.log().is_empty());
+
     Ok(())
 }
 

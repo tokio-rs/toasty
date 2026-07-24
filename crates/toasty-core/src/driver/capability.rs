@@ -289,6 +289,12 @@ pub struct Capability {
     /// Property of the dialect, not the bind layer.
     pub predicate_match_any: bool,
 
+    /// The backend can insert a multi-row batch as one array bind per column:
+    /// `INSERT ... SELECT * FROM ROWS FROM (unnest($1), unnest($2))` instead
+    /// of a per-cell `VALUES` list. PostgreSQL only; implies
+    /// [`Self::bind_list_param`].
+    pub insert_values_unnest: bool,
+
     /// Whether the database can store a `Vec<scalar>` model field as a native
     /// array column (e.g. PostgreSQL `text[]`, `int8[]`).
     ///
@@ -645,6 +651,8 @@ impl Capability {
         bind_list_param: true,
         predicate_match_any: false,
 
+        insert_values_unnest: false,
+
         // SQLite has no native typed-array column type; `Vec<scalar>`
         // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
@@ -709,6 +717,8 @@ impl Capability {
         // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
         bind_list_param: true,
         predicate_match_any: true,
+
+        insert_values_unnest: true,
 
         // PostgreSQL: native arrays (`text[]`, `int8[]`, …) are the storage
         // representation for `Vec<scalar>` model fields.
@@ -862,6 +872,7 @@ impl Capability {
         // not apply.
         bind_list_param: false,
         predicate_match_any: false,
+        insert_values_unnest: false,
 
         // DynamoDB has no SQL-style typed-array column type; the
         // `db::Type::List(elem)` storage shape doesn't apply. `Vec<scalar>`
