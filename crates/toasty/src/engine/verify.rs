@@ -310,8 +310,9 @@ impl Verify<'_, '_> {
         }
     }
 
-    /// Reject include ordering on singular relations and preserve the existing
-    /// rule that filters are rejected only on required singular relations.
+    /// Reject include ordering and limits on singular relations and preserve
+    /// the existing rule that filters are rejected only on required singular
+    /// relations.
     /// Variant-rooted paths are not resolvable here and pass through unchecked.
     fn verify_include_modifiers(&mut self, i: &stmt::Select) {
         for include in i.returning.model_includes() {
@@ -323,7 +324,8 @@ impl Verify<'_, '_> {
                 _ => false,
             };
             let has_order_by = query.order_by.is_some();
-            if !has_filter && !has_order_by {
+            let has_limit = query.limit.is_some();
+            if !has_filter && !has_order_by && !has_limit {
                 continue;
             }
             let Some(model_id) = include.path.root.as_model() else {
@@ -347,6 +349,14 @@ impl Verify<'_, '_> {
                 self.record(Error::invalid_statement(format!(
                     "cannot order the include of singular relation `{}`; \
                      include ordering requires a many-valued relation",
+                    field.name,
+                )));
+                continue;
+            }
+            if has_limit && singular {
+                self.record(Error::invalid_statement(format!(
+                    "cannot limit the include of singular relation `{}`; \
+                     include limits require a many-valued relation",
                     field.name,
                 )));
                 continue;
