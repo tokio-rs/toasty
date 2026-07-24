@@ -53,9 +53,25 @@ impl Connect {
             allow(unused_variables, unreachable_code)
         )]
 
-        let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
+        let scheme = url
+            .split_once(':')
+            .map(|(scheme, _)| scheme.to_ascii_lowercase())
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url(format!(
+                    "connection URL has no scheme; url={url}"
+                ))
+            })?;
 
-        let driver: Box<dyn Driver> = match url.scheme() {
+        // `sqlite:` and `turso:` URLs name a file path rather than a network
+        // location, and their accepted forms are not valid WHATWG URLs
+        // (`sqlite://:memory:` has no parseable authority), so those drivers
+        // parse their own. Everything else is a real URL — validate it here,
+        // before a malformed one reaches a driver that never parses it.
+        if !matches!(scheme.as_str(), "sqlite" | "turso") {
+            Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
+        }
+
+        let driver: Box<dyn Driver> = match scheme.as_str() {
             #[cfg(feature = "dynamodb")]
             "dynamodb" => {
                 // DynamoDB driver requires async initialization to load AWS config from environment
