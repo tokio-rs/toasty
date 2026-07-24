@@ -51,6 +51,7 @@ struct FlatInclude {
 struct IncludeQuery {
     filter: Option<stmt::Expr>,
     order_by: Option<stmt::OrderBy>,
+    limit: Option<stmt::Limit>,
 }
 
 /// The include entries that target a single field, partitioned by whether
@@ -345,6 +346,7 @@ impl LowerStatement<'_, '_> {
             // JOIN chain yet; reject rather than silently drop them.
             if top_query.filter.is_some()
                 || top_query.order_by.is_some()
+                || top_query.limit.is_some()
                 || nested.iter().any(|fi| query_has_modifiers(&fi.query))
             {
                 todo!(
@@ -410,6 +412,7 @@ impl LowerStatement<'_, '_> {
             stmt.add_filter(filter);
         }
         stmt.order_by = top_query.order_by;
+        stmt.limit = top_query.limit;
 
         // Attach each non-empty remainder as a nested include on the
         // subquery, carrying any deeper-level filter forward. Empty remainders
@@ -449,6 +452,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
     let mut unfiltered_self = false;
     let mut top_filter: Option<stmt::Expr> = None;
     let mut top_order_by = None;
+    let mut top_limit = None;
     let mut sub_paths = Vec::new();
     for fi in includes {
         if let Some((first, rest)) = fi.projection.as_slice().split_first()
@@ -457,6 +461,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
             if rest.is_empty() {
                 include_self = true;
                 top_order_by = fi.query.as_ref().and_then(|query| query.order_by.clone());
+                top_limit = fi.query.as_ref().and_then(|query| query.limit.clone());
                 match query_filter_expr(&fi.query) {
                     Some(f) if !unfiltered_self => {
                         top_filter = Some(match top_filter.take() {
@@ -483,6 +488,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
         top_query: IncludeQuery {
             filter: top_filter,
             order_by: top_order_by,
+            limit: top_limit,
         },
         sub_paths,
     }
@@ -504,7 +510,9 @@ fn query_filter_expr(query: &Option<stmt::Query>) -> Option<stmt::Expr> {
 
 fn query_has_modifiers(query: &Option<stmt::Query>) -> bool {
     query.as_ref().is_some_and(|query| {
-        query_filter_expr(&Some(query.clone())).is_some() || query.order_by.is_some()
+        query_filter_expr(&Some(query.clone())).is_some()
+            || query.order_by.is_some()
+            || query.limit.is_some()
     })
 }
 
