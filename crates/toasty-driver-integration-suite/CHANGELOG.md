@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.1](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.9.0...toasty-driver-integration-suite-v0.9.1) - 2026-07-24
+
+### Fixed
+
+- Pagination with multiple order by keys ([#1124])
+
+[#1124]: https://github.com/tokio-rs/toasty/pull/1124
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.8.0...toasty-driver-integration-suite-v0.9.0) - 2026-07-23
 
 ### Added
