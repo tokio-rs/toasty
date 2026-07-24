@@ -1,6 +1,9 @@
-use crate::engine::exec::{
-    DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Project,
-    QueryPk, ReadModifyWrite, Scan, SetVar, UpdateByKey, Upsert,
+use crate::engine::{
+    effect::{self, Effect},
+    exec::{
+        DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge,
+        Project, QueryPk, ReadModifyWrite, Scan, SetVar, UpdateByKey, Upsert,
+    },
 };
 
 use std::fmt;
@@ -100,6 +103,29 @@ impl Action {
             | Action::NestedMerge(_)
             | Action::Project(_)
             | Action::SetVar(_) => false,
+        }
+    }
+
+    /// Returns this action's effect on database state.
+    pub(crate) fn effect(&self) -> Effect {
+        match self {
+            Action::DeleteByKey(_)
+            | Action::ReadModifyWrite(_)
+            | Action::UpdateByKey(_)
+            | Action::Upsert(_) => Effect::Mutating,
+
+            Action::ExecStatement(action) => effect::classify(&action.stmt),
+
+            Action::Eval(_)
+            | Action::Filter(_)
+            | Action::FindPkByIndex(_)
+            | Action::GetByKey(_)
+            | Action::Guard(_)
+            | Action::NestedMerge(_)
+            | Action::Project(_)
+            | Action::QueryPk(_)
+            | Action::Scan(_)
+            | Action::SetVar(_) => Effect::ReadOnly,
         }
     }
 }
