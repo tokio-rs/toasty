@@ -1,0 +1,23 @@
+[package]
+name = "toasty-d1-worker-tests"
+version = "0.0.0"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+async-trait.workspace = true
+getrandom = { workspace = true, features = ["wasm_js"] }
+serde = { workspace = true, features = ["derive"] }
+toasty.workspace = true
+toasty-core.workspace = true
+toasty-driver-d1.workspace = true
+toasty-driver-integration-suite.workspace = true
+worker = { workspace = true, features = ["d1"] }
+
+[lints]
+workspace = true
