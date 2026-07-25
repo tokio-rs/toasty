@@ -52,6 +52,10 @@ pub struct Capability {
     /// Whether the driver can reset the complete database.
     pub reset_database: bool,
 
+    /// Whether table rebuild migrations must defer foreign-key checks instead
+    /// of disabling enforcement.
+    pub defer_foreign_keys_during_rebuild: bool,
+
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
@@ -639,6 +643,7 @@ impl Capability {
         max_bind_parameters: None,
         runtime_migrations: true,
         reset_database: true,
+        defer_foreign_keys_during_rebuild: false,
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
@@ -875,6 +880,7 @@ impl Capability {
         max_bind_parameters: None,
         runtime_migrations: true,
         reset_database: true,
+        defer_foreign_keys_during_rebuild: false,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
@@ -968,6 +974,7 @@ impl Capability {
         max_bind_parameters: Some(100),
         runtime_migrations: false,
         reset_database: false,
+        defer_foreign_keys_during_rebuild: true,
         test_connection_pool: false,
         transaction_lock_mode: false,
         ..Self::SQLITE

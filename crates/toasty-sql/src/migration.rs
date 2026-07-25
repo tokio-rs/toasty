@@ -219,9 +219,15 @@ impl<'a> MigrationStatement<'a> {
         let current_name = schema.table(previous.id).name.clone();
         let temp_name = format!("_toasty_new_{}", current_name);
 
-        // 1. PRAGMA foreign_keys = OFF
+        // D1 migrations run inside a Wrangler-owned transaction and forbid
+        // disabling foreign-key enforcement. SQLite's connected migration
+        // path retains its existing disable/enable pair.
         result.push(Self::new(
-            Statement::pragma_disable_foreign_keys(),
+            if capability.defer_foreign_keys_during_rebuild {
+                Statement::pragma_defer_foreign_keys()
+            } else {
+                Statement::pragma_disable_foreign_keys()
+            },
             schema.clone(),
         ));
 
@@ -297,11 +303,12 @@ impl<'a> MigrationStatement<'a> {
             schema.clone(),
         ));
 
-        // 6. PRAGMA foreign_keys = ON
-        result.push(Self::new(
-            Statement::pragma_enable_foreign_keys(),
-            schema.clone(),
-        ));
+        if !capability.defer_foreign_keys_during_rebuild {
+            result.push(Self::new(
+                Statement::pragma_enable_foreign_keys(),
+                schema.clone(),
+            ));
+        }
     }
 
     fn emit_column_changes(

@@ -29,6 +29,15 @@ impl Statement {
         .into()
     }
 
+    /// Defers foreign-key validation until the surrounding transaction ends.
+    pub fn pragma_defer_foreign_keys() -> Self {
+        Pragma {
+            name: "defer_foreign_keys".to_string(),
+            value: Some("ON".to_string()),
+        }
+        .into()
+    }
+
     /// Creates a PRAGMA statement with the given name and value.
     pub fn pragma(name: impl Into<String>, value: impl Into<String>) -> Self {
         Pragma {
