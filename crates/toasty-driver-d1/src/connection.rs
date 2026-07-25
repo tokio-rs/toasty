@@ -373,12 +373,19 @@ impl toasty_core::Connection for Connection {
         if statements.is_empty() {
             return Ok(());
         }
+        let statement_count = statements.len();
         let results = self
             .database
             .batch(statements)
             .into_send()
             .await
             .map_err(|error| error::worker("push schema", error))?;
+        if results.len() != statement_count {
+            return Err(toasty_core::Error::invalid_result(format!(
+                "D1 schema batch returned {} results for {statement_count} statements",
+                results.len()
+            )));
+        }
         for (index, result) in results.iter().enumerate() {
             ensure_success(result, &format!("push schema statement {index}"))?;
         }
