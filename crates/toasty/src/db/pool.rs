@@ -54,6 +54,47 @@ impl Default for PoolConfig {
     }
 }
 
+impl PoolConfig {
+    pub(crate) fn validate_direct(&self) -> crate::Result<()> {
+        let default = Self::default();
+        let mut configured = Vec::new();
+
+        if self.max_size != default.max_size {
+            configured.push("max_pool_size");
+        }
+        if self.timeouts.wait != default.timeouts.wait {
+            configured.push("pool_wait_timeout");
+        }
+        if self.timeouts.create != default.timeouts.create {
+            configured.push("pool_create_timeout");
+        }
+        if self.timeouts.recycle != default.timeouts.recycle {
+            configured.push("pool_recycle_timeout");
+        }
+        if self.health_check_interval != default.health_check_interval {
+            configured.push("pool_health_check_interval");
+        }
+        if self.pre_ping != default.pre_ping {
+            configured.push("pool_pre_ping");
+        }
+        if self.max_connection_lifetime != default.max_connection_lifetime {
+            configured.push("pool_max_connection_lifetime");
+        }
+        if self.max_connection_idle_time != default.max_connection_idle_time {
+            configured.push("pool_max_connection_idle_time");
+        }
+
+        if configured.is_empty() {
+            Ok(())
+        } else {
+            Err(toasty_core::Error::invalid_driver_configuration(format!(
+                "direct connections do not support pool configuration: {}",
+                configured.join(", ")
+            )))
+        }
+    }
+}
+
 /// A connection pool that manages database connections with background tasks.
 #[derive(Debug)]
 pub struct Pool {
@@ -144,7 +185,7 @@ impl Pool {
             toasty_core::Error::connection_pool(e)
         })?;
         Ok(super::Connection {
-            inner: connection,
+            inner: super::connection::ConnectionInner::Pooled(connection),
             shared,
         })
     }

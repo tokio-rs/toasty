@@ -10,7 +10,7 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
 
     // Db is stateless — after setup_db, the connection used for push_schema has
     // been returned to the pool, so it should be available.
-    let status = db.pool().status();
+    let status = db.pool().unwrap().status();
     assert_eq!(
         status.size, 1,
         "setup_db should have created one connection"
@@ -23,7 +23,7 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
     // Execute an operation — it acquires a connection, runs, and returns it.
     User::create().name("dummy").exec(&mut db).await?;
 
-    let status = db.pool().status();
+    let status = db.pool().unwrap().status();
     assert_eq!(
         status.available, 1,
         "connection should be returned after operation"
@@ -33,7 +33,7 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
     let mut db2 = db.clone();
     User::create().name("dummy").exec(&mut db2).await?;
 
-    let status = db.pool().status();
+    let status = db.pool().unwrap().status();
     assert_eq!(
         status.available, status.size,
         "all connections should be available after operations"
@@ -56,13 +56,13 @@ pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     let db = setup(t).await;
 
     // All connections available since Db is stateless.
-    let status = db.pool().status();
+    let status = db.pool().unwrap().status();
     assert_eq!(status.available, status.size);
 
     // Acquire a dedicated connection — it should be held from the pool.
     let mut conn = db.connection().await?;
 
-    let status = db.pool().status();
+    let status = db.pool().unwrap().status();
     assert_eq!(
         status.available,
         status.size - 1,
@@ -73,7 +73,7 @@ pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     User::create().name("dummy").exec(&mut conn).await?;
 
     // Connection is still held.
-    let status = db.pool().status();
+    let status = db.pool().unwrap().status();
     assert_eq!(
         status.available,
         status.size - 1,
@@ -86,7 +86,7 @@ pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     // The background task needs a moment to notice the channel closed and exit.
     tokio::task::yield_now().await;
 
-    let status = db.pool().status();
+    let status = db.pool().unwrap().status();
     assert_eq!(
         status.available, status.size,
         "connection should be returned after drop"

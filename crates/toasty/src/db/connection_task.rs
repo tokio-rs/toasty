@@ -10,9 +10,8 @@
 
 use std::sync::Arc;
 
+use toasty_core::driver::Connection;
 use toasty_core::driver::operation::RawSql;
-use toasty_core::driver::{Connection, Rows};
-use toasty_core::stmt::Value;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinHandle,
@@ -186,26 +185,9 @@ impl ConnectionTask {
         stmt: toasty_core::stmt::Statement,
         in_transaction: bool,
     ) -> crate::Result<toasty_core::driver::ExecResponse> {
-        let single = stmt.is_single();
-        let mut response = self
-            .engine
-            .exec(&mut *self.connection, stmt, in_transaction)
-            .await?;
-        response.values.buffer().await?;
-
-        if single {
-            let Rows::Value(Value::List(mut items)) = response.values else {
-                unreachable!()
-            };
-            assert!(
-                items.len() <= 1,
-                "expected at most 1 row for single statement, got {}",
-                items.len()
-            );
-            response.values = Rows::Value(items.pop().unwrap_or(Value::Null));
-        }
-
-        Ok(response)
+        self.engine
+            .exec_buffered(&mut *self.connection, stmt, in_transaction)
+            .await
     }
 
     /// Send `result` to the caller, but if the connection reported

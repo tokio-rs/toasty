@@ -96,6 +96,18 @@ pub struct ConnectContext {
     pub query_log: QueryLogConfig,
 }
 
+/// Selects how a database handle obtains connections from a driver.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionStrategy {
+    /// Create connections on demand and return them to a pool after use.
+    Pooled,
+
+    /// Create one connection when the database handle is built and serialize
+    /// all access to it. Direct connections do not start background tasks or
+    /// timers.
+    Direct,
+}
+
 /// Factory for database connections and provider of driver-level metadata.
 ///
 /// Each database backend (SQLite, PostgreSQL, MySQL, DynamoDB) implements this
@@ -124,10 +136,16 @@ pub trait Driver: Debug + Send + Sync + 'static {
     /// Describes the driver's capability, which informs the query planner.
     fn capability(&self) -> &'static Capability;
 
+    /// Returns how Toasty should own connections created by this driver.
+    fn connection_strategy(&self) -> ConnectionStrategy {
+        ConnectionStrategy::Pooled
+    }
+
     /// Creates a new connection to the database.
     ///
-    /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is
-    /// available and there is room to create a new [`Connection`]. The [`ConnectContext`] carries
+    /// Pooled drivers are called whenever no idle connection is available and
+    /// the pool has room for another. Direct drivers are called exactly once
+    /// while the database handle is built. The [`ConnectContext`] carries
     /// per-connection configuration the driver applies at construction time.
     async fn connect(&self, cx: &ConnectContext) -> crate::Result<Box<dyn Connection>>;
 

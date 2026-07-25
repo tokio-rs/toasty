@@ -14,7 +14,7 @@ pub async fn max_pool_size_is_applied(t: &mut Test) -> Result<()> {
         })
         .await;
 
-    assert_eq!(db.pool().status().max_size, 7);
+    assert_eq!(db.pool().unwrap().status().max_size, 7);
 
     Ok(())
 }

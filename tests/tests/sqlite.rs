@@ -60,7 +60,7 @@ async fn in_memory_caps_user_max_pool_size() {
         .await
         .unwrap();
 
-    assert_eq!(db.pool().status().max_size, 1);
+    assert_eq!(db.pool().unwrap().status().max_size, 1);
 }
 
 #[tokio::test]

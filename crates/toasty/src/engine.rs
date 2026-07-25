@@ -30,8 +30,8 @@ use crate::Result;
 use std::sync::Arc;
 use toasty_core::{
     Connection, Schema,
-    driver::{Capability, operation::RawSql},
-    stmt::{self, Statement},
+    driver::{Capability, Rows, operation::RawSql},
+    stmt::{self, Statement, Value},
 };
 
 /// The query execution engine.
@@ -100,6 +100,31 @@ impl Engine {
         // The plan is called once (single entry record stream) with no arguments
         // (empty record).
         self.exec_plan(connection, plan, in_transaction).await
+    }
+
+    pub(crate) async fn exec_buffered(
+        &self,
+        connection: &mut dyn Connection,
+        stmt: Statement,
+        in_transaction: bool,
+    ) -> Result<toasty_core::driver::ExecResponse> {
+        let single = stmt.is_single();
+        let mut response = self.exec(connection, stmt, in_transaction).await?;
+        response.values.buffer().await?;
+
+        if single {
+            let Rows::Value(Value::List(mut items)) = response.values else {
+                unreachable!()
+            };
+            assert!(
+                items.len() <= 1,
+                "expected at most 1 row for single statement, got {}",
+                items.len()
+            );
+            response.values = Rows::Value(items.pop().unwrap_or(Value::Null));
+        }
+
+        Ok(response)
     }
 
     /// Executes user-authored SQL through the driver SQL path.
