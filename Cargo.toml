@@ -8,6 +8,7 @@ members = [
     "crates/toasty-sql",
 
     # Driver implementations
+    "crates/toasty-driver-d1",
     "crates/toasty-driver-dynamodb",
     "crates/toasty-driver-mysql",
     "crates/toasty-driver-postgresql",
@@ -78,6 +79,7 @@ toasty-core = { version = "0.9.0", path = "crates/toasty-core" }
 toasty-macros = { version = "0.9.0", path = "crates/toasty-macros" }
 toasty-sql = { version = "0.9.0", path = "crates/toasty-sql" }
 # Driver implementations
+toasty-driver-d1 = { version = "0.9.0", path = "crates/toasty-driver-d1" }
 toasty-driver-dynamodb = { version = "0.9.0", path = "crates/toasty-driver-dynamodb" }
 toasty-driver-mysql = { version = "0.9.0", path = "crates/toasty-driver-mysql" }
 toasty-driver-postgresql = { version = "0.9.0", path = "crates/toasty-driver-postgresql" }
@@ -150,6 +152,7 @@ tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"
 uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng", "js"] }
+worker = "0.8.5"
 
 [profile.dev]
 debug = "line-tables-only"
