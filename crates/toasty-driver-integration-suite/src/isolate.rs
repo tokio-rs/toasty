@@ -29,7 +29,15 @@ impl Isolate {
     }
 
     /// Generate a process ID using the OS process ID.
+    #[cfg(not(target_arch = "wasm32"))]
     fn generate_process_id() -> u32 {
         std::process::id()
+    }
+
+    /// Workers have no process identifier. The per-isolate counter remains
+    /// unique within one Worker instance.
+    #[cfg(target_arch = "wasm32")]
+    fn generate_process_id() -> u32 {
+        0
     }
 }

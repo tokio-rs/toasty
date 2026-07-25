@@ -5,11 +5,7 @@ use toasty_core::driver::{Operation, operation::Transaction};
 /// When a batch of two creates fails on the second INSERT (unique constraint
 /// violation), the entire batch is rolled back — the first INSERT must not
 /// persist.
-#[driver_test(
-    id(ID),
-    requires(interactive_transactions),
-    scenario(crate::scenarios::user_unique_email)
-)]
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -29,20 +25,24 @@ pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Res
         .await
     );
 
-    // BEGIN → INSERT (succeeds) → INSERT (fails, not logged) → ROLLBACK
-    assert_struct!(
-        t.log().pop_op(),
-        Operation::Transaction(Transaction::Start {
-            isolation: None,
-            read_only: false,
-            ..
-        })
-    );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // first INSERT
-    assert_struct!(
-        t.log().pop_op(),
-        Operation::Transaction(Transaction::Rollback)
-    );
+    if t.capability().interactive_transactions {
+        // BEGIN → INSERT (succeeds) → INSERT (fails, not logged) → ROLLBACK
+        assert_struct!(
+            t.log().pop_op(),
+            Operation::Transaction(Transaction::Start {
+                isolation: None,
+                read_only: false,
+                ..
+            })
+        );
+        assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // first INSERT
+        assert_struct!(
+            t.log().pop_op(),
+            Operation::Transaction(Transaction::Rollback)
+        );
+    }
+    // Atomic-batch drivers return the failing batch before the middleware can
+    // log any successful child operation.
     assert!(t.log().is_empty());
 
     // Only the seeded user remains — "new@example.com" was rolled back

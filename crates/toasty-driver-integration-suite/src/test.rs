@@ -1,9 +1,10 @@
-use std::{
-    error::Error,
-    sync::{Arc, RwLock},
-};
+use std::{error::Error, sync::Arc};
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::sync::RwLock;
 
 use toasty::{Db, schema::ModelSet};
+#[cfg(not(target_arch = "wasm32"))]
 use tokio::runtime::Runtime;
 
 use crate::{Fault, InstrumentedDriver, InstrumentedHandle, Isolate, Setup};
@@ -11,6 +12,7 @@ use crate::{Fault, InstrumentedDriver, InstrumentedHandle, Isolate, Setup};
 /// Global lock for coordinating serial vs parallel tests.
 /// Normal tests acquire a read lock (allowing parallelism).
 /// Serial tests acquire a write lock (exclusive access).
+#[cfg(not(target_arch = "wasm32"))]
 static TEST_LOCK: RwLock<()> = RwLock::new(());
 
 /// Wraps the Tokio runtime and ensures cleanup happens.
@@ -24,6 +26,7 @@ pub struct Test {
     isolate: Isolate,
 
     /// Tokio runtime used by the test
+    #[cfg(not(target_arch = "wasm32"))]
     runtime: Option<Runtime>,
 
     /// Single handle controlling the instrumented driver test middleware:
@@ -39,6 +42,7 @@ pub struct Test {
 }
 
 impl Test {
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn new(setup: Arc<dyn Setup>) -> Self {
         let runtime = tokio::runtime::Builder::new_current_thread()
             .enable_all()
@@ -49,6 +53,22 @@ impl Test {
             setup,
             isolate: Isolate::new(),
             runtime: Some(runtime),
+            handle: InstrumentedHandle::default(),
+            tables: vec![],
+            serial: false,
+        }
+    }
+
+    /// Create a test harness for an existing async runtime.
+    ///
+    /// Worker handlers use this constructor and [`run_async`](Self::run_async)
+    /// instead of creating or blocking a Tokio runtime.
+    pub fn new_async(setup: Arc<dyn Setup>) -> Self {
+        Test {
+            setup,
+            isolate: Isolate::new(),
+            #[cfg(not(target_arch = "wasm32"))]
+            runtime: None,
             handle: InstrumentedHandle::default(),
             tables: vec![],
             serial: false,
@@ -131,6 +151,7 @@ impl Test {
     }
 
     /// Run an async test function using the internal runtime
+    #[cfg(not(target_arch = "wasm32"))]
     pub fn run<R>(&mut self, f: impl AsyncFn(&mut Test) -> R)
     where
         R: Into<TestResult>,
@@ -145,19 +166,42 @@ impl Test {
 
         // Temporarily take the runtime to avoid borrow checker issues
         let runtime = self.runtime.take().expect("runtime already consumed");
-        let f: std::pin::Pin<Box<dyn std::future::Future<Output = R>>> = Box::pin(f(self));
-        let result = runtime.block_on(f).into();
+        let result = runtime.block_on(self.run_async(f));
 
-        // now, wut
-        for table in &self.tables {
-            runtime.block_on(self.setup.delete_table(table));
-        }
-
-        if let Some(error) = result.error {
-            panic!("Driver test returned an error: {error}");
+        if let Err(error) = result {
+            panic!("Driver test failed: {error}");
         }
 
         self.runtime = Some(runtime);
+    }
+
+    /// Run one test body and clean up every table it created.
+    ///
+    /// This entry point is executor-neutral: it awaits the caller's runtime and
+    /// never blocks a thread or creates a Tokio runtime. It returns test and
+    /// cleanup failures as strings so a Worker can send them to its host.
+    pub async fn run_async<R>(&mut self, f: impl AsyncFn(&mut Test) -> R) -> Result<(), String>
+    where
+        R: Into<TestResult>,
+    {
+        let result: TestResult = f(self).await.into();
+        let tables = std::mem::take(&mut self.tables);
+        let mut cleanup_errors = Vec::new();
+        for table in tables {
+            if let Err(error) = self.setup.try_delete_table(&table).await {
+                cleanup_errors.push(format!("{table}: {error}"));
+            }
+        }
+
+        match (result.error, cleanup_errors.is_empty()) {
+            (None, true) => Ok(()),
+            (Some(error), true) => Err(error.to_string()),
+            (None, false) => Err(format!("cleanup failed: {}", cleanup_errors.join("; "))),
+            (Some(error), false) => Err(format!(
+                "{error}; cleanup failed: {}",
+                cleanup_errors.join("; ")
+            )),
+        }
     }
 }
 
