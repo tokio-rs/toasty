@@ -39,10 +39,11 @@ pub(crate) struct Shared {
 
 /// A database handle backed by a pooled or direct connection source.
 ///
-/// Each operation acquires a connection from the pool, executes, and returns
-/// the connection. Use [`Db::connection`] to obtain a dedicated
-/// [`Connection`] when you need multiple statements to share the same
-/// physical connection (e.g. temporary tables or session-level state).
+/// With a pooled driver, each operation acquires a connection from the pool,
+/// executes, and returns the connection. A direct driver serializes operations
+/// through one request-local connection. Use [`Db::connection`] to obtain a
+/// dedicated [`Connection`] when you need multiple statements to share the
+/// same physical connection (e.g. temporary tables or session-level state).
 ///
 /// Cloning a `Db` is cheap. Clones share the same pool or direct connection.
 pub struct Db {

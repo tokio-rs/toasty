@@ -52,14 +52,18 @@ The event's fields:
 
 | Field | Meaning |
 |---|---|
-| `db.system` | Backend that ran the operation: `sqlite`, `turso`, `postgresql`, `mysql`, or `dynamodb`. |
-| `db.statement` | The serialized SQL, with `?N` (SQLite, Turso, MySQL) or `$N` (PostgreSQL) placeholders. SQL drivers only. |
+| `db.system` | Backend that ran the operation: `sqlite`, `turso`, `d1`, `postgresql`, `mysql`, or `dynamodb`. |
+| `db.statement` | The serialized SQL, with `?N` (SQLite, Turso, D1), `?` (MySQL), or `$N` (PostgreSQL) placeholders. SQL drivers only. |
 | `db.operation` | The operation name (`get_by_key`, `query_pk`, `scan`, …). Key-value drivers only. |
 | `db.collection` | The table the operation targets. Key-value drivers only. |
 | `db.params` | Bound parameter values. Only present when enabled — see [Parameter values](#parameter-values). |
 | `duration_ms` | Elapsed execution time in milliseconds. |
 | `rows` | Rows returned or affected, when the driver knows the count. |
 | `error` | The error, when the operation failed. |
+
+D1 reports `duration_ms` as `0`. Rust's standard monotonic clock is not
+available in this Worker environment, so query logging omits timing rather
+than risking a runtime panic.
 
 The field names follow [OpenTelemetry's database semantic conventions], so
 subscribers that understand those conventions (for example, an OTLP

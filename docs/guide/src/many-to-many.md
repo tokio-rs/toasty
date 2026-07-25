@@ -271,8 +271,9 @@ incoming rows reach followers.
 
 Queries that traverse `has_many(via = ...)`, including relation accessors,
 `.any()`, `.include()`, and `.select()`, require a SQL backend. They are supported
-on SQLite, PostgreSQL, and MySQL and are not available on DynamoDB. Creating,
-updating, querying, and deleting the join model use its ordinary model APIs.
+on SQLite, Turso, Cloudflare D1, PostgreSQL, and MySQL and are not available on
+DynamoDB. Creating, updating, querying, and deleting the join model use its
+ordinary model APIs.
 
 See [HasMany](./has-many.md#multi-step-relations-via) for the general `via`
 rules, [Filtering with Expressions](./filtering-with-expressions.md#filtering-on-associations)

@@ -314,8 +314,8 @@ collapsed, so an article a user commented on twice appears once. A
 list.
 
 Preloading a `via` relation with `.include()` (and projecting one with
-`.select()`) is supported on SQL backends (SQLite, PostgreSQL, MySQL). It is
-not yet available on DynamoDB.
+`.select()`) is supported on SQL backends (SQLite, Turso, Cloudflare D1,
+PostgreSQL, MySQL). It is not yet available on DynamoDB.
 
 ## Multiple includes
 

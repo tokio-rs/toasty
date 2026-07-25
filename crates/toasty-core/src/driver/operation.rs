@@ -5,8 +5,11 @@
 //! SQL drivers handle [`QuerySql`], [`RawSql`], and [`Insert`]; key-value
 //! drivers handle [`GetByKey`], [`QueryPk`], [`DeleteByKey`],
 //! [`FindPkByIndex`], [`UpdateByKey`], and (when
-//! [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`]. Both
-//! driver types handle [`Transaction`] operations.
+//! [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`].
+//! Drivers with interactive transaction support also handle [`Transaction`]
+//! operations. Drivers with atomic batch support receive
+//! [`AtomicSqlBatch`] through
+//! [`Connection::exec_atomic_batch`](super::Connection::exec_atomic_batch).
 
 mod atomic_sql_batch;
 pub use atomic_sql_batch::AtomicSqlBatch;

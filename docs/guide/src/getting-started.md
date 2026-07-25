@@ -20,7 +20,9 @@ tokio = { version = "1", features = ["full"] }
 
 The `sqlite` feature enables the SQLite driver. Toasty also supports
 `postgresql`, `mysql`, `turso`, and `dynamodb` — swap the feature flag to use
-a different database.
+a different database. Cloudflare D1 uses the separate `toasty-driver-d1`
+crate because a Worker supplies the database binding directly; see
+[Cloudflare D1](./d1.md).
 
 ## Define a model
 

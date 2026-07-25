@@ -43,7 +43,7 @@ Toasty supports these Rust types as model fields:
 | `f32`, `f64` | Floating point |
 | `uuid::Uuid` | UUID |
 | `Vec<u8>` | Binary / Blob |
-| `Vec<T>` (T scalar, not `u8`) | Native array column on PostgreSQL (`text[]`, `int8[]`, …); JSON on MySQL / SQLite; List `L` on DynamoDB. See [`Vec<scalar>` Fields](./vec-scalar-fields.md). |
+| `Vec<T>` (T scalar, not `u8`) | Native array column on PostgreSQL (`text[]`, `int8[]`, …); JSON on MySQL; JSON text on SQLite, Turso, and D1; List `L` on DynamoDB. See [`Vec<scalar>` Fields](./vec-scalar-fields.md). |
 | `Option<T>` | Nullable version of `T` |
 | Embedded types (`#[derive(toasty::Embed)]`) | Flattened into parent table columns (see [Embedded Types](./embedded-types.md)) |
 | Document fields (`#[document]`) | One structured column whose scalar leaves remain queryable (see [`#[document]` Fields](./document-fields.md)) |

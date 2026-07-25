@@ -79,10 +79,10 @@ use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
 /// Per-connection configuration passed to [`Driver::connect`].
 ///
-/// The connection pool builds one from the values set on `Db::builder()` and
+/// The connection source builds one from the values set on `Db::builder()` and
 /// hands it to the driver every time a new connection is created, so drivers
 /// can apply configuration at construction time rather than through separate
-/// setters. Callers connecting outside a pool use
+/// setters. Callers connecting outside a `Db` use
 /// [`ConnectContext::default()`].
 ///
 /// The struct is non-exhaustive: construct it with `default()` and assign the
@@ -110,9 +110,9 @@ pub enum ConnectionStrategy {
 
 /// Factory for database connections and provider of driver-level metadata.
 ///
-/// Each database backend (SQLite, PostgreSQL, MySQL, DynamoDB) implements this
-/// trait to tell Toasty what the backend supports ([`Capability`]) and to
-/// create [`Connection`] instances on demand.
+/// Each database backend (SQLite, Turso, Cloudflare D1, PostgreSQL, MySQL,
+/// DynamoDB) implements this trait to tell Toasty what the backend supports
+/// ([`Capability`]) and to create [`Connection`] instances on demand.
 ///
 /// # Examples
 ///
@@ -166,9 +166,10 @@ pub trait Driver: Debug + Send + Sync + 'static {
 
 /// A live database session that can execute [`Operation`]s.
 ///
-/// Connections are obtained from [`Driver::connect`] and are managed by the
-/// connection pool. All query execution flows through [`Connection::exec`],
-/// which accepts an [`Operation`] and returns an [`ExecResponse`].
+/// Connections are obtained from [`Driver::connect`] and are managed by a
+/// pooled or direct connection source. All query execution flows through
+/// [`Connection::exec`], which accepts an [`Operation`] and returns an
+/// [`ExecResponse`].
 ///
 /// # Examples
 ///

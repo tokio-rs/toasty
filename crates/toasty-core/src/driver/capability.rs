@@ -9,7 +9,8 @@ use crate::{schema::db, stmt};
 ///
 /// Pre-built configurations are available as associated constants:
 /// [`SQLITE`](Self::SQLITE), [`POSTGRESQL`](Self::POSTGRESQL),
-/// [`MYSQL`](Self::MYSQL), and [`DYNAMODB`](Self::DYNAMODB).
+/// [`MYSQL`](Self::MYSQL), [`DYNAMODB`](Self::DYNAMODB), and
+/// [`D1`](Self::D1).
 ///
 /// # Examples
 ///
@@ -128,7 +129,7 @@ pub struct Capability {
     ///
     /// - MySQL: `Some(64)` — hard error on longer names
     /// - PostgreSQL: `Some(63)` — silently truncates, risking collisions
-    /// - SQLite / DynamoDB: `None` — no enforced limit
+    /// - SQLite / D1 / DynamoDB: `None` — no enforced identifier limit
     pub max_identifier_length: Option<usize>,
 
     /// Whether the database supports `VARCHAR(n)` column types natively.
@@ -187,7 +188,7 @@ pub struct Capability {
     /// When false, the decimal type requires fixed precision and scale to be specified upfront.
     /// - PostgreSQL: true (NUMERIC supports arbitrary precision)
     /// - MySQL: false (DECIMAL requires fixed precision/scale)
-    /// - SQLite/DynamoDB: false (no native decimal support, stored as TEXT)
+    /// - SQLite/D1/DynamoDB: false (no native decimal support, stored as TEXT)
     pub decimal_arbitrary_precision: bool,
 
     /// Whether OR is supported in index key conditions (e.g. DynamoDB KeyConditionExpression).
@@ -318,7 +319,8 @@ pub struct Capability {
     /// array-valued parameter.
     ///
     /// When `false`, `Vec<T>` model fields use whatever fallback the backend
-    /// provides (JSON column on MySQL/SQLite, native List `L` on DynamoDB).
+    /// provides (JSON on MySQL, JSON text on SQLite/D1, native List `L` on
+    /// DynamoDB).
     /// See [`Self::vec_scalar`] for the schema-build gate.
     pub native_array: bool,
 

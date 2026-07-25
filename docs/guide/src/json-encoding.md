@@ -83,9 +83,9 @@ JSON fields accept these column types:
 | `json` | Native JSON on PostgreSQL and MySQL |
 | `jsonb` | Native binary JSON on PostgreSQL |
 
-Use `text` on SQLite, Turso, DynamoDB, or any backend where the database
-does not provide a native JSON column. Toasty's serializer still emits
-valid JSON, but a text column does not ask the database to validate
+Use `text` on SQLite, Turso, Cloudflare D1, DynamoDB, or any backend where the
+database does not provide a native JSON column. Toasty's serializer still
+emits valid JSON, but a text column does not ask the database to validate
 external writes.
 
 Use `json` when PostgreSQL or MySQL should validate the stored value as
