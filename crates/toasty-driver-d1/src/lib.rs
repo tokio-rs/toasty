@@ -5,14 +5,16 @@
 //! D1 drivers are constructed from a request-local Worker binding and use a
 //! direct connection rather than a connection pool.
 
-mod error;
 mod migration;
-mod value;
 
 #[cfg(target_arch = "wasm32")]
 mod connection;
 #[cfg(target_arch = "wasm32")]
 mod driver;
+#[cfg(target_arch = "wasm32")]
+mod error;
+#[cfg(any(target_arch = "wasm32", test))]
+mod value;
 
 pub use migration::generate_migration;
 
