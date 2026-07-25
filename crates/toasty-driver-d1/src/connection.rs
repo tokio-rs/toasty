@@ -16,7 +16,10 @@ use worker::{
     send::{IntoSendFuture, SendWrapper},
 };
 
-use crate::{error, value::wasm as value};
+use crate::{
+    error,
+    value::{self, wasm as codec},
+};
 
 enum SqlReturn {
     Count,
@@ -46,6 +49,8 @@ impl Connection {
             return Err(error::unsupported("MySQL last-insert-id workaround"));
         }
 
+        validate_patterns(&operation.stmt, &operation.params)?;
+
         let statement = toasty_sql::Statement::from(operation.stmt);
         let sql = toasty_sql::Serializer::sqlite(&schema.db).serialize(&statement);
         let ret = operation
@@ -73,12 +78,8 @@ impl Connection {
         ret: SqlReturn,
         operation: &str,
     ) -> toasty_core::Result<ExecResponse> {
-        if params.len() > 100 {
-            return Err(toasty_core::Error::validation_failed(format!(
-                "D1 statement has {} bind parameters; maximum is 100",
-                params.len()
-            )));
-        }
+        value::validate_sql(sql)?;
+        value::validate_parameter_count(params.len())?;
 
         let log = QueryLog::sql(
             &self.query_log,
@@ -100,7 +101,7 @@ impl Connection {
     ) -> toasty_core::Result<ExecResponse> {
         let values = params
             .into_iter()
-            .map(|param| value::bind(param.value))
+            .map(|param| codec::bind(param.value))
             .collect::<toasty_core::Result<Vec<_>>>()?;
         let statement = self
             .database
@@ -152,7 +153,7 @@ async fn execute_rows(
         .map_err(|error| error::worker(operation, error))?;
     let mut decoded = Vec::with_capacity(rows.len());
     for row in rows {
-        let row = value::row(row)?;
+        let row = codec::row(row)?;
         if let Some(types) = types
             && row.length() as usize != types.len()
         {
@@ -167,8 +168,8 @@ async fn execute_rows(
             .iter()
             .enumerate()
             .map(|(index, item)| match types {
-                Some(types) => value::decode_typed(item, &types[index], index),
-                None => value::decode_infer(item, index),
+                Some(types) => codec::decode_typed(item, &types[index], index),
+                None => codec::decode_infer(item, index),
             })
             .collect::<toasty_core::Result<Vec<_>>>()?;
         decoded.push(stmt::ValueRecord::from_vec(values).into());
@@ -188,6 +189,34 @@ fn ensure_success(result: &worker::D1Result, operation: &str) -> toasty_core::Re
             result.error().unwrap_or_else(|| "unknown D1 error".into()),
         ))
     }
+}
+
+fn validate_patterns(
+    statement: &stmt::Statement,
+    params: &[TypedValue],
+) -> toasty_core::Result<()> {
+    let mut validation = Ok(());
+    stmt::visit::for_each_expr(statement, |expression| {
+        if validation.is_err() {
+            return;
+        }
+        let pattern = match expression {
+            stmt::Expr::Like(expression) => expression.pattern.as_ref(),
+            stmt::Expr::StartsWith(expression) => expression.prefix.as_ref(),
+            _ => return,
+        };
+        let value = match pattern {
+            stmt::Expr::Arg(argument) if argument.nesting == 0 => {
+                params.get(argument.position).map(|param| &param.value)
+            }
+            stmt::Expr::Value(value) | stmt::Expr::Static(value) => Some(value),
+            _ => None,
+        };
+        if let Some(stmt::Value::String(pattern)) = value {
+            validation = value::validate_pattern(pattern);
+        }
+    });
+    validation
 }
 
 fn decode_batch_result(
@@ -225,7 +254,7 @@ fn decode_batch_result(
             })?;
             let item = worker::d1::serde_wasm_bindgen::to_value(&item)
                 .map_err(|error| error::worker("batch value conversion", error.into()))?;
-            values.push(value::decode_typed(item, ty, column_index)?);
+            values.push(codec::decode_typed(item, ty, column_index)?);
         }
         decoded.push(stmt::ValueRecord::from_vec(values).into());
     }
@@ -263,19 +292,20 @@ impl toasty_core::Connection for Connection {
             if operation.last_insert_id_hack.is_some() {
                 return Err(error::unsupported("MySQL last-insert-id workaround"));
             }
-            if operation.params.len() > 100 {
-                return Err(toasty_core::Error::validation_failed(format!(
-                    "D1 batch statement {index} has {} bind parameters; maximum is 100",
-                    operation.params.len()
-                )));
-            }
+            value::validate_parameter_count(operation.params.len()).map_err(|error| {
+                error.context(toasty_core::Error::from_args(format_args!(
+                    "D1 batch statement {index} is invalid"
+                )))
+            })?;
+            validate_patterns(&operation.stmt, &operation.params)?;
 
             let statement = toasty_sql::Statement::from(operation.stmt);
             let sql = toasty_sql::Serializer::sqlite(&schema.db).serialize(&statement);
+            value::validate_sql(&sql)?;
             let values = operation
                 .params
                 .into_iter()
-                .map(|param| value::bind(param.value))
+                .map(|param| codec::bind(param.value))
                 .collect::<toasty_core::Result<Vec<_>>>()?;
             let statement =
                 self.database.prepare(sql).bind(&values).map_err(|error| {
@@ -312,8 +342,47 @@ impl toasty_core::Connection for Connection {
             .collect()
     }
 
-    async fn push_schema(&mut self, _schema: &Schema) -> toasty_core::Result<()> {
-        Err(error::unsupported("push schema"))
+    async fn push_schema(&mut self, schema: &Schema) -> toasty_core::Result<()> {
+        let serializer = toasty_sql::Serializer::sqlite(&schema.db);
+        let mut statements = Vec::new();
+        for table in &schema.db.tables {
+            if table.columns.len() > 100 {
+                return Err(toasty_core::Error::validation_failed(format!(
+                    "D1 table {} has {} columns; maximum is 100",
+                    table.name,
+                    table.columns.len()
+                )));
+            }
+
+            let sql = serializer.serialize(&toasty_sql::Statement::create_table(
+                table,
+                &toasty_core::driver::Capability::D1,
+            ));
+            value::validate_sql(&sql)?;
+            statements.push(self.database.prepare(sql));
+            for index in &table.indices {
+                if index.primary_key {
+                    continue;
+                }
+                let sql = serializer.serialize(&toasty_sql::Statement::create_index(index));
+                value::validate_sql(&sql)?;
+                statements.push(self.database.prepare(sql));
+            }
+        }
+
+        if statements.is_empty() {
+            return Ok(());
+        }
+        let results = self
+            .database
+            .batch(statements)
+            .into_send()
+            .await
+            .map_err(|error| error::worker("push schema", error))?;
+        for (index, result) in results.iter().enumerate() {
+            ensure_success(result, &format!("push schema statement {index}"))?;
+        }
+        Ok(())
     }
 
     async fn applied_migrations(&mut self) -> toasty_core::Result<Vec<AppliedMigration>> {

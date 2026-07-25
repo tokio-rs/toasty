@@ -7,6 +7,9 @@ pub(crate) const MIN_SAFE_INTEGER: i64 = -9_007_199_254_740_991;
 pub(crate) const MAX_SAFE_INTEGER: i64 = 9_007_199_254_740_991;
 pub(crate) const MAX_SAFE_UNSIGNED_INTEGER: u64 = MAX_SAFE_INTEGER as u64;
 pub(crate) const MAX_VALUE_BYTES: usize = 2_000_000;
+pub(crate) const MAX_BIND_PARAMETERS: usize = 100;
+pub(crate) const MAX_PATTERN_BYTES: usize = 50;
+pub(crate) const MAX_SQL_BYTES: usize = 100_000;
 
 fn invalid_value(message: impl Into<String>) -> toasty_core::Error {
     toasty_core::Error::validation_failed(message)
@@ -46,6 +49,38 @@ fn validate_bytes(len: usize, ty: &str) -> toasty_core::Result<()> {
     } else {
         Err(invalid_value(format!(
             "D1 {ty} exceeds the {MAX_VALUE_BYTES}-byte value limit"
+        )))
+    }
+}
+
+pub(crate) fn validate_parameter_count(count: usize) -> toasty_core::Result<()> {
+    if count <= MAX_BIND_PARAMETERS {
+        Ok(())
+    } else {
+        Err(invalid_value(format!(
+            "D1 statement has {count} bind parameters; maximum is {MAX_BIND_PARAMETERS}"
+        )))
+    }
+}
+
+pub(crate) fn validate_pattern(pattern: &str) -> toasty_core::Result<()> {
+    if pattern.len() <= MAX_PATTERN_BYTES {
+        Ok(())
+    } else {
+        Err(invalid_value(format!(
+            "D1 LIKE/GLOB pattern is {} bytes; maximum is {MAX_PATTERN_BYTES}",
+            pattern.len()
+        )))
+    }
+}
+
+pub(crate) fn validate_sql(sql: &str) -> toasty_core::Result<()> {
+    if sql.len() <= MAX_SQL_BYTES {
+        Ok(())
+    } else {
+        Err(invalid_value(format!(
+            "D1 SQL statement is {} bytes; maximum is {MAX_SQL_BYTES}",
+            sql.len()
         )))
     }
 }
@@ -414,6 +449,16 @@ mod tests {
         assert!(validate(&Value::String("x".repeat(MAX_VALUE_BYTES + 1))).is_err());
         assert!(validate(&Value::Bytes(vec![0; MAX_VALUE_BYTES])).is_ok());
         assert!(validate(&Value::Bytes(vec![0; MAX_VALUE_BYTES + 1])).is_err());
+    }
+
+    #[test]
+    fn validates_statement_and_pattern_limits() {
+        assert!(validate_parameter_count(MAX_BIND_PARAMETERS).is_ok());
+        assert!(validate_parameter_count(MAX_BIND_PARAMETERS + 1).is_err());
+        assert!(validate_pattern(&"x".repeat(MAX_PATTERN_BYTES)).is_ok());
+        assert!(validate_pattern(&"x".repeat(MAX_PATTERN_BYTES + 1)).is_err());
+        assert!(validate_sql(&"x".repeat(MAX_SQL_BYTES)).is_ok());
+        assert!(validate_sql(&"x".repeat(MAX_SQL_BYTES + 1)).is_err());
     }
 
     #[test]
