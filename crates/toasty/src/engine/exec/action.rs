@@ -102,6 +102,10 @@ impl Action {
             | Action::SetVar(_) => false,
         }
     }
+
+    pub(crate) fn requires_interactive_transaction(&self) -> bool {
+        matches!(self, Action::ReadModifyWrite(_))
+    }
 }
 
 impl fmt::Debug for Action {

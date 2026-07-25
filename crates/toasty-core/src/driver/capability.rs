@@ -35,6 +35,23 @@ pub struct Capability {
     /// SQL drivers set this to `Some`. Non-SQL drivers set this to `None`.
     pub sql_placeholder: Option<SqlPlaceholder>,
 
+    /// Whether callers can begin, commit, and roll back an interactive
+    /// transaction on one connection.
+    pub interactive_transactions: bool,
+
+    /// Whether the driver can execute a prevalidated group of SQL statements
+    /// as one atomic batch.
+    pub atomic_batch: bool,
+
+    /// Maximum number of bind parameters accepted by one statement.
+    pub max_bind_parameters: Option<usize>,
+
+    /// Whether the driver can apply Toasty migrations at runtime.
+    pub runtime_migrations: bool,
+
+    /// Whether the driver can reset the complete database.
+    pub reset_database: bool,
+
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
@@ -414,6 +431,14 @@ pub struct StorageTypes {
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
+
+    /// Minimum value accepted for signed integers. `None` means the full i64
+    /// range is supported.
+    pub min_signed_integer: Option<i64>,
+
+    /// Maximum value accepted for signed integers. `None` means the full i64
+    /// range is supported.
+    pub max_signed_integer: Option<i64>,
 }
 
 /// The database's capabilities to mutate the schema (tables, columns, indices).
@@ -531,6 +556,40 @@ impl Capability {
             ));
         }
 
+        if self.interactive_transactions && !self.sql {
+            return Err(crate::Error::invalid_driver_configuration(
+                "interactive_transactions is true but sql is false",
+            ));
+        }
+
+        if self.atomic_batch && !self.sql {
+            return Err(crate::Error::invalid_driver_configuration(
+                "atomic_batch is true but sql is false",
+            ));
+        }
+
+        if self.max_bind_parameters.is_some() && !self.sql {
+            return Err(crate::Error::invalid_driver_configuration(
+                "max_bind_parameters is set but sql is false",
+            ));
+        }
+
+        if self.transaction_lock_mode && !self.interactive_transactions {
+            return Err(crate::Error::invalid_driver_configuration(
+                "transaction_lock_mode is true but interactive_transactions is false",
+            ));
+        }
+
+        if let (Some(min), Some(max)) = (
+            self.storage_types.min_signed_integer,
+            self.storage_types.max_signed_integer,
+        ) && min > max
+        {
+            return Err(crate::Error::invalid_driver_configuration(
+                "storage_types.min_signed_integer exceeds max_signed_integer",
+            ));
+        }
+
         Ok(())
     }
 
@@ -575,6 +634,11 @@ impl Capability {
         driver_name: "SQLite",
         sql: true,
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
+        interactive_transactions: true,
+        atomic_batch: false,
+        max_bind_parameters: None,
+        runtime_migrations: true,
+        reset_database: true,
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
@@ -806,6 +870,11 @@ impl Capability {
         driver_name: "DynamoDB",
         sql: false,
         sql_placeholder: None,
+        interactive_transactions: false,
+        atomic_batch: false,
+        max_bind_parameters: None,
+        runtime_migrations: true,
+        reset_database: true,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,
@@ -888,6 +957,21 @@ impl Capability {
         vec_pop: false,
         vec_remove_at: false,
     };
+
+    /// Cloudflare D1 capabilities.
+    pub const D1: Self = Self {
+        driver_name: "D1",
+        storage_types: StorageTypes::D1,
+        schema_mutations: SchemaMutations::D1,
+        interactive_transactions: false,
+        atomic_batch: true,
+        max_bind_parameters: Some(100),
+        runtime_migrations: false,
+        reset_database: false,
+        test_connection_pool: false,
+        transaction_lock_mode: false,
+        ..Self::SQLITE
+    };
 }
 
 impl StorageTypes {
@@ -925,6 +1009,8 @@ impl StorageTypes {
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
+        min_signed_integer: None,
+        max_signed_integer: None,
     };
 
     /// PostgreSQL storage types.
@@ -957,6 +1043,8 @@ impl StorageTypes {
         // to i64::MAX. While NUMERIC could theoretically support larger values,
         // we prefer explicit limits over implicit type switching.
         max_unsigned_integer: Some(i64::MAX as u64),
+        min_signed_integer: None,
+        max_signed_integer: None,
     };
 
     /// MySQL storage types.
@@ -993,6 +1081,8 @@ impl StorageTypes {
 
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
+        min_signed_integer: None,
+        max_signed_integer: None,
     };
 
     /// DynamoDB storage types.
@@ -1019,6 +1109,17 @@ impl StorageTypes {
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
+        min_signed_integer: None,
+        max_signed_integer: None,
+    };
+
+    /// Cloudflare D1 storage types.
+    pub const D1: StorageTypes = StorageTypes {
+        default_uuid_type: db::Type::Text,
+        max_unsigned_integer: Some(9_007_199_254_740_991),
+        min_signed_integer: Some(-9_007_199_254_740_991),
+        max_signed_integer: Some(9_007_199_254_740_991),
+        ..Self::SQLITE
     };
 }
 
@@ -1045,6 +1146,12 @@ impl SchemaMutations {
 
     /// DynamoDB schema mutation capabilities. Migrations are not currently supported.
     pub const DYNAMODB: Self = Self {
+        alter_column_type: false,
+        alter_column_properties_atomic: false,
+    };
+
+    /// D1 schema mutation capabilities.
+    pub const D1: Self = Self {
         alter_column_type: false,
         alter_column_properties_atomic: false,
     };
@@ -1076,6 +1183,48 @@ mod tests {
     fn test_validate_dynamodb_capability() {
         // DynamoDB has native_varchar=false and varchar=None, should pass
         assert!(Capability::DYNAMODB.validate().is_ok());
+    }
+
+    #[test]
+    fn test_validate_d1_capability() {
+        assert!(Capability::D1.validate().is_ok());
+        const {
+            assert!(!Capability::D1.interactive_transactions);
+            assert!(Capability::D1.atomic_batch);
+        }
+        assert_eq!(Capability::D1.max_bind_parameters, Some(100));
+        assert_eq!(
+            Capability::D1.storage_types.max_signed_integer,
+            Some(9_007_199_254_740_991)
+        );
+        assert_eq!(
+            Capability::D1.storage_types.min_signed_integer,
+            Some(-9_007_199_254_740_991)
+        );
+        assert!(matches!(
+            Capability::D1.storage_types.default_uuid_type,
+            db::Type::Text
+        ));
+    }
+
+    #[test]
+    fn test_validate_rejects_atomic_batch_for_non_sql_driver() {
+        let invalid = Capability {
+            atomic_batch: true,
+            ..Capability::DYNAMODB
+        };
+
+        assert!(invalid.validate().is_err());
+    }
+
+    #[test]
+    fn test_validate_rejects_lock_modes_without_interactive_transactions() {
+        let invalid = Capability {
+            interactive_transactions: false,
+            ..Capability::SQLITE
+        };
+
+        assert!(invalid.validate().is_err());
     }
 
     #[test]

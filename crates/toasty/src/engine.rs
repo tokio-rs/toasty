@@ -93,7 +93,7 @@ impl Engine {
 
         tracing::trace!(
             actions = plan.actions.len(),
-            needs_transaction = plan.needs_transaction,
+            atomicity = ?plan.atomicity,
             "execution plan ready"
         );
 

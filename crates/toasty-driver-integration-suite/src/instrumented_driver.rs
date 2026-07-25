@@ -157,6 +157,10 @@ impl Driver for InstrumentedDriver {
         self.inner.capability()
     }
 
+    fn connection_strategy(&self) -> toasty_core::driver::ConnectionStrategy {
+        self.inner.connection_strategy()
+    }
+
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
         Ok(Box::new(InstrumentedConnection {
             inner: self.inner.connect(cx).await?,

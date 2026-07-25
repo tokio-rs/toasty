@@ -112,6 +112,12 @@ impl Db {
 
     /// Drops the entire database and recreates an empty one without applying migrations.
     pub async fn reset_db(&self) -> Result<()> {
+        if !self.capability().reset_database {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support resetting the database",
+                self.capability().driver_name
+            )));
+        }
         self.shared.source.driver().reset_db().await
     }
 
@@ -174,6 +180,7 @@ impl std::fmt::Debug for Db {
 #[async_trait]
 impl Executor for Db {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        require_interactive_transactions(self.capability())?;
         let conn = self.connection().await?;
         Transaction::begin(ConnRef::owned(conn)).await
     }
@@ -193,5 +200,16 @@ impl Executor for Db {
 
     fn schema(&mut self) -> &Arc<Schema> {
         Db::schema(self)
+    }
+}
+
+pub(crate) fn require_interactive_transactions(capability: &Capability) -> Result<()> {
+    if capability.interactive_transactions {
+        Ok(())
+    } else {
+        Err(toasty_core::Error::unsupported_feature(format!(
+            "{} does not support interactive transactions",
+            capability.driver_name
+        )))
     }
 }

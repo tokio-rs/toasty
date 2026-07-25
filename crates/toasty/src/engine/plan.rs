@@ -29,7 +29,7 @@ struct ExecPlanner<'a> {
     logical_plan: &'a LogicalPlan,
     var_decls: VarDecls,
     actions: Vec<exec::Action>,
-    use_transactions: bool,
+    capability: &'static toasty_core::driver::Capability,
     schema: Arc<Schema>,
 }
 
@@ -44,15 +44,15 @@ impl Engine {
         .build_logical_plan()?;
 
         // Build the execution plan from the logical plan
-        Ok(self.plan_execution(logical_plan))
+        self.plan_execution(logical_plan)
     }
 
-    fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
+    fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> Result<ExecPlan> {
         ExecPlanner {
             logical_plan: &logical_plan,
             var_decls: VarDecls::default(),
             actions: vec![],
-            use_transactions: self.capability().sql,
+            capability: self.capability,
             schema: self.schema.clone(),
         }
         .plan_execution()

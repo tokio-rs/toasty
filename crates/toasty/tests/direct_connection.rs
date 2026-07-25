@@ -45,6 +45,7 @@ struct State {
 #[derive(Debug)]
 struct DirectDriver {
     inner: toasty_driver_sqlite::Sqlite,
+    capability: &'static Capability,
     state: Arc<State>,
     _tempdir: TempDir,
 }
@@ -55,6 +56,7 @@ impl DirectDriver {
         let inner = toasty_driver_sqlite::Sqlite::open(tempdir.path().join("direct.db"));
         Self {
             inner,
+            capability: &Capability::SQLITE,
             state: Arc::new(State::default()),
             _tempdir: tempdir,
         }
@@ -62,6 +64,11 @@ impl DirectDriver {
 
     fn state(&self) -> Arc<State> {
         self.state.clone()
+    }
+
+    fn d1_like(mut self) -> Self {
+        self.capability = &Capability::D1;
+        self
     }
 }
 
@@ -78,7 +85,7 @@ impl Driver for DirectDriver {
     }
 
     fn capability(&self) -> &'static Capability {
-        self.inner.capability()
+        self.capability
     }
 
     fn connection_strategy(&self) -> ConnectionStrategy {
@@ -272,4 +279,50 @@ async fn direct_source_rejects_pool_configuration() {
 
     assert!(error.is_invalid_driver_configuration());
     assert!(error.to_string().contains("max_pool_size"));
+}
+
+#[tokio::test]
+async fn unsupported_transactions_fail_before_connection_use() {
+    let driver = DirectDriver::new().d1_like();
+    let state = driver.state();
+    let mut db = toasty::Db::builder().build(driver).await.unwrap();
+
+    let Err(error) = db.transaction().await else {
+        panic!("transaction unexpectedly succeeded");
+    };
+    assert!(error.is_unsupported_feature());
+    assert_eq!(state.connects.load(Ordering::Relaxed), 1);
+    assert_eq!(state.execs.load(Ordering::Relaxed), 0);
+
+    let Err(error) = db.transaction_builder().begin().await else {
+        panic!("transaction builder unexpectedly succeeded");
+    };
+    assert!(error.is_unsupported_feature());
+    assert_eq!(state.execs.load(Ordering::Relaxed), 0);
+
+    let mut connection = db.connection().await.unwrap();
+    let Err(error) = connection.transaction().await else {
+        panic!("connection transaction unexpectedly succeeded");
+    };
+    assert!(error.is_unsupported_feature());
+    assert_eq!(state.execs.load(Ordering::Relaxed), 0);
+}
+
+#[tokio::test]
+async fn atomic_batch_plan_fails_before_dispatch_until_batch_support_lands() {
+    let driver = DirectDriver::new().d1_like();
+    let state = driver.state();
+    let mut db = toasty::Db::builder()
+        .models(toasty::models!(User))
+        .build(driver)
+        .await
+        .unwrap();
+    db.push_schema().await.unwrap();
+
+    let error = toasty::batch((User::create().name("a"), User::create().name("b")))
+        .exec(&mut db)
+        .await
+        .unwrap_err();
+    assert!(error.is_unsupported_feature());
+    assert_eq!(state.execs.load(Ordering::Relaxed), 0);
 }

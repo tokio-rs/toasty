@@ -35,7 +35,7 @@ mod output;
 pub(crate) use output::Output;
 
 mod plan;
-pub(crate) use plan::ExecPlan;
+pub(crate) use plan::{Atomicity, ExecPlan};
 
 mod project;
 pub(crate) use project::Project;
@@ -111,7 +111,16 @@ impl Engine {
             )
         };
 
-        if plan.needs_transaction {
+        if plan.atomicity == Atomicity::AtomicBatch {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} atomic batch execution is not implemented",
+                self.capability.driver_name
+            )));
+        }
+
+        let interactive = plan.atomicity == Atomicity::InteractiveTransaction;
+
+        if interactive {
             tracing::trace!("beginning plan transaction");
             exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
@@ -124,7 +133,7 @@ impl Engine {
             // violation should not error-spam production logs.
             if let Err(e) = exec.exec_step(step).await {
                 tracing::debug!(step = i, action = %step.name(), error = %e, "action failed");
-                if plan.needs_transaction {
+                if interactive {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec.connection.exec(&self.schema, rollback.into()).await;
@@ -133,7 +142,7 @@ impl Engine {
             }
         }
 
-        if plan.needs_transaction {
+        if interactive {
             tracing::trace!("committing plan transaction");
             exec.connection.exec(&self.schema, commit.into()).await?;
         }

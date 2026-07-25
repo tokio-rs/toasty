@@ -70,6 +70,12 @@ impl<'a> TransactionBuilder<'a> {
     /// its configured source. The returned [`Transaction`] owns the
     /// connection until it completes or is dropped.
     pub async fn begin(self) -> Result<Transaction<'a>> {
+        let capability = match &self.source {
+            TxSource::Db(db) => super::Db::capability(db),
+            TxSource::Connection(conn) => conn.shared.engine.capability(),
+        };
+        super::require_interactive_transactions(capability)?;
+
         let conn = match self.source {
             TxSource::Db(db) => ConnRef::owned(db.connection().await?),
             TxSource::Connection(conn) => ConnRef::Borrowed(conn),

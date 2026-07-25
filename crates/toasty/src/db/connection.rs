@@ -197,6 +197,7 @@ impl Connection {
 #[async_trait]
 impl super::Executor for Connection {
     async fn transaction(&mut self) -> crate::Result<Transaction<'_>> {
+        super::require_interactive_transactions(self.shared.engine.capability())?;
         Transaction::begin(ConnRef::Borrowed(self)).await
     }
 
