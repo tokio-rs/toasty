@@ -136,7 +136,7 @@ toml = "1.1.0"
 toml_edit = "0.25.8"
 tempfile = "3.27"
 proptest = "1"
-tokio = { version = "1.50", features = ["full"] }
+tokio = "1.50"
 tokio-postgres = "0.7.17"
 tokio-postgres-rustls = { version = "0.14.0", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
@@ -149,7 +149,7 @@ turso = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"
-uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng"] }
+uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng", "js"] }
 
 [profile.dev]
 debug = "line-tables-only"

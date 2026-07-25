@@ -30,7 +30,7 @@ toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "
 toasty-cli.workspace = true
 toasty-core.workspace = true
 toasty-macros.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 
 # Integration test suite
 toasty-driver-integration-suite.workspace = true
