@@ -64,6 +64,7 @@ pub mod infra_reset_db;
 pub mod infra_sync_send;
 pub mod key_unsigned;
 pub mod lift_belongs_to_complex_filter;
+pub mod paginate_multi_column;
 pub mod query_count;
 pub mod query_in_list;
 pub mod raw_identifier_fields;
