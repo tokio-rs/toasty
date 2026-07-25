@@ -8,6 +8,9 @@
 //! [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`]. Both
 //! driver types handle [`Transaction`] operations.
 
+mod atomic_sql_batch;
+pub use atomic_sql_batch::AtomicSqlBatch;
+
 mod delete_by_key;
 pub use delete_by_key::DeleteByKey;
 

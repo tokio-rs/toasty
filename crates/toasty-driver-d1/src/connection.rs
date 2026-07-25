@@ -6,7 +6,7 @@ use toasty_core::{
     driver::{
         ExecResponse, QueryLogConfig,
         log::QueryLog,
-        operation::{Operation, QuerySql, RawSql, RawSqlRet, TypedValue},
+        operation::{AtomicSqlBatch, Operation, QuerySql, RawSql, RawSqlRet, TypedValue},
     },
     schema::db::{AppliedMigration, Migration},
     stmt,
@@ -190,6 +190,51 @@ fn ensure_success(result: &worker::D1Result, operation: &str) -> toasty_core::Re
     }
 }
 
+fn decode_batch_result(
+    result: &worker::D1Result,
+    types: Option<&[stmt::Type]>,
+    statement_index: usize,
+) -> toasty_core::Result<ExecResponse> {
+    ensure_success(result, &format!("batch statement {statement_index}"))?;
+    let Some(types) = types else {
+        let changes = result
+            .meta()
+            .map_err(|error| error::worker("batch metadata", error))?
+            .and_then(|meta| meta.changes)
+            .unwrap_or(0);
+        return Ok(ExecResponse::count(changes as u64));
+    };
+
+    let rows: Vec<serde_json::Value> = result
+        .results()
+        .map_err(|error| error::worker("batch results", error))?;
+    let mut decoded = Vec::with_capacity(rows.len());
+    for row in rows {
+        let serde_json::Value::Object(mut row) = row else {
+            return Err(toasty_core::Error::invalid_result(format!(
+                "D1 batch statement {statement_index} returned a non-object row"
+            )));
+        };
+        let mut values = Vec::with_capacity(types.len());
+        for (column_index, ty) in types.iter().enumerate() {
+            let alias = format!("column{}", column_index + 1);
+            let item = row.remove(&alias).ok_or_else(|| {
+                toasty_core::Error::invalid_result(format!(
+                    "D1 batch statement {statement_index} row is missing alias {alias}"
+                ))
+            })?;
+            let item = worker::d1::serde_wasm_bindgen::to_value(&item)
+                .map_err(|error| error::worker("batch value conversion", error.into()))?;
+            values.push(value::decode_typed(item, ty, column_index)?);
+        }
+        decoded.push(stmt::ValueRecord::from_vec(values).into());
+    }
+
+    Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(
+        decoded,
+    )))
+}
+
 #[async_trait]
 impl toasty_core::Connection for Connection {
     async fn exec(
@@ -204,6 +249,67 @@ impl toasty_core::Connection for Connection {
             Operation::Transaction(_) => Err(error::unsupported("transaction")),
             operation => Err(error::unsupported(operation.name())),
         }
+    }
+
+    async fn exec_atomic_batch(
+        &mut self,
+        schema: &Arc<Schema>,
+        batch: AtomicSqlBatch,
+    ) -> toasty_core::Result<Vec<ExecResponse>> {
+        let mut statements = Vec::with_capacity(batch.operations.len());
+        let mut returns = Vec::with_capacity(batch.operations.len());
+
+        for (index, operation) in batch.operations.into_iter().enumerate() {
+            if operation.last_insert_id_hack.is_some() {
+                return Err(error::unsupported("MySQL last-insert-id workaround"));
+            }
+            if operation.params.len() > 100 {
+                return Err(toasty_core::Error::validation_failed(format!(
+                    "D1 batch statement {index} has {} bind parameters; maximum is 100",
+                    operation.params.len()
+                )));
+            }
+
+            let statement = toasty_sql::Statement::from(operation.stmt);
+            let sql = toasty_sql::Serializer::sqlite(&schema.db).serialize(&statement);
+            let values = operation
+                .params
+                .into_iter()
+                .map(|param| value::bind(param.value))
+                .collect::<toasty_core::Result<Vec<_>>>()?;
+            let statement =
+                self.database.prepare(sql).bind(&values).map_err(|error| {
+                    error::worker(&format!("batch statement {index} bind"), error)
+                })?;
+            statements.push(statement);
+            returns.push(operation.ret);
+        }
+
+        tracing::trace!(
+            driver = "d1",
+            statements = statements.len(),
+            "executing atomic SQL batch"
+        );
+        let results = self
+            .database
+            .batch(statements)
+            .into_send()
+            .await
+            .map_err(|error| error::worker("atomic batch", error))?;
+        if results.len() != returns.len() {
+            return Err(toasty_core::Error::invalid_result(format!(
+                "D1 atomic batch returned {} results for {} statements",
+                results.len(),
+                returns.len()
+            )));
+        }
+
+        results
+            .iter()
+            .zip(&returns)
+            .enumerate()
+            .map(|(index, (result, types))| decode_batch_result(result, types.as_deref(), index))
+            .collect()
     }
 
     async fn push_schema(&mut self, _schema: &Schema) -> toasty_core::Result<()> {

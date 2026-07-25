@@ -197,6 +197,20 @@ pub trait Connection: Debug + Send + 'static {
     /// typed by the structural `Type::Object`.
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
 
+    /// Executes generated SQL statements as one atomic backend batch.
+    ///
+    /// The default deliberately rejects the operation. A sequential fallback
+    /// would violate the caller's atomicity requirement.
+    async fn exec_atomic_batch(
+        &mut self,
+        _schema: &Arc<Schema>,
+        _batch: operation::AtomicSqlBatch,
+    ) -> crate::Result<Vec<ExecResponse>> {
+        Err(crate::Error::unsupported_feature(
+            "driver does not support atomic SQL batches",
+        ))
+    }
+
     /// Cheap, synchronous, local check that the driver's client object
     /// still considers the connection open.
     ///

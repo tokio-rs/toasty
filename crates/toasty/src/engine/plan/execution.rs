@@ -28,7 +28,18 @@ impl ExecPlanner<'_> {
 fn plan_atomicity(capability: &Capability, actions: &[Action]) -> crate::Result<Atomicity> {
     let requires_interactive = actions.iter().any(Action::requires_interactive_transaction);
     let database_operations = actions.iter().filter(|action| action.is_db_op()).count();
-    select_atomicity(capability, database_operations, requires_interactive)
+    let atomicity = select_atomicity(capability, database_operations, requires_interactive)?;
+    if atomicity == Atomicity::AtomicBatch
+        && actions
+            .iter()
+            .any(|action| !action.is_atomic_batch_eligible())
+    {
+        return Err(toasty_core::Error::unsupported_feature(format!(
+            "{} cannot atomically batch a plan with database result dependencies or non-generated SQL operations",
+            capability.driver_name
+        )));
+    }
+    Ok(atomicity)
 }
 
 fn select_atomicity(

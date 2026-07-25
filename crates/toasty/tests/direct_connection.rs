@@ -15,7 +15,9 @@ use tempfile::TempDir;
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Connection, ConnectionStrategy, Driver, ExecResponse, Operation,
+        Capability, ConnectContext, Connection, ConnectionStrategy, Driver, ExecResponse,
+        Operation,
+        operation::{AtomicSqlBatch, Transaction},
     },
     schema::{
         db::{AppliedMigration, Migration},
@@ -35,6 +37,7 @@ struct User {
 struct State {
     connects: AtomicU32,
     execs: AtomicU32,
+    batches: AtomicU32,
     active: AtomicU32,
     max_active: AtomicU32,
     connection_drops: AtomicU32,
@@ -137,6 +140,27 @@ impl Connection for DirectConnection {
         let result = self.inner.exec(schema, op).await;
         self.state.active.fetch_sub(1, Ordering::SeqCst);
         result
+    }
+
+    async fn exec_atomic_batch(
+        &mut self,
+        schema: &Arc<Schema>,
+        batch: AtomicSqlBatch,
+    ) -> Result<Vec<ExecResponse>> {
+        self.state.batches.fetch_add(1, Ordering::Relaxed);
+        self.inner.exec(schema, Transaction::start().into()).await?;
+        let mut responses = Vec::with_capacity(batch.operations.len());
+        for operation in batch.operations {
+            match self.inner.exec(schema, operation.into()).await {
+                Ok(response) => responses.push(response),
+                Err(error) => {
+                    let _ = self.inner.exec(schema, Transaction::Rollback.into()).await;
+                    return Err(error);
+                }
+            }
+        }
+        self.inner.exec(schema, Transaction::Commit.into()).await?;
+        Ok(responses)
     }
 
     async fn ping(&mut self) -> Result<()> {
@@ -309,7 +333,7 @@ async fn unsupported_transactions_fail_before_connection_use() {
 }
 
 #[tokio::test]
-async fn atomic_batch_plan_fails_before_dispatch_until_batch_support_lands() {
+async fn atomic_batch_plan_dispatches_once() {
     let driver = DirectDriver::new().d1_like();
     let state = driver.state();
     let mut db = toasty::Db::builder()
@@ -319,10 +343,12 @@ async fn atomic_batch_plan_fails_before_dispatch_until_batch_support_lands() {
         .unwrap();
     db.push_schema().await.unwrap();
 
-    let error = toasty::batch((User::create().name("a"), User::create().name("b")))
+    let (a, b): (User, User) = toasty::batch((User::create().name("a"), User::create().name("b")))
         .exec(&mut db)
         .await
-        .unwrap_err();
-    assert!(error.is_unsupported_feature());
+        .unwrap();
+    assert_eq!(a.name, "a");
+    assert_eq!(b.name, "b");
+    assert_eq!(state.batches.load(Ordering::Relaxed), 1);
     assert_eq!(state.execs.load(Ordering::Relaxed), 0);
 }
