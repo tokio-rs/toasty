@@ -11,6 +11,7 @@ fn make_field(model_id: ModelId, index: usize, name: &str, versionable: bool) ->
             app: Some(name.to_string()),
             storage: None,
         },
+        comment: None,
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: if versionable {
                 stmt::Type::I64
@@ -40,6 +41,7 @@ fn build_model(fields: Vec<Field>, version_field: Option<FieldId>) -> Model {
     Model::Root(ModelRoot {
         id,
         name: Name::new("Thing"),
+        comment: None,
         fields,
         primary_key: PrimaryKey {
             fields: vec![id.field(0)],

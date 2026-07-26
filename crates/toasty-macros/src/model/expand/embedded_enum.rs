@@ -441,6 +441,7 @@ impl Expand<'_> {
                             app: Some(#app_name.to_string()),
                             storage: #storage_name,
                         },
+                        comment: None,
                         ty: <#ty as #toasty::Field>::field_ty(#storage_ty),
                         nullable: <#ty as #toasty::Field>::NULLABLE,
                         primary_key: false,

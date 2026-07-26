@@ -71,11 +71,13 @@ impl Connection for SchemaConnection {
 #[tokio::test]
 async fn migration_generate_with_decimal_model_writes_snapshot() {
     #[derive(Debug, toasty::Model)]
+    #[comment = "Weighted records"]
     struct SomeModel {
         #[key]
         #[auto]
         id: u64,
 
+        #[comment = "Measured weight"]
         weight: rust_decimal::Decimal,
     }
 
@@ -86,8 +88,11 @@ async fn migration_generate_with_decimal_model_writes_snapshot() {
         .await
         .unwrap();
     let dir = tempfile::tempdir().unwrap();
-    let config =
-        toasty_cli::Config::new().migration(toasty_cli::MigrationConfig::new().path(dir.path()));
+    let config = toasty_cli::Config::new().migration(
+        toasty_cli::MigrationConfig::new()
+            .path(dir.path())
+            .schema_comments(true),
+    );
 
     toasty_cli::ToastyCli::with_config(db, config)
         .parse_from(["toasty", "migration", "generate"])
@@ -105,4 +110,55 @@ async fn migration_generate_with_decimal_model_writes_snapshot() {
         .unwrap();
     assert_eq!(weight.ty, stmt::Type::Decimal);
     assert_eq!(weight.storage_ty, Type::Numeric(None));
+    assert_eq!(
+        snapshot.schema.tables[0].comment.as_deref(),
+        Some("Weighted records")
+    );
+    assert_eq!(weight.comment.as_deref(), Some("Measured weight"));
+}
+
+#[tokio::test]
+async fn disabled_schema_comments_carry_managed_comments_forward() {
+    #[derive(Debug, toasty::Model)]
+    #[comment = "Current declaration"]
+    struct SomeModel {
+        #[key]
+        #[auto]
+        id: u64,
+
+        #[comment = "Current field declaration"]
+        weight: rust_decimal::Decimal,
+    }
+
+    let db = toasty::Db::builder()
+        .models(toasty::models!(SomeModel))
+        .build(PostgresSchemaDriver)
+        .await
+        .unwrap();
+    let mut previous = db.schema().db.clone();
+    previous.tables[0].comment = Some("Managed table comment".to_string());
+    previous.tables[0].columns[1].comment = Some("Managed column comment".to_string());
+
+    let mut next = db.schema().db.clone();
+    next.tables[0].columns[1].storage_ty = Type::Numeric(Some((28, 10)));
+
+    let generated = toasty::migration::generate_with_options(
+        db.driver(),
+        &previous,
+        &next,
+        &diff::RenameHints::new(),
+        toasty::migration::GenerateOptions::new(),
+    )
+    .unwrap();
+
+    assert_eq!(
+        generated.snapshot.schema.tables[0].comment.as_deref(),
+        Some("Managed table comment")
+    );
+    assert_eq!(
+        generated.snapshot.schema.tables[0].columns[1]
+            .comment
+            .as_deref(),
+        Some("Managed column comment")
+    );
 }

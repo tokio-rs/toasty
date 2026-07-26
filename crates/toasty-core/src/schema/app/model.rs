@@ -150,6 +150,9 @@ pub struct ModelRoot {
     /// The model's name.
     pub name: Name,
 
+    /// Optional database table comment declared on the model.
+    pub comment: Option<String>,
+
     /// All fields defined on this model.
     pub fields: Vec<Field>,
 

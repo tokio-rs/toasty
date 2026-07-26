@@ -10,6 +10,6 @@ mod generate;
 mod history;
 mod snapshot;
 
-pub use generate::{Generated, generate};
+pub use generate::{GenerateOptions, Generated, generate, generate_with_options};
 pub use history::{History, HistoryEntry};
 pub use snapshot::Snapshot;

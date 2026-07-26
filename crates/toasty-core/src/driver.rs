@@ -56,7 +56,7 @@
 //! [`crate::Error::driver_operation_failed`].
 
 mod capability;
-pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
+pub use capability::{Capability, SchemaComments, SchemaMutations, SqlPlaceholder, StorageTypes};
 
 pub mod log;
 pub use log::QueryLogConfig;

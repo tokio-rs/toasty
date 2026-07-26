@@ -45,6 +45,9 @@ pub struct Capability {
     /// alter statement and several single-property ones.
     pub schema_mutations: SchemaMutations,
 
+    /// Native table and column comment support.
+    pub schema_comments: SchemaComments,
+
     /// SQL: supports update statements in CTE queries.
     pub cte_with_update: bool,
 
@@ -453,6 +456,16 @@ pub struct SchemaMutations {
     pub alter_column_properties_atomic: bool,
 }
 
+/// Describes native database catalog comment support.
+#[derive(Debug, Clone, Copy)]
+pub struct SchemaComments {
+    /// Whether tables can carry native comments.
+    pub table: bool,
+
+    /// Whether columns can carry native comments.
+    pub column: bool,
+}
+
 /// SQL bind-parameter placeholder syntax accepted by a driver.
 ///
 /// This describes the SQL text users must write when sending raw SQL through
@@ -577,6 +590,7 @@ impl Capability {
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
+        schema_comments: SchemaComments::UNSUPPORTED,
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: true,
@@ -670,6 +684,7 @@ impl Capability {
         sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
         schema_mutations: SchemaMutations::POSTGRESQL,
+        schema_comments: SchemaComments::SUPPORTED,
         select_for_update: true,
         auto_increment: true,
         max_auto_increment_integer_width: None,
@@ -732,6 +747,7 @@ impl Capability {
         sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
+        schema_comments: SchemaComments::SUPPORTED,
         select_for_update: true,
         returning_from_mutation: false,
         upsert_primary_key: false,
@@ -808,6 +824,7 @@ impl Capability {
         sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
+        schema_comments: SchemaComments::UNSUPPORTED,
         cte_with_update: false,
         select_for_update: false,
         returning_from_mutation: false,
@@ -1047,6 +1064,20 @@ impl SchemaMutations {
     pub const DYNAMODB: Self = Self {
         alter_column_type: false,
         alter_column_properties_atomic: false,
+    };
+}
+
+impl SchemaComments {
+    /// Neither table nor column comments are supported.
+    pub const UNSUPPORTED: Self = Self {
+        table: false,
+        column: false,
+    };
+
+    /// Both table and column comments are supported.
+    pub const SUPPORTED: Self = Self {
+        table: true,
+        column: true,
     };
 }
 

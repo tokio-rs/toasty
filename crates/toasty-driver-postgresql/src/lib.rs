@@ -462,6 +462,32 @@ impl Connection {
             .await
             .map_err(classify_pg_error)?;
 
+        if table.comment.is_some() {
+            let sql = serializer.serialize(&sql::Statement::set_table_comment(
+                table.name.as_str(),
+                table.comment.as_deref(),
+            ));
+            self.client
+                .execute(&sql, &[])
+                .await
+                .map_err(classify_pg_error)?;
+        }
+
+        for column in &table.columns {
+            if column.comment.is_none() {
+                continue;
+            }
+            let sql = serializer.serialize(&sql::Statement::set_column_comment(
+                table.name.as_str(),
+                column,
+                &Capability::POSTGRESQL,
+            ));
+            self.client
+                .execute(&sql, &[])
+                .await
+                .map_err(classify_pg_error)?;
+        }
+
         for index in &table.indices {
             if index.primary_key {
                 continue;

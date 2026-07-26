@@ -28,6 +28,12 @@ impl ToSql for &stmt::ColumnDef {
             fmt!(f, " ");
             check.to_sql(f);
         }
+
+        if f.serializer.is_mysql()
+            && let Some(comment) = &self.comment
+        {
+            fmt!(f, " COMMENT " stmt::Value::String(comment.clone()));
+        }
     }
 }
 

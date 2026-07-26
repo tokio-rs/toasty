@@ -1,6 +1,6 @@
 use super::AutoStrategy;
 
-use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
+use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name, parse_comment};
 
 use syn::spanned::Spanned;
 
@@ -58,6 +58,9 @@ pub(crate) struct FieldAttr {
     /// Optional database column name and / or type
     pub(crate) column: Option<Column>,
 
+    /// Optional database column comment.
+    pub(crate) comment: Option<syn::LitStr>,
+
     /// Shared logical field this enum variant field participates in:
     /// `#[shared(<ident>)]`. Variant fields declaring the same identifier are
     /// backed by a single shared column. Only valid on enum variant fields.
@@ -102,6 +105,7 @@ impl FieldAttr {
             auto: None,
             index: false,
             column: None,
+            comment: None,
             shared: None,
             default_expr: None,
             update_expr: None,
@@ -160,6 +164,18 @@ impl FieldAttr {
                     match Column::from_ast(attr) {
                         Ok(col) => field_attr.column = Some(col),
                         Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("comment") {
+                if field_attr.comment.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[comment] attribute",
+                    ));
+                } else {
+                    match parse_comment(attr) {
+                        Ok(comment) => field_attr.comment = Some(comment),
+                        Err(err) => errs.push(err),
                     }
                 }
             } else if attr.path().is_ident("shared") {

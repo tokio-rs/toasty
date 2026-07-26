@@ -1,4 +1,4 @@
-use super::{ErrorSet, KeyAttr};
+use super::{ErrorSet, KeyAttr, parse_comment};
 
 #[derive(Debug, Default)]
 pub(crate) struct ModelAttr {
@@ -10,6 +10,9 @@ pub(crate) struct ModelAttr {
 
     /// Optional database table name to map the model to
     pub(crate) table: Option<syn::LitStr>,
+
+    /// Optional database table comment.
+    pub(crate) comment: Option<syn::LitStr>,
 }
 
 impl ModelAttr {
@@ -73,6 +76,18 @@ impl ModelAttr {
                 };
 
                 self.table = Some(lit.clone());
+            } else if attr.path().is_ident("comment") {
+                if self.comment.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[comment] attribute",
+                    ));
+                } else {
+                    match parse_comment(attr) {
+                        Ok(comment) => self.comment = Some(comment),
+                        Err(err) => errs.push(err),
+                    }
+                }
             }
         }
 

@@ -115,4 +115,20 @@ mod tests {
             "error message should mention the missing path: {message}"
         );
     }
+
+    #[test]
+    fn existing_config_defaults_schema_comments_to_false() {
+        let config: Config = toml::from_str(
+            r#"
+            [migration]
+            path = "toasty"
+            prefix_style = "Sequential"
+            checksums = false
+            statement_breakpoints = true
+            "#,
+        )
+        .unwrap();
+
+        assert!(!config.migration.schema_comments);
+    }
 }
