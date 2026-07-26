@@ -243,6 +243,21 @@ pub struct Capability {
     /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
     pub transaction_lock_mode: bool,
 
+    /// Whether a multi-statement read can be given a consistent snapshot by
+    /// wrapping it in a transaction.
+    ///
+    /// SQL backends set this `true`, so a read-only plan of several
+    /// statements — an eager load, say — runs inside `BEGIN`/`COMMIT` and its
+    /// statements cannot straddle a concurrent write.
+    ///
+    /// A driver whose backend has no transactions at all sets it `false`.
+    /// Read-only plans then run unwrapped, trading that snapshot for being
+    /// able to run at all: the alternative is the engine asking for a
+    /// transaction the driver must refuse. Plans that *write* are unaffected
+    /// — they still request a transaction, so a driver that cannot provide
+    /// one still rejects them rather than silently writing non-atomically.
+    pub snapshot_reads: bool,
+
     /// Whether the backend can walk a paginated query in reverse from a
     /// cursor.
     ///
@@ -638,6 +653,7 @@ impl Capability {
         // SQLite exposes `BEGIN DEFERRED|IMMEDIATE|EXCLUSIVE` for
         // lock-acquisition policy.
         transaction_lock_mode: true,
+        snapshot_reads: true,
 
         backward_pagination: true,
         sql_nulls_first_on_asc: true,
@@ -713,6 +729,7 @@ impl Capability {
         // PostgreSQL has no SQLite-style lock-mode keyword on BEGIN.
         transaction_lock_mode: false,
         sql_nulls_first_on_asc: false,
+        snapshot_reads: true,
 
         // PostgreSQL accepts a single array-valued bind param and supports
         // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
@@ -771,6 +788,7 @@ impl Capability {
 
         // MySQL has no SQLite-style lock-mode keyword on START TRANSACTION.
         transaction_lock_mode: false,
+        snapshot_reads: true,
 
         // `Vec<scalar>` model fields land in a `JSON` column. The driver
         // serializes `Value::List` to a JSON string at bind time, so the
@@ -864,6 +882,7 @@ impl Capability {
 
         // DynamoDB rejects `Operation::Transaction` wholesale.
         transaction_lock_mode: false,
+        snapshot_reads: false,
 
         backward_pagination: false,
         sql_nulls_first_on_asc: false,
