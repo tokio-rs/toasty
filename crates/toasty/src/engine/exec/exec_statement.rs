@@ -197,8 +197,86 @@ impl Exec<'_> {
             last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 
-        let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
+        let res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
+        self.finish_exec_statement(action, res, mysql_insert_returning, mysql_update_returning)
+            .await
+    }
+
+    /// Readies a statement for the driver without sending it.
+    ///
+    /// Returns `None` when the action resolved without touching the database,
+    /// having already stored its result. Only called for actions that
+    /// [`is_batchable`](ExecStatement::is_batchable) accepted, so the MySQL
+    /// `RETURNING` fixups cannot apply here.
+    pub(super) async fn prepare_exec_statement(
+        &mut self,
+        action: &ExecStatement,
+    ) -> Result<Option<operation::QuerySql>> {
+        let mut stmt = action.stmt.clone();
+        debug_assert!(action.input.is_empty(), "batched statement takes no input");
+
+        if let stmt::Statement::Query(query) = &stmt
+            && let stmt::ExprSet::Values(values) = &query.body
+            && values.is_empty()
+        {
+            let rows = if action.output.ty.is_some() {
+                Rows::Stream(stmt::ValueStream::default())
+            } else {
+                Rows::Count(0)
+            };
+            self.vars.store(
+                action.output.output.var,
+                action.output.output.num_uses,
+                ExecResponse::from_rows(rows),
+            );
+            return Ok(None);
+        }
+
+        let params = self.engine.prepare_for_driver(&mut stmt);
+
+        let ret = match action.conditional {
+            ConditionalOutput::Count => Some(vec![stmt::Type::I64, stmt::Type::I64]),
+            ConditionalOutput::Returning => {
+                let mut tys = vec![stmt::Type::I64, stmt::Type::I64];
+                tys.extend(
+                    action
+                        .output
+                        .ty
+                        .clone()
+                        .expect("conditional write with RETURNING has output columns"),
+                );
+                Some(tys)
+            }
+            ConditionalOutput::None => action.output.ty.clone(),
+        };
+
+        Ok(Some(operation::QuerySql {
+            stmt,
+            params,
+            ret,
+            last_insert_id_hack: None,
+        }))
+    }
+
+    /// Interprets a batched statement's response. The MySQL `RETURNING`
+    /// fixups never apply: they belong to a driver that streams its writes.
+    pub(super) async fn finish_batched_statement(
+        &mut self,
+        action: &ExecStatement,
+        res: ExecResponse,
+    ) -> Result<()> {
+        self.finish_exec_statement(action, res, None, None).await
+    }
+
+    /// Interprets a statement's response and stores it in the output variable.
+    async fn finish_exec_statement(
+        &mut self,
+        action: &ExecStatement,
+        mut res: ExecResponse,
+        mysql_insert_returning: Option<MySQLInsertReturning>,
+        mysql_update_returning: Option<MySQLUpdateReturning>,
+    ) -> Result<()> {
         match action.conditional {
             ConditionalOutput::None => {
                 if let Some(mysql_info) = mysql_insert_returning {

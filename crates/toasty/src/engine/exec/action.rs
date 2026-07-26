@@ -106,6 +106,21 @@ impl Action {
         }
     }
 
+    /// Returns true if this action is a write that can be handed to
+    /// [`Connection::exec_batch`](toasty_core::driver::Connection::exec_batch).
+    ///
+    /// A batch is submitted before any of it runs, so a statement that reads
+    /// a variable is excluded: whatever produced that variable may itself be
+    /// in the batch, and would not have run yet.
+    pub(crate) fn is_batchable_write(&self) -> bool {
+        match self {
+            Action::ExecStatement(exec) => {
+                !matches!(exec.stmt, stmt::Statement::Query(_)) && exec.input.is_empty()
+            }
+            _ => false,
+        }
+    }
+
     /// Returns true if this action issues a database operation.
     ///
     /// Used to determine whether a plan needs to be wrapped in a transaction.

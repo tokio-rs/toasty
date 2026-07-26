@@ -1,7 +1,8 @@
 #![cfg(feature = "sqlite")]
 
-//! Tests that the engine decides whether a plan needs a transaction from what
-//! the driver says it can do, via [`Capability::snapshot_reads`].
+//! Tests that the engine dispatches a plan according to what the driver says
+//! it can do, for the two capabilities a backend without transactions needs:
+//! [`Capability::snapshot_reads`] and [`Capability::atomic_write_batch`].
 //!
 //! Each test wraps the SQLite driver in one that reports different
 //! capabilities and records what it is asked to do, so the assertions are
@@ -53,6 +54,8 @@ struct Book {
 enum Call {
     Transaction,
     Statement,
+    /// A write set handed over together, with how many statements it held.
+    Batch(usize),
 }
 
 type Log = Arc<Mutex<Vec<Call>>>;
@@ -67,9 +70,19 @@ struct Probe {
 }
 
 impl Probe {
-    /// Capabilities of a SQL backend that cannot open a transaction, so its
-    /// reads get no snapshot.
+    /// Capabilities of a SQL backend that cannot open a transaction: reads
+    /// get no snapshot, writes arrive as a set.
     fn without_transactions() -> &'static Capability {
+        static CAPABILITY: OnceLock<Capability> = OnceLock::new();
+        CAPABILITY.get_or_init(|| Capability {
+            snapshot_reads: false,
+            atomic_write_batch: true,
+            ..Capability::SQLITE
+        })
+    }
+
+    /// As above, but declining batches, so writes take the streamed path.
+    fn without_transactions_or_batching() -> &'static Capability {
         static CAPABILITY: OnceLock<Capability> = OnceLock::new();
         CAPABILITY.get_or_init(|| Capability {
             snapshot_reads: false,
@@ -129,6 +142,23 @@ impl toasty_core::driver::Connection for ProbeConnection {
             _ => Call::Statement,
         });
         self.inner.exec(schema, op).await
+    }
+
+    async fn exec_batch(
+        &mut self,
+        schema: &Arc<Schema>,
+        ops: Vec<Operation>,
+    ) -> toasty_core::Result<Vec<ExecResponse>> {
+        self.log.lock().unwrap().push(Call::Batch(ops.len()));
+
+        // SQLite has real transactions; a driver reaching for this API would
+        // not. Running the statements one at a time is enough to check what
+        // the engine dispatched and that the results come back in order.
+        let mut responses = Vec::with_capacity(ops.len());
+        for op in ops {
+            responses.push(self.inner.exec(schema, op).await?);
+        }
+        Ok(responses)
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> toasty_core::Result<()> {
@@ -232,5 +262,86 @@ async fn read_only_plan_skips_the_transaction_without_snapshot_reads() {
     assert!(
         !calls.contains(&Call::Transaction),
         "expected no transaction, got {calls:?}"
+    );
+}
+
+/// Several independent writes are handed over as one set.
+#[tokio::test]
+async fn writes_are_batched_when_the_driver_takes_them_together() {
+    let (db, log) = setup(Probe::without_transactions()).await;
+    let author_id = seed(&db).await;
+    take(&log);
+
+    let mut handle = db.clone();
+    let books = toasty::create!(Book::[
+        { title: "One", author_id: author_id },
+        { title: "Two", author_id: author_id },
+    ])
+    .exec(&mut handle)
+    .await
+    .unwrap();
+
+    assert_eq!(books.len(), 2);
+    assert!(books.iter().all(|book| book.id > 0), "ids: {books:?}");
+
+    let calls = take(&log);
+    assert!(
+        calls.contains(&Call::Batch(2)),
+        "expected one batch of two, got {calls:?}"
+    );
+    assert!(
+        !calls.contains(&Call::Transaction),
+        "a batched plan opens no transaction, got {calls:?}"
+    );
+}
+
+/// Without the capability the same plan streams its writes under a
+/// transaction, exactly as before.
+#[tokio::test]
+async fn writes_stream_under_a_transaction_without_the_capability() {
+    let (db, log) = setup(Probe::without_transactions_or_batching()).await;
+    let author_id = seed(&db).await;
+    take(&log);
+
+    let mut handle = db.clone();
+    toasty::create!(Book::[
+        { title: "One", author_id: author_id },
+        { title: "Two", author_id: author_id },
+    ])
+    .exec(&mut handle)
+    .await
+    .unwrap();
+
+    let calls = take(&log);
+    assert!(
+        calls.contains(&Call::Transaction),
+        "expected a transaction, got {calls:?}"
+    );
+    assert!(
+        !calls.iter().any(|call| matches!(call, Call::Batch(_))),
+        "expected no batch, got {calls:?}"
+    );
+}
+
+/// A single write is not a set, so it needs neither a batch nor a
+/// transaction.
+#[tokio::test]
+async fn a_lone_write_is_not_batched() {
+    let (db, log) = setup(Probe::without_transactions()).await;
+    let author_id = seed(&db).await;
+    take(&log);
+
+    let mut handle = db.clone();
+    Book::create()
+        .title("Only")
+        .author_id(author_id)
+        .exec(&mut handle)
+        .await
+        .unwrap();
+
+    let calls = take(&log);
+    assert!(
+        !calls.iter().any(|call| matches!(call, Call::Batch(_))),
+        "expected no batch, got {calls:?}"
     );
 }

@@ -244,6 +244,57 @@ impl Connection for InstrumentedConnection {
         Ok(response)
     }
 
+    async fn exec_batch(
+        &mut self,
+        schema: &Arc<Schema>,
+        ops: Vec<Operation>,
+    ) -> Result<Vec<ExecResponse>> {
+        // One injected fault fails the batch, matching what the underlying
+        // driver would do: a batch applies wholly or not at all.
+        let fault = self
+            .handle
+            .inner
+            .faults
+            .lock()
+            .expect("Failed to acquire faults lock")
+            .pop_front();
+        if let Some(fault) = fault {
+            match fault {
+                Fault::OperationFailed => {
+                    return Err(toasty_core::Error::driver_operation_failed(
+                        std::io::Error::other("injected operation failure"),
+                    ));
+                }
+                Fault::ConnectionLost => {
+                    self.valid.store(false, Ordering::Release);
+                    return Err(toasty_core::Error::connection_lost(std::io::Error::other(
+                        "injected connection-lost fault",
+                    )));
+                }
+            }
+        }
+
+        let operations = ops.clone();
+        let mut responses = self.inner.exec_batch(schema, ops).await?;
+
+        // Log each statement separately, so assertions over the operation log
+        // read the same whether the driver batched or streamed the writes.
+        for (operation, response) in operations.into_iter().zip(responses.iter_mut()) {
+            let duplicated_response = duplicate_response_mut(response).await?;
+            self.handle
+                .inner
+                .ops_log
+                .lock()
+                .expect("Failed to acquire ops log lock")
+                .push(DriverOp {
+                    operation,
+                    response: duplicated_response,
+                });
+        }
+
+        Ok(responses)
+    }
+
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
         self.inner.push_schema(schema).await
     }

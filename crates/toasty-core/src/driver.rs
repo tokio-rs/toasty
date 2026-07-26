@@ -182,6 +182,30 @@ pub trait Connection: Debug + Send + 'static {
     /// typed by the structural `Type::Object`.
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
 
+    /// Executes several write operations as one atomic unit, returning one
+    /// response per operation, in order.
+    ///
+    /// The engine calls this instead of [`exec`](Self::exec) when the driver
+    /// reports [`Capability::atomic_write_batch`] and a plan performs more
+    /// than one write. It exists for backends that cannot hold a transaction
+    /// open across calls but can commit a set of statements submitted
+    /// together — Cloudflare D1, whose HTTP API rejects `BEGIN` yet runs a
+    /// multi-statement request atomically, is the motivating case.
+    ///
+    /// Implementations must apply every operation or none of them. The
+    /// default returns [`Error::unsupported_feature`](crate::Error::unsupported_feature),
+    /// which is correct for any driver that leaves the capability off, since
+    /// the engine then never calls this.
+    async fn exec_batch(
+        &mut self,
+        _schema: &Arc<Schema>,
+        _ops: Vec<Operation>,
+    ) -> crate::Result<Vec<ExecResponse>> {
+        Err(crate::Error::unsupported_feature(
+            "this driver does not execute write batches atomically",
+        ))
+    }
+
     /// Cheap, synchronous, local check that the driver's client object
     /// still considers the connection open.
     ///
