@@ -25,6 +25,7 @@ Guide-level design documents for specific features. Use
 [`_template.md`](./design/_template.md) when starting a new one.
 
 - [Design Overview](./design/README.md)
+- [Cloudflare D1 Driver](./design/cloudflare-d1.md)
 - [Per-Call Column Projection](./design/column-projection.md)
 - [DynamoDB Driver Error-Handling Convention](./design/ddb-error-handling.md)
 - [DynamoDB Scan Support](./design/ddb-scan.md)

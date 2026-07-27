@@ -4,24 +4,45 @@ use std::sync::Arc;
 
 use serde::Serialize;
 use toasty_core::driver::Driver;
-use toasty_driver_integration_suite::{Setup, Test};
+use toasty_driver_integration_suite::{Setup, Test, tests};
 use worker::{Context, Env, Request, Response, send::IntoSendFuture};
 
-const TESTS: &[&str] = &[
-    "crud_basic::crud_one_string::id_uuid",
-    "type_primitives::ty_i64",
-    "type_primitives::ty_u64",
-    "type_primitives::ty_uuid",
-    "raw_sql::statement_and_query_on_db",
-    "select_projection::select_tuple",
-    "filter_like::like_basic",
-    "starts_with::starts_with_case_sensitive",
-    "crud_upsert::upsert_by_primary_key_creates_then_updates::id_uuid",
-    "type_document::vec_struct_create_get::id_uuid",
-    "batch_query::batch_same_model::id_uuid",
-    "batch_rollback::batch_two_creates_rolls_back_on_second_failure::id_uuid",
-];
 const COMPATIBILITY_DATE: &str = "2026-07-25";
+
+macro_rules! d1_tests {
+    ($($name:literal => $test:path),+ $(,)?) => {
+        const TESTS: &[&str] = &[$($name),+];
+
+        async fn run_test(name: &str, test: &mut Test) -> Result<(), String> {
+            match name {
+                $(
+                    $name => test
+                        .run_async(async move |test| $test(test).await)
+                        .await,
+                )+
+                _ => Err(format!("unknown test: {name}")),
+            }
+        }
+    };
+}
+
+d1_tests! {
+    "crud_basic::crud_one_string::id_uuid" => tests::crud_basic::crud_one_string::id_uuid,
+    "type_primitives::ty_i64" => tests::type_primitives::ty_i64,
+    "type_primitives::ty_u64" => tests::type_primitives::ty_u64,
+    "type_primitives::ty_uuid" => tests::type_primitives::ty_uuid,
+    "raw_sql::statement_and_query_on_db" => tests::raw_sql::statement_and_query_on_db,
+    "select_projection::select_tuple" => tests::select_projection::select_tuple,
+    "filter_like::like_basic" => tests::filter_like::like_basic,
+    "starts_with::starts_with_case_sensitive" => tests::starts_with::starts_with_case_sensitive,
+    "crud_upsert::upsert_by_primary_key_creates_then_updates::id_uuid" =>
+        tests::crud_upsert::upsert_by_primary_key_creates_then_updates::id_uuid,
+    "type_document::vec_struct_create_get::id_uuid" =>
+        tests::type_document::vec_struct_create_get::id_uuid,
+    "batch_query::batch_same_model::id_uuid" => tests::batch_query::batch_same_model::id_uuid,
+    "batch_rollback::batch_two_creates_rolls_back_on_second_failure::id_uuid" =>
+        tests::batch_rollback::batch_two_creates_rolls_back_on_second_failure::id_uuid,
+}
 
 #[derive(Clone)]
 struct D1Setup {
@@ -125,74 +146,9 @@ struct TestOutcome {
 }
 
 async fn run(name: &str, env: Env) -> TestOutcome {
-    use toasty_driver_integration_suite::tests;
-
     let setup = Arc::new(D1Setup { env });
     let mut test = Test::new_async(setup);
-    let result = match name {
-        "crud_basic::crud_one_string::id_uuid" => {
-            test.run_async(async move |test| {
-                tests::crud_basic::crud_one_string::id_uuid(test).await
-            })
-            .await
-        }
-        "type_primitives::ty_i64" => {
-            test.run_async(async move |test| tests::type_primitives::ty_i64(test).await)
-                .await
-        }
-        "type_primitives::ty_u64" => {
-            test.run_async(async move |test| tests::type_primitives::ty_u64(test).await)
-                .await
-        }
-        "type_primitives::ty_uuid" => {
-            test.run_async(async move |test| tests::type_primitives::ty_uuid(test).await)
-                .await
-        }
-        "raw_sql::statement_and_query_on_db" => {
-            test.run_async(async move |test| tests::raw_sql::statement_and_query_on_db(test).await)
-                .await
-        }
-        "select_projection::select_tuple" => {
-            test.run_async(async move |test| tests::select_projection::select_tuple(test).await)
-                .await
-        }
-        "filter_like::like_basic" => {
-            test.run_async(async move |test| tests::filter_like::like_basic(test).await)
-                .await
-        }
-        "starts_with::starts_with_case_sensitive" => {
-            test.run_async(async move |test| {
-                tests::starts_with::starts_with_case_sensitive(test).await
-            })
-            .await
-        }
-        "crud_upsert::upsert_by_primary_key_creates_then_updates::id_uuid" => {
-            test.run_async(async move |test| {
-                tests::crud_upsert::upsert_by_primary_key_creates_then_updates::id_uuid(test).await
-            })
-            .await
-        }
-        "type_document::vec_struct_create_get::id_uuid" => {
-            test.run_async(async move |test| {
-                tests::type_document::vec_struct_create_get::id_uuid(test).await
-            })
-            .await
-        }
-        "batch_query::batch_same_model::id_uuid" => {
-            test.run_async(async move |test| {
-                tests::batch_query::batch_same_model::id_uuid(test).await
-            })
-            .await
-        }
-        "batch_rollback::batch_two_creates_rolls_back_on_second_failure::id_uuid" => {
-            test.run_async(async move |test| {
-                tests::batch_rollback::batch_two_creates_rolls_back_on_second_failure::id_uuid(test)
-                    .await
-            })
-            .await
-        }
-        _ => Err(format!("unknown test: {name}")),
-    };
+    let result = run_test(name, &mut test).await;
     TestOutcome {
         result,
         operations: format!("{:?}", test.log()),

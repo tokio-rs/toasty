@@ -153,9 +153,10 @@ which the migration generator handles.
 
 **Row-level locking.** Generated [transactions](./transactions.md) can
 use `SELECT ... FOR UPDATE` to lock rows for the duration of a
-transaction. SQLite, Turso, Cloudflare D1, and DynamoDB do not have row-level
-locking; Toasty's transaction layer falls back to serializable transaction
-isolation on those backends.
+transaction. SQLite and Turso do not have row-level locking; Toasty's
+transaction layer uses serializable transaction isolation on those backends.
+Cloudflare D1 and DynamoDB do not expose interactive transactions through
+Toasty.
 
 **Backward pagination.**
 [`.paginate(per_page).prev(&db)`](./sorting-limits-and-pagination.md#navigating-pages)

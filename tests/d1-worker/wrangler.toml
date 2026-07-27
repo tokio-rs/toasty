@@ -5,7 +5,3 @@ compatibility_date = "2026-07-25"
 [[d1_databases]]
 binding = "DB"
 database_name = "toasty-d1-local-tests"
-
-[build]
-command = "bash ./build.sh"
-watch_dir = ["src"]

@@ -1,10 +1,21 @@
 import { spawn } from "node:child_process";
+import { join } from "node:path";
 
 const address = "http://127.0.0.1:8791";
+const wranglerState = join(import.meta.dirname, ".wrangler");
 const wrangler = spawn(
   "npx",
   ["--yes", "wrangler@4.114.0", "dev", "--local", "--port", "8791"],
-  { cwd: import.meta.dirname, stdio: ["ignore", "pipe", "pipe"] },
+  {
+    cwd: import.meta.dirname,
+    env: {
+      ...process.env,
+      npm_config_cache: join(wranglerState, "npm-cache"),
+      XDG_CACHE_HOME: join(wranglerState, "cache"),
+      XDG_CONFIG_HOME: join(wranglerState, "config"),
+    },
+    stdio: ["ignore", "pipe", "pipe"],
+  },
 );
 
 let output = "";
