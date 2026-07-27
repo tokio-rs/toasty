@@ -8,8 +8,6 @@ use toasty_core::{
     schema::{db::Migration, diff},
 };
 
-use url::Url;
-
 /// A connection to a database, wrapping the specific driver implementation.
 pub struct Connect {
     driver: Box<dyn Driver>,
@@ -53,6 +51,10 @@ impl Connect {
             allow(unused_variables, unreachable_code)
         )]
 
+        // Dispatch on the scheme alone — each driver parses and validates the
+        // full URL itself. Schemes are case-insensitive, and some accepted
+        // forms (`sqlite://:memory:`) are not valid WHATWG URLs, so the string
+        // must not be parsed as one here.
         let scheme = url
             .split_once(':')
             .map(|(scheme, _)| scheme.to_ascii_lowercase())
@@ -61,15 +63,6 @@ impl Connect {
                     "connection URL has no scheme; url={url}"
                 ))
             })?;
-
-        // `sqlite:` and `turso:` URLs name a file path rather than a network
-        // location, and their accepted forms are not valid WHATWG URLs
-        // (`sqlite://:memory:` has no parseable authority), so those drivers
-        // parse their own. Everything else is a real URL — validate it here,
-        // before a malformed one reaches a driver that never parses it.
-        if !matches!(scheme.as_str(), "sqlite" | "turso") {
-            Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
-        }
 
         let driver: Box<dyn Driver> = match scheme.as_str() {
             #[cfg(feature = "dynamodb")]
