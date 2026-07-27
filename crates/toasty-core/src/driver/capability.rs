@@ -243,6 +243,16 @@ pub struct Capability {
     /// [`Error::unsupported_feature`](crate::Error::unsupported_feature).
     pub transaction_lock_mode: bool,
 
+    /// Whether the driver accepts
+    /// [`IsolationLevel::RepeatableRead`](super::operation::IsolationLevel::RepeatableRead)
+    /// on `Transaction::Start`.
+    ///
+    /// The engine requests it when a plan reads from more than one statement,
+    /// so the statements share one snapshot. When `false`, the plan runs at
+    /// the database default — which on SQLite and Turso is already
+    /// serializable.
+    pub repeatable_read: bool,
+
     /// Whether the backend can walk a paginated query in reverse from a
     /// cursor.
     ///
@@ -632,6 +642,10 @@ impl Capability {
         // lock-acquisition policy.
         transaction_lock_mode: true,
 
+        // SQLite accepts only `Serializable`, which is also what every
+        // transaction already runs at.
+        repeatable_read: false,
+
         backward_pagination: true,
 
         // `Vec<scalar>` model fields land in a `TEXT` column holding a JSON
@@ -705,6 +719,10 @@ impl Capability {
         // PostgreSQL has no SQLite-style lock-mode keyword on BEGIN.
         transaction_lock_mode: false,
 
+        // `BEGIN ISOLATION LEVEL REPEATABLE READ` gives the transaction one
+        // snapshot; the `READ COMMITTED` default does not.
+        repeatable_read: true,
+
         // PostgreSQL accepts a single array-valued bind param and supports
         // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
         bind_list_param: true,
@@ -762,6 +780,9 @@ impl Capability {
 
         // MySQL has no SQLite-style lock-mode keyword on START TRANSACTION.
         transaction_lock_mode: false,
+
+        // InnoDB implements `REPEATABLE READ`, which is also its default.
+        repeatable_read: true,
 
         // `Vec<scalar>` model fields land in a `JSON` column. The driver
         // serializes `Value::List` to a JSON string at bind time, so the
@@ -855,6 +876,7 @@ impl Capability {
 
         // DynamoDB rejects `Operation::Transaction` wholesale.
         transaction_lock_mode: false,
+        repeatable_read: false,
 
         backward_pagination: false,
 
