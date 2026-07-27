@@ -473,8 +473,8 @@ match — it works across all drivers.
 
 `.ilike()` is the case-insensitive form of `.like()` and maps to PostgreSQL's
 `ILIKE` operator. **PostgreSQL only.** Toasty does not emulate `ILIKE` on
-backends that lack it: on MySQL, SQLite, and DynamoDB the query is rejected with
-an `unsupported_feature` error.
+backends that lack it: on MySQL, SQLite, Turso, Cloudflare D1, and DynamoDB the
+query is rejected with an `unsupported_feature` error.
 
 PostgreSQL's `LIKE` is case-sensitive, so PostgreSQL provides `ILIKE` for
 case-insensitive matching. The other backends have no operator with matching

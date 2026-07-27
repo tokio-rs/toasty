@@ -74,7 +74,7 @@ indexmap.workspace = true
 index_vec.workspace = true
 inventory.workspace = true
 serde = { workspace = true, optional = true }
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 toml = { workspace = true, optional = true }
 toml_edit = { workspace = true, features = ["serde"], optional = true }
 tracing.workspace = true
@@ -84,7 +84,7 @@ url.workspace = true
 assert-struct.workspace = true
 proptest.workspace = true
 tempfile.workspace = true
-tokio = { workspace = true, features = ["test-util"] }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "test-util"] }
 toasty-driver-sqlite = { workspace = true }
 
 [lints]

@@ -14,6 +14,11 @@ execute each statement, and commit. In many cases, batch operations are
 sufficient. Reach for interactive transactions only when you need to read data
 and make decisions based on those reads within the same atomic scope.
 
+On Cloudflare D1, Toasty sends multi-statement plans through D1's atomic batch
+API when every statement can be prepared up front. A plan whose later database
+operation depends on an earlier database result is rejected instead of losing
+atomicity. See [Cloudflare D1](./d1.md#atomic-batches-and-transactions).
+
 ## Batching queries with tuples
 
 Pass a tuple of queries to `toasty::batch()`. The return type matches the tuple

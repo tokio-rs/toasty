@@ -222,7 +222,7 @@ async fn sweep_evicts_dead_idle_connection() {
     .exec(&mut db)
     .await
     .unwrap();
-    assert_eq!(db.pool().status().size, 1);
+    assert_eq!(db.pool().unwrap().status().size, 1);
 
     state.ping_fail_tokens.store(1, Ordering::Relaxed);
 
@@ -230,7 +230,7 @@ async fn sweep_evicts_dead_idle_connection() {
     tokio::time::sleep(Duration::from_millis(100)).await;
 
     assert_eq!(
-        db.pool().status().size,
+        db.pool().unwrap().status().size,
         0,
         "sweep did not evict the dead idle connection",
     );
@@ -259,7 +259,7 @@ async fn eager_escalation_after_observed_loss() {
     let c2 = db.connection().await.unwrap();
     let c3 = db.connection().await.unwrap();
     drop((c1, c2, c3));
-    assert_eq!(db.pool().status().size, 3);
+    assert_eq!(db.pool().unwrap().status().size, 3);
 
     // One fault for the user query, two for the sweep's escalation
     // pings over the remaining idle connections.
@@ -323,7 +323,7 @@ async fn periodic_failure_does_not_redundantly_escalate() {
     let c2 = db.connection().await.unwrap();
     let c3 = db.connection().await.unwrap();
     drop((c1, c2, c3));
-    assert_eq!(db.pool().status().size, 3);
+    assert_eq!(db.pool().unwrap().status().size, 3);
 
     state.ping_fail_tokens.store(1, Ordering::Relaxed);
 
@@ -355,7 +355,7 @@ async fn pre_ping_evicts_silently_broken_idle_connection() {
     .exec(&mut db)
     .await
     .unwrap();
-    assert_eq!(db.pool().status().size, 1);
+    assert_eq!(db.pool().unwrap().status().size, 1);
 
     let pings_before = state.pings.load(Ordering::Relaxed);
     state.ping_fail_tokens.store(1, Ordering::Relaxed);
@@ -372,7 +372,7 @@ async fn pre_ping_evicts_silently_broken_idle_connection() {
 
     assert_eq!(state.pings.load(Ordering::Relaxed) - pings_before, 1);
     assert_eq!(state.ping_fail_tokens.load(Ordering::Relaxed), 0);
-    assert_eq!(db.pool().status().size, 1);
+    assert_eq!(db.pool().unwrap().status().size, 1);
 }
 
 /// Pre-ping issues a round-trip on every checkout. The first query
@@ -459,7 +459,7 @@ async fn lifetime_cap_evicts_aged_connection() {
         1,
         "recycle did not replace the over-lifetime connection",
     );
-    assert_eq!(db.pool().status().size, 1);
+    assert_eq!(db.pool().unwrap().status().size, 1);
 }
 
 /// Idle-time cap: a connection that has been sitting unused for longer
@@ -506,7 +506,7 @@ async fn idle_time_cap_evicts_long_idle_connection() {
         1,
         "recycle did not replace the over-idle connection",
     );
-    assert_eq!(db.pool().status().size, 1);
+    assert_eq!(db.pool().unwrap().status().size, 1);
 }
 
 /// A connection within both caps is reused — `recycle` must not evict

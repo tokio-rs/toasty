@@ -102,6 +102,23 @@ impl Action {
             | Action::SetVar(_) => false,
         }
     }
+
+    pub(crate) fn requires_interactive_transaction(&self) -> bool {
+        matches!(self, Action::ReadModifyWrite(_))
+    }
+
+    /// Whether this database action can be fully materialized before a D1
+    /// atomic batch is dispatched.
+    pub(crate) fn is_atomic_batch_eligible(&self) -> bool {
+        match self {
+            Action::ExecStatement(action) => {
+                action.input.is_empty()
+                    && action.conditional == crate::engine::exec::ConditionalOutput::None
+                    && action.pagination.is_none()
+            }
+            action => !action.is_db_op(),
+        }
+    }
 }
 
 impl fmt::Debug for Action {

@@ -667,6 +667,38 @@ fn alter_column_change_nullability_sqlite() {
 }
 
 #[test]
+fn alter_column_change_nullability_d1_defers_foreign_keys() {
+    let mut email = make_column(0, 1, "email", Type::Text);
+    email.nullable = true;
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8)), email],
+        )],
+    };
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "email", Type::Text),
+            ],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let statements = MigrationStatement::from_diff(&diff, &Capability::D1);
+    let sql = serialize_migration(&statements, "sqlite");
+
+    assert_eq!(sql.first().unwrap(), "PRAGMA defer_foreign_keys = ON;");
+    assert!(!sql.iter().any(|sql| sql.contains("foreign_keys = OFF")));
+    assert!(!sql.iter().any(|sql| sql == "BEGIN;" || sql == "COMMIT;"));
+}
+
+#[test]
 fn alter_column_change_type_sqlite() {
     // value: Integer(4) → Text requires table recreation
     let from = Schema {

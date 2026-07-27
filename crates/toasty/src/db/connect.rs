@@ -128,6 +128,10 @@ impl Driver for Connect {
         self.driver.capability()
     }
 
+    fn connection_strategy(&self) -> toasty_core::driver::ConnectionStrategy {
+        self.driver.connection_strategy()
+    }
+
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
         self.driver.connect(cx).await
     }

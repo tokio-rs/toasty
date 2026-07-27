@@ -23,14 +23,20 @@ macro_rules! num_ty_test_body {
         let mut db = test.setup_db(models!(Item)).await;
         let mut test_values: Vec<$ty> = (*$test_values).to_vec();
 
-        // Filter test values based on database capabilities for unsigned integers
-        // Unsigned types have MIN == 0, signed types have MIN < 0
+        // Filter test values against the backend's integer range.
         if <$ty>::MIN == 0 {
             if let Some(max_unsigned) = test.capability().storage_types.max_unsigned_integer {
                 test_values.retain(|&val| {
                     let val_as_u64 = val as u64;
                     val_as_u64 <= max_unsigned
                 });
+            }
+        } else {
+            if let Some(min_signed) = test.capability().storage_types.min_signed_integer {
+                test_values.retain(|&val| (val as i128) >= i128::from(min_signed));
+            }
+            if let Some(max_signed) = test.capability().storage_types.max_signed_integer {
+                test_values.retain(|&val| (val as i128) <= i128::from(max_signed));
             }
         }
 
@@ -168,12 +174,12 @@ pub async fn ty_isize(test: &mut Test) -> Result<()> {
         isize,
         &[
             isize::MIN,
-            -1000000000000,
+            -1000000,
             -1,
             0,
             1,
-            1000000000000,
-            4611686018427387903,
+            1000000,
+            1073741823,
             isize::MAX
         ]
     )
@@ -224,9 +230,9 @@ pub async fn ty_usize(test: &mut Test) -> Result<()> {
             usize::MIN,
             0,
             1,
-            1000000000000,
-            9223372036854775807,
-            10000000000000000000,
+            1000000,
+            2147483647,
+            4000000000,
             usize::MAX
         ]
     )

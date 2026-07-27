@@ -108,8 +108,8 @@ let users = User::filter(
 
 The query engine lowers `address().city()` to the backend's document
 path operation. PostgreSQL extracts a JSONB path, MySQL uses its JSON
-functions, SQLite and Turso use JSON1, and DynamoDB uses a document path
-expression.
+functions, SQLite, Turso, and Cloudflare D1 use JSON1, and DynamoDB uses a
+document path expression.
 
 Equality, ordering, and optional-field checks work on supported scalar
 leaves. Comparing the entire document to an `Address` value is not yet
@@ -156,8 +156,8 @@ struct Order {
 }
 ```
 
-PostgreSQL, MySQL, SQLite, and Turso encode the field as an array of JSON
-objects. DynamoDB stores it as a List (`L`) of Map (`M`) values.
+PostgreSQL, MySQL, SQLite, Turso, and Cloudflare D1 encode the field as an array
+of JSON objects. DynamoDB stores it as a List (`L`) of Map (`M`) values.
 
 Whole-value create, read, and replacement work for document
 collections. `stmt::push` appends one embedded value. Element predicates

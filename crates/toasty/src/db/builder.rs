@@ -1,6 +1,6 @@
 use crate::{
     Db, Result,
-    db::{Connect, Pool, Shared, pool::PoolConfig},
+    db::{Connect, ConnectionStrategy, Shared, pool::PoolConfig, source::ConnectionSource},
     engine::Engine,
 };
 
@@ -296,13 +296,25 @@ impl Builder {
         tracing::info!(tables = schema.db.tables.len(), "schema built successfully");
 
         let engine = Engine::new(Arc::new(schema), capability);
-        let pool = Pool::new(driver, engine.clone(), self.pool.clone())?;
+        let source = match driver.connection_strategy() {
+            ConnectionStrategy::Pooled => {
+                ConnectionSource::pooled(driver, engine.clone(), self.pool.clone())?
+            }
+            ConnectionStrategy::Direct => {
+                self.pool.validate_direct()?;
+                ConnectionSource::direct(driver, &self.pool).await?
+            }
+        };
 
-        let shared = Arc::new(Shared { engine, pool });
+        let shared = Arc::new(Shared { engine, source });
 
-        // see if we're able to acquire a valid connection
-        let conn = shared.pool.get(shared.clone()).await?;
-        std::mem::drop(conn);
+        // Pooled sources open their first connection lazily, so acquire one
+        // here to preserve build-time connection validation. Direct sources
+        // connected exactly once while they were constructed above.
+        if shared.source.pool().is_some() {
+            let conn = shared.source.get(shared.clone()).await?;
+            std::mem::drop(conn);
+        }
 
         tracing::info!("database ready");
         Ok(Db { shared })

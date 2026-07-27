@@ -3,8 +3,8 @@
 Raw SQL runs backend SQL through Toasty's database handles. Use it when you need
 a database feature that Toasty's query builders do not expose.
 
-Raw SQL is available on SQL backends: SQLite, Turso, PostgreSQL, and MySQL.
-DynamoDB returns an `unsupported_feature` error.
+Raw SQL is available on SQL backends: SQLite, Turso, Cloudflare D1,
+PostgreSQL, and MySQL. DynamoDB returns an `unsupported_feature` error.
 
 ## Statements
 
@@ -57,6 +57,7 @@ reported by `db.capability().sql_placeholder` for the active backend:
 |---|---|---|
 | SQLite | `NumberedQuestionMark` | `?1`, `?2`, ... |
 | Turso | `NumberedQuestionMark` | `?1`, `?2`, ... |
+| Cloudflare D1 | `NumberedQuestionMark` | `?1`, `?2`, ... |
 | PostgreSQL | `DollarNumber` | `$1`, `$2`, ... |
 | MySQL | `QuestionMark` | `?`, `?`, ... |
 

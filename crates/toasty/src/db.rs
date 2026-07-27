@@ -2,8 +2,10 @@ mod builder;
 mod connect;
 mod connection;
 mod connection_task;
+mod direct;
 mod executor;
 mod pool;
+mod source;
 mod tx;
 
 pub use builder::Builder;
@@ -11,7 +13,9 @@ pub use connect::Connect;
 pub use connection::Connection;
 pub use executor::Executor;
 pub use pool::{Pool, PoolStatus};
-pub use toasty_core::driver::{Capability, ConnectContext, Driver, SqlPlaceholder};
+pub use toasty_core::driver::{
+    Capability, ConnectContext, ConnectionStrategy, Driver, SqlPlaceholder,
+};
 pub use tx::{Transaction, TransactionBuilder};
 
 /// Response from executing a statement, including pagination metadata.
@@ -30,17 +34,18 @@ use std::sync::Arc;
 /// Shared state between all `Db` clones.
 pub(crate) struct Shared {
     pub(crate) engine: Engine,
-    pub(crate) pool: Pool,
+    pub(crate) source: source::ConnectionSource,
 }
 
-/// A database handle backed by a connection pool.
+/// A database handle backed by a pooled or direct connection source.
 ///
-/// Each operation acquires a connection from the pool, executes, and returns
-/// the connection. Use [`Db::connection`] to obtain a dedicated
-/// [`Connection`] when you need multiple statements to share the same
-/// physical connection (e.g. temporary tables or session-level state).
+/// With a pooled driver, each operation acquires a connection from the pool,
+/// executes, and returns the connection. A direct driver serializes operations
+/// through one request-local connection. Use [`Db::connection`] to obtain a
+/// dedicated [`Connection`] when you need multiple statements to share the
+/// same physical connection (e.g. temporary tables or session-level state).
 ///
-/// Cloning a `Db` is cheap — it shares the underlying pool.
+/// Cloning a `Db` is cheap. Clones share the same pool or direct connection.
 pub struct Db {
     shared: Arc<Shared>,
 }
@@ -78,16 +83,17 @@ impl Db {
         Builder::default()
     }
 
-    /// Acquire a dedicated connection from the pool.
+    /// Acquire a dedicated database connection.
     ///
     /// The returned [`Connection`] implements [`Executor`] and pins all
     /// operations to the same physical connection. This is useful when
     /// multiple statements must share connection-level state such as
     /// temporary tables or session variables.
     ///
-    /// When the `Connection` is dropped it is returned to the pool for reuse.
+    /// Pooled connections return to the pool when dropped. Direct connections
+    /// release the shared request-local connection for the next operation.
     pub async fn connection(&self) -> Result<Connection> {
-        self.shared.pool.get(self.shared.clone()).await
+        self.shared.source.get(self.shared.clone()).await
     }
 
     pub(crate) async fn exec_stmt(
@@ -95,24 +101,30 @@ impl Db {
         stmt: stmt::Statement,
         in_transaction: bool,
     ) -> Result<ExecResponse> {
-        let conn = self.connection().await?;
+        let mut conn = self.connection().await?;
         conn.exec_stmt(stmt, in_transaction).await
     }
 
     /// Creates tables and indices defined in the schema on the database.
     pub async fn push_schema(&self) -> Result<()> {
-        let conn = self.connection().await?;
+        let mut conn = self.connection().await?;
         conn.push_schema().await
     }
 
     /// Drops the entire database and recreates an empty one without applying migrations.
     pub async fn reset_db(&self) -> Result<()> {
-        self.shared.pool.driver().reset_db().await
+        if !self.capability().reset_database {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} does not support resetting the database",
+                self.capability().driver_name
+            )));
+        }
+        self.shared.source.driver().reset_db().await
     }
 
     /// Returns a reference to the underlying database driver.
     pub fn driver(&self) -> &dyn Driver {
-        self.shared.pool.driver()
+        self.shared.source.driver()
     }
 
     /// Returns the compiled schema used by this database handle.
@@ -128,7 +140,7 @@ impl Db {
         self.shared.engine.capability()
     }
 
-    /// Begin a transaction, acquiring a connection from the pool.
+    /// Begin a transaction, acquiring a connection from the configured source.
     ///
     /// Takes `&mut self` so the `Db` handle is exclusively borrowed while the
     /// transaction is open. This prevents accidentally running a statement
@@ -151,10 +163,10 @@ impl Db {
         TransactionBuilder::new(tx::TxSource::Db(self))
     }
 
-    /// Returns a reference to the connection pool backing this handle.
+    /// Returns the connection pool backing this handle, if the driver uses one.
     #[doc(hidden)]
-    pub fn pool(&self) -> &Pool {
-        &self.shared.pool
+    pub fn pool(&self) -> Option<&Pool> {
+        self.shared.source.pool()
     }
 }
 
@@ -169,6 +181,7 @@ impl std::fmt::Debug for Db {
 #[async_trait]
 impl Executor for Db {
     async fn transaction(&mut self) -> Result<Transaction<'_>> {
+        require_interactive_transactions(self.capability())?;
         let conn = self.connection().await?;
         Transaction::begin(ConnRef::owned(conn)).await
     }
@@ -178,7 +191,7 @@ impl Executor for Db {
     }
 
     async fn exec_raw_sql(&mut self, raw: RawSql) -> Result<ExecResponse> {
-        let conn = self.connection().await?;
+        let mut conn = self.connection().await?;
         conn.exec_raw_sql(raw).await
     }
 
@@ -188,5 +201,16 @@ impl Executor for Db {
 
     fn schema(&mut self) -> &Arc<Schema> {
         Db::schema(self)
+    }
+}
+
+pub(crate) fn require_interactive_transactions(capability: &Capability) -> Result<()> {
+    if capability.interactive_transactions {
+        Ok(())
+    } else {
+        Err(toasty_core::Error::unsupported_feature(format!(
+            "{} does not support interactive transactions",
+            capability.driver_name
+        )))
     }
 }

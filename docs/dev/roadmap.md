@@ -118,6 +118,7 @@ the entry lands here.
 
 ## Drivers
 
+- Cloudflare D1 ([design](design/cloudflare-d1.md))
 - DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
 - Connection pooling improvements ([#384])
 - Retry-safe transparent recovery from connection loss ([design](design/retry-safe-recovery.md), [#863])

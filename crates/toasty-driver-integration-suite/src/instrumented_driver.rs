@@ -10,7 +10,10 @@ use std::{
 };
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation, Rows},
+    driver::{
+        Capability, ConnectContext, Connection, Driver, ExecResponse, Operation, Rows,
+        operation::AtomicSqlBatch,
+    },
     schema::{
         db::{AppliedMigration, Migration},
         diff,
@@ -157,6 +160,10 @@ impl Driver for InstrumentedDriver {
         self.inner.capability()
     }
 
+    fn connection_strategy(&self) -> toasty_core::driver::ConnectionStrategy {
+        self.inner.connection_strategy()
+    }
+
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
         Ok(Box::new(InstrumentedConnection {
             inner: self.inner.connect(cx).await?,
@@ -242,6 +249,36 @@ impl Connection for InstrumentedConnection {
             .push(driver_op);
 
         Ok(response)
+    }
+
+    async fn exec_atomic_batch(
+        &mut self,
+        schema: &Arc<Schema>,
+        batch: AtomicSqlBatch,
+    ) -> Result<Vec<ExecResponse>> {
+        let operations = batch.operations.clone();
+        let mut responses = self.inner.exec_atomic_batch(schema, batch).await?;
+        if operations.len() != responses.len() {
+            return Err(toasty_core::Error::invalid_result(format!(
+                "instrumented atomic batch received {} responses for {} operations",
+                responses.len(),
+                operations.len()
+            )));
+        }
+
+        for (operation, response) in operations.into_iter().zip(&mut responses) {
+            let duplicated_response = duplicate_response_mut(response).await?;
+            self.handle
+                .inner
+                .ops_log
+                .lock()
+                .expect("Failed to acquire ops log lock")
+                .push(DriverOp {
+                    operation: operation.into(),
+                    response: duplicated_response,
+                });
+        }
+        Ok(responses)
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {

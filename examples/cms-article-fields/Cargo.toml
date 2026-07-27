@@ -15,7 +15,7 @@ sqlite = [ "toasty/sqlite" ]
 
 [dependencies]
 toasty = { workspace = true, features = [ "jiff", "serde" ] }
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 uuid.workspace = true
 serde.workspace = true
 jiff.workspace = true

@@ -4,6 +4,11 @@ A transaction groups multiple database operations so they either all succeed or
 all fail. Toasty supports interactive transactions on SQL databases
 (SQLite/Turso, PostgreSQL, MySQL).
 
+Cloudflare D1 does not expose interactive transactions to Workers. Calling
+`db.transaction()` with the D1 driver returns `Error::UnsupportedFeature`.
+Use an eligible [batch operation](./batch-operations.md) when all statements
+can be prepared before any result is available.
+
 > **Tip:** If you just need multiple operations to execute atomically, consider
 > using [batch operations](./batch-operations.md) first. Batch operations are
 > atomic and more efficient — they can be sent as a single statement, avoiding

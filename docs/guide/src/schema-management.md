@@ -3,6 +3,10 @@
 Toasty provides two ways to manage your database schema: `push_schema` for
 quick development, and a migration system for production databases.
 
+Cloudflare D1 uses Wrangler's migration files and migration ledger instead of
+Toasty's runtime migration commands. See
+[Cloudflare D1 migrations](./d1.md#migrations) before setting up a D1 project.
+
 ## Quick setup with `push_schema`
 
 `db.push_schema()` creates all tables and indexes based on your registered

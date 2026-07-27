@@ -75,6 +75,10 @@ For per-backend details — URL query parameters, TLS, type mapping,
 and per-driver behavior — see the
 [Database Backends](./postgresql.md) chapters.
 
+Cloudflare D1 is the exception to URL-based setup. A Worker receives a D1
+binding from its `Env`, so construct `toasty_driver_d1::D1` from that binding
+and use `build()`. See [Cloudflare D1](./d1.md) for the complete setup.
+
 ## Using a driver directly
 
 If you need more control over the driver configuration, construct the driver
@@ -90,10 +94,13 @@ let mut db = toasty::Db::builder()
 
 ## Connection pool
 
-`Db` owns a connection pool. Each query checks out a connection from the
-pool for the duration of the call and returns it when finished. The pool
-defaults work for typical applications; the builder exposes knobs for
+With a pooled driver, `Db` owns a connection pool. Each query checks out a
+connection for the duration of the call and returns it when finished. The
+pool defaults work for typical applications; the builder exposes knobs for
 tuning size, timeouts, and broken-connection recovery.
+
+D1 uses one request-local direct connection instead. Pool configuration is
+rejected for direct drivers because there is no pool to configure.
 
 ```rust,ignore
 use std::time::Duration;

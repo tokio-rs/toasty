@@ -25,7 +25,7 @@ async-trait.workspace = true
 toasty-core.workspace = true
 toasty-sql.workspace = true
 serde.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
 tracing.workspace = true
 turso.workspace = true
 url.workspace = true

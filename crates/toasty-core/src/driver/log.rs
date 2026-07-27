@@ -15,7 +15,10 @@ use crate::driver::{ExecResponse, Rows};
 use crate::stmt::Value;
 
 use std::fmt::Write;
-use std::time::{Duration, Instant};
+use std::time::Duration;
+
+#[cfg(not(target_arch = "wasm32"))]
+use std::time::Instant;
 
 /// The tracing target of the per-query event, shared by all drivers.
 pub const TARGET: &str = "toasty::query";
@@ -69,6 +72,7 @@ pub struct QueryLog<'a> {
     collection: Option<&'a str>,
     params: Option<String>,
     rows: Option<u64>,
+    #[cfg(not(target_arch = "wasm32"))]
     start: Instant,
 }
 
@@ -88,6 +92,7 @@ impl<'a> QueryLog<'a> {
             collection: None,
             params: render_params(config, params),
             rows: None,
+            #[cfg(not(target_arch = "wasm32"))]
             start: Instant::now(),
         }
     }
@@ -107,6 +112,7 @@ impl<'a> QueryLog<'a> {
             collection,
             params: None,
             rows: None,
+            #[cfg(not(target_arch = "wasm32"))]
             start: Instant::now(),
         }
     }
@@ -120,7 +126,13 @@ impl<'a> QueryLog<'a> {
 
     /// Emits the `toasty::query` event describing `result`.
     pub fn finish(self, result: &crate::Result<ExecResponse>) {
+        #[cfg(not(target_arch = "wasm32"))]
         let elapsed = self.start.elapsed();
+        // `std::time::Instant` panics on `wasm32-unknown-unknown`. Workers do
+        // not currently provide a platform-neutral monotonic clock through
+        // Toasty's shared crates, so D1 query events omit meaningful timing.
+        #[cfg(target_arch = "wasm32")]
+        let elapsed = Duration::ZERO;
         let duration_ms = elapsed.as_secs_f64() * 1e3;
         let rows = self.rows.or(match result {
             Ok(response) => match &response.values {

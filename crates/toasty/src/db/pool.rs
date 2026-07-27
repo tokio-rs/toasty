@@ -54,6 +54,47 @@ impl Default for PoolConfig {
     }
 }
 
+impl PoolConfig {
+    pub(crate) fn validate_direct(&self) -> crate::Result<()> {
+        let default = Self::default();
+        let mut configured = Vec::new();
+
+        if self.max_size != default.max_size {
+            configured.push("max_pool_size");
+        }
+        if self.timeouts.wait != default.timeouts.wait {
+            configured.push("pool_wait_timeout");
+        }
+        if self.timeouts.create != default.timeouts.create {
+            configured.push("pool_create_timeout");
+        }
+        if self.timeouts.recycle != default.timeouts.recycle {
+            configured.push("pool_recycle_timeout");
+        }
+        if self.health_check_interval != default.health_check_interval {
+            configured.push("pool_health_check_interval");
+        }
+        if self.pre_ping != default.pre_ping {
+            configured.push("pool_pre_ping");
+        }
+        if self.max_connection_lifetime != default.max_connection_lifetime {
+            configured.push("pool_max_connection_lifetime");
+        }
+        if self.max_connection_idle_time != default.max_connection_idle_time {
+            configured.push("pool_max_connection_idle_time");
+        }
+
+        if configured.is_empty() {
+            Ok(())
+        } else {
+            Err(toasty_core::Error::invalid_driver_configuration(format!(
+                "direct connections do not support pool configuration: {}",
+                configured.join(", ")
+            )))
+        }
+    }
+}
+
 /// A connection pool that manages database connections with background tasks.
 #[derive(Debug)]
 pub struct Pool {
@@ -105,7 +146,9 @@ impl Pool {
             engine,
             sweep_waker: sweep_waker.clone(),
             pre_ping: config.pre_ping,
+            #[cfg(not(target_arch = "wasm32"))]
             max_connection_lifetime: config.max_connection_lifetime,
+            #[cfg(not(target_arch = "wasm32"))]
             max_connection_idle_time: config.max_connection_idle_time,
             connect_cx,
         })
@@ -142,7 +185,7 @@ impl Pool {
             toasty_core::Error::connection_pool(e)
         })?;
         Ok(super::Connection {
-            inner: connection,
+            inner: super::connection::ConnectionInner::Pooled(connection),
             shared,
         })
     }
@@ -175,7 +218,9 @@ pub(super) struct Manager {
     engine: Engine,
     sweep_waker: Arc<SweepWaker>,
     pre_ping: bool,
+    #[cfg(not(target_arch = "wasm32"))]
     max_connection_lifetime: Option<Duration>,
+    #[cfg(not(target_arch = "wasm32"))]
     max_connection_idle_time: Option<Duration>,
     /// Per-connection configuration handed to `Driver::connect` for every
     /// connection the pool creates.
@@ -215,22 +260,30 @@ impl deadpool::managed::Manager for Manager {
         obj: &mut Self::Type,
         metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
-        if let Some(max) = self.max_connection_lifetime
-            && metrics.age() >= max
+        // deadpool omits its `Instant`-based metrics on wasm. D1 uses a direct
+        // connection, so these pooled lifetime checks are native-only.
+        #[cfg(not(target_arch = "wasm32"))]
         {
-            tracing::debug!(?max, "discarding pooled connection past max lifetime");
-            return Err(deadpool::managed::RecycleError::message(
-                "connection exceeded max lifetime",
-            ));
+            if let Some(max) = self.max_connection_lifetime
+                && metrics.age() >= max
+            {
+                tracing::debug!(?max, "discarding pooled connection past max lifetime");
+                return Err(deadpool::managed::RecycleError::message(
+                    "connection exceeded max lifetime",
+                ));
+            }
+            if let Some(max) = self.max_connection_idle_time
+                && metrics.last_used() >= max
+            {
+                tracing::debug!(?max, "discarding pooled connection past max idle time");
+                return Err(deadpool::managed::RecycleError::message(
+                    "connection exceeded max idle time",
+                ));
+            }
         }
-        if let Some(max) = self.max_connection_idle_time
-            && metrics.last_used() >= max
-        {
-            tracing::debug!(?max, "discarding pooled connection past max idle time");
-            return Err(deadpool::managed::RecycleError::message(
-                "connection exceeded max idle time",
-            ));
-        }
+
+        #[cfg(target_arch = "wasm32")]
+        let _ = metrics;
         if obj.in_tx.is_closed() || obj.is_finished() {
             tracing::debug!("discarding dead pooled connection");
             return Err(deadpool::managed::RecycleError::message(

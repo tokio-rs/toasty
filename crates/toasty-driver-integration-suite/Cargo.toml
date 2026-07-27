@@ -26,7 +26,7 @@ toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "
 toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 toasty-driver-integration-suite-macros.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt", "sync", "time"] }
 rand.workspace = true
 uuid.workspace = true
 

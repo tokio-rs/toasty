@@ -40,7 +40,7 @@ percent-encoding.workspace = true
 postgres-protocol.workspace = true
 postgres-types.workspace = true
 fallible-iterator.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "net", "rt-multi-thread", "sync", "time"] }
 tokio-postgres.workspace = true
 uuid.workspace = true
 url.workspace = true

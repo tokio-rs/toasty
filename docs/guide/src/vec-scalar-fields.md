@@ -16,10 +16,10 @@ Storage depends on the driver:
 |---|---|
 | PostgreSQL | Native array column (`text[]`, `int8[]`, `double precision[]`, …) |
 | MySQL | `JSON` column |
-| SQLite, Turso | JSON-encoded text |
+| SQLite, Turso, Cloudflare D1 | JSON-encoded text |
 | DynamoDB | List `L` attribute |
 
-All five built-in drivers support `Vec<scalar>` fields. A driver that
+All six built-in drivers support `Vec<scalar>` fields. A driver that
 does not will reject the model at schema build with an error naming the
 unsupported field rather than mis-storing it. The incremental update
 builders have narrower support — see [Driver support](#driver-support).
@@ -371,7 +371,7 @@ replacement and the appending builders — `set`, `push`, `extend`,
 
 The element-removal builders are narrower:
 
-| Operation | PostgreSQL | MySQL | SQLite | DynamoDB |
+| Operation | PostgreSQL | MySQL | SQLite/Turso/D1 | DynamoDB |
 |---|---|---|---|---|
 | Define field, create, read | ✓ | ✓ | ✓ | ✓ |
 | `contains`, `len`, `is_empty` | ✓ | ✓ | ✓ | ✓ |

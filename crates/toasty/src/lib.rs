@@ -1,6 +1,6 @@
 #![warn(missing_docs)]
-//! Toasty is an async ORM for Rust supporting both SQL (SQLite, PostgreSQL,
-//! MySQL) and NoSQL (DynamoDB) databases.
+//! Toasty is an async ORM for Rust supporting SQL (SQLite, Turso, Cloudflare
+//! D1, PostgreSQL, MySQL) and NoSQL (DynamoDB) databases.
 //!
 //! This crate is the user-facing API. It contains the database handle,
 //! query execution traits, and the types that generated code builds on. For
@@ -10,11 +10,12 @@
 //!
 //! # Modules
 //!
-//! ## [`db`] — database handle and connection pool
+//! ## [`db`] — database handle and connections
 //!
-//! The [`Db`] type is the entry point for all database interaction. It owns
-//! a connection pool and provides [`Db::builder`] for configuration. The
-//! module also contains [`Builder`](db::Builder) and the pool internals.
+//! The [`Db`] type is the entry point for all database interaction. It owns a
+//! pooled or direct connection source and provides [`Db::builder`] for
+//! configuration. The module also contains [`Builder`](db::Builder) and the
+//! connection internals.
 //!
 //! ## [`schema`] — model, relation, and schema inspection
 //!
@@ -99,6 +100,9 @@
 //! | `dynamodb`     | `toasty-driver-dynamodb`     |
 //! | `turso`        | `toasty-driver-turso`        |
 //!
+//! Cloudflare D1 uses the separate `toasty-driver-d1` crate rather than a
+//! feature here because Workers provide D1 as a request-local binding.
+//!
 //! Additional feature flags: `rust_decimal`, `bigdecimal`, `jiff` (date/time
 //! via the `jiff` crate), and `serde` (JSON serialization support).
 //!
@@ -122,10 +126,11 @@ pub use update_target::UpdateTarget;
 // `Batch`, `batch()`, and `CreateMany` live in `stmt`.
 pub use stmt::{Batch, batch};
 
-/// Database handle, connection pool, executor trait, and transaction support.
+/// Database handle, connection sources, executor trait, and transaction support.
 pub mod db;
 pub use db::{
-    Capability, Connection, Db, Executor, SqlPlaceholder, Transaction, TransactionBuilder,
+    Capability, Connection, ConnectionStrategy, Db, Executor, SqlPlaceholder, Transaction,
+    TransactionBuilder,
 };
 
 mod engine;

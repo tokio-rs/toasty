@@ -6,7 +6,11 @@ use toasty_core::driver::{Operation, operation::IsolationLevel, operation::Trans
 // ===== Basic commit / rollback =====
 
 /// Data created inside a committed transaction is visible afterwards.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn commit_persists_data(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -22,7 +26,11 @@ pub async fn commit_persists_data(t: &mut Test) -> Result<()> {
 }
 
 /// Data created inside a rolled-back transaction is not visible.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn rollback_discards_data(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -37,7 +45,11 @@ pub async fn rollback_discards_data(t: &mut Test) -> Result<()> {
 }
 
 /// Dropping a transaction without commit or rollback automatically rolls back.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn drop_without_finalize_rolls_back(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -54,7 +66,7 @@ pub async fn drop_without_finalize_rolls_back(t: &mut Test) -> Result<()> {
 }
 
 /// A failed commit rolls back before the connection returns to the pool.
-#[driver_test(requires(sql))]
+#[driver_test(requires(interactive_transactions))]
 pub async fn commit_failure_rolls_back_before_connection_reuse(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -104,7 +116,7 @@ pub async fn commit_failure_rolls_back_before_connection_reuse(t: &mut Test) -> 
 }
 
 /// A failed rollback is retried before the connection returns to the pool.
-#[driver_test(requires(sql))]
+#[driver_test(requires(interactive_transactions))]
 pub async fn rollback_failure_retries_before_connection_reuse(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -126,7 +138,7 @@ pub async fn rollback_failure_retries_before_connection_reuse(t: &mut Test) -> R
 }
 
 /// Cancelling a queued commit keeps the connection reusable.
-#[driver_test(requires(sql))]
+#[driver_test(requires(interactive_transactions))]
 pub async fn cancel_queued_commit_keeps_connection_reusable(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -159,7 +171,11 @@ pub async fn cancel_queued_commit_keeps_connection_reusable(t: &mut Test) -> Res
 }
 
 /// Multiple operations inside a single transaction are all committed together.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn multiple_ops_in_transaction(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -177,7 +193,11 @@ pub async fn multiple_ops_in_transaction(t: &mut Test) -> Result<()> {
 
 /// Read-your-writes: data created inside a transaction is visible within it
 /// before commit.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn read_your_writes(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -194,7 +214,11 @@ pub async fn read_your_writes(t: &mut Test) -> Result<()> {
 }
 
 /// Updates inside a transaction are committed.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn update_inside_transaction(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -211,7 +235,11 @@ pub async fn update_inside_transaction(t: &mut Test) -> Result<()> {
 }
 
 /// Updates inside a rolled-back transaction are discarded.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn update_rolled_back(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -228,7 +256,11 @@ pub async fn update_rolled_back(t: &mut Test) -> Result<()> {
 }
 
 /// Deletes inside a rolled-back transaction are discarded.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn delete_rolled_back(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -247,7 +279,11 @@ pub async fn delete_rolled_back(t: &mut Test) -> Result<()> {
 // ===== Driver operation log =====
 
 /// Verify the driver receives BEGIN, statements, and COMMIT in the right order.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn driver_sees_begin_commit(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -276,7 +312,11 @@ pub async fn driver_sees_begin_commit(t: &mut Test) -> Result<()> {
 }
 
 /// Verify the driver receives BEGIN and ROLLBACK when rolled back.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn driver_sees_begin_rollback(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -308,7 +348,11 @@ pub async fn driver_sees_begin_rollback(t: &mut Test) -> Result<()> {
 
 /// A committed nested transaction (savepoint) persists when the outer
 /// transaction also commits.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn nested_commit_both(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -331,7 +375,11 @@ pub async fn nested_commit_both(t: &mut Test) -> Result<()> {
 
 /// Rolling back a nested transaction discards only its changes; the outer
 /// transaction can still commit its own.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn nested_rollback_inner(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -355,7 +403,11 @@ pub async fn nested_rollback_inner(t: &mut Test) -> Result<()> {
 
 /// Rolling back the outer transaction discards everything, including changes
 /// from an already-committed nested transaction.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn nested_rollback_outer(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -378,7 +430,11 @@ pub async fn nested_rollback_outer(t: &mut Test) -> Result<()> {
 
 /// Dropping a nested transaction without finalize rolls back just that
 /// savepoint.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn nested_drop_rolls_back_savepoint(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -402,7 +458,11 @@ pub async fn nested_drop_rolls_back_savepoint(t: &mut Test) -> Result<()> {
 
 /// Verify the driver log for a nested transaction shows SAVEPOINT / RELEASE
 /// SAVEPOINT around the inner work.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn nested_driver_sees_savepoint_ops(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -452,7 +512,11 @@ pub async fn nested_driver_sees_savepoint_ops(t: &mut Test) -> Result<()> {
 
 /// Verify the driver log when a nested transaction is rolled back shows
 /// ROLLBACK TO SAVEPOINT.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn nested_driver_sees_rollback_to_savepoint(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -499,7 +563,11 @@ pub async fn nested_driver_sees_rollback_to_savepoint(t: &mut Test) -> Result<()
 
 /// Two sequential nested transactions: first committed, second rolled back.
 /// Only data from the first survives.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn two_sequential_nested_transactions(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -531,7 +599,11 @@ pub async fn two_sequential_nested_transactions(t: &mut Test) -> Result<()> {
 /// When a multi-op statement (e.g. create with association) runs inside an
 /// interactive transaction, the engine wraps it in SAVEPOINT/RELEASE instead
 /// of BEGIN/COMMIT.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -586,7 +658,11 @@ pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
 // ===== TransactionBuilder API =====
 
 /// TransactionBuilder from Db commits data like a regular transaction.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn builder_on_db_commit(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -602,7 +678,11 @@ pub async fn builder_on_db_commit(t: &mut Test) -> Result<()> {
 }
 
 /// TransactionBuilder from Connection commits data like a regular transaction.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn builder_on_connection_commit(t: &mut Test) -> Result<()> {
     let db = setup(t).await;
     let mut conn = db.connection().await?;
@@ -619,7 +699,11 @@ pub async fn builder_on_connection_commit(t: &mut Test) -> Result<()> {
 }
 
 /// TransactionBuilder with isolation level sends the correct option to the driver.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn builder_with_isolation_level(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -646,7 +730,11 @@ pub async fn builder_with_isolation_level(t: &mut Test) -> Result<()> {
 }
 
 /// TransactionBuilder with read_only sends the correct option to the driver.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn builder_with_read_only(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -668,7 +756,11 @@ pub async fn builder_with_read_only(t: &mut Test) -> Result<()> {
 }
 
 /// TransactionBuilder with both isolation and read_only sends both options.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn builder_with_all_options(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -695,7 +787,11 @@ pub async fn builder_with_all_options(t: &mut Test) -> Result<()> {
 }
 
 /// TransactionBuilder auto-rolls back on drop just like a regular transaction.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn builder_drop_rolls_back(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -711,7 +807,11 @@ pub async fn builder_drop_rolls_back(t: &mut Test) -> Result<()> {
 }
 
 /// Calling `.transaction()` through `&mut dyn Executor` works.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(
+    id(ID),
+    requires(interactive_transactions),
+    scenario(crate::scenarios::two_models)
+)]
 pub async fn transaction_via_dyn_executor(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

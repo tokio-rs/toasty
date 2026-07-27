@@ -141,6 +141,28 @@ jobs:
       - name: doc-tests
         run: cargo test -p tests --doc
 
+  test-d1:
+    needs: check
+    name: Run tests for Cloudflare D1
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - name: Install worker-build
+        run: cargo install worker-build --version 0.8.5 --locked
+      - name: Build D1 Worker
+        working-directory: tests/d1-worker
+        run: worker-build --release --panic-unwind
+      - name: Run D1 Worker tests
+        run: node tests/d1-worker/run.mjs
+
   test-mysql:
     needs: check
     name: Run tests for MySQL

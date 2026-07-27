@@ -35,7 +35,7 @@ mod output;
 pub(crate) use output::Output;
 
 mod plan;
-pub(crate) use plan::ExecPlan;
+pub(crate) use plan::{Atomicity, ExecPlan};
 
 mod project;
 pub(crate) use project::Project;
@@ -64,7 +64,10 @@ pub(crate) use var::{VarDecls, VarId, VarStore};
 use crate::{Result, engine::Engine};
 use toasty_core::{
     Connection,
-    driver::{ExecResponse, Rows, operation::Transaction},
+    driver::{
+        ExecResponse, Rows,
+        operation::{AtomicSqlBatch, QuerySql, Transaction},
+    },
     stmt::{self, ValueStream},
 };
 
@@ -111,20 +114,30 @@ impl Engine {
             )
         };
 
-        if plan.needs_transaction {
+        let atomic_batch = plan.atomicity == Atomicity::AtomicBatch;
+        if atomic_batch {
+            exec.exec_atomic_batch(&plan.actions).await?;
+        }
+
+        let interactive = plan.atomicity == Atomicity::InteractiveTransaction;
+
+        if interactive {
             tracing::trace!("beginning plan transaction");
             exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
         }
 
         for (i, step) in plan.actions.iter().enumerate() {
+            if atomic_batch && step.is_db_op() {
+                continue;
+            }
             tracing::trace!(step = i, action = %step.name(), "executing action");
             // Debug, not error: the failure propagates to the caller, who
             // decides whether it is an application error. A handled unique
             // violation should not error-spam production logs.
             if let Err(e) = exec.exec_step(step).await {
                 tracing::debug!(step = i, action = %step.name(), error = %e, "action failed");
-                if plan.needs_transaction {
+                if interactive {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec.connection.exec(&self.schema, rollback.into()).await;
@@ -133,7 +146,7 @@ impl Engine {
             }
         }
 
-        if plan.needs_transaction {
+        if interactive {
             tracing::trace!("committing plan transaction");
             exec.connection.exec(&self.schema, commit.into()).await?;
         }
@@ -164,6 +177,57 @@ impl Engine {
 }
 
 impl Exec<'_> {
+    async fn exec_atomic_batch(&mut self, actions: &[Action]) -> Result<()> {
+        let mut operations = Vec::new();
+        let mut outputs = Vec::new();
+
+        for action in actions {
+            if !action.is_db_op() {
+                continue;
+            }
+            let Action::ExecStatement(action) = action else {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "atomic SQL batches require generated SQL statements",
+                ));
+            };
+            if !action.input.is_empty()
+                || action.conditional != ConditionalOutput::None
+                || action.pagination.is_some()
+            {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "atomic SQL batch statement depends on an earlier database result",
+                ));
+            }
+
+            let mut statement = action.stmt.clone();
+            let params = self.engine.prepare_for_driver(&mut statement);
+            operations.push(QuerySql {
+                stmt: statement,
+                params,
+                ret: action.output.ty.clone(),
+                last_insert_id_hack: None,
+            });
+            outputs.push(action.output.output.clone());
+        }
+
+        let responses = self
+            .connection
+            .exec_atomic_batch(&self.engine.schema, AtomicSqlBatch::new(operations))
+            .await?;
+        if responses.len() != outputs.len() {
+            return Err(toasty_core::Error::invalid_result(format!(
+                "atomic SQL batch returned {} responses for {} statements",
+                responses.len(),
+                outputs.len()
+            )));
+        }
+
+        for (output, response) in outputs.into_iter().zip(responses) {
+            self.vars.store(output.var, output.num_uses, response);
+        }
+        Ok(())
+    }
+
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,

@@ -67,9 +67,15 @@ impl<'a> TransactionBuilder<'a> {
     /// Begin the transaction.
     ///
     /// When built from a [`Db`](super::Db), this acquires a connection from
-    /// the pool. The connection is owned by the returned [`Transaction`] and
-    /// will be returned to the pool when the transaction is dropped.
+    /// its configured source. The returned [`Transaction`] owns the
+    /// connection until it completes or is dropped.
     pub async fn begin(self) -> Result<Transaction<'a>> {
+        let capability = match &self.source {
+            TxSource::Db(db) => super::Db::capability(db),
+            TxSource::Connection(conn) => conn.shared.engine.capability(),
+        };
+        super::require_interactive_transactions(capability)?;
+
         let conn = match self.source {
             TxSource::Db(db) => ConnRef::owned(db.connection().await?),
             TxSource::Connection(conn) => ConnRef::Borrowed(conn),
@@ -150,7 +156,7 @@ impl<'a> Transaction<'a> {
         // We're creating the Transaction struct before actually starting the transaction. If the
         // future is cancelled while waiting on the response of the start command, the transaction
         // is still rolled back.
-        let tx = Transaction {
+        let mut tx = Transaction {
             conn,
             finalized: false,
             savepoint: None,
@@ -182,15 +188,11 @@ impl<'a> Transaction<'a> {
     /// Commit the transaction.
     pub async fn commit(mut self) -> Result<()> {
         tracing::debug!("committing transaction");
-        match self.savepoint {
-            Some(_) => self
-                .conn
-                .exec_operation(operation::Transaction::ReleaseSavepoint(self.savepoint()).into()),
-            None => self
-                .conn
-                .exec_operation(operation::Transaction::Commit.into()),
-        }
-        .await?;
+        let operation = match self.savepoint {
+            Some(_) => operation::Transaction::ReleaseSavepoint(self.savepoint()),
+            None => operation::Transaction::Commit,
+        };
+        self.conn.exec_operation(operation.into()).await?;
         self.finalized = true;
         Ok(())
     }
@@ -198,15 +200,11 @@ impl<'a> Transaction<'a> {
     /// Roll back the transaction.
     pub async fn rollback(mut self) -> Result<()> {
         tracing::debug!("rolling back transaction");
-        match self.savepoint {
-            Some(_) => self.conn.exec_operation(
-                operation::Transaction::RollbackToSavepoint(self.savepoint()).into(),
-            ),
-            None => self
-                .conn
-                .exec_operation(operation::Transaction::Rollback.into()),
-        }
-        .await?;
+        let operation = match self.savepoint {
+            Some(_) => operation::Transaction::RollbackToSavepoint(self.savepoint()),
+            None => operation::Transaction::Rollback,
+        };
+        self.conn.exec_operation(operation.into()).await?;
         self.finalized = true;
         Ok(())
     }
@@ -227,15 +225,13 @@ impl Drop for Transaction<'_> {
             // Fire-and-forget rollback: send the operation to the background
             // connection task without awaiting the response.
             let (tx, _rx) = oneshot::channel();
-            let _ = self
-                .conn
-                .handle()
-                .in_tx
-                .send(ConnectionOperation::ExecOperation {
+            if let Some(handle) = self.conn.handle() {
+                let _ = handle.in_tx.send(ConnectionOperation::ExecOperation {
                     operation: Box::new(op.into()),
                     span: tracing::Span::current(),
                     tx,
                 });
+            }
         }
     }
 }
@@ -249,15 +245,16 @@ impl<'a> Executor for Transaction<'a> {
         };
         tracing::debug!(depth = depth, "creating nested transaction (savepoint)");
 
-        let transaction = Transaction {
+        let mut transaction = Transaction {
             conn: ConnRef::Borrowed(&mut self.conn),
             finalized: false,
             savepoint: Some(depth),
         };
 
+        let savepoint = transaction.savepoint();
         transaction
             .conn
-            .exec_operation(operation::Transaction::Savepoint(transaction.savepoint()).into())
+            .exec_operation(operation::Transaction::Savepoint(savepoint).into())
             .await?;
 
         Ok(transaction)

@@ -79,10 +79,10 @@ use std::{borrow::Cow, fmt::Debug, sync::Arc};
 
 /// Per-connection configuration passed to [`Driver::connect`].
 ///
-/// The connection pool builds one from the values set on `Db::builder()` and
+/// The connection source builds one from the values set on `Db::builder()` and
 /// hands it to the driver every time a new connection is created, so drivers
 /// can apply configuration at construction time rather than through separate
-/// setters. Callers connecting outside a pool use
+/// setters. Callers connecting outside a `Db` use
 /// [`ConnectContext::default()`].
 ///
 /// The struct is non-exhaustive: construct it with `default()` and assign the
@@ -96,11 +96,23 @@ pub struct ConnectContext {
     pub query_log: QueryLogConfig,
 }
 
+/// Selects how a database handle obtains connections from a driver.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ConnectionStrategy {
+    /// Create connections on demand and return them to a pool after use.
+    Pooled,
+
+    /// Create one connection when the database handle is built and serialize
+    /// all access to it. Direct connections do not start background tasks or
+    /// timers.
+    Direct,
+}
+
 /// Factory for database connections and provider of driver-level metadata.
 ///
-/// Each database backend (SQLite, PostgreSQL, MySQL, DynamoDB) implements this
-/// trait to tell Toasty what the backend supports ([`Capability`]) and to
-/// create [`Connection`] instances on demand.
+/// Each database backend (SQLite, Turso, Cloudflare D1, PostgreSQL, MySQL,
+/// DynamoDB) implements this trait to tell Toasty what the backend supports
+/// ([`Capability`]) and to create [`Connection`] instances on demand.
 ///
 /// # Examples
 ///
@@ -124,10 +136,16 @@ pub trait Driver: Debug + Send + Sync + 'static {
     /// Describes the driver's capability, which informs the query planner.
     fn capability(&self) -> &'static Capability;
 
+    /// Returns how Toasty should own connections created by this driver.
+    fn connection_strategy(&self) -> ConnectionStrategy {
+        ConnectionStrategy::Pooled
+    }
+
     /// Creates a new connection to the database.
     ///
-    /// This method is called by the [`Pool`] whenever a [`Connection`] is requested while none is
-    /// available and there is room to create a new [`Connection`]. The [`ConnectContext`] carries
+    /// Pooled drivers are called whenever no idle connection is available and
+    /// the pool has room for another. Direct drivers are called exactly once
+    /// while the database handle is built. The [`ConnectContext`] carries
     /// per-connection configuration the driver applies at construction time.
     async fn connect(&self, cx: &ConnectContext) -> crate::Result<Box<dyn Connection>>;
 
@@ -148,9 +166,10 @@ pub trait Driver: Debug + Send + Sync + 'static {
 
 /// A live database session that can execute [`Operation`]s.
 ///
-/// Connections are obtained from [`Driver::connect`] and are managed by the
-/// connection pool. All query execution flows through [`Connection::exec`],
-/// which accepts an [`Operation`] and returns an [`ExecResponse`].
+/// Connections are obtained from [`Driver::connect`] and are managed by a
+/// pooled or direct connection source. All query execution flows through
+/// [`Connection::exec`], which accepts an [`Operation`] and returns an
+/// [`ExecResponse`].
 ///
 /// # Examples
 ///
@@ -178,6 +197,20 @@ pub trait Connection: Debug + Send + 'static {
     /// as resolved `FuncJsonExtract` name paths, and document columns are
     /// typed by the structural `Type::Object`.
     async fn exec(&mut self, schema: &Arc<Schema>, plan: Operation) -> crate::Result<ExecResponse>;
+
+    /// Executes generated SQL statements as one atomic backend batch.
+    ///
+    /// The default deliberately rejects the operation. A sequential fallback
+    /// would violate the caller's atomicity requirement.
+    async fn exec_atomic_batch(
+        &mut self,
+        _schema: &Arc<Schema>,
+        _batch: operation::AtomicSqlBatch,
+    ) -> crate::Result<Vec<ExecResponse>> {
+        Err(crate::Error::unsupported_feature(
+            "driver does not support atomic SQL batches",
+        ))
+    }
 
     /// Cheap, synchronous, local check that the driver's client object
     /// still considers the connection open.

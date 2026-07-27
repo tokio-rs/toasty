@@ -1,0 +1,7 @@
+name = "toasty-d1-worker-tests"
+main = "build/worker/shim.mjs"
+compatibility_date = "2026-07-25"
+
+[[d1_databases]]
+binding = "DB"
+database_name = "toasty-d1-local-tests"

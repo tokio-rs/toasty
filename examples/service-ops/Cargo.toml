@@ -17,7 +17,7 @@ sqlite = [ "toasty/sqlite" ]
 [dependencies]
 toasty.workspace = true
 toasty-cli.workspace = true
-tokio.workspace = true
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }
 uuid.workspace = true
 anyhow = "1"
 tracing-subscriber.workspace = true

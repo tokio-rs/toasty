@@ -8,6 +8,7 @@ members = [
     "crates/toasty-sql",
 
     # Driver implementations
+    "crates/toasty-driver-d1",
     "crates/toasty-driver-dynamodb",
     "crates/toasty-driver-mysql",
     "crates/toasty-driver-postgresql",
@@ -29,6 +30,7 @@ members = [
 
     # Tests
     "tests",
+    "tests/d1-worker",
     "tests/tests/fixtures/post",
     "tests/tests/fixtures/user",
 ]
@@ -78,6 +80,7 @@ toasty-core = { version = "0.9.0", path = "crates/toasty-core" }
 toasty-macros = { version = "0.9.0", path = "crates/toasty-macros" }
 toasty-sql = { version = "0.9.0", path = "crates/toasty-sql" }
 # Driver implementations
+toasty-driver-d1 = { version = "0.9.0", path = "crates/toasty-driver-d1" }
 toasty-driver-dynamodb = { version = "0.9.0", path = "crates/toasty-driver-dynamodb" }
 toasty-driver-mysql = { version = "0.9.0", path = "crates/toasty-driver-mysql" }
 toasty-driver-postgresql = { version = "0.9.0", path = "crates/toasty-driver-postgresql" }
@@ -103,6 +106,7 @@ console = "0.16"
 deadpool = { version = "0.13", features = ["rt_tokio_1"] }
 dialoguer = "0.12"
 expect-test = "1.5"
+getrandom = "0.4.3"
 hashbrown = "0.17"
 heck = "0.5.0"
 indexmap = "2.13.0"
@@ -136,7 +140,7 @@ toml = "1.1.0"
 toml_edit = "0.25.8"
 tempfile = "3.27"
 proptest = "1"
-tokio = { version = "1.50", features = ["full"] }
+tokio = "1.50"
 tokio-postgres = "0.7.17"
 tokio-postgres-rustls = { version = "0.14.0", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
@@ -149,7 +153,8 @@ turso = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"
-uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng"] }
+uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng", "js"] }
+worker = "0.8.5"
 
 [profile.dev]
 debug = "line-tables-only"
