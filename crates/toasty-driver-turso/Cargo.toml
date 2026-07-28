@@ -28,9 +28,7 @@ serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 turso.workspace = true
-url.workspace = true
 uuid.workspace = true
-percent-encoding.workspace = true
 
 [dev-dependencies]
 reqwest = { version = "0.13.4", features = ["json"] }

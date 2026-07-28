@@ -21,7 +21,7 @@ use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode},
     },
@@ -32,7 +32,6 @@ use toasty_core::{
     stmt::{self, ValueRecord},
 };
 use toasty_sql::{self as sql};
-use url::Url;
 
 enum SqlReturn {
     Count {
@@ -98,30 +97,30 @@ impl MySQL {
     /// `mysql://user:pass@host:3306/dbname`.
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        if url.scheme() != "mysql" {
+        if !url.has_scheme("mysql") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection url does not have a `mysql` scheme; url={}",
-                url
+                url.as_str()
             )));
         }
 
-        url.host_str().ok_or_else(|| {
+        url.host()?.ok_or_else(|| {
             toasty_core::Error::invalid_connection_url(format!(
                 "missing host in connection URL; url={}",
-                url
+                url.as_str()
             ))
         })?;
 
         if url.path().is_empty() {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
-                url
+                url.as_str()
             )));
         }
 
-        let opts = mysql_async::Opts::from_url(url.as_ref())
+        let opts = mysql_async::Opts::from_url(url.as_str())
             .map_err(toasty_core::Error::driver_operation_failed)?;
         let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
 

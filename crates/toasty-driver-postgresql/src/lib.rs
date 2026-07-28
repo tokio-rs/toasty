@@ -21,12 +21,11 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode, TypedValue},
     },
@@ -39,7 +38,6 @@ use toasty_core::{
 };
 use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
-use url::Url;
 
 enum SqlReturn {
     Count,
@@ -108,42 +106,35 @@ impl PostgreSQL {
     /// Create a new PostgreSQL driver from a connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        if !matches!(url.scheme(), "postgresql" | "postgres") {
+        if !(url.has_scheme("postgresql") || url.has_scheme("postgres")) {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `postgresql` scheme; url={}",
-                url
+                url.as_str()
             )));
         }
 
         if url.path().is_empty() {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
-                url
+                url.as_str()
             )));
         }
 
         let mut config = Config::new();
 
-        let dbname = percent_decode_str(url.path().trim_start_matches('/'))
-            .decode_utf8()
-            .map_err(|_| {
-                toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
-            })?;
-        config.dbname(&*dbname);
+        let dbname = url.decoded_path().map_err(|_| {
+            toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
+        })?;
+        config.dbname(dbname.trim_start_matches('/'));
 
-        if !url.username().is_empty() {
-            let user = percent_decode_str(url.username())
-                .decode_utf8()
-                .map_err(|_| {
-                    toasty_core::Error::invalid_connection_url("username is not valid UTF-8")
-                })?;
+        if let Some(user) = url.username()?.filter(|user| !user.is_empty()) {
             config.user(&*user);
         }
 
         if let Some(password) = url.password() {
-            config.password(percent_decode_str(password).collect::<Vec<u8>>());
+            config.password(&*password);
         }
 
         // libpq lets standard connection parameters appear in the query
@@ -183,17 +174,15 @@ impl PostgreSQL {
             }
         }
 
-        let host = host
-            .or_else(|| url.host_str().filter(|h| !h.is_empty()).map(String::from))
-            .ok_or_else(|| {
-                toasty_core::Error::invalid_connection_url(format!(
-                    "missing host in connection URL; url={}",
-                    url
-                ))
-            })?;
+        let host = host.or(url.host()?.map(String::from)).ok_or_else(|| {
+            toasty_core::Error::invalid_connection_url(format!(
+                "missing host in connection URL; url={}",
+                url.as_str()
+            ))
+        })?;
         config.host(&host);
 
-        if let Some(port) = port.or_else(|| url.port()) {
+        if let Some(port) = port.or(url.port()?) {
             config.port(port);
         }
 
