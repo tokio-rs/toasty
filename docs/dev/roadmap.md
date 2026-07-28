@@ -113,6 +113,7 @@ the entry lands here.
 - `toasty-cli` for schema management ([#190])
 - Database comments for models and fields, managed optionally by migrations
   ([design](design/schema-comments.md))
+- Compile migration files into application binaries ([design](design/embedded-migrations.md))
 - Schema lock file for tracking applied migrations ([#136])
 
 [#136]: https://github.com/tokio-rs/toasty/issues/136

@@ -17,7 +17,7 @@ documentation = "https://docs.rs/toasty-macros"
 proc-macro = true
 
 [dependencies]
-toasty-core.workspace = true
+toasty-core = { workspace = true, features = ["migration"] }
 
 hashbrown.workspace = true
 heck.workspace = true

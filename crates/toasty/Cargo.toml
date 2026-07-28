@@ -16,7 +16,7 @@ documentation = "https://docs.rs/toasty"
 [features]
 default = []
 dynamodb = ["dep:toasty-driver-dynamodb"]
-migration = ["dep:serde", "dep:toml", "dep:toml_edit", "toasty-core/serde"]
+migration = ["dep:serde", "dep:toml", "dep:toml_edit", "toasty-core/migration"]
 mysql = ["dep:toasty-driver-mysql"]
 postgresql = ["dep:toasty-driver-postgresql"]
 sqlite = ["dep:toasty-driver-sqlite"]
