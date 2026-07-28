@@ -7,6 +7,155 @@
 
 use crate::prelude::*;
 
+/// A nullable one-field newtype foreign key uses its leaf column rather than
+/// its presence-guarded embed expression when preloading a via relation.
+#[driver_test(requires(and(sql, auto_increment)))]
+pub async fn include_with_newtype_foreign_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct UserId(u64);
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: UserId,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+
+        #[has_many(via = comments.article)]
+        commented_articles: toasty::Deferred<Vec<Article>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Comment {
+        #[key]
+        #[auto]
+        id: u64,
+
+        #[index]
+        user_id: Option<UserId>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<Option<User>>,
+
+        #[index]
+        article_id: u64,
+
+        #[belongs_to(key = article_id, references = id)]
+        article: toasty::Deferred<Article>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Article {
+        #[key]
+        #[auto]
+        id: u64,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Comment, Article)).await;
+    let user = toasty::create!(User {}).exec(&mut db).await?;
+    let article = toasty::create!(Article {}).exec(&mut db).await?;
+    toasty::create!(Comment {
+        user: &user,
+        article: &article,
+    })
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::all()
+        .include(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [_ {
+        commented_articles.get().len(): 1,
+        ..
+    }]);
+
+    Ok(())
+}
+
+/// A unit enum key and foreign key link through the enum's discriminant column
+/// when preloading a via relation.
+#[driver_test(requires(sql))]
+pub async fn include_with_unit_enum_foreign_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    enum UserId {
+        #[column(variant = 1)]
+        Alice,
+        #[column(variant = 2)]
+        Bob,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        id: UserId,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+
+        #[has_many(via = comments.article)]
+        commented_articles: toasty::Deferred<Vec<Article>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Comment {
+        #[key]
+        id: u64,
+
+        #[index]
+        user_id: UserId,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+
+        #[index]
+        article_id: u64,
+
+        #[belongs_to(key = article_id, references = id)]
+        article: toasty::Deferred<Article>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Article {
+        #[key]
+        id: u64,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Comment, Article)).await;
+    let user = toasty::create!(User { id: UserId::Alice })
+        .exec(&mut db)
+        .await?;
+    let article = toasty::create!(Article { id: 1 }).exec(&mut db).await?;
+    toasty::create!(Comment {
+        id: 1,
+        user: &user,
+        article: &article,
+    })
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::all()
+        .include(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [_ {
+        commented_articles.get().len(): 1,
+        ..
+    }]);
+
+    Ok(())
+}
+
 /// Querying a `via` relation returns the distinct targets reachable through
 /// the path — a target is listed once however many intermediates reach it.
 #[driver_test(
