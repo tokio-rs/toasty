@@ -768,8 +768,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         panic!()
                     };
 
-                    let arg =
-                        self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
+                    let mut stmt: stmt::Statement = (*e.query).into();
+
+                    // Post-lower simplify. The sub-statement detaches into its
+                    // own HIR entry (`new_sub_statement`), so the parent's
+                    // post-lower simplify never sees it — without this, raw
+                    // lowered shapes (e.g. an embedded-field path, lowered to
+                    // `Project(Record([column]), [i])`) reach the driver.
+                    self.state.engine.simplify_stmt(&mut stmt);
+
+                    let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
                     *expr = stmt::ExprInList {
                         expr: e.expr,
