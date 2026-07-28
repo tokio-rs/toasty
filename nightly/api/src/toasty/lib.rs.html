@@ -151,9 +151,11 @@
 <a href=#151 id=151 data-nosnippet>151</a><span class="doccomment">/// Raw SQL execution helpers.
 <a href=#152 id=152 data-nosnippet>152</a></span><span class="kw">pub mod </span>sql;
 <a href=#153 id=153 data-nosnippet>153</a>
-<a href=#154 id=154 data-nosnippet>154</a><span class="kw">pub use </span>toasty_macros::{Embed, Model, create, query, update};
-<a href=#155 id=155 data-nosnippet>155</a>
-<a href=#156 id=156 data-nosnippet>156</a><span class="kw">pub use </span>toasty_core::{Error, <span class="prelude-ty">Result</span>, schema::app::ModelSet};
+<a href=#154 id=154 data-nosnippet>154</a><span class="attr">#[cfg(feature = <span class="string">"migration"</span>)]
+<a href=#155 id=155 data-nosnippet>155</a></span><span class="kw">pub use </span>toasty_macros::embed_migrations;
+<a href=#156 id=156 data-nosnippet>156</a><span class="kw">pub use </span>toasty_macros::{Embed, Model, create, query, update};
 <a href=#157 id=157 data-nosnippet>157</a>
-<a href=#158 id=158 data-nosnippet>158</a><span class="kw">pub mod </span>codegen_support;
+<a href=#158 id=158 data-nosnippet>158</a><span class="kw">pub use </span>toasty_core::{Error, <span class="prelude-ty">Result</span>, schema::app::ModelSet};
+<a href=#159 id=159 data-nosnippet>159</a>
+<a href=#160 id=160 data-nosnippet>160</a><span class="kw">pub mod </span>codegen_support;
 </code></pre></div></section></main></body></html>

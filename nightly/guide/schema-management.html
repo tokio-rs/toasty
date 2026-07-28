@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-1738c6ff.js";
+            window.path_to_searchindex_js = "searchindex-8ec779bd.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -305,6 +305,37 @@ been applied. It executes each pending migration in order inside a transaction
 and records it in the tracking table.</p>
 <p>If all migrations are already applied, the command prints a message and exits
 without changes.</p>
+<h2 id="embedding-migrations"><a class="header" href="#embedding-migrations">Embedding migrations</a></h2>
+<p>Applications that ship as a single binary can compile generated migrations
+into that binary. Enable the <code>migration</code> feature and call
+<code>embed_migrations!</code> to embed the default <code>toasty/</code> migration directory:</p>
+<pre><code class="language-rust ignore">static MIGRATIONS: toasty::migration::MigrationSet = toasty::embed_migrations!();
+
+async fn migrate(db: &amp;toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+    let report = MIGRATIONS.apply(db).await?;
+
+    println!("applied {} migrations", report.applied());
+    Ok(())
+}</code></pre>
+<p>Pass a path when the migrations live outside the default <code>toasty/</code> directory.
+The path is relative to your crate’s <code>Cargo.toml</code>. The macro embeds
+<code>history.toml</code> and the files under <code>migrations/</code> that it names. Snapshot files
+are not needed when applying migrations and are not embedded.</p>
+<p>The compiler reports an error when the history file is invalid, two entries
+use the same ID or name, or a referenced SQL file is missing. At runtime,
+<code>MigrationSet::apply</code> checks the database’s <code>__toasty_migrations</code> table and
+skips migration IDs that are already present.</p>
+<p>For multiple databases, embed and apply one migration set per database:</p>
+<pre><code class="language-rust ignore">async fn migrate_all(primary_db: &amp;toasty::Db, audit_db: &amp;toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+    let primary = toasty::embed_migrations!("toasty/primary");
+    let audit = toasty::embed_migrations!("toasty/audit");
+
+    primary.apply(primary_db).await?;
+    audit.apply(audit_db).await?;
+    Ok(())
+}</code></pre>
+<p>Toasty does not associate migration sets with data source names. The
+application decides which set applies to each <code>Db</code> and when to run it.</p>
 <h2 id="inspecting-the-current-schema"><a class="header" href="#inspecting-the-current-schema">Inspecting the current schema</a></h2>
 <p>Print the schema snapshot derived from your current model definitions:</p>
 <pre><code class="language-bash">cargo run --bin my-cli -- migration snapshot

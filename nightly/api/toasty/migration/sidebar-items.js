@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["Generated","History","HistoryEntry","Snapshot"]};
+window.SIDEBAR_ITEMS = {"fn":["generate"],"struct":["Generated","History","HistoryEntry","MigrationFile","MigrationReport","MigrationSet","Snapshot"]};
