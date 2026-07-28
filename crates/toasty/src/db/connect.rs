@@ -8,8 +8,6 @@ use toasty_core::{
     schema::{db::Migration, diff},
 };
 
-use url::Url;
-
 /// A connection to a database, wrapping the specific driver implementation.
 pub struct Connect {
     driver: Box<dyn Driver>,
@@ -53,9 +51,20 @@ impl Connect {
             allow(unused_variables, unreachable_code)
         )]
 
-        let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
+        // Dispatch on the scheme alone — each driver parses and validates the
+        // full URL itself. Schemes are case-insensitive, and some accepted
+        // forms (`sqlite://:memory:`) are not valid WHATWG URLs, so the string
+        // must not be parsed as one here.
+        let scheme = url
+            .split_once(':')
+            .map(|(scheme, _)| scheme.to_ascii_lowercase())
+            .ok_or_else(|| {
+                toasty_core::Error::invalid_connection_url(format!(
+                    "connection URL has no scheme; url={url}"
+                ))
+            })?;
 
-        let driver: Box<dyn Driver> = match url.scheme() {
+        let driver: Box<dyn Driver> = match scheme.as_str() {
             #[cfg(feature = "dynamodb")]
             "dynamodb" => {
                 // DynamoDB driver requires async initialization to load AWS config from environment
