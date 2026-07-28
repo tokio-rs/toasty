@@ -253,43 +253,79 @@
 <a href=#253 id=253 data-nosnippet>253</a>    }
 <a href=#254 id=254 data-nosnippet>254</a>}
 <a href=#255 id=255 data-nosnippet>255</a>
-<a href=#256 id=256 data-nosnippet>256</a><span class="doccomment">/// The single-column mapping for a foreign-key field. Via include paths only
-<a href=#257 id=257 data-nosnippet>257</a>/// resolve FK source/target fields, which the schema guarantees are primitive.
-<a href=#258 id=258 data-nosnippet>258</a></span><span class="kw">fn </span>fk_primitive(schema: <span class="kw-2">&amp;</span>toasty_core::Schema, field_id: app::FieldId) -&gt; <span class="kw-2">&amp;</span>mapping::FieldPrimitive {
-<a href=#259 id=259 data-nosnippet>259</a>    schema.mapping_for(field_id.model).fields[field_id.index]
-<a href=#260 id=260 data-nosnippet>260</a>        .as_primitive()
-<a href=#261 id=261 data-nosnippet>261</a>        .expect(<span class="string">"FK field maps to a single column"</span>)
-<a href=#262 id=262 data-nosnippet>262</a>}
-<a href=#263 id=263 data-nosnippet>263</a>
-<a href=#264 id=264 data-nosnippet>264</a><span class="doccomment">/// A raw (storage-level) column reference at table `slot` for a FK field.
-<a href=#265 id=265 data-nosnippet>265</a>/// Used in JOIN constraints, which compare stored values directly and so need
-<a href=#266 id=266 data-nosnippet>266</a>/// no storage→model cast.
-<a href=#267 id=267 data-nosnippet>267</a></span><span class="kw">fn </span>raw_column(schema: <span class="kw-2">&amp;</span>toasty_core::Schema, slot: usize, field_id: app::FieldId) -&gt; stmt::Expr {
-<a href=#268 id=268 data-nosnippet>268</a>    stmt::Expr::column(stmt::ExprReference::column(
-<a href=#269 id=269 data-nosnippet>269</a>        slot,
-<a href=#270 id=270 data-nosnippet>270</a>        fk_primitive(schema, field_id).column.index,
-<a href=#271 id=271 data-nosnippet>271</a>    ))
-<a href=#272 id=272 data-nosnippet>272</a>}
-<a href=#273 id=273 data-nosnippet>273</a>
-<a href=#274 id=274 data-nosnippet>274</a><span class="doccomment">/// The model-level expression for a FK field — its column reference wrapped in
-<a href=#275 id=275 data-nosnippet>275</a>/// the storage→model cast when the storage type differs (e.g. `Uuid` stored as
-<a href=#276 id=276 data-nosnippet>276</a>/// `Bytes`) — re-pointed at table `slot`.
-<a href=#277 id=277 data-nosnippet>277</a>///
-<a href=#278 id=278 data-nosnippet>278</a>/// `FieldPrimitive::column_expr` is the schema's pre-built table→model
-<a href=#279 id=279 data-nosnippet>279</a>/// expression at slot 0; we rewrite each column ref's slot.
-<a href=#280 id=280 data-nosnippet>280</a></span><span class="kw">fn </span>model_level_column_expr(
-<a href=#281 id=281 data-nosnippet>281</a>    schema: <span class="kw-2">&amp;</span>toasty_core::Schema,
-<a href=#282 id=282 data-nosnippet>282</a>    field_id: app::FieldId,
-<a href=#283 id=283 data-nosnippet>283</a>    slot: usize,
-<a href=#284 id=284 data-nosnippet>284</a>) -&gt; stmt::Expr {
-<a href=#285 id=285 data-nosnippet>285</a>    <span class="kw">let </span><span class="kw-2">mut </span>expr = fk_primitive(schema, field_id).column_expr.clone();
-<a href=#286 id=286 data-nosnippet>286</a>
-<a href=#287 id=287 data-nosnippet>287</a>    stmt::visit_mut::for_each_expr_mut(<span class="kw-2">&amp;mut </span>expr, |e| {
-<a href=#288 id=288 data-nosnippet>288</a>        <span class="kw">if let </span>stmt::Expr::Reference(stmt::ExprReference::Column(col)) = e {
-<a href=#289 id=289 data-nosnippet>289</a>            col.table = slot;
+<a href=#256 id=256 data-nosnippet>256</a><span class="doccomment">/// The single-column mapping for a foreign-key field.
+<a href=#257 id=257 data-nosnippet>257</a>///
+<a href=#258 id=258 data-nosnippet>258</a>/// Besides primitives, foreign keys may use embedded newtypes and unit enums.
+<a href=#259 id=259 data-nosnippet>259</a>/// Newtypes map through one-field structs to a primitive leaf; unit enums map
+<a href=#260 id=260 data-nosnippet>260</a>/// through their discriminant.
+<a href=#261 id=261 data-nosnippet>261</a></span><span class="kw">struct </span>SingleColumnFk&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#262 id=262 data-nosnippet>262</a>    primitive: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>mapping::FieldPrimitive,
+<a href=#263 id=263 data-nosnippet>263</a>    newtype_depth: usize,
+<a href=#264 id=264 data-nosnippet>264</a>}
+<a href=#265 id=265 data-nosnippet>265</a>
+<a href=#266 id=266 data-nosnippet>266</a><span class="kw">fn </span>single_column_fk(schema: <span class="kw-2">&amp;</span>toasty_core::Schema, field_id: app::FieldId) -&gt; SingleColumnFk&lt;<span class="lifetime">'_</span>&gt; {
+<a href=#267 id=267 data-nosnippet>267</a>    <span class="kw">fn </span>resolve(field: <span class="kw-2">&amp;</span>mapping::Field) -&gt; <span class="prelude-ty">Option</span>&lt;SingleColumnFk&lt;<span class="lifetime">'_</span>&gt;&gt; {
+<a href=#268 id=268 data-nosnippet>268</a>        <span class="kw">match </span>field {
+<a href=#269 id=269 data-nosnippet>269</a>            mapping::Field::Primitive(primitive) =&gt; <span class="prelude-val">Some</span>(SingleColumnFk {
+<a href=#270 id=270 data-nosnippet>270</a>                primitive,
+<a href=#271 id=271 data-nosnippet>271</a>                newtype_depth: <span class="number">0</span>,
+<a href=#272 id=272 data-nosnippet>272</a>            }),
+<a href=#273 id=273 data-nosnippet>273</a>            mapping::Field::Struct(field) <span class="kw">if </span>field.fields.len() == <span class="number">1 </span>=&gt; {
+<a href=#274 id=274 data-nosnippet>274</a>                <span class="kw">let </span><span class="kw-2">mut </span>fk = resolve(<span class="kw-2">&amp;</span>field.fields[<span class="number">0</span>])<span class="question-mark">?</span>;
+<a href=#275 id=275 data-nosnippet>275</a>                fk.newtype_depth += <span class="number">1</span>;
+<a href=#276 id=276 data-nosnippet>276</a>                <span class="prelude-val">Some</span>(fk)
+<a href=#277 id=277 data-nosnippet>277</a>            }
+<a href=#278 id=278 data-nosnippet>278</a>            mapping::Field::Enum(field)
+<a href=#279 id=279 data-nosnippet>279</a>                <span class="kw">if </span>field
+<a href=#280 id=280 data-nosnippet>280</a>                    .variants
+<a href=#281 id=281 data-nosnippet>281</a>                    .iter()
+<a href=#282 id=282 data-nosnippet>282</a>                    .all(|variant| variant.fields.is_empty()) =&gt;
+<a href=#283 id=283 data-nosnippet>283</a>            {
+<a href=#284 id=284 data-nosnippet>284</a>                <span class="prelude-val">Some</span>(SingleColumnFk {
+<a href=#285 id=285 data-nosnippet>285</a>                    primitive: <span class="kw-2">&amp;</span>field.discriminant,
+<a href=#286 id=286 data-nosnippet>286</a>                    newtype_depth: <span class="number">0</span>,
+<a href=#287 id=287 data-nosnippet>287</a>                })
+<a href=#288 id=288 data-nosnippet>288</a>            }
+<a href=#289 id=289 data-nosnippet>289</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">None</span>,
 <a href=#290 id=290 data-nosnippet>290</a>        }
-<a href=#291 id=291 data-nosnippet>291</a>    });
+<a href=#291 id=291 data-nosnippet>291</a>    }
 <a href=#292 id=292 data-nosnippet>292</a>
-<a href=#293 id=293 data-nosnippet>293</a>    expr
-<a href=#294 id=294 data-nosnippet>294</a>}
+<a href=#293 id=293 data-nosnippet>293</a>    resolve(<span class="kw-2">&amp;</span>schema.mapping_for(field_id.model).fields[field_id.index])
+<a href=#294 id=294 data-nosnippet>294</a>        .expect(<span class="string">"FK field maps to a single column"</span>)
+<a href=#295 id=295 data-nosnippet>295</a>}
+<a href=#296 id=296 data-nosnippet>296</a>
+<a href=#297 id=297 data-nosnippet>297</a><span class="doccomment">/// A raw (storage-level) column reference at table `slot` for a FK field.
+<a href=#298 id=298 data-nosnippet>298</a>/// Used in JOIN constraints, which compare stored values directly and so need
+<a href=#299 id=299 data-nosnippet>299</a>/// no storage→model cast.
+<a href=#300 id=300 data-nosnippet>300</a></span><span class="kw">fn </span>raw_column(schema: <span class="kw-2">&amp;</span>toasty_core::Schema, slot: usize, field_id: app::FieldId) -&gt; stmt::Expr {
+<a href=#301 id=301 data-nosnippet>301</a>    stmt::Expr::column(stmt::ExprReference::column(
+<a href=#302 id=302 data-nosnippet>302</a>        slot,
+<a href=#303 id=303 data-nosnippet>303</a>        single_column_fk(schema, field_id).primitive.column.index,
+<a href=#304 id=304 data-nosnippet>304</a>    ))
+<a href=#305 id=305 data-nosnippet>305</a>}
+<a href=#306 id=306 data-nosnippet>306</a>
+<a href=#307 id=307 data-nosnippet>307</a><span class="doccomment">/// The single-column expression for a FK field, re-pointed at table `slot`.
+<a href=#308 id=308 data-nosnippet>308</a>///
+<a href=#309 id=309 data-nosnippet>309</a>/// Primitive leaves and unit-enum discriminants use `column_expr` to preserve
+<a href=#310 id=310 data-nosnippet>310</a>/// storage casts. This path does not use an embed's `default_returning`, which
+<a href=#311 id=311 data-nosnippet>311</a>/// may contain nullable presence guards or deferred-field placeholders.
+<a href=#312 id=312 data-nosnippet>312</a></span><span class="kw">fn </span>model_level_column_expr(
+<a href=#313 id=313 data-nosnippet>313</a>    schema: <span class="kw-2">&amp;</span>toasty_core::Schema,
+<a href=#314 id=314 data-nosnippet>314</a>    field_id: app::FieldId,
+<a href=#315 id=315 data-nosnippet>315</a>    slot: usize,
+<a href=#316 id=316 data-nosnippet>316</a>) -&gt; stmt::Expr {
+<a href=#317 id=317 data-nosnippet>317</a>    <span class="kw">let </span>fk = single_column_fk(schema, field_id);
+<a href=#318 id=318 data-nosnippet>318</a>    <span class="kw">let </span><span class="kw-2">mut </span>expr = fk.primitive.column_expr.clone();
+<a href=#319 id=319 data-nosnippet>319</a>    <span class="kw">for _ in </span><span class="number">0</span>..fk.newtype_depth {
+<a href=#320 id=320 data-nosnippet>320</a>        expr = stmt::Expr::record([expr]);
+<a href=#321 id=321 data-nosnippet>321</a>    }
+<a href=#322 id=322 data-nosnippet>322</a>
+<a href=#323 id=323 data-nosnippet>323</a>    stmt::visit_mut::for_each_expr_mut(<span class="kw-2">&amp;mut </span>expr, |e| {
+<a href=#324 id=324 data-nosnippet>324</a>        <span class="kw">if let </span>stmt::Expr::Reference(stmt::ExprReference::Column(col)) = e {
+<a href=#325 id=325 data-nosnippet>325</a>            col.table = slot;
+<a href=#326 id=326 data-nosnippet>326</a>        }
+<a href=#327 id=327 data-nosnippet>327</a>    });
+<a href=#328 id=328 data-nosnippet>328</a>
+<a href=#329 id=329 data-nosnippet>329</a>    expr
+<a href=#330 id=330 data-nosnippet>330</a>}
 </code></pre></div></section></main></body></html>
