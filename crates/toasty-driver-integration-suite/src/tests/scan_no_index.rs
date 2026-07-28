@@ -33,6 +33,116 @@ pub async fn scan_no_filter(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// DELETE filtered on a non-indexed field. On the scan path the engine has to
+/// collect the primary keys of the matching rows before it can delete them.
+#[driver_test(id(ID))]
+pub async fn scan_delete_by_filter(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        category: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { category: "keep" },
+        { category: "drop" },
+        { category: "drop" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    Item::filter(Item::fields().category().eq("drop"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let remaining: Vec<Item> = Item::all().exec(&mut db).await?;
+
+    assert_eq!(1, remaining.len());
+    assert_eq!("keep", remaining[0].category);
+
+    Ok(())
+}
+
+/// UPDATE filtered on a non-indexed field, the mutation counterpart to
+/// [`scan_delete_by_filter`].
+#[driver_test(id(ID))]
+pub async fn scan_update_by_filter(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        category: String,
+        label: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { category: "keep", label: "old" },
+        { category: "stale", label: "old" },
+        { category: "stale", label: "old" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    Item::filter(Item::fields().category().eq("stale"))
+        .update()
+        .label("new")
+        .exec(&mut db)
+        .await?;
+
+    let mut results: Vec<Item> = Item::all().exec(&mut db).await?;
+    results.sort_by(|a, b| a.category.cmp(&b.category));
+
+    assert_eq!(3, results.len());
+    assert_eq!("old", results[0].label);
+    assert_eq!("new", results[1].label);
+    assert_eq!("new", results[2].label);
+
+    Ok(())
+}
+
+/// DELETE on the scan path for a model with a composite primary key — every
+/// key column has to be read back from the scan.
+#[driver_test]
+pub async fn scan_delete_by_filter_composite_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+        name: String,
+        position: String,
+    }
+
+    let mut db = t.setup_db(models!(Player)).await;
+
+    toasty::create!(Player::[
+        { team: "red", name: "alice", position: "keeper" },
+        { team: "red", name: "bob", position: "striker" },
+        { team: "blue", name: "carol", position: "striker" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    Player::filter(Player::fields().position().eq("striker"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let remaining: Vec<Player> = Player::all().exec(&mut db).await?;
+
+    assert_eq!(1, remaining.len());
+    assert_eq!("alice", remaining[0].name);
+
+    Ok(())
+}
+
 /// Scan with an OR filter on non-indexed fields.
 #[driver_test(id(ID))]
 pub async fn scan_or_filter(t: &mut Test) -> Result<()> {
