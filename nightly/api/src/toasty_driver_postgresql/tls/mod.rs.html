@@ -2,12 +2,12 @@
 <a href=#2 id=2 data-nosnippet>2</a>
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>config::{SslVerifyMode, build_client_config};
 <a href=#4 id=4 data-nosnippet>4</a>
-<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>tokio_postgres::Config;
-<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>tokio_postgres_rustls::MakeRustlsConnect;
-<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>url::Url;
+<a href=#5 id=5 data-nosnippet>5</a><span class="kw">use </span>toasty_core::driver::ConnectionUrl;
+<a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>tokio_postgres::Config;
+<a href=#7 id=7 data-nosnippet>7</a><span class="kw">use </span>tokio_postgres_rustls::MakeRustlsConnect;
 <a href=#8 id=8 data-nosnippet>8</a>
 <a href=#9 id=9 data-nosnippet>9</a><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>configure_tls(
-<a href=#10 id=10 data-nosnippet>10</a>    url: <span class="kw-2">&amp;</span>Url,
+<a href=#10 id=10 data-nosnippet>10</a>    url: <span class="kw-2">&amp;</span>ConnectionUrl&lt;<span class="lifetime">'_</span>&gt;,
 <a href=#11 id=11 data-nosnippet>11</a>    config: <span class="kw-2">&amp;mut </span>Config,
 <a href=#12 id=12 data-nosnippet>12</a>) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="prelude-ty">Option</span>&lt;MakeRustlsConnect&gt;, toasty_core::Error&gt; {
 <a href=#13 id=13 data-nosnippet>13</a>    <span class="kw">let </span><span class="kw-2">mut </span>sslmode = SslVerifyMode::Prefer;
