@@ -111,6 +111,7 @@ the entry lands here.
 
 - Schema migration system ([#190])
 - `toasty-cli` for schema management ([#190])
+- Compile migration files into application binaries ([design](design/embedded-migrations.md))
 - Schema lock file for tracking applied migrations ([#136])
 
 [#136]: https://github.com/tokio-rs/toasty/issues/136

@@ -29,6 +29,7 @@ Guide-level design documents for specific features. Use
 - [DynamoDB Driver Error-Handling Convention](./design/ddb-error-handling.md)
 - [DynamoDB Scan Support](./design/ddb-scan.md)
 - [Document and Collection Fields](./design/document-fields.md)
+- [Embedded Migrations](./design/embedded-migrations.md)
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
 - [Optimistic Concurrency with `#[version]`](./design/field-version.md)
 - [`query!` Macro](./design/query-macro.md)
