@@ -30,7 +30,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
@@ -46,13 +46,6 @@ enum SqlReturn {
     Count,
     Infer,
     Types(Vec<stmt::Type>),
-}
-
-/// Strip a leading `<scheme>:` from a connection URL. Schemes are
-/// case-insensitive; returns `None` if the URL names a different scheme.
-fn strip_scheme<'a>(url: &'a str, scheme: &str) -> Option<&'a str> {
-    let (found, rest) = url.split_once(':')?;
-    found.eq_ignore_ascii_case(scheme).then_some(rest)
 }
 
 /// A SQLite [`Driver`] that opens connections to a file or in-memory database.
@@ -76,46 +69,20 @@ impl Sqlite {
     /// Create a new SQLite driver with an arbitrary connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        // A `sqlite:` URL is a scheme followed by a path, where `//` is an
-        // optional authority marker. It is deliberately not parsed as a WHATWG
-        // URL: that grammar rejects `sqlite://:memory:` (`:memory:` reads as an
-        // invalid port) and reads `sqlite://todos.db` as host `todos.db` with an
-        // empty path, which SQLite opens as a private temporary database.
-        let Some(rest) = strip_scheme(&url_str, "sqlite") else {
+        if !url.has_scheme("sqlite") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `sqlite` scheme; url={url_str}"
             )));
-        };
+        }
 
-        let path = rest.strip_prefix("//").unwrap_or(rest);
-
-        // A query string is not part of the file path. The driver does not
-        // support SQLite URI parameters (`?cache=shared`) — `Connection::open`
-        // treats its whole argument as a filename — so they are dropped.
-        //
-        // `#` is not special: a connection URL has no fragment, and `#` is a
-        // legal filename character, so it stays. Write `%3F` for a literal `?`.
-        let path = match path.find('?') {
-            Some(i) => &path[..i],
-            None => path,
-        };
-
-        if path == ":memory:" {
+        let path = url.file_path()?;
+        if path == Path::new(":memory:") {
             return Ok(Self::InMemory);
         }
 
-        if path.is_empty() {
-            return Err(toasty_core::Error::invalid_connection_url(format!(
-                "connection URL does not name a database file; url={url_str}"
-            )));
-        }
-
-        Ok(Self::File(PathBuf::from(
-            percent_encoding::percent_decode(path.as_bytes())
-                .decode_utf8_lossy()
-                .as_ref(),
-        )))
+        Ok(Self::File(path))
     }
 
     /// Create an in-memory SQLite database
@@ -485,123 +452,5 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Sqlite;
-    use std::path::PathBuf;
-
-    /// The file path `Sqlite::new` resolves out of a `sqlite:` URL.
-    fn file_path(url: &str) -> PathBuf {
-        match Sqlite::new(url).unwrap() {
-            Sqlite::File(path) => path,
-            Sqlite::InMemory => panic!("expected a file-backed database for {url}"),
-        }
-    }
-
-    #[test]
-    fn new_decodes_percent_encoded_path() {
-        // `url::Url` stores the path percent-encoded: a space becomes `%20` and
-        // non-ASCII bytes become `%XX` sequences. The driver must decode it back
-        // before opening the file, otherwise it opens one whose name literally
-        // contains `%20`.
-        assert_eq!(
-            file_path("sqlite:/tmp/my db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
-        );
-        assert_eq!(
-            file_path("sqlite:///tmp/my%20db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
-        );
-        assert_eq!(
-            file_path("sqlite:/tmp/d%C3%A9j%C3%A0.db"),
-            PathBuf::from("/tmp/déjà.db")
-        );
-        // Percent-decoding, not form-decoding: a literal `+` must stay a `+`.
-        assert_eq!(
-            file_path("sqlite:/tmp/a+b.db"),
-            PathBuf::from("/tmp/a+b.db")
-        );
-    }
-
-    #[test]
-    fn new_memory_url_stays_in_memory() {
-        assert!(matches!(
-            Sqlite::new("sqlite::memory:").unwrap(),
-            Sqlite::InMemory
-        ));
-        assert!(matches!(
-            Sqlite::new("sqlite://:memory:").unwrap(),
-            Sqlite::InMemory
-        ));
-        // Schemes are case-insensitive.
-        assert!(matches!(
-            Sqlite::new("SQLITE://:memory:").unwrap(),
-            Sqlite::InMemory
-        ));
-        assert!(matches!(
-            Sqlite::new("SQLITE::memory:").unwrap(),
-            Sqlite::InMemory
-        ));
-    }
-
-    #[test]
-    fn new_authority_form_names_a_relative_file() {
-        // Authority-form URLs: the host component is part of the file path.
-        assert_eq!(file_path("sqlite://todos.db"), PathBuf::from("todos.db"));
-        assert_eq!(
-            file_path("sqlite://./todos.db"),
-            PathBuf::from("./todos.db")
-        );
-        assert_eq!(
-            file_path("sqlite://data/todos.db"),
-            PathBuf::from("data/todos.db")
-        );
-        // Non-special schemes have opaque hosts: case is preserved,
-        // unlike `http`.
-        assert_eq!(
-            file_path("sqlite://MyDatabase.db"),
-            PathBuf::from("MyDatabase.db")
-        );
-    }
-
-    #[test]
-    fn new_url_without_a_path_is_rejected() {
-        assert!(Sqlite::new("sqlite:").is_err());
-        assert!(Sqlite::new("sqlite://").is_err());
-        assert!(Sqlite::new("sqlite:?cache=shared").is_err());
-    }
-
-    #[test]
-    fn new_drops_query_string() {
-        // The driver does not support SQLite URI parameters, so a query string
-        // must not end up in the filename.
-        assert_eq!(
-            file_path("sqlite:app.db?cache=shared"),
-            PathBuf::from("app.db")
-        );
-        assert_eq!(
-            file_path("sqlite://app.db?mode=ro"),
-            PathBuf::from("app.db")
-        );
-        assert!(matches!(
-            Sqlite::new("sqlite::memory:?cache=shared").unwrap(),
-            Sqlite::InMemory
-        ));
-    }
-
-    #[test]
-    fn new_keeps_hash_in_filename() {
-        // A connection URL has no fragment, and `#` is a legal filename
-        // character — truncating there would silently open the wrong file.
-        assert_eq!(file_path("sqlite:notes#1.db"), PathBuf::from("notes#1.db"));
-        assert_eq!(
-            file_path("sqlite://notes#1.db"),
-            PathBuf::from("notes#1.db")
-        );
-        // A literal `?` still has to be percent-encoded.
-        assert_eq!(file_path("sqlite:a%3Fb.db"), PathBuf::from("a?b.db"));
     }
 }
