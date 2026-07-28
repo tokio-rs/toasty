@@ -73,11 +73,10 @@ impl DynamoDb {
         // The URL does not name the endpoint — that comes from the ambient AWS
         // config — but validate it anyway, so a typo fails here instead of
         // silently connecting to whatever the environment points at.
-        let parsed = url::Url::parse(&url).map_err(|err| {
-            toasty_core::Error::invalid_connection_url(format!("{err}; url={url}"))
-        })?;
+        let parsed = toasty_core::driver::ConnectionUrl::parse(&url)?;
+        parsed.validate_authority()?;
 
-        if parsed.scheme() != "dynamodb" {
+        if !parsed.has_scheme("dynamodb") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `dynamodb` scheme; url={url}"
             )));

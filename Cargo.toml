@@ -111,6 +111,8 @@ inventory = "0.3.24"
 # Must match the version used by `postgres-protocol` (the postgres driver
 # iterates over its `FallibleIterator` types); do not bump independently.
 fallible-iterator = "0.2"
+fluent-uri = "0.4.1"
+form_urlencoded = "1.2.2"
 jiff = "0.2.23"
 lru = "0.18.0"
 mysql_async = { version = "0.37.0", default-features = false, features = [

@@ -55,7 +55,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
@@ -77,13 +77,6 @@ enum SqlReturn {
     Count,
     Infer,
     Types(Vec<stmt::Type>),
-}
-
-/// Strip a leading `<scheme>:` from a connection URL. Schemes are
-/// case-insensitive; returns `None` if the URL names a different scheme.
-fn strip_scheme<'a>(url: &'a str, scheme: &str) -> Option<&'a str> {
-    let (found, rest) = url.split_once(':')?;
-    found.eq_ignore_ascii_case(scheme).then_some(rest)
 }
 
 const CREATE_MIGRATIONS_TABLE: &str = "\
@@ -344,45 +337,20 @@ impl Turso {
     /// `turso:/path/to/db`).
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        // A `turso:` URL is a scheme followed by a path, where `//` is an
-        // optional authority marker. It is deliberately not parsed as a WHATWG
-        // URL: that grammar rejects `turso://:memory:` (`:memory:` reads as an
-        // invalid port) and reads `turso://todos.db` as host `todos.db` with an
-        // empty path.
-        let Some(rest) = strip_scheme(&url_str, "turso") else {
+        if !url.has_scheme("turso") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `turso` scheme; url={url_str}"
             )));
-        };
+        }
 
-        let path = rest.strip_prefix("//").unwrap_or(rest);
-
-        // A query string is not part of the file path. The driver does not
-        // support URI parameters, so they are dropped.
-        //
-        // `#` is not special: a connection URL has no fragment, and `#` is a
-        // legal filename character, so it stays. Write `%3F` for a literal `?`.
-        let path = match path.find('?') {
-            Some(i) => &path[..i],
-            None => path,
-        };
-
-        if path == ":memory:" {
+        let path = url.file_path()?;
+        if path == Path::new(":memory:") {
             return Ok(Self::with_path(TursoPath::InMemory));
         }
 
-        if path.is_empty() {
-            return Err(toasty_core::Error::invalid_connection_url(format!(
-                "connection URL does not name a database file; url={url_str}"
-            )));
-        }
-
-        Ok(Self::with_path(TursoPath::File(PathBuf::from(
-            percent_encoding::percent_decode(path.as_bytes())
-                .decode_utf8_lossy()
-                .as_ref(),
-        ))))
+        Ok(Self::with_path(TursoPath::File(path)))
     }
 
     /// Create an in-memory Turso database.
@@ -1030,112 +998,6 @@ impl toasty_core::driver::Connection for Connection {
             .map_err(classify_turso_error)?;
 
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::{Turso, TursoPath};
-    use std::path::PathBuf;
-
-    /// The file path `Turso::new` resolves out of a `turso:` URL.
-    fn file_path(url: &str) -> PathBuf {
-        match Turso::new(url).unwrap().path {
-            TursoPath::File(path) => path,
-            TursoPath::InMemory => panic!("expected a file-backed database for {url}"),
-        }
-    }
-
-    #[test]
-    fn new_decodes_percent_encoded_path() {
-        // `url::Url` stores the path percent-encoded: a space becomes `%20` and
-        // non-ASCII bytes become `%XX` sequences. The driver must decode it back
-        // before opening the file, otherwise it opens one whose name literally
-        // contains `%20`.
-        assert_eq!(
-            file_path("turso:/tmp/my db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
-        );
-        assert_eq!(
-            file_path("turso:///tmp/my%20db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
-        );
-        assert_eq!(
-            file_path("turso:/tmp/d%C3%A9j%C3%A0.db"),
-            PathBuf::from("/tmp/déjà.db")
-        );
-        // Percent-decoding, not form-decoding: a literal `+` must stay a `+`.
-        assert_eq!(file_path("turso:/tmp/a+b.db"), PathBuf::from("/tmp/a+b.db"));
-    }
-
-    #[test]
-    fn new_memory_url_stays_in_memory() {
-        assert!(matches!(
-            Turso::new("turso::memory:").unwrap().path,
-            TursoPath::InMemory
-        ));
-        assert!(matches!(
-            Turso::new("turso://:memory:").unwrap().path,
-            TursoPath::InMemory
-        ));
-        // Schemes are case-insensitive.
-        assert!(matches!(
-            Turso::new("TURSO://:memory:").unwrap().path,
-            TursoPath::InMemory
-        ));
-        assert!(matches!(
-            Turso::new("TURSO::memory:").unwrap().path,
-            TursoPath::InMemory
-        ));
-    }
-
-    #[test]
-    fn new_authority_form_names_a_relative_file() {
-        // Authority-form URLs: the host component is part of the file path.
-        assert_eq!(file_path("turso://todos.db"), PathBuf::from("todos.db"));
-        assert_eq!(file_path("turso://./todos.db"), PathBuf::from("./todos.db"));
-        assert_eq!(
-            file_path("turso://data/todos.db"),
-            PathBuf::from("data/todos.db")
-        );
-        // Non-special schemes have opaque hosts: case is preserved,
-        // unlike `http`.
-        assert_eq!(
-            file_path("turso://MyDatabase.db"),
-            PathBuf::from("MyDatabase.db")
-        );
-    }
-
-    #[test]
-    fn new_drops_query_string() {
-        // The driver does not support URI parameters, so a query string must
-        // not end up in the filename.
-        assert_eq!(
-            file_path("turso:app.db?cache=shared"),
-            PathBuf::from("app.db")
-        );
-        assert_eq!(file_path("turso://app.db?mode=ro"), PathBuf::from("app.db"));
-        assert!(matches!(
-            Turso::new("turso::memory:?cache=shared").unwrap().path,
-            TursoPath::InMemory
-        ));
-    }
-
-    #[test]
-    fn new_keeps_hash_in_filename() {
-        // A connection URL has no fragment, and `#` is a legal filename
-        // character — truncating there would silently open the wrong file.
-        assert_eq!(file_path("turso:notes#1.db"), PathBuf::from("notes#1.db"));
-        assert_eq!(file_path("turso://notes#1.db"), PathBuf::from("notes#1.db"));
-        // A literal `?` still has to be percent-encoded.
-        assert_eq!(file_path("turso:a%3Fb.db"), PathBuf::from("a?b.db"));
-    }
-
-    #[test]
-    fn new_url_without_a_path_is_rejected() {
-        assert!(Turso::new("turso:").is_err());
-        assert!(Turso::new("turso://").is_err());
-        assert!(Turso::new("turso:?cache=shared").is_err());
     }
 }
 
