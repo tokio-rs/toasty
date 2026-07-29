@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_simple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -16,7 +16,7 @@ pub async fn create_macro_simple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_name_email))]
 pub async fn create_macro_multiple_fields(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -34,7 +34,7 @@ pub async fn create_macro_multiple_fields(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -48,7 +48,7 @@ pub async fn create_macro_with_variable(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_with_different_variable(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -64,7 +64,7 @@ pub async fn create_macro_with_different_variable(test: &mut Test) -> Result<()>
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -81,7 +81,7 @@ pub async fn create_macro_scoped(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -98,7 +98,7 @@ pub async fn create_macro_batch(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -113,7 +113,7 @@ pub async fn create_macro_tuple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -131,7 +131,7 @@ pub async fn create_macro_tuple_mixed(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_nested_association(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -152,7 +152,7 @@ pub async fn create_macro_nested_association(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_nested_multiple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -197,7 +197,7 @@ pub async fn create_macro_with_belongs_to(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -272,7 +272,7 @@ pub async fn create_macro_deeply_nested(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_field_shorthand(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -286,7 +286,7 @@ pub async fn create_macro_field_shorthand(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_name_email))]
 pub async fn create_macro_field_shorthand_multiple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -302,7 +302,7 @@ pub async fn create_macro_field_shorthand_multiple(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_name_email))]
 pub async fn create_macro_field_shorthand_mixed(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -322,7 +322,7 @@ pub async fn create_macro_field_shorthand_mixed(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn create_macro_field_shorthand_scoped(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -341,7 +341,7 @@ pub async fn create_macro_field_shorthand_scoped(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn create_macro_field_shorthand_batch(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

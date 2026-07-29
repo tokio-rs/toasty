@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_primary_key),
     scenario(crate::scenarios::two_models)
 )]
@@ -46,7 +46,7 @@ pub async fn upsert_update_increments_version(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_branch_assignments),
     scenario(crate::scenarios::two_models)
 )]
@@ -75,7 +75,7 @@ pub async fn upsert_branch_overrides(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_branch_assignments),
     scenario(crate::scenarios::two_models)
 )]
@@ -104,7 +104,7 @@ pub async fn upsert_branch_overrides_are_order_independent(test: &mut Test) -> R
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_branch_assignments),
     scenario(crate::scenarios::two_models)
 )]
@@ -151,7 +151,7 @@ pub async fn upsert_single_branch_override_keeps_shared_other_branch(
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_targeted_ignore),
     scenario(crate::scenarios::two_models)
 )]
@@ -179,7 +179,7 @@ pub async fn upsert_or_ignore_returns_option(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(and(upsert_primary_key, upsert_targeted_ignore)),
     scenario(crate::scenarios::user_unique_email_with_name)
 )]
@@ -234,7 +234,7 @@ pub async fn upsert_or_ignore_suppresses_only_the_selected_conflict(test: &mut T
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_unique),
     scenario(crate::scenarios::user_unique_email_with_name)
 )]
@@ -256,7 +256,7 @@ pub async fn upsert_by_unique_field(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_unique),
     scenario(crate::scenarios::upsert_models)
 )]
@@ -277,7 +277,7 @@ pub async fn upsert_by_composite_unique_constraint(test: &mut Test) -> Result<()
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_primary_key),
     scenario(crate::scenarios::upsert_models)
 )]
@@ -305,7 +305,7 @@ pub async fn upsert_applies_model_defaults(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(upsert_primary_key))]
+#[driver_test(id(ID, uuid), requires(upsert_primary_key))]
 pub async fn upsert_explicit_assignments_override_model_defaults(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -360,7 +360,7 @@ pub async fn upsert_explicit_assignments_override_model_defaults(test: &mut Test
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_primary_key),
     scenario(crate::scenarios::upsert_models)
 )]
@@ -389,7 +389,7 @@ pub async fn upsert_create_assignment_initializes_only_new_record(test: &mut Tes
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_branch_assignments),
     scenario(crate::scenarios::two_models)
 )]
@@ -412,7 +412,7 @@ pub async fn upsert_update_can_reference_incoming_value(test: &mut Test) -> Resu
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_branch_assignments),
     scenario(crate::scenarios::two_models)
 )]
@@ -432,7 +432,7 @@ pub async fn upsert_update_can_reference_stored_value(test: &mut Test) -> Result
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_primary_key),
     scenario(crate::scenarios::upsert_models)
 )]
@@ -605,7 +605,7 @@ pub async fn upsert_pop_applies_declared_default_on_create(test: &mut Test) -> R
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(upsert_primary_key),
     scenario(crate::scenarios::has_many_nullable_fk)
 )]
@@ -618,7 +618,7 @@ pub async fn upsert_without_update_assignments_is_invalid(test: &mut Test) -> Re
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(and(upsert_primary_key, not(upsert_branch_assignments))),
     scenario(crate::scenarios::two_models)
 )]
@@ -642,7 +642,7 @@ pub async fn unsupported_upsert_branches_are_reported_before_dispatch(
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(and(upsert_primary_key, not(upsert_unique))),
     scenario(crate::scenarios::user_unique_email_with_name)
 )]
@@ -662,7 +662,7 @@ pub async fn unsupported_unique_upsert_is_reported_before_dispatch(test: &mut Te
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(not(upsert_primary_key)),
     scenario(crate::scenarios::two_models)
 )]

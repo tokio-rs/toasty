@@ -551,7 +551,7 @@ pub async fn json_value_jsonb_native_round_trip(t: &mut Test) -> Result<(), BoxE
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn json_data_enum_field(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Payload {

@@ -1,7 +1,7 @@
 use crate::prelude::*;
 use hashbrown::HashMap;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Person {

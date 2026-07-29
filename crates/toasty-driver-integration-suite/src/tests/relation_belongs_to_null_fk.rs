@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn optional_belongs_to_null_fk(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

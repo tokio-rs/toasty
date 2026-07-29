@@ -10,7 +10,7 @@ use toasty_core::driver::{
 // commits normally. Gated on `transaction_lock_mode` so it only runs
 // against drivers that honor the mode (SQLite today).
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(transaction_lock_mode),
     scenario(crate::scenarios::two_models)
 )]
@@ -51,7 +51,7 @@ pub async fn mode_immediate_reaches_driver_and_commits(t: &mut Test) -> Result<(
 // transaction's lifetime — for a single-connection test this is
 // indistinguishable from a successful commit, which is what we assert.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(transaction_lock_mode),
     scenario(crate::scenarios::two_models)
 )]
@@ -89,7 +89,7 @@ pub async fn mode_exclusive_reaches_driver_and_commits(t: &mut Test) -> Result<(
 // modes with `unsupported_feature` rather than silently degrading.
 // Runs on every SQL driver; SQLite is excluded because it supports the
 // mode.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn mode_immediate_rejected_when_unsupported(t: &mut Test) -> Result<()> {
     if t.capability().transaction_lock_mode {
         return Ok(());

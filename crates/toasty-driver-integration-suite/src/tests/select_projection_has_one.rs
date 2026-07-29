@@ -10,7 +10,7 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn select_has_one_basic(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -58,7 +58,7 @@ pub async fn select_has_one_basic(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn select_has_one_with_filter(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -112,7 +112,7 @@ pub async fn select_has_one_with_filter(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn select_has_one_first(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

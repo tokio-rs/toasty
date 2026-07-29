@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Registering only the Parent model should auto-discover the Child model
 /// through the BelongsTo relation.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
@@ -30,7 +30,7 @@ pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
 
 /// Registering only the Parent model should auto-discover the Child model
 /// through the HasOne relation.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
@@ -62,7 +62,7 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
 
 /// Registering only the Parent model should auto-discover the Child model
 /// through the HasMany relation.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
@@ -94,7 +94,7 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
 
 /// Registering only the Parent model should auto-discover the Detail embedded
 /// model through the embedded field.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn missing_registration_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {

@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Tuple and chained ordering apply independently to each parent's relation.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::has_many_belongs_to_with_flags)
 )]
@@ -64,7 +64,11 @@ pub async fn preload_has_many_ordered_per_parent(test: &mut Test) -> Result<()> 
 }
 
 /// Include filters run before ordering.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    requires(sql),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn preload_has_many_filter_and_order(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -94,7 +98,11 @@ pub async fn preload_has_many_filter_and_order(test: &mut Test) -> Result<()> {
 }
 
 /// Ordering applies at each terminal relation in a nested include path.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_post_comment))]
+#[driver_test(
+    id(ID, uuid),
+    requires(sql),
+    scenario(crate::scenarios::user_post_comment)
+)]
 pub async fn preload_nested_relations_ordered_at_each_level(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -198,7 +206,11 @@ pub async fn preload_modifiers_with_reserved_field_names(test: &mut Test) -> Res
 }
 
 /// The last include supplies the complete ordering for a repeated relation path.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    requires(sql),
+    scenario(crate::scenarios::has_many_belongs_to)
+)]
 pub async fn preload_has_many_repeated_ordering_last_wins(test: &mut Test) -> Result<()> {
     use toasty_core::{driver::Operation, stmt::Statement};
 
@@ -255,7 +267,7 @@ pub async fn preload_has_many_repeated_ordering_last_wins(test: &mut Test) -> Re
 }
 
 /// Include ordering is rejected when the terminal relation is singular.
-#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn preload_has_one_ordering_rejected(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

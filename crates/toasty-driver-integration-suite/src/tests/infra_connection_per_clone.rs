@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
     if !t.capability().test_connection_pool {
         return Ok(());
@@ -47,7 +47,7 @@ pub async fn db_does_not_hold_connection(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     if !t.capability().test_connection_pool {
         return Ok(());
@@ -95,7 +95,7 @@ pub async fn dedicated_connection_holds_pool_slot(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn write_visible_on_same_handle(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

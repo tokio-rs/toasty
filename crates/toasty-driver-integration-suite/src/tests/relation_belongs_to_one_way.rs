@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn crud_user_optional_profile_one_direction(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

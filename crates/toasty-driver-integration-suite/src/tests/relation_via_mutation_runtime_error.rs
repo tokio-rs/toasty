@@ -10,7 +10,7 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_org_project_todo)
 )]

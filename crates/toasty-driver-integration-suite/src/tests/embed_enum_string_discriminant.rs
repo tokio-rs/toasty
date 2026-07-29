@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Tests basic CRUD with a unit enum using explicit string discriminants.
-#[driver_test(id(ID), scenario(crate::scenarios::task_with_string_status))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::task_with_string_status))]
 pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -26,7 +26,7 @@ pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests unit enum with default labels (variant ident used as string label).
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn default_string_labels(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -61,7 +61,7 @@ pub async fn default_string_labels(t: &mut Test) -> Result<()> {
 }
 
 /// Tests mixing explicit string labels with default labels.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
@@ -105,7 +105,7 @@ pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum with string discriminants.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -165,7 +165,7 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum with default string labels (variant ident as discriminant).
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -223,7 +223,7 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum mixing explicit string labels with defaults.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {

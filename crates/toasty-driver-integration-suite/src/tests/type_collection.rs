@@ -151,7 +151,7 @@ pub async fn vec_datetime_create_get(t: &mut Test) -> Result<(), BoxError> {
 /// — covers both the PG bind path (driver receives `Value::List` as one
 /// `text[]` parameter) and the read path (`text[]` decoded back to
 /// `Value::List`).
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -177,7 +177,7 @@ pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
 
 /// Whole-value replacement via the update builder. Verifies the PG bind
 /// path on UPDATE (assignment expression rather than INSERT row).
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -208,7 +208,7 @@ pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
 /// `path.contains(value)` filter. Lowers to `value = ANY(col)` on
 /// PostgreSQL — a GIN-indexable predicate when the column has the
 /// appropriate index.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -244,7 +244,7 @@ pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
 
 /// `path.is_superset([...])` (PG `@>`). Matches rows whose array contains
 /// every element of the right-hand set.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -279,7 +279,7 @@ pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError>
 
 /// `path.intersects([...])` (PG `&&`). Matches rows whose array shares at
 /// least one element with the right-hand set.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -315,7 +315,7 @@ pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> 
 /// On backends without `vec_scalar` support, a model containing a
 /// `Vec<scalar>` field is rejected at schema build with a clear error
 /// message.
-#[driver_test(id(ID), requires(not(vec_scalar)))]
+#[driver_test(id(ID, uuid), requires(not(vec_scalar)))]
 pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -345,7 +345,7 @@ pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError
 /// per-backend native append path (`||` on PG, `JSON_MERGE_PRESERVE` on
 /// MySQL, `json_each + json_group_array` on SQLite, `list_append` on
 /// DynamoDB).
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_push(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -382,7 +382,7 @@ pub async fn vec_string_push(t: &mut Test) -> Result<(), BoxError> {
 /// empty Apply loop adds no entry to the assignments map. Run alongside
 /// a non-`Vec<scalar>` field so the engine verifier doesn't reject the
 /// otherwise-empty update.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_apply_empty_is_noop(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -422,7 +422,7 @@ pub async fn vec_string_apply_empty_is_noop(t: &mut Test) -> Result<(), BoxError
 /// `Vec<scalar>` field. The Apply surface API folds same-projection ops
 /// into `Assignment::Batch`; lowering folds the entries into one
 /// equivalent `Append`.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_apply_pushes(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -466,7 +466,7 @@ pub async fn vec_string_apply_pushes(t: &mut Test) -> Result<(), BoxError> {
 /// `stmt::push` onto a `Vec<String>` that was created empty. Covers the
 /// "initially empty" path — DynamoDB's `if_not_exists` guard and the
 /// PG / JSON-backed paths over an empty array literal.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_push_to_empty(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -501,7 +501,7 @@ pub async fn vec_string_push_to_empty(t: &mut Test) -> Result<(), BoxError> {
 /// `stmt::extend(iter)` appends every element in order. Validates that
 /// multi-element appends emit one append op per call (not one per
 /// element).
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_extend(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -543,7 +543,7 @@ pub async fn vec_string_extend(t: &mut Test) -> Result<(), BoxError> {
 /// the appended list has no elements to infer an element type from —
 /// `refine_update` must push the column's element type down into the
 /// param so finalize doesn't see an unresolved `Ty::Unknown`.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_extend_empty(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -576,7 +576,7 @@ pub async fn vec_string_extend_empty(t: &mut Test) -> Result<(), BoxError> {
 }
 
 /// `stmt::clear()` replaces the field with an empty list.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_clear(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -614,7 +614,7 @@ pub async fn vec_string_clear(t: &mut Test) -> Result<(), BoxError> {
 /// `stmt::pop()` drops the trailing element. PG slicing
 /// (`col[1:cardinality(col) - 1]`); other backends fall back to RMW (not
 /// yet implemented).
-#[driver_test(id(ID), requires(vec_pop))]
+#[driver_test(id(ID, uuid), requires(vec_pop))]
 pub async fn vec_string_pop(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -650,7 +650,7 @@ pub async fn vec_string_pop(t: &mut Test) -> Result<(), BoxError> {
 /// `stmt::pop()` on an already-empty collection is a no-op rather than
 /// an error. Verifies the slicing expression handles the empty case
 /// cleanly.
-#[driver_test(id(ID), requires(vec_pop))]
+#[driver_test(id(ID, uuid), requires(vec_pop))]
 pub async fn vec_string_pop_on_empty(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -685,7 +685,7 @@ pub async fn vec_string_pop_on_empty(t: &mut Test) -> Result<(), BoxError> {
 /// `stmt::remove(value)` removes every matching element. PG
 /// `array_remove(col, $1)`; other backends fall back to RMW (not yet
 /// implemented).
-#[driver_test(id(ID), requires(vec_remove))]
+#[driver_test(id(ID, uuid), requires(vec_remove))]
 pub async fn vec_string_remove_value(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -720,7 +720,7 @@ pub async fn vec_string_remove_value(t: &mut Test) -> Result<(), BoxError> {
 
 /// `stmt::remove(value)` against an absent value is a no-op rather than
 /// an error.
-#[driver_test(id(ID), requires(vec_remove))]
+#[driver_test(id(ID, uuid), requires(vec_remove))]
 pub async fn vec_string_remove_value_missing(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -756,7 +756,7 @@ pub async fn vec_string_remove_value_missing(t: &mut Test) -> Result<(), BoxErro
 /// `stmt::remove(value)` removes every element equal to the value, not
 /// just the first match. Matches `array_remove` on PG and aligns with
 /// the design's "remove all matching" semantic.
-#[driver_test(id(ID), requires(vec_remove))]
+#[driver_test(id(ID, uuid), requires(vec_remove))]
 pub async fn vec_string_remove_value_multiple_matches(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -797,7 +797,7 @@ pub async fn vec_string_remove_value_multiple_matches(t: &mut Test) -> Result<()
 
 /// `stmt::remove_at(idx)` drops the element at the given 0-based index.
 /// PG: `col[1:i] || col[i + 2:cardinality(col)]`.
-#[driver_test(id(ID), requires(vec_remove_at))]
+#[driver_test(id(ID, uuid), requires(vec_remove_at))]
 pub async fn vec_string_remove_at(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -832,7 +832,7 @@ pub async fn vec_string_remove_at(t: &mut Test) -> Result<(), BoxError> {
 
 /// `stmt::remove_at(0)` drops the head element. Exercises the
 /// boundary case where the PG prefix slice (`col[1:0]`) is empty.
-#[driver_test(id(ID), requires(vec_remove_at))]
+#[driver_test(id(ID, uuid), requires(vec_remove_at))]
 pub async fn vec_string_remove_at_head(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -867,7 +867,7 @@ pub async fn vec_string_remove_at_head(t: &mut Test) -> Result<(), BoxError> {
 
 /// `stmt::remove_at(i)` with `i >= len` is a no-op — per-row failure
 /// semantics on a bulk update are rarely useful.
-#[driver_test(id(ID), requires(vec_remove_at))]
+#[driver_test(id(ID, uuid), requires(vec_remove_at))]
 pub async fn vec_string_remove_at_out_of_bounds(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -901,7 +901,7 @@ pub async fn vec_string_remove_at_out_of_bounds(t: &mut Test) -> Result<(), BoxE
 }
 
 /// `path.len()` and `path.is_empty()` predicates. PG `cardinality(col)`.
-#[driver_test(id(ID), requires(vec_scalar))]
+#[driver_test(id(ID, uuid), requires(vec_scalar))]
 pub async fn vec_string_len_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]

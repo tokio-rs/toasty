@@ -3,7 +3,7 @@ use crate::prelude::*;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_decimal(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -64,7 +64,7 @@ pub async fn ty_decimal_vec(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     use rust_decimal::Decimal;
     use std::str::FromStr;
@@ -95,7 +95,7 @@ pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(decimal_arbitrary_precision))]
+#[driver_test(id(ID, uuid), requires(decimal_arbitrary_precision))]
 pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -124,7 +124,7 @@ pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_decimal))]
+#[driver_test(id(ID, uuid), requires(native_decimal))]
 pub async fn ty_decimal_as_numeric_fixed_precision(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {

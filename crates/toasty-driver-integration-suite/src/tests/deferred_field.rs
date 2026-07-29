@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_document))]
 pub async fn default_load_leaves_deferred_unloaded(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -23,7 +23,7 @@ pub async fn default_load_leaves_deferred_unloaded(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_include_loads_value(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -47,7 +47,7 @@ pub async fn deferred_include_loads_value(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_optional_document))]
 pub async fn deferred_optional_include_loads_some(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -69,7 +69,7 @@ pub async fn deferred_optional_include_loads_some(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_optional_document))]
 pub async fn deferred_optional_include_loads_none(t: &mut Test) -> Result<()> {
     // A nullable deferred field must distinguish "loaded as NULL" from
     // "unloaded". An eager `.include()` puts the field into the loaded state
@@ -93,7 +93,7 @@ pub async fn deferred_optional_include_loads_none(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_optional_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_optional_document))]
 pub async fn deferred_optional_create_returns_none_loaded(t: &mut Test) -> Result<()> {
     // INSERT...RETURNING bypasses the deferred mask, so the value the caller
     // just supplied (including `None`) must come back loaded — the in-memory
@@ -122,7 +122,11 @@ pub async fn deferred_optional_create_returns_none_loaded(t: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::deferred_document))]
+#[driver_test(
+    id(ID, uuid),
+    requires(sql),
+    scenario(crate::scenarios::deferred_document)
+)]
 pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     // SQL-only: a bare predicate on the deferred field requires a full table
     // scan. The DDB equivalent is `deferred_pk_filter_does_not_load_field`,
@@ -156,7 +160,7 @@ pub async fn deferred_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_pk_filter_does_not_load_field(t: &mut Test) -> Result<()> {
     // Same coverage as `deferred_filter_does_not_load_field`, expressed as a
     // PK-grounded query so it runs on DDB. The deferred field appears in the
@@ -197,7 +201,7 @@ pub async fn deferred_pk_filter_does_not_load_field(t: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn deferred_works_through_type_alias(t: &mut Test) -> Result<()> {
     type Lazy<T> = toasty::Deferred<T>;
 
@@ -229,7 +233,7 @@ pub async fn deferred_works_through_type_alias(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_update_loads_from_unloaded(t: &mut Test) -> Result<()> {
     // The caller supplied the value as part of the update, so the in-memory
     // field becomes loaded — no follow-up fetch is needed.
@@ -256,7 +260,7 @@ pub async fn deferred_update_loads_from_unloaded(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::deferred_document))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::deferred_document))]
 pub async fn deferred_update_refreshes_loaded_value(t: &mut Test) -> Result<()> {
     // An already-loaded deferred field is refreshed by the update, matching
     // non-deferred field behavior.
@@ -294,7 +298,7 @@ pub async fn deferred_update_refreshes_loaded_value(t: &mut Test) -> Result<()> 
 // against the shared scenario.
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::deferred_json_document)
 )]
@@ -322,7 +326,7 @@ pub async fn deferred_json_create_returns_loaded(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::deferred_json_document)
 )]
@@ -346,7 +350,7 @@ pub async fn deferred_json_default_load_leaves_unloaded(t: &mut Test) -> Result<
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::deferred_json_document)
 )]
@@ -379,7 +383,7 @@ pub async fn deferred_json_include_eager_loads_value(t: &mut Test) -> Result<()>
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::deferred_json_document)
 )]

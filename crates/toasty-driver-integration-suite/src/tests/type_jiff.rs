@@ -79,7 +79,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Zoned;
 
@@ -110,7 +110,7 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_date(test: &mut Test) -> Result<()> {
     use jiff::civil::Date;
 
@@ -144,7 +144,7 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_time(test: &mut Test) -> Result<()> {
     use jiff::civil::Time;
 
@@ -176,7 +176,7 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_datetime(test: &mut Test) -> Result<()> {
     use jiff::civil::DateTime;
 
@@ -210,7 +210,7 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_timestamp))]
+#[driver_test(id(ID, uuid), requires(native_timestamp))]
 pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -246,7 +246,7 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_time))]
+#[driver_test(id(ID, uuid), requires(native_time))]
 pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
     use jiff::civil::Time;
 
@@ -280,7 +280,7 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_datetime))]
+#[driver_test(id(ID, uuid), requires(native_datetime))]
 pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
     use jiff::civil::DateTime;
 
@@ -371,7 +371,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     use jiff::civil::Date;
 
@@ -401,7 +401,7 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
     use jiff::civil::Time;
 
@@ -432,7 +432,7 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     use jiff::civil::DateTime;
 
@@ -462,7 +462,7 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -510,7 +510,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn latest_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -546,7 +546,7 @@ pub async fn latest_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 

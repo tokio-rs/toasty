@@ -142,7 +142,7 @@ pub async fn eager_belongs_to_loads_without_include(t: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn eager_has_many_create_returning_loads_relations(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -331,7 +331,7 @@ pub async fn eager_relations_reload_after_update(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn eager_relation_cycle_is_rejected(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -367,7 +367,7 @@ pub async fn eager_relation_cycle_is_rejected(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn eager_relation_self_cycle_is_rejected(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Node {
@@ -396,7 +396,7 @@ pub async fn eager_relation_self_cycle_is_rejected(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn eager_relation_long_cycle_is_rejected(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

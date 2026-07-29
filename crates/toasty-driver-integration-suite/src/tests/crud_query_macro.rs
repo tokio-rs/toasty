@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_all(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -15,7 +15,7 @@ pub async fn query_macro_all(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_eq(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -33,7 +33,7 @@ pub async fn query_macro_filter_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -50,7 +50,11 @@ pub async fn query_macro_filter_ne(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::user_with_age),
+    requires(scan)
+)]
 pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -81,7 +85,11 @@ pub async fn query_macro_filter_numeric_comparisons(test: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::user_with_age),
+    requires(scan)
+)]
 pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -102,7 +110,7 @@ pub async fn query_macro_filter_and(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_or(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -119,7 +127,7 @@ pub async fn query_macro_filter_or(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -136,7 +144,11 @@ pub async fn query_macro_filter_not(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::user_with_age),
+    requires(scan)
+)]
 pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -159,7 +171,7 @@ pub async fn query_macro_filter_parens(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_external_ref(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -177,7 +189,7 @@ pub async fn query_macro_filter_external_ref(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_external_expr(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -198,7 +210,7 @@ pub async fn query_macro_filter_external_expr(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -221,7 +233,11 @@ pub async fn query_macro_case_insensitive_keywords(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(scan))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::user_with_age),
+    requires(scan)
+)]
 pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -245,7 +261,7 @@ pub async fn query_macro_complex_boolean(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::widget_mixed_types))]
 pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -267,7 +283,7 @@ pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
 
 // --- ORDER BY, LIMIT, OFFSET tests ---
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_order_by_asc(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -283,7 +299,7 @@ pub async fn query_macro_order_by_asc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_order_by_desc(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -299,7 +315,7 @@ pub async fn query_macro_order_by_desc(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_limit(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -316,7 +332,7 @@ pub async fn query_macro_limit(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_offset_and_limit(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -333,7 +349,7 @@ pub async fn query_macro_offset_and_limit(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_filter_with_order_by_and_limit(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -355,7 +371,7 @@ pub async fn query_macro_filter_with_order_by_and_limit(test: &mut Test) -> Resu
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_limit_external_ref(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -372,7 +388,7 @@ pub async fn query_macro_limit_external_ref(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_case_insensitive_order_limit(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -393,7 +409,7 @@ pub async fn query_macro_case_insensitive_order_limit(test: &mut Test) -> Result
 // These use composite primary keys (partition + local) so queries can be served
 // by DynamoDB's key condition expressions.
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn query_macro_partition_key_eq(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
@@ -432,7 +448,7 @@ pub async fn query_macro_partition_key_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn query_macro_partition_and_local_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
@@ -471,7 +487,7 @@ pub async fn query_macro_partition_and_local_key(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn query_macro_local_key_comparison(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
@@ -519,7 +535,7 @@ pub async fn query_macro_local_key_comparison(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn query_macro_partition_key_external_ref(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
@@ -558,7 +574,7 @@ pub async fn query_macro_partition_key_external_ref(test: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn query_macro_partition_key_with_not(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = team, local = name)]
@@ -598,7 +614,7 @@ pub async fn query_macro_partition_key_with_not(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = team, local = name)]
@@ -641,7 +657,7 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -659,7 +675,7 @@ pub async fn query_macro_filter_in_list(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -678,7 +694,7 @@ pub async fn query_macro_filter_in_list_external_ref(test: &mut Test) -> Result<
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -696,7 +712,7 @@ pub async fn query_macro_filter_in_list_with_and(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
 pub async fn query_macro_filter_in_list_by_pk(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

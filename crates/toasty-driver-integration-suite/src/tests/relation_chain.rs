@@ -10,7 +10,7 @@ use crate::prelude::*;
 /// Happy path: HasMany → BelongsTo chain returns the distinct set of
 /// categories the user's todos belong to, with no duplicates even when the
 /// user has multiple todos in the same category.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn user_todos_category(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -52,7 +52,7 @@ pub async fn user_todos_category(test: &mut Test) -> Result<()> {
 }
 
 /// Empty source: a user with no todos produces an empty chain result.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn chain_from_empty_source_is_empty(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -81,7 +81,7 @@ pub async fn chain_from_empty_source_is_empty(test: &mut Test) -> Result<()> {
 
 /// Many todos sharing a single category yield exactly one category row in the
 /// chain result — IN dedupes against the outermost relation.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn chain_dedupes_when_todos_share_category(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -111,7 +111,7 @@ pub async fn chain_dedupes_when_todos_share_category(test: &mut Test) -> Result<
 
 /// The chain respects the starting source: each user's chain returns only the
 /// categories their own todos belong to, even when the data sets overlap.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn chain_scopes_per_starting_user(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -153,7 +153,7 @@ pub async fn chain_scopes_per_starting_user(test: &mut Test) -> Result<()> {
 
 /// `Many::filter(expr)` after a chain applies a filter to the final
 /// relation. The result is the chain's category set narrowed by the filter.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn chain_then_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -187,7 +187,7 @@ pub async fn chain_then_filter(test: &mut Test) -> Result<()> {
 
 /// Two HasMany hops in succession (`Author → posts → comments`). The lowering
 /// unfolds into nested IN-subqueries on each `BelongsTo` pair.
-#[driver_test(id(ID), scenario(crate::scenarios::user_post_comment))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_post_comment))]
 pub async fn has_many_through_has_many(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

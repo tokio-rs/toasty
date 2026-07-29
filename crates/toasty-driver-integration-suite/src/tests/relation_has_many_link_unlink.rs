@@ -2,7 +2,7 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -55,7 +55,7 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -91,7 +91,7 @@ pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) -> 
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn reassign_relation_required_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -115,7 +115,7 @@ pub async fn reassign_relation_required_belongs_to(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn add_remove_multiple_relation_option_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

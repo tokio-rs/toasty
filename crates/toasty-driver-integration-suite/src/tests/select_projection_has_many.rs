@@ -9,7 +9,11 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::has_many_belongs_to),
+    requires(sql)
+)]
 pub async fn select_has_many_basic(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -33,7 +37,11 @@ pub async fn select_has_many_basic(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::has_many_belongs_to),
+    requires(sql)
+)]
 pub async fn select_has_many_with_filter(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -66,7 +74,11 @@ pub async fn select_has_many_with_filter(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to), requires(sql))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::has_many_belongs_to),
+    requires(sql)
+)]
 pub async fn select_has_many_first(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

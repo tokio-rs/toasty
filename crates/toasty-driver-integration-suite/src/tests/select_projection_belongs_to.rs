@@ -6,7 +6,7 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -34,7 +34,7 @@ pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -63,7 +63,7 @@ pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]

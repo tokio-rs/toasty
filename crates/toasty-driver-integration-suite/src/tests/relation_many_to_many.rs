@@ -7,7 +7,7 @@ use crate::prelude::*;
 /// normal query operations such as ordering and returns an empty list when no
 /// join rows exist.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_group_membership)
 )]
@@ -50,7 +50,7 @@ pub async fn query_from_both_sides(test: &mut Test) -> Result<()> {
 /// traverse to the opposite endpoint and can also inspect fields stored on the
 /// join model.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_group_membership)
 )]
@@ -95,7 +95,7 @@ pub async fn filter_through_join_model(test: &mut Test) -> Result<()> {
 /// Parent queries can apply `.any()` directly to either derived relation,
 /// without spelling the join model in the predicate.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_group_membership)
 )]
@@ -130,7 +130,7 @@ pub async fn filter_through_via_from_both_sides(test: &mut Test) -> Result<()> {
 /// Preloading works in both directions and keeps results grouped under the
 /// correct endpoint, including endpoints with no join rows.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_group_membership)
 )]
@@ -185,7 +185,7 @@ pub async fn include_from_both_sides(test: &mut Test) -> Result<()> {
 /// preserves relation data such as `role` and leaves both endpoint records
 /// intact when the link is removed.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_group_membership)
 )]
@@ -226,7 +226,7 @@ pub async fn mutate_link_through_join_model(test: &mut Test) -> Result<()> {
 /// A composite primary key on the join model prevents duplicate links while
 /// allowing each endpoint to participate in other links.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_group_membership)
 )]
@@ -271,7 +271,7 @@ pub async fn composite_join_key_prevents_duplicate_links(test: &mut Test) -> Res
 /// A self-referential many-to-many relation uses pair hints to distinguish
 /// the two foreign keys on the join model. Each direction then exposes its
 /// own `has_many(via = ...)` traversal.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn self_referential_followers_and_following(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

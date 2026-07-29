@@ -20,7 +20,7 @@ use toasty_core::{
     stmt,
 };
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_string(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -52,7 +52,7 @@ pub async fn in_list_string(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::in_list_item))]
 pub async fn not_in_list_string(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -85,7 +85,7 @@ pub async fn not_in_list_string(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -117,7 +117,7 @@ pub async fn in_list_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_i64_large(t: &mut Test) -> Result<()> {
     // Regression guard: with PG's gate on, the engine must bind the whole
     // list as a single `Value::List` param. With the gate off (SQLite,
@@ -152,7 +152,7 @@ pub async fn in_list_i64_large(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_id(t: &mut Test) -> Result<()> {
     // Filter by the auto-generated id. Runs once per ID variant, so this
     // exercises the PG driver's per-element-type dispatch for both `u64`
@@ -190,7 +190,7 @@ pub async fn in_list_id(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_with_null(t: &mut Test) -> Result<()> {
     // Exercises the PG driver's `Vec<Option<T>>` bind path: a `None` in the
     // list maps to a SQL NULL inside the bound array.

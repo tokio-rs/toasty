@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Filters on a numeric field using `between()`, returning only rows in range.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn filter_between_numeric(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -32,7 +32,7 @@ pub async fn filter_between_numeric(test: &mut Test) -> Result<()> {
 }
 
 /// Verifies that `between()` bounds are inclusive on both ends.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn filter_between_inclusive_bounds(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -73,7 +73,7 @@ pub async fn filter_between_inclusive_bounds(test: &mut Test) -> Result<()> {
 }
 
 /// Verifies that `between()` returns nothing when the range excludes all rows.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn filter_between_empty_result(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -100,7 +100,7 @@ pub async fn filter_between_empty_result(test: &mut Test) -> Result<()> {
 }
 
 /// Filters on a string field using `between()`.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn filter_between_string(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {

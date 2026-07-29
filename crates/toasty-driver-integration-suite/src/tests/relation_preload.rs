@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Tests that preloading a `Deferred<Option<_>>` correctly distinguishes between
 /// "not loaded" and "loaded as None" when the relation does not exist.
-#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -38,7 +38,7 @@ pub async fn preload_has_one_option_none_then_some(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -72,7 +72,7 @@ pub async fn basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_two_children))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_two_children))]
 pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -136,7 +136,7 @@ pub async fn multiple_includes_same_model(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_one_optional_belongs_to))]
 pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -171,7 +171,7 @@ pub async fn basic_has_one_and_belongs_to_preload(test: &mut Test) -> Result<()>
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_profile_settings))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_profile_settings))]
 pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -261,7 +261,7 @@ pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -278,7 +278,7 @@ pub async fn preload_on_empty_table(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
 pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -294,7 +294,7 @@ pub async fn preload_on_empty_query(test: &mut Test) -> Result<()> {
 
 /// `Deferred<Vec<T>>` + `Deferred<Option<T>>`: nullable FK allows children to
 /// exist without a parent. Tests preloading from both directions.
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -340,7 +340,7 @@ pub async fn preload_has_many_with_optional_belongs_to(test: &mut Test) -> Resul
 /// `Deferred<Option<T>>` + `Deferred<T>` (required FK): the child always points
 /// to a parent, but the parent may or may not have a child. Tests preloading
 /// from both directions.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -414,7 +414,7 @@ pub async fn preload_has_one_optional_with_required_belongs_to(test: &mut Test) 
 /// `Deferred<T>` (required) + `Deferred<Option<T>>`: creating a parent requires
 /// providing a child, but the child FK is nullable. Tests preloading from both
 /// directions.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -474,7 +474,7 @@ pub async fn preload_has_one_required_with_optional_belongs_to(test: &mut Test) 
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_todo_step))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_todo_step))]
 pub async fn nested_has_many_preload(test: &mut Test) {
     let mut db = setup(test).await;
 
@@ -522,7 +522,7 @@ pub async fn nested_has_many_preload(test: &mut Test) {
 
 // ===== HasMany -> Deferred<Option<T>> =====
 // User has_many Posts, each Post has_one optional Detail
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -610,7 +610,7 @@ pub async fn nested_has_many_then_has_one_optional(test: &mut Test) -> Result<()
 
 // ===== HasMany -> Deferred<T> (required) =====
 // User has_many Accounts, each Account has_one required Settings
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -693,7 +693,7 @@ pub async fn nested_has_many_then_has_one_required(test: &mut Test) -> Result<()
 
 // ===== HasMany -> Deferred<T> (required) =====
 // Category has_many Items, each Item belongs_to a Brand
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -771,7 +771,7 @@ pub async fn nested_has_many_then_belongs_to_required(test: &mut Test) -> Result
 // Sibling rows with the same foreign key must not break the nested preload.
 // Regression for #701: the DDB nested merge used to panic with
 // "HashIndex: duplicate key detected" when two Items pointed at one Brand.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_many_then_shared_belongs_to(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -844,7 +844,7 @@ pub async fn nested_has_many_then_shared_belongs_to(test: &mut Test) -> Result<(
 
 // ===== HasMany -> Deferred<Option<T>> =====
 // Team has_many Tasks, each Task optionally belongs_to an Assignee
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -929,7 +929,7 @@ pub async fn nested_has_many_then_belongs_to_optional(test: &mut Test) -> Result
 
 // ===== Deferred<Option<T>> -> HasMany =====
 // User has_one optional Profile, Profile has_many Badges
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1024,7 +1024,7 @@ pub async fn nested_has_one_optional_then_has_many(test: &mut Test) -> Result<()
 
 // ===== Deferred<T> (required) -> HasMany =====
 // Order has_one required Invoice, Invoice has_many LineItems
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1108,7 +1108,7 @@ pub async fn nested_has_one_required_then_has_many(test: &mut Test) -> Result<()
 
 // ===== Deferred<Option<T>> -> Deferred<Option<T>> =====
 // User has_one optional Profile, Profile has_one optional Avatar
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1212,7 +1212,7 @@ pub async fn nested_has_one_optional_then_has_one_optional(test: &mut Test) -> R
 
 // ===== Deferred<T> (required) -> Deferred<T> (required) =====
 // User has_one required Profile, Profile has_one required Avatar
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_one_required_then_has_one_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1289,7 +1289,7 @@ pub async fn nested_has_one_required_then_has_one_required(test: &mut Test) -> R
 
 // ===== Deferred<Option<T>> -> Deferred<T> (required) =====
 // User has_one optional Review, Review belongs_to a Product
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_has_one_optional_then_belongs_to_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1371,7 +1371,7 @@ pub async fn nested_has_one_optional_then_belongs_to_required(test: &mut Test) -
 
 // ===== Deferred<T> (required) -> HasMany =====
 // Comment belongs_to a Post, Post has_many Tags
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1456,7 +1456,7 @@ pub async fn nested_belongs_to_required_then_has_many(test: &mut Test) -> Result
 
 // ===== Deferred<T> (required) -> Deferred<Option<T>> =====
 // Todo belongs_to a User, User has_one optional Profile
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1549,7 +1549,7 @@ pub async fn nested_belongs_to_required_then_has_one_optional(test: &mut Test) -
 
 // ===== Deferred<T> (required) -> Deferred<T> (required) =====
 // Step belongs_to a Todo, Todo belongs_to a User (chain of belongs_to going up)
-#[driver_test(id(ID), scenario(crate::scenarios::user_todo_step))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_todo_step))]
 pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -1578,7 +1578,7 @@ pub async fn nested_belongs_to_required_then_belongs_to_required(test: &mut Test
 
 // ===== Deferred<Option<T>> -> HasMany =====
 // Task optionally belongs_to a Project, Project has_many Members
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1667,7 +1667,7 @@ pub async fn nested_belongs_to_optional_then_has_many(test: &mut Test) -> Result
 
 // ===== Deferred<Option<T>> -> Deferred<Option<T>> =====
 // Comment optionally belongs_to a Post, Post optionally belongs_to a Category
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_belongs_to_optional_then_belongs_to_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1769,7 +1769,7 @@ pub async fn nested_belongs_to_optional_then_belongs_to_optional(test: &mut Test
 
 // ===== Deferred<T> -> Deferred<T> (required) =====
 // Todo belongs_to a User, User has_one required Config
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
@@ -1844,7 +1844,7 @@ pub async fn nested_belongs_to_required_then_has_one_required(test: &mut Test) -
 // ===== HasMany -> HasMany (with empty nested collections) =====
 // Ensures that when some parents have children and others don't, nested preload
 // correctly assigns empty collections rather than panicking.
-#[driver_test(id(ID), scenario(crate::scenarios::user_todo_step))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_todo_step))]
 pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
     let mut db = setup(test).await;
 
@@ -1886,7 +1886,7 @@ pub async fn nested_has_many_then_has_many_with_empty_leaves(test: &mut Test) {
 // sibling nested include must be preserved — previously the second overwrote
 // the first at the shared field slot.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::has_many_multi_relation)
 )]
@@ -1928,7 +1928,7 @@ pub async fn sibling_nested_includes_on_shared_prefix(test: &mut Test) -> Result
 // two sibling nested includes sharing that same top-level prefix. All three
 // paths must be honored.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::has_many_multi_relation)
 )]
@@ -1964,7 +1964,7 @@ pub async fn bare_and_nested_includes_on_shared_prefix(test: &mut Test) -> Resul
 // under `items()` — each item has a distinct brand and supplier so the
 // per-item belongs_to batches stay unique (DDB's nested merge uses a HashIndex
 // that requires unique keys).
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn sibling_nested_includes_on_shared_prefix_non_sql(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]

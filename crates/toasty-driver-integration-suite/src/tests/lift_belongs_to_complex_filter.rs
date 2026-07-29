@@ -15,7 +15,7 @@ use crate::prelude::*;
 // `index_match` panics when the lifted lhs is an `ExprProject`.
 //
 // [#858]: https://github.com/tokio-rs/toasty/issues/858
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn lift_belongs_to_preserves_embedded_field_filter(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {

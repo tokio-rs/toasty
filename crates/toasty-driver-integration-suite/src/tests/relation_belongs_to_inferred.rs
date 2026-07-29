@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 // A bare `#[belongs_to]` infers `key` from the field name (`user` -> `user_id`)
 // and `references` from the target's primary key.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn infers_key_and_references(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -43,7 +43,7 @@ pub async fn infers_key_and_references(test: &mut Test) -> Result<()> {
 }
 
 // A nullable `#[belongs_to]` also infers `key` and `references`.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn infers_optional_relation(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -82,7 +82,7 @@ pub async fn infers_optional_relation(test: &mut Test) -> Result<()> {
 
 // An explicit `key` with `references` omitted still infers the target's primary
 // key.
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn infers_references_only(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

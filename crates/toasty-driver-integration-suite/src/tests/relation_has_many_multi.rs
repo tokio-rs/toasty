@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use hashbrown::HashMap;
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

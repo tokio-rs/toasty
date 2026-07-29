@@ -3,7 +3,7 @@ use crate::prelude::*;
 use bigdecimal::BigDecimal;
 use std::str::FromStr;
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_bigdecimal(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -36,7 +36,7 @@ pub async fn ty_bigdecimal(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn ty_bigdecimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -66,7 +66,7 @@ pub async fn ty_bigdecimal_as_text(test: &mut Test) -> Result<(), BoxError> {
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(and(bigdecimal_implemented, decimal_arbitrary_precision))
 )]
 pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) -> Result<(), BoxError> {
@@ -97,7 +97,7 @@ pub async fn ty_bigdecimal_as_numeric_arbitrary_precision(test: &mut Test) -> Re
     Ok(())
 }
 
-#[driver_test(id(ID), requires(and(native_decimal, bigdecimal_implemented)))]
+#[driver_test(id(ID, uuid), requires(and(native_decimal, bigdecimal_implemented)))]
 pub async fn ty_bigdecimal_as_numeric_fixed_precision(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {

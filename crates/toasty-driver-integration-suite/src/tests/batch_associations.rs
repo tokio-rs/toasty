@@ -5,7 +5,7 @@ use crate::prelude::*;
 
 /// Batch two association-scoped creates on the same relation.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -33,7 +33,7 @@ pub async fn batch_two_scoped_creates_same_relation(t: &mut Test) -> Result<()> 
 
 /// Batch two association-scoped queries on the same relation.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -57,7 +57,7 @@ pub async fn batch_two_scoped_queries_same_relation(t: &mut Test) -> Result<()> 
 
 /// Batch association-scoped update and delete on the same relation.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -86,7 +86,7 @@ pub async fn batch_scoped_update_and_delete_same_relation(t: &mut Test) -> Resul
 
 /// Batch all four CRUD operations through association scope.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -130,7 +130,7 @@ pub async fn batch_scoped_all_four_crud(t: &mut Test) -> Result<()> {
 
 /// Batch association-scoped statements mixed with root-level statements.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -156,7 +156,11 @@ pub async fn batch_scoped_with_root_statements(t: &mut Test) -> Result<()> {
 }
 
 /// Batch association statements across different relations of the same parent.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_two_children))]
+#[driver_test(
+    id(ID, uuid),
+    requires(scan),
+    scenario(crate::scenarios::user_two_children)
+)]
 pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
@@ -178,7 +182,11 @@ pub async fn batch_scoped_across_relations(t: &mut Test) -> Result<()> {
 }
 
 /// Batch queries across different relations of the same parent.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::user_two_children))]
+#[driver_test(
+    id(ID, uuid),
+    requires(scan),
+    scenario(crate::scenarios::user_two_children)
+)]
 pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
@@ -200,7 +208,7 @@ pub async fn batch_query_across_relations(t: &mut Test) -> Result<()> {
 
 /// Batch scoped operations from different parents.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]
@@ -234,7 +242,7 @@ pub async fn batch_scoped_different_parents(t: &mut Test) -> Result<()> {
 
 /// Batch a scoped delete together with a root-level update.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to)
 )]

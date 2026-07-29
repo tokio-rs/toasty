@@ -159,7 +159,7 @@ pub async fn include_with_unit_enum_foreign_key(test: &mut Test) -> Result<()> {
 /// Querying a `via` relation returns the distinct targets reachable through
 /// the path — a target is listed once however many intermediates reach it.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -207,7 +207,7 @@ pub async fn query_returns_distinct_targets(test: &mut Test) -> Result<()> {
 
 /// A user with no comments reaches no articles — an empty result, no error.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -230,7 +230,7 @@ pub async fn query_with_no_intermediates_is_empty(test: &mut Test) -> Result<()>
 /// A `via` relation query can be further filtered, like any other relation
 /// query.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -272,7 +272,7 @@ pub async fn via_relation_query_can_be_filtered(test: &mut Test) -> Result<()> {
 /// relation path. The same predicate works when the path contains another
 /// `via` field.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_org_project_todo)
 )]
@@ -357,7 +357,7 @@ pub async fn filter_parent_by_via_any(test: &mut Test) -> Result<()> {
 /// of distinct targets reached through the path. Tests the HasMany →
 /// BelongsTo shape (User → Comment → Article).
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -429,10 +429,10 @@ pub async fn include_via_two_step(test: &mut Test) -> Result<()> {
 /// The data shape (Alice has two orgs, one with two projects; Bob one org with
 /// one project; each project has a couple of todos) is shared with
 /// [`include_via_nested_via`] so the two can be compared directly. It can't be
-/// hoisted into a helper: the `id(ID)` expansion generates per-ID-type model
+/// hoisted into a helper: the `id(ID, uuid)` expansion generates per-ID-type model
 /// structs, so `User`/`Todo`/etc. only exist inside a scenario-scoped test fn.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_org_project_todo)
 )]
@@ -531,7 +531,7 @@ pub async fn include_via_three_step(test: &mut Test) -> Result<()> {
 /// `User::todos` include in [`include_via_three_step`] exactly — same data
 /// shape, same expected grouping.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_org_project_todo)
 )]
@@ -636,7 +636,7 @@ pub async fn include_via_nested_via(test: &mut Test) -> Result<()> {
 /// Distinct values still apply, so a title shared by todos in different orgs
 /// collapses to one. Navigation and `.include()` must agree.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_org_project_todo)
 )]
@@ -704,7 +704,7 @@ pub async fn scalar_via_of_via(test: &mut Test) -> Result<()> {
 /// A user with no intermediates yields an empty included set — the
 /// `INNER JOIN` excludes them but the parent row is still returned.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_org_project_todo)
 )]
@@ -731,7 +731,7 @@ pub async fn include_via_three_step_no_intermediates(test: &mut Test) -> Result<
 /// slot. Distinct targets still apply, so Rust appears once though commented
 /// twice.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -777,7 +777,7 @@ pub async fn select_via_two_step(test: &mut Test) -> Result<()> {
 /// parent whose chain is incomplete at *either* step, so a missing leaf and a
 /// missing intermediate both surface as `None`.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_account_subscription)
 )]
@@ -827,7 +827,7 @@ pub async fn include_via_has_one(test: &mut Test) -> Result<()> {
 /// into a record slot. The missing-row path is already covered by the include
 /// test, so this focuses on a matched chain returning the target.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_account_subscription)
 )]
@@ -863,7 +863,7 @@ pub async fn select_via_has_one(test: &mut Test) -> Result<()> {
 /// relation path, yielding distinct values — a title reached through several
 /// comments appears once.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -914,7 +914,7 @@ pub async fn query_scalar_via_returns_distinct_titles(test: &mut Test) -> Result
 /// semantics: it dedups a single target reached through several comments, which
 /// both semantics collapse identically. Navigation and `.include()` must agree.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -969,7 +969,7 @@ pub async fn scalar_via_distinct_values_across_distinct_targets(test: &mut Test)
 /// `comments.article.title`. Distinct values still apply, so a body repeated
 /// across comments appears once. Navigation and `.include()` must agree.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -1008,7 +1008,7 @@ pub async fn query_scalar_via_two_step(test: &mut Test) -> Result<()> {
 /// `.include()` of a scalar-terminal `via` loads the projected titles onto each
 /// parent, grouped by user, with duplicates collapsed.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -1074,7 +1074,7 @@ pub async fn include_scalar_via(test: &mut Test) -> Result<()> {
 /// loaded instance): `User::filter(…).article_titles()` yields the distinct
 /// titles reachable from the matched users.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -1110,7 +1110,7 @@ pub async fn query_chain_scalar_via(test: &mut Test) -> Result<()> {
 /// `.select()` of a scalar-terminal `via` returns the projected titles per
 /// parent row.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
@@ -1153,7 +1153,11 @@ pub async fn select_scalar_via(test: &mut Test) -> Result<()> {
 /// `ViaManyField for Vec<E>` (`DEFERRED = false`) impl and via auto-loading. The
 /// load groups per user and collapses duplicate values, like the explicit
 /// `.include()` paths.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_tag_names))]
+#[driver_test(
+    id(ID, uuid),
+    requires(sql),
+    scenario(crate::scenarios::user_tag_names)
+)]
 pub async fn eager_scalar_via_auto_loads(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

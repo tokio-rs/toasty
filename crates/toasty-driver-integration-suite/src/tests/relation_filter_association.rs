@@ -3,7 +3,7 @@
 use crate::prelude::*;
 
 /// Filter a parent by a HasOne field, with eq and a non-commutative op.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn filter_by_has_one_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -62,7 +62,7 @@ pub async fn filter_by_has_one_field(t: &mut Test) -> Result<()> {
 
 /// Filter a child by a BelongsTo field.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::has_one_optional_belongs_to)
 )]
@@ -96,7 +96,7 @@ pub async fn filter_by_belongs_to_field(test: &mut Test) -> Result<()> {
 /// Covers both relation directions: `BelongsTo` (child filtered by parent)
 /// and `Has` (parent filtered by child).
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::has_one_optional_belongs_to)
 )]
@@ -207,7 +207,7 @@ pub async fn filter_by_nested_has_one_chain(t: &mut Test) -> Result<()> {
 /// `BelongsTo`-then-`HasMany` chain hit a `todo!()` in
 /// `LiftInSubquery::lift_in_subquery`.
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::has_many_multi_relation)
 )]

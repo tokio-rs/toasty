@@ -3,7 +3,11 @@
 use crate::prelude::*;
 use hashbrown::HashSet;
 
-#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
+#[driver_test(
+    id(ID, uuid),
+    matrix(single, composite),
+    requires(or(single, not(id_u64)))
+)]
 pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -129,7 +133,11 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
+#[driver_test(
+    id(ID, uuid),
+    matrix(single, composite),
+    requires(or(single, not(id_u64)))
+)]
 pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

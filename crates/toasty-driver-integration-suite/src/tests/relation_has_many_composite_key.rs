@@ -85,7 +85,10 @@ pub async fn composite_belongs_to_missing_index_is_error(test: &mut Test) -> Res
 // single-key tests in `relation_has_many_crud.rs`.
 // =====================================================================
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_crud_user_todos(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -205,7 +208,10 @@ pub async fn composite_crud_user_todos(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_has_many_insert_on_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -225,7 +231,10 @@ pub async fn composite_has_many_insert_on_update(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_scoped_find_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -271,13 +280,16 @@ pub async fn composite_scoped_find_by_id(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_belongs_to_required(test: &mut Test) {
     let mut db = setup(test).await;
     assert_err!(Todo::create().title("orphan").exec(&mut db).await);
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -448,7 +460,10 @@ pub async fn composite_assign_existing_user_to_todo(test: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -471,7 +486,10 @@ pub async fn composite_assign_todo_to_user_on_update_query(test: &mut Test) -> R
 // and `relation_has_many_link_unlink.rs`.
 // =====================================================================
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_user_batch_create_todos_one_level(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -492,7 +510,10 @@ pub async fn composite_user_batch_create_todos_one_level(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -512,7 +533,7 @@ pub async fn composite_user_batch_create_two_todos_simple(test: &mut Test) -> Re
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -563,7 +584,7 @@ pub async fn composite_user_batch_create_todos_with_optional_field(test: &mut Te
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -595,7 +616,10 @@ pub async fn composite_remove_add_single_relation_option_belongs_to(test: &mut T
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_add_remove_single_relation_required_belongs_to(
     test: &mut Test,
 ) -> Result<()> {
@@ -656,7 +680,7 @@ pub async fn composite_reassign_relation_required_belongs_to(test: &mut Test) ->
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_add_remove_multiple_relation_option_belongs_to(
     test: &mut Test,
 ) -> Result<()> {
@@ -688,7 +712,10 @@ pub async fn composite_add_remove_multiple_relation_option_belongs_to(
 // `relation_preload.rs`.
 // =====================================================================
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_basic_has_many_and_belongs_to_preload(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -756,7 +783,10 @@ pub async fn composite_fk_belongs_to_preload(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_preload_on_empty_query(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -770,7 +800,7 @@ pub async fn composite_preload_on_empty_query(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn composite_preload_has_many_with_optional_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -789,7 +819,10 @@ pub async fn composite_preload_has_many_with_optional_belongs_to(test: &mut Test
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::composite_has_many_belongs_to))]
+#[driver_test(
+    id(ID, uuid),
+    scenario(crate::scenarios::composite_has_many_belongs_to)
+)]
 pub async fn composite_nested_has_many_then_belongs_to_required(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -818,7 +851,7 @@ pub async fn composite_nested_has_many_then_belongs_to_required(test: &mut Test)
 // Tier D — has_one / belongs_to topologies with composite FK on the child.
 // =====================================================================
 
-#[driver_test(id(ID))]
+#[driver_test(id(ID, uuid))]
 pub async fn composite_crud_has_one_required(test: &mut Test) -> Result<()> {
     // User has a single auto-PK and a `has_one` Profile.
     // Profile's PK is composite (`partition = user_id, local = id`), making the
@@ -869,7 +902,7 @@ pub async fn composite_crud_has_one_required(test: &mut Test) -> Result<()> {
 // Tier E — filters and projections through associations.
 // =====================================================================
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(id(ID, uuid), requires(sql))]
 pub async fn composite_filter_by_belongs_to_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
@@ -919,7 +952,7 @@ pub async fn composite_filter_by_belongs_to_field(test: &mut Test) -> Result<()>
 }
 
 #[driver_test(
-    id(ID),
+    id(ID, uuid),
     requires(scan),
     scenario(crate::scenarios::composite_has_many_belongs_to)
 )]
@@ -947,7 +980,7 @@ pub async fn composite_filter_parent_by_child_field(test: &mut Test) -> Result<(
     Ok(())
 }
 
-#[driver_test(id(ID), requires(scan))]
+#[driver_test(id(ID, uuid), requires(scan))]
 pub async fn composite_select_belongs_to_basic(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
