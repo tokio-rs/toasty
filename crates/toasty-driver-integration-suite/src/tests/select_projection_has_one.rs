@@ -11,7 +11,7 @@
 use crate::prelude::*;
 
 #[driver_test(id(ID, uuid), requires(sql))]
-pub async fn select_has_one_basic(t: &mut Test) -> Result<()> {
+pub async fn select_has_one(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
@@ -55,45 +55,6 @@ pub async fn select_has_one_basic(t: &mut Test) -> Result<()> {
     assert_eq!(profiles.len(), 1);
     assert_eq!(profiles[0].bio, "apple a day");
 
-    Ok(())
-}
-
-#[driver_test(id(ID, uuid), requires(sql))]
-pub async fn select_has_one_with_filter(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-
-        #[has_one]
-        profile: toasty::Deferred<Profile>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-
-        bio: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Profile)).await;
-
-    toasty::create!(User {
-        name: "Alice",
-        profile: Profile::create().bio("alpha bio"),
-    })
-    .exec(&mut db)
-    .await?;
     toasty::create!(User {
         name: "Bob",
         profile: Profile::create().bio("beta bio"),
@@ -108,46 +69,6 @@ pub async fn select_has_one_with_filter(t: &mut Test) -> Result<()> {
 
     assert_eq!(profiles.len(), 1);
     assert_eq!(profiles[0].bio, "beta bio");
-
-    Ok(())
-}
-
-#[driver_test(id(ID, uuid), requires(sql))]
-pub async fn select_has_one_first(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-        name: String,
-
-        #[has_one]
-        profile: toasty::Deferred<Profile>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::Deferred<Option<User>>,
-
-        bio: String,
-    }
-
-    let mut db = t.setup_db(models!(User, Profile)).await;
-
-    toasty::create!(User {
-        name: "Alice",
-        profile: Profile::create().bio("apple a day"),
-    })
-    .exec(&mut db)
-    .await?;
 
     let profile: Option<Profile> = User::filter(User::fields().name().eq("Alice"))
         .select(User::fields().profile())
