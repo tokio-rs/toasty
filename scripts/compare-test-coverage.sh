@@ -2,15 +2,16 @@
 
 set -euo pipefail
 
-if [[ $# -ne 2 ]]; then
-    echo "usage: $0 <baseline.json> <candidate.json>" >&2
+if [[ $# -lt 2 ]]; then
+    echo "usage: $0 <baseline.json> <candidate.json> [candidate.json ...]" >&2
     exit 2
 fi
 
 baseline=$1
-candidate=$2
+shift
+candidates=("$@")
 
-for report in "$baseline" "$candidate"; do
+for report in "$baseline" "${candidates[@]}"; do
     if [[ ! -f "$report" ]]; then
         echo "coverage report not found: $report" >&2
         exit 2
@@ -52,7 +53,11 @@ covered_regions() {
 }
 
 covered_regions "$baseline" >"$work_dir/baseline"
-covered_regions "$candidate" >"$work_dir/candidate"
+: >"$work_dir/candidate-unsorted"
+for report in "${candidates[@]}"; do
+    covered_regions "$report" >>"$work_dir/candidate-unsorted"
+done
+LC_ALL=C sort -u "$work_dir/candidate-unsorted" >"$work_dir/candidate"
 
 baseline_count=$(wc -l <"$work_dir/baseline" | tr -d ' ')
 candidate_count=$(wc -l <"$work_dir/candidate" | tr -d ' ')

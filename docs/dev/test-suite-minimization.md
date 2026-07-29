@@ -58,6 +58,17 @@ candidate may execute a region fewer times, because removing duplicate
 executions is the purpose of the change. A region that changes from covered to
 uncovered fails the comparison.
 
+Pass multiple candidate reports to compare their union against the baseline.
+This supports test shards and per-driver reports without merging LLVM profile
+data:
+
+```bash
+scripts/compare-test-coverage.sh \
+  /tmp/baseline.json \
+  /tmp/candidate-part-1.json \
+  /tmp/candidate-part-2.json
+```
+
 Coverage is one acceptance gate, not the complete argument for removal. Each
 pruning change must also:
 
