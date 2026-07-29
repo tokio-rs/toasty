@@ -7,11 +7,13 @@ use toasty_core::{
 use super::Normalize;
 
 impl Normalize<'_> {
-    /// Appends missing primary-key fields to ambiguous SQL cursor ordering.
+    /// Appends missing physical primary-key columns to ambiguous SQL cursor
+    /// ordering.
     ///
     /// The public query retains only the user-provided ordering. Normalization
     /// runs on the cloned statement passed to the engine, making these
-    /// tie-breakers internal to execution and cursor generation.
+    /// tie-breakers internal to execution and cursor generation. Physical
+    /// column references keep embedded newtype keys scalar after lowering.
     pub(super) fn normalize_cursor_order(&mut self, query: &mut stmt::Query) {
         if !self.capability.sql || !matches!(query.limit, Some(stmt::Limit::Cursor(_))) {
             return;
@@ -30,10 +32,9 @@ impl Normalize<'_> {
             return;
         };
 
-        let model = self.schema.app.model(model_id).as_root_unwrap();
         let mapping = self.schema.mapping.model(model_id);
         let table = self.schema.db.table(mapping.table);
-        let ordered_columns: HashSet<_> = order_by
+        let mut ordered_columns: HashSet<_> = order_by
             .exprs
             .iter()
             .filter_map(|order| resolve_order_column(mapping, &order.expr))
@@ -55,18 +56,13 @@ impl Normalize<'_> {
         }
 
         let direction = order_by.exprs.last().and_then(|order| order.order);
-        for field_id in &model.primary_key.fields {
-            let field_mapping = &mapping.fields[field_id.index];
-            let field_columns: Vec<_> = field_mapping.columns().map(|(column, _)| column).collect();
-            if field_columns
-                .iter()
-                .all(|column| ordered_columns.contains(column))
-            {
+        for column in &table.primary_key.columns {
+            if !ordered_columns.insert(*column) {
                 continue;
             }
 
             order_by.exprs.push(stmt::OrderByExpr {
-                expr: stmt::Expr::ref_self_field(*field_id),
+                expr: stmt::Expr::column(*column),
                 order: direction,
             });
         }
@@ -80,6 +76,13 @@ fn resolve_order_column(
     mapping: &toasty_core::schema::mapping::Model,
     expr: &stmt::Expr,
 ) -> Option<ColumnId> {
+    if let stmt::Expr::Reference(ExprReference::Column(column)) = expr {
+        return (column.nesting == 0 && column.table == 0).then_some(ColumnId {
+            table: mapping.table,
+            index: column.column,
+        });
+    }
+
     let projection = field_projection(expr)?;
     let field = mapping.resolve_field_mapping(&projection)?;
     let mut columns = field.columns();

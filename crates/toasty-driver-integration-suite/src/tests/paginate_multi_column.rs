@@ -53,6 +53,51 @@ pub async fn paginate_single_non_unique_column(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(requires(sql))]
+pub async fn paginate_non_unique_column_with_newtype_primary_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct ItemId(i64);
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: ItemId,
+        group: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[
+        { id: ItemId(1), group: 1 },
+        { id: ItemId(2), group: 1 },
+        { id: ItemId(3), group: 1 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let first: Page<Item> = Item::all()
+        .order_by(Item::fields().group().asc())
+        .paginate(2)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(
+        first.items.iter().map(|item| item.id.0).collect::<Vec<_>>(),
+        [1, 2]
+    );
+    assert_eq!(cursor_len(first.next_cursor.as_ref()), 2);
+
+    let second = first.next(&mut db).await?.unwrap();
+    assert_eq!(
+        second
+            .items
+            .iter()
+            .map(|item| item.id.0)
+            .collect::<Vec<_>>(),
+        [3]
+    );
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
 pub async fn paginate_accepts_cursor_without_hidden_primary_key(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
