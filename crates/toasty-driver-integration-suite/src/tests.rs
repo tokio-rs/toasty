@@ -29,7 +29,6 @@ pub mod dynamodb_update_batch_filter;
 pub mod embed_enum_collection;
 pub mod embed_enum_data;
 pub mod embed_enum_filter;
-pub mod embed_enum_filter_comparison;
 pub mod embed_enum_filter_variant_field;
 pub mod embed_enum_index;
 pub mod embed_enum_native_ops;
