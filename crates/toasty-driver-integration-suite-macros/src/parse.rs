@@ -561,7 +561,7 @@ impl DriverTest {
                 };
 
                 let expansion = Expansion {
-                    id_variant: id_variant.clone(),
+                    id_variant: *id_variant,
                     id_ident: attr.id_ident.clone(),
                     matrix_values: matrix_values.clone(),
                     predicate,
