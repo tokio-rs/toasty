@@ -156,19 +156,20 @@ pub async fn include_with_unit_enum_foreign_key(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Querying a `via` relation returns the distinct targets reachable through
-/// the path — a target is listed once however many intermediates reach it.
+/// Querying and including a two-step `via` returns distinct target models and
+/// scalar terminal values, grouped by parent for includes.
 #[driver_test(
     id(ID, uuid),
     requires(sql),
     scenario(crate::scenarios::user_comment_article)
 )]
-pub async fn query_returns_distinct_targets(test: &mut Test) -> Result<()> {
+pub async fn query_and_include_two_step_targets_and_values(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
     let users = toasty::create!(User::[
         { name: "Alice" },
         { name: "Bob" },
+        { name: "Charlie" },
     ])
     .exec(&mut db)
     .await?;
@@ -201,6 +202,59 @@ pub async fn query_returns_distinct_targets(test: &mut Test) -> Result<()> {
     // Bob has commented only on SQL.
     let commented = bob.commented_articles().exec(&mut db).await?;
     assert_eq_unordered!(commented.iter().map(|a| &a.title[..]), ["SQL"]);
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(3, loaded.len());
+    for user in &loaded {
+        let titles: Vec<&str> = user
+            .commented_articles
+            .get()
+            .iter()
+            .map(|a| &a.title[..])
+            .collect();
+        match &user.name[..] {
+            "Alice" => {
+                assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(titles, ["SQL"]);
+            }
+            "Charlie" => assert!(titles.is_empty(), "Charlie has no comments; got {titles:?}"),
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    let titles = alice.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust", "Toasty"]);
+    let titles = bob.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["SQL"]);
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().commented_article_titles())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(3, loaded.len());
+    for user in &loaded {
+        let titles: Vec<&str> = user
+            .commented_article_titles
+            .get()
+            .iter()
+            .map(|t| &t[..])
+            .collect();
+        match &user.name[..] {
+            "Alice" => {
+                assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(titles, ["SQL"]);
+            }
+            "Charlie" => assert!(titles.is_empty(), "Charlie has no comments; got {titles:?}"),
+            other => panic!("unexpected user {other}"),
+        }
+    }
 
     Ok(())
 }
@@ -352,75 +406,6 @@ pub async fn filter_parent_by_via_any(test: &mut Test) -> Result<()> {
 // `INNER JOIN`s each intermediate model and groups results by the parent FK.
 // `.include()` splices that child query into a record slot; `.select()` uses it
 // as the whole projection.
-
-/// `.include()` over a 2-step `via`: each parent gets its own filtered set
-/// of distinct targets reached through the path. Tests the HasMany →
-/// BelongsTo shape (User → Comment → Article).
-#[driver_test(
-    id(ID, uuid),
-    requires(sql),
-    scenario(crate::scenarios::user_comment_article)
-)]
-pub async fn include_via_two_step(test: &mut Test) -> Result<()> {
-    let mut db = setup(test).await;
-
-    let users = toasty::create!(User::[
-        { name: "Alice" },
-        { name: "Bob" },
-        { name: "Charlie" },
-    ])
-    .exec(&mut db)
-    .await?;
-    let (alice, bob, _charlie) = (&users[0], &users[1], &users[2]);
-
-    let articles = toasty::create!(Article::[
-        { title: "Rust" },
-        { title: "Toasty" },
-        { title: "SQL" },
-    ])
-    .exec(&mut db)
-    .await?;
-    let (rust, toasty_article, sql) = (&articles[0], &articles[1], &articles[2]);
-
-    // Alice → Rust (twice), Toasty.  Bob → SQL.  Charlie → nothing.
-    toasty::create!(Comment::[
-        { body: "a1", user: alice, article: rust },
-        { body: "a2", user: alice, article: rust },
-        { body: "a3", user: alice, article: toasty_article },
-        { body: "b1", user: bob, article: sql },
-    ])
-    .exec(&mut db)
-    .await?;
-
-    let loaded: Vec<User> = User::all()
-        .include(User::fields().commented_articles())
-        .exec(&mut db)
-        .await?;
-    assert_eq!(3, loaded.len());
-
-    for user in &loaded {
-        let titles: Vec<&str> = user
-            .commented_articles
-            .get()
-            .iter()
-            .map(|a| &a.title[..])
-            .collect();
-        match &user.name[..] {
-            // Alice commented on Rust twice but `via` yields distinct
-            // targets, so Rust appears once.
-            "Alice" => {
-                assert_eq_unordered!(titles, ["Rust", "Toasty"]);
-            }
-            "Bob" => {
-                assert_eq_unordered!(titles, ["SQL"]);
-            }
-            "Charlie" => assert!(titles.is_empty(), "Charlie has no comments; got {titles:?}"),
-            other => panic!("unexpected user {other}"),
-        }
-    }
-
-    Ok(())
-}
 
 /// `.include()` over a 3-step `via`: User → Organization → Project → Todo,
 /// all `HasMany` steps. Verifies that the child query joins every
@@ -859,58 +844,13 @@ pub async fn select_via_has_one(test: &mut Test) -> Result<()> {
 // The relation chain (`comments.article`) is the same as `commented_articles`;
 // the extra `.title` step makes the field a `Vec<String>` of distinct titles.
 
-/// Querying a scalar-terminal `via` projects the terminal field across the
-/// relation path, yielding distinct values — a title reached through several
-/// comments appears once.
-#[driver_test(
-    id(ID, uuid),
-    requires(sql),
-    scenario(crate::scenarios::user_comment_article)
-)]
-pub async fn query_scalar_via_returns_distinct_titles(test: &mut Test) -> Result<()> {
-    let mut db = setup(test).await;
-
-    let users = toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }])
-        .exec(&mut db)
-        .await?;
-    let (alice, bob) = (&users[0], &users[1]);
-
-    let articles = toasty::create!(Article::[
-        { title: "Rust" },
-        { title: "Toasty" },
-        { title: "SQL" },
-    ])
-    .exec(&mut db)
-    .await?;
-    let (rust, toasty_article, sql) = (&articles[0], &articles[1], &articles[2]);
-
-    // Alice → Rust (twice), Toasty.  Bob → SQL.
-    toasty::create!(Comment::[
-        { body: "a1", user: alice, article: rust },
-        { body: "a2", user: alice, article: rust },
-        { body: "a3", user: alice, article: toasty_article },
-        { body: "b1", user: bob, article: sql },
-    ])
-    .exec(&mut db)
-    .await?;
-
-    // Rust appears once even though Alice commented on it twice.
-    let titles = alice.commented_article_titles().exec(&mut db).await?;
-    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust", "Toasty"]);
-
-    let titles = bob.commented_article_titles().exec(&mut db).await?;
-    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["SQL"]);
-
-    Ok(())
-}
-
 /// Pins the **distinct *values*** decision against the alternative (distinct
 /// *targets*). The case that tells them apart is a user commenting on two
 /// *different* articles that happen to share a title: the model-via reaches two
 /// distinct targets, but the scalar via collapses their equal terminal values
 /// to one — `["Rust"]`, not `["Rust", "Rust"]`.
 ///
-/// [`query_scalar_via_returns_distinct_titles`] can't distinguish the two
+/// [`query_and_include_two_step_targets_and_values`] can't distinguish the two
 /// semantics: it dedups a single target reached through several comments, which
 /// both semantics collapse identically. Navigation and `.include()` must agree.
 #[driver_test(
@@ -1001,71 +941,6 @@ pub async fn query_scalar_via_two_step(test: &mut Test) -> Result<()> {
         .await?;
     let bodies: Vec<&str> = loaded.comment_bodies.get().iter().map(|b| &b[..]).collect();
     assert_eq_unordered!(bodies, ["a1", "a2"]);
-
-    Ok(())
-}
-
-/// `.include()` of a scalar-terminal `via` loads the projected titles onto each
-/// parent, grouped by user, with duplicates collapsed.
-#[driver_test(
-    id(ID, uuid),
-    requires(sql),
-    scenario(crate::scenarios::user_comment_article)
-)]
-pub async fn include_scalar_via(test: &mut Test) -> Result<()> {
-    let mut db = setup(test).await;
-
-    let users = toasty::create!(User::[
-        { name: "Alice" },
-        { name: "Bob" },
-        { name: "Charlie" },
-    ])
-    .exec(&mut db)
-    .await?;
-    let (alice, bob) = (&users[0], &users[1]);
-
-    let articles = toasty::create!(Article::[
-        { title: "Rust" },
-        { title: "Toasty" },
-        { title: "SQL" },
-    ])
-    .exec(&mut db)
-    .await?;
-    let (rust, toasty_article, sql) = (&articles[0], &articles[1], &articles[2]);
-
-    toasty::create!(Comment::[
-        { body: "a1", user: alice, article: rust },
-        { body: "a2", user: alice, article: rust },
-        { body: "a3", user: alice, article: toasty_article },
-        { body: "b1", user: bob, article: sql },
-    ])
-    .exec(&mut db)
-    .await?;
-
-    let loaded: Vec<User> = User::all()
-        .include(User::fields().commented_article_titles())
-        .exec(&mut db)
-        .await?;
-    assert_eq!(3, loaded.len());
-
-    for user in &loaded {
-        let titles: Vec<&str> = user
-            .commented_article_titles
-            .get()
-            .iter()
-            .map(|t| &t[..])
-            .collect();
-        match &user.name[..] {
-            "Alice" => {
-                assert_eq_unordered!(titles, ["Rust", "Toasty"]);
-            }
-            "Bob" => {
-                assert_eq_unordered!(titles, ["SQL"]);
-            }
-            "Charlie" => assert!(titles.is_empty(), "Charlie has no comments; got {titles:?}"),
-            other => panic!("unexpected user {other}"),
-        }
-    }
 
     Ok(())
 }
