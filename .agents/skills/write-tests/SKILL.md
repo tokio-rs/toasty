@@ -69,6 +69,8 @@ This is why FK fields are also typed `ID` (e.g. `user_id: ID`): the substitution
 
 **Attribute forms:**
 - `#[driver_test(id(ID))]` — expands to two variants (u64 and uuid::Uuid); only use when it genuinely makes sense to test both ID types
+- `#[driver_test(id(ID, uuid))]` — expands only the UUID variant
+- `#[driver_test(id(ID, u64))]` — expands only the u64 variant and requires auto-increment support
 - `#[driver_test(id(ID), requires(sql))]` — ID expansion with a capability gate
 - `#[driver_test(requires(native_decimal))]` — no ID expansion, just a capability gate
 - `#[driver_test]` — single variant, no capability gate, use a concrete ID type in the model
