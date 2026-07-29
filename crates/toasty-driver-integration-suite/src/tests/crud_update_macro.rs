@@ -271,7 +271,7 @@ pub async fn update_macro_query_target(test: &mut Test) -> Result<()> {
 /// Embedded partial update via brace block: `meta: { version: 2 }`
 /// lowers to `meta: stmt::apply([stmt::patch(<Metadata>::fields().version(), 2)])`.
 #[driver_test(id(ID, uuid))]
-pub async fn update_macro_embedded_patch(test: &mut Test) -> Result<()> {
+pub async fn update_macro_embedded_patch_and_mixed_shapes(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     #[allow(dead_code)]
     struct Metadata {
@@ -309,6 +309,20 @@ pub async fn update_macro_embedded_patch(test: &mut Test) -> Result<()> {
 
     let reloaded = Document::get_by_id(&mut db, &doc.id).await?;
     assert_eq!(reloaded.meta.version, 2);
+    assert_eq!(reloaded.meta.status, "published");
+
+    // Mix a scalar set, embedded patch, and method-shorthand call. Omitting
+    // `status` from the second patch must leave its existing value untouched.
+    toasty::update!(doc {
+        title.set("New title"),
+        meta: { version: 3 },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Document::get_by_id(&mut db, &doc.id).await?;
+    assert_eq!(reloaded.title, "New title");
+    assert_eq!(reloaded.meta.version, 3);
     assert_eq!(reloaded.meta.status, "published");
 
     Ok(())
@@ -369,55 +383,6 @@ pub async fn update_macro_has_many_mixed_list(test: &mut Test) -> Result<()> {
         .map(|t| t.title)
         .collect();
     assert_eq!(titles, ["new"]);
-
-    Ok(())
-}
-
-/// Mixing a scalar set, an embedded patch, and a method-shorthand call
-/// in one invocation.
-#[driver_test(id(ID, uuid))]
-pub async fn update_macro_mixed_shapes(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Embed)]
-    #[allow(dead_code)]
-    struct Metadata {
-        version: i64,
-        status: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Document {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-        meta: Metadata,
-    }
-
-    let mut db = test.setup_db(models!(Document)).await;
-
-    let mut doc = toasty::create!(Document {
-        title: "Doc",
-        meta: Metadata {
-            version: 1,
-            status: "draft".to_string(),
-        },
-    })
-    .exec(&mut db)
-    .await?;
-
-    toasty::update!(doc {
-        title.set("New title"),
-        meta: { version: 2 },
-    })
-    .exec(&mut db)
-    .await?;
-
-    let reloaded = Document::get_by_id(&mut db, &doc.id).await?;
-    assert_eq!(reloaded.title, "New title");
-    assert_eq!(reloaded.meta.version, 2);
-    // status untouched
-    assert_eq!(reloaded.meta.status, "draft");
 
     Ok(())
 }
