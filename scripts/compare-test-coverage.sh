@@ -71,6 +71,13 @@ echo "candidate covered regions: $candidate_count"
 if [[ "$missing_count" -ne 0 ]]; then
     echo "missing covered regions:   $missing_count"
     echo
+    echo "missing regions by file:"
+    awk -F '\t' '{ count[$1]++ } END {
+        for (file in count) {
+            print count[file], file
+        }
+    }' "$work_dir/missing" | LC_ALL=C sort -k1,1nr -k2,2
+    echo
     echo "first missing regions (file, start, end, kind):"
     sed -n '1,50p' "$work_dir/missing"
     exit 1
