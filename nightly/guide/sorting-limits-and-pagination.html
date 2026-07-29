@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-8ec779bd.js";
+            window.path_to_searchindex_js = "searchindex-60a19065.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -484,6 +484,15 @@ let page: Page&lt;_&gt; = Item::all()
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
 <p>The value passed to <code>.after()</code> corresponds to the field used in <code>.order_by()</code>.</p>
+<p>Toasty adds primary-key ordering fields when the requested ordering does not
+uniquely identify each row. Cursors returned by <code>Page</code> include those fields, so
+<code>.next()</code> and <code>.prev()</code> preserve a deterministic order when multiple rows have
+the same requested ordering values.</p>
+<p>A cursor supplied directly to <code>.after()</code> or <code>.before()</code> may omit the internal
+primary-key fields. Toasty accepts the cursor as a prefix of the complete
+ordering. A prefix cursor cannot identify a position within rows that have the
+same prefix values. After the initial query, use the cursor returned by <code>Page</code>
+to continue without skipping tied rows.</p>
 <h2 id="method-summary"><a class="header" href="#method-summary">Method summary</a></h2>
 <p>Methods available on query builders:</p>
 <div class="table-wrapper">

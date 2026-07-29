@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["paginate_multi_column_equal_leading_values","paginate_multi_column_mixed_directions"]};
+window.SIDEBAR_ITEMS = {"fn":["paginate_accepts_cursor_without_hidden_primary_key","paginate_composite_unique_non_nullable_order_needs_no_tiebreaker","paginate_multi_column_equal_leading_values","paginate_multi_column_mixed_directions","paginate_non_unique_column_with_newtype_primary_key","paginate_nullable_unique_column_uses_primary_key","paginate_single_non_unique_column","paginate_unique_non_nullable_column_needs_no_tiebreaker"]};
