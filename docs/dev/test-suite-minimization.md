@@ -82,3 +82,53 @@ pruning change must also:
 For type matrices, retain focused cases for every supported representation.
 Do not repeat the full behavioral matrix for each representation when those
 cases execute the same product regions.
+
+## Reference Minimization
+
+The July 2026 minimization used SQLite as the service-free runtime and coverage
+reference. Cold builds used a new target directory, one Cargo job, and the same
+workspace command before and after the change.
+
+| Metric | Before | After | Reduction |
+|---|---:|---:|---:|
+| Cold compile wall time | 345.11 s | 259.52 s | 24.8% |
+| SQLite driver tests | 1,354 | 763 | 43.6% |
+| SQLite driver execution | 0.68 s | 0.39 s | 42.6% |
+| SQLite integration binary | 166,749,544 bytes | 115,636,392 bytes | 30.6% |
+| Cold target directory | 8.5 GiB | 6.4 GiB | about 25% |
+
+The exact-region baseline contained 30,392 covered product regions. The final
+candidate covered 30,398 regions and missed none of the baseline regions. The
+candidate is therefore a strict coverage superset under the normalization
+described above.
+
+The reduction came from four classes of waste:
+
+1. Running the full behavior matrix for both UUID and integer IDs. The suite
+   now keeps UUID as the default and focused integer representatives for
+   type-specific behavior.
+2. Separate tests that repeated a local model and database setup for compatible
+   cases. These cases now use independent rows in one fixture.
+3. Separate wrappers around query-macro forms that used the same scenario,
+   capability, and compatible dataset.
+4. Empty relation cases that performed no operation or assertion.
+
+The convergence audit stopped at repetitions that preserve a practical
+distinction:
+
+- different database capabilities or native operators;
+- different scalar, document, smart-pointer, or composite-key domains;
+- different relationship topologies;
+- transaction, rollback, stale-write, and failure-state isolation;
+- generated API forms with distinct type-checking behavior.
+
+Shared scenarios are defined once at module scope. Reusing the same scenario in
+several `#[driver_test]` functions does not regenerate its models, so an equal
+scenario attribute alone is not evidence of compile-time duplication.
+
+Final validation included the complete SQLite workspace test run, UI tests,
+doctests, an all-targets Clippy pass, a clean affected-crate Clippy rerun after
+fixing its warning, a PostgreSQL no-run integration build, and the exact-region
+comparison. Service-backed runtime coverage for PostgreSQL, MySQL, DynamoDB,
+and Turso still requires their CI services and should use the same
+capture-and-compare procedure before backend-specific pruning.
