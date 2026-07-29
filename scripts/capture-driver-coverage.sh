@@ -9,6 +9,7 @@ fi
 
 driver=$1
 output=$2
+shift 2
 
 case "$driver" in
     sqlite | mysql | postgresql | dynamodb | turso) ;;
@@ -18,9 +19,8 @@ case "$driver" in
         ;;
 esac
 
-test_args=()
 if [[ "$driver" == "dynamodb" ]]; then
-    test_args=(-- --test-threads=1)
+    set -- --test-threads=1
 fi
 
 cargo llvm-cov \
@@ -34,4 +34,4 @@ cargo llvm-cov \
     --test "$driver" \
     --jobs 1 \
     --quiet \
-    "${test_args[@]}"
+    "$@"
