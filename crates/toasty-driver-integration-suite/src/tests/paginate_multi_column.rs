@@ -7,6 +7,187 @@
 
 use crate::prelude::*;
 use toasty::stmt::Page;
+use toasty_core::stmt::Value;
+
+fn cursor_len(cursor: Option<&Value>) -> usize {
+    let Some(Value::Record(cursor)) = cursor else {
+        panic!("expected a record cursor");
+    };
+    cursor.fields.len()
+}
+
+#[driver_test(requires(sql))]
+pub async fn paginate_single_non_unique_column(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+        group: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[
+        { id: 1, group: 1 },
+        { id: 2, group: 1 },
+        { id: 3, group: 1 },
+        { id: 4, group: 1 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let first: Page<Item> = Item::all()
+        .order_by(Item::fields().group().asc())
+        .paginate(2)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(first.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_eq!(cursor_len(first.next_cursor.as_ref()), 2);
+
+    let second = first.next(&mut db).await?.unwrap();
+    assert_struct!(second.items, [_ { id: 3, .. }, _ { id: 4, .. }]);
+
+    let first_again = second.prev(&mut db).await?.unwrap();
+    assert_struct!(first_again.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
+pub async fn paginate_accepts_cursor_without_hidden_primary_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+        group: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[
+        { id: 1, group: 1 },
+        { id: 2, group: 1 },
+        { id: 3, group: 1 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let first: Page<Item> = Item::all()
+        .order_by(Item::fields().group().asc())
+        .paginate(2)
+        .after(0_i64)
+        .exec(&mut db)
+        .await?;
+    assert_struct!(first.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_eq!(cursor_len(first.next_cursor.as_ref()), 2);
+
+    let second = first.next(&mut db).await?.unwrap();
+    assert_struct!(second.items, [_ { id: 3, .. }]);
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
+pub async fn paginate_unique_non_nullable_column_needs_no_tiebreaker(
+    test: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+        #[unique]
+        rank: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[
+        { id: 1, rank: 10 },
+        { id: 2, rank: 20 },
+        { id: 3, rank: 30 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let page: Page<Item> = Item::all()
+        .order_by(Item::fields().rank().asc())
+        .paginate(2)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(cursor_len(page.next_cursor.as_ref()), 1);
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
+pub async fn paginate_composite_unique_non_nullable_order_needs_no_tiebreaker(
+    test: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[unique(group, rank)]
+    struct Item {
+        #[key]
+        id: i64,
+        group: i64,
+        rank: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[
+        { id: 1, group: 1, rank: 10 },
+        { id: 2, group: 1, rank: 20 },
+        { id: 3, group: 2, rank: 10 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let page: Page<Item> = Item::all()
+        .order_by((Item::fields().group().asc(), Item::fields().rank().asc()))
+        .paginate(2)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(cursor_len(page.next_cursor.as_ref()), 2);
+
+    Ok(())
+}
+
+#[driver_test(requires(sql))]
+pub async fn paginate_nullable_unique_column_uses_primary_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+        #[unique]
+        rank: Option<i64>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[
+        { id: 1, rank: None },
+        { id: 2, rank: None },
+        { id: 3, rank: Some(10) },
+        { id: 4, rank: Some(20) },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let mut page: Page<Item> = Item::all()
+        .order_by(Item::fields().rank().asc())
+        .paginate(1)
+        .exec(&mut db)
+        .await?;
+    assert_eq!(cursor_len(page.next_cursor.as_ref()), 2);
+
+    let mut ids = Vec::new();
+    loop {
+        ids.extend(page.iter().map(|item| item.id));
+        let Some(next) = page.next(&mut db).await? else {
+            break;
+        };
+        page = next;
+    }
+    ids.sort_unstable();
+    assert_eq!(ids, [1, 2, 3, 4]);
+
+    Ok(())
+}
 
 #[driver_test(requires(sql))]
 pub async fn paginate_multi_column_equal_leading_values(test: &mut Test) -> Result<()> {
