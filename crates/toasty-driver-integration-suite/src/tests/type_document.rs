@@ -13,11 +13,9 @@
 
 use crate::prelude::*;
 
-/// A `#[document] Vec<struct>` round-trips through INSERT and a fresh fetch:
-/// the engine encodes each element as a JSON object on the way in and
-/// decodes it back to the embed struct on the way out.
+/// CRUD and collection mutations for a `#[document] Vec<struct>`.
 #[driver_test(id(ID, uuid), requires(document_collections))]
-pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
+pub async fn vec_struct_crud(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct LineItem {
         sku: String,
@@ -55,6 +53,92 @@ pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
     let reloaded = Order::get_by_id(&mut db, &order.id).await?;
     assert_eq!(reloaded.items, items);
 
+    let empty = toasty::create!(Order {
+        items: Vec::<LineItem>::new(),
+    })
+    .exec(&mut db)
+    .await?;
+    let reloaded = Order::get_by_id(&mut db, &empty.id).await?;
+    assert!(reloaded.items.is_empty());
+
+    let mut replaced = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "OLD".into(),
+            qty: 1,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+    let replacement = vec![
+        LineItem {
+            sku: "NEW-1".into(),
+            qty: 5,
+        },
+        LineItem {
+            sku: "NEW-2".into(),
+            qty: 9,
+        },
+    ];
+    replaced
+        .update()
+        .items(replacement.clone())
+        .exec(&mut db)
+        .await?;
+    let reloaded = Order::get_by_id(&mut db, &replaced.id).await?;
+    assert_eq!(reloaded.items, replacement);
+
+    let mut pushed = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+    pushed
+        .update()
+        .items(toasty::stmt::push(LineItem {
+            sku: "SKU-2".into(),
+            qty: 1,
+        }))
+        .exec(&mut db)
+        .await?;
+    let expected = vec![
+        LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        },
+        LineItem {
+            sku: "SKU-2".into(),
+            qty: 1,
+        },
+    ];
+    assert_eq!(pushed.items, expected);
+    let reloaded = Order::get_by_id(&mut db, &pushed.id).await?;
+    assert_eq!(reloaded.items, expected);
+
+    // Removal operators are not implemented for document collections.
+    let mut rejected = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+    let err = assert_err!(
+        rejected
+            .update()
+            .items(toasty::stmt::pop())
+            .exec(&mut db)
+            .await
+    );
+    let msg = err.to_string();
+    assert!(
+        msg.contains("stmt::pop") && msg.contains("document collections"),
+        "expected a clear rejection, got: {msg}"
+    );
+
     Ok(())
 }
 
@@ -63,7 +147,7 @@ pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
 /// type alone determines document storage — so the attribute is redundant here;
 /// it is only needed to force document storage on a *struct* embed (which
 /// otherwise column-expands) or to select an encoding via `#[document(text)]`.
-/// This round-trips identically to the annotated `vec_struct_create_get` above.
+/// This round-trips identically to the annotated `vec_struct_crud` above.
 #[driver_test(id(ID, uuid), requires(document_collections))]
 pub async fn vec_struct_without_attr(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
@@ -194,211 +278,9 @@ pub async fn vec_struct_option_field(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-/// An empty `Vec<struct>` round-trips as an empty JSON array.
+/// A bare `#[document]` struct embed round-trips and supports replacement.
 #[driver_test(id(ID, uuid), requires(document_collections))]
-pub async fn vec_struct_empty(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let order = toasty::create!(Order {
-        items: Vec::<LineItem>::new(),
-    })
-    .exec(&mut db)
-    .await?;
-
-    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
-    assert!(reloaded.items.is_empty());
-
-    Ok(())
-}
-
-/// Whole-value replacement via the update builder: the assignment path
-/// encodes the new `Vec<struct>` the same way the INSERT path does.
-#[driver_test(id(ID, uuid), requires(document_collections))]
-pub async fn vec_struct_update_replace(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let mut order = toasty::create!(Order {
-        items: vec![LineItem {
-            sku: "OLD".into(),
-            qty: 1,
-        }],
-    })
-    .exec(&mut db)
-    .await?;
-
-    let replacement = vec![
-        LineItem {
-            sku: "NEW-1".into(),
-            qty: 5,
-        },
-        LineItem {
-            sku: "NEW-2".into(),
-            qty: 9,
-        },
-    ];
-    order
-        .update()
-        .items(replacement.clone())
-        .exec(&mut db)
-        .await?;
-
-    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
-    assert_eq!(reloaded.items, replacement);
-
-    Ok(())
-}
-
-/// `stmt::push(value)` appends one element to a document collection in
-/// place. The append operand takes the same document encoding the
-/// whole-value path uses (the lowering casts it through the column's
-/// document type), so the element lands as a JSON object at the end of the
-/// stored array.
-#[driver_test(id(ID, uuid), requires(document_collections))]
-pub async fn vec_struct_push(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let mut order = toasty::create!(Order {
-        items: vec![LineItem {
-            sku: "SKU-1".into(),
-            qty: 3,
-        }],
-    })
-    .exec(&mut db)
-    .await?;
-
-    order
-        .update()
-        .items(toasty::stmt::push(LineItem {
-            sku: "SKU-2".into(),
-            qty: 1,
-        }))
-        .exec(&mut db)
-        .await?;
-
-    let expected = vec![
-        LineItem {
-            sku: "SKU-1".into(),
-            qty: 3,
-        },
-        LineItem {
-            sku: "SKU-2".into(),
-            qty: 1,
-        },
-    ];
-
-    // In-memory model reflects the post-update value.
-    assert_eq!(order.items, expected);
-
-    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
-    assert_eq!(reloaded.items, expected);
-
-    Ok(())
-}
-
-/// The removal operators (`stmt::pop` / `stmt::remove` / `stmt::remove_at`)
-/// are not yet implemented on document collections — the per-backend
-/// renderings the `vec_*` capability flags advertise are native-array forms.
-/// The lowering rejects them with a clear error on every backend instead of
-/// emitting SQL that does not apply to a document column. They share one
-/// gate; `stmt::pop` stands in for all three.
-#[driver_test(id(ID, uuid), requires(document_collections))]
-pub async fn vec_struct_pop_rejected(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let mut order = toasty::create!(Order {
-        items: vec![LineItem {
-            sku: "SKU-1".into(),
-            qty: 3,
-        }],
-    })
-    .exec(&mut db)
-    .await?;
-
-    let err = assert_err!(
-        order
-            .update()
-            .items(toasty::stmt::pop())
-            .exec(&mut db)
-            .await
-    );
-    let msg = err.to_string();
-    assert!(
-        msg.contains("stmt::pop") && msg.contains("document collections"),
-        "expected a clear rejection, got: {msg}"
-    );
-
-    Ok(())
-}
-
-/// A bare `#[document]` struct embed round-trips through INSERT and a fresh
-/// fetch: the engine encodes the embed as one JSON object on the way in and
-/// decodes it back to the struct on the way out.
-#[driver_test(id(ID, uuid), requires(document_collections))]
-pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
+pub async fn struct_embed_crud(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Profile {
         name: String,
@@ -421,7 +303,7 @@ pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
         name: "Alice".into(),
         age: 30,
     };
-    let account = toasty::create!(Account {
+    let mut account = toasty::create!(Account {
         profile: profile.clone(),
     })
     .exec(&mut db)
@@ -429,40 +311,6 @@ pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
 
     let reloaded = Account::get_by_id(&mut db, &account.id).await?;
     assert_eq!(reloaded.profile, profile);
-
-    Ok(())
-}
-
-/// Whole-value replacement of a bare `#[document]` embed via the update
-/// builder.
-#[driver_test(id(ID, uuid), requires(document_collections))]
-pub async fn struct_embed_update_replace(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct Profile {
-        name: String,
-        age: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Account {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        profile: Profile,
-    }
-
-    let mut db = t.setup_db(models!(Account)).await;
-
-    let mut account = toasty::create!(Account {
-        profile: Profile {
-            name: "old".into(),
-            age: 1,
-        },
-    })
-    .exec(&mut db)
-    .await?;
 
     let replacement = Profile {
         name: "new".into(),
