@@ -137,6 +137,36 @@ fn comment_changes_postgresql() {
 }
 
 #[test]
+fn comment_changes_mysql() {
+    let from = Schema {
+        tables: vec![make_table(
+            Some("Old table"),
+            vec![
+                make_column(0, 0, "id", None),
+                make_column(0, 1, "email", Some("Old column")),
+            ],
+        )],
+    };
+    let to = Schema {
+        tables: vec![make_table(
+            Some("New table"),
+            vec![
+                make_column(0, 0, "id", None),
+                make_column(0, 1, "email", None),
+            ],
+        )],
+    };
+
+    assert_eq!(
+        migration_sql(&from, &to, &Capability::MYSQL),
+        vec![
+            "ALTER TABLE `users` MODIFY COLUMN `email` TEXT NOT NULL COMMENT '';",
+            "ALTER TABLE `users` COMMENT = 'New table';",
+        ]
+    );
+}
+
+#[test]
 fn unsupported_comments_are_ignored() {
     let from = Schema {
         tables: vec![make_table(

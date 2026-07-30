@@ -1,6 +1,6 @@
 use super::AutoStrategy;
 
-use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name, parse_comment};
+use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
 
@@ -112,6 +112,7 @@ impl FieldAttr {
             document: None,
             versionable: false,
         };
+        let mut seen_column_attr = false;
 
         for attr in attrs {
             if attr.path().is_ident("key") {
@@ -155,27 +156,30 @@ impl FieldAttr {
                     field_attr.index = true;
                 }
             } else if attr.path().is_ident("column") {
-                if field_attr.column.is_some() {
+                if seen_column_attr {
                     errs.push(syn::Error::new_spanned(
                         attr,
                         "duplicate #[column] attribute",
                     ));
                 } else {
+                    seen_column_attr = true;
                     match Column::from_ast(attr) {
-                        Ok(col) => field_attr.column = Some(col),
+                        Ok(mut col) => {
+                            if let Some(comment) = col.comment.take() {
+                                if field_attr.comment.is_some() {
+                                    errs.push(syn::Error::new_spanned(
+                                        attr,
+                                        "duplicate column comment",
+                                    ));
+                                } else {
+                                    field_attr.comment = Some(comment);
+                                }
+                            }
+                            if !col.is_empty() {
+                                field_attr.column = Some(col);
+                            }
+                        }
                         Err(e) => errs.push(e),
-                    }
-                }
-            } else if attr.path().is_ident("comment") {
-                if field_attr.comment.is_some() {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[comment] attribute",
-                    ));
-                } else {
-                    match parse_comment(attr) {
-                        Ok(comment) => field_attr.comment = Some(comment),
-                        Err(err) => errs.push(err),
                     }
                 }
             } else if attr.path().is_ident("shared") {

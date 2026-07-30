@@ -71,13 +71,13 @@ impl Connection for SchemaConnection {
 #[tokio::test]
 async fn migration_generate_with_decimal_model_writes_snapshot() {
     #[derive(Debug, toasty::Model)]
-    #[comment = "Weighted records"]
+    #[table(comment = "Weighted records")]
     struct SomeModel {
         #[key]
         #[auto]
         id: u64,
 
-        #[comment = "Measured weight"]
+        #[column(comment = "Measured weight")]
         weight: rust_decimal::Decimal,
     }
 
@@ -120,13 +120,13 @@ async fn migration_generate_with_decimal_model_writes_snapshot() {
 #[tokio::test]
 async fn disabled_schema_comments_carry_managed_comments_forward() {
     #[derive(Debug, toasty::Model)]
-    #[comment = "Current declaration"]
+    #[table(comment = "Current declaration")]
     struct SomeModel {
         #[key]
         #[auto]
         id: u64,
 
-        #[comment = "Current field declaration"]
+        #[column(comment = "Current field declaration")]
         weight: rust_decimal::Decimal,
     }
 

@@ -4,19 +4,28 @@
 struct Address {
     street: String,
 
-    #[comment = "Postal city"]
+    #[column("postal_city", comment = "Postal city")]
     city: String,
 }
 
+#[derive(Debug, toasty::Embed)]
+struct Profile {
+    display_name: String,
+}
+
 #[derive(Debug, toasty::Model)]
-#[comment = "User accounts"]
+#[table(name = "app_users", comment = "User accounts")]
 struct CommentedUser {
     #[key]
     #[auto]
-    #[comment = "Stable identifier"]
+    #[column(comment = "Stable identifier")]
     id: i64,
 
     address: Address,
+
+    #[document]
+    #[column(comment = "Serialized profile")]
+    profile: Profile,
 }
 
 #[tokio::test]
@@ -28,6 +37,7 @@ async fn model_comments_reach_the_database_schema() {
         .unwrap();
 
     let table = &db.schema().db.tables[0];
+    assert_eq!(table.name, "app_users");
     assert_eq!(table.comment.as_deref(), Some("User accounts"));
     assert_eq!(
         table.columns[0].comment.as_deref(),
@@ -37,7 +47,14 @@ async fn model_comments_reach_the_database_schema() {
     let city = table
         .columns
         .iter()
-        .find(|column| column.name == "address_city")
+        .find(|column| column.name == "address_postal_city")
         .unwrap();
     assert_eq!(city.comment.as_deref(), Some("Postal city"));
+
+    let profile = table
+        .columns
+        .iter()
+        .find(|column| column.name == "profile")
+        .unwrap();
+    assert_eq!(profile.comment.as_deref(), Some("Serialized profile"));
 }

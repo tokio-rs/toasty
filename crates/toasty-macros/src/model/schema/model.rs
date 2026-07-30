@@ -396,6 +396,13 @@ impl Model {
         for attr in &ast.attrs {
             if attr.path().is_ident("column") {
                 let col = Column::from_ast(attr)?;
+                if let Some(comment) = col.comment {
+                    return Err(syn::Error::new_spanned(
+                        comment,
+                        "#[column(comment = ...)] is not supported on embedded enum types; \
+                         place it on the model field that stores the enum",
+                    ));
+                }
                 if let Some(ty) = col.ty {
                     if enum_column_type.is_some() {
                         return Err(syn::Error::new_spanned(

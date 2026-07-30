@@ -44,4 +44,4 @@ mod column;
 pub(crate) use column::{Column, ColumnType, VariantValue};
 
 mod comment;
-pub(crate) use comment::parse_comment;
+pub(crate) use comment::validate_comment;

@@ -1,23 +1,4 @@
-pub(crate) fn parse_comment(attr: &syn::Attribute) -> syn::Result<syn::LitStr> {
-    let syn::Meta::NameValue(meta) = &attr.meta else {
-        return Err(syn::Error::new_spanned(
-            attr,
-            "expected `comment = \"text\"`",
-        ));
-    };
-    let syn::Expr::Lit(lit) = &meta.value else {
-        return Err(syn::Error::new_spanned(
-            attr,
-            "expected `comment = \"text\"`",
-        ));
-    };
-    let syn::Lit::Str(comment) = &lit.lit else {
-        return Err(syn::Error::new_spanned(
-            attr,
-            "expected `comment = \"text\"`",
-        ));
-    };
-
+pub(crate) fn validate_comment(comment: syn::LitStr) -> syn::Result<syn::LitStr> {
     let value = comment.value();
     if value.trim().is_empty() {
         return Err(syn::Error::new_spanned(
@@ -32,5 +13,5 @@ pub(crate) fn parse_comment(attr: &syn::Attribute) -> syn::Result<syn::LitStr> {
         ));
     }
 
-    Ok(comment.clone())
+    Ok(comment)
 }

@@ -1,4 +1,4 @@
-use super::{ErrorSet, KeyAttr, parse_comment};
+use super::{ErrorSet, KeyAttr, validate_comment};
 
 #[derive(Debug, Default)]
 pub(crate) struct ModelAttr {
@@ -50,43 +50,25 @@ impl ModelAttr {
                     Err(e) => errs.push(e),
                 }
             } else if attr.path().is_ident("table") {
-                if self.table.is_some() {
-                    return Err(syn::Error::new_spanned(attr, "duplicate `table` attribute"));
-                }
+                match TableAttr::from_ast(attr) {
+                    Ok(table_attr) => {
+                        if let Some(table) = table_attr.name {
+                            if self.table.is_some() {
+                                errs.push(syn::Error::new_spanned(attr, "duplicate table name"));
+                            } else {
+                                self.table = Some(table);
+                            }
+                        }
 
-                let syn::Meta::NameValue(meta) = &attr.meta else {
-                    return Err(syn::Error::new_spanned(
-                        attr,
-                        "expected `table = \"table_name\"`",
-                    ));
-                };
-
-                let syn::Expr::Lit(lit) = &meta.value else {
-                    return Err(syn::Error::new_spanned(
-                        attr,
-                        "expected `table = \"table_name\"`",
-                    ));
-                };
-
-                let syn::Lit::Str(lit) = &lit.lit else {
-                    return Err(syn::Error::new_spanned(
-                        attr,
-                        "expected `table = \"table_name\"`",
-                    ));
-                };
-
-                self.table = Some(lit.clone());
-            } else if attr.path().is_ident("comment") {
-                if self.comment.is_some() {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[comment] attribute",
-                    ));
-                } else {
-                    match parse_comment(attr) {
-                        Ok(comment) => self.comment = Some(comment),
-                        Err(err) => errs.push(err),
+                        if let Some(comment) = table_attr.comment {
+                            if self.comment.is_some() {
+                                errs.push(syn::Error::new_spanned(attr, "duplicate table comment"));
+                            } else {
+                                self.comment = Some(comment);
+                            }
+                        }
                     }
+                    Err(err) => errs.push(err),
                 }
             }
         }
@@ -97,4 +79,88 @@ impl ModelAttr {
 
         Ok(())
     }
+}
+
+struct TableAttr {
+    name: Option<syn::LitStr>,
+    comment: Option<syn::LitStr>,
+}
+
+impl TableAttr {
+    fn from_ast(attr: &syn::Attribute) -> syn::Result<Self> {
+        match &attr.meta {
+            syn::Meta::NameValue(meta) => {
+                let syn::Expr::Lit(lit) = &meta.value else {
+                    return Err(expected_table_attr(attr));
+                };
+
+                let syn::Lit::Str(lit) = &lit.lit else {
+                    return Err(expected_table_attr(attr));
+                };
+
+                Ok(Self {
+                    name: Some(lit.clone()),
+                    comment: None,
+                })
+            }
+            syn::Meta::List(_) => attr.parse_args(),
+            syn::Meta::Path(_) => Err(expected_table_attr(attr)),
+        }
+    }
+}
+
+impl syn::parse::Parse for TableAttr {
+    fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+        let mut result = Self {
+            name: None,
+            comment: None,
+        };
+
+        loop {
+            let lookahead = input.lookahead1();
+
+            if lookahead.peek(syn::LitStr) {
+                if result.name.is_some() {
+                    return Err(syn::Error::new(input.span(), "duplicate table name"));
+                }
+                result.name = Some(input.parse()?);
+            } else if lookahead.peek(kw::name) {
+                if result.name.is_some() {
+                    return Err(syn::Error::new(input.span(), "duplicate table name"));
+                }
+                let _name_token: kw::name = input.parse()?;
+                let _eq_token: syn::Token![=] = input.parse()?;
+                result.name = Some(input.parse()?);
+            } else if lookahead.peek(kw::comment) {
+                if result.comment.is_some() {
+                    return Err(syn::Error::new(input.span(), "duplicate table comment"));
+                }
+                let _comment_token: kw::comment = input.parse()?;
+                let _eq_token: syn::Token![=] = input.parse()?;
+                let lit: syn::LitStr = input.parse()?;
+                result.comment = Some(validate_comment(lit)?);
+            } else {
+                return Err(lookahead.error());
+            }
+
+            if input.is_empty() {
+                break;
+            }
+            let _comma_token: syn::Token![,] = input.parse()?;
+        }
+
+        Ok(result)
+    }
+}
+
+fn expected_table_attr(attr: &syn::Attribute) -> syn::Error {
+    syn::Error::new_spanned(
+        attr,
+        "expected `table = \"table_name\"` or `table(comment = \"text\")`",
+    )
+}
+
+mod kw {
+    syn::custom_keyword!(comment);
+    syn::custom_keyword!(name);
 }

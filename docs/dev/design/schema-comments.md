@@ -2,10 +2,11 @@
 
 ## Summary
 
-Models and stored fields gain a `#[comment = "..."]` attribute for database
-table and column comments. Migration generation applies these comments only
-when `schema_comments` is enabled. PostgreSQL and MySQL use their native
-catalog comments. `db.push_schema()` also creates supported comments, and
+Models and stored fields gain `#[table(comment = "...")]` and
+`#[column(comment = "...")]` attributes for database table and column
+comments. Migration generation applies these comments only when
+`schema_comments` is enabled. PostgreSQL and MySQL use their native catalog
+comments. `db.push_schema()` also creates supported comments, and
 `migration reset` restores comments recorded in migration history. Backends
 without native table or column comments ignore the attributes and do not
 emulate them in Toasty-owned storage. Create, alter, rename, and table
@@ -30,20 +31,20 @@ comments. The model remains portable when comment management is disabled.
 
 ### Declaring table and column comments
 
-Place `#[comment = "..."]` on a model to describe its table. Place the same
-attribute on a stored field to describe its column:
+Place `#[table(comment = "...")]` on a model to describe its table. Place
+`#[column(comment = "...")]` on a stored field to describe its column:
 
 ```rust
 #[derive(toasty::Model)]
-#[comment = "Accounts that can sign in to the service"]
+#[table(comment = "Accounts that can sign in to the service")]
 struct User {
     #[key]
     #[auto]
-    #[comment = "Stable account identifier"]
+    #[column(comment = "Stable account identifier")]
     id: uuid::Uuid,
 
     #[unique]
-    #[comment = "Normalized address used for sign-in"]
+    #[column(comment = "Normalized address used for sign-in")]
     email: String,
 }
 ```
@@ -55,8 +56,8 @@ multi-line literals are accepted. A comment is database metadata, not a SQL
 A field comment must resolve to exactly one physical column. Primitive fields
 meet this rule. A document field and a transparent newtype embed also meet it
 because each has one column. A relation maps to no column, while a flattened
-multi-field embed maps to several, so placing `#[comment]` on either is an
-error.
+multi-field embed maps to several, so placing `#[column(comment = "...")]`
+on either is an error.
 
 Leaf fields declared by an embedded type may carry comments. Toasty applies
 the comment to each physical column created from that leaf:
@@ -66,7 +67,7 @@ the comment to each physical column created from that leaf:
 struct Address {
     street: String,
 
-    #[comment = "Postal city as supplied by the user"]
+    #[column(comment = "Postal city as supplied by the user")]
     city: String,
 }
 
@@ -80,8 +81,8 @@ struct Customer {
 
 Here the comment belongs to the `billing_address_city` column. Commenting
 `billing_address` itself is rejected because `Address` expands to more than
-one column. `#[comment]` is not accepted on an `Embed` type itself because an
-embedded type does not own a table.
+one column. `#[table(comment = "...")]` is not accepted on an `Embed` type
+itself because an embedded type does not own a table.
 
 ### Enabling comments in migrations
 
