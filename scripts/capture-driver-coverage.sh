@@ -20,7 +20,7 @@ case "$driver" in
 esac
 
 if [[ "$driver" == "dynamodb" ]]; then
-    set -- --test-threads=1
+    set -- -- --test-threads=1
 fi
 
 cargo llvm-cov \
