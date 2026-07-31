@@ -79,7 +79,7 @@ toasty-macros = { version = "0.9.0", path = "crates/toasty-macros" }
 toasty-sql = { version = "0.9.0", path = "crates/toasty-sql" }
 # Driver implementations
 toasty-driver-dynamodb = { version = "0.9.0", path = "crates/toasty-driver-dynamodb" }
-toasty-driver-mysql = { version = "0.9.0", path = "crates/toasty-driver-mysql" }
+toasty-driver-mysql = { version = "0.9.0", path = "crates/toasty-driver-mysql", default-features = false }
 toasty-driver-postgresql = { version = "0.9.0", path = "crates/toasty-driver-postgresql" }
 toasty-driver-sqlite = { version = "0.9.0", path = "crates/toasty-driver-sqlite" }
 toasty-driver-turso = { version = "0.9.0", path = "crates/toasty-driver-turso" }
@@ -117,7 +117,6 @@ jiff = "0.2.23"
 lru = "0.18.0"
 mysql_async = { version = "0.37.0", default-features = false, features = [
     "minimal",
-    "native-tls-tls",
 ] }
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"

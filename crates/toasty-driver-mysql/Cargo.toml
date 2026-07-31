@@ -14,6 +14,9 @@ readme.workspace = true
 documentation = "https://docs.rs/toasty-driver-mysql"
 
 [features]
+default = ["native-tls"]
+native-tls = ["mysql_async/native-tls-tls"]
+rustls = ["mysql_async/rustls-tls", "mysql_async/ring"]
 rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff", "toasty-sql/jiff"]
