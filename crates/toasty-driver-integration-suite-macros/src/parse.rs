@@ -229,7 +229,7 @@ pub enum BoolExpr {
 }
 
 /// Type variants for ID replacement
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone)]
 pub enum KindVariant {
     /// u64 ID type variant
     IdU64,
@@ -251,7 +251,6 @@ impl KindVariant {
 #[derive(Debug, Clone)]
 pub struct DriverTestAttr {
     pub id_ident: Option<String>,
-    pub id_variants: Vec<KindVariant>,
     pub matrix: Vec<String>,
     pub requires: Option<BoolExpr>,
     pub serial: bool,
@@ -268,7 +267,6 @@ impl DriverTestAttr {
             // Empty attribute: #[driver_test]
             Ok(DriverTestAttr {
                 id_ident: None,
-                id_variants: Vec::new(),
                 matrix: Vec::new(),
                 requires: None,
                 serial: false,
@@ -290,7 +288,6 @@ impl Parse for DriverTestAttr {
         let input_tokens = input.cursor().token_stream();
 
         let mut id_ident = None;
-        let mut id_variants = Vec::new();
         let mut matrix = Vec::new();
         let mut requires = None;
         let mut serial = false;
@@ -301,9 +298,8 @@ impl Parse for DriverTestAttr {
 
         for attr in attrs {
             match attr {
-                DriverTestAttrItem::Id { ident, variants } => {
+                DriverTestAttrItem::Id(ident) => {
                     id_ident = Some(ident);
-                    id_variants = variants;
                 }
                 DriverTestAttrItem::Matrix(items) => {
                     matrix = items;
@@ -325,7 +321,6 @@ impl Parse for DriverTestAttr {
 
         Ok(DriverTestAttr {
             id_ident,
-            id_variants,
             matrix,
             requires,
             serial,
@@ -338,11 +333,8 @@ impl Parse for DriverTestAttr {
 /// Individual attribute item
 #[derive(Debug)]
 enum DriverTestAttrItem {
-    /// id(IDENT[, KIND]) - specifies the ID placeholder and variants
-    Id {
-        ident: String,
-        variants: Vec<KindVariant>,
-    },
+    /// id(IDENT) - specifies test should be expanded for multiple ID types
+    Id(String),
     /// matrix(ident1, ident2, ...) - specifies custom matrix dimensions
     Matrix(Vec<String>),
     /// requires(expr) - specifies boolean expression for filtering expansions
@@ -359,43 +351,11 @@ impl Parse for DriverTestAttrItem {
 
         match name.to_string().as_str() {
             "id" => {
-                // Parse id(IDENT[, KIND])
+                // Parse id(IDENT)
                 let content;
                 syn::parenthesized!(content in input);
                 let ident: Ident = content.parse()?;
-                let mut variants = Vec::new();
-
-                while !content.is_empty() {
-                    content.parse::<Comma>()?;
-                    let variant_ident: Ident = content.parse()?;
-                    let variant = match variant_ident.to_string().as_str() {
-                        "u64" => KindVariant::IdU64,
-                        "uuid" => KindVariant::IdUuid,
-                        _ => {
-                            return Err(syn::Error::new_spanned(
-                                variant_ident,
-                                "unknown ID variant, expected `u64` or `uuid`",
-                            ));
-                        }
-                    };
-
-                    if variants.contains(&variant) {
-                        return Err(syn::Error::new_spanned(
-                            variant_ident,
-                            "duplicate ID variant",
-                        ));
-                    }
-                    variants.push(variant);
-                }
-
-                if variants.is_empty() {
-                    variants.extend([KindVariant::IdU64, KindVariant::IdUuid]);
-                }
-
-                Ok(DriverTestAttrItem::Id {
-                    ident: ident.to_string(),
-                    variants,
-                })
+                Ok(DriverTestAttrItem::Id(ident.to_string()))
             }
             "matrix" => {
                 // Parse matrix(ident1, ident2, ...)
@@ -534,7 +494,7 @@ impl DriverTest {
 
         // ID variants to iterate over
         let id_variants = if has_id {
-            attr.id_variants.iter().copied().map(Some).collect()
+            vec![Some(KindVariant::IdU64), Some(KindVariant::IdUuid)]
         } else {
             vec![None]
         };
@@ -561,7 +521,7 @@ impl DriverTest {
                 };
 
                 let expansion = Expansion {
-                    id_variant: *id_variant,
+                    id_variant: id_variant.clone(),
                     id_ident: attr.id_ident.clone(),
                     matrix_values: matrix_values.clone(),
                     predicate,
@@ -602,61 +562,5 @@ impl DriverTest {
         }
 
         combinations
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    fn parse_attr(tokens: proc_macro2::TokenStream) -> syn::Result<DriverTestAttr> {
-        syn::parse2(tokens)
-    }
-
-    #[test]
-    fn id_defaults_to_both_variants() {
-        let attr = parse_attr(quote::quote!(id(ID))).unwrap();
-        let expansions = DriverTest::generate_expansions(&attr);
-
-        assert_eq!(expansions.len(), 2);
-        assert_eq!(expansions[0].name(), "id_u64");
-        assert_eq!(expansions[1].name(), "id_uuid");
-    }
-
-    #[test]
-    fn id_can_select_uuid() {
-        let attr = parse_attr(quote::quote!(id(ID, uuid))).unwrap();
-        let expansions = DriverTest::generate_expansions(&attr);
-
-        assert_eq!(expansions.len(), 1);
-        assert_eq!(expansions[0].name(), "id_uuid");
-        assert_eq!(expansions[0].predicate, None);
-    }
-
-    #[test]
-    fn id_can_select_u64() {
-        let attr = parse_attr(quote::quote!(id(ID, u64))).unwrap();
-        let expansions = DriverTest::generate_expansions(&attr);
-
-        assert_eq!(expansions.len(), 1);
-        assert_eq!(expansions[0].name(), "id_u64");
-        assert_eq!(
-            expansions[0].predicate,
-            Some(BoolExpr::Ident("auto_increment".to_string()))
-        );
-    }
-
-    #[test]
-    fn id_rejects_unknown_variant() {
-        let error = parse_attr(quote::quote!(id(ID, string))).unwrap_err();
-
-        assert!(error.to_string().contains("expected `u64` or `uuid`"));
-    }
-
-    #[test]
-    fn id_rejects_duplicate_variant() {
-        let error = parse_attr(quote::quote!(id(ID, uuid, uuid))).unwrap_err();
-
-        assert!(error.to_string().contains("duplicate ID variant"));
     }
 }

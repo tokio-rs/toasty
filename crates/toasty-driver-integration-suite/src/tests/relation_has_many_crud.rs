@@ -4,7 +4,7 @@
 use crate::prelude::*;
 use hashbrown::HashMap;
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn crud_user_todos(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -190,7 +190,7 @@ pub async fn has_many_insert_on_update(test: &mut Test) -> Result<()> {
 /// field is treated as unchanged. Run alongside a separate scalar
 /// change because the engine verifier rejects updates with no
 /// assignments at all.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_empty_is_noop(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -214,7 +214,7 @@ pub async fn has_many_apply_empty_is_noop(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_multiple_inserts(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -242,7 +242,7 @@ pub async fn has_many_apply_multiple_inserts(test: &mut Test) -> Result<()> {
 
 /// Sanity check for plain `update().todos(stmt::remove(..))` — no
 /// `apply` involved. With a required FK, Remove deletes the child row.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_update_remove(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -262,7 +262,7 @@ pub async fn has_many_update_remove(test: &mut Test) -> Result<()> {
 /// has-many in one update. Each entry dispatches as its own Mutation:
 /// the Insert associates the new child; the Remove dissociates the old
 /// one (and for a required FK, deletes it).
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_insert_and_remove(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -292,7 +292,7 @@ pub async fn has_many_apply_insert_and_remove(test: &mut Test) -> Result<()> {
 /// `has_many_apply_insert_and_remove`. `flatten_relation_batch` always
 /// emits the merged Insert first, so the final state is order-independent:
 /// the new child is associated and the old one is removed.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_remove_then_insert(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -321,7 +321,7 @@ pub async fn has_many_apply_remove_then_insert(test: &mut Test) -> Result<()> {
 /// `stmt::apply([insert(a), insert(b), remove(c)])` — multiple inserts
 /// merge into one multi-row INSERT, dispatched alongside a separate
 /// Remove. Exercises the Insert-merge path plus a sibling disassociate.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_two_inserts_and_remove(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -352,7 +352,7 @@ pub async fn has_many_apply_two_inserts_and_remove(test: &mut Test) -> Result<()
 /// `stmt::apply([remove(a), remove(b)])` — only disassociations, no
 /// Insert. `flatten_relation_batch` pushes no merged Insert, so both
 /// entries dispatch as standalone Disassociate mutations.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_multiple_removes(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -389,7 +389,7 @@ pub async fn has_many_apply_multiple_removes(test: &mut Test) -> Result<()> {
 /// foreign key. Unlike the required-FK case (which deletes the child),
 /// Remove here takes the disassociate-nullify branch: the old todo
 /// persists with its FK set to NULL.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn has_many_apply_insert_and_remove_nullable_fk(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -427,7 +427,7 @@ pub async fn has_many_apply_insert_and_remove_nullable_fk(test: &mut Test) -> Re
 /// `flatten_relation_batch` dispatches the merged Insert after the batch's
 /// removes, so the delete lands before the insert and the swap succeeds
 /// regardless of the order the caller wrote the entries.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_unique_title))]
+#[driver_test(scenario(crate::scenarios::has_many_unique_title))]
 pub async fn has_many_apply_swap_unique_required_fk(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -459,7 +459,7 @@ pub async fn has_many_apply_swap_unique_required_fk(test: &mut Test) -> Result<(
 /// single statement. That merged INSERT must still be dispatched after the
 /// `remove`, or the new "X" collides with the old one on the unique
 /// constraint — i.e. coalescing inserts must not pull them ahead of removes.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_unique_title))]
+#[driver_test(scenario(crate::scenarios::has_many_unique_title))]
 pub async fn has_many_apply_swap_unique_with_extra_insert(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -496,7 +496,7 @@ pub async fn has_many_apply_swap_unique_with_extra_insert(test: &mut Test) -> Re
 /// Note this is orthogonal to `flatten_relation_batch`'s insert-last reorder —
 /// that only moves create-new inserts (`Todo::create()`), not
 /// associate-existing inserts (`&todo`), which keep their written position.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<()> {
     use toasty_core::{
         driver::Operation,
@@ -590,7 +590,7 @@ pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<(
 /// batch. Guards the flattening contract — if nesting ever stopped
 /// flattening, the engine's `flatten_relation_batch` dispatch would hit
 /// its `unreachable!` arm.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_nested(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -629,7 +629,7 @@ pub async fn has_many_apply_nested(test: &mut Test) -> Result<()> {
 /// reference computed in memory. This covers larger batches and more
 /// combinations than the targeted tests above without the
 /// non-determinism (and sync/async friction) of a `proptest` runner.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn has_many_apply_combinations(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -703,7 +703,7 @@ pub async fn has_many_apply_combinations(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -755,10 +755,7 @@ pub async fn scoped_find_by_id(test: &mut Test) -> Result<()> {
 }
 
 // When the FK is composite, things should still work
-#[driver_test(
-    id(ID, uuid),
-    scenario(crate::scenarios::composite_has_many_belongs_to)
-)]
+#[driver_test(scenario(crate::scenarios::composite_has_many_belongs_to))]
 pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -904,14 +901,14 @@ pub async fn has_many_when_fk_is_composite(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn belongs_to_required(test: &mut Test) {
     let mut db = setup(test).await;
 
     assert_err!(Todo::create().exec(&mut db).await);
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_nullable_fk))]
+#[driver_test(scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -936,7 +933,7 @@ pub async fn delete_when_belongs_to_optional(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -959,7 +956,7 @@ pub async fn associate_new_user_with_todo_on_update_via_creation(test: &mut Test
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn associate_new_user_with_todo_on_update_query_via_creation(
     test: &mut Test,
 ) -> Result<()> {
@@ -985,14 +982,14 @@ pub async fn associate_new_user_with_todo_on_update_query_via_creation(
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 #[should_panic]
 pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
         todos: toasty::Deferred<Vec<Todo>>,
@@ -1002,10 +999,10 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     struct Todo {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
@@ -1035,7 +1032,7 @@ pub async fn update_user_with_null_todo_is_err(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -1068,7 +1065,7 @@ pub async fn assign_todo_that_already_has_user_on_create(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -1103,7 +1100,7 @@ pub async fn assign_todo_that_already_has_user_on_update(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -1135,7 +1132,7 @@ pub async fn assign_existing_user_to_todo(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -1153,10 +1150,7 @@ pub async fn assign_todo_to_user_on_update_query(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(
-    id(ID, uuid),
-    scenario(crate::scenarios::composite_has_many_belongs_to)
-)]
+#[driver_test(scenario(crate::scenarios::composite_has_many_belongs_to))]
 pub async fn has_many_when_fk_is_composite_with_snippets(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

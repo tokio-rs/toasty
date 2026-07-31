@@ -6,7 +6,7 @@ fn assert_sync_send<T: Send>(val: T) -> T {
 
 fn assert_send_sync<T: Send + Sync>() {}
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(scenario(crate::scenarios::user_unique_email))]
 pub async fn ensure_types_sync_send(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

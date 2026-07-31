@@ -1,12 +1,12 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn default_expr_on_create(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
@@ -27,13 +27,13 @@ pub async fn default_expr_on_create(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn default_expr_override(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
@@ -57,7 +57,7 @@ pub async fn default_expr_override(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn update_expr_on_create(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
@@ -65,7 +65,7 @@ pub async fn update_expr_on_create(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
@@ -86,7 +86,7 @@ pub async fn update_expr_on_create(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn update_expr_on_update(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
@@ -94,7 +94,7 @@ pub async fn update_expr_on_update(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
@@ -122,7 +122,7 @@ pub async fn update_expr_on_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
@@ -130,7 +130,7 @@ pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
@@ -158,13 +158,13 @@ pub async fn update_expr_override_on_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn default_and_update_on_same_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
@@ -204,7 +204,7 @@ pub async fn default_and_update_on_same_field(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn auto_on_timestamp_fields(test: &mut Test) -> Result<()> {
     use jiff::Timestamp;
 
@@ -212,7 +212,7 @@ pub async fn auto_on_timestamp_fields(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 

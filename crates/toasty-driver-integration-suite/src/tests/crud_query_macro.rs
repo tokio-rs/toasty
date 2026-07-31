@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn query_macro_scan_filters(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -75,11 +75,7 @@ pub async fn query_macro_scan_filters(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(
-    id(ID, uuid),
-    scenario(crate::scenarios::user_with_age),
-    requires(scan)
-)]
+#[driver_test(scenario(crate::scenarios::user_with_age), requires(scan))]
 pub async fn query_macro_numeric_and_boolean_filters(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -159,7 +155,7 @@ pub async fn query_macro_numeric_and_boolean_filters(test: &mut Test) -> Result<
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::widget_mixed_types))]
+#[driver_test(scenario(crate::scenarios::widget_mixed_types))]
 pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -181,7 +177,7 @@ pub async fn query_macro_filter_bool_literal(test: &mut Test) -> Result<()> {
 
 // --- ORDER BY, LIMIT, OFFSET tests ---
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models), requires(sql))]
+#[driver_test(scenario(crate::scenarios::two_models), requires(sql))]
 pub async fn query_macro_ordering_and_pagination(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -235,7 +231,7 @@ pub async fn query_macro_ordering_and_pagination(test: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_age), requires(sql))]
+#[driver_test(scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn query_macro_filter_with_order_by_and_limit(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -261,7 +257,7 @@ pub async fn query_macro_filter_with_order_by_and_limit(test: &mut Test) -> Resu
 // These use composite primary keys (partition + local) so queries can be served
 // by DynamoDB's key condition expressions.
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_macro_partition_key_filters(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
@@ -313,7 +309,7 @@ pub async fn query_macro_partition_key_filters(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_macro_local_key_comparison(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
@@ -361,7 +357,7 @@ pub async fn query_macro_local_key_comparison(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_macro_partition_key_with_not(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = team, local = name)]
@@ -401,7 +397,7 @@ pub async fn query_macro_partition_key_with_not(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = team, local = name)]
@@ -444,7 +440,7 @@ pub async fn query_macro_partition_key_with_or(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn query_macro_filter_in_list_by_pk(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

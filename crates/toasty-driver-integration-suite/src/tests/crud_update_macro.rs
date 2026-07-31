@@ -1,7 +1,7 @@
 use crate::prelude::*;
 
 /// Basic single-field update through an instance target.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn update_macro_simple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -20,7 +20,7 @@ pub async fn update_macro_simple(test: &mut Test) -> Result<()> {
 }
 
 /// Multiple fields in one update call.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_name_email))]
+#[driver_test(scenario(crate::scenarios::user_name_email))]
 pub async fn update_macro_multiple_fields(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -44,7 +44,7 @@ pub async fn update_macro_multiple_fields(test: &mut Test) -> Result<()> {
 }
 
 /// Field shorthand — `name` as a bare ident expands to `name: name`.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn update_macro_shorthand(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -60,7 +60,7 @@ pub async fn update_macro_shorthand(test: &mut Test) -> Result<()> {
 
 /// Method shorthand: `field.set(value)` lowers to
 /// `field: stmt::set(value)`.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn update_macro_method_shorthand_set(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -77,14 +77,14 @@ pub async fn update_macro_method_shorthand_set(test: &mut Test) -> Result<()> {
 
 /// Method shorthand on a `Vec<scalar>` field: `tags.push("rust")`
 /// lowers to `tags: stmt::push("rust")` for an atomic append.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn update_macro_method_shorthand_push(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -110,14 +110,14 @@ pub async fn update_macro_method_shorthand_push(test: &mut Test) -> Result<()> {
 
 /// Method shorthand on a `Vec<scalar>` field: `tags.extend([..])`
 /// lowers to `tags: stmt::extend([..])` for an atomic batch append.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn update_macro_method_shorthand_extend(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -144,14 +144,14 @@ pub async fn update_macro_method_shorthand_extend(test: &mut Test) -> Result<()>
 
 /// Method shorthand on a `Vec<scalar>` field: `tags.pop()` lowers to
 /// `tags: stmt::pop()` for an atomic trailing-element drop.
-#[driver_test(id(ID, uuid), requires(vec_pop))]
+#[driver_test(requires(vec_pop))]
 pub async fn update_macro_method_shorthand_pop(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -176,14 +176,14 @@ pub async fn update_macro_method_shorthand_pop(test: &mut Test) -> Result<()> {
 
 /// Method shorthand on a `Vec<scalar>` field: `tags.clear()` lowers to
 /// `tags: stmt::clear()`, replacing the field with an empty list.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn update_macro_method_shorthand_clear(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -208,7 +208,7 @@ pub async fn update_macro_method_shorthand_clear(test: &mut Test) -> Result<()> 
 /// Value expressions may read the target instance's own fields inline
 /// (issue #1073). The macro evaluates values before `.update()` borrows
 /// the target, so `active: !user.active` compiles.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_active))]
+#[driver_test(scenario(crate::scenarios::user_with_active))]
 pub async fn update_macro_value_reads_target_field(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -237,7 +237,7 @@ pub async fn update_macro_value_reads_target_field(test: &mut Test) -> Result<()
 
 /// Method-shorthand arguments may also read the target instance's own
 /// fields inline (issue #1073).
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn update_macro_method_shorthand_reads_target_field(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -253,7 +253,7 @@ pub async fn update_macro_method_shorthand_reads_target_field(test: &mut Test) -
 }
 
 /// Update through a query builder target — no instance required.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn update_macro_query_target(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
     let user = User::create().name("Alice").exec(&mut db).await?;
@@ -270,7 +270,7 @@ pub async fn update_macro_query_target(test: &mut Test) -> Result<()> {
 
 /// Embedded partial update via brace block: `meta: { version: 2 }`
 /// lowers to `meta: stmt::apply([stmt::patch(<Metadata>::fields().version(), 2)])`.
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn update_macro_embedded_patch_and_mixed_shapes(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     #[allow(dead_code)]
@@ -284,7 +284,7 @@ pub async fn update_macro_embedded_patch_and_mixed_shapes(test: &mut Test) -> Re
     struct Document {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         title: String,
         meta: Metadata,
     }
@@ -331,7 +331,7 @@ pub async fn update_macro_embedded_patch_and_mixed_shapes(test: &mut Test) -> Re
 /// Has-many insert via bracket-of-braces: `todos: [{ title: "x" }]`
 /// lowers to
 /// `todos: stmt::apply([stmt::insert(Todo::create().title("x"))])`.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn update_macro_has_many_insert(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -359,7 +359,7 @@ pub async fn update_macro_has_many_insert(test: &mut Test) -> Result<()> {
 /// Has-many list with mixed builders and plain expressions — the macro
 /// passes plain entries through and wraps inline builders in
 /// `stmt::insert`.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn update_macro_has_many_mixed_list(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

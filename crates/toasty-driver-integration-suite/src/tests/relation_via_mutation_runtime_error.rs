@@ -9,11 +9,7 @@
 
 use crate::prelude::*;
 
-#[driver_test(
-    id(ID, uuid),
-    requires(sql),
-    scenario(crate::scenarios::user_org_project_todo)
-)]
+#[driver_test(requires(sql), scenario(crate::scenarios::user_org_project_todo))]
 pub async fn insert_on_multi_step_traversal_errors(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

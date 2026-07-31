@@ -142,13 +142,13 @@ pub async fn eager_belongs_to_loads_without_include(t: &mut Test) -> Result<()> 
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn eager_has_many_create_returning_loads_relations(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
 
         #[has_many]
@@ -159,11 +159,11 @@ pub async fn eager_has_many_create_returning_loads_relations(t: &mut Test) -> Re
     struct Post {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         title: String,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
@@ -331,13 +331,13 @@ pub async fn eager_relations_reload_after_update(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn eager_relation_cycle_is_rejected(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
         posts: Vec<Post>,
@@ -347,10 +347,10 @@ pub async fn eager_relation_cycle_is_rejected(t: &mut Test) -> Result<()> {
     struct Post {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: User,
@@ -367,16 +367,16 @@ pub async fn eager_relation_cycle_is_rejected(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn eager_relation_self_cycle_is_rejected(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Node {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        parent_id: Option<ID>,
+        parent_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = parent_id, references = id)]
         parent: toasty::Deferred<Option<Node>>,
@@ -396,13 +396,13 @@ pub async fn eager_relation_self_cycle_is_rejected(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn eager_relation_long_cycle_is_rejected(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
         posts: Vec<Post>,
@@ -412,10 +412,10 @@ pub async fn eager_relation_long_cycle_is_rejected(t: &mut Test) -> Result<()> {
     struct Post {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
@@ -428,16 +428,16 @@ pub async fn eager_relation_long_cycle_is_rejected(t: &mut Test) -> Result<()> {
     struct Detail {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        post_id: ID,
+        post_id: uuid::Uuid,
 
         #[belongs_to(key = post_id, references = id)]
         post: toasty::Deferred<Post>,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: User,

@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 /// Filtering a `HasMany` include loads only matching children. Parents
 /// with no matching children are returned with an empty preloaded `Vec`.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn preload_has_many_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -36,7 +36,7 @@ pub async fn preload_has_many_with_filter(test: &mut Test) -> Result<()> {
 /// An include filter is independent of a parent-side `.any(...)`. The
 /// parent filter selects which users come back; the include filter
 /// selects which todos travel with each user.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn preload_has_many_filter_independent_of_parent_any(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -73,7 +73,7 @@ pub async fn preload_has_many_filter_independent_of_parent_any(test: &mut Test) 
 }
 
 /// Repeated includes of the same relation OR their filters.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn preload_has_many_repeated_filters_ored(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -108,7 +108,7 @@ pub async fn preload_has_many_repeated_filters_ored(test: &mut Test) -> Result<(
 
 /// Filtering a `HasOne` include: when the predicate excludes the row,
 /// the relation loads as `None`; when it matches, as `Some`.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid))]
 pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -145,7 +145,7 @@ pub async fn preload_has_one_with_filter(test: &mut Test) -> Result<()> {
 /// Filtering a `BelongsTo` include: the predicate is evaluated against the
 /// parent row. When it excludes the parent the relation loads as `None`;
 /// when it matches, as `Some`.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid))]
 pub async fn preload_belongs_to_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -183,7 +183,7 @@ pub async fn preload_belongs_to_with_filter(test: &mut Test) -> Result<()> {
 
 /// A filter on a nested include applies to the innermost relation only. The
 /// intermediate relation still loads in full; only its children are filtered.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_post_comment))]
+#[driver_test(scenario(crate::scenarios::user_post_comment))]
 pub async fn preload_nested_relation_with_filter(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -215,7 +215,7 @@ pub async fn preload_nested_relation_with_filter(test: &mut Test) -> Result<()> 
 }
 
 /// A bare include dominates a filtered include of the same relation.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn preload_has_many_bare_and_filtered_loads_all(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -246,7 +246,7 @@ pub async fn preload_has_many_bare_and_filtered_loads_all(test: &mut Test) -> Re
 }
 
 /// Nested filters apply at their own relation level.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_post_comment))]
+#[driver_test(scenario(crate::scenarios::user_post_comment))]
 pub async fn preload_nested_relation_filters_at_both_levels(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -393,7 +393,7 @@ pub async fn preload_required_has_one_filter_rejected(test: &mut Test) -> Result
 }
 
 /// Filtering a required `BelongsTo` relation is rejected.
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn preload_required_belongs_to_filter_rejected(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

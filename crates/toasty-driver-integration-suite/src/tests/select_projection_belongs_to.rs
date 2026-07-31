@@ -6,9 +6,8 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID, uuid),
     requires(scan),
-    scenario(crate::scenarios::has_many_belongs_to)
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid)
 )]
 pub async fn select_belongs_to(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;

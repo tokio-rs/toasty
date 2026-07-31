@@ -1,12 +1,12 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn auto_uuid_v4(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[auto(uuid(v4))]
         auto_field: uuid::Uuid,
@@ -20,13 +20,13 @@ pub async fn auto_uuid_v4(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn auto_uuid_v7(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[auto(uuid(v7))]
         auto_field: uuid::Uuid,

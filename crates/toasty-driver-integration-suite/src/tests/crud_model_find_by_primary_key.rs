@@ -3,7 +3,7 @@ use crate::prelude::*;
 use toasty::schema::Model;
 use toasty::stmt::IntoExpr;
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn single_column_pk(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

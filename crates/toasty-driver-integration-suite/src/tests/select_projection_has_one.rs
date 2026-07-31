@@ -10,13 +10,13 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID, uuid), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn select_has_one(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
 
         #[has_one]
@@ -27,10 +27,10 @@ pub async fn select_has_one(t: &mut Test) -> Result<()> {
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<Option<User>>,

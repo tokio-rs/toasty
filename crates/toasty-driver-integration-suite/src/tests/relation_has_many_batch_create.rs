@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -24,7 +24,7 @@ pub async fn user_batch_create_todos_one_level_basic_fk(test: &mut Test) -> Resu
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -86,7 +86,7 @@ pub async fn user_batch_create_todos_two_levels_basic_fk(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -134,13 +134,13 @@ pub async fn user_batch_create_todos_set_category_by_value(test: &mut Test) -> R
 /// The issue is in the RETURNING clause constantization code path where
 /// batch inserts with auto-increment fields encounter an Expr::Stmt (nested insert)
 /// that is not yet handled.
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -157,10 +157,10 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
     struct Todo {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
@@ -190,13 +190,13 @@ pub async fn user_batch_create_todos_with_optional_field(test: &mut Test) -> Res
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -212,10 +212,10 @@ pub async fn user_batch_create_two_todos_simple(test: &mut Test) -> Result<()> {
     struct Todo {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,

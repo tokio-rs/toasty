@@ -5,13 +5,13 @@ use toasty_core::{
     stmt::{ExprSet, InsertTarget, Statement},
 };
 
-#[driver_test(id(ID, uuid), requires(native_varchar))]
+#[driver_test(requires(native_varchar))]
 pub async fn specify_constrained_string_field(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column(type = varchar(5))]
         name: String,
@@ -28,14 +28,14 @@ pub async fn specify_constrained_string_field(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), requires(native_varchar))]
+#[driver_test(requires(native_varchar))]
 pub async fn specify_invalid_varchar_size(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column(type = varchar(1_000_000_000_000))]
         name: String,
@@ -57,14 +57,14 @@ pub async fn specify_invalid_varchar_size(test: &mut Test) {
     );
 }
 
-#[driver_test(id(ID, uuid), requires(not(native_varchar)))]
+#[driver_test(requires(not(native_varchar)))]
 pub async fn specify_varchar_ty_when_not_supported(test: &mut Test) {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column(type = varchar(5))]
         name: String,
@@ -146,13 +146,13 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn specify_uuid_as_bytes(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column(type = blob)]
         val: uuid::Uuid,

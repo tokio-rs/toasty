@@ -151,14 +151,14 @@ pub async fn vec_datetime_create_get(t: &mut Test) -> Result<(), BoxError> {
 /// — covers both the PG bind path (driver receives `Value::List` as one
 /// `text[]` parameter) and the read path (`text[]` decoded back to
 /// `Value::List`).
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -177,14 +177,14 @@ pub async fn vec_string_create_get(t: &mut Test) -> Result<(), BoxError> {
 
 /// Whole-value replacement via the update builder. Verifies the PG bind
 /// path on UPDATE (assignment expression rather than INSERT row).
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -208,14 +208,14 @@ pub async fn vec_string_update_replace(t: &mut Test) -> Result<(), BoxError> {
 /// `path.contains(value)` filter. Lowers to `value = ANY(col)` on
 /// PostgreSQL — a GIN-indexable predicate when the column has the
 /// appropriate index.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -244,14 +244,14 @@ pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
 
 /// `path.is_superset([...])` (PG `@>`). Matches rows whose array contains
 /// every element of the right-hand set.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -279,14 +279,14 @@ pub async fn vec_string_is_superset_filter(t: &mut Test) -> Result<(), BoxError>
 
 /// `path.intersects([...])` (PG `&&`). Matches rows whose array shares at
 /// least one element with the right-hand set.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -315,14 +315,14 @@ pub async fn vec_string_intersects_filter(t: &mut Test) -> Result<(), BoxError> 
 /// On backends without `vec_scalar` support, a model containing a
 /// `Vec<scalar>` field is rejected at schema build with a clear error
 /// message.
-#[driver_test(id(ID, uuid), requires(not(vec_scalar)))]
+#[driver_test(requires(not(vec_scalar)))]
 pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -342,14 +342,14 @@ pub async fn vec_string_unsupported_backend(t: &mut Test) -> Result<(), BoxError
 }
 
 /// Basic `Vec<scalar>` mutations supported by every vector-capable backend.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_basic_mutations(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -461,14 +461,14 @@ pub async fn vec_string_basic_mutations(t: &mut Test) -> Result<(), BoxError> {
 /// empty Apply loop adds no entry to the assignments map. Run alongside
 /// a non-`Vec<scalar>` field so the engine verifier doesn't reject the
 /// otherwise-empty update.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_apply_empty_is_noop(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         tags: Vec<String>,
     }
@@ -498,14 +498,14 @@ pub async fn vec_string_apply_empty_is_noop(t: &mut Test) -> Result<(), BoxError
 }
 
 /// `stmt::pop()` for populated and empty collections.
-#[driver_test(id(ID, uuid), requires(vec_pop))]
+#[driver_test(requires(vec_pop))]
 pub async fn vec_string_pop_cases(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -549,14 +549,14 @@ pub async fn vec_string_pop_cases(t: &mut Test) -> Result<(), BoxError> {
 }
 
 /// `stmt::remove(value)` for one, no, and multiple matches.
-#[driver_test(id(ID, uuid), requires(vec_remove))]
+#[driver_test(requires(vec_remove))]
 pub async fn vec_string_remove_value_cases(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -625,14 +625,14 @@ pub async fn vec_string_remove_value_cases(t: &mut Test) -> Result<(), BoxError>
 }
 
 /// `stmt::remove_at(idx)` for middle, head, and out-of-bounds indexes.
-#[driver_test(id(ID, uuid), requires(vec_remove_at))]
+#[driver_test(requires(vec_remove_at))]
 pub async fn vec_string_remove_at_cases(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 
@@ -695,14 +695,14 @@ pub async fn vec_string_remove_at_cases(t: &mut Test) -> Result<(), BoxError> {
 }
 
 /// `path.len()` and `path.is_empty()` predicates. PG `cardinality(col)`.
-#[driver_test(id(ID, uuid), requires(vec_scalar))]
+#[driver_test(requires(vec_scalar))]
 pub async fn vec_string_len_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     #[allow(dead_code)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         tags: Vec<String>,
     }
 

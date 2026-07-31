@@ -6,7 +6,7 @@ use toasty_core::{
     stmt::{Expr, ExprSet, Statement},
 };
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn query_index_eq(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -31,7 +31,7 @@ pub async fn query_index_eq(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
@@ -149,7 +149,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
@@ -243,7 +243,7 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_age))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn set_filter_overwrites(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -267,7 +267,7 @@ pub async fn set_filter_overwrites(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_age))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_or_basic(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
     let _name_column = db.schema().table_for(User::id()).columns[1].id;
@@ -339,7 +339,7 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_age))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -374,7 +374,7 @@ pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_active))]
+#[driver_test(scenario(crate::scenarios::user_with_active))]
 pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -420,7 +420,7 @@ pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_boolean_filters_with_index(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = team, local = name)]
@@ -570,7 +570,7 @@ pub async fn query_boolean_filters_with_index(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid))]
+#[driver_test]
 pub async fn query_or_on_keys(test: &mut Test) -> Result<()> {
     // OR directly on the partition key of a composite primary key.
     //
@@ -650,11 +650,7 @@ pub async fn query_or_on_keys(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(
-    id(ID, uuid),
-    requires(scan),
-    scenario(crate::scenarios::user_with_active)
-)]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_with_active))]
 pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -777,7 +773,7 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_age))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_not_basic(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -809,7 +805,7 @@ pub async fn query_not_basic(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_active))]
+#[driver_test(scenario(crate::scenarios::user_with_active))]
 pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -853,7 +849,7 @@ pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID, uuid), scenario(crate::scenarios::user_with_age))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

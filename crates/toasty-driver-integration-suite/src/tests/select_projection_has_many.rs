@@ -10,8 +10,7 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID, uuid),
-    scenario(crate::scenarios::has_many_belongs_to),
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid),
     requires(sql)
 )]
 pub async fn select_has_many(t: &mut Test) -> Result<()> {
