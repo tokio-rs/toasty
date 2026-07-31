@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a>// `index_match` panics when the lifted lhs is an `ExprProject`.
 <a href=#16 id=16 data-nosnippet>16</a>//
 <a href=#17 id=17 data-nosnippet>17</a>// [#858]: https://github.com/tokio-rs/toasty/issues/858
-<a href=#18 id=18 data-nosnippet>18</a></span><span class="attr">#[driver_test(id(ID), requires(sql))]
+<a href=#18 id=18 data-nosnippet>18</a></span><span class="attr">#[driver_test(requires(sql))]
 <a href=#19 id=19 data-nosnippet>19</a></span><span class="kw">pub async fn </span>lift_belongs_to_preserves_embedded_field_filter(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#20 id=20 data-nosnippet>20</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
 <a href=#21 id=21 data-nosnippet>21</a>    </span><span class="kw">struct </span>Address {
@@ -26,7 +26,7 @@
 <a href=#26 id=26 data-nosnippet>26</a>    </span><span class="kw">struct </span>User {
 <a href=#27 id=27 data-nosnippet>27</a>        <span class="attr">#[key]
 <a href=#28 id=28 data-nosnippet>28</a>        #[auto]
-<a href=#29 id=29 data-nosnippet>29</a>        </span>id: ID,
+<a href=#29 id=29 data-nosnippet>29</a>        </span>id: uuid::Uuid,
 <a href=#30 id=30 data-nosnippet>30</a>
 <a href=#31 id=31 data-nosnippet>31</a>        address: Address,
 <a href=#32 id=32 data-nosnippet>32</a>    }
@@ -35,12 +35,12 @@
 <a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">struct </span>Post {
 <a href=#36 id=36 data-nosnippet>36</a>        <span class="attr">#[key]
 <a href=#37 id=37 data-nosnippet>37</a>        #[auto]
-<a href=#38 id=38 data-nosnippet>38</a>        </span>id: ID,
+<a href=#38 id=38 data-nosnippet>38</a>        </span>id: uuid::Uuid,
 <a href=#39 id=39 data-nosnippet>39</a>
 <a href=#40 id=40 data-nosnippet>40</a>        title: String,
 <a href=#41 id=41 data-nosnippet>41</a>
 <a href=#42 id=42 data-nosnippet>42</a>        <span class="attr">#[index]
-<a href=#43 id=43 data-nosnippet>43</a>        </span>user_id: ID,
+<a href=#43 id=43 data-nosnippet>43</a>        </span>user_id: uuid::Uuid,
 <a href=#44 id=44 data-nosnippet>44</a>
 <a href=#45 id=45 data-nosnippet>45</a>        <span class="attr">#[belongs_to(key = user_id, references = id)]
 <a href=#46 id=46 data-nosnippet>46</a>        </span>user: toasty::Deferred&lt;User&gt;,

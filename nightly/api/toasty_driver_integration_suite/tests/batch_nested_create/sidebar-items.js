@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["batch_as_nested_has_many_create"]};
+window.SIDEBAR_ITEMS = {"fn":["batch_as_nested_has_many_create"]};

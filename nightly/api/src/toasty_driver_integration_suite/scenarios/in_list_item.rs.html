@@ -6,25 +6,23 @@
 <a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#7 id=7 data-nosnippet>7</a>
 <a href=#8 id=8 data-nosnippet>8</a><span class="macro">scenario!</span> {
-<a href=#9 id=9 data-nosnippet>9</a>    <span class="attr">#![id(ID)]
-<a href=#10 id=10 data-nosnippet>10</a>
-<a href=#11 id=11 data-nosnippet>11</a>    #[derive(Debug, toasty::Model)]
-<a href=#12 id=12 data-nosnippet>12</a>    </span><span class="kw">struct </span>Item {
-<a href=#13 id=13 data-nosnippet>13</a>        <span class="attr">#[key]
-<a href=#14 id=14 data-nosnippet>14</a>        #[auto]
-<a href=#15 id=15 data-nosnippet>15</a>        </span>id: ID,
-<a href=#16 id=16 data-nosnippet>16</a>
-<a href=#17 id=17 data-nosnippet>17</a>        <span class="attr">#[index]
-<a href=#18 id=18 data-nosnippet>18</a>        </span>name: String,
-<a href=#19 id=19 data-nosnippet>19</a>
-<a href=#20 id=20 data-nosnippet>20</a>        <span class="attr">#[index]
-<a href=#21 id=21 data-nosnippet>21</a>        </span>n: i64,
-<a href=#22 id=22 data-nosnippet>22</a>
-<a href=#23 id=23 data-nosnippet>23</a>        bio: <span class="prelude-ty">Option</span>&lt;String&gt;,
-<a href=#24 id=24 data-nosnippet>24</a>    }
-<a href=#25 id=25 data-nosnippet>25</a>
-<a href=#26 id=26 data-nosnippet>26</a>    <span class="kw">async fn </span>setup(test: <span class="kw-2">&amp;mut </span>Test) -&gt; toasty::Db {
-<a href=#27 id=27 data-nosnippet>27</a>        test.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await
-<a href=#28 id=28 data-nosnippet>28</a>    </span>}
-<a href=#29 id=29 data-nosnippet>29</a>}
+<a href=#9 id=9 data-nosnippet>9</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#10 id=10 data-nosnippet>10</a>    </span><span class="kw">struct </span>Item {
+<a href=#11 id=11 data-nosnippet>11</a>        <span class="attr">#[key]
+<a href=#12 id=12 data-nosnippet>12</a>        #[auto]
+<a href=#13 id=13 data-nosnippet>13</a>        </span>id: uuid::Uuid,
+<a href=#14 id=14 data-nosnippet>14</a>
+<a href=#15 id=15 data-nosnippet>15</a>        <span class="attr">#[index]
+<a href=#16 id=16 data-nosnippet>16</a>        </span>name: String,
+<a href=#17 id=17 data-nosnippet>17</a>
+<a href=#18 id=18 data-nosnippet>18</a>        <span class="attr">#[index]
+<a href=#19 id=19 data-nosnippet>19</a>        </span>n: i64,
+<a href=#20 id=20 data-nosnippet>20</a>
+<a href=#21 id=21 data-nosnippet>21</a>        bio: <span class="prelude-ty">Option</span>&lt;String&gt;,
+<a href=#22 id=22 data-nosnippet>22</a>    }
+<a href=#23 id=23 data-nosnippet>23</a>
+<a href=#24 id=24 data-nosnippet>24</a>    <span class="kw">async fn </span>setup(test: <span class="kw-2">&amp;mut </span>Test) -&gt; toasty::Db {
+<a href=#25 id=25 data-nosnippet>25</a>        test.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await
+<a href=#26 id=26 data-nosnippet>26</a>    </span>}
+<a href=#27 id=27 data-nosnippet>27</a>}
 </code></pre></div></section></main></body></html>

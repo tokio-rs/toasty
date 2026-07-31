@@ -2,13 +2,13 @@
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span>toasty::stmt::Page;
 <a href=#3 id=3 data-nosnippet>3</a>
 <a href=#4 id=4 data-nosnippet>4</a><span class="doccomment">/// Scan with no filter predicate returns all rows.
-<a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#[driver_test]
 <a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">pub async fn </span>scan_no_filter(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#7 id=7 data-nosnippet>7</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#8 id=8 data-nosnippet>8</a>    </span><span class="kw">struct </span>Item {
 <a href=#9 id=9 data-nosnippet>9</a>        <span class="attr">#[key]
 <a href=#10 id=10 data-nosnippet>10</a>        #[auto]
-<a href=#11 id=11 data-nosnippet>11</a>        </span>id: ID,
+<a href=#11 id=11 data-nosnippet>11</a>        </span>id: uuid::Uuid,
 <a href=#12 id=12 data-nosnippet>12</a>        name: String,
 <a href=#13 id=13 data-nosnippet>13</a>    }
 <a href=#14 id=14 data-nosnippet>14</a>
@@ -34,13 +34,13 @@
 <a href=#34 id=34 data-nosnippet>34</a>}
 <a href=#35 id=35 data-nosnippet>35</a>
 <a href=#36 id=36 data-nosnippet>36</a><span class="doccomment">/// Scan with an OR filter on non-indexed fields.
-<a href=#37 id=37 data-nosnippet>37</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#37 id=37 data-nosnippet>37</a></span><span class="attr">#[driver_test]
 <a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub async fn </span>scan_or_filter(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#39 id=39 data-nosnippet>39</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#40 id=40 data-nosnippet>40</a>    </span><span class="kw">struct </span>Item {
 <a href=#41 id=41 data-nosnippet>41</a>        <span class="attr">#[key]
 <a href=#42 id=42 data-nosnippet>42</a>        #[auto]
-<a href=#43 id=43 data-nosnippet>43</a>        </span>id: ID,
+<a href=#43 id=43 data-nosnippet>43</a>        </span>id: uuid::Uuid,
 <a href=#44 id=44 data-nosnippet>44</a>        name: String,
 <a href=#45 id=45 data-nosnippet>45</a>    }
 <a href=#46 id=46 data-nosnippet>46</a>
@@ -72,13 +72,13 @@
 <a href=#72 id=72 data-nosnippet>72</a>}
 <a href=#73 id=73 data-nosnippet>73</a>
 <a href=#74 id=74 data-nosnippet>74</a><span class="doccomment">/// Scan respects a limit — at most `limit` rows are returned.
-<a href=#75 id=75 data-nosnippet>75</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#75 id=75 data-nosnippet>75</a></span><span class="attr">#[driver_test]
 <a href=#76 id=76 data-nosnippet>76</a></span><span class="kw">pub async fn </span>scan_with_limit(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#77 id=77 data-nosnippet>77</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#78 id=78 data-nosnippet>78</a>    </span><span class="kw">struct </span>Item {
 <a href=#79 id=79 data-nosnippet>79</a>        <span class="attr">#[key]
 <a href=#80 id=80 data-nosnippet>80</a>        #[auto]
-<a href=#81 id=81 data-nosnippet>81</a>        </span>id: ID,
+<a href=#81 id=81 data-nosnippet>81</a>        </span>id: uuid::Uuid,
 <a href=#82 id=82 data-nosnippet>82</a>        name: String,
 <a href=#83 id=83 data-nosnippet>83</a>    }
 <a href=#84 id=84 data-nosnippet>84</a>
@@ -108,13 +108,13 @@
 <a href=#108 id=108 data-nosnippet>108</a><span class="doccomment">/// Scan with a filter AND a limit returns exactly `limit` matching rows even
 <a href=#109 id=109 data-nosnippet>109</a>/// when the table contains more non-matching rows than `limit`. This exercises
 <a href=#110 id=110 data-nosnippet>110</a>/// the loop-with-ExclusiveStartKey path in the DynamoDB driver.
-<a href=#111 id=111 data-nosnippet>111</a></span><span class="attr">#[driver_test(id(ID), requires(not(sql)))]
+<a href=#111 id=111 data-nosnippet>111</a></span><span class="attr">#[driver_test(requires(not(sql)))]
 <a href=#112 id=112 data-nosnippet>112</a></span><span class="kw">pub async fn </span>scan_limit_with_filter_returns_correct_count(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#113 id=113 data-nosnippet>113</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#114 id=114 data-nosnippet>114</a>    </span><span class="kw">struct </span>Item {
 <a href=#115 id=115 data-nosnippet>115</a>        <span class="attr">#[key]
 <a href=#116 id=116 data-nosnippet>116</a>        #[auto]
-<a href=#117 id=117 data-nosnippet>117</a>        </span>id: ID,
+<a href=#117 id=117 data-nosnippet>117</a>        </span>id: uuid::Uuid,
 <a href=#118 id=118 data-nosnippet>118</a>        category: String,
 <a href=#119 id=119 data-nosnippet>119</a>    }
 <a href=#120 id=120 data-nosnippet>120</a>
@@ -154,13 +154,13 @@
 <a href=#154 id=154 data-nosnippet>154</a>
 <a href=#155 id=155 data-nosnippet>155</a><span class="doccomment">/// Cursor-based pagination over a full-table scan returns all rows across
 <a href=#156 id=156 data-nosnippet>156</a>/// multiple pages with no duplicates.
-<a href=#157 id=157 data-nosnippet>157</a></span><span class="attr">#[driver_test(id(ID), requires(not(sql)))]
+<a href=#157 id=157 data-nosnippet>157</a></span><span class="attr">#[driver_test(requires(not(sql)))]
 <a href=#158 id=158 data-nosnippet>158</a></span><span class="kw">pub async fn </span>scan_paginate_multi_page(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#159 id=159 data-nosnippet>159</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#160 id=160 data-nosnippet>160</a>    </span><span class="kw">struct </span>Item {
 <a href=#161 id=161 data-nosnippet>161</a>        <span class="attr">#[key]
 <a href=#162 id=162 data-nosnippet>162</a>        #[auto]
-<a href=#163 id=163 data-nosnippet>163</a>        </span>id: ID,
+<a href=#163 id=163 data-nosnippet>163</a>        </span>id: uuid::Uuid,
 <a href=#164 id=164 data-nosnippet>164</a>        score: i64,
 <a href=#165 id=165 data-nosnippet>165</a>    }
 <a href=#166 id=166 data-nosnippet>166</a>
@@ -198,13 +198,13 @@
 <a href=#198 id=198 data-nosnippet>198</a><span class="doccomment">/// ORDER BY on a scan-path query is an error on DynamoDB — the Scan API
 <a href=#199 id=199 data-nosnippet>199</a>/// returns items in an unspecified order so sorted results cannot be
 <a href=#200 id=200 data-nosnippet>200</a>/// guaranteed.
-<a href=#201 id=201 data-nosnippet>201</a></span><span class="attr">#[driver_test(id(ID), requires(not(sql)))]
+<a href=#201 id=201 data-nosnippet>201</a></span><span class="attr">#[driver_test(requires(not(sql)))]
 <a href=#202 id=202 data-nosnippet>202</a></span><span class="kw">pub async fn </span>scan_order_by_is_error(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#203 id=203 data-nosnippet>203</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#204 id=204 data-nosnippet>204</a>    </span><span class="kw">struct </span>Item {
 <a href=#205 id=205 data-nosnippet>205</a>        <span class="attr">#[key]
 <a href=#206 id=206 data-nosnippet>206</a>        #[auto]
-<a href=#207 id=207 data-nosnippet>207</a>        </span>id: ID,
+<a href=#207 id=207 data-nosnippet>207</a>        </span>id: uuid::Uuid,
 <a href=#208 id=208 data-nosnippet>208</a>        score: i64,
 <a href=#209 id=209 data-nosnippet>209</a>    }
 <a href=#210 id=210 data-nosnippet>210</a>
@@ -235,13 +235,13 @@
 <a href=#235 id=235 data-nosnippet>235</a>
 <a href=#236 id=236 data-nosnippet>236</a><span class="doccomment">/// ORDER BY on a full-table scan works on SQL drivers — the database sorts
 <a href=#237 id=237 data-nosnippet>237</a>/// natively via ORDER BY in the SQL query.
-<a href=#238 id=238 data-nosnippet>238</a></span><span class="attr">#[driver_test(id(ID), requires(sql))]
+<a href=#238 id=238 data-nosnippet>238</a></span><span class="attr">#[driver_test(requires(sql))]
 <a href=#239 id=239 data-nosnippet>239</a></span><span class="kw">pub async fn </span>scan_order_by_sql(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#240 id=240 data-nosnippet>240</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#241 id=241 data-nosnippet>241</a>    </span><span class="kw">struct </span>Item {
 <a href=#242 id=242 data-nosnippet>242</a>        <span class="attr">#[key]
 <a href=#243 id=243 data-nosnippet>243</a>        #[auto]
-<a href=#244 id=244 data-nosnippet>244</a>        </span>id: ID,
+<a href=#244 id=244 data-nosnippet>244</a>        </span>id: uuid::Uuid,
 <a href=#245 id=245 data-nosnippet>245</a>        score: i64,
 <a href=#246 id=246 data-nosnippet>246</a>    }
 <a href=#247 id=247 data-nosnippet>247</a>

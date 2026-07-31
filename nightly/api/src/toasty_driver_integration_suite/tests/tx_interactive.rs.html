@@ -6,7 +6,7 @@
 <a href=#6 id=6 data-nosnippet>6</a><span class="comment">// ===== Basic commit / rollback =====
 <a href=#7 id=7 data-nosnippet>7</a>
 <a href=#8 id=8 data-nosnippet>8</a></span><span class="doccomment">/// Data created inside a committed transaction is visible afterwards.
-<a href=#9 id=9 data-nosnippet>9</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#9 id=9 data-nosnippet>9</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub async fn </span>commit_persists_data(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#11 id=11 data-nosnippet>11</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#12 id=12 data-nosnippet>12</a>
@@ -22,7 +22,7 @@
 <a href=#22 id=22 data-nosnippet>22</a>}
 <a href=#23 id=23 data-nosnippet>23</a>
 <a href=#24 id=24 data-nosnippet>24</a><span class="doccomment">/// Data created inside a rolled-back transaction is not visible.
-<a href=#25 id=25 data-nosnippet>25</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#25 id=25 data-nosnippet>25</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub async fn </span>rollback_discards_data(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#27 id=27 data-nosnippet>27</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#28 id=28 data-nosnippet>28</a>
@@ -37,7 +37,7 @@
 <a href=#37 id=37 data-nosnippet>37</a>}
 <a href=#38 id=38 data-nosnippet>38</a>
 <a href=#39 id=39 data-nosnippet>39</a><span class="doccomment">/// Dropping a transaction without commit or rollback automatically rolls back.
-<a href=#40 id=40 data-nosnippet>40</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#40 id=40 data-nosnippet>40</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#41 id=41 data-nosnippet>41</a></span><span class="kw">pub async fn </span>drop_without_finalize_rolls_back(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#42 id=42 data-nosnippet>42</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#43 id=43 data-nosnippet>43</a>
@@ -159,7 +159,7 @@
 <a href=#159 id=159 data-nosnippet>159</a>}
 <a href=#160 id=160 data-nosnippet>160</a>
 <a href=#161 id=161 data-nosnippet>161</a><span class="doccomment">/// Multiple operations inside a single transaction are all committed together.
-<a href=#162 id=162 data-nosnippet>162</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#162 id=162 data-nosnippet>162</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#163 id=163 data-nosnippet>163</a></span><span class="kw">pub async fn </span>multiple_ops_in_transaction(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#164 id=164 data-nosnippet>164</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#165 id=165 data-nosnippet>165</a>
@@ -177,7 +177,7 @@
 <a href=#177 id=177 data-nosnippet>177</a>
 <a href=#178 id=178 data-nosnippet>178</a><span class="doccomment">/// Read-your-writes: data created inside a transaction is visible within it
 <a href=#179 id=179 data-nosnippet>179</a>/// before commit.
-<a href=#180 id=180 data-nosnippet>180</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#180 id=180 data-nosnippet>180</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#181 id=181 data-nosnippet>181</a></span><span class="kw">pub async fn </span>read_your_writes(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#183 id=183 data-nosnippet>183</a>
@@ -194,7 +194,7 @@
 <a href=#194 id=194 data-nosnippet>194</a>}
 <a href=#195 id=195 data-nosnippet>195</a>
 <a href=#196 id=196 data-nosnippet>196</a><span class="doccomment">/// Updates inside a transaction are committed.
-<a href=#197 id=197 data-nosnippet>197</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#197 id=197 data-nosnippet>197</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#198 id=198 data-nosnippet>198</a></span><span class="kw">pub async fn </span>update_inside_transaction(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#199 id=199 data-nosnippet>199</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#200 id=200 data-nosnippet>200</a>
@@ -211,7 +211,7 @@
 <a href=#211 id=211 data-nosnippet>211</a>}
 <a href=#212 id=212 data-nosnippet>212</a>
 <a href=#213 id=213 data-nosnippet>213</a><span class="doccomment">/// Updates inside a rolled-back transaction are discarded.
-<a href=#214 id=214 data-nosnippet>214</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#214 id=214 data-nosnippet>214</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#215 id=215 data-nosnippet>215</a></span><span class="kw">pub async fn </span>update_rolled_back(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#216 id=216 data-nosnippet>216</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#217 id=217 data-nosnippet>217</a>
@@ -228,7 +228,7 @@
 <a href=#228 id=228 data-nosnippet>228</a>}
 <a href=#229 id=229 data-nosnippet>229</a>
 <a href=#230 id=230 data-nosnippet>230</a><span class="doccomment">/// Deletes inside a rolled-back transaction are discarded.
-<a href=#231 id=231 data-nosnippet>231</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#231 id=231 data-nosnippet>231</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#232 id=232 data-nosnippet>232</a></span><span class="kw">pub async fn </span>delete_rolled_back(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#234 id=234 data-nosnippet>234</a>
@@ -247,7 +247,7 @@
 <a href=#247 id=247 data-nosnippet>247</a><span class="comment">// ===== Driver operation log =====
 <a href=#248 id=248 data-nosnippet>248</a>
 <a href=#249 id=249 data-nosnippet>249</a></span><span class="doccomment">/// Verify the driver receives BEGIN, statements, and COMMIT in the right order.
-<a href=#250 id=250 data-nosnippet>250</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#250 id=250 data-nosnippet>250</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#251 id=251 data-nosnippet>251</a></span><span class="kw">pub async fn </span>driver_sees_begin_commit(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#252 id=252 data-nosnippet>252</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#253 id=253 data-nosnippet>253</a>
@@ -276,7 +276,7 @@
 <a href=#276 id=276 data-nosnippet>276</a>}
 <a href=#277 id=277 data-nosnippet>277</a>
 <a href=#278 id=278 data-nosnippet>278</a><span class="doccomment">/// Verify the driver receives BEGIN and ROLLBACK when rolled back.
-<a href=#279 id=279 data-nosnippet>279</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#279 id=279 data-nosnippet>279</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#280 id=280 data-nosnippet>280</a></span><span class="kw">pub async fn </span>driver_sees_begin_rollback(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#281 id=281 data-nosnippet>281</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#282 id=282 data-nosnippet>282</a>
@@ -308,7 +308,7 @@
 <a href=#308 id=308 data-nosnippet>308</a>
 <a href=#309 id=309 data-nosnippet>309</a></span><span class="doccomment">/// A committed nested transaction (savepoint) persists when the outer
 <a href=#310 id=310 data-nosnippet>310</a>/// transaction also commits.
-<a href=#311 id=311 data-nosnippet>311</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#311 id=311 data-nosnippet>311</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#312 id=312 data-nosnippet>312</a></span><span class="kw">pub async fn </span>nested_commit_both(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#313 id=313 data-nosnippet>313</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#314 id=314 data-nosnippet>314</a>
@@ -331,7 +331,7 @@
 <a href=#331 id=331 data-nosnippet>331</a>
 <a href=#332 id=332 data-nosnippet>332</a><span class="doccomment">/// Rolling back a nested transaction discards only its changes; the outer
 <a href=#333 id=333 data-nosnippet>333</a>/// transaction can still commit its own.
-<a href=#334 id=334 data-nosnippet>334</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#334 id=334 data-nosnippet>334</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#335 id=335 data-nosnippet>335</a></span><span class="kw">pub async fn </span>nested_rollback_inner(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#336 id=336 data-nosnippet>336</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#337 id=337 data-nosnippet>337</a>
@@ -355,7 +355,7 @@
 <a href=#355 id=355 data-nosnippet>355</a>
 <a href=#356 id=356 data-nosnippet>356</a><span class="doccomment">/// Rolling back the outer transaction discards everything, including changes
 <a href=#357 id=357 data-nosnippet>357</a>/// from an already-committed nested transaction.
-<a href=#358 id=358 data-nosnippet>358</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#358 id=358 data-nosnippet>358</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#359 id=359 data-nosnippet>359</a></span><span class="kw">pub async fn </span>nested_rollback_outer(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#360 id=360 data-nosnippet>360</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#361 id=361 data-nosnippet>361</a>
@@ -378,7 +378,7 @@
 <a href=#378 id=378 data-nosnippet>378</a>
 <a href=#379 id=379 data-nosnippet>379</a><span class="doccomment">/// Dropping a nested transaction without finalize rolls back just that
 <a href=#380 id=380 data-nosnippet>380</a>/// savepoint.
-<a href=#381 id=381 data-nosnippet>381</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#381 id=381 data-nosnippet>381</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#382 id=382 data-nosnippet>382</a></span><span class="kw">pub async fn </span>nested_drop_rolls_back_savepoint(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#383 id=383 data-nosnippet>383</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#384 id=384 data-nosnippet>384</a>
@@ -402,7 +402,7 @@
 <a href=#402 id=402 data-nosnippet>402</a>
 <a href=#403 id=403 data-nosnippet>403</a><span class="doccomment">/// Verify the driver log for a nested transaction shows SAVEPOINT / RELEASE
 <a href=#404 id=404 data-nosnippet>404</a>/// SAVEPOINT around the inner work.
-<a href=#405 id=405 data-nosnippet>405</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#405 id=405 data-nosnippet>405</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#406 id=406 data-nosnippet>406</a></span><span class="kw">pub async fn </span>nested_driver_sees_savepoint_ops(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#407 id=407 data-nosnippet>407</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#408 id=408 data-nosnippet>408</a>
@@ -452,7 +452,7 @@
 <a href=#452 id=452 data-nosnippet>452</a>
 <a href=#453 id=453 data-nosnippet>453</a><span class="doccomment">/// Verify the driver log when a nested transaction is rolled back shows
 <a href=#454 id=454 data-nosnippet>454</a>/// ROLLBACK TO SAVEPOINT.
-<a href=#455 id=455 data-nosnippet>455</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#455 id=455 data-nosnippet>455</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#456 id=456 data-nosnippet>456</a></span><span class="kw">pub async fn </span>nested_driver_sees_rollback_to_savepoint(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#457 id=457 data-nosnippet>457</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#458 id=458 data-nosnippet>458</a>
@@ -499,7 +499,7 @@
 <a href=#499 id=499 data-nosnippet>499</a>
 <a href=#500 id=500 data-nosnippet>500</a><span class="doccomment">/// Two sequential nested transactions: first committed, second rolled back.
 <a href=#501 id=501 data-nosnippet>501</a>/// Only data from the first survives.
-<a href=#502 id=502 data-nosnippet>502</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#502 id=502 data-nosnippet>502</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#503 id=503 data-nosnippet>503</a></span><span class="kw">pub async fn </span>two_sequential_nested_transactions(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#504 id=504 data-nosnippet>504</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#505 id=505 data-nosnippet>505</a>
@@ -531,199 +531,202 @@
 <a href=#531 id=531 data-nosnippet>531</a></span><span class="doccomment">/// When a multi-op statement (e.g. create with association) runs inside an
 <a href=#532 id=532 data-nosnippet>532</a>/// interactive transaction, the engine wraps it in SAVEPOINT/RELEASE instead
 <a href=#533 id=533 data-nosnippet>533</a>/// of BEGIN/COMMIT.
-<a href=#534 id=534 data-nosnippet>534</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
-<a href=#535 id=535 data-nosnippet>535</a></span><span class="kw">pub async fn </span>multi_op_inside_tx_uses_savepoints(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#536 id=536 data-nosnippet>536</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#537 id=537 data-nosnippet>537</a>
-<a href=#538 id=538 data-nosnippet>538</a>    t.log().clear();
-<a href=#539 id=539 data-nosnippet>539</a>
-<a href=#540 id=540 data-nosnippet>540</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = db.transaction().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#541 id=541 data-nosnippet>541</a>    <span class="kw">let </span>user = User::create()
-<a href=#542 id=542 data-nosnippet>542</a>        .name(<span class="string">"Alice"</span>)
-<a href=#543 id=543 data-nosnippet>543</a>        .todos([Todo::create().title(<span class="string">"task"</span>)])
-<a href=#544 id=544 data-nosnippet>544</a>        .exec(<span class="kw-2">&amp;mut </span>tx)
-<a href=#545 id=545 data-nosnippet>545</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#546 id=546 data-nosnippet>546</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#547 id=547 data-nosnippet>547</a>
-<a href=#548 id=548 data-nosnippet>548</a>    <span class="comment">// BEGIN (interactive tx)
-<a href=#549 id=549 data-nosnippet>549</a>    </span><span class="macro">assert_struct!</span>(
-<a href=#550 id=550 data-nosnippet>550</a>        t.log().pop_op(),
-<a href=#551 id=551 data-nosnippet>551</a>        Operation::Transaction(Transaction::Start {
-<a href=#552 id=552 data-nosnippet>552</a>            isolation: <span class="prelude-val">None</span>,
-<a href=#553 id=553 data-nosnippet>553</a>            read_only: <span class="bool-val">false</span>,
-<a href=#554 id=554 data-nosnippet>554</a>            ..
-<a href=#555 id=555 data-nosnippet>555</a>        })
-<a href=#556 id=556 data-nosnippet>556</a>    );
-<a href=#557 id=557 data-nosnippet>557</a>    <span class="comment">// SAVEPOINT (engine wraps the multi-op plan)
-<a href=#558 id=558 data-nosnippet>558</a>    </span><span class="macro">assert_struct!</span>(
-<a href=#559 id=559 data-nosnippet>559</a>        t.log().pop_op(),
-<a href=#560 id=560 data-nosnippet>560</a>        Operation::Transaction(Transaction::Savepoint(<span class="kw">_</span>))
-<a href=#561 id=561 data-nosnippet>561</a>    );
-<a href=#562 id=562 data-nosnippet>562</a>    <span class="comment">// INSERT user
-<a href=#563 id=563 data-nosnippet>563</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
-<a href=#564 id=564 data-nosnippet>564</a>    <span class="comment">// INSERT todo
-<a href=#565 id=565 data-nosnippet>565</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
-<a href=#566 id=566 data-nosnippet>566</a>    <span class="comment">// RELEASE SAVEPOINT
-<a href=#567 id=567 data-nosnippet>567</a>    </span><span class="macro">assert_struct!</span>(
-<a href=#568 id=568 data-nosnippet>568</a>        t.log().pop_op(),
-<a href=#569 id=569 data-nosnippet>569</a>        Operation::Transaction(Transaction::ReleaseSavepoint(<span class="kw">_</span>))
-<a href=#570 id=570 data-nosnippet>570</a>    );
-<a href=#571 id=571 data-nosnippet>571</a>    <span class="comment">// COMMIT (interactive tx)
-<a href=#572 id=572 data-nosnippet>572</a>    </span><span class="macro">assert_struct!</span>(
-<a href=#573 id=573 data-nosnippet>573</a>        t.log().pop_op(),
-<a href=#574 id=574 data-nosnippet>574</a>        Operation::Transaction(Transaction::Commit)
-<a href=#575 id=575 data-nosnippet>575</a>    );
-<a href=#576 id=576 data-nosnippet>576</a>    <span class="macro">assert!</span>(t.log().is_empty());
-<a href=#577 id=577 data-nosnippet>577</a>
-<a href=#578 id=578 data-nosnippet>578</a>    <span class="comment">// Verify the data landed
-<a href=#579 id=579 data-nosnippet>579</a>    </span><span class="kw">let </span>todos = user.todos().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#580 id=580 data-nosnippet>580</a>    <span class="macro">assert_eq!</span>(todos.len(), <span class="number">1</span>);
-<a href=#581 id=581 data-nosnippet>581</a>    <span class="macro">assert_eq!</span>(todos[<span class="number">0</span>].title, <span class="string">"task"</span>);
-<a href=#582 id=582 data-nosnippet>582</a>
-<a href=#583 id=583 data-nosnippet>583</a>    <span class="prelude-val">Ok</span>(())
-<a href=#584 id=584 data-nosnippet>584</a>}
+<a href=#534 id=534 data-nosnippet>534</a></span><span class="attr">#[driver_test(
+<a href=#535 id=535 data-nosnippet>535</a>    requires(sql),
+<a href=#536 id=536 data-nosnippet>536</a>    scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid)
+<a href=#537 id=537 data-nosnippet>537</a>)]
+<a href=#538 id=538 data-nosnippet>538</a></span><span class="kw">pub async fn </span>multi_op_inside_tx_uses_savepoints(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#539 id=539 data-nosnippet>539</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#540 id=540 data-nosnippet>540</a>
+<a href=#541 id=541 data-nosnippet>541</a>    t.log().clear();
+<a href=#542 id=542 data-nosnippet>542</a>
+<a href=#543 id=543 data-nosnippet>543</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = db.transaction().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#544 id=544 data-nosnippet>544</a>    <span class="kw">let </span>user = User::create()
+<a href=#545 id=545 data-nosnippet>545</a>        .name(<span class="string">"Alice"</span>)
+<a href=#546 id=546 data-nosnippet>546</a>        .todos([Todo::create().title(<span class="string">"task"</span>)])
+<a href=#547 id=547 data-nosnippet>547</a>        .exec(<span class="kw-2">&amp;mut </span>tx)
+<a href=#548 id=548 data-nosnippet>548</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#549 id=549 data-nosnippet>549</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#550 id=550 data-nosnippet>550</a>
+<a href=#551 id=551 data-nosnippet>551</a>    <span class="comment">// BEGIN (interactive tx)
+<a href=#552 id=552 data-nosnippet>552</a>    </span><span class="macro">assert_struct!</span>(
+<a href=#553 id=553 data-nosnippet>553</a>        t.log().pop_op(),
+<a href=#554 id=554 data-nosnippet>554</a>        Operation::Transaction(Transaction::Start {
+<a href=#555 id=555 data-nosnippet>555</a>            isolation: <span class="prelude-val">None</span>,
+<a href=#556 id=556 data-nosnippet>556</a>            read_only: <span class="bool-val">false</span>,
+<a href=#557 id=557 data-nosnippet>557</a>            ..
+<a href=#558 id=558 data-nosnippet>558</a>        })
+<a href=#559 id=559 data-nosnippet>559</a>    );
+<a href=#560 id=560 data-nosnippet>560</a>    <span class="comment">// SAVEPOINT (engine wraps the multi-op plan)
+<a href=#561 id=561 data-nosnippet>561</a>    </span><span class="macro">assert_struct!</span>(
+<a href=#562 id=562 data-nosnippet>562</a>        t.log().pop_op(),
+<a href=#563 id=563 data-nosnippet>563</a>        Operation::Transaction(Transaction::Savepoint(<span class="kw">_</span>))
+<a href=#564 id=564 data-nosnippet>564</a>    );
+<a href=#565 id=565 data-nosnippet>565</a>    <span class="comment">// INSERT user
+<a href=#566 id=566 data-nosnippet>566</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#567 id=567 data-nosnippet>567</a>    <span class="comment">// INSERT todo
+<a href=#568 id=568 data-nosnippet>568</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#569 id=569 data-nosnippet>569</a>    <span class="comment">// RELEASE SAVEPOINT
+<a href=#570 id=570 data-nosnippet>570</a>    </span><span class="macro">assert_struct!</span>(
+<a href=#571 id=571 data-nosnippet>571</a>        t.log().pop_op(),
+<a href=#572 id=572 data-nosnippet>572</a>        Operation::Transaction(Transaction::ReleaseSavepoint(<span class="kw">_</span>))
+<a href=#573 id=573 data-nosnippet>573</a>    );
+<a href=#574 id=574 data-nosnippet>574</a>    <span class="comment">// COMMIT (interactive tx)
+<a href=#575 id=575 data-nosnippet>575</a>    </span><span class="macro">assert_struct!</span>(
+<a href=#576 id=576 data-nosnippet>576</a>        t.log().pop_op(),
+<a href=#577 id=577 data-nosnippet>577</a>        Operation::Transaction(Transaction::Commit)
+<a href=#578 id=578 data-nosnippet>578</a>    );
+<a href=#579 id=579 data-nosnippet>579</a>    <span class="macro">assert!</span>(t.log().is_empty());
+<a href=#580 id=580 data-nosnippet>580</a>
+<a href=#581 id=581 data-nosnippet>581</a>    <span class="comment">// Verify the data landed
+<a href=#582 id=582 data-nosnippet>582</a>    </span><span class="kw">let </span>todos = user.todos().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#583 id=583 data-nosnippet>583</a>    <span class="macro">assert_eq!</span>(todos.len(), <span class="number">1</span>);
+<a href=#584 id=584 data-nosnippet>584</a>    <span class="macro">assert_eq!</span>(todos[<span class="number">0</span>].title, <span class="string">"task"</span>);
 <a href=#585 id=585 data-nosnippet>585</a>
-<a href=#586 id=586 data-nosnippet>586</a><span class="comment">// ===== TransactionBuilder API =====
-<a href=#587 id=587 data-nosnippet>587</a>
-<a href=#588 id=588 data-nosnippet>588</a></span><span class="doccomment">/// TransactionBuilder from Db commits data like a regular transaction.
-<a href=#589 id=589 data-nosnippet>589</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
-<a href=#590 id=590 data-nosnippet>590</a></span><span class="kw">pub async fn </span>builder_on_db_commit(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#591 id=591 data-nosnippet>591</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#592 id=592 data-nosnippet>592</a>
-<a href=#593 id=593 data-nosnippet>593</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = db.transaction_builder().begin().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#594 id=594 data-nosnippet>594</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#595 id=595 data-nosnippet>595</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#596 id=596 data-nosnippet>596</a>
-<a href=#597 id=597 data-nosnippet>597</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#598 id=598 data-nosnippet>598</a>    <span class="macro">assert_eq!</span>(users.len(), <span class="number">1</span>);
-<a href=#599 id=599 data-nosnippet>599</a>    <span class="macro">assert_eq!</span>(users[<span class="number">0</span>].name, <span class="string">"Alice"</span>);
-<a href=#600 id=600 data-nosnippet>600</a>
-<a href=#601 id=601 data-nosnippet>601</a>    <span class="prelude-val">Ok</span>(())
-<a href=#602 id=602 data-nosnippet>602</a>}
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="prelude-val">Ok</span>(())
+<a href=#587 id=587 data-nosnippet>587</a>}
+<a href=#588 id=588 data-nosnippet>588</a>
+<a href=#589 id=589 data-nosnippet>589</a><span class="comment">// ===== TransactionBuilder API =====
+<a href=#590 id=590 data-nosnippet>590</a>
+<a href=#591 id=591 data-nosnippet>591</a></span><span class="doccomment">/// TransactionBuilder from Db commits data like a regular transaction.
+<a href=#592 id=592 data-nosnippet>592</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#593 id=593 data-nosnippet>593</a></span><span class="kw">pub async fn </span>builder_on_db_commit(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#594 id=594 data-nosnippet>594</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#595 id=595 data-nosnippet>595</a>
+<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = db.transaction_builder().begin().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#597 id=597 data-nosnippet>597</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#598 id=598 data-nosnippet>598</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#599 id=599 data-nosnippet>599</a>
+<a href=#600 id=600 data-nosnippet>600</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#601 id=601 data-nosnippet>601</a>    <span class="macro">assert_eq!</span>(users.len(), <span class="number">1</span>);
+<a href=#602 id=602 data-nosnippet>602</a>    <span class="macro">assert_eq!</span>(users[<span class="number">0</span>].name, <span class="string">"Alice"</span>);
 <a href=#603 id=603 data-nosnippet>603</a>
-<a href=#604 id=604 data-nosnippet>604</a><span class="doccomment">/// TransactionBuilder from Connection commits data like a regular transaction.
-<a href=#605 id=605 data-nosnippet>605</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
-<a href=#606 id=606 data-nosnippet>606</a></span><span class="kw">pub async fn </span>builder_on_connection_commit(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#607 id=607 data-nosnippet>607</a>    <span class="kw">let </span>db = setup(t).<span class="kw">await</span>;
-<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">let </span><span class="kw-2">mut </span>conn = db.connection().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#609 id=609 data-nosnippet>609</a>
-<a href=#610 id=610 data-nosnippet>610</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = conn.transaction_builder().begin().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#611 id=611 data-nosnippet>611</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#612 id=612 data-nosnippet>612</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#613 id=613 data-nosnippet>613</a>
-<a href=#614 id=614 data-nosnippet>614</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>conn).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#615 id=615 data-nosnippet>615</a>    <span class="macro">assert_eq!</span>(users.len(), <span class="number">1</span>);
-<a href=#616 id=616 data-nosnippet>616</a>    <span class="macro">assert_eq!</span>(users[<span class="number">0</span>].name, <span class="string">"Alice"</span>);
-<a href=#617 id=617 data-nosnippet>617</a>
-<a href=#618 id=618 data-nosnippet>618</a>    <span class="prelude-val">Ok</span>(())
-<a href=#619 id=619 data-nosnippet>619</a>}
+<a href=#604 id=604 data-nosnippet>604</a>    <span class="prelude-val">Ok</span>(())
+<a href=#605 id=605 data-nosnippet>605</a>}
+<a href=#606 id=606 data-nosnippet>606</a>
+<a href=#607 id=607 data-nosnippet>607</a><span class="doccomment">/// TransactionBuilder from Connection commits data like a regular transaction.
+<a href=#608 id=608 data-nosnippet>608</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#609 id=609 data-nosnippet>609</a></span><span class="kw">pub async fn </span>builder_on_connection_commit(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#610 id=610 data-nosnippet>610</a>    <span class="kw">let </span>db = setup(t).<span class="kw">await</span>;
+<a href=#611 id=611 data-nosnippet>611</a>    <span class="kw">let </span><span class="kw-2">mut </span>conn = db.connection().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#612 id=612 data-nosnippet>612</a>
+<a href=#613 id=613 data-nosnippet>613</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = conn.transaction_builder().begin().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#614 id=614 data-nosnippet>614</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#615 id=615 data-nosnippet>615</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#616 id=616 data-nosnippet>616</a>
+<a href=#617 id=617 data-nosnippet>617</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>conn).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#618 id=618 data-nosnippet>618</a>    <span class="macro">assert_eq!</span>(users.len(), <span class="number">1</span>);
+<a href=#619 id=619 data-nosnippet>619</a>    <span class="macro">assert_eq!</span>(users[<span class="number">0</span>].name, <span class="string">"Alice"</span>);
 <a href=#620 id=620 data-nosnippet>620</a>
-<a href=#621 id=621 data-nosnippet>621</a><span class="doccomment">/// TransactionBuilder with isolation level sends the correct option to the driver.
-<a href=#622 id=622 data-nosnippet>622</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
-<a href=#623 id=623 data-nosnippet>623</a></span><span class="kw">pub async fn </span>builder_with_isolation_level(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#624 id=624 data-nosnippet>624</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#625 id=625 data-nosnippet>625</a>
-<a href=#626 id=626 data-nosnippet>626</a>    t.log().clear();
-<a href=#627 id=627 data-nosnippet>627</a>
-<a href=#628 id=628 data-nosnippet>628</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = db
-<a href=#629 id=629 data-nosnippet>629</a>        .transaction_builder()
-<a href=#630 id=630 data-nosnippet>630</a>        .isolation(IsolationLevel::Serializable)
-<a href=#631 id=631 data-nosnippet>631</a>        .begin()
-<a href=#632 id=632 data-nosnippet>632</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#633 id=633 data-nosnippet>633</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#634 id=634 data-nosnippet>634</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#635 id=635 data-nosnippet>635</a>
-<a href=#636 id=636 data-nosnippet>636</a>    <span class="macro">assert_struct!</span>(
-<a href=#637 id=637 data-nosnippet>637</a>        t.log().pop_op(),
-<a href=#638 id=638 data-nosnippet>638</a>        Operation::Transaction(Transaction::Start {
-<a href=#639 id=639 data-nosnippet>639</a>            isolation: <span class="prelude-val">Some</span>(IsolationLevel::Serializable),
-<a href=#640 id=640 data-nosnippet>640</a>            read_only: <span class="bool-val">false</span>,
-<a href=#641 id=641 data-nosnippet>641</a>            ..
-<a href=#642 id=642 data-nosnippet>642</a>        })
-<a href=#643 id=643 data-nosnippet>643</a>    );
-<a href=#644 id=644 data-nosnippet>644</a>
-<a href=#645 id=645 data-nosnippet>645</a>    <span class="prelude-val">Ok</span>(())
-<a href=#646 id=646 data-nosnippet>646</a>}
+<a href=#621 id=621 data-nosnippet>621</a>    <span class="prelude-val">Ok</span>(())
+<a href=#622 id=622 data-nosnippet>622</a>}
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a><span class="doccomment">/// TransactionBuilder with isolation level sends the correct option to the driver.
+<a href=#625 id=625 data-nosnippet>625</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#626 id=626 data-nosnippet>626</a></span><span class="kw">pub async fn </span>builder_with_isolation_level(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#627 id=627 data-nosnippet>627</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#628 id=628 data-nosnippet>628</a>
+<a href=#629 id=629 data-nosnippet>629</a>    t.log().clear();
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = db
+<a href=#632 id=632 data-nosnippet>632</a>        .transaction_builder()
+<a href=#633 id=633 data-nosnippet>633</a>        .isolation(IsolationLevel::Serializable)
+<a href=#634 id=634 data-nosnippet>634</a>        .begin()
+<a href=#635 id=635 data-nosnippet>635</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#636 id=636 data-nosnippet>636</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#637 id=637 data-nosnippet>637</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#638 id=638 data-nosnippet>638</a>
+<a href=#639 id=639 data-nosnippet>639</a>    <span class="macro">assert_struct!</span>(
+<a href=#640 id=640 data-nosnippet>640</a>        t.log().pop_op(),
+<a href=#641 id=641 data-nosnippet>641</a>        Operation::Transaction(Transaction::Start {
+<a href=#642 id=642 data-nosnippet>642</a>            isolation: <span class="prelude-val">Some</span>(IsolationLevel::Serializable),
+<a href=#643 id=643 data-nosnippet>643</a>            read_only: <span class="bool-val">false</span>,
+<a href=#644 id=644 data-nosnippet>644</a>            ..
+<a href=#645 id=645 data-nosnippet>645</a>        })
+<a href=#646 id=646 data-nosnippet>646</a>    );
 <a href=#647 id=647 data-nosnippet>647</a>
-<a href=#648 id=648 data-nosnippet>648</a><span class="doccomment">/// TransactionBuilder with read_only sends the correct option to the driver.
-<a href=#649 id=649 data-nosnippet>649</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
-<a href=#650 id=650 data-nosnippet>650</a></span><span class="kw">pub async fn </span>builder_with_read_only(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#651 id=651 data-nosnippet>651</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#652 id=652 data-nosnippet>652</a>
-<a href=#653 id=653 data-nosnippet>653</a>    t.log().clear();
-<a href=#654 id=654 data-nosnippet>654</a>
-<a href=#655 id=655 data-nosnippet>655</a>    <span class="kw">let </span>tx = db.transaction_builder().read_only(<span class="bool-val">true</span>).begin().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#656 id=656 data-nosnippet>656</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#648 id=648 data-nosnippet>648</a>    <span class="prelude-val">Ok</span>(())
+<a href=#649 id=649 data-nosnippet>649</a>}
+<a href=#650 id=650 data-nosnippet>650</a>
+<a href=#651 id=651 data-nosnippet>651</a><span class="doccomment">/// TransactionBuilder with read_only sends the correct option to the driver.
+<a href=#652 id=652 data-nosnippet>652</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#653 id=653 data-nosnippet>653</a></span><span class="kw">pub async fn </span>builder_with_read_only(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#654 id=654 data-nosnippet>654</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#655 id=655 data-nosnippet>655</a>
+<a href=#656 id=656 data-nosnippet>656</a>    t.log().clear();
 <a href=#657 id=657 data-nosnippet>657</a>
-<a href=#658 id=658 data-nosnippet>658</a>    <span class="macro">assert_struct!</span>(
-<a href=#659 id=659 data-nosnippet>659</a>        t.log().pop_op(),
-<a href=#660 id=660 data-nosnippet>660</a>        Operation::Transaction(Transaction::Start {
-<a href=#661 id=661 data-nosnippet>661</a>            isolation: <span class="prelude-val">None</span>,
-<a href=#662 id=662 data-nosnippet>662</a>            read_only: <span class="bool-val">true</span>,
-<a href=#663 id=663 data-nosnippet>663</a>            ..
-<a href=#664 id=664 data-nosnippet>664</a>        })
-<a href=#665 id=665 data-nosnippet>665</a>    );
-<a href=#666 id=666 data-nosnippet>666</a>
-<a href=#667 id=667 data-nosnippet>667</a>    <span class="prelude-val">Ok</span>(())
-<a href=#668 id=668 data-nosnippet>668</a>}
+<a href=#658 id=658 data-nosnippet>658</a>    <span class="kw">let </span>tx = db.transaction_builder().read_only(<span class="bool-val">true</span>).begin().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#659 id=659 data-nosnippet>659</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#660 id=660 data-nosnippet>660</a>
+<a href=#661 id=661 data-nosnippet>661</a>    <span class="macro">assert_struct!</span>(
+<a href=#662 id=662 data-nosnippet>662</a>        t.log().pop_op(),
+<a href=#663 id=663 data-nosnippet>663</a>        Operation::Transaction(Transaction::Start {
+<a href=#664 id=664 data-nosnippet>664</a>            isolation: <span class="prelude-val">None</span>,
+<a href=#665 id=665 data-nosnippet>665</a>            read_only: <span class="bool-val">true</span>,
+<a href=#666 id=666 data-nosnippet>666</a>            ..
+<a href=#667 id=667 data-nosnippet>667</a>        })
+<a href=#668 id=668 data-nosnippet>668</a>    );
 <a href=#669 id=669 data-nosnippet>669</a>
-<a href=#670 id=670 data-nosnippet>670</a><span class="doccomment">/// TransactionBuilder with both isolation and read_only sends both options.
-<a href=#671 id=671 data-nosnippet>671</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
-<a href=#672 id=672 data-nosnippet>672</a></span><span class="kw">pub async fn </span>builder_with_all_options(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#673 id=673 data-nosnippet>673</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#674 id=674 data-nosnippet>674</a>
-<a href=#675 id=675 data-nosnippet>675</a>    t.log().clear();
-<a href=#676 id=676 data-nosnippet>676</a>
-<a href=#677 id=677 data-nosnippet>677</a>    <span class="kw">let </span>tx = db
-<a href=#678 id=678 data-nosnippet>678</a>        .transaction_builder()
-<a href=#679 id=679 data-nosnippet>679</a>        .isolation(IsolationLevel::Serializable)
-<a href=#680 id=680 data-nosnippet>680</a>        .read_only(<span class="bool-val">true</span>)
-<a href=#681 id=681 data-nosnippet>681</a>        .begin()
-<a href=#682 id=682 data-nosnippet>682</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#683 id=683 data-nosnippet>683</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#684 id=684 data-nosnippet>684</a>
-<a href=#685 id=685 data-nosnippet>685</a>    <span class="macro">assert_struct!</span>(
-<a href=#686 id=686 data-nosnippet>686</a>        t.log().pop_op(),
-<a href=#687 id=687 data-nosnippet>687</a>        Operation::Transaction(Transaction::Start {
-<a href=#688 id=688 data-nosnippet>688</a>            isolation: <span class="prelude-val">Some</span>(IsolationLevel::Serializable),
-<a href=#689 id=689 data-nosnippet>689</a>            read_only: <span class="bool-val">true</span>,
-<a href=#690 id=690 data-nosnippet>690</a>            ..
-<a href=#691 id=691 data-nosnippet>691</a>        })
-<a href=#692 id=692 data-nosnippet>692</a>    );
-<a href=#693 id=693 data-nosnippet>693</a>
-<a href=#694 id=694 data-nosnippet>694</a>    <span class="prelude-val">Ok</span>(())
-<a href=#695 id=695 data-nosnippet>695</a>}
+<a href=#670 id=670 data-nosnippet>670</a>    <span class="prelude-val">Ok</span>(())
+<a href=#671 id=671 data-nosnippet>671</a>}
+<a href=#672 id=672 data-nosnippet>672</a>
+<a href=#673 id=673 data-nosnippet>673</a><span class="doccomment">/// TransactionBuilder with both isolation and read_only sends both options.
+<a href=#674 id=674 data-nosnippet>674</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#675 id=675 data-nosnippet>675</a></span><span class="kw">pub async fn </span>builder_with_all_options(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#676 id=676 data-nosnippet>676</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#677 id=677 data-nosnippet>677</a>
+<a href=#678 id=678 data-nosnippet>678</a>    t.log().clear();
+<a href=#679 id=679 data-nosnippet>679</a>
+<a href=#680 id=680 data-nosnippet>680</a>    <span class="kw">let </span>tx = db
+<a href=#681 id=681 data-nosnippet>681</a>        .transaction_builder()
+<a href=#682 id=682 data-nosnippet>682</a>        .isolation(IsolationLevel::Serializable)
+<a href=#683 id=683 data-nosnippet>683</a>        .read_only(<span class="bool-val">true</span>)
+<a href=#684 id=684 data-nosnippet>684</a>        .begin()
+<a href=#685 id=685 data-nosnippet>685</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#686 id=686 data-nosnippet>686</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#687 id=687 data-nosnippet>687</a>
+<a href=#688 id=688 data-nosnippet>688</a>    <span class="macro">assert_struct!</span>(
+<a href=#689 id=689 data-nosnippet>689</a>        t.log().pop_op(),
+<a href=#690 id=690 data-nosnippet>690</a>        Operation::Transaction(Transaction::Start {
+<a href=#691 id=691 data-nosnippet>691</a>            isolation: <span class="prelude-val">Some</span>(IsolationLevel::Serializable),
+<a href=#692 id=692 data-nosnippet>692</a>            read_only: <span class="bool-val">true</span>,
+<a href=#693 id=693 data-nosnippet>693</a>            ..
+<a href=#694 id=694 data-nosnippet>694</a>        })
+<a href=#695 id=695 data-nosnippet>695</a>    );
 <a href=#696 id=696 data-nosnippet>696</a>
-<a href=#697 id=697 data-nosnippet>697</a><span class="doccomment">/// TransactionBuilder auto-rolls back on drop just like a regular transaction.
-<a href=#698 id=698 data-nosnippet>698</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
-<a href=#699 id=699 data-nosnippet>699</a></span><span class="kw">pub async fn </span>builder_drop_rolls_back(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#700 id=700 data-nosnippet>700</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#701 id=701 data-nosnippet>701</a>
-<a href=#702 id=702 data-nosnippet>702</a>    {
-<a href=#703 id=703 data-nosnippet>703</a>        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.transaction_builder().begin().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#704 id=704 data-nosnippet>704</a>        User::create().name(<span class="string">"Ghost"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#705 id=705 data-nosnippet>705</a>    }
-<a href=#706 id=706 data-nosnippet>706</a>
-<a href=#707 id=707 data-nosnippet>707</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#708 id=708 data-nosnippet>708</a>    <span class="macro">assert!</span>(users.is_empty());
+<a href=#697 id=697 data-nosnippet>697</a>    <span class="prelude-val">Ok</span>(())
+<a href=#698 id=698 data-nosnippet>698</a>}
+<a href=#699 id=699 data-nosnippet>699</a>
+<a href=#700 id=700 data-nosnippet>700</a><span class="doccomment">/// TransactionBuilder auto-rolls back on drop just like a regular transaction.
+<a href=#701 id=701 data-nosnippet>701</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#702 id=702 data-nosnippet>702</a></span><span class="kw">pub async fn </span>builder_drop_rolls_back(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#703 id=703 data-nosnippet>703</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#704 id=704 data-nosnippet>704</a>
+<a href=#705 id=705 data-nosnippet>705</a>    {
+<a href=#706 id=706 data-nosnippet>706</a>        <span class="kw">let </span><span class="kw-2">mut </span>tx = db.transaction_builder().begin().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#707 id=707 data-nosnippet>707</a>        User::create().name(<span class="string">"Ghost"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#708 id=708 data-nosnippet>708</a>    }
 <a href=#709 id=709 data-nosnippet>709</a>
-<a href=#710 id=710 data-nosnippet>710</a>    <span class="prelude-val">Ok</span>(())
-<a href=#711 id=711 data-nosnippet>711</a>}
+<a href=#710 id=710 data-nosnippet>710</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#711 id=711 data-nosnippet>711</a>    <span class="macro">assert!</span>(users.is_empty());
 <a href=#712 id=712 data-nosnippet>712</a>
-<a href=#713 id=713 data-nosnippet>713</a><span class="doccomment">/// Calling `.transaction()` through `&amp;mut dyn Executor` works.
-<a href=#714 id=714 data-nosnippet>714</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
-<a href=#715 id=715 data-nosnippet>715</a></span><span class="kw">pub async fn </span>transaction_via_dyn_executor(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#716 id=716 data-nosnippet>716</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#717 id=717 data-nosnippet>717</a>
-<a href=#718 id=718 data-nosnippet>718</a>    <span class="kw">let </span>executor: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>toasty::Executor = <span class="kw-2">&amp;mut </span>db;
-<a href=#719 id=719 data-nosnippet>719</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = executor.transaction().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#720 id=720 data-nosnippet>720</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#721 id=721 data-nosnippet>721</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#722 id=722 data-nosnippet>722</a>
-<a href=#723 id=723 data-nosnippet>723</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#724 id=724 data-nosnippet>724</a>    <span class="macro">assert_eq!</span>(users.len(), <span class="number">1</span>);
-<a href=#725 id=725 data-nosnippet>725</a>    <span class="macro">assert_eq!</span>(users[<span class="number">0</span>].name, <span class="string">"Alice"</span>);
-<a href=#726 id=726 data-nosnippet>726</a>
-<a href=#727 id=727 data-nosnippet>727</a>    <span class="prelude-val">Ok</span>(())
-<a href=#728 id=728 data-nosnippet>728</a>}
+<a href=#713 id=713 data-nosnippet>713</a>    <span class="prelude-val">Ok</span>(())
+<a href=#714 id=714 data-nosnippet>714</a>}
+<a href=#715 id=715 data-nosnippet>715</a>
+<a href=#716 id=716 data-nosnippet>716</a><span class="doccomment">/// Calling `.transaction()` through `&amp;mut dyn Executor` works.
+<a href=#717 id=717 data-nosnippet>717</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#718 id=718 data-nosnippet>718</a></span><span class="kw">pub async fn </span>transaction_via_dyn_executor(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#719 id=719 data-nosnippet>719</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#720 id=720 data-nosnippet>720</a>
+<a href=#721 id=721 data-nosnippet>721</a>    <span class="kw">let </span>executor: <span class="kw-2">&amp;mut </span><span class="kw">dyn </span>toasty::Executor = <span class="kw-2">&amp;mut </span>db;
+<a href=#722 id=722 data-nosnippet>722</a>    <span class="kw">let </span><span class="kw-2">mut </span>tx = executor.transaction().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#723 id=723 data-nosnippet>723</a>    User::create().name(<span class="string">"Alice"</span>).exec(<span class="kw-2">&amp;mut </span>tx).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#724 id=724 data-nosnippet>724</a>    tx.commit().<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#725 id=725 data-nosnippet>725</a>
+<a href=#726 id=726 data-nosnippet>726</a>    <span class="kw">let </span>users = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#727 id=727 data-nosnippet>727</a>    <span class="macro">assert_eq!</span>(users.len(), <span class="number">1</span>);
+<a href=#728 id=728 data-nosnippet>728</a>    <span class="macro">assert_eq!</span>(users[<span class="number">0</span>].name, <span class="string">"Alice"</span>);
+<a href=#729 id=729 data-nosnippet>729</a>
+<a href=#730 id=730 data-nosnippet>730</a>    <span class="prelude-val">Ok</span>(())
+<a href=#731 id=731 data-nosnippet>731</a>}
 </code></pre></div></section></main></body></html>

@@ -1,12 +1,12 @@
 <!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/toasty-driver-integration-suite/src/tests/relation_belongs_to_configured.rs`."><title>relation_belongs_to_configured.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-17e0aaed.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="toasty_driver_integration_suite" data-themes="" data-resource-suffix="" data-rustdoc-version="1.97.1 (8bab26f4f 2026-07-14)" data-channel="1.97.1" data-search-js="search-fd9372ac.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-fcd733ba.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">toasty_driver_integration_suite/tests/</div>relation_belongs_to_configured.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#2 id=2 data-nosnippet>2</a>
-<a href=#3 id=3 data-nosnippet>3</a><span class="attr">#[driver_test(id(ID))]
+<a href=#3 id=3 data-nosnippet>3</a><span class="attr">#[driver_test]
 <a href=#4 id=4 data-nosnippet>4</a></span><span class="kw">pub async fn </span>different_field_name(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#5 id=5 data-nosnippet>5</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#6 id=6 data-nosnippet>6</a>    </span><span class="kw">struct </span>User {
 <a href=#7 id=7 data-nosnippet>7</a>        <span class="attr">#[key]
 <a href=#8 id=8 data-nosnippet>8</a>        #[auto]
-<a href=#9 id=9 data-nosnippet>9</a>        </span>id: ID,
+<a href=#9 id=9 data-nosnippet>9</a>        </span>id: uuid::Uuid,
 <a href=#10 id=10 data-nosnippet>10</a>
 <a href=#11 id=11 data-nosnippet>11</a>        <span class="attr">#[has_many(pair = owner)]
 <a href=#12 id=12 data-nosnippet>12</a>        </span>todos: toasty::Deferred&lt;Vec&lt;Todo&gt;&gt;,
@@ -16,13 +16,13 @@
 <a href=#16 id=16 data-nosnippet>16</a>    </span><span class="kw">struct </span>Todo {
 <a href=#17 id=17 data-nosnippet>17</a>        <span class="attr">#[key]
 <a href=#18 id=18 data-nosnippet>18</a>        #[auto]
-<a href=#19 id=19 data-nosnippet>19</a>        </span>id: ID,
+<a href=#19 id=19 data-nosnippet>19</a>        </span>id: uuid::Uuid,
 <a href=#20 id=20 data-nosnippet>20</a>
 <a href=#21 id=21 data-nosnippet>21</a>        <span class="attr">#[belongs_to(key = owner_id, references = id)]
 <a href=#22 id=22 data-nosnippet>22</a>        </span>owner: toasty::Deferred&lt;User&gt;,
 <a href=#23 id=23 data-nosnippet>23</a>
 <a href=#24 id=24 data-nosnippet>24</a>        <span class="attr">#[index]
-<a href=#25 id=25 data-nosnippet>25</a>        </span>owner_id: ID,
+<a href=#25 id=25 data-nosnippet>25</a>        </span>owner_id: uuid::Uuid,
 <a href=#26 id=26 data-nosnippet>26</a>
 <a href=#27 id=27 data-nosnippet>27</a>        title: String,
 <a href=#28 id=28 data-nosnippet>28</a>    }
@@ -53,13 +53,13 @@
 <a href=#53 id=53 data-nosnippet>53</a>// `#[has_one(pair = &lt;field&gt;)]` was accepted but ignored, so the generated
 <a href=#54 id=54 data-nosnippet>54</a>// back-reference check still looked for a `BelongsTo` field named after the
 <a href=#55 id=55 data-nosnippet>55</a>// parent model instead of the configured pair.
-<a href=#56 id=56 data-nosnippet>56</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#56 id=56 data-nosnippet>56</a></span><span class="attr">#[driver_test]
 <a href=#57 id=57 data-nosnippet>57</a></span><span class="kw">pub async fn </span>has_one_different_field_name(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#58 id=58 data-nosnippet>58</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#59 id=59 data-nosnippet>59</a>    </span><span class="kw">struct </span>Parent {
 <a href=#60 id=60 data-nosnippet>60</a>        <span class="attr">#[key]
 <a href=#61 id=61 data-nosnippet>61</a>        #[auto]
-<a href=#62 id=62 data-nosnippet>62</a>        </span>id: ID,
+<a href=#62 id=62 data-nosnippet>62</a>        </span>id: uuid::Uuid,
 <a href=#63 id=63 data-nosnippet>63</a>
 <a href=#64 id=64 data-nosnippet>64</a>        <span class="attr">#[has_one(pair = owner)]
 <a href=#65 id=65 data-nosnippet>65</a>        </span>other: toasty::Deferred&lt;Child&gt;,
@@ -69,13 +69,13 @@
 <a href=#69 id=69 data-nosnippet>69</a>    </span><span class="kw">struct </span>Child {
 <a href=#70 id=70 data-nosnippet>70</a>        <span class="attr">#[key]
 <a href=#71 id=71 data-nosnippet>71</a>        #[auto]
-<a href=#72 id=72 data-nosnippet>72</a>        </span>id: ID,
+<a href=#72 id=72 data-nosnippet>72</a>        </span>id: uuid::Uuid,
 <a href=#73 id=73 data-nosnippet>73</a>
 <a href=#74 id=74 data-nosnippet>74</a>        <span class="attr">#[belongs_to(key = owner_id, references = id)]
 <a href=#75 id=75 data-nosnippet>75</a>        </span>owner: toasty::Deferred&lt;Parent&gt;,
 <a href=#76 id=76 data-nosnippet>76</a>
 <a href=#77 id=77 data-nosnippet>77</a>        <span class="attr">#[unique]
-<a href=#78 id=78 data-nosnippet>78</a>        </span>owner_id: ID,
+<a href=#78 id=78 data-nosnippet>78</a>        </span>owner_id: uuid::Uuid,
 <a href=#79 id=79 data-nosnippet>79</a>    }
 <a href=#80 id=80 data-nosnippet>80</a>
 <a href=#81 id=81 data-nosnippet>81</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(Parent, Child)).<span class="kw">await</span>;

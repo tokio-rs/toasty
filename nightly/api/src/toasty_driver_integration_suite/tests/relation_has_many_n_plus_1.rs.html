@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>hashbrown::HashSet;
 <a href=#5 id=5 data-nosnippet>5</a>
-<a href=#6 id=6 data-nosnippet>6</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
+<a href=#6 id=6 data-nosnippet>6</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
 <a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub async fn </span>hello_world(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#8 id=8 data-nosnippet>8</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#9 id=9 data-nosnippet>9</a>
@@ -25,7 +25,7 @@
 <a href=#25 id=25 data-nosnippet>25</a>    <span class="prelude-val">Ok</span>(())
 <a href=#26 id=26 data-nosnippet>26</a>}
 <a href=#27 id=27 data-nosnippet>27</a>
-<a href=#28 id=28 data-nosnippet>28</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
+<a href=#28 id=28 data-nosnippet>28</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid))]
 <a href=#29 id=29 data-nosnippet>29</a></span><span class="kw">pub async fn </span>query_by_index_optimization(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#31 id=31 data-nosnippet>31</a>

@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// When a batch of two creates fails on the second INSERT (unique constraint
 <a href=#6 id=6 data-nosnippet>6</a>/// violation), the entire batch is rolled back — the first INSERT must not
 <a href=#7 id=7 data-nosnippet>7</a>/// persist.
-<a href=#8 id=8 data-nosnippet>8</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
+<a href=#8 id=8 data-nosnippet>8</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
 <a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">pub async fn </span>batch_two_creates_rolls_back_on_second_failure(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#10 id=10 data-nosnippet>10</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#11 id=11 data-nosnippet>11</a>
@@ -51,7 +51,7 @@
 <a href=#51 id=51 data-nosnippet>51</a>
 <a href=#52 id=52 data-nosnippet>52</a><span class="doccomment">/// When a batch of a create + update fails on the update (unique constraint),
 <a href=#53 id=53 data-nosnippet>53</a>/// the successful create is rolled back.
-<a href=#54 id=54 data-nosnippet>54</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
+<a href=#54 id=54 data-nosnippet>54</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
 <a href=#55 id=55 data-nosnippet>55</a></span><span class="kw">pub async fn </span>batch_create_and_update_rolls_back_on_update_failure(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#56 id=56 data-nosnippet>56</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#57 id=57 data-nosnippet>57</a>
@@ -104,7 +104,7 @@
 <a href=#104 id=104 data-nosnippet>104</a>
 <a href=#105 id=105 data-nosnippet>105</a><span class="doccomment">/// When a batch of an update + create fails on the create (unique constraint),
 <a href=#106 id=106 data-nosnippet>106</a>/// the successful update is rolled back.
-<a href=#107 id=107 data-nosnippet>107</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
+<a href=#107 id=107 data-nosnippet>107</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
 <a href=#108 id=108 data-nosnippet>108</a></span><span class="kw">pub async fn </span>batch_update_and_create_rolls_back_on_create_failure(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#109 id=109 data-nosnippet>109</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#110 id=110 data-nosnippet>110</a>
@@ -162,7 +162,7 @@
 <a href=#162 id=162 data-nosnippet>162</a>
 <a href=#163 id=163 data-nosnippet>163</a><span class="doccomment">/// When a batch of array creates fails on one element (unique constraint),
 <a href=#164 id=164 data-nosnippet>164</a>/// all prior successful creates are rolled back.
-<a href=#165 id=165 data-nosnippet>165</a></span><span class="attr">#[driver_test(id(ID), requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
+<a href=#165 id=165 data-nosnippet>165</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
 <a href=#166 id=166 data-nosnippet>166</a></span><span class="kw">pub async fn </span>batch_array_creates_rolls_back_on_failure(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#167 id=167 data-nosnippet>167</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#168 id=168 data-nosnippet>168</a>
@@ -210,51 +210,47 @@
 <a href=#210 id=210 data-nosnippet>210</a>
 <a href=#211 id=211 data-nosnippet>211</a><span class="doccomment">/// When a batch of different models fails on the second create, the first
 <a href=#212 id=212 data-nosnippet>212</a>/// model's create is rolled back too.
-<a href=#213 id=213 data-nosnippet>213</a></span><span class="attr">#[driver_test(
-<a href=#214 id=214 data-nosnippet>214</a>    id(ID),
-<a href=#215 id=215 data-nosnippet>215</a>    requires(sql),
-<a href=#216 id=216 data-nosnippet>216</a>    scenario(<span class="kw">crate</span>::scenarios::two_models_unique_title)
-<a href=#217 id=217 data-nosnippet>217</a>)]
-<a href=#218 id=218 data-nosnippet>218</a></span><span class="kw">pub async fn </span>batch_different_models_rolls_back_on_failure(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#219 id=219 data-nosnippet>219</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
-<a href=#220 id=220 data-nosnippet>220</a>
-<a href=#221 id=221 data-nosnippet>221</a>    <span class="comment">// Seed the collision
-<a href=#222 id=222 data-nosnippet>222</a>    </span>Post::create().title(<span class="string">"taken"</span>).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#223 id=223 data-nosnippet>223</a>
-<a href=#224 id=224 data-nosnippet>224</a>    t.log().clear();
-<a href=#225 id=225 data-nosnippet>225</a>    <span class="macro">assert_err!</span>(
-<a href=#226 id=226 data-nosnippet>226</a>        toasty::batch((
-<a href=#227 id=227 data-nosnippet>227</a>            User::create().name(<span class="string">"alice"</span>),
-<a href=#228 id=228 data-nosnippet>228</a>            Post::create().title(<span class="string">"taken"</span>), <span class="comment">// fails: unique
-<a href=#229 id=229 data-nosnippet>229</a>        </span>))
-<a href=#230 id=230 data-nosnippet>230</a>        .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#231 id=231 data-nosnippet>231</a>        .<span class="kw">await
-<a href=#232 id=232 data-nosnippet>232</a>    </span>);
-<a href=#233 id=233 data-nosnippet>233</a>
-<a href=#234 id=234 data-nosnippet>234</a>    <span class="comment">// BEGIN → INSERT user (succeeds) → INSERT post (fails) → ROLLBACK
-<a href=#235 id=235 data-nosnippet>235</a>    </span><span class="macro">assert_struct!</span>(
-<a href=#236 id=236 data-nosnippet>236</a>        t.log().pop_op(),
-<a href=#237 id=237 data-nosnippet>237</a>        Operation::Transaction(Transaction::Start {
-<a href=#238 id=238 data-nosnippet>238</a>            isolation: <span class="prelude-val">None</span>,
-<a href=#239 id=239 data-nosnippet>239</a>            read_only: <span class="bool-val">false</span>,
-<a href=#240 id=240 data-nosnippet>240</a>            ..
-<a href=#241 id=241 data-nosnippet>241</a>        })
-<a href=#242 id=242 data-nosnippet>242</a>    );
-<a href=#243 id=243 data-nosnippet>243</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT user
-<a href=#244 id=244 data-nosnippet>244</a>    </span><span class="macro">assert_struct!</span>(
-<a href=#245 id=245 data-nosnippet>245</a>        t.log().pop_op(),
-<a href=#246 id=246 data-nosnippet>246</a>        Operation::Transaction(Transaction::Rollback)
-<a href=#247 id=247 data-nosnippet>247</a>    );
-<a href=#248 id=248 data-nosnippet>248</a>    <span class="macro">assert!</span>(t.log().is_empty());
+<a href=#213 id=213 data-nosnippet>213</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::two_models_unique_title))]
+<a href=#214 id=214 data-nosnippet>214</a></span><span class="kw">pub async fn </span>batch_different_models_rolls_back_on_failure(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#215 id=215 data-nosnippet>215</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
+<a href=#216 id=216 data-nosnippet>216</a>
+<a href=#217 id=217 data-nosnippet>217</a>    <span class="comment">// Seed the collision
+<a href=#218 id=218 data-nosnippet>218</a>    </span>Post::create().title(<span class="string">"taken"</span>).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#219 id=219 data-nosnippet>219</a>
+<a href=#220 id=220 data-nosnippet>220</a>    t.log().clear();
+<a href=#221 id=221 data-nosnippet>221</a>    <span class="macro">assert_err!</span>(
+<a href=#222 id=222 data-nosnippet>222</a>        toasty::batch((
+<a href=#223 id=223 data-nosnippet>223</a>            User::create().name(<span class="string">"alice"</span>),
+<a href=#224 id=224 data-nosnippet>224</a>            Post::create().title(<span class="string">"taken"</span>), <span class="comment">// fails: unique
+<a href=#225 id=225 data-nosnippet>225</a>        </span>))
+<a href=#226 id=226 data-nosnippet>226</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#227 id=227 data-nosnippet>227</a>        .<span class="kw">await
+<a href=#228 id=228 data-nosnippet>228</a>    </span>);
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="comment">// BEGIN → INSERT user (succeeds) → INSERT post (fails) → ROLLBACK
+<a href=#231 id=231 data-nosnippet>231</a>    </span><span class="macro">assert_struct!</span>(
+<a href=#232 id=232 data-nosnippet>232</a>        t.log().pop_op(),
+<a href=#233 id=233 data-nosnippet>233</a>        Operation::Transaction(Transaction::Start {
+<a href=#234 id=234 data-nosnippet>234</a>            isolation: <span class="prelude-val">None</span>,
+<a href=#235 id=235 data-nosnippet>235</a>            read_only: <span class="bool-val">false</span>,
+<a href=#236 id=236 data-nosnippet>236</a>            ..
+<a href=#237 id=237 data-nosnippet>237</a>        })
+<a href=#238 id=238 data-nosnippet>238</a>    );
+<a href=#239 id=239 data-nosnippet>239</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT user
+<a href=#240 id=240 data-nosnippet>240</a>    </span><span class="macro">assert_struct!</span>(
+<a href=#241 id=241 data-nosnippet>241</a>        t.log().pop_op(),
+<a href=#242 id=242 data-nosnippet>242</a>        Operation::Transaction(Transaction::Rollback)
+<a href=#243 id=243 data-nosnippet>243</a>    );
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="macro">assert!</span>(t.log().is_empty());
+<a href=#245 id=245 data-nosnippet>245</a>
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="comment">// No user was persisted
+<a href=#247 id=247 data-nosnippet>247</a>    </span><span class="kw">let </span>users: Vec&lt;User&gt; = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#248 id=248 data-nosnippet>248</a>    <span class="macro">assert!</span>(users.is_empty());
 <a href=#249 id=249 data-nosnippet>249</a>
-<a href=#250 id=250 data-nosnippet>250</a>    <span class="comment">// No user was persisted
-<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="kw">let </span>users: Vec&lt;User&gt; = User::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#252 id=252 data-nosnippet>252</a>    <span class="macro">assert!</span>(users.is_empty());
+<a href=#250 id=250 data-nosnippet>250</a>    <span class="comment">// Only the seeded post remains
+<a href=#251 id=251 data-nosnippet>251</a>    </span><span class="kw">let </span>posts: Vec&lt;Post&gt; = Post::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#252 id=252 data-nosnippet>252</a>    <span class="macro">assert_eq!</span>(<span class="number">1</span>, posts.len());
 <a href=#253 id=253 data-nosnippet>253</a>
-<a href=#254 id=254 data-nosnippet>254</a>    <span class="comment">// Only the seeded post remains
-<a href=#255 id=255 data-nosnippet>255</a>    </span><span class="kw">let </span>posts: Vec&lt;Post&gt; = Post::all().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#256 id=256 data-nosnippet>256</a>    <span class="macro">assert_eq!</span>(<span class="number">1</span>, posts.len());
-<a href=#257 id=257 data-nosnippet>257</a>
-<a href=#258 id=258 data-nosnippet>258</a>    <span class="prelude-val">Ok</span>(())
-<a href=#259 id=259 data-nosnippet>259</a>}
+<a href=#254 id=254 data-nosnippet>254</a>    <span class="prelude-val">Ok</span>(())
+<a href=#255 id=255 data-nosnippet>255</a>}
 </code></pre></div></section></main></body></html>

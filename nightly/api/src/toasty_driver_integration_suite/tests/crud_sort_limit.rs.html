@@ -7,7 +7,7 @@
 <a href=#7 id=7 data-nosnippet>7</a>    stmt::{Expr, ExprSet, Limit, Statement, Value},
 <a href=#8 id=8 data-nosnippet>8</a>};
 <a href=#9 id=9 data-nosnippet>9</a>
-<a href=#10 id=10 data-nosnippet>10</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
+<a href=#10 id=10 data-nosnippet>10</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
 <a href=#11 id=11 data-nosnippet>11</a></span><span class="kw">pub async fn </span>sort_asc(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#12 id=12 data-nosnippet>12</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#13 id=13 data-nosnippet>13</a>
@@ -63,7 +63,7 @@
 <a href=#63 id=63 data-nosnippet>63</a>    <span class="prelude-val">Ok</span>(())
 <a href=#64 id=64 data-nosnippet>64</a>}
 <a href=#65 id=65 data-nosnippet>65</a>
-<a href=#66 id=66 data-nosnippet>66</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
+<a href=#66 id=66 data-nosnippet>66</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
 <a href=#67 id=67 data-nosnippet>67</a></span><span class="kw">pub async fn </span>paginate(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#68 id=68 data-nosnippet>68</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#69 id=69 data-nosnippet>69</a>
@@ -129,7 +129,7 @@
 <a href=#129 id=129 data-nosnippet>129</a>    <span class="prelude-val">Ok</span>(())
 <a href=#130 id=130 data-nosnippet>130</a>}
 <a href=#131 id=131 data-nosnippet>131</a>
-<a href=#132 id=132 data-nosnippet>132</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
+<a href=#132 id=132 data-nosnippet>132</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
 <a href=#133 id=133 data-nosnippet>133</a></span><span class="kw">pub async fn </span>limit_offset(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#134 id=134 data-nosnippet>134</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#135 id=135 data-nosnippet>135</a>
@@ -202,7 +202,7 @@
 <a href=#202 id=202 data-nosnippet>202</a>    <span class="prelude-val">Ok</span>(())
 <a href=#203 id=203 data-nosnippet>203</a>}
 <a href=#204 id=204 data-nosnippet>204</a>
-<a href=#205 id=205 data-nosnippet>205</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
+<a href=#205 id=205 data-nosnippet>205</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
 <a href=#206 id=206 data-nosnippet>206</a></span><span class="kw">pub async fn </span>first_narrows_to_single_row(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#207 id=207 data-nosnippet>207</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#208 id=208 data-nosnippet>208</a>
@@ -246,7 +246,7 @@
 <a href=#246 id=246 data-nosnippet>246</a>    <span class="prelude-val">Ok</span>(())
 <a href=#247 id=247 data-nosnippet>247</a>}
 <a href=#248 id=248 data-nosnippet>248</a>
-<a href=#249 id=249 data-nosnippet>249</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
+<a href=#249 id=249 data-nosnippet>249</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
 <a href=#250 id=250 data-nosnippet>250</a></span><span class="kw">pub async fn </span>order_by_multiple_columns_composes(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#252 id=252 data-nosnippet>252</a>
@@ -274,7 +274,7 @@
 <a href=#274 id=274 data-nosnippet>274</a>    <span class="prelude-val">Ok</span>(())
 <a href=#275 id=275 data-nosnippet>275</a>}
 <a href=#276 id=276 data-nosnippet>276</a>
-<a href=#277 id=277 data-nosnippet>277</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
+<a href=#277 id=277 data-nosnippet>277</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
 <a href=#278 id=278 data-nosnippet>278</a></span><span class="kw">pub async fn </span>set_order_by_overwrites(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#279 id=279 data-nosnippet>279</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#280 id=280 data-nosnippet>280</a>
@@ -300,7 +300,7 @@
 <a href=#300 id=300 data-nosnippet>300</a>    <span class="prelude-val">Ok</span>(())
 <a href=#301 id=301 data-nosnippet>301</a>}
 <a href=#302 id=302 data-nosnippet>302</a>
-<a href=#303 id=303 data-nosnippet>303</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
+<a href=#303 id=303 data-nosnippet>303</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_age), requires(sql))]
 <a href=#304 id=304 data-nosnippet>304</a></span><span class="kw">pub async fn </span>order_by_tuple(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#305 id=305 data-nosnippet>305</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#306 id=306 data-nosnippet>306</a>

@@ -14,7 +14,7 @@
 <a href=#14 id=14 data-nosnippet>14</a>
 <a href=#15 id=15 data-nosnippet>15</a></span><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#16 id=16 data-nosnippet>16</a>
-<a href=#17 id=17 data-nosnippet>17</a><span class="attr">#[driver_test(id(ID), requires(not(sql)), scenario(<span class="kw">crate</span>::scenarios::user_with_age))]
+<a href=#17 id=17 data-nosnippet>17</a><span class="attr">#[driver_test(requires(not(sql)), scenario(<span class="kw">crate</span>::scenarios::user_with_age))]
 <a href=#18 id=18 data-nosnippet>18</a></span><span class="kw">pub async fn </span>update_via_secondary_index_uses_primary_key_type(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#20 id=20 data-nosnippet>20</a>

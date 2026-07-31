@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["paginate_for_dynamodb"],"mod":["first_narrows_to_single_row","limit_offset","order_by_multiple_columns_composes","order_by_tuple","paginate","set_order_by_overwrites","sort_asc"]};
+window.SIDEBAR_ITEMS = {"fn":["first_narrows_to_single_row","limit_offset","order_by_multiple_columns_composes","order_by_tuple","paginate","paginate_for_dynamodb","set_order_by_overwrites","sort_asc"]};

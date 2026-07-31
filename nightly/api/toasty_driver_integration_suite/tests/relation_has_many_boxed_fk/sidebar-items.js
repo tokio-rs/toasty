@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["arc_u64_fk_crud","boxed_u64_fk_batch_create","boxed_u64_fk_crud","boxed_u64_fk_delete_and_update","rc_u64_fk_crud"]};
+window.SIDEBAR_ITEMS = {"fn":["arc_u64_fk_crud","boxed_u64_fk_crud","rc_u64_fk_crud"]};

@@ -79,7 +79,7 @@
 <a href=#79 id=79 data-nosnippet>79</a>    <span class="prelude-val">Ok</span>(())
 <a href=#80 id=80 data-nosnippet>80</a>}
 <a href=#81 id=81 data-nosnippet>81</a>
-<a href=#82 id=82 data-nosnippet>82</a><span class="attr">#[driver_test(id(ID))]
+<a href=#82 id=82 data-nosnippet>82</a><span class="attr">#[driver_test]
 <a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">pub async fn </span>ty_zoned(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">use </span>jiff::Zoned;
 <a href=#85 id=85 data-nosnippet>85</a>
@@ -88,7 +88,7 @@
 <a href=#88 id=88 data-nosnippet>88</a>    </span><span class="kw">struct </span>Item {
 <a href=#89 id=89 data-nosnippet>89</a>        <span class="attr">#[key]
 <a href=#90 id=90 data-nosnippet>90</a>        #[auto]
-<a href=#91 id=91 data-nosnippet>91</a>        </span>id: ID,
+<a href=#91 id=91 data-nosnippet>91</a>        </span>id: uuid::Uuid,
 <a href=#92 id=92 data-nosnippet>92</a>        val: Zoned,
 <a href=#93 id=93 data-nosnippet>93</a>    }
 <a href=#94 id=94 data-nosnippet>94</a>
@@ -110,7 +110,7 @@
 <a href=#110 id=110 data-nosnippet>110</a>    <span class="prelude-val">Ok</span>(())
 <a href=#111 id=111 data-nosnippet>111</a>}
 <a href=#112 id=112 data-nosnippet>112</a>
-<a href=#113 id=113 data-nosnippet>113</a><span class="attr">#[driver_test(id(ID))]
+<a href=#113 id=113 data-nosnippet>113</a><span class="attr">#[driver_test]
 <a href=#114 id=114 data-nosnippet>114</a></span><span class="kw">pub async fn </span>ty_date(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#115 id=115 data-nosnippet>115</a>    <span class="kw">use </span>jiff::civil::Date;
 <a href=#116 id=116 data-nosnippet>116</a>
@@ -119,7 +119,7 @@
 <a href=#119 id=119 data-nosnippet>119</a>    </span><span class="kw">struct </span>Item {
 <a href=#120 id=120 data-nosnippet>120</a>        <span class="attr">#[key]
 <a href=#121 id=121 data-nosnippet>121</a>        #[auto]
-<a href=#122 id=122 data-nosnippet>122</a>        </span>id: ID,
+<a href=#122 id=122 data-nosnippet>122</a>        </span>id: uuid::Uuid,
 <a href=#123 id=123 data-nosnippet>123</a>        val: Date,
 <a href=#124 id=124 data-nosnippet>124</a>    }
 <a href=#125 id=125 data-nosnippet>125</a>
@@ -144,7 +144,7 @@
 <a href=#144 id=144 data-nosnippet>144</a>    <span class="prelude-val">Ok</span>(())
 <a href=#145 id=145 data-nosnippet>145</a>}
 <a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a><span class="attr">#[driver_test(id(ID))]
+<a href=#147 id=147 data-nosnippet>147</a><span class="attr">#[driver_test]
 <a href=#148 id=148 data-nosnippet>148</a></span><span class="kw">pub async fn </span>ty_time(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">use </span>jiff::civil::Time;
 <a href=#150 id=150 data-nosnippet>150</a>
@@ -153,7 +153,7 @@
 <a href=#153 id=153 data-nosnippet>153</a>    </span><span class="kw">struct </span>Item {
 <a href=#154 id=154 data-nosnippet>154</a>        <span class="attr">#[key]
 <a href=#155 id=155 data-nosnippet>155</a>        #[auto]
-<a href=#156 id=156 data-nosnippet>156</a>        </span>id: ID,
+<a href=#156 id=156 data-nosnippet>156</a>        </span>id: uuid::Uuid,
 <a href=#157 id=157 data-nosnippet>157</a>        val: Time,
 <a href=#158 id=158 data-nosnippet>158</a>    }
 <a href=#159 id=159 data-nosnippet>159</a>
@@ -176,7 +176,7 @@
 <a href=#176 id=176 data-nosnippet>176</a>    <span class="prelude-val">Ok</span>(())
 <a href=#177 id=177 data-nosnippet>177</a>}
 <a href=#178 id=178 data-nosnippet>178</a>
-<a href=#179 id=179 data-nosnippet>179</a><span class="attr">#[driver_test(id(ID))]
+<a href=#179 id=179 data-nosnippet>179</a><span class="attr">#[driver_test]
 <a href=#180 id=180 data-nosnippet>180</a></span><span class="kw">pub async fn </span>ty_datetime(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#181 id=181 data-nosnippet>181</a>    <span class="kw">use </span>jiff::civil::DateTime;
 <a href=#182 id=182 data-nosnippet>182</a>
@@ -185,7 +185,7 @@
 <a href=#185 id=185 data-nosnippet>185</a>    </span><span class="kw">struct </span>Item {
 <a href=#186 id=186 data-nosnippet>186</a>        <span class="attr">#[key]
 <a href=#187 id=187 data-nosnippet>187</a>        #[auto]
-<a href=#188 id=188 data-nosnippet>188</a>        </span>id: ID,
+<a href=#188 id=188 data-nosnippet>188</a>        </span>id: uuid::Uuid,
 <a href=#189 id=189 data-nosnippet>189</a>        val: DateTime,
 <a href=#190 id=190 data-nosnippet>190</a>    }
 <a href=#191 id=191 data-nosnippet>191</a>
@@ -210,7 +210,7 @@
 <a href=#210 id=210 data-nosnippet>210</a>    <span class="prelude-val">Ok</span>(())
 <a href=#211 id=211 data-nosnippet>211</a>}
 <a href=#212 id=212 data-nosnippet>212</a>
-<a href=#213 id=213 data-nosnippet>213</a><span class="attr">#[driver_test(id(ID), requires(native_timestamp))]
+<a href=#213 id=213 data-nosnippet>213</a><span class="attr">#[driver_test(requires(native_timestamp))]
 <a href=#214 id=214 data-nosnippet>214</a></span><span class="kw">pub async fn </span>ty_timestamp_precision_2(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#215 id=215 data-nosnippet>215</a>    <span class="kw">use </span>jiff::Timestamp;
 <a href=#216 id=216 data-nosnippet>216</a>
@@ -219,7 +219,7 @@
 <a href=#219 id=219 data-nosnippet>219</a>    </span><span class="kw">struct </span>Item {
 <a href=#220 id=220 data-nosnippet>220</a>        <span class="attr">#[key]
 <a href=#221 id=221 data-nosnippet>221</a>        #[auto]
-<a href=#222 id=222 data-nosnippet>222</a>        </span>id: ID,
+<a href=#222 id=222 data-nosnippet>222</a>        </span>id: uuid::Uuid,
 <a href=#223 id=223 data-nosnippet>223</a>        <span class="attr">#[column(<span class="kw">type </span>= timestamp(<span class="number">2</span>))]
 <a href=#224 id=224 data-nosnippet>224</a>        </span>val: Timestamp,
 <a href=#225 id=225 data-nosnippet>225</a>    }
@@ -246,7 +246,7 @@
 <a href=#246 id=246 data-nosnippet>246</a>    <span class="prelude-val">Ok</span>(())
 <a href=#247 id=247 data-nosnippet>247</a>}
 <a href=#248 id=248 data-nosnippet>248</a>
-<a href=#249 id=249 data-nosnippet>249</a><span class="attr">#[driver_test(id(ID), requires(native_time))]
+<a href=#249 id=249 data-nosnippet>249</a><span class="attr">#[driver_test(requires(native_time))]
 <a href=#250 id=250 data-nosnippet>250</a></span><span class="kw">pub async fn </span>ty_time_precision_2(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">use </span>jiff::civil::Time;
 <a href=#252 id=252 data-nosnippet>252</a>
@@ -255,7 +255,7 @@
 <a href=#255 id=255 data-nosnippet>255</a>    </span><span class="kw">struct </span>Item {
 <a href=#256 id=256 data-nosnippet>256</a>        <span class="attr">#[key]
 <a href=#257 id=257 data-nosnippet>257</a>        #[auto]
-<a href=#258 id=258 data-nosnippet>258</a>        </span>id: ID,
+<a href=#258 id=258 data-nosnippet>258</a>        </span>id: uuid::Uuid,
 <a href=#259 id=259 data-nosnippet>259</a>        <span class="attr">#[column(<span class="kw">type </span>= time(<span class="number">2</span>))]
 <a href=#260 id=260 data-nosnippet>260</a>        </span>val: Time,
 <a href=#261 id=261 data-nosnippet>261</a>    }
@@ -280,7 +280,7 @@
 <a href=#280 id=280 data-nosnippet>280</a>    <span class="prelude-val">Ok</span>(())
 <a href=#281 id=281 data-nosnippet>281</a>}
 <a href=#282 id=282 data-nosnippet>282</a>
-<a href=#283 id=283 data-nosnippet>283</a><span class="attr">#[driver_test(id(ID), requires(native_datetime))]
+<a href=#283 id=283 data-nosnippet>283</a><span class="attr">#[driver_test(requires(native_datetime))]
 <a href=#284 id=284 data-nosnippet>284</a></span><span class="kw">pub async fn </span>ty_datetime_precision_2(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#285 id=285 data-nosnippet>285</a>    <span class="kw">use </span>jiff::civil::DateTime;
 <a href=#286 id=286 data-nosnippet>286</a>
@@ -289,7 +289,7 @@
 <a href=#289 id=289 data-nosnippet>289</a>    </span><span class="kw">struct </span>Item {
 <a href=#290 id=290 data-nosnippet>290</a>        <span class="attr">#[key]
 <a href=#291 id=291 data-nosnippet>291</a>        #[auto]
-<a href=#292 id=292 data-nosnippet>292</a>        </span>id: ID,
+<a href=#292 id=292 data-nosnippet>292</a>        </span>id: uuid::Uuid,
 <a href=#293 id=293 data-nosnippet>293</a>        <span class="attr">#[column(<span class="kw">type </span>= datetime(<span class="number">2</span>))]
 <a href=#294 id=294 data-nosnippet>294</a>        </span>val: DateTime,
 <a href=#295 id=295 data-nosnippet>295</a>    }
@@ -371,7 +371,7 @@
 <a href=#371 id=371 data-nosnippet>371</a>    <span class="prelude-val">Ok</span>(())
 <a href=#372 id=372 data-nosnippet>372</a>}
 <a href=#373 id=373 data-nosnippet>373</a>
-<a href=#374 id=374 data-nosnippet>374</a><span class="attr">#[driver_test(id(ID))]
+<a href=#374 id=374 data-nosnippet>374</a><span class="attr">#[driver_test]
 <a href=#375 id=375 data-nosnippet>375</a></span><span class="kw">pub async fn </span>ty_date_as_text(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#376 id=376 data-nosnippet>376</a>    <span class="kw">use </span>jiff::civil::Date;
 <a href=#377 id=377 data-nosnippet>377</a>
@@ -380,7 +380,7 @@
 <a href=#380 id=380 data-nosnippet>380</a>    </span><span class="kw">struct </span>Item {
 <a href=#381 id=381 data-nosnippet>381</a>        <span class="attr">#[key]
 <a href=#382 id=382 data-nosnippet>382</a>        #[auto]
-<a href=#383 id=383 data-nosnippet>383</a>        </span>id: ID,
+<a href=#383 id=383 data-nosnippet>383</a>        </span>id: uuid::Uuid,
 <a href=#384 id=384 data-nosnippet>384</a>        <span class="attr">#[column(<span class="kw">type </span>= text)]
 <a href=#385 id=385 data-nosnippet>385</a>        </span>val: Date,
 <a href=#386 id=386 data-nosnippet>386</a>    }
@@ -401,7 +401,7 @@
 <a href=#401 id=401 data-nosnippet>401</a>    <span class="prelude-val">Ok</span>(())
 <a href=#402 id=402 data-nosnippet>402</a>}
 <a href=#403 id=403 data-nosnippet>403</a>
-<a href=#404 id=404 data-nosnippet>404</a><span class="attr">#[driver_test(id(ID))]
+<a href=#404 id=404 data-nosnippet>404</a><span class="attr">#[driver_test]
 <a href=#405 id=405 data-nosnippet>405</a></span><span class="kw">pub async fn </span>ty_time_as_text(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#406 id=406 data-nosnippet>406</a>    <span class="kw">use </span>jiff::civil::Time;
 <a href=#407 id=407 data-nosnippet>407</a>
@@ -410,7 +410,7 @@
 <a href=#410 id=410 data-nosnippet>410</a>    </span><span class="kw">struct </span>Item {
 <a href=#411 id=411 data-nosnippet>411</a>        <span class="attr">#[key]
 <a href=#412 id=412 data-nosnippet>412</a>        #[auto]
-<a href=#413 id=413 data-nosnippet>413</a>        </span>id: ID,
+<a href=#413 id=413 data-nosnippet>413</a>        </span>id: uuid::Uuid,
 <a href=#414 id=414 data-nosnippet>414</a>        <span class="attr">#[column(<span class="kw">type </span>= text)]
 <a href=#415 id=415 data-nosnippet>415</a>        </span>val: Time,
 <a href=#416 id=416 data-nosnippet>416</a>    }
@@ -432,7 +432,7 @@
 <a href=#432 id=432 data-nosnippet>432</a>    <span class="prelude-val">Ok</span>(())
 <a href=#433 id=433 data-nosnippet>433</a>}
 <a href=#434 id=434 data-nosnippet>434</a>
-<a href=#435 id=435 data-nosnippet>435</a><span class="attr">#[driver_test(id(ID))]
+<a href=#435 id=435 data-nosnippet>435</a><span class="attr">#[driver_test]
 <a href=#436 id=436 data-nosnippet>436</a></span><span class="kw">pub async fn </span>ty_datetime_as_text(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#437 id=437 data-nosnippet>437</a>    <span class="kw">use </span>jiff::civil::DateTime;
 <a href=#438 id=438 data-nosnippet>438</a>
@@ -441,7 +441,7 @@
 <a href=#441 id=441 data-nosnippet>441</a>    </span><span class="kw">struct </span>Item {
 <a href=#442 id=442 data-nosnippet>442</a>        <span class="attr">#[key]
 <a href=#443 id=443 data-nosnippet>443</a>        #[auto]
-<a href=#444 id=444 data-nosnippet>444</a>        </span>id: ID,
+<a href=#444 id=444 data-nosnippet>444</a>        </span>id: uuid::Uuid,
 <a href=#445 id=445 data-nosnippet>445</a>        <span class="attr">#[column(<span class="kw">type </span>= text)]
 <a href=#446 id=446 data-nosnippet>446</a>        </span>val: DateTime,
 <a href=#447 id=447 data-nosnippet>447</a>    }
@@ -462,7 +462,7 @@
 <a href=#462 id=462 data-nosnippet>462</a>    <span class="prelude-val">Ok</span>(())
 <a href=#463 id=463 data-nosnippet>463</a>}
 <a href=#464 id=464 data-nosnippet>464</a>
-<a href=#465 id=465 data-nosnippet>465</a><span class="attr">#[driver_test(id(ID), requires(sql))]
+<a href=#465 id=465 data-nosnippet>465</a><span class="attr">#[driver_test(requires(sql))]
 <a href=#466 id=466 data-nosnippet>466</a></span><span class="kw">pub async fn </span>order_by_timestamp(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#467 id=467 data-nosnippet>467</a>    <span class="kw">use </span>jiff::Timestamp;
 <a href=#468 id=468 data-nosnippet>468</a>
@@ -471,7 +471,7 @@
 <a href=#471 id=471 data-nosnippet>471</a>    </span><span class="kw">struct </span>Item {
 <a href=#472 id=472 data-nosnippet>472</a>        <span class="attr">#[key]
 <a href=#473 id=473 data-nosnippet>473</a>        #[auto]
-<a href=#474 id=474 data-nosnippet>474</a>        </span>id: ID,
+<a href=#474 id=474 data-nosnippet>474</a>        </span>id: uuid::Uuid,
 <a href=#475 id=475 data-nosnippet>475</a>
 <a href=#476 id=476 data-nosnippet>476</a>        <span class="attr">#[column(<span class="kw">type </span>= text)]
 <a href=#477 id=477 data-nosnippet>477</a>        </span>val: Timestamp,
@@ -510,7 +510,7 @@
 <a href=#510 id=510 data-nosnippet>510</a>    <span class="prelude-val">Ok</span>(())
 <a href=#511 id=511 data-nosnippet>511</a>}
 <a href=#512 id=512 data-nosnippet>512</a>
-<a href=#513 id=513 data-nosnippet>513</a><span class="attr">#[driver_test(id(ID), requires(sql))]
+<a href=#513 id=513 data-nosnippet>513</a><span class="attr">#[driver_test(requires(sql))]
 <a href=#514 id=514 data-nosnippet>514</a></span><span class="kw">pub async fn </span>latest_by_timestamp(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#515 id=515 data-nosnippet>515</a>    <span class="kw">use </span>jiff::Timestamp;
 <a href=#516 id=516 data-nosnippet>516</a>
@@ -519,7 +519,7 @@
 <a href=#519 id=519 data-nosnippet>519</a>    </span><span class="kw">struct </span>Item {
 <a href=#520 id=520 data-nosnippet>520</a>        <span class="attr">#[key]
 <a href=#521 id=521 data-nosnippet>521</a>        #[auto]
-<a href=#522 id=522 data-nosnippet>522</a>        </span>id: ID,
+<a href=#522 id=522 data-nosnippet>522</a>        </span>id: uuid::Uuid,
 <a href=#523 id=523 data-nosnippet>523</a>
 <a href=#524 id=524 data-nosnippet>524</a>        <span class="attr">#[column(<span class="kw">type </span>= text)]
 <a href=#525 id=525 data-nosnippet>525</a>        </span>val: Timestamp,
@@ -546,7 +546,7 @@
 <a href=#546 id=546 data-nosnippet>546</a>    <span class="prelude-val">Ok</span>(())
 <a href=#547 id=547 data-nosnippet>547</a>}
 <a href=#548 id=548 data-nosnippet>548</a>
-<a href=#549 id=549 data-nosnippet>549</a><span class="attr">#[driver_test(id(ID))]
+<a href=#549 id=549 data-nosnippet>549</a><span class="attr">#[driver_test]
 <a href=#550 id=550 data-nosnippet>550</a></span><span class="kw">pub async fn </span>filter_by_timestamp(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#551 id=551 data-nosnippet>551</a>    <span class="kw">use </span>jiff::Timestamp;
 <a href=#552 id=552 data-nosnippet>552</a>
@@ -555,7 +555,7 @@
 <a href=#555 id=555 data-nosnippet>555</a>    </span><span class="kw">struct </span>Event {
 <a href=#556 id=556 data-nosnippet>556</a>        <span class="attr">#[key]
 <a href=#557 id=557 data-nosnippet>557</a>        #[auto]
-<a href=#558 id=558 data-nosnippet>558</a>        </span>id: ID,
+<a href=#558 id=558 data-nosnippet>558</a>        </span>id: uuid::Uuid,
 <a href=#559 id=559 data-nosnippet>559</a>        <span class="attr">#[index]
 <a href=#560 id=560 data-nosnippet>560</a>        </span>at: Timestamp,
 <a href=#561 id=561 data-nosnippet>561</a>        name: String,

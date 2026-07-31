@@ -10,7 +10,7 @@
 <a href=#10 id=10 data-nosnippet>10</a><span class="doccomment">/// Happy path: HasMany → BelongsTo chain returns the distinct set of
 <a href=#11 id=11 data-nosnippet>11</a>/// categories the user's todos belong to, with no duplicates even when the
 <a href=#12 id=12 data-nosnippet>12</a>/// user has multiple todos in the same category.
-<a href=#13 id=13 data-nosnippet>13</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
+<a href=#13 id=13 data-nosnippet>13</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
 <a href=#14 id=14 data-nosnippet>14</a></span><span class="kw">pub async fn </span>user_todos_category(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#15 id=15 data-nosnippet>15</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#16 id=16 data-nosnippet>16</a>
@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>}
 <a href=#53 id=53 data-nosnippet>53</a>
 <a href=#54 id=54 data-nosnippet>54</a><span class="doccomment">/// Empty source: a user with no todos produces an empty chain result.
-<a href=#55 id=55 data-nosnippet>55</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
+<a href=#55 id=55 data-nosnippet>55</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
 <a href=#56 id=56 data-nosnippet>56</a></span><span class="kw">pub async fn </span>chain_from_empty_source_is_empty(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#58 id=58 data-nosnippet>58</a>
@@ -81,7 +81,7 @@
 <a href=#81 id=81 data-nosnippet>81</a>
 <a href=#82 id=82 data-nosnippet>82</a><span class="doccomment">/// Many todos sharing a single category yield exactly one category row in the
 <a href=#83 id=83 data-nosnippet>83</a>/// chain result — IN dedupes against the outermost relation.
-<a href=#84 id=84 data-nosnippet>84</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
+<a href=#84 id=84 data-nosnippet>84</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
 <a href=#85 id=85 data-nosnippet>85</a></span><span class="kw">pub async fn </span>chain_dedupes_when_todos_share_category(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#86 id=86 data-nosnippet>86</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#87 id=87 data-nosnippet>87</a>
@@ -111,7 +111,7 @@
 <a href=#111 id=111 data-nosnippet>111</a>
 <a href=#112 id=112 data-nosnippet>112</a><span class="doccomment">/// The chain respects the starting source: each user's chain returns only the
 <a href=#113 id=113 data-nosnippet>113</a>/// categories their own todos belong to, even when the data sets overlap.
-<a href=#114 id=114 data-nosnippet>114</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
+<a href=#114 id=114 data-nosnippet>114</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
 <a href=#115 id=115 data-nosnippet>115</a></span><span class="kw">pub async fn </span>chain_scopes_per_starting_user(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#116 id=116 data-nosnippet>116</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#117 id=117 data-nosnippet>117</a>
@@ -153,7 +153,7 @@
 <a href=#153 id=153 data-nosnippet>153</a>
 <a href=#154 id=154 data-nosnippet>154</a><span class="doccomment">/// `Many::filter(expr)` after a chain applies a filter to the final
 <a href=#155 id=155 data-nosnippet>155</a>/// relation. The result is the chain's category set narrowed by the filter.
-<a href=#156 id=156 data-nosnippet>156</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
+<a href=#156 id=156 data-nosnippet>156</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
 <a href=#157 id=157 data-nosnippet>157</a></span><span class="kw">pub async fn </span>chain_then_filter(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#158 id=158 data-nosnippet>158</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#159 id=159 data-nosnippet>159</a>
@@ -187,7 +187,7 @@
 <a href=#187 id=187 data-nosnippet>187</a>
 <a href=#188 id=188 data-nosnippet>188</a><span class="doccomment">/// Two HasMany hops in succession (`Author → posts → comments`). The lowering
 <a href=#189 id=189 data-nosnippet>189</a>/// unfolds into nested IN-subqueries on each `BelongsTo` pair.
-<a href=#190 id=190 data-nosnippet>190</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_post_comment))]
+<a href=#190 id=190 data-nosnippet>190</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_post_comment))]
 <a href=#191 id=191 data-nosnippet>191</a></span><span class="kw">pub async fn </span>has_many_through_has_many(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#192 id=192 data-nosnippet>192</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#193 id=193 data-nosnippet>193</a>

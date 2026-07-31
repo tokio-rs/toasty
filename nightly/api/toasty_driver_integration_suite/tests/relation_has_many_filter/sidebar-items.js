@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["filter_parent_all_children_match","filter_parent_by_child_field","filter_parent_no_matching_children"]};
+window.SIDEBAR_ITEMS = {"fn":["filter_parent_all_children_match","filter_parent_by_child_field","filter_parent_no_matching_children"]};

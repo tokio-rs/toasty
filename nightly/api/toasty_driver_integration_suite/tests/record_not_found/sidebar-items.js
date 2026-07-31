@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["not_found"]};
+window.SIDEBAR_ITEMS = {"fn":["not_found"]};

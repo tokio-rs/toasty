@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["crud_user_optional_profile_one_direction"]};
+window.SIDEBAR_ITEMS = {"fn":["crud_user_optional_profile_one_direction"]};

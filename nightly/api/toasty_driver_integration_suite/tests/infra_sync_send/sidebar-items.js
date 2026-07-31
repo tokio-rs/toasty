@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["ensure_types_sync_send"]};
+window.SIDEBAR_ITEMS = {"fn":["ensure_types_sync_send"]};

@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a>
 <a href=#3 id=3 data-nosnippet>3</a><span class="doccomment">/// Filtering a `HasMany` include loads only matching children. Parents
 <a href=#4 id=4 data-nosnippet>4</a>/// with no matching children are returned with an empty preloaded `Vec`.
-<a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid))]
 <a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">pub async fn </span>preload_has_many_with_filter(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#7 id=7 data-nosnippet>7</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#8 id=8 data-nosnippet>8</a>
@@ -36,7 +36,7 @@
 <a href=#36 id=36 data-nosnippet>36</a><span class="doccomment">/// An include filter is independent of a parent-side `.any(...)`. The
 <a href=#37 id=37 data-nosnippet>37</a>/// parent filter selects which users come back; the include filter
 <a href=#38 id=38 data-nosnippet>38</a>/// selects which todos travel with each user.
-<a href=#39 id=39 data-nosnippet>39</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
+<a href=#39 id=39 data-nosnippet>39</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid))]
 <a href=#40 id=40 data-nosnippet>40</a></span><span class="kw">pub async fn </span>preload_has_many_filter_independent_of_parent_any(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#42 id=42 data-nosnippet>42</a>
@@ -73,7 +73,7 @@
 <a href=#73 id=73 data-nosnippet>73</a>}
 <a href=#74 id=74 data-nosnippet>74</a>
 <a href=#75 id=75 data-nosnippet>75</a><span class="doccomment">/// Repeated includes of the same relation OR their filters.
-<a href=#76 id=76 data-nosnippet>76</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
+<a href=#76 id=76 data-nosnippet>76</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid))]
 <a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">pub async fn </span>preload_has_many_repeated_filters_ored(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#78 id=78 data-nosnippet>78</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#79 id=79 data-nosnippet>79</a>
@@ -108,7 +108,7 @@
 <a href=#108 id=108 data-nosnippet>108</a>
 <a href=#109 id=109 data-nosnippet>109</a><span class="doccomment">/// Filtering a `HasOne` include: when the predicate excludes the row,
 <a href=#110 id=110 data-nosnippet>110</a>/// the relation loads as `None`; when it matches, as `Some`.
-<a href=#111 id=111 data-nosnippet>111</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_one_optional_belongs_to))]
+<a href=#111 id=111 data-nosnippet>111</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_one_optional_belongs_to::id_uuid))]
 <a href=#112 id=112 data-nosnippet>112</a></span><span class="kw">pub async fn </span>preload_has_one_with_filter(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#113 id=113 data-nosnippet>113</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#114 id=114 data-nosnippet>114</a>
@@ -145,7 +145,7 @@
 <a href=#145 id=145 data-nosnippet>145</a><span class="doccomment">/// Filtering a `BelongsTo` include: the predicate is evaluated against the
 <a href=#146 id=146 data-nosnippet>146</a>/// parent row. When it excludes the parent the relation loads as `None`;
 <a href=#147 id=147 data-nosnippet>147</a>/// when it matches, as `Some`.
-<a href=#148 id=148 data-nosnippet>148</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_one_optional_belongs_to))]
+<a href=#148 id=148 data-nosnippet>148</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_one_optional_belongs_to::id_uuid))]
 <a href=#149 id=149 data-nosnippet>149</a></span><span class="kw">pub async fn </span>preload_belongs_to_with_filter(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#150 id=150 data-nosnippet>150</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#151 id=151 data-nosnippet>151</a>
@@ -183,7 +183,7 @@
 <a href=#183 id=183 data-nosnippet>183</a>
 <a href=#184 id=184 data-nosnippet>184</a><span class="doccomment">/// A filter on a nested include applies to the innermost relation only. The
 <a href=#185 id=185 data-nosnippet>185</a>/// intermediate relation still loads in full; only its children are filtered.
-<a href=#186 id=186 data-nosnippet>186</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_post_comment))]
+<a href=#186 id=186 data-nosnippet>186</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_post_comment))]
 <a href=#187 id=187 data-nosnippet>187</a></span><span class="kw">pub async fn </span>preload_nested_relation_with_filter(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#188 id=188 data-nosnippet>188</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#189 id=189 data-nosnippet>189</a>
@@ -215,7 +215,7 @@
 <a href=#215 id=215 data-nosnippet>215</a>}
 <a href=#216 id=216 data-nosnippet>216</a>
 <a href=#217 id=217 data-nosnippet>217</a><span class="doccomment">/// A bare include dominates a filtered include of the same relation.
-<a href=#218 id=218 data-nosnippet>218</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
+<a href=#218 id=218 data-nosnippet>218</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid))]
 <a href=#219 id=219 data-nosnippet>219</a></span><span class="kw">pub async fn </span>preload_has_many_bare_and_filtered_loads_all(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#220 id=220 data-nosnippet>220</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#221 id=221 data-nosnippet>221</a>
@@ -246,7 +246,7 @@
 <a href=#246 id=246 data-nosnippet>246</a>}
 <a href=#247 id=247 data-nosnippet>247</a>
 <a href=#248 id=248 data-nosnippet>248</a><span class="doccomment">/// Nested filters apply at their own relation level.
-<a href=#249 id=249 data-nosnippet>249</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_post_comment))]
+<a href=#249 id=249 data-nosnippet>249</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_post_comment))]
 <a href=#250 id=250 data-nosnippet>250</a></span><span class="kw">pub async fn </span>preload_nested_relation_filters_at_both_levels(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#251 id=251 data-nosnippet>251</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#252 id=252 data-nosnippet>252</a>
@@ -393,7 +393,7 @@
 <a href=#393 id=393 data-nosnippet>393</a>}
 <a href=#394 id=394 data-nosnippet>394</a>
 <a href=#395 id=395 data-nosnippet>395</a><span class="doccomment">/// Filtering a required `BelongsTo` relation is rejected.
-<a href=#396 id=396 data-nosnippet>396</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
+<a href=#396 id=396 data-nosnippet>396</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid))]
 <a href=#397 id=397 data-nosnippet>397</a></span><span class="kw">pub async fn </span>preload_required_belongs_to_filter_rejected(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#398 id=398 data-nosnippet>398</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#399 id=399 data-nosnippet>399</a>

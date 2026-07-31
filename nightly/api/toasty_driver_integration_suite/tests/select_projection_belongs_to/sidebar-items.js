@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["select_belongs_to_basic","select_belongs_to_first","select_belongs_to_with_filter"]};
+window.SIDEBAR_ITEMS = {"fn":["select_belongs_to"]};

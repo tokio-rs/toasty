@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#4 id=4 data-nosnippet>4</a>
 <a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// Clone a filtered query and apply different modifiers to each copy.
-<a href=#6 id=6 data-nosnippet>6</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::two_models), requires(scan))]
+<a href=#6 id=6 data-nosnippet>6</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::two_models), requires(scan))]
 <a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub async fn </span>clone_query_with_different_modifiers(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#8 id=8 data-nosnippet>8</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#9 id=9 data-nosnippet>9</a>
@@ -23,7 +23,7 @@
 <a href=#23 id=23 data-nosnippet>23</a>}
 <a href=#24 id=24 data-nosnippet>24</a>
 <a href=#25 id=25 data-nosnippet>25</a><span class="doccomment">/// Clone a create builder, then override a field on the second copy.
-<a href=#26 id=26 data-nosnippet>26</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#26 id=26 data-nosnippet>26</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#27 id=27 data-nosnippet>27</a></span><span class="kw">pub async fn </span>clone_create_builder(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#29 id=29 data-nosnippet>29</a>
@@ -38,7 +38,7 @@
 <a href=#38 id=38 data-nosnippet>38</a>}
 <a href=#39 id=39 data-nosnippet>39</a>
 <a href=#40 id=40 data-nosnippet>40</a><span class="doccomment">/// Clone a query-based update builder, then change the value on the second copy.
-<a href=#41 id=41 data-nosnippet>41</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::two_models), requires(scan))]
+<a href=#41 id=41 data-nosnippet>41</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::two_models), requires(scan))]
 <a href=#42 id=42 data-nosnippet>42</a></span><span class="kw">pub async fn </span>clone_update_builder(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#44 id=44 data-nosnippet>44</a>

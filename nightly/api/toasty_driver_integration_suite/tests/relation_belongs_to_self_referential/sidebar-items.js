@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["crud_person_self_referential"]};
+window.SIDEBAR_ITEMS = {"fn":["crud_person_self_referential"]};

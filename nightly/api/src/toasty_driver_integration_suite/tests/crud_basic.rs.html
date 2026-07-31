@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a>    stmt::{Assignment, Expr, Source, Statement, UpdateTarget},
 <a href=#6 id=6 data-nosnippet>6</a>};
 <a href=#7 id=7 data-nosnippet>7</a>
-<a href=#8 id=8 data-nosnippet>8</a><span class="attr">#[driver_test(id(ID))]
+<a href=#8 id=8 data-nosnippet>8</a><span class="attr">#[driver_test]
 <a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">pub async fn </span>crud_no_fields(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#10 id=10 data-nosnippet>10</a>    <span class="kw">const </span>MORE: i32 = <span class="number">10</span>;
 <a href=#11 id=11 data-nosnippet>11</a>
@@ -13,7 +13,7 @@
 <a href=#13 id=13 data-nosnippet>13</a>    </span><span class="kw">struct </span>Item {
 <a href=#14 id=14 data-nosnippet>14</a>        <span class="attr">#[key]
 <a href=#15 id=15 data-nosnippet>15</a>        #[auto]
-<a href=#16 id=16 data-nosnippet>16</a>        </span>id: ID,
+<a href=#16 id=16 data-nosnippet>16</a>        </span>id: uuid::Uuid,
 <a href=#17 id=17 data-nosnippet>17</a>    }
 <a href=#18 id=18 data-nosnippet>18</a>
 <a href=#19 id=19 data-nosnippet>19</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await</span>;
@@ -73,13 +73,13 @@
 <a href=#73 id=73 data-nosnippet>73</a>    <span class="prelude-val">Ok</span>(())
 <a href=#74 id=74 data-nosnippet>74</a>}
 <a href=#75 id=75 data-nosnippet>75</a>
-<a href=#76 id=76 data-nosnippet>76</a><span class="attr">#[driver_test(id(ID))]
+<a href=#76 id=76 data-nosnippet>76</a><span class="attr">#[driver_test]
 <a href=#77 id=77 data-nosnippet>77</a></span><span class="kw">pub async fn </span>crud_one_string(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#78 id=78 data-nosnippet>78</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#79 id=79 data-nosnippet>79</a>    </span><span class="kw">struct </span>Item {
 <a href=#80 id=80 data-nosnippet>80</a>        <span class="attr">#[key]
 <a href=#81 id=81 data-nosnippet>81</a>        #[auto]
-<a href=#82 id=82 data-nosnippet>82</a>        </span>id: ID,
+<a href=#82 id=82 data-nosnippet>82</a>        </span>id: uuid::Uuid,
 <a href=#83 id=83 data-nosnippet>83</a>
 <a href=#84 id=84 data-nosnippet>84</a>        val: String,
 <a href=#85 id=85 data-nosnippet>85</a>    }
@@ -197,7 +197,7 @@
 <a href=#197 id=197 data-nosnippet>197</a>    <span class="prelude-val">Ok</span>(())
 <a href=#198 id=198 data-nosnippet>198</a>}
 <a href=#199 id=199 data-nosnippet>199</a>
-<a href=#200 id=200 data-nosnippet>200</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#200 id=200 data-nosnippet>200</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#201 id=201 data-nosnippet>201</a></span><span class="kw">pub async fn </span>required_field_create_without_setting(test: <span class="kw-2">&amp;mut </span>Test) {
 <a href=#202 id=202 data-nosnippet>202</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#203 id=203 data-nosnippet>203</a>
@@ -205,7 +205,7 @@
 <a href=#205 id=205 data-nosnippet>205</a>    </span><span class="macro">assert_err!</span>(User::create().exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span>);
 <a href=#206 id=206 data-nosnippet>206</a>}
 <a href=#207 id=207 data-nosnippet>207</a>
-<a href=#208 id=208 data-nosnippet>208</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
+<a href=#208 id=208 data-nosnippet>208</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_unique_email))]
 <a href=#209 id=209 data-nosnippet>209</a></span><span class="kw">pub async fn </span>unique_index_required_field_update(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#210 id=210 data-nosnippet>210</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#211 id=211 data-nosnippet>211</a>
@@ -310,13 +310,13 @@
 <a href=#310 id=310 data-nosnippet>310</a>    <span class="prelude-val">Ok</span>(())
 <a href=#311 id=311 data-nosnippet>311</a>}
 <a href=#312 id=312 data-nosnippet>312</a>
-<a href=#313 id=313 data-nosnippet>313</a><span class="attr">#[driver_test(id(ID))]
+<a href=#313 id=313 data-nosnippet>313</a><span class="attr">#[driver_test]
 <a href=#314 id=314 data-nosnippet>314</a></span><span class="kw">pub async fn </span>unique_index_nullable_field_update(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#315 id=315 data-nosnippet>315</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#316 id=316 data-nosnippet>316</a>    </span><span class="kw">struct </span>User {
 <a href=#317 id=317 data-nosnippet>317</a>        <span class="attr">#[key]
 <a href=#318 id=318 data-nosnippet>318</a>        #[auto]
-<a href=#319 id=319 data-nosnippet>319</a>        </span>id: ID,
+<a href=#319 id=319 data-nosnippet>319</a>        </span>id: uuid::Uuid,
 <a href=#320 id=320 data-nosnippet>320</a>
 <a href=#321 id=321 data-nosnippet>321</a>        <span class="attr">#[unique]
 <a href=#322 id=322 data-nosnippet>322</a>        </span>email: <span class="prelude-ty">Option</span>&lt;String&gt;,
@@ -392,7 +392,7 @@
 <a href=#392 id=392 data-nosnippet>392</a>    <span class="prelude-val">Ok</span>(())
 <a href=#393 id=393 data-nosnippet>393</a>}
 <a href=#394 id=394 data-nosnippet>394</a>
-<a href=#395 id=395 data-nosnippet>395</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_unique_email_with_name))]
+<a href=#395 id=395 data-nosnippet>395</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_unique_email_with_name))]
 <a href=#396 id=396 data-nosnippet>396</a></span><span class="kw">pub async fn </span>unique_index_no_update(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#397 id=397 data-nosnippet>397</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#398 id=398 data-nosnippet>398</a>
@@ -419,7 +419,7 @@
 <a href=#419 id=419 data-nosnippet>419</a>    <span class="prelude-val">Ok</span>(())
 <a href=#420 id=420 data-nosnippet>420</a>}
 <a href=#421 id=421 data-nosnippet>421</a>
-<a href=#422 id=422 data-nosnippet>422</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_unique_email_with_name))]
+<a href=#422 id=422 data-nosnippet>422</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_unique_email_with_name))]
 <a href=#423 id=423 data-nosnippet>423</a></span><span class="kw">pub async fn </span>unique_index_set_same_value(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#424 id=424 data-nosnippet>424</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#425 id=425 data-nosnippet>425</a>
@@ -453,7 +453,7 @@
 <a href=#453 id=453 data-nosnippet>453</a>    <span class="prelude-val">Ok</span>(())
 <a href=#454 id=454 data-nosnippet>454</a>}
 <a href=#455 id=455 data-nosnippet>455</a>
-<a href=#456 id=456 data-nosnippet>456</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_name_email))]
+<a href=#456 id=456 data-nosnippet>456</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_name_email))]
 <a href=#457 id=457 data-nosnippet>457</a></span><span class="kw">pub async fn </span>update_multiple_fields(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#458 id=458 data-nosnippet>458</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#459 id=459 data-nosnippet>459</a>
@@ -491,7 +491,7 @@
 <a href=#491 id=491 data-nosnippet>491</a>    <span class="prelude-val">Ok</span>(())
 <a href=#492 id=492 data-nosnippet>492</a>}
 <a href=#493 id=493 data-nosnippet>493</a>
-<a href=#494 id=494 data-nosnippet>494</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::two_models))]
+<a href=#494 id=494 data-nosnippet>494</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::two_models))]
 <a href=#495 id=495 data-nosnippet>495</a></span><span class="kw">pub async fn </span>update_and_delete_snippets(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#496 id=496 data-nosnippet>496</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#497 id=497 data-nosnippet>497</a>

@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a></span><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">use </span>hashbrown::HashSet;
 <a href=#7 id=7 data-nosnippet>7</a>
-<a href=#8 id=8 data-nosnippet>8</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_same_target))]
+<a href=#8 id=8 data-nosnippet>8</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_same_target))]
 <a href=#9 id=9 data-nosnippet>9</a></span><span class="kw">pub async fn </span>pair_hint_disambiguates_has_many(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#10 id=10 data-nosnippet>10</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#11 id=11 data-nosnippet>11</a>
@@ -57,7 +57,7 @@
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="prelude-val">Ok</span>(())
 <a href=#58 id=58 data-nosnippet>58</a>}
 <a href=#59 id=59 data-nosnippet>59</a>
-<a href=#60 id=60 data-nosnippet>60</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_same_target))]
+<a href=#60 id=60 data-nosnippet>60</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_same_target))]
 <a href=#61 id=61 data-nosnippet>61</a></span><span class="kw">pub async fn </span>pair_hint_create_via_has_many_accessor(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#62 id=62 data-nosnippet>62</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#63 id=63 data-nosnippet>63</a>

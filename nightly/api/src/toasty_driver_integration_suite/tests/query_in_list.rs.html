@@ -20,7 +20,7 @@
 <a href=#20 id=20 data-nosnippet>20</a>    stmt,
 <a href=#21 id=21 data-nosnippet>21</a>};
 <a href=#22 id=22 data-nosnippet>22</a>
-<a href=#23 id=23 data-nosnippet>23</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
+<a href=#23 id=23 data-nosnippet>23</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
 <a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">pub async fn </span>in_list_string(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#25 id=25 data-nosnippet>25</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#26 id=26 data-nosnippet>26</a>
@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>    <span class="prelude-val">Ok</span>(())
 <a href=#53 id=53 data-nosnippet>53</a>}
 <a href=#54 id=54 data-nosnippet>54</a>
-<a href=#55 id=55 data-nosnippet>55</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
+<a href=#55 id=55 data-nosnippet>55</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
 <a href=#56 id=56 data-nosnippet>56</a></span><span class="kw">pub async fn </span>not_in_list_string(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#58 id=58 data-nosnippet>58</a>
@@ -85,7 +85,7 @@
 <a href=#85 id=85 data-nosnippet>85</a>    <span class="prelude-val">Ok</span>(())
 <a href=#86 id=86 data-nosnippet>86</a>}
 <a href=#87 id=87 data-nosnippet>87</a>
-<a href=#88 id=88 data-nosnippet>88</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
+<a href=#88 id=88 data-nosnippet>88</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
 <a href=#89 id=89 data-nosnippet>89</a></span><span class="kw">pub async fn </span>in_list_empty(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#91 id=91 data-nosnippet>91</a>
@@ -117,7 +117,7 @@
 <a href=#117 id=117 data-nosnippet>117</a>    <span class="prelude-val">Ok</span>(())
 <a href=#118 id=118 data-nosnippet>118</a>}
 <a href=#119 id=119 data-nosnippet>119</a>
-<a href=#120 id=120 data-nosnippet>120</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
+<a href=#120 id=120 data-nosnippet>120</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
 <a href=#121 id=121 data-nosnippet>121</a></span><span class="kw">pub async fn </span>in_list_i64_large(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#122 id=122 data-nosnippet>122</a>    <span class="comment">// Regression guard: with PG's gate on, the engine must bind the whole
 <a href=#123 id=123 data-nosnippet>123</a>    // list as a single `Value::List` param. With the gate off (SQLite,
@@ -152,7 +152,7 @@
 <a href=#152 id=152 data-nosnippet>152</a>    <span class="prelude-val">Ok</span>(())
 <a href=#153 id=153 data-nosnippet>153</a>}
 <a href=#154 id=154 data-nosnippet>154</a>
-<a href=#155 id=155 data-nosnippet>155</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
+<a href=#155 id=155 data-nosnippet>155</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
 <a href=#156 id=156 data-nosnippet>156</a></span><span class="kw">pub async fn </span>in_list_id(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#157 id=157 data-nosnippet>157</a>    <span class="comment">// Filter by the auto-generated id. Runs once per ID variant, so this
 <a href=#158 id=158 data-nosnippet>158</a>    // exercises the PG driver's per-element-type dispatch for both `u64`
@@ -190,7 +190,7 @@
 <a href=#190 id=190 data-nosnippet>190</a>    <span class="prelude-val">Ok</span>(())
 <a href=#191 id=191 data-nosnippet>191</a>}
 <a href=#192 id=192 data-nosnippet>192</a>
-<a href=#193 id=193 data-nosnippet>193</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
+<a href=#193 id=193 data-nosnippet>193</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item))]
 <a href=#194 id=194 data-nosnippet>194</a></span><span class="kw">pub async fn </span>in_list_with_null(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#195 id=195 data-nosnippet>195</a>    <span class="comment">// Exercises the PG driver's `Vec&lt;Option&lt;T&gt;&gt;` bind path: a `None` in the
 <a href=#196 id=196 data-nosnippet>196</a>    // list maps to a SQL NULL inside the bound array.

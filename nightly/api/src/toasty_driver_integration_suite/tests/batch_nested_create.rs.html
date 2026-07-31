@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a>
 <a href=#3 id=3 data-nosnippet>3</a><span class="doccomment">/// Use an array of create builders to create multiple nested HasMany records
 <a href=#4 id=4 data-nosnippet>4</a>/// in a single parent create statement.
-<a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to))]
+<a href=#5 id=5 data-nosnippet>5</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_belongs_to::id_uuid))]
 <a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">pub async fn </span>batch_as_nested_has_many_create(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#7 id=7 data-nosnippet>7</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#8 id=8 data-nosnippet>8</a>

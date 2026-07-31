@@ -2,7 +2,7 @@
 <a href=#2 id=2 data-nosnippet>2</a>
 <a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#4 id=4 data-nosnippet>4</a>
-<a href=#5 id=5 data-nosnippet>5</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item), requires(scan))]
+<a href=#5 id=5 data-nosnippet>5</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item), requires(scan))]
 <a href=#6 id=6 data-nosnippet>6</a></span><span class="kw">pub async fn </span>filter_option_is_none(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#7 id=7 data-nosnippet>7</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#8 id=8 data-nosnippet>8</a>
@@ -34,7 +34,7 @@
 <a href=#34 id=34 data-nosnippet>34</a>    <span class="prelude-val">Ok</span>(())
 <a href=#35 id=35 data-nosnippet>35</a>}
 <a href=#36 id=36 data-nosnippet>36</a>
-<a href=#37 id=37 data-nosnippet>37</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item), requires(scan))]
+<a href=#37 id=37 data-nosnippet>37</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item), requires(scan))]
 <a href=#38 id=38 data-nosnippet>38</a></span><span class="kw">pub async fn </span>filter_option_is_some(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#39 id=39 data-nosnippet>39</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#40 id=40 data-nosnippet>40</a>
@@ -68,7 +68,7 @@
 <a href=#68 id=68 data-nosnippet>68</a>    <span class="prelude-val">Ok</span>(())
 <a href=#69 id=69 data-nosnippet>69</a>}
 <a href=#70 id=70 data-nosnippet>70</a>
-<a href=#71 id=71 data-nosnippet>71</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::in_list_item), requires(scan))]
+<a href=#71 id=71 data-nosnippet>71</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::in_list_item), requires(scan))]
 <a href=#72 id=72 data-nosnippet>72</a></span><span class="kw">pub async fn </span>filter_option_combined_with_other_filters(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#73 id=73 data-nosnippet>73</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#74 id=74 data-nosnippet>74</a>
@@ -119,13 +119,13 @@
 <a href=#119 id=119 data-nosnippet>119</a>    <span class="prelude-val">Ok</span>(())
 <a href=#120 id=120 data-nosnippet>120</a>}
 <a href=#121 id=121 data-nosnippet>121</a>
-<a href=#122 id=122 data-nosnippet>122</a><span class="attr">#[driver_test(id(ID), requires(scan))]
+<a href=#122 id=122 data-nosnippet>122</a><span class="attr">#[driver_test(requires(scan))]
 <a href=#123 id=123 data-nosnippet>123</a></span><span class="kw">pub async fn </span>filter_option_multiple_nullable_fields(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#124 id=124 data-nosnippet>124</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#125 id=125 data-nosnippet>125</a>    </span><span class="kw">struct </span>Article {
 <a href=#126 id=126 data-nosnippet>126</a>        <span class="attr">#[key]
 <a href=#127 id=127 data-nosnippet>127</a>        #[auto]
-<a href=#128 id=128 data-nosnippet>128</a>        </span>id: ID,
+<a href=#128 id=128 data-nosnippet>128</a>        </span>id: uuid::Uuid,
 <a href=#129 id=129 data-nosnippet>129</a>
 <a href=#130 id=130 data-nosnippet>130</a>        title: String,
 <a href=#131 id=131 data-nosnippet>131</a>
@@ -288,17 +288,17 @@
 <a href=#288 id=288 data-nosnippet>288</a>/// `is_none()` on an `Option&lt;ID&gt;` field panics because the lowering phase
 <a href=#289 id=289 data-nosnippet>289</a>/// does not strip the `ExprCast` wrapper from the column expression inside
 <a href=#290 id=290 data-nosnippet>290</a>/// `IsNull`. The cast leaks into the SQL serializer which does not handle it.
-<a href=#291 id=291 data-nosnippet>291</a></span><span class="attr">#[driver_test(id(ID), requires(scan))]
+<a href=#291 id=291 data-nosnippet>291</a></span><span class="attr">#[driver_test(requires(scan))]
 <a href=#292 id=292 data-nosnippet>292</a></span><span class="kw">pub async fn </span>filter_option_id_is_none(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#293 id=293 data-nosnippet>293</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#294 id=294 data-nosnippet>294</a>    </span><span class="kw">struct </span>Player {
 <a href=#295 id=295 data-nosnippet>295</a>        <span class="attr">#[key]
 <a href=#296 id=296 data-nosnippet>296</a>        #[auto]
-<a href=#297 id=297 data-nosnippet>297</a>        </span>id: ID,
+<a href=#297 id=297 data-nosnippet>297</a>        </span>id: uuid::Uuid,
 <a href=#298 id=298 data-nosnippet>298</a>
 <a href=#299 id=299 data-nosnippet>299</a>        name: String,
 <a href=#300 id=300 data-nosnippet>300</a>
-<a href=#301 id=301 data-nosnippet>301</a>        user_id: <span class="prelude-ty">Option</span>&lt;ID&gt;,
+<a href=#301 id=301 data-nosnippet>301</a>        user_id: <span class="prelude-ty">Option</span>&lt;uuid::Uuid&gt;,
 <a href=#302 id=302 data-nosnippet>302</a>    }
 <a href=#303 id=303 data-nosnippet>303</a>
 <a href=#304 id=304 data-nosnippet>304</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(Player)).<span class="kw">await</span>;

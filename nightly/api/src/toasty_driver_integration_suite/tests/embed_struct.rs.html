@@ -137,7 +137,7 @@
 <a href=#137 id=137 data-nosnippet>137</a>
 <a href=#138 id=138 data-nosnippet>138</a><span class="doccomment">/// Tests basic CRUD operations with embedded fields across all ID types.
 <a href=#139 id=139 data-nosnippet>139</a>/// Validates create, read, update (both instance and query-based), and delete.
-<a href=#140 id=140 data-nosnippet>140</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#140 id=140 data-nosnippet>140</a></span><span class="attr">#[driver_test]
 <a href=#141 id=141 data-nosnippet>141</a></span><span class="kw">pub async fn </span>create_and_query_embedded(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#142 id=142 data-nosnippet>142</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
 <a href=#143 id=143 data-nosnippet>143</a>    </span><span class="kw">struct </span>Address {
@@ -149,7 +149,7 @@
 <a href=#149 id=149 data-nosnippet>149</a>    </span><span class="kw">struct </span>User {
 <a href=#150 id=150 data-nosnippet>150</a>        <span class="attr">#[key]
 <a href=#151 id=151 data-nosnippet>151</a>        #[auto]
-<a href=#152 id=152 data-nosnippet>152</a>        </span>id: ID,
+<a href=#152 id=152 data-nosnippet>152</a>        </span>id: uuid::Uuid,
 <a href=#153 id=153 data-nosnippet>153</a>        name: String,
 <a href=#154 id=154 data-nosnippet>154</a>        address: Address,
 <a href=#155 id=155 data-nosnippet>155</a>    }
@@ -207,7 +207,7 @@
 <a href=#207 id=207 data-nosnippet>207</a>/// - Chaining works: User::fields().address().city()
 <a href=#208 id=208 data-nosnippet>208</a>/// - Both model and embedded struct have fields() methods
 <a href=#209 id=209 data-nosnippet>209</a>/// This is purely a compile-time test validating the generated API.
-<a href=#210 id=210 data-nosnippet>210</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_zip_address::id_uuid))]
+<a href=#210 id=210 data-nosnippet>210</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_zip_address))]
 <a href=#211 id=211 data-nosnippet>211</a></span><span class="kw">pub async fn </span>embedded_struct_fields_codegen(test: <span class="kw-2">&amp;mut </span>Test) {
 <a href=#212 id=212 data-nosnippet>212</a>    <span class="kw">let </span>_db = setup(test).<span class="kw">await</span>;
 <a href=#213 id=213 data-nosnippet>213</a>
@@ -544,7 +544,7 @@
 <a href=#544 id=544 data-nosnippet>544</a><span class="doccomment">/// Tests partial updates of embedded struct fields via `stmt::patch` /
 <a href=#545 id=545 data-nosnippet>545</a>/// `stmt::apply`. This validates that individual fields within an embedded
 <a href=#546 id=546 data-nosnippet>546</a>/// struct can be updated without replacing the entire struct.
-<a href=#547 id=547 data-nosnippet>547</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_zip_address))]
+<a href=#547 id=547 data-nosnippet>547</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_zip_address))]
 <a href=#548 id=548 data-nosnippet>548</a></span><span class="kw">pub async fn </span>partial_update_embedded_fields(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#549 id=549 data-nosnippet>549</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#550 id=550 data-nosnippet>550</a>
@@ -950,7 +950,7 @@
 <a href=#950 id=950 data-nosnippet>950</a><span class="doccomment">/// Tests CRUD operations with 2-level nested embedded structs.
 <a href=#951 id=951 data-nosnippet>951</a>/// Validates that creating, reading, updating (instance and query-based),
 <a href=#952 id=952 data-nosnippet>952</a>/// and deleting records with nested embedded structs works end-to-end.
-<a href=#953 id=953 data-nosnippet>953</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::company_office_address))]
+<a href=#953 id=953 data-nosnippet>953</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::company_office_address))]
 <a href=#954 id=954 data-nosnippet>954</a></span><span class="kw">pub async fn </span>crud_nested_embedded(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#955 id=955 data-nosnippet>955</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#956 id=956 data-nosnippet>956</a>
@@ -1040,7 +1040,7 @@
 <a href=#1040 id=1040 data-nosnippet>1040</a>/// `stmt::patch` calls. Validates that patching a leaf field inside an
 <a href=#1041 id=1041 data-nosnippet>1041</a>/// outer embedded struct updates only that leaf, leaving all other fields
 <a href=#1042 id=1042 data-nosnippet>1042</a>/// unchanged in the database.
-<a href=#1043 id=1043 data-nosnippet>1043</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::company_office_address))]
+<a href=#1043 id=1043 data-nosnippet>1043</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::company_office_address))]
 <a href=#1044 id=1044 data-nosnippet>1044</a></span><span class="kw">pub async fn </span>partial_update_nested_embedded(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#1045 id=1045 data-nosnippet>1045</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#1046 id=1046 data-nosnippet>1046</a>
@@ -1122,7 +1122,7 @@
 <a href=#1122 id=1122 data-nosnippet>1122</a>/// `User::filter_by_id(id).update().address(stmt::patch(...))` follows a different
 <a href=#1123 id=1123 data-nosnippet>1123</a>/// code path than the instance-based `user.update().address(stmt::patch(...))`,
 <a href=#1124 id=1124 data-nosnippet>1124</a>/// so both need coverage.
-<a href=#1125 id=1125 data-nosnippet>1125</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::user_with_zip_address))]
+<a href=#1125 id=1125 data-nosnippet>1125</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::user_with_zip_address))]
 <a href=#1126 id=1126 data-nosnippet>1126</a></span><span class="kw">pub async fn </span>query_based_partial_update_embedded(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#1127 id=1127 data-nosnippet>1127</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(t).<span class="kw">await</span>;
 <a href=#1128 id=1128 data-nosnippet>1128</a>
@@ -1172,7 +1172,7 @@
 <a href=#1172 id=1172 data-nosnippet>1172</a>
 <a href=#1173 id=1173 data-nosnippet>1173</a><span class="doccomment">/// Tests that jiff temporal types inside embedded structs round-trip correctly.
 <a href=#1174 id=1174 data-nosnippet>1174</a>/// Covers Timestamp (epoch nanos), civil::Date, civil::Time, and civil::DateTime.
-<a href=#1175 id=1175 data-nosnippet>1175</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#1175 id=1175 data-nosnippet>1175</a></span><span class="attr">#[driver_test]
 <a href=#1176 id=1176 data-nosnippet>1176</a></span><span class="kw">pub async fn </span>embedded_struct_with_jiff_fields(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#1177 id=1177 data-nosnippet>1177</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
 <a href=#1178 id=1178 data-nosnippet>1178</a>    </span><span class="kw">struct </span>Schedule {
@@ -1186,7 +1186,7 @@
 <a href=#1186 id=1186 data-nosnippet>1186</a>    </span><span class="kw">struct </span>Event {
 <a href=#1187 id=1187 data-nosnippet>1187</a>        <span class="attr">#[key]
 <a href=#1188 id=1188 data-nosnippet>1188</a>        #[auto]
-<a href=#1189 id=1189 data-nosnippet>1189</a>        </span>id: ID,
+<a href=#1189 id=1189 data-nosnippet>1189</a>        </span>id: uuid::Uuid,
 <a href=#1190 id=1190 data-nosnippet>1190</a>        name: String,
 <a href=#1191 id=1191 data-nosnippet>1191</a>        schedule: Schedule,
 <a href=#1192 id=1192 data-nosnippet>1192</a>    }
@@ -1221,7 +1221,7 @@
 <a href=#1221 id=1221 data-nosnippet>1221</a>
 <a href=#1222 id=1222 data-nosnippet>1222</a><span class="doccomment">/// Tests a unit enum embedded as a field inside an embedded struct (enum-in-struct nesting).
 <a href=#1223 id=1223 data-nosnippet>1223</a>/// The struct flattens to columns including the enum's discriminant column.
-<a href=#1224 id=1224 data-nosnippet>1224</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#1224 id=1224 data-nosnippet>1224</a></span><span class="attr">#[driver_test]
 <a href=#1225 id=1225 data-nosnippet>1225</a></span><span class="kw">pub async fn </span>unit_enum_in_embedded_struct(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#1226 id=1226 data-nosnippet>1226</a>    <span class="attr">#[derive(Debug, PartialEq, toasty::Embed)]
 <a href=#1227 id=1227 data-nosnippet>1227</a>    </span><span class="kw">enum </span>Priority {
@@ -1243,7 +1243,7 @@
 <a href=#1243 id=1243 data-nosnippet>1243</a>    </span><span class="kw">struct </span>Task {
 <a href=#1244 id=1244 data-nosnippet>1244</a>        <span class="attr">#[key]
 <a href=#1245 id=1245 data-nosnippet>1245</a>        #[auto]
-<a href=#1246 id=1246 data-nosnippet>1246</a>        </span>id: ID,
+<a href=#1246 id=1246 data-nosnippet>1246</a>        </span>id: uuid::Uuid,
 <a href=#1247 id=1247 data-nosnippet>1247</a>        meta: Meta,
 <a href=#1248 id=1248 data-nosnippet>1248</a>    }
 <a href=#1249 id=1249 data-nosnippet>1249</a>
@@ -1279,7 +1279,7 @@
 <a href=#1279 id=1279 data-nosnippet>1279</a>/// UUID requires a type cast on databases that don't support it natively
 <a href=#1280 id=1280 data-nosnippet>1280</a>/// (e.g., SQLite stores it as text). This exercises the table_to_model
 <a href=#1281 id=1281 data-nosnippet>1281</a>/// lifting path for embedded struct fields with non-trivial type mappings.
-<a href=#1282 id=1282 data-nosnippet>1282</a></span><span class="attr">#[driver_test(id(ID))]
+<a href=#1282 id=1282 data-nosnippet>1282</a></span><span class="attr">#[driver_test]
 <a href=#1283 id=1283 data-nosnippet>1283</a></span><span class="kw">pub async fn </span>embedded_struct_with_uuid_field(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#1284 id=1284 data-nosnippet>1284</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
 <a href=#1285 id=1285 data-nosnippet>1285</a>    </span><span class="kw">struct </span>Meta {
@@ -1291,7 +1291,7 @@
 <a href=#1291 id=1291 data-nosnippet>1291</a>    </span><span class="kw">struct </span>Item {
 <a href=#1292 id=1292 data-nosnippet>1292</a>        <span class="attr">#[key]
 <a href=#1293 id=1293 data-nosnippet>1293</a>        #[auto]
-<a href=#1294 id=1294 data-nosnippet>1294</a>        </span>id: ID,
+<a href=#1294 id=1294 data-nosnippet>1294</a>        </span>id: uuid::Uuid,
 <a href=#1295 id=1295 data-nosnippet>1295</a>        name: String,
 <a href=#1296 id=1296 data-nosnippet>1296</a>        meta: Meta,
 <a href=#1297 id=1297 data-nosnippet>1297</a>    }

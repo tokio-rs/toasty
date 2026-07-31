@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["insert_on_multi_step_traversal_errors"]};
+window.SIDEBAR_ITEMS = {"fn":["insert_on_multi_step_traversal_errors"]};

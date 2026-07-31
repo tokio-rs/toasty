@@ -3,7 +3,7 @@
 <a href=#3 id=3 data-nosnippet>3</a></span><span class="kw">use </span><span class="kw">crate</span>::prelude::<span class="kw-2">*</span>;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>hashbrown::HashMap;
 <a href=#5 id=5 data-nosnippet>5</a>
-<a href=#6 id=6 data-nosnippet>6</a><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
+<a href=#6 id=6 data-nosnippet>6</a><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::has_many_multi_relation))]
 <a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub async fn </span>crud_user_todos_categories(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#8 id=8 data-nosnippet>8</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#9 id=9 data-nosnippet>9</a>
@@ -89,7 +89,7 @@
 <a href=#89 id=89 data-nosnippet>89</a>
 <a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">async fn </span>check_todo_list(
 <a href=#91 id=91 data-nosnippet>91</a>        db: <span class="kw-2">&amp;mut </span>toasty::Db,
-<a href=#92 id=92 data-nosnippet>92</a>        expect: <span class="kw-2">&amp;</span>HashMap&lt;ID, Todo&gt;,
+<a href=#92 id=92 data-nosnippet>92</a>        expect: <span class="kw-2">&amp;</span>HashMap&lt;uuid::Uuid, Todo&gt;,
 <a href=#93 id=93 data-nosnippet>93</a>        list: Vec&lt;Todo&gt;,
 <a href=#94 id=94 data-nosnippet>94</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#95 id=95 data-nosnippet>95</a>        <span class="macro">assert_eq!</span>(<span class="number">3</span>, list.len(), <span class="string">"list={list:#?}"</span>);

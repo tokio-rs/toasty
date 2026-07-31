@@ -9,7 +9,7 @@
 <a href=#9 id=9 data-nosnippet>9</a>
 <a href=#10 id=10 data-nosnippet>10</a>// Update only the last declared field, leaving earlier fields untouched.
 <a href=#11 id=11 data-nosnippet>11</a>// With offset-based IndexMap this could assign the value to field 0 instead.
-<a href=#12 id=12 data-nosnippet>12</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
+<a href=#12 id=12 data-nosnippet>12</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
 <a href=#13 id=13 data-nosnippet>13</a></span><span class="kw">pub async fn </span>update_last_field_only(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#14 id=14 data-nosnippet>14</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#15 id=15 data-nosnippet>15</a>
@@ -33,7 +33,7 @@
 <a href=#33 id=33 data-nosnippet>33</a>
 <a href=#34 id=34 data-nosnippet>34</a><span class="comment">// Update fields in reverse declaration order. If offset mapping is wrong, the
 <a href=#35 id=35 data-nosnippet>35</a>// String value ends up in the i64 column (or vice versa), causing a parse error.
-<a href=#36 id=36 data-nosnippet>36</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
+<a href=#36 id=36 data-nosnippet>36</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
 <a href=#37 id=37 data-nosnippet>37</a></span><span class="kw">pub async fn </span>update_fields_reverse_order(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#38 id=38 data-nosnippet>38</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#39 id=39 data-nosnippet>39</a>
@@ -65,7 +65,7 @@
 <a href=#65 id=65 data-nosnippet>65</a><span class="comment">// Update a single middle field among many typed fields. This is the simplest
 <a href=#66 id=66 data-nosnippet>66</a>// trigger for the original bug: a single assignment at a high offset gets
 <a href=#67 id=67 data-nosnippet>67</a>// misrouted to offset 0.
-<a href=#68 id=68 data-nosnippet>68</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
+<a href=#68 id=68 data-nosnippet>68</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
 <a href=#69 id=69 data-nosnippet>69</a></span><span class="kw">pub async fn </span>update_middle_field_mixed_types(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#70 id=70 data-nosnippet>70</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#71 id=71 data-nosnippet>71</a>
@@ -91,7 +91,7 @@
 <a href=#91 id=91 data-nosnippet>91</a>
 <a href=#92 id=92 data-nosnippet>92</a><span class="comment">// Query-based update with fields in non-declaration order. Exercises the
 <a href=#93 id=93 data-nosnippet>93</a>// filter_by path rather than the instance-update path.
-<a href=#94 id=94 data-nosnippet>94</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
+<a href=#94 id=94 data-nosnippet>94</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
 <a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">pub async fn </span>query_update_non_declaration_order(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#97 id=97 data-nosnippet>97</a>
@@ -124,7 +124,7 @@
 <a href=#124 id=124 data-nosnippet>124</a>
 <a href=#125 id=125 data-nosnippet>125</a><span class="comment">// Successive single-field updates targeting different offsets each time.
 <a href=#126 id=126 data-nosnippet>126</a>// Ensures that each individual update routes to the correct column.
-<a href=#127 id=127 data-nosnippet>127</a></span><span class="attr">#[driver_test(id(ID), scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
+<a href=#127 id=127 data-nosnippet>127</a></span><span class="attr">#[driver_test(scenario(<span class="kw">crate</span>::scenarios::widget_mixed_types))]
 <a href=#128 id=128 data-nosnippet>128</a></span><span class="kw">pub async fn </span>successive_single_field_updates(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
 <a href=#130 id=130 data-nosnippet>130</a>

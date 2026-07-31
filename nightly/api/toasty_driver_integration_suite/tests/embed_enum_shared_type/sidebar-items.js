@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["shared_enum_filter"],"mod":["shared_enum_crud"]};
+window.SIDEBAR_ITEMS = {"fn":["shared_enum_crud","shared_enum_filter"]};

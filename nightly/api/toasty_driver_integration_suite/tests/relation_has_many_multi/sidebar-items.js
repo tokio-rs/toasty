@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"mod":["crud_user_todos_categories"]};
+window.SIDEBAR_ITEMS = {"fn":["crud_user_todos_categories"]};

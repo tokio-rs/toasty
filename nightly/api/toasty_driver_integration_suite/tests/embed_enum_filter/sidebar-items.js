@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["create_and_get_data_enum","filter_data_enum","filter_data_enum_by_variant","filter_enum_variant_with_partition_key","filter_unit_enum_by_variant"]};
+window.SIDEBAR_ITEMS = {"fn":["create_and_get_data_enum","filter_data_enum_value_and_variant","filter_enum_variant_with_partition_key","filter_unit_enum"]};

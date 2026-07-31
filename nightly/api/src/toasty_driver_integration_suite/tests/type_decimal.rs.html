@@ -3,13 +3,13 @@
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>rust_decimal::Decimal;
 <a href=#4 id=4 data-nosnippet>4</a><span class="kw">use </span>std::str::FromStr;
 <a href=#5 id=5 data-nosnippet>5</a>
-<a href=#6 id=6 data-nosnippet>6</a><span class="attr">#[driver_test(id(ID))]
+<a href=#6 id=6 data-nosnippet>6</a><span class="attr">#[driver_test]
 <a href=#7 id=7 data-nosnippet>7</a></span><span class="kw">pub async fn </span>ty_decimal(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#8 id=8 data-nosnippet>8</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#9 id=9 data-nosnippet>9</a>    </span><span class="kw">struct </span>Item {
 <a href=#10 id=10 data-nosnippet>10</a>        <span class="attr">#[key]
 <a href=#11 id=11 data-nosnippet>11</a>        #[auto]
-<a href=#12 id=12 data-nosnippet>12</a>        </span>id: ID,
+<a href=#12 id=12 data-nosnippet>12</a>        </span>id: uuid::Uuid,
 <a href=#13 id=13 data-nosnippet>13</a>        val: Decimal,
 <a href=#14 id=14 data-nosnippet>14</a>    }
 <a href=#15 id=15 data-nosnippet>15</a>
@@ -64,7 +64,7 @@
 <a href=#64 id=64 data-nosnippet>64</a>    <span class="prelude-val">Ok</span>(())
 <a href=#65 id=65 data-nosnippet>65</a>}
 <a href=#66 id=66 data-nosnippet>66</a>
-<a href=#67 id=67 data-nosnippet>67</a><span class="attr">#[driver_test(id(ID))]
+<a href=#67 id=67 data-nosnippet>67</a><span class="attr">#[driver_test]
 <a href=#68 id=68 data-nosnippet>68</a></span><span class="kw">pub async fn </span>ty_decimal_as_text(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#69 id=69 data-nosnippet>69</a>    <span class="kw">use </span>rust_decimal::Decimal;
 <a href=#70 id=70 data-nosnippet>70</a>    <span class="kw">use </span>std::str::FromStr;
@@ -73,7 +73,7 @@
 <a href=#73 id=73 data-nosnippet>73</a>    </span><span class="kw">struct </span>Item {
 <a href=#74 id=74 data-nosnippet>74</a>        <span class="attr">#[key]
 <a href=#75 id=75 data-nosnippet>75</a>        #[auto]
-<a href=#76 id=76 data-nosnippet>76</a>        </span>id: ID,
+<a href=#76 id=76 data-nosnippet>76</a>        </span>id: uuid::Uuid,
 <a href=#77 id=77 data-nosnippet>77</a>        <span class="attr">#[column(<span class="kw">type </span>= text)]
 <a href=#78 id=78 data-nosnippet>78</a>        </span>val: Decimal,
 <a href=#79 id=79 data-nosnippet>79</a>    }
@@ -95,13 +95,13 @@
 <a href=#95 id=95 data-nosnippet>95</a>    <span class="prelude-val">Ok</span>(())
 <a href=#96 id=96 data-nosnippet>96</a>}
 <a href=#97 id=97 data-nosnippet>97</a>
-<a href=#98 id=98 data-nosnippet>98</a><span class="attr">#[driver_test(id(ID), requires(decimal_arbitrary_precision))]
+<a href=#98 id=98 data-nosnippet>98</a><span class="attr">#[driver_test(requires(decimal_arbitrary_precision))]
 <a href=#99 id=99 data-nosnippet>99</a></span><span class="kw">pub async fn </span>ty_decimal_as_numeric_arbitrary_precision(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#100 id=100 data-nosnippet>100</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#101 id=101 data-nosnippet>101</a>    </span><span class="kw">struct </span>Item {
 <a href=#102 id=102 data-nosnippet>102</a>        <span class="attr">#[key]
 <a href=#103 id=103 data-nosnippet>103</a>        #[auto]
-<a href=#104 id=104 data-nosnippet>104</a>        </span>id: ID,
+<a href=#104 id=104 data-nosnippet>104</a>        </span>id: uuid::Uuid,
 <a href=#105 id=105 data-nosnippet>105</a>        <span class="attr">#[column(<span class="kw">type </span>= numeric)]
 <a href=#106 id=106 data-nosnippet>106</a>        </span>val: Decimal,
 <a href=#107 id=107 data-nosnippet>107</a>    }
@@ -124,13 +124,13 @@
 <a href=#124 id=124 data-nosnippet>124</a>    <span class="prelude-val">Ok</span>(())
 <a href=#125 id=125 data-nosnippet>125</a>}
 <a href=#126 id=126 data-nosnippet>126</a>
-<a href=#127 id=127 data-nosnippet>127</a><span class="attr">#[driver_test(id(ID), requires(native_decimal))]
+<a href=#127 id=127 data-nosnippet>127</a><span class="attr">#[driver_test(requires(native_decimal))]
 <a href=#128 id=128 data-nosnippet>128</a></span><span class="kw">pub async fn </span>ty_decimal_as_numeric_fixed_precision(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;(), BoxError&gt; {
 <a href=#129 id=129 data-nosnippet>129</a>    <span class="attr">#[derive(Debug, toasty::Model)]
 <a href=#130 id=130 data-nosnippet>130</a>    </span><span class="kw">struct </span>Item {
 <a href=#131 id=131 data-nosnippet>131</a>        <span class="attr">#[key]
 <a href=#132 id=132 data-nosnippet>132</a>        #[auto]
-<a href=#133 id=133 data-nosnippet>133</a>        </span>id: ID,
+<a href=#133 id=133 data-nosnippet>133</a>        </span>id: uuid::Uuid,
 <a href=#134 id=134 data-nosnippet>134</a>        <span class="attr">#[column(<span class="kw">type </span>= numeric(<span class="number">28</span>, <span class="number">10</span>))]
 <a href=#135 id=135 data-nosnippet>135</a>        </span>val: Decimal,
 <a href=#136 id=136 data-nosnippet>136</a>    }
