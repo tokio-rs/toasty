@@ -143,3 +143,25 @@ pub async fn filter_parent_all_children_match(test: &mut Test) -> Result<()> {
 
     Ok(())
 }
+
+#[driver_test(requires(scan), scenario(crate::scenarios::has_many_nullable_fk))]
+pub async fn filter_parent_all_ignores_unlinked_children(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User {}).exec(&mut db).await?;
+    toasty::create!(Todo { title: "later" })
+        .exec(&mut db)
+        .await?;
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .todos()
+            .all(Todo::fields().title().eq("urgent")),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(users.len(), 1);
+
+    Ok(())
+}

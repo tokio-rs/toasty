@@ -199,7 +199,9 @@ pub(super) fn lift_in_subquery(
     // relation chain into a projected path and use the projection lift.
     match &field.ty {
         FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
-        FieldTy::Has(has) => lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query),
+        FieldTy::Has(has) => {
+            lift_has_n_in_subquery(cx, has.target, has.pair(&cx.schema().app), query)
+        }
         FieldTy::Via(via) => lift_via_in_subquery(cx, via, query),
         _ => None,
     }
@@ -423,6 +425,7 @@ fn try_fuse_paired_relations(
     }
 
     lift_fk_in_subquery(
+        cx,
         inner_has.target,
         super::key_field_refs(
             0,
@@ -548,6 +551,7 @@ fn lift_relation_path_predicate(
 /// `lhs` references key fields on the current model. `returning` references
 /// the matching key fields on `target`, which is also the subquery source.
 fn lift_fk_in_subquery(
+    cx: &ExprContext,
     target: ModelId,
     lhs: stmt::Expr,
     returning: stmt::Expr,
@@ -558,6 +562,17 @@ fn lift_fk_in_subquery(
     }
 
     let mut subquery = query.clone();
+    for field in returning
+        .as_record()
+        .map_or(std::slice::from_ref(&returning), |record| &record.fields)
+    {
+        let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
+            unreachable!();
+        };
+        if cx.schema().app.field(target.field(*index)).nullable {
+            subquery.add_filter(stmt::Expr::is_not_null(field.clone()));
+        }
+    }
     subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
 
     Some(stmt::Expr::in_subquery(lhs, subquery))
@@ -601,6 +616,7 @@ fn lift_belongs_to_in_subquery(
 
     if lift.fail || !all_fks_matched {
         lift_fk_in_subquery(
+            cx,
             belongs_to.target,
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
@@ -623,11 +639,13 @@ fn lift_belongs_to_in_subquery(
 /// FKs produce a tuple-form IN that the SQL serializer renders as
 /// `(a, b) IN (SELECT a, b FROM ...)`.
 fn lift_has_n_in_subquery(
+    cx: &ExprContext,
     target: ModelId,
     pair: &BelongsTo,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
     lift_fk_in_subquery(
+        cx,
         target,
         super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.target)),
         super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.source)),
