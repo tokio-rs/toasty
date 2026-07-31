@@ -44,4 +44,3 @@ Guide-level design documents for specific features. Use
 
 - [Commit Guidelines](./COMMITS.md)
 - [GitHub Labels](./labels.md)
-- [Test Suite Minimization](./test-suite-minimization.md)
