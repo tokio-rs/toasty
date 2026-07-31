@@ -19,9 +19,8 @@ case "$driver" in
         ;;
 esac
 
-if [[ "$driver" == "dynamodb" ]]; then
-    set -- -- --test-threads=1
-fi
+# Serialize tests so coverage counters are deterministic.
+set -- -- --test-threads=1
 
 cargo llvm-cov \
     --json \
