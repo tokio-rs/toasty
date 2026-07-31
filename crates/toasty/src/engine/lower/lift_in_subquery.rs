@@ -67,6 +67,31 @@ impl<'a> LiftInSubquery<'a> {
             exclude_nulls: self.exclude_nulls,
         }
     }
+
+    fn exclude_nulls(&self, expr: &mut stmt::Expr) {
+        if !self.exclude_nulls {
+            return;
+        }
+
+        let stmt::Expr::InSubquery(expr) = expr else {
+            return;
+        };
+        let select = expr.query.body.as_select_mut_unwrap();
+        let target = select.source.model_id_unwrap();
+        let returning = select.returning.as_project_unwrap().clone();
+
+        for field in returning
+            .as_record()
+            .map_or(std::slice::from_ref(&returning), |record| &record.fields)
+        {
+            let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
+                unreachable!();
+            };
+            if self.cx.schema().app.field(target.field(*index)).nullable {
+                select.add_filter(stmt::Expr::is_not_null(field.clone()));
+            }
+        }
+    }
 }
 
 impl VisitMut for LiftInSubquery<'_> {
@@ -76,35 +101,28 @@ impl VisitMut for LiftInSubquery<'_> {
         // would not introduce relation references that were not there.
         match expr {
             stmt::Expr::InSubquery(e) => {
-                if let Some(lifted) =
-                    lift_in_subquery_inner(&self.cx, &e.expr, &e.query, self.exclude_nulls)
-                {
+                if let Some(mut lifted) = lift_in_subquery(&self.cx, &e.expr, &e.query) {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 }
             }
             stmt::Expr::BinaryOp(e) => {
-                if let Some(lifted) = try_lift_relation_path_comparison(
-                    &self.cx,
-                    e.op,
-                    &e.lhs,
-                    &e.rhs,
-                    self.exclude_nulls,
-                ) {
+                if let Some(mut lifted) =
+                    try_lift_relation_path_comparison(&self.cx, e.op, &e.lhs, &e.rhs)
+                {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 } else if let Some(commuted) = e.op.commute()
-                    && let Some(lifted) = try_lift_relation_path_comparison(
-                        &self.cx,
-                        commuted,
-                        &e.rhs,
-                        &e.lhs,
-                        self.exclude_nulls,
-                    )
+                    && let Some(mut lifted) =
+                        try_lift_relation_path_comparison(&self.cx, commuted, &e.rhs, &e.lhs)
                 {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 }
             }
             stmt::Expr::Like(e) => {
-                if let Some(lifted) = try_lift_relation_path_like(&self.cx, e, self.exclude_nulls) {
+                if let Some(mut lifted) = try_lift_relation_path_like(&self.cx, e) {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 }
             }
@@ -184,20 +202,10 @@ struct LiftBelongsTo<'a> {
 /// the lift cannot apply.  When the lift succeeds, the returned
 /// expression may itself contain unlowered references and the caller is
 /// expected to re-visit it through the lowering walk.
-#[cfg(test)]
 pub(super) fn lift_in_subquery(
     cx: &ExprContext,
     expr: &stmt::Expr,
     query: &stmt::Query,
-) -> Option<stmt::Expr> {
-    lift_in_subquery_inner(cx, expr, query, true)
-}
-
-fn lift_in_subquery_inner(
-    cx: &ExprContext,
-    expr: &stmt::Expr,
-    query: &stmt::Query,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     // The expression is a path expression referencing a relation.
     let field = match expr {
@@ -207,7 +215,7 @@ fn lift_in_subquery_inner(
         // nested IN-subquery on that model, then recurse to lift the outer
         // `rel` hop.
         stmt::Expr::Project(project_expr) => {
-            return lift_projection_in_subquery(cx, project_expr, query, exclude_nulls);
+            return lift_projection_in_subquery(cx, project_expr, query);
         }
         stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => {
             cx.resolve_expr_reference(expr_reference).as_field_unwrap()
@@ -221,17 +229,9 @@ fn lift_in_subquery_inner(
     // their paired foreign keys. A `via` has no single pair, so normalize its
     // relation chain into a projected path and use the projection lift.
     match &field.ty {
-        FieldTy::BelongsTo(belongs_to) => {
-            lift_belongs_to_in_subquery(cx, belongs_to, query, exclude_nulls)
-        }
-        FieldTy::Has(has) => lift_has_n_in_subquery(
-            cx,
-            has.target,
-            has.pair(&cx.schema().app),
-            query,
-            exclude_nulls,
-        ),
-        FieldTy::Via(via) => lift_via_in_subquery(cx, via, query, exclude_nulls),
+        FieldTy::BelongsTo(belongs_to) => lift_belongs_to_in_subquery(cx, belongs_to, query),
+        FieldTy::Has(has) => lift_has_n_in_subquery(has.target, has.pair(&cx.schema().app), query),
+        FieldTy::Via(via) => lift_via_in_subquery(cx, via, query),
         _ => None,
     }
 }
@@ -257,7 +257,6 @@ fn lift_via_in_subquery(
     cx: &ExprContext,
     via: &app::Via,
     query: &stmt::Query,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     if via.is_scalar() {
         return None;
@@ -284,7 +283,7 @@ fn lift_via_in_subquery(
         stmt::Expr::project(base, projection.as_slice())
     };
 
-    lift_in_subquery_inner(cx, &path, query, exclude_nulls)
+    lift_in_subquery(cx, &path, query)
 }
 
 /// Lifts an `IN`-subquery whose left side is a path through a relation field.
@@ -330,7 +329,6 @@ fn lift_projection_in_subquery(
     cx: &ExprContext,
     project_expr: &stmt::ExprProject,
     query: &stmt::Query,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     let Expr::Reference(expr_ref) = &*project_expr.base else {
         return None;
@@ -345,7 +343,7 @@ fn lift_projection_in_subquery(
 
     if tail.is_empty()
         && let Some(direct) =
-            try_fuse_paired_relations(cx, field, target_model_id, *head_idx, query, exclude_nulls)
+            try_fuse_paired_relations(cx, field, target_model_id, *head_idx, query)
     {
         return Some(direct);
     }
@@ -365,7 +363,7 @@ fn lift_projection_in_subquery(
         Expr::in_subquery(inner_lhs, query.clone()),
     );
 
-    lift_in_subquery_inner(cx, &project_expr.base, &new_subquery, exclude_nulls)
+    lift_in_subquery(cx, &project_expr.base, &new_subquery)
 }
 
 /// Fuses a `BelongsTo → Has` chain into a single FK-on-FK `IN` when both
@@ -426,7 +424,6 @@ fn try_fuse_paired_relations(
     target_model_id: ModelId,
     head_idx: usize,
     query: &stmt::Query,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     let outer_belongs_to = match &outer_field.ty {
         FieldTy::BelongsTo(rel) => rel,
@@ -457,7 +454,6 @@ fn try_fuse_paired_relations(
     }
 
     lift_fk_in_subquery(
-        cx,
         inner_has.target,
         super::key_field_refs(
             0,
@@ -469,7 +465,6 @@ fn try_fuse_paired_relations(
         ),
         super::key_field_refs(0, inner_pair.foreign_key.fields.iter().map(|fk| fk.source)),
         query,
-        exclude_nulls,
     )
 }
 
@@ -491,14 +486,10 @@ pub(super) fn try_lift_relation_path_comparison(
     op: stmt::BinaryOp,
     project_side: &stmt::Expr,
     other_side: &stmt::Expr,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
-    lift_relation_path_predicate(
-        cx,
-        project_side,
-        |target_lhs| Expr::binary_op(target_lhs, op, other_side.clone()),
-        exclude_nulls,
-    )
+    lift_relation_path_predicate(cx, project_side, |target_lhs| {
+        Expr::binary_op(target_lhs, op, other_side.clone())
+    })
 }
 
 /// Rewrites a `LIKE`/`ILIKE` that walks a relation field into a foreign-key
@@ -519,22 +510,16 @@ pub(super) fn try_lift_relation_path_comparison(
 pub(super) fn try_lift_relation_path_like(
     cx: &ExprContext,
     like: &stmt::ExprLike,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
-    lift_relation_path_predicate(
-        cx,
-        &like.expr,
-        |target_lhs| {
-            stmt::ExprLike {
-                expr: Box::new(target_lhs),
-                pattern: like.pattern.clone(),
-                escape: like.escape,
-                case_insensitive: like.case_insensitive,
-            }
-            .into()
-        },
-        exclude_nulls,
-    )
+    lift_relation_path_predicate(cx, &like.expr, |target_lhs| {
+        stmt::ExprLike {
+            expr: Box::new(target_lhs),
+            pattern: like.pattern.clone(),
+            escape: like.escape,
+            case_insensitive: like.case_insensitive,
+        }
+        .into()
+    })
 }
 
 /// Shared core of the relation-path lifts.
@@ -556,7 +541,6 @@ fn lift_relation_path_predicate(
     cx: &ExprContext,
     project_side: &stmt::Expr,
     make_filter: impl FnOnce(stmt::Expr) -> stmt::Expr,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     let Expr::Project(project_expr) = project_side else {
         return None;
@@ -587,7 +571,7 @@ fn lift_relation_path_predicate(
     let subquery =
         stmt::Query::new_select(stmt::Source::from(target_model_id), make_filter(target_lhs));
 
-    lift_in_subquery_inner(cx, &project_expr.base, &subquery, exclude_nulls)
+    lift_in_subquery(cx, &project_expr.base, &subquery)
 }
 
 /// Build a foreign-key `IN` subquery for one direct relation edge.
@@ -595,31 +579,16 @@ fn lift_relation_path_predicate(
 /// `lhs` references key fields on the current model. `returning` references
 /// the matching key fields on `target`, which is also the subquery source.
 fn lift_fk_in_subquery(
-    cx: &ExprContext,
     target: ModelId,
     lhs: stmt::Expr,
     returning: stmt::Expr,
     query: &stmt::Query,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     if target != query.body.as_select_unwrap().source.model_id_unwrap() {
         return None;
     }
 
     let mut subquery = query.clone();
-    if exclude_nulls {
-        for field in returning
-            .as_record()
-            .map_or(std::slice::from_ref(&returning), |record| &record.fields)
-        {
-            let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
-                unreachable!();
-            };
-            if cx.schema().app.field(target.field(*index)).nullable {
-                subquery.add_filter(stmt::Expr::is_not_null(field.clone()));
-            }
-        }
-    }
     subquery.body.as_select_mut_unwrap().returning = stmt::Returning::Project(returning);
 
     Some(stmt::Expr::in_subquery(lhs, subquery))
@@ -636,7 +605,6 @@ fn lift_belongs_to_in_subquery(
     cx: &ExprContext,
     belongs_to: &BelongsTo,
     query: &stmt::Query,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     if belongs_to.target != query.body.as_select_unwrap().source.model_id_unwrap() {
         return None;
@@ -664,12 +632,10 @@ fn lift_belongs_to_in_subquery(
 
     if lift.fail || !all_fks_matched {
         lift_fk_in_subquery(
-            cx,
             belongs_to.target,
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.source)),
             super::key_field_refs(0, belongs_to.foreign_key.fields.iter().map(|fk| fk.target)),
             query,
-            exclude_nulls,
         )
     } else {
         Some(if lift.operands.len() == 1 {
@@ -688,19 +654,15 @@ fn lift_belongs_to_in_subquery(
 /// FKs produce a tuple-form IN that the SQL serializer renders as
 /// `(a, b) IN (SELECT a, b FROM ...)`.
 fn lift_has_n_in_subquery(
-    cx: &ExprContext,
     target: ModelId,
     pair: &BelongsTo,
     query: &stmt::Query,
-    exclude_nulls: bool,
 ) -> Option<stmt::Expr> {
     lift_fk_in_subquery(
-        cx,
         target,
         super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.target)),
         super::key_field_refs(0, pair.foreign_key.fields.iter().map(|fk| fk.source)),
         query,
-        exclude_nulls,
     )
 }
 
