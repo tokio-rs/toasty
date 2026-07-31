@@ -6,7 +6,10 @@ use toasty_core::driver::{Operation, operation::Transaction};
 
 /// A multi-op create (user + associated todo) should be wrapped in
 /// BEGIN ... COMMIT so the driver sees all three transaction operations.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    requires(sql),
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid)
+)]
 pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -41,7 +44,7 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
 
 /// A single-op create (no associations) must NOT be wrapped in a transaction —
 /// the engine skips the overhead for plans with only one DB operation.
-#[driver_test(id(ID), requires(scan), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(scan), scenario(crate::scenarios::two_models))]
 pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -214,13 +217,13 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
 /// a dependency of the UPDATE's returning clause). So the collision is placed
 /// on the User's name field (not the Todo), ensuring the INSERT succeeds first
 /// and is then rolled back when the subsequent UPDATE fails.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
         name: String,
@@ -233,10 +236,10 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
     struct Todo {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
@@ -289,11 +292,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
 /// its own BEGIN...COMMIT on drivers that don't support CTE-with-update
 /// (SQLite, MySQL). When nested inside an outer transaction it uses savepoints
 /// instead. On PostgreSQL the same operation is a single CTE-based QuerySql.
-#[driver_test(
-    id(ID),
-    requires(sql),
-    scenario(crate::scenarios::has_many_nullable_fk)
-)]
+#[driver_test(requires(sql), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -334,11 +333,7 @@ pub async fn rmw_uses_savepoints(t: &mut Test) -> Result<()> {
 /// When a standalone RMW condition fails (todo doesn't belong to this user),
 /// the driver should receive ROLLBACK on the RMW's own transaction.
 /// On PostgreSQL the CTE handles this in a single statement.
-#[driver_test(
-    id(ID),
-    requires(sql),
-    scenario(crate::scenarios::has_many_nullable_fk)
-)]
+#[driver_test(requires(sql), scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn rmw_condition_failure_issues_rollback_to_savepoint(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

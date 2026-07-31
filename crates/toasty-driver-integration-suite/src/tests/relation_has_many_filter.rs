@@ -3,7 +3,6 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to_with_flags)
 )]
@@ -78,7 +77,6 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to_with_flags)
 )]
@@ -105,9 +103,8 @@ pub async fn filter_parent_no_matching_children(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
     requires(scan),
-    scenario(crate::scenarios::has_many_belongs_to)
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid)
 )]
 pub async fn filter_parent_all_children_match(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
