@@ -91,15 +91,6 @@ impl Field {
         }
     }
 
-    /// Returns a mutable reference to the inner [`FieldPrimitive`] if this is
-    /// a `Primitive` variant, or `None` otherwise.
-    pub fn as_primitive_mut(&mut self) -> Option<&mut FieldPrimitive> {
-        match self {
-            Field::Primitive(p) => Some(p),
-            _ => None,
-        }
-    }
-
     /// Returns the inner [`FieldStruct`] if this is a `Struct` variant, or
     /// `None` otherwise.
     pub fn as_struct(&self) -> Option<&FieldStruct> {
