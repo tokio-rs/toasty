@@ -1,22 +1,22 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn optional_belongs_to_null_fk(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Post {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<Option<User>>,

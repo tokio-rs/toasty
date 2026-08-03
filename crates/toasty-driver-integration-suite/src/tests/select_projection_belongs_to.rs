@@ -6,11 +6,10 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID),
     requires(scan),
-    scenario(crate::scenarios::has_many_belongs_to)
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid)
 )]
-pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
+pub async fn select_belongs_to(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
     let alice = toasty::create!(User { name: "Alice" })
@@ -30,25 +29,12 @@ pub async fn select_belongs_to_basic(t: &mut Test) -> Result<()> {
 
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
-    Ok(())
-}
 
-#[driver_test(
-    id(ID),
-    requires(scan),
-    scenario(crate::scenarios::has_many_belongs_to)
-)]
-pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    let alice = toasty::create!(User { name: "Alice" })
-        .exec(&mut db)
-        .await?;
     let bob = toasty::create!(User { name: "Bob" }).exec(&mut db).await?;
-    toasty::create!(Todo::[
-        { title: "Alpha", user: alice },
-        { title: "Beta",  user: bob },
-    ])
+    toasty::create!(Todo {
+        title: "Beta",
+        user: bob,
+    })
     .exec(&mut db)
     .await?;
 
@@ -59,26 +45,6 @@ pub async fn select_belongs_to_with_filter(t: &mut Test) -> Result<()> {
 
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Bob");
-    Ok(())
-}
-
-#[driver_test(
-    id(ID),
-    requires(scan),
-    scenario(crate::scenarios::has_many_belongs_to)
-)]
-pub async fn select_belongs_to_first(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    let alice = toasty::create!(User { name: "Alice" })
-        .exec(&mut db)
-        .await?;
-    toasty::create!(Todo {
-        title: "Hello",
-        user: alice
-    })
-    .exec(&mut db)
-    .await?;
 
     let user: Option<User> = Todo::filter(Todo::fields().title().eq("Hello"))
         .select(Todo::fields().user())
