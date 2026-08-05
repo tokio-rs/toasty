@@ -143,4 +143,26 @@
 <a href=#143 id=143 data-nosnippet>143</a>
 <a href=#144 id=144 data-nosnippet>144</a>    <span class="prelude-val">Ok</span>(())
 <a href=#145 id=145 data-nosnippet>145</a>}
+<a href=#146 id=146 data-nosnippet>146</a>
+<a href=#147 id=147 data-nosnippet>147</a><span class="attr">#[driver_test(requires(scan), scenario(<span class="kw">crate</span>::scenarios::has_many_nullable_fk))]
+<a href=#148 id=148 data-nosnippet>148</a></span><span class="kw">pub async fn </span>filter_parent_all_ignores_unlinked_children(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = setup(test).<span class="kw">await</span>;
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>    <span class="macro">toasty::create!</span>(User {}).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#152 id=152 data-nosnippet>152</a>    <span class="macro">toasty::create!</span>(Todo { title: <span class="string">"later" </span>})
+<a href=#153 id=153 data-nosnippet>153</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#154 id=154 data-nosnippet>154</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#155 id=155 data-nosnippet>155</a>
+<a href=#156 id=156 data-nosnippet>156</a>    <span class="kw">let </span>users: Vec&lt;User&gt; = User::filter(
+<a href=#157 id=157 data-nosnippet>157</a>        User::fields()
+<a href=#158 id=158 data-nosnippet>158</a>            .todos()
+<a href=#159 id=159 data-nosnippet>159</a>            .all(Todo::fields().title().eq(<span class="string">"urgent"</span>)),
+<a href=#160 id=160 data-nosnippet>160</a>    )
+<a href=#161 id=161 data-nosnippet>161</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#162 id=162 data-nosnippet>162</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#163 id=163 data-nosnippet>163</a>
+<a href=#164 id=164 data-nosnippet>164</a>    <span class="macro">assert_eq!</span>(users.len(), <span class="number">1</span>);
+<a href=#165 id=165 data-nosnippet>165</a>
+<a href=#166 id=166 data-nosnippet>166</a>    <span class="prelude-val">Ok</span>(())
+<a href=#167 id=167 data-nosnippet>167</a>}
 </code></pre></div></section></main></body></html>
