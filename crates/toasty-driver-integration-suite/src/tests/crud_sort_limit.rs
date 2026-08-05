@@ -247,6 +247,31 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
 }
 
 #[driver_test(scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn first_respects_offset(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let user = User::all()
+        .order_by(User::fields().age().asc())
+        .limit(3)
+        .offset(1)
+        .first()
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(user, Some(_ { name: "Alice", .. }));
+
+    Ok(())
+}
+
+#[driver_test(scenario(crate::scenarios::user_with_age), requires(sql))]
 pub async fn order_by_multiple_columns_composes(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
