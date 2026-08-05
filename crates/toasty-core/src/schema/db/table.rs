@@ -57,15 +57,6 @@ pub struct Table {
 pub struct TableId(pub usize);
 
 impl Table {
-    /// Returns the `i`-th column of this table's primary key.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `i` is out of bounds for the primary key column list.
-    pub fn primary_key_column(&self, i: usize) -> &Column {
-        &self.columns[self.primary_key.columns[i].index]
-    }
-
     /// Returns an iterator over the columns that make up this table's primary key.
     pub fn primary_key_columns(&self) -> impl ExactSizeIterator<Item = &Column> + '_ {
         self.primary_key

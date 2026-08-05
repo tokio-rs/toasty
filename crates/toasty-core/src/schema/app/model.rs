@@ -49,8 +49,8 @@ pub enum Model {
 /// ```
 /// use toasty_core::schema::app::{Model, ModelSet};
 ///
-/// let mut set = ModelSet::new();
-/// assert_eq!(set.iter().len(), 0);
+/// let set = ModelSet::new();
+/// assert_eq!((&set).into_iter().len(), 0);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct ModelSet {
@@ -83,11 +83,6 @@ impl ModelSet {
     /// If a model with the same ID already exists, it is replaced.
     pub fn add(&mut self, model: Model) {
         self.models.insert(model.id(), model);
-    }
-
-    /// Returns an iterator over the models in insertion order.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Model> {
-        self.models.values()
     }
 }
 
@@ -419,11 +414,6 @@ impl Model {
         matches!(self, Model::EmbeddedStruct(_) | Model::EmbeddedEnum(_))
     }
 
-    /// Returns true if this model can be the target of a relation
-    pub fn can_be_relation_target(&self) -> bool {
-        self.is_root()
-    }
-
     /// Returns the inner [`ModelRoot`] if this is a root model.
     pub fn as_root(&self) -> Option<&ModelRoot> {
         match self {
@@ -508,9 +498,9 @@ impl Model {
 /// # Examples
 ///
 /// ```
-/// use toasty_core::schema::app::ModelId;
+/// use toasty_core::schema::app::{ModelId, VariantId};
 ///
-/// let variant_id = ModelId(1).variant(0);
+/// let variant_id = VariantId { model: ModelId(1), index: 0 };
 /// assert_eq!(variant_id.model, ModelId(1));
 /// assert_eq!(variant_id.index, 0);
 /// ```
@@ -533,12 +523,6 @@ impl ModelId {
     /// `index`.
     pub const fn field(self, index: usize) -> FieldId {
         FieldId { model: self, index }
-    }
-
-    /// Create a `VariantId` representing the current model's variant at
-    /// `index`.
-    pub const fn variant(self, index: usize) -> VariantId {
-        VariantId { model: self, index }
     }
 
     pub(crate) const fn placeholder() -> Self {
