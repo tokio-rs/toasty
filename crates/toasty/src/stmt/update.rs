@@ -8,20 +8,17 @@ use toasty_core::stmt;
 
 /// A typed update statement.
 ///
-/// `Update` modifies records matching a selection (typically derived from a
-/// [`Query`]). Field assignments are added with [`set`](Update::set),
-/// [`insert`](Update::insert), and [`remove`](Update::remove).
+/// `Update` modifies records matching a selection, typically derived from a
+/// [`Query`]. Field assignments can be added with [`set`](Update::set) or
+/// populated by generated update builders.
 ///
-/// The type parameter `T` is the **returning type** — it determines what
-/// `exec()` produces, not which model is being updated. For example,
-/// `Update<User>` returns the updated `User` (single-row update), while
-/// `Update<List<User>>` returns the updated records as `Vec<User>`.
+/// The type parameter `T` is the returning type—it determines what `exec()`
+/// produces, not which model is being updated. For example, `Update<User>`
+/// returns one updated `User`, while `Update<List<User>>` returns the updated
+/// records as `Vec<User>`.
 ///
 /// Generated update-builders wrap this type and expose typed setter methods.
 /// You rarely construct `Update` by hand.
-///
-/// By default, an update returns the changed records. Call
-/// [`set_returning_none`](Update::set_returning_none) to suppress this.
 pub struct Update<T> {
     pub(crate) untyped: stmt::Update,
     _p: PhantomData<T>,
@@ -53,30 +50,6 @@ impl<T> Update<T> {
 
         Self {
             untyped: stmt,
-            _p: PhantomData,
-        }
-    }
-
-    /// Wrap a raw untyped [`stmt::Update`](toasty_core::stmt::Update).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::{List, Query, Update};
-    ///
-    /// // Round-trip through an untyped update
-    /// let update = Update::<List<User>>::new(Query::<List<User>>::all());
-    /// let raw = update.into_untyped();
-    /// ```
-    pub const fn from_untyped(untyped: stmt::Update) -> Self {
-        Self {
-            untyped,
             _p: PhantomData,
         }
     }
@@ -139,71 +112,10 @@ impl<T> Update<T> {
     /// use toasty::stmt::{List, Query, Update};
     ///
     /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
-    /// // Set field at index 1 (name) to "Bob"
     /// update.set(1, toasty_core::stmt::Value::from("Bob"));
     /// ```
     pub fn set(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
         self.untyped.assignments.set(field, expr);
-    }
-
-    /// Append a value to a collection field (e.g., a has-many relation).
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::{List, Query, Update};
-    ///
-    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
-    /// update.insert(1, toasty_core::stmt::Value::from("new_tag"));
-    /// ```
-    pub fn insert(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
-        self.untyped.assignments.insert(field, expr);
-    }
-
-    /// Remove a value from a collection field.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::{List, Query, Update};
-    ///
-    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
-    /// update.remove(1, toasty_core::stmt::Value::from("old_tag"));
-    /// ```
-    pub fn remove(&mut self, field: impl Into<stmt::Projection>, expr: impl Into<stmt::Expr>) {
-        self.untyped.assignments.remove(field, expr);
-    }
-
-    /// Don't return anything.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::{List, Query, Update};
-    ///
-    /// let mut update = Update::<List<User>>::new(Query::<List<User>>::all());
-    /// update.set_returning_none();
-    /// ```
-    pub fn set_returning_none(&mut self) {
-        self.untyped.returning = None;
     }
 
     /// Consume this typed update and return the untyped core statement.
@@ -229,9 +141,6 @@ impl<T> Update<T> {
 
 impl<T: Load> Update<T> {
     /// Execute this update statement against the given executor.
-    ///
-    /// Returns the updated records unless
-    /// [`set_returning_none`](Update::set_returning_none) was called.
     ///
     /// # Examples
     ///

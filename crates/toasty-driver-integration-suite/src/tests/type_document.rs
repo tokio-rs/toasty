@@ -13,11 +13,9 @@
 
 use crate::prelude::*;
 
-/// A `#[document] Vec<struct>` round-trips through INSERT and a fresh fetch:
-/// the engine encodes each element as a JSON object on the way in and
-/// decodes it back to the embed struct on the way out.
-#[driver_test(id(ID), requires(document_collections))]
-pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
+/// CRUD and collection mutations for a `#[document] Vec<struct>`.
+#[driver_test(requires(document_collections))]
+pub async fn vec_struct_crud(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct LineItem {
         sku: String,
@@ -29,7 +27,7 @@ pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
     struct Order {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         items: Vec<LineItem>,
     }
@@ -55,6 +53,92 @@ pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
     let reloaded = Order::get_by_id(&mut db, &order.id).await?;
     assert_eq!(reloaded.items, items);
 
+    let empty = toasty::create!(Order {
+        items: Vec::<LineItem>::new(),
+    })
+    .exec(&mut db)
+    .await?;
+    let reloaded = Order::get_by_id(&mut db, &empty.id).await?;
+    assert!(reloaded.items.is_empty());
+
+    let mut replaced = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "OLD".into(),
+            qty: 1,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+    let replacement = vec![
+        LineItem {
+            sku: "NEW-1".into(),
+            qty: 5,
+        },
+        LineItem {
+            sku: "NEW-2".into(),
+            qty: 9,
+        },
+    ];
+    replaced
+        .update()
+        .items(replacement.clone())
+        .exec(&mut db)
+        .await?;
+    let reloaded = Order::get_by_id(&mut db, &replaced.id).await?;
+    assert_eq!(reloaded.items, replacement);
+
+    let mut pushed = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+    pushed
+        .update()
+        .items(toasty::stmt::push(LineItem {
+            sku: "SKU-2".into(),
+            qty: 1,
+        }))
+        .exec(&mut db)
+        .await?;
+    let expected = vec![
+        LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        },
+        LineItem {
+            sku: "SKU-2".into(),
+            qty: 1,
+        },
+    ];
+    assert_eq!(pushed.items, expected);
+    let reloaded = Order::get_by_id(&mut db, &pushed.id).await?;
+    assert_eq!(reloaded.items, expected);
+
+    // Removal operators are not implemented for document collections.
+    let mut rejected = toasty::create!(Order {
+        items: vec![LineItem {
+            sku: "SKU-1".into(),
+            qty: 3,
+        }],
+    })
+    .exec(&mut db)
+    .await?;
+    let err = assert_err!(
+        rejected
+            .update()
+            .items(toasty::stmt::pop())
+            .exec(&mut db)
+            .await
+    );
+    let msg = err.to_string();
+    assert!(
+        msg.contains("stmt::pop") && msg.contains("document collections"),
+        "expected a clear rejection, got: {msg}"
+    );
+
     Ok(())
 }
 
@@ -63,8 +147,8 @@ pub async fn vec_struct_create_get(t: &mut Test) -> Result<(), BoxError> {
 /// type alone determines document storage — so the attribute is redundant here;
 /// it is only needed to force document storage on a *struct* embed (which
 /// otherwise column-expands) or to select an encoding via `#[document(text)]`.
-/// This round-trips identically to the annotated `vec_struct_create_get` above.
-#[driver_test(id(ID), requires(document_collections))]
+/// This round-trips identically to the annotated `vec_struct_crud` above.
+#[driver_test(requires(document_collections))]
 pub async fn vec_struct_without_attr(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct LineItem {
@@ -77,7 +161,7 @@ pub async fn vec_struct_without_attr(t: &mut Test) -> Result<(), BoxError> {
     struct Order {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         // No `#[document]`: a `Vec<embed>` is a document collection on its own.
         items: Vec<LineItem>,
     }
@@ -109,7 +193,7 @@ pub async fn vec_struct_without_attr(t: &mut Test) -> Result<(), BoxError> {
 /// Enum embeds are column-expanded values and are not accepted inside a
 /// `#[document]` struct. A discriminant storage hint therefore never implies
 /// an integer-width guarantee inside JSON.
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn enum_inside_document_rejected(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     #[column(type = u8)]
@@ -129,7 +213,7 @@ pub async fn enum_inside_document_rejected(t: &mut Test) -> Result<(), BoxError>
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         metadata: Metadata,
     }
@@ -152,7 +236,7 @@ pub async fn enum_inside_document_rejected(t: &mut Test) -> Result<(), BoxError>
 /// An `Option` field inside a document element round-trips both `Some` and
 /// `None`. `None` is omitted from the JSON object entirely and decodes back
 /// from the missing key.
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn vec_struct_option_field(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct LineItem {
@@ -165,7 +249,7 @@ pub async fn vec_struct_option_field(t: &mut Test) -> Result<(), BoxError> {
     struct Order {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         items: Vec<LineItem>,
     }
@@ -194,211 +278,9 @@ pub async fn vec_struct_option_field(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-/// An empty `Vec<struct>` round-trips as an empty JSON array.
-#[driver_test(id(ID), requires(document_collections))]
-pub async fn vec_struct_empty(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let order = toasty::create!(Order {
-        items: Vec::<LineItem>::new(),
-    })
-    .exec(&mut db)
-    .await?;
-
-    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
-    assert!(reloaded.items.is_empty());
-
-    Ok(())
-}
-
-/// Whole-value replacement via the update builder: the assignment path
-/// encodes the new `Vec<struct>` the same way the INSERT path does.
-#[driver_test(id(ID), requires(document_collections))]
-pub async fn vec_struct_update_replace(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let mut order = toasty::create!(Order {
-        items: vec![LineItem {
-            sku: "OLD".into(),
-            qty: 1,
-        }],
-    })
-    .exec(&mut db)
-    .await?;
-
-    let replacement = vec![
-        LineItem {
-            sku: "NEW-1".into(),
-            qty: 5,
-        },
-        LineItem {
-            sku: "NEW-2".into(),
-            qty: 9,
-        },
-    ];
-    order
-        .update()
-        .items(replacement.clone())
-        .exec(&mut db)
-        .await?;
-
-    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
-    assert_eq!(reloaded.items, replacement);
-
-    Ok(())
-}
-
-/// `stmt::push(value)` appends one element to a document collection in
-/// place. The append operand takes the same document encoding the
-/// whole-value path uses (the lowering casts it through the column's
-/// document type), so the element lands as a JSON object at the end of the
-/// stored array.
-#[driver_test(id(ID), requires(document_collections))]
-pub async fn vec_struct_push(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let mut order = toasty::create!(Order {
-        items: vec![LineItem {
-            sku: "SKU-1".into(),
-            qty: 3,
-        }],
-    })
-    .exec(&mut db)
-    .await?;
-
-    order
-        .update()
-        .items(toasty::stmt::push(LineItem {
-            sku: "SKU-2".into(),
-            qty: 1,
-        }))
-        .exec(&mut db)
-        .await?;
-
-    let expected = vec![
-        LineItem {
-            sku: "SKU-1".into(),
-            qty: 3,
-        },
-        LineItem {
-            sku: "SKU-2".into(),
-            qty: 1,
-        },
-    ];
-
-    // In-memory model reflects the post-update value.
-    assert_eq!(order.items, expected);
-
-    let reloaded = Order::get_by_id(&mut db, &order.id).await?;
-    assert_eq!(reloaded.items, expected);
-
-    Ok(())
-}
-
-/// The removal operators (`stmt::pop` / `stmt::remove` / `stmt::remove_at`)
-/// are not yet implemented on document collections — the per-backend
-/// renderings the `vec_*` capability flags advertise are native-array forms.
-/// The lowering rejects them with a clear error on every backend instead of
-/// emitting SQL that does not apply to a document column. They share one
-/// gate; `stmt::pop` stands in for all three.
-#[driver_test(id(ID), requires(document_collections))]
-pub async fn vec_struct_pop_rejected(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct LineItem {
-        sku: String,
-        qty: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Order {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        items: Vec<LineItem>,
-    }
-
-    let mut db = t.setup_db(models!(Order)).await;
-
-    let mut order = toasty::create!(Order {
-        items: vec![LineItem {
-            sku: "SKU-1".into(),
-            qty: 3,
-        }],
-    })
-    .exec(&mut db)
-    .await?;
-
-    let err = assert_err!(
-        order
-            .update()
-            .items(toasty::stmt::pop())
-            .exec(&mut db)
-            .await
-    );
-    let msg = err.to_string();
-    assert!(
-        msg.contains("stmt::pop") && msg.contains("document collections"),
-        "expected a clear rejection, got: {msg}"
-    );
-
-    Ok(())
-}
-
-/// A bare `#[document]` struct embed round-trips through INSERT and a fresh
-/// fetch: the engine encodes the embed as one JSON object on the way in and
-/// decodes it back to the struct on the way out.
-#[driver_test(id(ID), requires(document_collections))]
-pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
+/// A bare `#[document]` struct embed round-trips and supports replacement.
+#[driver_test(requires(document_collections))]
+pub async fn struct_embed_crud(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Profile {
         name: String,
@@ -410,7 +292,7 @@ pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         profile: Profile,
     }
@@ -421,7 +303,7 @@ pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
         name: "Alice".into(),
         age: 30,
     };
-    let account = toasty::create!(Account {
+    let mut account = toasty::create!(Account {
         profile: profile.clone(),
     })
     .exec(&mut db)
@@ -429,40 +311,6 @@ pub async fn struct_embed_create_get(t: &mut Test) -> Result<(), BoxError> {
 
     let reloaded = Account::get_by_id(&mut db, &account.id).await?;
     assert_eq!(reloaded.profile, profile);
-
-    Ok(())
-}
-
-/// Whole-value replacement of a bare `#[document]` embed via the update
-/// builder.
-#[driver_test(id(ID), requires(document_collections))]
-pub async fn struct_embed_update_replace(t: &mut Test) -> Result<(), BoxError> {
-    #[derive(Clone, Debug, PartialEq, toasty::Embed)]
-    struct Profile {
-        name: String,
-        age: i64,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Account {
-        #[key]
-        #[auto]
-        id: ID,
-        #[document]
-        profile: Profile,
-    }
-
-    let mut db = t.setup_db(models!(Account)).await;
-
-    let mut account = toasty::create!(Account {
-        profile: Profile {
-            name: "old".into(),
-            age: 1,
-        },
-    })
-    .exec(&mut db)
-    .await?;
 
     let replacement = Profile {
         name: "new".into(),
@@ -485,7 +333,7 @@ pub async fn struct_embed_update_replace(t: &mut Test) -> Result<(), BoxError> {
 /// assignments, so the driver receives a plain UPDATE with no result
 /// columns — exactly as for a scalar field. The constantization itself is
 /// unit-tested in `engine::lower::tests::constantize`.
-#[driver_test(id(ID), requires(and(document_collections, sql)))]
+#[driver_test(requires(and(document_collections, sql)))]
 pub async fn struct_embed_update_returning_constantized(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Profile {
@@ -498,7 +346,7 @@ pub async fn struct_embed_update_returning_constantized(t: &mut Test) -> Result<
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         profile: Profile,
     }
@@ -539,7 +387,7 @@ pub async fn struct_embed_update_returning_constantized(t: &mut Test) -> Result<
 /// access lowers to a JSON extraction in the WHERE clause: equality on a
 /// string leaf, range on a numeric leaf, and `is_none` on an optional leaf
 /// (an absent JSON key).
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn struct_embed_filter(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Profile {
@@ -553,7 +401,7 @@ pub async fn struct_embed_filter(t: &mut Test) -> Result<(), BoxError> {
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         profile: Profile,
     }
@@ -594,7 +442,7 @@ pub async fn struct_embed_filter(t: &mut Test) -> Result<(), BoxError> {
 /// per-backend expectation, assert the document-leaf filter and an equivalent
 /// plain-column filter agree on a wrong-case query — the leaf inherits the
 /// column's collation.
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn struct_embed_filter_matches_column_case_sensitivity(
     t: &mut Test,
 ) -> Result<(), BoxError> {
@@ -608,7 +456,7 @@ pub async fn struct_embed_filter_matches_column_case_sensitivity(
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         #[document]
         profile: Profile,
@@ -650,7 +498,7 @@ pub async fn struct_embed_filter_matches_column_case_sensitivity(
 
 /// Filtering on a field inside a nested `#[document]` embed: the JSON path
 /// descends two levels (`profile.address.city`).
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn struct_embed_filter_nested(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Address {
@@ -669,7 +517,7 @@ pub async fn struct_embed_filter_nested(t: &mut Test) -> Result<(), BoxError> {
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         profile: Profile,
     }
@@ -698,7 +546,7 @@ pub async fn struct_embed_filter_nested(t: &mut Test) -> Result<(), BoxError> {
 /// `Type::Model`, just like a top-level `#[document]` field. The schema builder
 /// must still resolve it to a nested document so the value encodes as a JSON
 /// object rather than reaching the codec as an unencodable positional record.
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn struct_embed_nested_document_field(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Address {
@@ -718,7 +566,7 @@ pub async fn struct_embed_nested_document_field(t: &mut Test) -> Result<(), BoxE
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         profile: Profile,
     }
@@ -757,7 +605,7 @@ pub async fn struct_embed_nested_document_field(t: &mut Test) -> Result<(), BoxE
 /// where decoded rows feed the returning projection directly. Documents sit on
 /// both sides (`User.settings` and the included `Order.items`), covering decode
 /// on the parent and the child of the merge.
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn document_field_through_include(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Settings {
@@ -776,7 +624,7 @@ pub async fn document_field_through_include(t: &mut Test) -> Result<(), BoxError
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         #[document]
         settings: Settings,
@@ -789,9 +637,9 @@ pub async fn document_field_through_include(t: &mut Test) -> Result<(), BoxError
     struct Order {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
         #[document]
@@ -851,7 +699,7 @@ pub async fn document_field_through_include(t: &mut Test) -> Result<(), BoxError
 /// column — there is no intermediate record in the data-load row to descend
 /// through.
 /// This is the "document at a nested embed position" case.
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn document_in_column_expanded_embed(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Settings {
@@ -879,7 +727,7 @@ pub async fn document_in_column_expanded_embed(t: &mut Test) -> Result<(), BoxEr
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         wrapper: Wrapper,
     }
 
@@ -908,7 +756,7 @@ pub async fn document_in_column_expanded_embed(t: &mut Test) -> Result<(), BoxEr
 
 /// On a backend without document-collection support, a `#[document]`
 /// collection field is rejected at schema build with a clear error message.
-#[driver_test(id(ID), requires(not(document_collections)))]
+#[driver_test(requires(not(document_collections)))]
 pub async fn vec_struct_unsupported_backend(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct LineItem {
@@ -921,7 +769,7 @@ pub async fn vec_struct_unsupported_backend(t: &mut Test) -> Result<(), BoxError
     struct Order {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         items: Vec<LineItem>,
     }
@@ -950,7 +798,7 @@ pub async fn vec_struct_unsupported_backend(t: &mut Test) -> Result<(), BoxError
 /// compares as text, so the engine rewrites the operand to the codec's
 /// fixed-precision document text form — which also keeps range comparisons
 /// chronological (see the sub-second assertions below).
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn struct_embed_filter_temporal(t: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
     use jiff::civil::{DateTime, date, time};
@@ -969,7 +817,7 @@ pub async fn struct_embed_filter_temporal(t: &mut Test) -> Result<(), BoxError> 
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         event: Event,
     }
@@ -1077,7 +925,7 @@ pub async fn struct_embed_filter_temporal(t: &mut Test) -> Result<(), BoxError> 
 /// binding so an equality filter on the original nanosecond value still
 /// matches the stored row. DynamoDB stores documents as native Maps and
 /// keeps full nanosecond precision, so this is gated to SQL.
-#[driver_test(id(ID), requires(and(document_collections, sql)))]
+#[driver_test(requires(and(document_collections, sql)))]
 pub async fn struct_embed_timestamp_truncates_to_micros(t: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -1091,7 +939,7 @@ pub async fn struct_embed_timestamp_truncates_to_micros(t: &mut Test) -> Result<
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         event: Event,
     }
@@ -1169,7 +1017,7 @@ pub async fn struct_embed_whole_value_filter_rejected(t: &mut Test) -> Result<()
 /// PostgreSQL, `DECIMAL(65, 30)` on MySQL); SQLite has none, so the engine
 /// binds the operand as the codec's `Display` text and the comparison happens
 /// as text.
-#[driver_test(id(ID), requires(and(document_collections, sql)))]
+#[driver_test(requires(and(document_collections, sql)))]
 pub async fn struct_embed_filter_decimal(t: &mut Test) -> Result<(), BoxError> {
     use rust_decimal::Decimal;
 
@@ -1184,7 +1032,7 @@ pub async fn struct_embed_filter_decimal(t: &mut Test) -> Result<(), BoxError> {
     struct Product {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         pricing: Pricing,
     }
@@ -1263,7 +1111,7 @@ pub async fn struct_embed_temporal_create_get(t: &mut Test) -> Result<(), BoxErr
 /// A `Zoned` leaf in a `#[document]` is rejected at schema-build: jiff renders
 /// it with an RFC 9557 `[IANA]` annotation that no SQL backend can parse back,
 /// and dropping the annotation would lose the zone identity the type carries.
-#[driver_test(id(ID), requires(document_collections))]
+#[driver_test(requires(document_collections))]
 pub async fn struct_embed_zoned_document_rejected(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Clone, Debug, PartialEq, toasty::Embed)]
     struct Event {
@@ -1276,7 +1124,7 @@ pub async fn struct_embed_zoned_document_rejected(t: &mut Test) -> Result<(), Bo
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[document]
         event: Event,
     }

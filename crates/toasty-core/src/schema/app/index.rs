@@ -99,30 +99,3 @@ pub struct IndexField {
     /// Whether this field is a partition key or a local (sort) key.
     pub scope: IndexScope,
 }
-
-impl Index {
-    /// Returns the partition-scoped fields of this index.
-    ///
-    /// Partition fields come before local fields and determine data
-    /// distribution in NoSQL backends.
-    pub fn partition_fields(&self) -> &[IndexField] {
-        let i = self.index_of_first_local_field();
-        &self.fields[0..i]
-    }
-
-    /// Returns the local (sort-key) fields of this index.
-    ///
-    /// Local fields follow partition fields and determine ordering within a
-    /// partition.
-    pub fn local_fields(&self) -> &[IndexField] {
-        let i = self.index_of_first_local_field();
-        &self.fields[i..]
-    }
-
-    fn index_of_first_local_field(&self) -> usize {
-        self.fields
-            .iter()
-            .position(|field| field.scope.is_local())
-            .unwrap_or(self.fields.len())
-    }
-}

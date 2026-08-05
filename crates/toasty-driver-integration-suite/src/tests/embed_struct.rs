@@ -137,7 +137,7 @@ pub async fn root_model_with_embedded_field(test: &mut Test) {
 
 /// Tests basic CRUD operations with embedded fields across all ID types.
 /// Validates create, read, update (both instance and query-based), and delete.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Address {
@@ -149,7 +149,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         address: Address,
     }
@@ -207,7 +207,7 @@ pub async fn create_and_query_embedded(t: &mut Test) -> Result<()> {
 /// - Chaining works: User::fields().address().city()
 /// - Both model and embedded struct have fields() methods
 /// This is purely a compile-time test validating the generated API.
-#[driver_test(scenario(crate::scenarios::user_with_zip_address::id_uuid))]
+#[driver_test(scenario(crate::scenarios::user_with_zip_address))]
 pub async fn embedded_struct_fields_codegen(test: &mut Test) {
     let _db = setup(test).await;
 
@@ -544,7 +544,7 @@ pub async fn update_with_embedded_field_filter(t: &mut Test) -> Result<()> {
 /// Tests partial updates of embedded struct fields via `stmt::patch` /
 /// `stmt::apply`. This validates that individual fields within an embedded
 /// struct can be updated without replacing the entire struct.
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_zip_address))]
+#[driver_test(scenario(crate::scenarios::user_with_zip_address))]
 pub async fn partial_update_embedded_fields(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -950,7 +950,7 @@ pub async fn deeply_nested_embedded_schema(test: &mut Test) {
 /// Tests CRUD operations with 2-level nested embedded structs.
 /// Validates that creating, reading, updating (instance and query-based),
 /// and deleting records with nested embedded structs works end-to-end.
-#[driver_test(id(ID), scenario(crate::scenarios::company_office_address))]
+#[driver_test(scenario(crate::scenarios::company_office_address))]
 pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -1040,7 +1040,7 @@ pub async fn crud_nested_embedded(t: &mut Test) -> Result<()> {
 /// `stmt::patch` calls. Validates that patching a leaf field inside an
 /// outer embedded struct updates only that leaf, leaving all other fields
 /// unchanged in the database.
-#[driver_test(id(ID), scenario(crate::scenarios::company_office_address))]
+#[driver_test(scenario(crate::scenarios::company_office_address))]
 pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -1122,7 +1122,7 @@ pub async fn partial_update_nested_embedded(t: &mut Test) -> Result<()> {
 /// `User::filter_by_id(id).update().address(stmt::patch(...))` follows a different
 /// code path than the instance-based `user.update().address(stmt::patch(...))`,
 /// so both need coverage.
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_zip_address))]
+#[driver_test(scenario(crate::scenarios::user_with_zip_address))]
 pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -1172,7 +1172,7 @@ pub async fn query_based_partial_update_embedded(t: &mut Test) -> Result<()> {
 
 /// Tests that jiff temporal types inside embedded structs round-trip correctly.
 /// Covers Timestamp (epoch nanos), civil::Date, civil::Time, and civil::DateTime.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Schedule {
@@ -1186,7 +1186,7 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
     struct Event {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         schedule: Schedule,
     }
@@ -1221,7 +1221,7 @@ pub async fn embedded_struct_with_jiff_fields(t: &mut Test) -> Result<()> {
 
 /// Tests a unit enum embedded as a field inside an embedded struct (enum-in-struct nesting).
 /// The struct flattens to columns including the enum's discriminant column.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -1243,7 +1243,7 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         meta: Meta,
     }
 
@@ -1279,7 +1279,7 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
 /// UUID requires a type cast on databases that don't support it natively
 /// (e.g., SQLite stores it as text). This exercises the table_to_model
 /// lifting path for embedded struct fields with non-trivial type mappings.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn embedded_struct_with_uuid_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Meta {
@@ -1291,7 +1291,7 @@ pub async fn embedded_struct_with_uuid_field(t: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         meta: Meta,
     }
