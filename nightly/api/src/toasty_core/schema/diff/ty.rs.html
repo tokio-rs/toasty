@@ -5,8 +5,8 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="doccomment">/// A single change to a named enum type between two schema versions.
 <a href=#6 id=6 data-nosnippet>6</a>///
 <a href=#7 id=7 data-nosnippet>7</a>/// Enum types are not top-level schema objects — they are embedded in column
-<a href=#8 id=8 data-nosnippet>8</a>/// definitions. [`Type::diff`] collects all named `TypeEnum` types from both
-<a href=#9 id=9 data-nosnippet>9</a>/// schemas (by scanning columns) and computes the changes.
+<a href=#8 id=8 data-nosnippet>8</a>/// definitions. Diffing schemas collects named `TypeEnum` types by scanning
+<a href=#9 id=9 data-nosnippet>9</a>/// columns in both schemas.
 <a href=#10 id=10 data-nosnippet>10</a></span><span class="kw">pub enum </span>Type&lt;<span class="lifetime">'a</span>&gt; {
 <a href=#11 id=11 data-nosnippet>11</a>    <span class="doccomment">/// A new named enum type must be created.
 <a href=#12 id=12 data-nosnippet>12</a>    </span>Create(<span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::TypeEnum),
@@ -30,7 +30,7 @@
 <a href=#30 id=30 data-nosnippet>30</a>    ///
 <a href=#31 id=31 data-nosnippet>31</a>    /// Panics if existing variants were removed or reordered. Callers should
 <a href=#32 id=32 data-nosnippet>32</a>    /// validate schema transitions before computing the diff.
-<a href=#33 id=33 data-nosnippet>33</a>    </span><span class="kw">pub fn </span>diff(previous: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema, next: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema) -&gt; Vec&lt;<span class="self">Self</span>&gt; {
+<a href=#33 id=33 data-nosnippet>33</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>diff(previous: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema, next: <span class="kw-2">&amp;</span><span class="lifetime">'a </span>db::Schema) -&gt; Vec&lt;<span class="self">Self</span>&gt; {
 <a href=#34 id=34 data-nosnippet>34</a>        <span class="kw">let </span>prev_types = collect_named_enums(previous);
 <a href=#35 id=35 data-nosnippet>35</a>        <span class="kw">let </span>next_types = collect_named_enums(next);
 <a href=#36 id=36 data-nosnippet>36</a>

@@ -3,9 +3,9 @@
     pub index: <a class="primitive" href="https://doc.rust-lang.org/1.97.1/std/primitive.usize.html">usize</a>,
 }</code></pre><details class="toggle top-doc" open><summary class="hideme"><span>Expand description</span></summary><div class="docblock"><p>Identifies a specific variant within an <a href="struct.EmbeddedEnum.html" title="struct toasty::schema::app::EmbeddedEnum"><code>EmbeddedEnum</code></a> model.</p>
 <h2 id="examples"><a class="doc-anchor" href="#examples">§</a>Examples</h2>
-<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty_core::schema::app::ModelId;
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="kw">use </span>toasty_core::schema::app::{ModelId, VariantId};
 
-<span class="kw">let </span>variant_id = ModelId(<span class="number">1</span>).variant(<span class="number">0</span>);
+<span class="kw">let </span>variant_id = VariantId { model: ModelId(<span class="number">1</span>), index: <span class="number">0 </span>};
 <span class="macro">assert_eq!</span>(variant_id.model, ModelId(<span class="number">1</span>));
 <span class="macro">assert_eq!</span>(variant_id.index, <span class="number">0</span>);</code></pre></div></div></details><h2 id="fields" class="fields section-header">Fields<a href="#fields" class="anchor">§</a></h2><span id="structfield.model" class="structfield section-header"><a href="#structfield.model" class="anchor field">§</a><code>model: <a class="struct" href="struct.ModelId.html" title="struct toasty::schema::app::ModelId">ModelId</a></code></span><div class="docblock"><p>The enum model this variant belongs to.</p>
 </div><span id="structfield.index" class="structfield section-header"><a href="#structfield.index" class="anchor field">§</a><code>index: <a class="primitive" href="https://doc.rust-lang.org/1.97.1/std/primitive.usize.html">usize</a></code></span><div class="docblock"><p>Index of the variant within <code>EmbeddedEnum::variants</code>.</p>
