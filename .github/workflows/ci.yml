@@ -93,7 +93,7 @@ jobs:
       - name: Install cargo-hack
         run: cargo install cargo-hack --locked
       - name: cargo hack check --feature-powerset
-        run: cargo hack check --package "${{ matrix.package }}" --feature-powerset --mutually-exclusive-features native-tls,rustls ${{ matrix.extra_args }}
+        run: cargo hack check --package "${{ matrix.package }}" --feature-powerset ${{ matrix.extra_args }}
 
   msrv:
     needs: check

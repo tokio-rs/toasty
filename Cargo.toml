@@ -115,9 +115,6 @@ fluent-uri = "0.4.1"
 form_urlencoded = "1.2.2"
 jiff = "0.2.23"
 lru = "0.18.0"
-mysql_async = { version = "0.37.0", default-features = false, features = [
-    "minimal",
-] }
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
 percent-encoding = "2.3.2"
@@ -132,7 +129,10 @@ bigdecimal = "0.4.10"
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1.0.228", features = ["derive"] }
 serde_json = "1.0.149"
+sqlx-core = { version = "=0.9.0", default-features = false, features = ["_rt-tokio"] }
+sqlx-mysql = { version = "=0.9.0", default-features = false, features = ["rsa", "time"] }
 syn = { version = "3.0.0", features = ["full", "extra-traits", "visit-mut"] }
+time = "0.3.47"
 toml = "1.1.0"
 toml_edit = "0.25.8"
 tempfile = "3.27"
