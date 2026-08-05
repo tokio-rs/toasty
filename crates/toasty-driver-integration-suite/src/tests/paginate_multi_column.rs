@@ -16,6 +16,31 @@ fn cursor_len(cursor: Option<&Value>) -> usize {
     cursor.fields.len()
 }
 
+#[driver_test(requires(and(sql, backward_pagination)))]
+pub async fn paginate_first_page_has_no_previous_page(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[{ id: 1 }, { id: 2 }])
+        .exec(&mut db)
+        .await?;
+
+    let first: Page<Item> = Item::all()
+        .order_by(Item::fields().id().asc())
+        .paginate(1)
+        .exec(&mut db)
+        .await?;
+
+    assert!(!first.has_prev());
+    assert!(first.prev(&mut db).await?.is_none());
+
+    Ok(())
+}
+
 #[driver_test(requires(sql))]
 pub async fn paginate_single_non_unique_column(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]

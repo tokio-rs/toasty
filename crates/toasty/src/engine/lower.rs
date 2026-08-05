@@ -1169,6 +1169,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
+        if matches!(
+            &stmt.limit,
+            Some(stmt::Limit::Cursor(cursor)) if cursor.after.is_some()
+        ) {
+            self.curr_stmt_info().has_pagination_cursor = true;
+        }
+
         let mut lower = self.scope_expr(&stmt.body);
 
         if let Some(with) = &mut stmt.with {

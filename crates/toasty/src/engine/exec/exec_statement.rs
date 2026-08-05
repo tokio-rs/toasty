@@ -37,6 +37,8 @@ pub(crate) enum ConditionalOutput {
 pub(crate) struct PaginationConfig {
     /// Number of items per page
     pub page_size: i64,
+    /// Whether the query starts after a cursor and can have a previous page.
+    pub has_previous_page: bool,
     /// Function to extract cursor from a row (SQL only).
     /// For NoSQL drivers, this is None (driver provides cursor).
     pub extract_cursor: Option<eval::Func>,
@@ -296,8 +298,11 @@ impl Exec<'_> {
             None
         };
 
-        // Extract prev cursor from first row only when the driver supports backward pagination
-        res.prev_cursor = if !row_vec.is_empty() && self.engine.capability().backward_pagination {
+        // Extract a previous cursor only when this query started after another page.
+        res.prev_cursor = if pagination.has_previous_page
+            && !row_vec.is_empty()
+            && self.engine.capability().backward_pagination
+        {
             let cursor_row = &row_vec[0];
             Some(extract_cursor.eval(&self.engine.schema, std::slice::from_ref(cursor_row))?)
         } else {
