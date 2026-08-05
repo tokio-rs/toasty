@@ -173,9 +173,17 @@ impl Exec<'_> {
     pub(super) async fn action_nested_merge(&mut self, action: &NestedMerge) -> Result<()> {
         // Load all input data upfront
         let mut inputs = Vec::with_capacity(action.inputs.len());
+        let mut next_cursor = None;
+        let mut prev_cursor = None;
 
-        for var_id in &action.inputs {
+        for (source, var_id) in action.inputs.iter().enumerate() {
             let response = self.vars.load(*var_id).await?;
+
+            if source == action.root.source {
+                next_cursor = response.next_cursor;
+                prev_cursor = response.prev_cursor;
+            }
+
             inputs.push(match response.values {
                 Rows::Count(count) => Input::Count(count),
                 Rows::Value(value) => Input::Value(match value {
@@ -253,7 +261,11 @@ impl Exec<'_> {
         self.vars.store(
             action.output.var,
             action.output.num_uses,
-            ExecResponse::from_rows(Rows::value_stream(merged_rows)),
+            ExecResponse {
+                values: Rows::value_stream(merged_rows),
+                next_cursor,
+                prev_cursor,
+            },
         );
 
         Ok(())
