@@ -5,7 +5,7 @@ use crate::prelude::*;
 /// On PostgreSQL, both tables should share the same `CREATE TYPE priority …`
 /// enum type. This test verifies that CRUD and filter operations work correctly
 /// when the enum type is reused across tables.
-#[driver_test(id(ID), scenario(crate::scenarios::task_bug_priority))]
+#[driver_test(scenario(crate::scenarios::task_bug_priority))]
 pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -56,7 +56,7 @@ pub async fn shared_enum_crud(t: &mut Test) -> Result<()> {
 }
 
 /// Filter by enum value on two models that share the same enum type.
-#[driver_test(requires(scan), scenario(crate::scenarios::task_bug_priority::id_uuid))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_bug_priority))]
 pub async fn shared_enum_filter(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

@@ -5,8 +5,8 @@ use hashbrown::HashMap;
 /// A single change to a named enum type between two schema versions.
 ///
 /// Enum types are not top-level schema objects — they are embedded in column
-/// definitions. [`Type::diff`] collects all named `TypeEnum` types from both
-/// schemas (by scanning columns) and computes the changes.
+/// definitions. Diffing schemas collects named `TypeEnum` types by scanning
+/// columns in both schemas.
 pub enum Type<'a> {
     /// A new named enum type must be created.
     Create(&'a db::TypeEnum),
@@ -30,7 +30,7 @@ impl<'a> Type<'a> {
     ///
     /// Panics if existing variants were removed or reordered. Callers should
     /// validate schema transitions before computing the diff.
-    pub fn diff(previous: &'a db::Schema, next: &'a db::Schema) -> Vec<Self> {
+    pub(super) fn diff(previous: &'a db::Schema, next: &'a db::Schema) -> Vec<Self> {
         let prev_types = collect_named_enums(previous);
         let next_types = collect_named_enums(next);
 
