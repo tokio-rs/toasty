@@ -35,7 +35,7 @@ mod output;
 pub(crate) use output::Output;
 
 mod plan;
-pub(crate) use plan::ExecPlan;
+pub(crate) use plan::{ExecPlan, PlanTransaction};
 
 mod project;
 pub(crate) use project::Project;
@@ -64,7 +64,10 @@ pub(crate) use var::{VarDecls, VarId, VarStore};
 use crate::{Result, engine::Engine};
 use toasty_core::{
     Connection,
-    driver::{ExecResponse, Rows, operation::Transaction},
+    driver::{
+        ExecResponse, Rows,
+        operation::{Transaction, TransactionMode},
+    },
     stmt::{self, ValueStream},
 };
 
@@ -104,14 +107,22 @@ impl Engine {
                 Transaction::RollbackToSavepoint(name.to_owned()),
             )
         } else {
-            (
-                Transaction::start(),
-                Transaction::Commit,
-                Transaction::Rollback,
-            )
+            // The isolation level comes from the plan: read-only plans run at
+            // repeatable read, mutating plans at the database default. A
+            // savepoint cannot change isolation, so the nested case above
+            // inherits whatever the enclosing transaction runs at.
+            let start = plan
+                .transaction
+                .map_or_else(Transaction::start, |tx| Transaction::Start {
+                    isolation: tx.isolation,
+                    read_only: tx.read_only,
+                    mode: TransactionMode::Default,
+                });
+
+            (start, Transaction::Commit, Transaction::Rollback)
         };
 
-        if plan.needs_transaction {
+        if plan.transaction.is_some() {
             tracing::trace!("beginning plan transaction");
             exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
@@ -124,7 +135,7 @@ impl Engine {
             // violation should not error-spam production logs.
             if let Err(e) = exec.exec_step(step).await {
                 tracing::debug!(step = i, action = %step.name(), error = %e, "action failed");
-                if plan.needs_transaction {
+                if plan.transaction.is_some() {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec.connection.exec(&self.schema, rollback.into()).await;
@@ -133,7 +144,7 @@ impl Engine {
             }
         }
 
-        if plan.needs_transaction {
+        if plan.transaction.is_some() {
             tracing::trace!("committing plan transaction");
             exec.connection.exec(&self.schema, commit.into()).await?;
         }

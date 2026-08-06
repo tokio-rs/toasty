@@ -1,6 +1,12 @@
 use crate::prelude::*;
 
-use toasty_core::driver::{Operation, operation::Transaction};
+use toasty_core::{
+    driver::{
+        Operation,
+        operation::{IsolationLevel, Transaction},
+    },
+    stmt::Statement,
+};
 
 // ===== Transaction wrapping =====
 
@@ -53,6 +59,53 @@ pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
 
     // Only the INSERT — no Transaction::Start { isolation: None, read_only: false } bookending it
     assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
+/// An include reads its parent and relation queries from one snapshot: the
+/// plan is wrapped in a read-only transaction, at `REPEATABLE READ` on drivers
+/// that accept the explicit level and at the database default on the rest.
+#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+pub async fn read_only_include_wraps_in_read_only_transaction(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+    let expected_isolation = t
+        .capability()
+        .repeatable_read
+        .then_some(IsolationLevel::RepeatableRead);
+    let user = toasty::create!(User {
+        name: "Alice",
+        todos: [{ title: "task" }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+    let user = User::filter_by_id(user.id)
+        .include(User::fields().todos())
+        .get(&mut db)
+        .await?;
+
+    assert_eq!(user.todos.get().len(), 1);
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Start {
+            isolation: == expected_isolation,
+            read_only: true,
+            ..
+        })
+    );
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+        stmt: Statement::Query(_),
+    }));
+    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+        stmt: Statement::Query(_),
+    }));
+    assert_struct!(
+        t.log().pop_op(),
+        Operation::Transaction(Transaction::Commit)
+    );
     assert!(t.log().is_empty());
 
     Ok(())

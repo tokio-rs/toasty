@@ -95,7 +95,7 @@ impl Engine {
 
         tracing::trace!(
             actions = plan.actions.len(),
-            needs_transaction = plan.needs_transaction,
+            needs_transaction = plan.transaction.is_some(),
             "execution plan ready"
         );
 

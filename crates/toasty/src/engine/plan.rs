@@ -11,7 +11,7 @@ use crate::{
     },
 };
 use std::sync::Arc;
-use toasty_core::Schema;
+use toasty_core::{Schema, driver::Capability};
 
 #[derive(Debug)]
 struct HirPlanner<'a> {
@@ -29,7 +29,7 @@ struct ExecPlanner<'a> {
     logical_plan: &'a LogicalPlan,
     var_decls: VarDecls,
     actions: Vec<exec::Action>,
-    use_transactions: bool,
+    capability: &'static Capability,
     schema: Arc<Schema>,
 }
 
@@ -52,7 +52,7 @@ impl Engine {
             logical_plan: &logical_plan,
             var_decls: VarDecls::default(),
             actions: vec![],
-            use_transactions: self.capability().sql,
+            capability: self.capability,
             schema: self.schema.clone(),
         }
         .plan_execution()
