@@ -42,7 +42,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: cargo check
-        run: cargo check --workspace --features assert-struct,bigdecimal,dynamodb,jiff,migration,mysql,native-tls,postgresql,rust_decimal,serde,sql,sqlite,sync,tls,turso
+        run: cargo check --workspace --all-features
       - name: cargo fmt
         run: cargo fmt --all --check
 
@@ -59,7 +59,7 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - name: cargo clippy
-        run: cargo clippy --workspace --features assert-struct,bigdecimal,dynamodb,jiff,migration,mysql,native-tls,postgresql,rust_decimal,serde,sql,sqlite,sync,tls,turso
+        run: cargo clippy --workspace --all-features
 
   feature-combinations:
     needs: check
@@ -117,7 +117,7 @@ jobs:
       - name: cargo check
         env:
           RUSTUP_TOOLCHAIN: ${{ steps.msrv.outputs.version }}
-        run: cargo check --workspace --features assert-struct,bigdecimal,dynamodb,jiff,migration,mysql,native-tls,postgresql,rust_decimal,serde,sql,sqlite,sync,tls,turso
+        run: cargo check --workspace --all-features
 
   test-sqlite:
     needs: check
