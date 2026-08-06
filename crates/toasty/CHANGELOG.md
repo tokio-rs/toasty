@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- Plans are dispatched by what the driver reports it can do: a read-only plan
+  runs without a transaction when the driver cannot offer a snapshot, and a
+  plan's independent writes are handed over as one set when the driver commits
+  them together. Drivers reporting neither capability are unaffected.
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.8.0...toasty-v0.9.0) - 2026-07-23
 
 ### Added

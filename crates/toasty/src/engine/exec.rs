@@ -111,20 +111,29 @@ impl Engine {
             )
         };
 
-        if plan.needs_transaction {
+        // A driver that commits a set of writes handed to it takes that route
+        // rather than a transaction, when the plan's writes qualify.
+        let batched = self.capability().atomic_write_batch
+            && plan.needs_transaction
+            && exec.exec_write_batch(&plan.actions).await?;
+
+        if plan.needs_transaction && !batched {
             tracing::trace!("beginning plan transaction");
             exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
         }
 
         for (i, step) in plan.actions.iter().enumerate() {
+            if batched && step.is_batchable_write() {
+                continue;
+            }
             tracing::trace!(step = i, action = %step.name(), "executing action");
             // Debug, not error: the failure propagates to the caller, who
             // decides whether it is an application error. A handled unique
             // violation should not error-spam production logs.
             if let Err(e) = exec.exec_step(step).await {
                 tracing::debug!(step = i, action = %step.name(), error = %e, "action failed");
-                if plan.needs_transaction {
+                if plan.needs_transaction && !batched {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec.connection.exec(&self.schema, rollback.into()).await;
@@ -133,7 +142,7 @@ impl Engine {
             }
         }
 
-        if plan.needs_transaction {
+        if plan.needs_transaction && !batched {
             tracing::trace!("committing plan transaction");
             exec.connection.exec(&self.schema, commit.into()).await?;
         }
@@ -164,6 +173,62 @@ impl Engine {
 }
 
 impl Exec<'_> {
+    /// Sends the plan's writes to the driver as one atomic set.
+    ///
+    /// Returns `false` without touching the database when the plan does not
+    /// qualify — fewer than two writes, or a write that reads a variable and
+    /// so cannot be submitted before the rest of the batch has run. The
+    /// caller then falls back to the streamed path.
+    ///
+    /// The writes are hoisted ahead of the actions between them, which is
+    /// sound precisely because none of them takes an input.
+    async fn exec_write_batch(&mut self, actions: &[Action]) -> Result<bool> {
+        let writes: Vec<&ExecStatement> = actions
+            .iter()
+            .filter_map(|action| match action {
+                Action::ExecStatement(exec) if action.is_batchable_write() => Some(&**exec),
+                _ => None,
+            })
+            .collect();
+
+        let all_writes_batchable = actions
+            .iter()
+            .filter(|action| action.is_write())
+            .all(Action::is_batchable_write);
+
+        if writes.len() < 2 || !all_writes_batchable {
+            return Ok(false);
+        }
+
+        let mut ops = Vec::with_capacity(writes.len());
+        let mut pending = Vec::with_capacity(writes.len());
+        for action in &writes {
+            if let Some(op) = self.prepare_exec_statement(action).await? {
+                ops.push(op.into());
+                pending.push(*action);
+            }
+        }
+
+        if ops.is_empty() {
+            return Ok(true);
+        }
+
+        tracing::trace!(writes = ops.len(), "executing write batch");
+        let responses = self.connection.exec_batch(&self.engine.schema, ops).await?;
+
+        if responses.len() != pending.len() {
+            return Err(toasty_core::Error::invalid_result(
+                "driver returned the wrong number of batch responses",
+            ));
+        }
+
+        for (action, res) in pending.into_iter().zip(responses) {
+            self.finish_batched_statement(action, res).await?;
+        }
+
+        Ok(true)
+    }
+
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,

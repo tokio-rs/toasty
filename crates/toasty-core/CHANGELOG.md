@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- `Capability::snapshot_reads`, letting a driver whose backend has no
+  transactions run read-only plans unwrapped instead of refusing them.
+- `Capability::atomic_write_batch` and `Connection::exec_batch`, for a backend
+  that commits a set of writes submitted together rather than under an
+  engine-controlled `BEGIN`/`COMMIT`.
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.8.0...toasty-core-v0.9.0) - 2026-07-23
 
 ### Added

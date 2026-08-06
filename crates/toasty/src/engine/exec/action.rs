@@ -2,6 +2,7 @@ use crate::engine::exec::{
     DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Project,
     QueryPk, ReadModifyWrite, Scan, SetVar, UpdateByKey, Upsert,
 };
+use toasty_core::stmt;
 
 use std::fmt;
 
@@ -75,6 +76,48 @@ impl Action {
             Action::SetVar(_) => "set_var",
             Action::UpdateByKey(_) => "update_by_key",
             Action::Upsert(_) => "upsert",
+        }
+    }
+
+    /// Returns true if this action can modify the database.
+    ///
+    /// A plan built only from actions that return `false` here reads without
+    /// writing, which is what lets the planner decide whether wrapping it in a
+    /// transaction is about atomicity or only about snapshot consistency.
+    pub(crate) fn is_write(&self) -> bool {
+        match self {
+            Action::DeleteByKey(_)
+            | Action::ReadModifyWrite(_)
+            | Action::UpdateByKey(_)
+            | Action::Upsert(_) => true,
+
+            Action::ExecStatement(exec) => !matches!(exec.stmt, stmt::Statement::Query(_)),
+
+            Action::Eval(_)
+            | Action::Filter(_)
+            | Action::FindPkByIndex(_)
+            | Action::GetByKey(_)
+            | Action::Guard(_)
+            | Action::NestedMerge(_)
+            | Action::Project(_)
+            | Action::QueryPk(_)
+            | Action::Scan(_)
+            | Action::SetVar(_) => false,
+        }
+    }
+
+    /// Returns true if this action is a write that can be handed to
+    /// [`Connection::exec_batch`](toasty_core::driver::Connection::exec_batch).
+    ///
+    /// A batch is submitted before any of it runs, so a statement that reads
+    /// a variable is excluded: whatever produced that variable may itself be
+    /// in the batch, and would not have run yet.
+    pub(crate) fn is_batchable_write(&self) -> bool {
+        match self {
+            Action::ExecStatement(exec) => {
+                !matches!(exec.stmt, stmt::Statement::Query(_)) && exec.input.is_empty()
+            }
+            _ => false,
         }
     }
 
