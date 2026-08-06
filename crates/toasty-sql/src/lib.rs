@@ -10,6 +10,13 @@
 pub mod migration;
 pub use migration::*;
 
+/// The SQL dialect being targeted.
+///
+/// Re-exported from `toasty-core` so callers that only need to name a dialect
+/// — `toasty migrate generate --flavor postgresql` — can do so without
+/// depending on the driver interface.
+pub use toasty_core::driver::SqlFlavor as Flavor;
+
 /// SQL serialization and parameter handling.
 pub mod serializer;
 pub use serializer::Serializer;

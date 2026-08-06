@@ -9,6 +9,7 @@ use crate::{
 /// [`BelongsTo`] field on B that holds the foreign key. Its cardinality records
 /// whether the field represents "A has many Bs" or "A has one B".
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Has {
     /// The [`ModelId`] of the associated (target) model.
     pub target: ModelId,
@@ -26,6 +27,7 @@ pub struct Has {
 
 /// Cardinality for a relation field that reaches another model.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Cardinality {
     /// The relation yields zero or more associated items.
     Many {

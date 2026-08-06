@@ -17,6 +17,7 @@ use super::{FieldId, IndexId};
 /// assert_eq!(pk.fields.len(), 1);
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PrimaryKey {
     /// The fields that compose this primary key, in order.
     pub fields: Vec<FieldId>,

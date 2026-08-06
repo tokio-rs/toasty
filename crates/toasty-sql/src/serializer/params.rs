@@ -1,4 +1,4 @@
-use super::{Formatter, ToSql};
+use super::{Formatter, ToSql, flavor};
 
 use std::fmt;
 use toasty_core::driver::SqlPlaceholder;
@@ -20,7 +20,8 @@ pub struct Placeholder(pub usize);
 
 impl ToSql for Placeholder {
     fn to_sql(self, f: &mut Formatter<'_>) {
-        write_sql_placeholder(&mut f.dst, f.serializer.flavor.sql_placeholder(), self.0).unwrap();
+        let placeholder = flavor::sql_placeholder(f.serializer.flavor);
+        write_sql_placeholder(&mut f.dst, placeholder, self.0).unwrap();
     }
 }
 

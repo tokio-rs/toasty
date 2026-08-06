@@ -6,6 +6,7 @@ use crate::schema::app::{FieldId, ModelId, VariantId};
 /// A path can originate from a top-level model or from a specific variant of
 /// an embedded enum field.
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PathRoot {
     /// The path originates from a top-level model.
     Model(ModelId),
@@ -58,6 +59,7 @@ impl PathRoot {
 /// assert!(p.is_empty()); // no field steps
 /// ```
 #[derive(Debug, Clone, PartialEq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Path {
     /// Where the path originates from.
     pub root: PathRoot,

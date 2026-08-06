@@ -26,6 +26,7 @@ use std::fmt;
 /// }
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum Model {
     /// A root model that maps to its own database table and can be queried
     /// directly.
@@ -143,6 +144,7 @@ impl ExactSizeIterator for ModelSetIntoIter {}
 /// let pk_fields: Vec<_> = root.primary_key_fields().collect();
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ModelRoot {
     /// Uniquely identifies this model within the schema.
     pub id: ModelId,
@@ -260,6 +262,7 @@ impl ModelRoot {
 /// }
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EmbeddedStruct {
     /// Uniquely identifies this model within the schema.
     pub id: ModelId,
@@ -303,6 +306,7 @@ impl EmbeddedStruct {
 /// }
 /// ```
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EmbeddedEnum {
     /// Uniquely identifies this model within the schema.
     pub id: ModelId,
@@ -333,6 +337,7 @@ pub struct EmbeddedEnum {
 /// Each variant has a name and a discriminant value (integer or string) that is
 /// stored in the database to identify which variant is active.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct EnumVariant {
     /// The Rust variant name.
     pub name: Name,
@@ -340,7 +345,81 @@ pub struct EnumVariant {
     /// The discriminant value stored in the database column.
     /// Typically `Value::I64` for integer discriminants or `Value::String` for
     /// string discriminants.
+    #[cfg_attr(feature = "serde", serde(with = "discriminant_serde"))]
     pub discriminant: stmt::Value,
+}
+
+/// Serializes an [`EnumVariant`] discriminant.
+///
+/// [`stmt::Value`] is the engine's general-purpose runtime value and is
+/// deliberately not `Serialize`. A discriminant is only ever the integer or
+/// string the `#[derive(Model)]` expansion emits, so this codec covers exactly
+/// those two shapes and rejects anything else rather than committing the whole
+/// value type to a wire format.
+#[cfg(feature = "serde")]
+mod discriminant_serde {
+    use crate::stmt;
+    use serde::{Deserialize, Deserializer, Serialize, Serializer};
+
+    #[derive(Serialize, Deserialize)]
+    #[serde(rename_all = "snake_case")]
+    enum Discriminant {
+        Int(i64),
+        String(String),
+    }
+
+    pub(super) fn serialize<S: Serializer>(
+        value: &stmt::Value,
+        serializer: S,
+    ) -> Result<S::Ok, S::Error> {
+        let discriminant = match value {
+            stmt::Value::I64(v) => Discriminant::Int(*v),
+            stmt::Value::String(v) => Discriminant::String(v.clone()),
+            other => {
+                return Err(serde::ser::Error::custom(format!(
+                    "enum discriminant must be an integer or a string, found {other:?}"
+                )));
+            }
+        };
+        discriminant.serialize(serializer)
+    }
+
+    pub(super) fn deserialize<'de, D: Deserializer<'de>>(
+        deserializer: D,
+    ) -> Result<stmt::Value, D::Error> {
+        Ok(match Discriminant::deserialize(deserializer)? {
+            Discriminant::Int(v) => stmt::Value::I64(v),
+            Discriminant::String(v) => stmt::Value::String(v),
+        })
+    }
+
+    #[cfg(test)]
+    mod tests {
+        use super::*;
+
+        #[derive(Serialize, Deserialize, Debug, PartialEq)]
+        struct Wrapper(#[serde(with = "super")] stmt::Value);
+
+        #[test]
+        fn integer_and_string_discriminants_round_trip() {
+            for value in [stmt::Value::I64(7), stmt::Value::String("open".into())] {
+                let json = serde_json::to_string(&Wrapper(value.clone())).unwrap();
+                assert_eq!(
+                    serde_json::from_str::<Wrapper>(&json).unwrap(),
+                    Wrapper(value)
+                );
+            }
+        }
+
+        #[test]
+        fn other_value_kinds_are_rejected() {
+            let err = serde_json::to_string(&Wrapper(stmt::Value::Bool(true))).unwrap_err();
+            assert!(
+                err.to_string().contains("must be an integer or a string"),
+                "unexpected error: {err}"
+            );
+        }
+    }
 }
 
 impl EmbeddedEnum {
@@ -512,6 +591,7 @@ impl Model {
 /// assert_eq!(variant_id.index, 0);
 /// ```
 #[derive(Copy, Clone, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct VariantId {
     /// The enum model this variant belongs to.
     pub model: ModelId,

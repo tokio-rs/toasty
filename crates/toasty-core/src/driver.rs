@@ -56,7 +56,7 @@
 //! [`crate::Error::driver_operation_failed`].
 
 mod capability;
-pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
+pub use capability::{Capability, SchemaMutations, SqlFlavor, SqlPlaceholder, StorageTypes};
 
 mod connection_url;
 pub use connection_url::ConnectionUrl;
@@ -73,7 +73,6 @@ pub use operation::{IsolationLevel, Operation};
 use crate::schema::{
     Schema,
     db::{AppliedMigration, Migration},
-    diff,
 };
 
 use async_trait::async_trait;
@@ -139,9 +138,6 @@ pub trait Driver: Debug + Send + Sync + 'static {
     fn max_connections(&self) -> Option<usize> {
         None
     }
-
-    /// Generates a migration from a [`diff::Schema`].
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration;
 
     /// Drops the entire database and recreates an empty one without applying migrations.
     ///

@@ -18,6 +18,7 @@ use heck::{ToLowerCamelCase, ToShoutySnakeCase, ToSnakeCase, ToUpperCamelCase};
 /// assert_eq!(name.upper_snake_case(), "USER_PROFILE");
 /// ```
 #[derive(Debug, Clone, Eq, PartialEq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Name {
     /// The individual lowercase word parts of this name.
     pub parts: Vec<String>,

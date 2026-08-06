@@ -4,10 +4,7 @@ use toasty::db::{Capability, ConnectContext, Driver, ExecResponse};
 use toasty_core::{
     Schema,
     driver::{Connection, Operation},
-    schema::{
-        db::{AppliedMigration, Migration, Type},
-        diff,
-    },
+    schema::db::{AppliedMigration, Migration, Type},
     stmt,
 };
 
@@ -26,10 +23,6 @@ impl Driver for PostgresSchemaDriver {
 
     async fn connect(&self, _cx: &ConnectContext) -> toasty::Result<Box<dyn Connection>> {
         Ok(Box::new(SchemaConnection))
-    }
-
-    fn generate_migration(&self, _schema_diff: &diff::Schema<'_>) -> Migration {
-        Migration::Sql("-- generated migration".to_string())
     }
 
     async fn reset_db(&self) -> toasty::Result<()> {

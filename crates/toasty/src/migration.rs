@@ -11,6 +11,6 @@ mod generate;
 mod snapshot;
 
 pub use embed::{MigrationFile, MigrationReport, MigrationSet};
-pub use generate::{Generated, generate};
+pub use generate::{Flavor, Generated, generate};
 pub use snapshot::Snapshot;
 pub use toasty_core::migration::{History, HistoryEntry};

@@ -17,6 +17,13 @@ pub struct SnapshotCommand {
 
 impl SnapshotCommand {
     pub(crate) fn run(self, db: &Db, _config: &Config) -> Result<()> {
+        run_snapshot(&toasty::schema::db::Schema::clone(&db.schema().db))
+    }
+}
+
+/// Prints `schema` as a TOML snapshot.
+pub(crate) fn run_snapshot(schema: &toasty::schema::db::Schema) -> Result<()> {
+    {
         println!();
         println!(
             "  {}",
@@ -24,7 +31,7 @@ impl SnapshotCommand {
         );
         println!();
 
-        let snapshot = Snapshot::new(toasty::schema::db::Schema::clone(&db.schema().db));
+        let snapshot = Snapshot::new(schema.clone());
 
         // Print the snapshot with nice formatting
         let snapshot_str = snapshot.to_toml_string()?;

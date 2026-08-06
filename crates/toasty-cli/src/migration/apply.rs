@@ -5,6 +5,7 @@ use console::style;
 use hashbrown::HashSet;
 use std::fs;
 use toasty::Db;
+use toasty::db::Driver;
 use toasty::migration::History;
 use toasty::schema::db::Migration;
 
@@ -21,24 +22,33 @@ pub struct ApplyCommand {}
 
 impl ApplyCommand {
     pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
-        println!();
-        println!("  {}", style("Apply Migrations").cyan().bold().underlined());
-        println!();
-        println!(
-            "  {}",
-            style(format!(
-                "Connected to {}",
-                crate::utility::redact_url_password(&db.driver().url())
-            ))
-            .dim()
-        );
-        println!();
-
-        apply_migrations(db, config).await
+        run_apply(db.driver(), config).await
     }
 }
 
-pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
+/// Applies pending migrations against `driver`.
+///
+/// Takes a driver rather than a [`Db`] because applying a migration needs a
+/// connection and nothing else — in particular, not the models. That is what
+/// lets the standalone CLI apply migrations with only a `--url`.
+pub(crate) async fn run_apply(driver: &dyn Driver, config: &Config) -> Result<()> {
+    println!();
+    println!("  {}", style("Apply Migrations").cyan().bold().underlined());
+    println!();
+    println!(
+        "  {}",
+        style(format!(
+            "Connected to {}",
+            crate::utility::redact_url_password(&driver.url())
+        ))
+        .dim()
+    );
+    println!();
+
+    apply_migrations(driver, config).await
+}
+
+pub(crate) async fn apply_migrations(driver: &dyn Driver, config: &Config) -> Result<()> {
     let history_path = config.migration.get_history_file_path();
 
     // Load migration history
@@ -56,8 +66,7 @@ pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
     }
 
     // Get a connection to check which migrations have been applied
-    let mut conn = db
-        .driver()
+    let mut conn = driver
         .connect(&toasty::db::ConnectContext::default())
         .await?;
 

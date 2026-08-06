@@ -12,6 +12,13 @@ pub use generate::GenerateCommand;
 pub use reset::ResetCommand;
 pub use snapshot::SnapshotCommand;
 
+// The `Db`-free entry points. Each command's `run` calls into these too, but
+// only the standalone CLI reaches them from outside this module.
+#[cfg(feature = "cli")]
+pub(crate) use {
+    apply::run_apply, generate::run_generate, reset::run_reset, snapshot::run_snapshot,
+};
+
 use crate::Config;
 use anyhow::Result;
 use clap::Parser;

@@ -6,6 +6,7 @@ use clap::Parser;
 use console::style;
 use dialoguer::Confirm;
 use toasty::Db;
+use toasty::db::Driver;
 
 /// Drops all tables in the database, then optionally re-applies migrations.
 ///
@@ -21,6 +22,20 @@ pub struct ResetCommand {
 
 impl ResetCommand {
     pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
+        run_reset(db.driver(), config, self.skip_migrations).await
+    }
+}
+
+/// Drops every table on `driver` and optionally re-applies the migrations.
+///
+/// Driver-based for the same reason as [`run_apply`](super::apply::run_apply):
+/// the models play no part.
+pub(crate) async fn run_reset(
+    driver: &dyn Driver,
+    config: &Config,
+    skip_migrations: bool,
+) -> Result<()> {
+    {
         println!();
         println!("  {}", style("Reset Database").cyan().bold().underlined());
         println!();
@@ -28,7 +43,7 @@ impl ResetCommand {
             "  {}",
             style(format!(
                 "Connected to {}",
-                crate::utility::redact_url_password(&db.driver().url())
+                crate::utility::redact_url_password(&driver.url())
             ))
             .dim()
         );
@@ -57,7 +72,7 @@ impl ResetCommand {
         println!();
         println!("  {} Resetting database...", style("→").cyan());
 
-        db.reset_db().await?;
+        driver.reset_db().await?;
 
         println!(
             "  {} {}",
@@ -66,8 +81,8 @@ impl ResetCommand {
         );
         println!();
 
-        if !self.skip_migrations {
-            apply_migrations(db, config).await?;
+        if !skip_migrations {
+            apply_migrations(driver, config).await?;
         }
 
         Ok(())

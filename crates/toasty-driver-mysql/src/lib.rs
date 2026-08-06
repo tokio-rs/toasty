@@ -25,10 +25,7 @@ use toasty_core::{
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode},
     },
-    schema::{
-        db::{self, Migration, Table},
-        diff,
-    },
+    schema::db::{self, Table},
     stmt::{self, ValueRecord},
 };
 use toasty_sql::{self as sql};
@@ -148,17 +145,6 @@ impl Driver for MySQL {
         let mut connection = Connection::new(conn);
         connection.query_log = cx.query_log;
         Ok(Box::new(connection))
-    }
-
-    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
-        let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::MYSQL);
-
-        let sql_strings: Vec<String> = statements
-            .iter()
-            .map(|stmt| sql::Serializer::mysql(stmt.schema()).serialize(stmt.statement()))
-            .collect();
-
-        Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
     async fn reset_db(&self) -> toasty_core::Result<()> {

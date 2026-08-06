@@ -1,10 +1,25 @@
 #![warn(missing_docs)]
-//! A library for building Toasty command-line tools.
+//! The Toasty command-line tool, and a library for building your own.
 //!
-//! `toasty-cli` provides [`ToastyCli`], a ready-made CLI runner that wraps a
-//! [`toasty::Db`] handle and exposes database migration subcommands (generate,
-//! apply, drop, reset, snapshot). It uses [clap] for argument parsing and
-//! [dialoguer] for interactive prompts.
+//! Installing this crate gives you the standalone `toasty` binary:
+//!
+//! ```text
+//! cargo install toasty-cli
+//! ```
+//!
+//! Run it from any Cargo package that uses Toasty — it reads your schema out
+//! of the artifact your project already builds, so there is nothing to add to
+//! your `Cargo.toml` and no code to write. See [`standalone`] for the details.
+//!
+//! ```text
+//! toasty migrate generate --flavor postgresql --name init
+//! toasty migrate apply --url postgres://localhost/app
+//! ```
+//!
+//! As a library, `toasty-cli` provides [`ToastyCli`], a CLI runner that wraps
+//! a [`toasty::Db`] handle and exposes the same migration subcommands from a
+//! binary of your own. It uses [clap] for argument parsing and [dialoguer] for
+//! interactive prompts.
 //!
 //! The crate also exposes the underlying configuration used by the command
 //! runner. Reusable migration history, snapshot, and generation types live in
@@ -34,6 +49,8 @@
 
 mod config;
 mod migration;
+#[cfg(feature = "cli")]
+pub mod standalone;
 mod theme;
 mod utility;
 

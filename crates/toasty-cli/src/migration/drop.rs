@@ -26,6 +26,12 @@ pub struct DropCommand {
 
 impl DropCommand {
     pub(crate) fn run(self, _db: &Db, config: &Config) -> Result<()> {
+        self.run_drop(config)
+    }
+
+    /// Drops a migration from the history and deletes its files. Touches no
+    /// database, so the standalone CLI runs it without a `--url`.
+    pub(crate) fn run_drop(self, config: &Config) -> Result<()> {
         let history_path = config.migration.get_history_file_path();
         let mut history = History::load_or_default(&history_path)?;
 

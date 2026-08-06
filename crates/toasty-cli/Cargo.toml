@@ -13,6 +13,27 @@ categories.workspace = true
 readme.workspace = true
 documentation = "https://docs.rs/toasty-cli"
 
+[features]
+default = ["cli"]
+
+# The standalone `toasty` binary. Pulls in the SQL drivers it connects with and
+# the machinery for building a user's package and reading the schema back out.
+# Depend on this crate with `default-features = false` to use it purely as a
+# library for a CLI of your own.
+cli = [
+	"dep:libloading",
+	"dep:serde_json",
+	"dep:tokio",
+	"toasty/mysql",
+	"toasty/postgresql",
+	"toasty/sqlite",
+]
+
+[[bin]]
+name = "toasty"
+path = "src/bin/toasty.rs"
+required-features = ["cli"]
+
 [dependencies]
 toasty = { workspace = true, features = ["migration"] }
 toasty-core.workspace = true
@@ -23,8 +44,11 @@ console.workspace = true
 dialoguer.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
+libloading = { workspace = true, optional = true }
 rand.workspace = true
 serde.workspace = true
+serde_json = { workspace = true, optional = true }
+tokio = { workspace = true, optional = true, features = ["rt", "macros"] }
 toml.workspace = true
 
 [dev-dependencies]

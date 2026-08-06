@@ -43,8 +43,9 @@ TOASTY_CONNECTION_URL=postgresql://user:pass@localhost/mydb \
 ### service-ops
 
 `service-ops` has two binaries. `cargo run -p example-service-ops` runs the
-`server` binary (the default). The migration CLI is a separate binary; run it
-from the example's directory so it finds `Toasty.toml`:
+`server` binary (the default). The `migrate` binary embeds the migration
+commands with `toasty-cli` as a library; run it from the example's directory so
+it finds `Toasty.toml`:
 
 ```sh
 cd examples/service-ops
@@ -54,6 +55,17 @@ cargo run --bin migrate -- migration generate --name <name>
 
 # Apply pending migrations to a persistent database:
 TOASTY_CONNECTION_URL=sqlite:./service.db cargo run --bin migrate -- migration apply
+```
+
+The installed `toasty` command (`cargo install toasty-cli`) does the same
+without a project binary — it builds the package and reads the schema out of
+the artifact:
+
+```sh
+cd examples/service-ops
+
+toasty migrate generate --flavor sqlite --name <name>
+toasty migrate apply --url sqlite:./service.db
 ```
 
 Each example's `src/main.rs` (or `src/lib.rs`) opens with a comment describing

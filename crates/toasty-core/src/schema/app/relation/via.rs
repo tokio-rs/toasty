@@ -29,6 +29,7 @@ use crate::{
 /// reachable from a user. The join model owns the foreign keys and any fields
 /// that describe the connection.
 #[derive(Debug, Clone)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct Via {
     /// The [`ModelId`] of the model the relation chain reaches. For a relation
     /// terminal this is the associated (target) model; for a scalar terminal

@@ -29,52 +29,58 @@ snapshot of the previous schema. It computes the diff and generates a SQL
 migration file containing only the changes (new tables, altered columns, dropped
 indexes, etc.).
 
-Migrations are managed through a small CLI binary that you create in your
-project using the `toasty-cli` library crate. Toasty cannot ship a ready-made
-CLI tool because the tool needs access to your model types to compute the
-schema. The `toasty-cli` crate provides `ToastyCli`, which handles argument
-parsing and all migration subcommands:
+Migrations are managed with the `toasty` command-line tool:
 
 | Command | What it does |
 |---|---|
-| `migration generate` | Diffs the current schema against the last snapshot and writes a SQL migration file |
-| `migration apply` | Runs pending migrations against the database |
-| `migration snapshot` | Prints the current schema as TOML |
-| `migration drop` | Removes a migration from history and deletes its files |
-| `migration reset` | Drops all tables and optionally re-applies all migrations |
+| `migrate generate` | Diffs the current schema against the last snapshot and writes a SQL migration file |
+| `migrate apply` | Runs pending migrations against the database |
+| `migrate snapshot` | Prints the current schema as TOML |
+| `migrate drop` | Removes a migration from history and deletes its files |
+| `migrate reset` | Drops all tables and optionally re-applies all migrations |
 
-## Setting up the CLI
+## Installing the CLI
 
-Add `toasty-cli` to your project:
+Install it once:
 
-```toml
-[dependencies]
-toasty = { version = "{{toasty_version}}", features = ["sqlite"] }
-toasty-cli = "{{toasty_version}}"
-tokio = { version = "1", features = ["full"] }
-anyhow = "1"
+```bash
+cargo install toasty-cli
 ```
 
-Create a CLI binary in `src/bin/cli.rs`:
+Then run it from any Cargo package that depends on `toasty`. There is nothing
+to add to your `Cargo.toml` and no code to write.
 
-```rust,ignore
-use toasty_cli::{Config, ToastyCli};
+Computing a schema diff needs your model types, which only exist in a compiled
+artifact. `toasty migrate generate` builds one — your package's binary, or its
+library as a `cdylib` when the package has no binary — and reads the schema
+back out of it. `toasty` contributes a constructor to that build which writes
+the schema and exits when the CLI sets `TOASTY_DUMP_SCHEMA`. Your `main` never
+runs. The constructor is compiled only under `cfg(debug_assertions)`, so
+release builds do not carry it.
 
-#[tokio::main]
-async fn main() -> anyhow::Result<()> {
-    let config = Config::load()?;
+To see what the CLI sees, set the variable yourself:
 
-    let db = toasty::Db::builder()
-        .models(toasty::models!(crate::*))
-        .connect("sqlite:./my_app.db")
-        .await?;
-
-    let cli = ToastyCli::with_config(db, config);
-    cli.parse_and_run().await?;
-
-    Ok(())
-}
+```bash
+TOASTY_DUMP_SCHEMA=1 cargo run
 ```
+
+### Selecting a package
+
+In a workspace, the CLI uses the root package. Use `-p` to pick a different
+member, as with `cargo`:
+
+```bash
+toasty -p api migrate generate --flavor postgresql
+```
+
+A workspace with no root package (a virtual manifest) requires `-p`. A package
+with more than one binary requires `--bin <name>`.
+
+Migration files and `Toasty.toml` are resolved relative to the selected
+package's directory, so the commands behave the same from anywhere in the
+workspace.
+
+## Configuration
 
 Add a `Toasty.toml` configuration file in your project root:
 
@@ -99,11 +105,15 @@ The `[migration]` section in `Toasty.toml` controls migration behavior:
 
 ## Generating a migration
 
-Run the generate command to create your first migration:
+Run the generate command to create your first migration. `--flavor` names the
+SQL dialect to generate for — `sqlite`, `postgresql`, or `mysql`:
 
 ```bash
-cargo run --bin my-cli -- migration generate
+toasty migrate generate --flavor sqlite
 ```
+
+The dialect is named rather than discovered from a connection, so migrations
+can be generated for a database that is not running.
 
 If there are schema changes since the last snapshot (or no snapshot exists yet),
 the CLI creates three things inside the configured `path` directory:
@@ -127,7 +137,7 @@ toasty/
 You can give a migration a descriptive name with `--name`:
 
 ```bash
-cargo run --bin my-cli -- migration generate --name add_posts_table
+toasty migrate generate --flavor sqlite --name add_posts_table
 ```
 
 This produces `0001_add_posts_table.sql` instead of `0001_migration.sql`.
@@ -152,8 +162,11 @@ instead of a `DROP TABLE` followed by a `CREATE TABLE`.
 Run pending migrations against the database:
 
 ```bash
-cargo run --bin my-cli -- migration apply
+toasty migrate apply --url sqlite://my_app.db
 ```
+
+Applying a migration runs saved SQL files, so it needs no models and does not
+build your package.
 
 The CLI reads `history.toml` to find all defined migrations, then queries the
 database's `__toasty_migrations` tracking table to see which ones have already
@@ -211,7 +224,7 @@ application decides which set applies to each `Db` and when to run it.
 Print the schema snapshot derived from your current model definitions:
 
 ```bash
-cargo run --bin my-cli -- migration snapshot
+toasty migrate snapshot --flavor sqlite
 ```
 
 This outputs the full schema as TOML, showing all tables, columns, and indexes.
@@ -223,38 +236,38 @@ Remove a migration from history and delete its files:
 
 ```bash
 # Drop by name
-cargo run --bin my-cli -- migration drop --name 0001_add_posts_table.sql
+toasty migrate drop --name 0001_add_posts_table.sql
 
 # Drop the latest migration
-cargo run --bin my-cli -- migration drop --latest
+toasty migrate drop --latest
 
 # Interactive picker
-cargo run --bin my-cli -- migration drop
+toasty migrate drop
 ```
 
 Dropping a migration removes its SQL file, its snapshot file, and its entry in
 `history.toml`. It does not undo changes already applied to the database. To
-undo applied changes, use `migration reset` and re-apply.
+undo applied changes, use `migrate reset` and re-apply.
 
 ## Resetting the database
 
 Drop all tables and optionally re-apply migrations from scratch:
 
 ```bash
-cargo run --bin my-cli -- migration reset
+toasty migrate reset --url sqlite://my_app.db
 ```
 
 The CLI prompts for confirmation before proceeding. After dropping all tables,
 it re-applies every migration in the history. To skip the re-apply step:
 
 ```bash
-cargo run --bin my-cli -- migration reset --skip-migrations
+toasty migrate reset --url sqlite://my_app.db --skip-migrations
 ```
 
 ## Generated SQL
 
 A generated migration file contains standard SQL DDL. Toasty generates
-database-specific SQL based on the driver you connect with. Here is an example
+database-specific SQL for the flavor you pass to `--flavor`. Here is an example
 for SQLite:
 
 ```sql
@@ -280,14 +293,40 @@ creates automatically. Each row stores the migration's ID (a random 64-bit
 integer from `history.toml`), its name, and a timestamp. The `migration apply`
 command checks this table to determine which migrations are pending.
 
+## Running the commands from your own binary
+
+The `toasty-cli` crate is also a library. `ToastyCli` exposes the same
+migration subcommands over a `Db` you build yourself, which is useful when a
+deployment runs migrations from a binary it already ships rather than from an
+installed tool:
+
+```rust,ignore
+use toasty_cli::{Config, ToastyCli};
+
+#[tokio::main]
+async fn main() -> anyhow::Result<()> {
+    let config = Config::load()?;
+    let db = toasty::Db::builder()
+        .models(toasty::models!(crate::*))
+        .connect("sqlite:./my_app.db")
+        .await?;
+
+    ToastyCli::with_config(db, config).parse_and_run().await?;
+    Ok(())
+}
+```
+
+Because this binary links your models and connects to a database, it takes
+neither `--flavor` nor `--url`: both come from the `Db` you pass it.
+
 ## Typical workflow
 
 A common development cycle looks like this:
 
 1. Edit your model structs (add a field, change a type, add an index)
-2. Run `migration generate --name describe_change`
+2. Run `toasty migrate generate --flavor <flavor> --name describe_change`
 3. Review the generated SQL file
-4. Run `migration apply` to update the database
+4. Run `toasty migrate apply --url <url>` to update the database
 5. Commit the migration files, snapshot, and updated history alongside your code
 
 For early development when the schema changes frequently, `push_schema` is

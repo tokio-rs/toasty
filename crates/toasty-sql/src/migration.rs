@@ -1,14 +1,54 @@
 use std::borrow::Cow;
 
 use toasty_core::{
-    driver::Capability,
+    driver::{Capability, SqlFlavor},
     schema::{
-        db::{Column, Schema, Table, TableId, Type, TypeEnum},
+        db::{Column, Migration, Schema, Table, TableId, Type, TypeEnum},
         diff,
     },
 };
 
-use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
+use crate::{
+    Serializer,
+    stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement},
+};
+
+/// Renders the DDL that migrates `schema_diff`'s previous schema into its next
+/// one, in `flavor`'s dialect.
+///
+/// Migration DDL is a function of the dialect alone, never of a live
+/// connection. That is what lets `toasty migrate generate --flavor postgresql`
+/// emit PostgreSQL DDL with no PostgreSQL to connect to, and it is the same
+/// call each SQL driver makes at runtime.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::schema::{db, diff};
+/// use toasty_sql::Flavor;
+///
+/// let empty = db::Schema::default();
+/// let hints = diff::RenameHints::default();
+/// let schema_diff = diff::Schema::from(&empty, &empty, &hints);
+/// let db::Migration::Sql(sql) = toasty_sql::generate_migration(Flavor::Postgresql, &schema_diff);
+/// assert!(sql.is_empty());
+/// ```
+pub fn generate_migration(flavor: SqlFlavor, schema_diff: &diff::Schema<'_>) -> Migration {
+    let statements = MigrationStatement::from_diff(schema_diff, flavor.capability());
+
+    let sql: Vec<String> = statements
+        .iter()
+        .map(|stmt| Serializer::new(flavor, stmt.schema()).serialize(stmt.statement()))
+        .collect();
+
+    match flavor {
+        // PostgreSQL runs a whole multi-statement migration in one implicit
+        // transaction, so it wants a single script. SQLite and MySQL execute
+        // statement by statement and need the breakpoints to split on.
+        SqlFlavor::Postgresql => Migration::new_sql(sql.join("\n")),
+        SqlFlavor::Sqlite | SqlFlavor::Mysql => Migration::new_sql_with_breakpoints(&sql),
+    }
+}
 
 /// Returns `true` if the only difference between two columns is the variant
 /// list of a named enum type. These changes are handled by `diff::Type`

@@ -61,6 +61,7 @@ tests-fixture-user = { path = "tests/fixtures/user" }
 
 # Third-party types
 uuid.workspace = true
+serde_json.workspace = true
 
 [dev-dependencies]
 

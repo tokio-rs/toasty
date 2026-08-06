@@ -11,7 +11,9 @@ mod delim;
 use delim::{Comma, Delimited, Period};
 
 mod flavor;
-use flavor::Flavor;
+// The dialect enum lives in `toasty-core` (drivers report it through
+// `Capability`); the serializer has always called it `Flavor`.
+use toasty_core::driver::SqlFlavor as Flavor;
 
 mod ident;
 use ident::Ident;

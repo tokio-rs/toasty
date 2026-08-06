@@ -35,6 +35,14 @@ pub struct Capability {
     /// SQL drivers set this to `Some`. Non-SQL drivers set this to `None`.
     pub sql_placeholder: Option<SqlPlaceholder>,
 
+    /// The SQL dialect this driver speaks, selecting how statements and
+    /// migration DDL are rendered.
+    ///
+    /// SQL drivers set this to `Some`. Non-SQL drivers set this to `None`.
+    /// Must agree with [`sql`](Self::sql); [`validate`](Self::validate)
+    /// checks the invariant.
+    pub sql_flavor: Option<SqlFlavor>,
+
     /// Column storage types supported by the database.
     pub storage_types: StorageTypes,
 
@@ -478,6 +486,91 @@ pub enum SqlPlaceholder {
     DollarNumber,
 }
 
+/// The SQL dialect a driver speaks.
+///
+/// Everything Toasty renders as SQL — statements and migration DDL alike —
+/// is a function of the dialect, not of the live connection. Naming the
+/// dialect separately is what lets `toasty migrate generate --flavor
+/// postgresql` produce PostgreSQL DDL without a PostgreSQL to connect to.
+///
+/// Dialect-compatible engines share a variant: Turso reports
+/// [`Sqlite`](Self::Sqlite) because it accepts SQLite's SQL.
+///
+/// # Examples
+///
+/// ```
+/// use toasty_core::driver::{Capability, SqlFlavor};
+///
+/// assert_eq!(Capability::SQLITE.sql_flavor, Some(SqlFlavor::Sqlite));
+/// assert_eq!(Capability::TURSO.sql_flavor, Some(SqlFlavor::Sqlite));
+/// assert_eq!(Capability::DYNAMODB.sql_flavor, None);
+/// ```
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum SqlFlavor {
+    /// SQLite, and engines that accept SQLite's SQL.
+    Sqlite,
+
+    /// PostgreSQL.
+    Postgresql,
+
+    /// MySQL.
+    Mysql,
+}
+
+impl SqlFlavor {
+    /// Every flavor, in the order the CLI lists them.
+    pub const ALL: [Self; 3] = [Self::Sqlite, Self::Postgresql, Self::Mysql];
+
+    /// The lowercase name this flavor is written as on the command line.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::driver::SqlFlavor;
+    ///
+    /// assert_eq!(SqlFlavor::Postgresql.as_str(), "postgresql");
+    /// ```
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Sqlite => "sqlite",
+            Self::Postgresql => "postgresql",
+            Self::Mysql => "mysql",
+        }
+    }
+
+    /// The capabilities of a database speaking this flavor.
+    pub const fn capability(self) -> &'static Capability {
+        match self {
+            Self::Sqlite => &Capability::SQLITE,
+            Self::Postgresql => &Capability::POSTGRESQL,
+            Self::Mysql => &Capability::MYSQL,
+        }
+    }
+}
+
+impl std::fmt::Display for SqlFlavor {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.as_str())
+    }
+}
+
+impl std::str::FromStr for SqlFlavor {
+    type Err = crate::Error;
+
+    /// Parses a flavor name, accepting the aliases users reach for:
+    /// `postgres` and `pg` for PostgreSQL, `mariadb` for MySQL.
+    fn from_str(src: &str) -> crate::Result<Self> {
+        match src.to_ascii_lowercase().as_str() {
+            "sqlite" | "sqlite3" => Ok(Self::Sqlite),
+            "postgresql" | "postgres" | "pg" => Ok(Self::Postgresql),
+            "mysql" | "mariadb" => Ok(Self::Mysql),
+            other => Err(crate::Error::unsupported_feature(format!(
+                "unknown SQL flavor `{other}`; expected one of: sqlite, postgresql, mysql"
+            ))),
+        }
+    }
+}
+
 impl Capability {
     /// Validates the consistency of the capability configuration.
     ///
@@ -538,6 +631,18 @@ impl Capability {
             ));
         }
 
+        if self.sql && self.sql_flavor.is_none() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is true but sql_flavor is None",
+            ));
+        }
+
+        if !self.sql && self.sql_flavor.is_some() {
+            return Err(crate::Error::invalid_driver_configuration(
+                "sql is false but sql_flavor is Some",
+            ));
+        }
+
         Ok(())
     }
 
@@ -582,6 +687,7 @@ impl Capability {
         driver_name: "SQLite",
         sql: true,
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
+        sql_flavor: Some(SqlFlavor::Sqlite),
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
         cte_with_update: false,
@@ -676,6 +782,7 @@ impl Capability {
         driver_name: "PostgreSQL",
         cte_with_update: true,
         sql_placeholder: Some(SqlPlaceholder::DollarNumber),
+        sql_flavor: Some(SqlFlavor::Postgresql),
         storage_types: StorageTypes::POSTGRESQL,
         schema_mutations: SchemaMutations::POSTGRESQL,
         select_for_update: true,
@@ -739,6 +846,7 @@ impl Capability {
         driver_name: "MySQL",
         cte_with_update: false,
         sql_placeholder: Some(SqlPlaceholder::QuestionMark),
+        sql_flavor: Some(SqlFlavor::Mysql),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
         select_for_update: true,
@@ -815,6 +923,7 @@ impl Capability {
         driver_name: "DynamoDB",
         sql: false,
         sql_placeholder: None,
+        sql_flavor: None,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
         cte_with_update: false,

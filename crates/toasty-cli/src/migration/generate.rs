@@ -6,7 +6,7 @@ use dialoguer::Select;
 use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
 use std::fs;
-use toasty::migration::{self, History, HistoryEntry, Snapshot};
+use toasty::migration::{self, Flavor, History, HistoryEntry, Snapshot};
 use toasty::{
     Db,
     schema::{
@@ -229,6 +229,32 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
 
 impl GenerateCommand {
     pub(crate) fn run(self, db: &Db, config: &Config) -> Result<()> {
+        let capability = db.driver().capability();
+        let Some(flavor) = capability.sql_flavor else {
+            anyhow::bail!(
+                "{} cannot generate migrations; its schema changes are made outside Toasty",
+                capability.driver_name
+            );
+        };
+
+        let schema = toasty::schema::db::Schema::clone(&db.schema().db);
+        run_generate(&schema, flavor, config, self.name.as_deref())
+    }
+}
+
+/// Generates a migration advancing the latest snapshot to `schema`.
+///
+/// Takes the schema and flavor directly rather than a [`Db`]: the migration is
+/// a function of the two, and the standalone CLI has neither a connection nor
+/// a reason to open one. `--flavor` names the dialect, and the schema comes
+/// from the project's own build artifact.
+pub(crate) fn run_generate(
+    schema: &Schema,
+    flavor: Flavor,
+    config: &Config,
+    name: Option<&str>,
+) -> Result<()> {
+    {
         println!();
         println!(
             "  {}",
@@ -253,11 +279,8 @@ impl GenerateCommand {
             .map(|snapshot| snapshot.schema)
             .unwrap_or_else(Schema::default);
 
-        let schema = toasty::schema::db::Schema::clone(&db.schema().db);
-
-        let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
-        let Some(generated) =
-            migration::generate(db.driver(), &previous_schema, &schema, &rename_hints)
+        let rename_hints = collect_rename_hints(&previous_schema, schema)?;
+        let Some(generated) = migration::generate(flavor, &previous_schema, schema, &rename_hints)
         else {
             println!(
                 "  {}",
@@ -283,7 +306,7 @@ impl GenerateCommand {
         let migration_name = format!(
             "{:04}_{}.sql",
             migration_prefix,
-            self.name.as_deref().unwrap_or("migration")
+            name.unwrap_or("migration")
         );
         let migration_path = config.migration.get_migrations_dir().join(&migration_name);
 

@@ -9,10 +9,7 @@ use async_trait::async_trait;
 use toasty::codegen_support::core::{
     Result, Schema,
     driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation},
-    schema::{
-        db::{AppliedMigration, Migration},
-        diff,
-    },
+    schema::db::{AppliedMigration, Migration},
 };
 
 #[derive(Debug, toasty::Model)]
@@ -66,10 +63,6 @@ impl Driver for MigrationDriver {
 
     fn max_connections(&self) -> Option<usize> {
         Some(1)
-    }
-
-    fn generate_migration(&self, _schema_diff: &diff::Schema<'_>) -> Migration {
-        Migration::new_sql(String::new())
     }
 
     async fn reset_db(&self) -> Result<()> {

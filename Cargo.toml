@@ -108,6 +108,12 @@ heck = "0.5.0"
 indexmap = "2.13.0"
 index_vec = "0.1.4"
 inventory = "0.3.24"
+libloading = "0.8.9"
+linktime = { version = "0.18.0", default-features = false, features = [
+	"std",
+	"ctor",
+	"proc_macro",
+] }
 # Must match the version used by `postgres-protocol` (the postgres driver
 # iterates over its `FallibleIterator` types); do not bump independently.
 fallible-iterator = "0.2"

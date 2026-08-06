@@ -1,15 +1,20 @@
 use super::Serializer;
 
-use toasty_core::{driver::SqlPlaceholder, schema::db};
-
-#[derive(Debug)]
-pub(super) enum Flavor {
-    Postgresql,
-    Sqlite,
-    Mysql,
-}
+use toasty_core::{
+    driver::{SqlFlavor, SqlPlaceholder},
+    schema::db,
+};
 
 impl<'a> Serializer<'a> {
+    /// Creates a serializer that emits SQL in `flavor`'s dialect.
+    pub fn new(flavor: SqlFlavor, schema: &'a db::Schema) -> Self {
+        match flavor {
+            SqlFlavor::Sqlite => Self::sqlite(schema),
+            SqlFlavor::Postgresql => Self::postgresql(schema),
+            SqlFlavor::Mysql => Self::mysql(schema),
+        }
+    }
+
     /// Creates a serializer that emits SQLite SQL.
     pub fn sqlite(schema: &'a db::Schema) -> Self {
         Self::sqlite_with_default_begin(schema, "BEGIN")
@@ -26,21 +31,21 @@ impl<'a> Serializer<'a> {
     pub fn sqlite_with_default_begin(schema: &'a db::Schema, default_begin: &'static str) -> Self {
         Serializer {
             schema,
-            flavor: Flavor::Sqlite,
+            flavor: SqlFlavor::Sqlite,
             sqlite_default_begin: default_begin,
         }
     }
 
     /// Returns `true` if this serializer targets SQLite.
     pub fn is_sqlite(&self) -> bool {
-        matches!(self.flavor, Flavor::Sqlite)
+        matches!(self.flavor, SqlFlavor::Sqlite)
     }
 
     /// Creates a serializer that emits PostgreSQL SQL.
     pub fn postgresql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
-            flavor: Flavor::Postgresql,
+            flavor: SqlFlavor::Postgresql,
             sqlite_default_begin: "BEGIN",
         }
     }
@@ -49,22 +54,21 @@ impl<'a> Serializer<'a> {
     pub fn mysql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
-            flavor: Flavor::Mysql,
+            flavor: SqlFlavor::Mysql,
             sqlite_default_begin: "BEGIN",
         }
     }
 
     pub(super) fn is_mysql(&self) -> bool {
-        matches!(self.flavor, Flavor::Mysql)
+        matches!(self.flavor, SqlFlavor::Mysql)
     }
 }
 
-impl Flavor {
-    pub(super) fn sql_placeholder(&self) -> SqlPlaceholder {
-        match self {
-            Flavor::Postgresql => SqlPlaceholder::DollarNumber,
-            Flavor::Sqlite => SqlPlaceholder::NumberedQuestionMark,
-            Flavor::Mysql => SqlPlaceholder::QuestionMark,
-        }
+/// The bind-parameter syntax `flavor` accepts.
+pub(super) fn sql_placeholder(flavor: SqlFlavor) -> SqlPlaceholder {
+    match flavor {
+        SqlFlavor::Postgresql => SqlPlaceholder::DollarNumber,
+        SqlFlavor::Sqlite => SqlPlaceholder::NumberedQuestionMark,
+        SqlFlavor::Mysql => SqlPlaceholder::QuestionMark,
     }
 }

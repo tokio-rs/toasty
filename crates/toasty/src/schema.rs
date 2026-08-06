@@ -4,6 +4,9 @@ pub use auto::Auto;
 mod deferred;
 pub use deferred::Deferred;
 
+#[cfg(feature = "schema-dump")]
+pub mod dump;
+
 mod embed;
 pub use embed::Embed;
 

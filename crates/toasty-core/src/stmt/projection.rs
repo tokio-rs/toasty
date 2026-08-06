@@ -239,6 +239,24 @@ impl<const N: usize> From<[usize; N]> for Projection {
     }
 }
 
+/// A projection is its steps; [`Steps`] only exists to keep the common
+/// identity and single-step cases off the heap. Serializing the slice keeps
+/// that representation choice private and makes the encoding independent of it.
+#[cfg(feature = "serde")]
+impl serde::Serialize for Projection {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        self.as_slice().serialize(serializer)
+    }
+}
+
+#[cfg(feature = "serde")]
+impl<'de> serde::Deserialize<'de> for Projection {
+    fn deserialize<D: serde::Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
+        let steps = Vec::<usize>::deserialize(deserializer)?;
+        Ok(Self::from(&steps[..]))
+    }
+}
+
 impl fmt::Debug for Projection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         let mut f = f.debug_tuple("Projection");
