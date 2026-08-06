@@ -12,6 +12,7 @@ const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
     "into_root",
     "filter",
     "order_by",
+    "limit",
     "create",
 ];
 
@@ -22,6 +23,7 @@ const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &[
     "all",
     "filter",
     "order_by",
+    "limit",
     "create",
 ];
 
@@ -215,6 +217,14 @@ impl Expand<'_> {
                     self.path,
                     #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
                 ).order_by(order_by)
+            }
+
+            /// Limits the related rows loaded by `.include(...)`, per parent record.
+            #vis fn limit(self, n: usize) -> #toasty::stmt::Include<__Origin, #target_ty> {
+                #toasty::stmt::Include::from_path_and_query(
+                    self.path,
+                    #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
+                ).limit(n)
             }
         }
     }

@@ -19,6 +19,7 @@ struct Comment {
 
     r#filter: i64,
     r#order_by: i64,
+    r#limit: i64,
 
     #[index]
     item_id: i64,
@@ -33,5 +34,7 @@ fn main() {
     let _ = Item::fields()
         .comments()
         .filter(Comment::fields().id().eq(1))
-        .order_by(Comment::fields().id().asc());
+        .order_by(Comment::fields().id().asc())
+        .limit(1)
+        .offset(1);
 }
