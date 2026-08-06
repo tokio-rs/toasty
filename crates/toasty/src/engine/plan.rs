@@ -30,6 +30,7 @@ struct ExecPlanner<'a> {
     var_decls: VarDecls,
     actions: Vec<exec::Action>,
     use_transactions: bool,
+    snapshot_reads: bool,
     schema: Arc<Schema>,
 }
 
@@ -53,6 +54,7 @@ impl Engine {
             var_decls: VarDecls::default(),
             actions: vec![],
             use_transactions: self.capability().sql,
+            snapshot_reads: self.capability().snapshot_reads,
             schema: self.schema.clone(),
         }
         .plan_execution()
