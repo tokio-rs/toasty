@@ -587,6 +587,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn rewrite_stmt_for_batch_load(&mut self, stmt: &mut stmt::Statement) {
+        // An include limit is per-parent, but a LIMIT on the batched query
+        // would apply globally. Strip it; NestedMerge truncates per parent
+        // instead (`plan_nested_child` reads it from the HIR statement).
+        if let stmt::Statement::Query(query) = stmt {
+            query.limit = None;
+        }
+
         if self.planner.engine.capability().sql {
             self.rewrite_stmt_query_for_batch_load_sql(stmt);
         } else {
@@ -2107,7 +2114,7 @@ fn extract_pagination(stmt: &stmt::Statement) -> Option<Pagination> {
 
 /// Extracts an `i64` from a bound or static `I64` literal expression. Panics on
 /// any other shape — an invariant violation that `verify` should have caught.
-fn as_i64_literal(expr: &stmt::Expr) -> i64 {
+pub(super) fn as_i64_literal(expr: &stmt::Expr) -> i64 {
     match expr {
         stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
         _ => panic!("limit/offset must be an i64 literal; got {expr:#?}"),
