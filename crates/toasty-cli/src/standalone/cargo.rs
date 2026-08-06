@@ -568,6 +568,24 @@ mod tests {
     }
 
     #[test]
+    fn the_windows_dll_is_picked_over_its_import_library() {
+        // A Windows cdylib reports the loadable `.dll` alongside the `.dll.lib`
+        // import library and a `.pdb`; only the first can be loaded.
+        let stdout = json!({
+            "reason": "compiler-artifact",
+            "target": { "crate_types": ["cdylib"] },
+            "executable": null,
+            "filenames": [r"C:\t\debug\app.dll", r"C:\t\debug\app.dll.lib", r"C:\t\debug\app.pdb"],
+        })
+        .to_string();
+
+        assert_eq!(
+            artifact_path(&stdout, &BuildTarget::Cdylib),
+            Some(PathBuf::from(r"C:\t\debug\app.dll"))
+        );
+    }
+
+    #[test]
     fn a_proc_macro_dependency_is_not_mistaken_for_the_cdylib() {
         // Every proc-macro in the dependency graph compiles to a shared
         // object, and cargo reports it before the crate being built.

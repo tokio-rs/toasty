@@ -35,7 +35,9 @@ impl Project {
                 edition = "2024"
 
                 [dependencies]
-                toasty = {{ path = "{}" }}
+                # A TOML literal string: a Windows path is full of backslashes,
+                # which a basic string would read as escape sequences.
+                toasty = {{ path = '{}' }}
 
                 [workspace]
                 "#,
