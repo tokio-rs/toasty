@@ -57,30 +57,30 @@ pub async fn paginate_first_page_ignores_subquery_cursor(test: &mut Test) -> Res
         .exec(&mut db)
         .await?;
 
-    let mut statement = Item::filter(
-        Item::fields().id().in_query(
-            Item::all()
-                .order_by(Item::fields().id().asc())
-                .select(Item::fields().id()),
-        ),
-    )
-    .order_by(Item::fields().id().asc())
-    .into_statement()
-    .into_untyped();
+    let mut inner = Item::all()
+        .order_by(Item::fields().id().asc())
+        .select((Item::fields().id(), Item::fields().id()))
+        .into_statement()
+        .into_untyped()
+        .into_query_unwrap();
+    inner.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+        page_size: stmt::Value::from(2_i64).into(),
+        after: Some(stmt::Value::from(0_i64).into()),
+    }));
+
+    let mut statement = Item::all()
+        .order_by(Item::fields().id().asc())
+        .into_statement()
+        .into_untyped();
 
     let outer = statement.as_query_mut().unwrap();
     outer.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
         page_size: stmt::Value::from(1_i64).into(),
         after: None,
     }));
-
-    let stmt::Expr::InSubquery(inner) = outer.filter_mut_unwrap().expr.as_mut().unwrap() else {
-        panic!("expected an IN subquery filter");
-    };
-    inner.query.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
-        page_size: stmt::Value::from(2_i64).into(),
-        after: Some(stmt::Value::from(0_i64).into()),
-    }));
+    outer.with = Some(stmt::With {
+        ctes: vec![stmt::Cte { query: inner }],
+    });
 
     let response = db.exec_untyped(statement).await?;
     assert!(response.prev_cursor.is_none());
