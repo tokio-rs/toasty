@@ -6,8 +6,11 @@
 //! into a WHERE filter; NoSQL drivers use a driver-level cursor instead.
 
 use crate::prelude::*;
-use toasty::stmt::Page;
-use toasty_core::stmt::Value;
+use toasty::{
+    Executor,
+    stmt::{IntoStatement, Page},
+};
+use toasty_core::stmt::{self, Value};
 
 fn cursor_len(cursor: Option<&Value>) -> usize {
     let Some(Value::Record(cursor)) = cursor else {
@@ -37,6 +40,50 @@ pub async fn paginate_first_page_has_no_previous_page(test: &mut Test) -> Result
 
     assert!(!first.has_prev());
     assert!(first.prev(&mut db).await?.is_none());
+
+    Ok(())
+}
+
+#[driver_test(requires(and(sql, backward_pagination)))]
+pub async fn paginate_first_page_ignores_subquery_cursor(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[{ id: 1 }, { id: 2 }])
+        .exec(&mut db)
+        .await?;
+
+    let mut statement = Item::filter(
+        Item::fields().id().in_query(
+            Item::all()
+                .order_by(Item::fields().id().asc())
+                .select(Item::fields().id()),
+        ),
+    )
+    .order_by(Item::fields().id().asc())
+    .into_statement()
+    .into_untyped();
+
+    let outer = statement.as_query_mut().unwrap();
+    outer.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+        page_size: stmt::Value::from(1_i64).into(),
+        after: None,
+    }));
+
+    let stmt::Expr::InSubquery(inner) = outer.filter_mut_unwrap().expr.as_mut().unwrap() else {
+        panic!("expected an IN subquery filter");
+    };
+    inner.query.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+        page_size: stmt::Value::from(2_i64).into(),
+        after: Some(stmt::Value::from(0_i64).into()),
+    }));
+
+    let response = db.exec_untyped(statement).await?;
+    assert!(response.prev_cursor.is_none());
 
     Ok(())
 }
