@@ -115,7 +115,7 @@ t.log().clear();
 foo.update().name("new").exec(&db).await?;
 
 let (op, resp) = t.log().pop();
-if t.capability().sql {
+if t.capability().sql() {
     assert_struct!(op, Operation::QuerySql(_ {
         stmt: Statement::Update(_ {
             target: UpdateTarget::Table(== foo_table_id),

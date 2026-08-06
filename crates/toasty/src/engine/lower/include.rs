@@ -335,7 +335,7 @@ impl LowerStatement<'_, '_> {
             _ => None,
         };
         if let Some(via) = via {
-            if !self.capability().sql {
+            if !self.capability().sql() {
                 todo!(
                     "`.include()` / `.select()` of a multi-step `via` relation is only \
                      supported on SQL backends; query the relation directly instead"

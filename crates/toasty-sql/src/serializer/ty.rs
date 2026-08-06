@@ -1,4 +1,4 @@
-use super::{Flavor, ToSql};
+use super::{Dialect, ToSql};
 
 use toasty_core::schema::db;
 
@@ -11,15 +11,15 @@ impl ToSql for &db::Type {
             db::Type::Integer(5..=8) => fmt!(f, "BIGINT"),
             db::Type::Integer(_) => todo!(),
             db::Type::UnsignedInteger(size) => {
-                match f.serializer.flavor {
-                    Flavor::Mysql => match size {
+                match f.serializer.dialect {
+                    Dialect::Mysql => match size {
                         1 => fmt!(f, "TINYINT UNSIGNED"),
                         2 => fmt!(f, "SMALLINT UNSIGNED"),
                         3..=4 => fmt!(f, "INT UNSIGNED"),
                         5..=8 => fmt!(f, "BIGINT UNSIGNED"),
                         _ => todo!("Unsupported unsigned integer size: {}", size),
                     },
-                    Flavor::Postgresql => {
+                    Dialect::Postgresql => {
                         match size {
                             1 => fmt!(f, "SMALLINT"),   // u8 -> SMALLINT (i16)
                             2 => fmt!(f, "INTEGER"),    // u16 -> INTEGER (i32)
@@ -28,22 +28,22 @@ impl ToSql for &db::Type {
                             _ => todo!("Unsupported unsigned integer size: {}", size),
                         }
                     }
-                    Flavor::Sqlite => {
+                    Dialect::Sqlite => {
                         // SQLite uses INTEGER for all integer types
                         fmt!(f, "INTEGER")
                     }
                 }
             }
-            db::Type::Float(size) => match f.serializer.flavor {
-                Flavor::Sqlite => fmt!(f, "REAL"),
-                Flavor::Postgresql => {
+            db::Type::Float(size) => match f.serializer.dialect {
+                Dialect::Sqlite => fmt!(f, "REAL"),
+                Dialect::Postgresql => {
                     if *size <= 4 {
                         fmt!(f, "REAL")
                     } else {
                         fmt!(f, "DOUBLE PRECISION")
                     }
                 }
-                Flavor::Mysql => {
+                Dialect::Mysql => {
                     if *size <= 4 {
                         fmt!(f, "FLOAT")
                     } else {
@@ -56,55 +56,55 @@ impl ToSql for &db::Type {
             db::Type::Uuid => {
                 fmt!(
                     f,
-                    match f.serializer.flavor {
-                        Flavor::Postgresql => "UUID",
+                    match f.serializer.dialect {
+                        Dialect::Postgresql => "UUID",
                         _ => todo!("Unsupported type UUID"),
                     }
                 );
             }
-            db::Type::Numeric(None) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, "NUMERIC"),
-                Flavor::Mysql => todo!(
+            db::Type::Numeric(None) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "NUMERIC"),
+                Dialect::Mysql => todo!(
                     "MySQL does not support arbitrary-precision NUMERIC; precision and scale must be specified"
                 ),
-                Flavor::Sqlite => todo!("SQLite does not support NUMERIC type"),
+                Dialect::Sqlite => todo!("SQLite does not support NUMERIC type"),
             },
-            db::Type::Numeric(Some((precision, scale))) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, "NUMERIC(" precision ", " scale ")"),
-                Flavor::Mysql => fmt!(f, "DECIMAL(" precision ", " scale ")"),
-                Flavor::Sqlite => todo!("SQLite does not support NUMERIC type"),
+            db::Type::Numeric(Some((precision, scale))) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "NUMERIC(" precision ", " scale ")"),
+                Dialect::Mysql => fmt!(f, "DECIMAL(" precision ", " scale ")"),
+                Dialect::Sqlite => todo!("SQLite does not support NUMERIC type"),
             },
-            db::Type::Binary(size) => match f.serializer.flavor {
-                Flavor::Mysql => fmt!(f, "BINARY(" size ")"),
+            db::Type::Binary(size) => match f.serializer.dialect {
+                Dialect::Mysql => fmt!(f, "BINARY(" size ")"),
                 _ => todo!("Unsupported fixed size binary type"),
             },
-            db::Type::Blob => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, "BYTEA"),
-                Flavor::Mysql => fmt!(f, "BLOB"),
-                Flavor::Sqlite => fmt!(f, "BLOB"),
+            db::Type::Blob => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "BYTEA"),
+                Dialect::Mysql => fmt!(f, "BLOB"),
+                Dialect::Sqlite => fmt!(f, "BLOB"),
             },
-            db::Type::Timestamp(precision) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, "TIMESTAMPTZ(" precision ")"),
-                Flavor::Mysql => fmt!(f, "TIMESTAMP(" precision ")"),
-                Flavor::Sqlite => todo!("SQLite does not support Timestamp"),
+            db::Type::Timestamp(precision) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "TIMESTAMPTZ(" precision ")"),
+                Dialect::Mysql => fmt!(f, "TIMESTAMP(" precision ")"),
+                Dialect::Sqlite => todo!("SQLite does not support Timestamp"),
             },
-            db::Type::Date => match f.serializer.flavor {
-                Flavor::Postgresql | Flavor::Mysql => fmt!(f, "DATE"),
-                Flavor::Sqlite => todo!("SQLite does not support Date"),
+            db::Type::Date => match f.serializer.dialect {
+                Dialect::Postgresql | Dialect::Mysql => fmt!(f, "DATE"),
+                Dialect::Sqlite => todo!("SQLite does not support Date"),
             },
-            db::Type::Time(precision) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, "TIME(" precision ")"),
-                Flavor::Mysql => fmt!(f, "TIME(" precision ")"),
-                Flavor::Sqlite => todo!("SQLite does not support Time"),
+            db::Type::Time(precision) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "TIME(" precision ")"),
+                Dialect::Mysql => fmt!(f, "TIME(" precision ")"),
+                Dialect::Sqlite => todo!("SQLite does not support Time"),
             },
-            db::Type::DateTime(precision) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, "TIMESTAMP(" precision ")"),
-                Flavor::Mysql => fmt!(f, "DATETIME(" precision ")"),
-                Flavor::Sqlite => todo!("SQLite does not support DateTime"),
+            db::Type::DateTime(precision) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "TIMESTAMP(" precision ")"),
+                Dialect::Mysql => fmt!(f, "DATETIME(" precision ")"),
+                Dialect::Sqlite => todo!("SQLite does not support DateTime"),
             },
-            db::Type::Enum(type_enum) => match f.serializer.flavor {
+            db::Type::Enum(type_enum) => match f.serializer.dialect {
                 // PostgreSQL: reference the named enum type created with CREATE TYPE.
-                Flavor::Postgresql => {
+                Dialect::Postgresql => {
                     let name = type_enum
                         .name
                         .as_deref()
@@ -112,7 +112,7 @@ impl ToSql for &db::Type {
                     fmt!(f, name);
                 }
                 // MySQL: inline ENUM('label1', 'label2', ...) column type.
-                Flavor::Mysql => {
+                Dialect::Mysql => {
                     use toasty_core::stmt::Value;
 
                     f.dst.push_str("ENUM(");
@@ -125,24 +125,24 @@ impl ToSql for &db::Type {
                     f.dst.push(')');
                 }
                 // SQLite: TEXT column (CHECK constraint added in ColumnDef).
-                Flavor::Sqlite => fmt!(f, "TEXT"),
+                Dialect::Sqlite => fmt!(f, "TEXT"),
             },
-            db::Type::List(elem) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, elem.as_ref() "[]"),
+            db::Type::List(elem) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, elem.as_ref() "[]"),
                 // MySQL stores `Vec<scalar>` as a JSON document; SQLite uses
                 // TEXT (JSON1 functions operate on either, but TEXT is the
                 // idiomatic affinity). The element type is tracked by the
                 // engine — it doesn't surface in the column DDL.
-                Flavor::Mysql => fmt!(f, "JSON"),
-                Flavor::Sqlite => fmt!(f, "TEXT"),
+                Dialect::Mysql => fmt!(f, "JSON"),
+                Dialect::Sqlite => fmt!(f, "TEXT"),
             },
-            db::Type::Document { binary } => match f.serializer.flavor {
+            db::Type::Document { binary } => match f.serializer.dialect {
                 // `binary` selects `jsonb` over `json` on PostgreSQL; the text
                 // encoding (`#[document(text)]`) is not yet wired up.
-                Flavor::Postgresql if *binary => fmt!(f, "JSONB"),
-                Flavor::Postgresql => fmt!(f, "JSON"),
-                Flavor::Mysql => fmt!(f, "JSON"),
-                Flavor::Sqlite => fmt!(f, "TEXT"),
+                Dialect::Postgresql if *binary => fmt!(f, "JSONB"),
+                Dialect::Postgresql => fmt!(f, "JSON"),
+                Dialect::Mysql => fmt!(f, "JSON"),
+                Dialect::Sqlite => fmt!(f, "TEXT"),
             },
             db::Type::Json => fmt!(f, "JSON"),
             db::Type::Jsonb => fmt!(f, "JSONB"),

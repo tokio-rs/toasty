@@ -52,7 +52,7 @@ impl Engine {
             logical_plan: &logical_plan,
             var_decls: VarDecls::default(),
             actions: vec![],
-            use_transactions: self.capability().sql,
+            use_transactions: self.capability().sql(),
             schema: self.schema.clone(),
         }
         .plan_execution()

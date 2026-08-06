@@ -39,7 +39,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     // Position: id_u64 uses Expr::Default (no param), so val is at
     // params[0]. id_uuid adds the uuid at params[0], shifting val to params[1].
-    let sql = test.capability().sql;
+    let sql = test.capability().sql();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     let val_pat = if sql {
         ArgOr::Arg(val_pos)
@@ -340,7 +340,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     // Verify the INSERT encodes the timestamp as a fixed-precision text string.
     // The #[column(type = text)] forces text encoding on all drivers.
     let (op, _) = test.log().pop();
-    let sql = test.capability().sql;
+    let sql = test.capability().sql();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     let val_pat = if sql {
         ArgOr::Arg(val_pos)

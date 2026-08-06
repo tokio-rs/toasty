@@ -559,7 +559,7 @@ pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<(
         ]))
         .exec(&mut db)
         .await?;
-    if test.capability().sql {
+    if test.capability().sql() {
         // Dissociate executes before associate.
         assert_eq!(fk_writes(test), ["unlink", "link"]);
     }
@@ -576,7 +576,7 @@ pub async fn has_many_apply_insert_remove_same_item(test: &mut Test) -> Result<(
         ]))
         .exec(&mut db)
         .await?;
-    if test.capability().sql {
+    if test.capability().sql() {
         // Associate executes before dissociate.
         assert_eq!(fk_writes(test), ["link", "unlink"]);
     }

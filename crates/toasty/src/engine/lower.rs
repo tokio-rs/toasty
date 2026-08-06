@@ -720,7 +720,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::InSubquery(e) => {
-                if self.capability().sql {
+                if self.capability().sql() {
                     self.visit_expr_in_subquery_mut(e);
 
                     self.lower_in_subquery_operands(
@@ -960,7 +960,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
-            stmt::Expr::Exists(_) if !self.capability().sql => {
+            stmt::Expr::Exists(_) if !self.capability().sql() => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
                 };
@@ -1092,7 +1092,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
-        let sql = self.state.engine.capability.sql;
+        let sql = self.state.engine.capability.sql();
         if let Err(err) = upsert::normalize(stmt, !sql) {
             self.state.errors.push(err);
             return;

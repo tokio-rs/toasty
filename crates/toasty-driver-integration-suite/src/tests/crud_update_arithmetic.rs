@@ -121,7 +121,7 @@ pub async fn increment_emits_add_assignment(t: &mut Test) -> Result<()> {
     .await?;
 
     let counter_table_id = table_id(&db, "counters");
-    let is_sql = t.capability().sql;
+    let is_sql = t.capability().sql();
 
     t.log().clear();
     counter

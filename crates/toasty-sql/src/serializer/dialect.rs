@@ -1,13 +1,9 @@
 use super::Serializer;
 
-use toasty_core::{driver::SqlPlaceholder, schema::db};
-
-#[derive(Debug)]
-pub(super) enum Flavor {
-    Postgresql,
-    Sqlite,
-    Mysql,
-}
+use toasty_core::{
+    driver::{Dialect, SqlPlaceholder},
+    schema::db,
+};
 
 impl<'a> Serializer<'a> {
     /// Creates a serializer that emits SQLite SQL.
@@ -15,7 +11,7 @@ impl<'a> Serializer<'a> {
         Self::sqlite_with_default_begin(schema, "BEGIN")
     }
 
-    /// Creates a SQLite-flavored serializer with a custom SQL string for
+    /// Creates a SQLite-dialect serializer with a custom SQL string for
     /// [`TransactionMode::Default`].
     ///
     /// Used by SQLite-compatible engines whose preferred "no opinion" BEGIN
@@ -26,21 +22,21 @@ impl<'a> Serializer<'a> {
     pub fn sqlite_with_default_begin(schema: &'a db::Schema, default_begin: &'static str) -> Self {
         Serializer {
             schema,
-            flavor: Flavor::Sqlite,
+            dialect: Dialect::Sqlite,
             sqlite_default_begin: default_begin,
         }
     }
 
     /// Returns `true` if this serializer targets SQLite.
     pub fn is_sqlite(&self) -> bool {
-        matches!(self.flavor, Flavor::Sqlite)
+        matches!(self.dialect, Dialect::Sqlite)
     }
 
     /// Creates a serializer that emits PostgreSQL SQL.
     pub fn postgresql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
-            flavor: Flavor::Postgresql,
+            dialect: Dialect::Postgresql,
             sqlite_default_begin: "BEGIN",
         }
     }
@@ -49,22 +45,21 @@ impl<'a> Serializer<'a> {
     pub fn mysql(schema: &'a db::Schema) -> Self {
         Serializer {
             schema,
-            flavor: Flavor::Mysql,
+            dialect: Dialect::Mysql,
             sqlite_default_begin: "BEGIN",
         }
     }
 
     pub(super) fn is_mysql(&self) -> bool {
-        matches!(self.flavor, Flavor::Mysql)
+        matches!(self.dialect, Dialect::Mysql)
     }
 }
 
-impl Flavor {
-    pub(super) fn sql_placeholder(&self) -> SqlPlaceholder {
-        match self {
-            Flavor::Postgresql => SqlPlaceholder::DollarNumber,
-            Flavor::Sqlite => SqlPlaceholder::NumberedQuestionMark,
-            Flavor::Mysql => SqlPlaceholder::QuestionMark,
-        }
+/// The placeholder syntax a dialect's bind layer accepts.
+pub(super) fn sql_placeholder(dialect: Dialect) -> SqlPlaceholder {
+    match dialect {
+        Dialect::Postgresql => SqlPlaceholder::DollarNumber,
+        Dialect::Sqlite => SqlPlaceholder::NumberedQuestionMark,
+        Dialect::Mysql => SqlPlaceholder::QuestionMark,
     }
 }

@@ -1,11 +1,12 @@
+use super::Dialect;
 use crate::{schema::db, stmt};
 
 /// Describes what a database driver supports.
 ///
 /// The query planner reads these flags to decide which [`Operation`](super::Operation)
-/// variants to generate. For example, a SQL driver sets `sql: true` and
-/// receives `QuerySql` operations, while DynamoDB sets `sql: false` and
-/// receives key-value operations like `GetByKey` and `QueryPk`.
+/// variants to generate. For example, a SQL driver names its dialect in `sql`
+/// and receives `QuerySql` operations, while DynamoDB leaves `sql` as `None`
+/// and receives key-value operations like `GetByKey` and `QueryPk`.
 ///
 /// Pre-built configurations are available as associated constants:
 /// [`SQLITE`](Self::SQLITE), [`POSTGRESQL`](Self::POSTGRESQL),
@@ -17,7 +18,7 @@ use crate::{schema::db, stmt};
 /// use toasty_core::driver::Capability;
 ///
 /// let cap = &Capability::SQLITE;
-/// assert!(cap.sql);
+/// assert!(cap.sql());
 /// assert!(cap.returning_from_mutation);
 /// assert!(!cap.select_for_update);
 /// ```
@@ -26,9 +27,14 @@ pub struct Capability {
     /// Human-readable driver name used in diagnostics.
     pub driver_name: &'static str,
 
-    /// When `true`, the database uses a SQL-based query language and the
-    /// planner will emit [`QuerySql`](super::operation::QuerySql) operations.
-    pub sql: bool,
+    /// The SQL dialect this driver speaks, selecting how statements are
+    /// rendered.
+    ///
+    /// `Some` means the database uses a SQL-based query language, so the
+    /// planner emits [`QuerySql`](super::operation::QuerySql) operations.
+    /// Non-SQL drivers set this to `None` and receive key-value operations
+    /// instead. [`sql()`](Self::sql) is the boolean view of this field.
+    pub sql: Option<Dialect>,
 
     /// Placeholder syntax accepted by the driver's SQL bind layer.
     ///
@@ -479,6 +485,23 @@ pub enum SqlPlaceholder {
 }
 
 impl Capability {
+    /// Whether the database uses a SQL-based query language.
+    ///
+    /// The boolean view of [`sql`](Self::sql), for the callers that only need
+    /// to know whether SQL is spoken at all and not which dialect.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use toasty_core::driver::Capability;
+    ///
+    /// assert!(Capability::SQLITE.sql());
+    /// assert!(!Capability::DYNAMODB.sql());
+    /// ```
+    pub const fn sql(&self) -> bool {
+        self.sql.is_some()
+    }
+
     /// Validates the consistency of the capability configuration.
     ///
     /// This performs sanity checks to ensure the capability fields are
@@ -526,15 +549,15 @@ impl Capability {
             ));
         }
 
-        if self.sql && self.sql_placeholder.is_none() {
+        if self.sql() && self.sql_placeholder.is_none() {
             return Err(crate::Error::invalid_driver_configuration(
-                "sql is true but sql_placeholder is None",
+                "sql is Some but sql_placeholder is None",
             ));
         }
 
-        if !self.sql && self.sql_placeholder.is_some() {
+        if !self.sql() && self.sql_placeholder.is_some() {
             return Err(crate::Error::invalid_driver_configuration(
-                "sql is false but sql_placeholder is Some",
+                "sql is None but sql_placeholder is Some",
             ));
         }
 
@@ -580,7 +603,7 @@ impl Capability {
     /// SQLite capabilities.
     pub const SQLITE: Self = Self {
         driver_name: "SQLite",
-        sql: true,
+        sql: Some(Dialect::Sqlite),
         sql_placeholder: Some(SqlPlaceholder::NumberedQuestionMark),
         storage_types: StorageTypes::SQLITE,
         schema_mutations: SchemaMutations::SQLITE,
@@ -675,6 +698,7 @@ impl Capability {
     pub const POSTGRESQL: Self = Self {
         driver_name: "PostgreSQL",
         cte_with_update: true,
+        sql: Some(Dialect::Postgresql),
         sql_placeholder: Some(SqlPlaceholder::DollarNumber),
         storage_types: StorageTypes::POSTGRESQL,
         schema_mutations: SchemaMutations::POSTGRESQL,
@@ -738,6 +762,7 @@ impl Capability {
     pub const MYSQL: Self = Self {
         driver_name: "MySQL",
         cte_with_update: false,
+        sql: Some(Dialect::Mysql),
         sql_placeholder: Some(SqlPlaceholder::QuestionMark),
         storage_types: StorageTypes::MYSQL,
         schema_mutations: SchemaMutations::MYSQL,
@@ -813,7 +838,7 @@ impl Capability {
     /// DynamoDB capabilities
     pub const DYNAMODB: Self = Self {
         driver_name: "DynamoDB",
-        sql: false,
+        sql: None,
         sql_placeholder: None,
         storage_types: StorageTypes::DYNAMODB,
         schema_mutations: SchemaMutations::DYNAMODB,
@@ -1101,7 +1126,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("sql is true but sql_placeholder is None")
+                .contains("sql is Some but sql_placeholder is None")
         );
     }
 
@@ -1118,7 +1143,7 @@ mod tests {
             result
                 .unwrap_err()
                 .to_string()
-                .contains("sql is false but sql_placeholder is Some")
+                .contains("sql is None but sql_placeholder is Some")
         );
     }
 

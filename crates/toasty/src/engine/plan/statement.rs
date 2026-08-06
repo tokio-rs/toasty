@@ -587,7 +587,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn rewrite_stmt_for_batch_load(&mut self, stmt: &mut stmt::Statement) {
-        if self.planner.engine.capability().sql {
+        if self.planner.engine.capability().sql() {
             self.rewrite_stmt_query_for_batch_load_sql(stmt);
         } else {
             self.rewrite_stmt_query_for_batch_load_nosql(stmt);
@@ -798,7 +798,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ) -> Result<mir::NodeId> {
         // COUNT(*) is SQL-only
         if self.load_data.select_items.contains(&SelectItem::CountStar)
-            && !self.planner.engine.capability().sql
+            && !self.planner.engine.capability().sql()
         {
             return Err(toasty_core::Error::unsupported_feature(format!(
                 "{} does not support count() queries",
@@ -815,7 +815,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             Ok(node_id)
         } else if stmt.is_insert() {
             self.plan_insert(stmt)
-        } else if self.planner.engine.capability().sql {
+        } else if self.planner.engine.capability().sql() {
             self.plan_data_loading_sql(stmt)
         } else {
             self.plan_data_loading_nosql(stmt)
@@ -884,7 +884,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
         let inputs = mem::take(&mut self.load_data.inputs);
 
-        let node = if !self.planner.engine.capability().sql && stmt.is_upsert() {
+        let node = if !self.planner.engine.capability().sql() && stmt.is_upsert() {
             mir::Operation::Upsert(Box::new(mir::Upsert {
                 inputs,
                 stmt: stmt.into_insert_unwrap(),
@@ -918,7 +918,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     // ===== SQL execution =====
 
     fn plan_data_loading_sql(&mut self, mut stmt: stmt::Statement) -> Result<mir::NodeId> {
-        debug_assert!(self.planner.engine.capability().sql, "stmt={stmt:#?}");
+        debug_assert!(self.planner.engine.capability().sql(), "stmt={stmt:#?}");
         debug_assert!(!stmt.is_insert(), "stmt={stmt:#?}");
 
         // Phase 1: Detect pagination and add ORDER BY columns to load_data

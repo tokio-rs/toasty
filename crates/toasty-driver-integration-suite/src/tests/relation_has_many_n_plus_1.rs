@@ -29,7 +29,7 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
 pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    if db.capability().sql {
+    if db.capability().sql() {
         // Statement count is correct for DDB, but not MySQL
         return Ok(());
     }

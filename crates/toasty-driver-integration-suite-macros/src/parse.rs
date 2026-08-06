@@ -35,6 +35,23 @@ pub struct DriverTest {
     pub attr: DriverTestAttr,
 }
 
+/// Builds the expression that reads capability `cap` off `capability`, a
+/// `&Capability` expression.
+///
+/// Capabilities are plain `bool` fields, with one exception: `sql` holds the
+/// driver's SQL dialect as an `Option<Dialect>` and exposes the boolean
+/// view as a method, so `requires(sql)` has to call it.
+pub fn read_capability(
+    capability: proc_macro2::TokenStream,
+    cap: &Ident,
+) -> proc_macro2::TokenStream {
+    if cap == "sql" {
+        quote::quote! { #capability.sql() }
+    } else {
+        quote::quote! { #capability.#cap }
+    }
+}
+
 /// Three-valued boolean logic for predicate evaluation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThreeValuedBool {

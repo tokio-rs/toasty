@@ -106,7 +106,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
         // Position: id_u64 uses Expr::Default (no param), so val is at
         // params[0]. id_uuid generates the uuid client-side, so val is at
         // params[1].
-        let sql = test.capability().sql;
+        let sql = test.capability().sql();
         let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
         let val_pat = if sql {
             ArgOr::Arg(val_pos)
@@ -135,7 +135,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
 
         let (op, _) = test.log().pop();
 
-        if test.capability().sql {
+        if test.capability().sql() {
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Query(_),
             }))

@@ -27,7 +27,7 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
     assert_eq!(res[0].title, "hello");
 
     // Single-row batch: no transaction wrapping needed
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
         assert!(test.log().is_empty());
     }
@@ -55,7 +55,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
 
     // Multi-row batch in a single INSERT statement: no transaction wrapping
     // needed because single SQL statements are inherently atomic.
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
         assert!(test.log().is_empty());
     }
