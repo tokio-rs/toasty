@@ -29,24 +29,12 @@ let db = toasty::Db::builder()
 The URL must include a database name in the path. TLS uses rustls by
 default.
 
-To select rustls explicitly, disable Toasty's default features:
-
-```toml
-[dependencies]
-toasty = { version = "{{toasty_version}}", default-features = false, features = ["mysql", "rustls"] }
-```
-
 To select native TLS instead:
 
 ```toml
 [dependencies]
 toasty = { version = "{{toasty_version}}", default-features = false, features = ["mysql", "native-tls"] }
 ```
-
-The `native-tls` and `rustls` features are additive and may both be
-enabled. SQLx selects `native-tls` when both are present. Cargo combines
-features selected by every dependency, so an application cannot disable
-one after another dependency enables it.
 
 ## Connection URL options
 
