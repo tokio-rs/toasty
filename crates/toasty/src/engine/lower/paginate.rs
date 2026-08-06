@@ -41,7 +41,7 @@ impl LowerStatement<'_, '_> {
                             .iter()
                             .zip(value.fields.iter())
                             .map(|(order_by, eq_value)| {
-                                stmt::Expr::eq(order_by.expr.clone(), eq_value.clone())
+                                self.rewrite_cursor_field_as_equality(order_by, eq_value.clone())
                             })
                             .collect();
 
@@ -69,11 +69,41 @@ impl LowerStatement<'_, '_> {
         order_by: &stmt::OrderByExpr,
         value: stmt::Value,
     ) -> stmt::Expr {
+        let nulls_first = match order_by.order {
+            Some(stmt::Direction::Desc) => !self.capability().sql_nulls_first_on_asc,
+            _ => self.capability().sql_nulls_first_on_asc,
+        };
+
+        if value.is_null() {
+            return if nulls_first {
+                stmt::Expr::is_not_null(order_by.expr.clone())
+            } else {
+                false.into()
+            };
+        }
+
         let op = match order_by.order {
             Some(stmt::Direction::Desc) => stmt::BinaryOp::Lt,
             _ => stmt::BinaryOp::Gt,
         };
+        let comparison = stmt::Expr::binary_op(order_by.expr.clone(), op, value);
 
-        stmt::Expr::binary_op(order_by.expr.clone(), op, value)
+        if nulls_first {
+            comparison
+        } else {
+            stmt::Expr::or(comparison, stmt::Expr::is_null(order_by.expr.clone()))
+        }
+    }
+
+    fn rewrite_cursor_field_as_equality(
+        &self,
+        order_by: &stmt::OrderByExpr,
+        value: stmt::Value,
+    ) -> stmt::Expr {
+        if value.is_null() {
+            stmt::Expr::is_null(order_by.expr.clone())
+        } else {
+            stmt::Expr::eq(order_by.expr.clone(), value)
+        }
     }
 }

@@ -268,6 +268,13 @@ pub struct Capability {
     /// all.
     pub backward_pagination: bool,
 
+    /// Whether ascending SQL ordering places `NULL` before non-null values.
+    ///
+    /// Cursor pagination uses this to generate predicates that match the
+    /// backend's native `ORDER BY` behavior. Descending ordering uses the
+    /// opposite placement.
+    pub sql_nulls_first_on_asc: bool,
+
     /// Whether the backend supports `BOOL` as a key attribute type.
     ///
     /// DynamoDB only allows `S`, `N`, or `B` for primary-key and GSI key
@@ -633,6 +640,7 @@ impl Capability {
         transaction_lock_mode: true,
 
         backward_pagination: true,
+        sql_nulls_first_on_asc: true,
 
         // `Vec<scalar>` model fields land in a `TEXT` column holding a JSON
         // document (JSON1 extension). The driver serializes `Value::List`
@@ -704,6 +712,7 @@ impl Capability {
 
         // PostgreSQL has no SQLite-style lock-mode keyword on BEGIN.
         transaction_lock_mode: false,
+        sql_nulls_first_on_asc: false,
 
         // PostgreSQL accepts a single array-valued bind param and supports
         // `expr <op> ANY(array)` / `<op> ALL(array)` predicates.
@@ -857,6 +866,7 @@ impl Capability {
         transaction_lock_mode: false,
 
         backward_pagination: false,
+        sql_nulls_first_on_asc: false,
 
         // DynamoDB: not SQL-based; the array-bind/`ANY`-predicate features do
         // not apply.

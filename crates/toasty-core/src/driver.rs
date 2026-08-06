@@ -58,6 +58,9 @@
 mod capability;
 pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
 
+mod connection_url;
+pub use connection_url::ConnectionUrl;
+
 pub mod log;
 pub use log::QueryLogConfig;
 

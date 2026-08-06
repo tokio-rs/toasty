@@ -70,6 +70,18 @@ impl DynamoDb {
     pub async fn from_env(url: String) -> Result<Self> {
         use aws_config::BehaviorVersion;
 
+        // The URL does not name the endpoint — that comes from the ambient AWS
+        // config — but validate it anyway, so a typo fails here instead of
+        // silently connecting to whatever the environment points at.
+        let parsed = toasty_core::driver::ConnectionUrl::parse(&url)?;
+        parsed.validate_authority()?;
+
+        if !parsed.has_scheme("dynamodb") {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "connection URL does not have a `dynamodb` scheme; url={url}"
+            )));
+        }
+
         let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;
         let client = Client::new(&sdk_config);
         Ok(Self::new(url, client))

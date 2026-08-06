@@ -253,11 +253,44 @@ impl Edge {
     }
 }
 
-/// The single-column mapping for a foreign-key field. Via include paths only
-/// resolve FK source/target fields, which the schema guarantees are primitive.
-fn fk_primitive(schema: &toasty_core::Schema, field_id: app::FieldId) -> &mapping::FieldPrimitive {
-    schema.mapping_for(field_id.model).fields[field_id.index]
-        .as_primitive()
+/// The single-column mapping for a foreign-key field.
+///
+/// Besides primitives, foreign keys may use embedded newtypes and unit enums.
+/// Newtypes map through one-field structs to a primitive leaf; unit enums map
+/// through their discriminant.
+struct SingleColumnFk<'a> {
+    primitive: &'a mapping::FieldPrimitive,
+    newtype_depth: usize,
+}
+
+fn single_column_fk(schema: &toasty_core::Schema, field_id: app::FieldId) -> SingleColumnFk<'_> {
+    fn resolve(field: &mapping::Field) -> Option<SingleColumnFk<'_>> {
+        match field {
+            mapping::Field::Primitive(primitive) => Some(SingleColumnFk {
+                primitive,
+                newtype_depth: 0,
+            }),
+            mapping::Field::Struct(field) if field.fields.len() == 1 => {
+                let mut fk = resolve(&field.fields[0])?;
+                fk.newtype_depth += 1;
+                Some(fk)
+            }
+            mapping::Field::Enum(field)
+                if field
+                    .variants
+                    .iter()
+                    .all(|variant| variant.fields.is_empty()) =>
+            {
+                Some(SingleColumnFk {
+                    primitive: &field.discriminant,
+                    newtype_depth: 0,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    resolve(&schema.mapping_for(field_id.model).fields[field_id.index])
         .expect("FK field maps to a single column")
 }
 
@@ -267,22 +300,25 @@ fn fk_primitive(schema: &toasty_core::Schema, field_id: app::FieldId) -> &mappin
 fn raw_column(schema: &toasty_core::Schema, slot: usize, field_id: app::FieldId) -> stmt::Expr {
     stmt::Expr::column(stmt::ExprReference::column(
         slot,
-        fk_primitive(schema, field_id).column.index,
+        single_column_fk(schema, field_id).primitive.column.index,
     ))
 }
 
-/// The model-level expression for a FK field — its column reference wrapped in
-/// the storage→model cast when the storage type differs (e.g. `Uuid` stored as
-/// `Bytes`) — re-pointed at table `slot`.
+/// The single-column expression for a FK field, re-pointed at table `slot`.
 ///
-/// `FieldPrimitive::column_expr` is the schema's pre-built table→model
-/// expression at slot 0; we rewrite each column ref's slot.
+/// Primitive leaves and unit-enum discriminants use `column_expr` to preserve
+/// storage casts. This path does not use an embed's `default_returning`, which
+/// may contain nullable presence guards or deferred-field placeholders.
 fn model_level_column_expr(
     schema: &toasty_core::Schema,
     field_id: app::FieldId,
     slot: usize,
 ) -> stmt::Expr {
-    let mut expr = fk_primitive(schema, field_id).column_expr.clone();
+    let fk = single_column_fk(schema, field_id);
+    let mut expr = fk.primitive.column_expr.clone();
+    for _ in 0..fk.newtype_depth {
+        expr = stmt::Expr::record([expr]);
+    }
 
     stmt::visit_mut::for_each_expr_mut(&mut expr, |e| {
         if let stmt::Expr::Reference(stmt::ExprReference::Column(col)) = e {

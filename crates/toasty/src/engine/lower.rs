@@ -101,7 +101,8 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
-        lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql)
+            .rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
@@ -1751,7 +1752,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            lift_in_subquery::LiftInSubquery::new(child.expr_cx).rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(child.expr_cx, child.state.engine.capability.sql)
+                .rewrite(&mut stmt);
             // Pre-lower simplify: remaining heavyweight rules the lowering
             // visitor expects to have already fired.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)

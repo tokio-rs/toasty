@@ -7,13 +7,11 @@ scenario! {
     //! `Deferred`, leaving the `ViaManyField for Vec<E>` (`DEFERRED = false`)
     //! impl — and via auto-loading — otherwise unexercised.
 
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -29,12 +27,12 @@ scenario! {
     struct Tag {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,

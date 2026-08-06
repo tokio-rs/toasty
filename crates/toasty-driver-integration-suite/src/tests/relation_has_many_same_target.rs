@@ -5,7 +5,7 @@
 use crate::prelude::*;
 use hashbrown::HashSet;
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_same_target))]
+#[driver_test(scenario(crate::scenarios::has_many_same_target))]
 pub async fn pair_hint_disambiguates_has_many(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -57,7 +57,7 @@ pub async fn pair_hint_disambiguates_has_many(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_same_target))]
+#[driver_test(scenario(crate::scenarios::has_many_same_target))]
 pub async fn pair_hint_create_via_has_many_accessor(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
