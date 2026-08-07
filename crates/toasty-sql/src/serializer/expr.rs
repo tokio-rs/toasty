@@ -2,7 +2,7 @@ use toasty_core::{schema::db::ColumnId, stmt::ResolvedRef};
 
 use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
-use crate::{serializer::Flavor, stmt};
+use crate::{serializer::Dialect, stmt};
 
 impl ToSql for &stmt::Expr {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
@@ -55,39 +55,39 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, "excluded." f.serializer.column_name(column));
             }
             stmt::Expr::Incoming(_) => panic!("incoming row must be projected"),
-            stmt::Expr::IsSuperset(e) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
+            stmt::Expr::IsSuperset(e) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, e.lhs.as_ref() " @> " e.rhs.as_ref()),
                 // The rhs Value::List is bound as one JSON string. MySQL's
                 // `JSON_CONTAINS(target, candidate)` matches when every
                 // element of `candidate` appears in `target`.
-                Flavor::Mysql => {
+                Dialect::Mysql => {
                     fmt!(f, "JSON_CONTAINS(" e.lhs.as_ref() ", " e.rhs.as_ref() ")")
                 }
                 // SQLite has no direct superset operator; emulate via
                 // `NOT EXISTS (rhs element with no match in lhs)`.
-                Flavor::Sqlite => fmt!(
+                Dialect::Sqlite => fmt!(
                     f,
                     "NOT EXISTS (SELECT 1 FROM json_each(" e.rhs.as_ref()
                     ") AS r WHERE r.value NOT IN (SELECT l.value FROM json_each("
                     e.lhs.as_ref() ") AS l))"
                 ),
             },
-            stmt::Expr::Intersects(e) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, e.lhs.as_ref() " && " e.rhs.as_ref()),
-                Flavor::Mysql => {
+            stmt::Expr::Intersects(e) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, e.lhs.as_ref() " && " e.rhs.as_ref()),
+                Dialect::Mysql => {
                     fmt!(f, "JSON_OVERLAPS(" e.lhs.as_ref() ", " e.rhs.as_ref() ")")
                 }
-                Flavor::Sqlite => fmt!(
+                Dialect::Sqlite => fmt!(
                     f,
                     "EXISTS (SELECT 1 FROM json_each(" e.rhs.as_ref()
                     ") AS r WHERE r.value IN (SELECT l.value FROM json_each("
                     e.lhs.as_ref() ") AS l))"
                 ),
             },
-            stmt::Expr::Length(e) => match f.serializer.flavor {
-                Flavor::Postgresql => fmt!(f, "cardinality(" e.expr.as_ref() ")"),
-                Flavor::Mysql => fmt!(f, "JSON_LENGTH(" e.expr.as_ref() ")"),
-                Flavor::Sqlite => fmt!(f, "json_array_length(" e.expr.as_ref() ")"),
+            stmt::Expr::Length(e) => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "cardinality(" e.expr.as_ref() ")"),
+                Dialect::Mysql => fmt!(f, "JSON_LENGTH(" e.expr.as_ref() ")"),
+                Dialect::Sqlite => fmt!(f, "json_array_length(" e.expr.as_ref() ")"),
             },
             stmt::Expr::Ident(name) => {
                 fmt!(f, Ident(name));
@@ -95,30 +95,32 @@ impl ToSql for &stmt::Expr {
             stmt::Expr::InList(expr) => {
                 fmt!(f, expr.expr " IN " expr.list);
             }
-            stmt::Expr::AnyOp(expr) => match f.serializer.flavor {
+            stmt::Expr::AnyOp(expr) => match f.serializer.dialect {
                 // `value = ANY(col)` — PostgreSQL's array membership operator.
                 // Drives `Path::contains` for native-array columns and the
                 // IN-list rewrite.
-                Flavor::Postgresql => {
+                Dialect::Postgresql => {
                     fmt!(f, expr.lhs " " expr.op " ANY(" expr.rhs ")");
                 }
                 // MySQL's `value MEMBER OF (json_array)` (8.0.17+). Only the
                 // equality form makes sense; `Path::contains` is the only
                 // current emitter and the lowering pass never produces
                 // ANY on MySQL since `predicate_match_any` is false.
-                Flavor::Mysql if matches!(expr.op, stmt::BinaryOp::Eq) => {
+                Dialect::Mysql if matches!(expr.op, stmt::BinaryOp::Eq) => {
                     fmt!(f, expr.lhs " MEMBER OF (" expr.rhs ")");
                 }
-                Flavor::Mysql => unreachable!("AnyOp with non-Eq operator on MySQL: {expr:?}"),
+                Dialect::Mysql => unreachable!("AnyOp with non-Eq operator on MySQL: {expr:?}"),
                 // SQLite renders `value = ANY(col)` (i.e. `Path::contains`)
                 // as `value IN (SELECT value FROM json_each(col))`.
-                Flavor::Sqlite if matches!(expr.op, stmt::BinaryOp::Eq) => {
+                Dialect::Sqlite if matches!(expr.op, stmt::BinaryOp::Eq) => {
                     fmt!(
                         f,
                         expr.lhs " IN (SELECT value FROM json_each(" expr.rhs "))"
                     );
                 }
-                Flavor::Sqlite => unreachable!("AnyOp with non-Eq operator on SQLite: {expr:?}"),
+                Dialect::Sqlite => {
+                    unreachable!("AnyOp with non-Eq operator on SQLite: {expr:?}")
+                }
             },
             stmt::Expr::AllOp(expr) => {
                 fmt!(f, expr.lhs " " expr.op " ALL(" expr.rhs ")");
@@ -130,12 +132,13 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, expr.expr " IS NULL");
             }
             stmt::Expr::Like(expr) => {
-                let op =
-                    if expr.case_insensitive && matches!(f.serializer.flavor, Flavor::Postgresql) {
-                        " ILIKE "
-                    } else {
-                        " LIKE "
-                    };
+                let op = if expr.case_insensitive
+                    && matches!(f.serializer.dialect, Dialect::Postgresql)
+                {
+                    " ILIKE "
+                } else {
+                    " LIKE "
+                };
                 fmt!(f, expr.expr op expr.pattern);
                 if let Some(escape) = expr.escape {
                     let escape = if f.serializer.is_mysql() && escape == '\\' {
@@ -148,23 +151,23 @@ impl ToSql for &stmt::Expr {
                 }
             }
             stmt::Expr::StartsWith(expr) => {
-                match f.serializer.flavor {
+                match f.serializer.dialect {
                     // PostgreSQL's `^@` prefix-match operator; prefix is bound
                     // as a plain string parameter.
-                    Flavor::Postgresql => {
+                    Dialect::Postgresql => {
                         fmt!(f, expr.expr " ^@ " expr.prefix);
                     }
                     // SQLite GLOB is case-sensitive.  extract_params has already
                     // escaped GLOB metacharacters and appended `*` to the prefix
                     // parameter, so we only need to emit the right operator.
-                    Flavor::Sqlite => {
+                    Dialect::Sqlite => {
                         fmt!(f, expr.expr " GLOB " expr.prefix);
                     }
                     // MySQL LIKE is case-insensitive by default; casting the
                     // column side to BINARY forces a case-sensitive byte
                     // comparison.  extract_params has escaped `%`/`_`/`!` and
                     // appended `%` to the prefix parameter.
-                    Flavor::Mysql => {
+                    Dialect::Mysql => {
                         fmt!(f, "BINARY " expr.expr " LIKE " expr.prefix " ESCAPE '!'");
                     }
                 }
@@ -202,7 +205,7 @@ impl ToSql for &stmt::Expr {
                     let column =
                         f.cx.resolve_expr_reference(expr_reference)
                             .as_column_unwrap();
-                    if matches!(f.serializer.flavor, Flavor::Postgresql)
+                    if matches!(f.serializer.dialect, Dialect::Postgresql)
                         && expr_column.nesting == 0
                         && f.assignment_table == Some(column.id.table)
                     {
@@ -233,10 +236,10 @@ impl ToSql for &stmt::Expr {
                 let placeholder = super::Placeholder(arg.position + 1);
                 fmt!(f, placeholder);
             }
-            stmt::Expr::Default => match f.serializer.flavor {
-                Flavor::Postgresql | Flavor::Mysql => fmt!(f, "DEFAULT"),
+            stmt::Expr::Default => match f.serializer.dialect {
+                Dialect::Postgresql | Dialect::Mysql => fmt!(f, "DEFAULT"),
                 // SQLite does not support the DEFAULT keyword but NULL acts similarly.
-                Flavor::Sqlite => fmt!(f, "NULL"),
+                Dialect::Sqlite => fmt!(f, "NULL"),
             },
             _ => todo!("expr={:#?}", self),
         }
@@ -267,8 +270,8 @@ impl ToSql for AndOperand<'_> {
 /// on MySQL, and `(col->'a'->>'b')::cast` on PostgreSQL — the latter two unwrap
 /// the leaf to text and cast it to match the bound parameter's type.
 fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExtract) {
-    match f.serializer.flavor {
-        Flavor::Sqlite => {
+    match f.serializer.dialect {
+        Dialect::Sqlite => {
             // SQLite's `json_extract` returns SQL-native scalars (unquoted text,
             // integers, reals), so a path read compares directly against a bound
             // parameter with no cast. The path is a single-quoted JSONPath like
@@ -280,8 +283,8 @@ fn serialize_json_extract(f: &mut super::Formatter<'_>, func: &stmt::FuncJsonExt
                 "')"
             );
         }
-        Flavor::Mysql => serialize_mysql_json_extract(f, func),
-        Flavor::Postgresql => {
+        Dialect::Mysql => serialize_mysql_json_extract(f, func),
+        Dialect::Postgresql => {
             // Descend with `->`, take the leaf as text with `->>`, then cast the
             // text to the leaf type so it compares against a bound parameter.
             let (leaf, parents) = func

@@ -2,7 +2,7 @@ use crate::prelude::*;
 
 // ---------- Deferred<Embed> on a struct embed ----------
 
-#[driver_test(id(ID), scenario(crate::scenarios::document_deferred_metadata))]
+#[driver_test(scenario(crate::scenarios::document_deferred_metadata))]
 pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -51,7 +51,7 @@ pub async fn deferred_embed_struct(t: &mut Test) -> Result<()> {
 // sub-fields. The lowering has to descend through the enum's `Match`
 // expression to mask / wrap those sub-fields.
 
-#[driver_test(id(ID), scenario(crate::scenarios::person_contact_deferred_metadata))]
+#[driver_test(scenario(crate::scenarios::person_contact_deferred_metadata))]
 pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -98,7 +98,7 @@ pub async fn deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
 // engine flattens into `[contact_idx, variant_idx, …]` projections and
 // dispatches into the matching arm of the embed enum's `Match`.
 
-#[driver_test(id(ID), scenario(crate::scenarios::person_contact_deferred_metadata))]
+#[driver_test(scenario(crate::scenarios::person_contact_deferred_metadata))]
 pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -154,7 +154,7 @@ pub async fn include_deferred_inside_embed_in_enum_variant(t: &mut Test) -> Resu
 
 // ---------- Deferred<UnitEnum> ----------
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn deferred_embed_unit_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
@@ -167,7 +167,7 @@ pub async fn deferred_embed_unit_enum(t: &mut Test) -> Result<()> {
     struct Document {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
         status: toasty::Deferred<Status>,
@@ -199,7 +199,7 @@ pub async fn deferred_embed_unit_enum(t: &mut Test) -> Result<()> {
 
 // ---------- Deferred<DataCarryingEnum> ----------
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactInfo {
@@ -212,7 +212,7 @@ pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
     struct Person {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
         contact: toasty::Deferred<ContactInfo>,
@@ -269,7 +269,7 @@ pub async fn deferred_embed_data_enum(t: &mut Test) -> Result<()> {
 
 // ---------- Updating a deferred embed reloads with the new value ----------
 
-#[driver_test(id(ID), scenario(crate::scenarios::document_deferred_metadata))]
+#[driver_test(scenario(crate::scenarios::document_deferred_metadata))]
 pub async fn deferred_embed_update_reloads(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -309,7 +309,7 @@ pub async fn deferred_embed_update_reloads(t: &mut Test) -> Result<()> {
 // outer wrapper but leaves the inner deferred sub-field unloaded;
 // `.include(metadata().notes())` loads both.
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     struct Metadata {
@@ -321,7 +321,7 @@ pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> 
     struct Document {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
         metadata: toasty::Deferred<Metadata>,
@@ -373,7 +373,7 @@ pub async fn deferred_embed_with_deferred_sub_field(t: &mut Test) -> Result<()> 
 
 // ---------- Deferred<T> inside an Embed (per-column) ----------
 
-#[driver_test(id(ID), scenario(crate::scenarios::document_metadata_deferred_notes))]
+#[driver_test(scenario(crate::scenarios::document_metadata_deferred_notes))]
 pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -412,7 +412,7 @@ pub async fn deferred_field_inside_embed(t: &mut Test) -> Result<()> {
 // via `From<T>` (`.into()`), the encoder unwraps it through
 // `Deferred<T>: IntoExpr<T>`, and the column is written.
 
-#[driver_test(id(ID), scenario(crate::scenarios::document_metadata_deferred_notes))]
+#[driver_test(scenario(crate::scenarios::document_metadata_deferred_notes))]
 pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -456,10 +456,7 @@ pub async fn update_embed_by_value_with_deferred_sub_field(t: &mut Test) -> Resu
 // presence `Match` that wraps a nullable embed's `default_returning` previously
 // hid the record from `process_embed`, leaving the deferred slot unloaded after
 // create.
-#[driver_test(
-    id(ID),
-    scenario(crate::scenarios::document_optional_metadata_deferred_notes)
-)]
+#[driver_test(scenario(crate::scenarios::document_optional_metadata_deferred_notes))]
 pub async fn deferred_field_inside_option_embed(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -502,7 +499,7 @@ pub async fn deferred_field_inside_option_embed(t: &mut Test) -> Result<()> {
 // a multi-field embed: loaded on create (echoed via `INSERT … RETURNING`),
 // unloaded on a default read. Guards the reuse path's presence `Match` wrapping
 // of the deferred record.
-#[driver_test(id(ID), scenario(crate::scenarios::document_optional_body_deferred))]
+#[driver_test(scenario(crate::scenarios::document_optional_body_deferred))]
 pub async fn deferred_newtype_inside_option_embed(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

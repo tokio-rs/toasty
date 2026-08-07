@@ -8,13 +8,11 @@ scenario! {
     //! single-result (`query.single`) path of via-include lowering, which the
     //! all-`has_many` `user_org_project_todo` scenario never exercises.
 
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -30,10 +28,10 @@ scenario! {
     struct Account {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<Option<User>>,
@@ -46,10 +44,10 @@ scenario! {
     struct Subscription {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        account_id: Option<ID>,
+        account_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = account_id, references = id)]
         account: toasty::Deferred<Option<Account>>,

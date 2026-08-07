@@ -50,7 +50,6 @@ impl<'a> Column<'a> {
 
         let mut changes = vec![];
         let mut add_ids: HashSet<_> = next.iter().map(|next| next.id).collect();
-
         let next_map = HashMap::<&str, &'a db::Column>::from_iter(
             next.iter().map(|to| (to.name.as_str(), to)),
         );

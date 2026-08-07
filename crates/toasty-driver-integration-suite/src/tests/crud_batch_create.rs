@@ -4,7 +4,7 @@ use crate::prelude::*;
 
 use toasty_core::driver::{Operation, operation::Transaction};
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -13,7 +13,7 @@ pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn batch_create_one(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -27,7 +27,7 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
     assert_eq!(res[0].title, "hello");
 
     // Single-row batch: no transaction wrapping needed
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
         assert!(test.log().is_empty());
     }
@@ -38,7 +38,7 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -55,7 +55,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
 
     // Multi-row batch in a single INSERT statement: no transaction wrapping
     // needed because single SQL statements are inherently atomic.
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
         assert!(test.log().is_empty());
     }
@@ -69,7 +69,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
 }
 
 // TODO: is a batch supposed to be atomic? Probably not.
-#[driver_test(id(ID))]
+#[driver_test]
 #[should_panic]
 pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -99,7 +99,7 @@ pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) ->
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -129,7 +129,7 @@ pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Te
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(scenario(crate::scenarios::user_unique_email))]
 #[should_panic]
 pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -144,7 +144,7 @@ pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test
 
 /// Unique constraint violation on a multi-row batch is atomic because a single
 /// INSERT statement is inherently atomic in SQL databases.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -175,7 +175,7 @@ pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()
 
 /// Multi-row batch inside an explicit transaction executes as a single INSERT
 /// without extra savepoint wrapping (the statement is inherently atomic).
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

@@ -103,8 +103,14 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
 fn extract_capability_names(expr: &BoolExpr, result: &mut hashbrown::HashSet<String>) {
     match expr {
         BoolExpr::Ident(name) => {
-            // Skip common matrix identifiers
-            if name != "single" && name != "composite" && name != "id_u64" && name != "id_uuid" {
+            // Skip common matrix identifiers, and test flags, which have no
+            // `Capability` field to validate against.
+            if name != "single"
+                && name != "composite"
+                && name != "id_u64"
+                && name != "id_uuid"
+                && !crate::parse::is_test_flag(name)
+            {
                 result.insert(name.clone());
             }
         }
@@ -244,6 +250,10 @@ fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
     }
 
     let requires_list = &structure.requires;
+    let requires_read: Vec<_> = requires_list
+        .iter()
+        .map(|cap| crate::parse::read_capability(quote! { capability }, cap))
+        .collect();
 
     quote! {
         #[test]
@@ -272,12 +282,12 @@ fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
                 #(
                     let expected = expected_capabilities.get(stringify!(#requires_list)).copied().unwrap_or(true);
                     assert_eq!(
-                        capability.#requires_list,
+                        #requires_read,
                         expected,
                         "Capability mismatch for {}: expected {}, got {}",
                         stringify!(#requires_list),
                         expected,
-                        capability.#requires_list
+                        #requires_read
                     );
                 )*
             });

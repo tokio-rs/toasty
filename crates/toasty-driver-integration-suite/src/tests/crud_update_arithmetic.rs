@@ -6,7 +6,7 @@ use toasty_core::{
 };
 
 #[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn increment_adds_one(t: &mut Test) -> Result<()> {
+pub async fn arithmetic_update_cases(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     let mut counter = toasty::create!(Counter {
         id: uuid::Uuid::new_v4(),
@@ -23,118 +23,80 @@ pub async fn increment_adds_one(t: &mut Test) -> Result<()> {
 
     let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
     assert_eq!(reloaded.value, 11);
-    Ok(())
-}
 
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn decrement_subtracts_one(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
     let mut counter = toasty::create!(Counter {
         id: uuid::Uuid::new_v4(),
         value: 10,
     })
     .exec(&mut db)
     .await?;
-
     counter
         .update()
         .value(toasty::stmt::decrement())
         .exec(&mut db)
         .await?;
-
     let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
     assert_eq!(reloaded.value, 9);
-    Ok(())
-}
 
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn add_adds_value(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
     let mut counter = toasty::create!(Counter {
         id: uuid::Uuid::new_v4(),
         value: 10,
     })
     .exec(&mut db)
     .await?;
-
     counter
         .update()
         .value(toasty::stmt::add(25))
         .exec(&mut db)
         .await?;
-
     let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
     assert_eq!(reloaded.value, 35);
-    Ok(())
-}
 
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn subtract_subtracts_value(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
     let mut counter = toasty::create!(Counter {
         id: uuid::Uuid::new_v4(),
         value: 10,
     })
     .exec(&mut db)
     .await?;
-
     counter
         .update()
         .value(toasty::stmt::subtract(3))
         .exec(&mut db)
         .await?;
-
     let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
     assert_eq!(reloaded.value, 7);
-    Ok(())
-}
 
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn add_negative_value(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
     let mut counter = toasty::create!(Counter {
         id: uuid::Uuid::new_v4(),
         value: 10,
     })
     .exec(&mut db)
     .await?;
-
     counter
         .update()
         .value(toasty::stmt::add(-4))
         .exec(&mut db)
         .await?;
-
     let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
     assert_eq!(reloaded.value, 6);
-    Ok(())
-}
 
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn increment_emits_add_assignment(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
     let mut counter = toasty::create!(Counter {
         id: uuid::Uuid::new_v4(),
         value: 10,
     })
     .exec(&mut db)
     .await?;
-
+    // Column index 1 is `value`. Confirm increment lowers to `Assignment::Add`;
+    // the value checks above cover each driver's return path.
     let counter_table_id = table_id(&db, "counters");
-    let is_sql = t.capability().sql;
-
+    let is_sql = t.capability().sql();
     t.log().clear();
     counter
         .update()
         .value(toasty::stmt::increment())
         .exec(&mut db)
         .await?;
-
     let (op, _resp) = t.log().pop();
-    // Column index 1 = value (id=0, value=1). Confirms the engine emits
-    // an `Assignment::Add` for `stmt::increment()`. Driver-specific shape
-    // (RETURNING vs follow-up SELECT) is exercised in the value-check
-    // tests above; here we only care about the assignment variant.
     if is_sql {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
@@ -150,6 +112,71 @@ pub async fn increment_emits_add_assignment(t: &mut Test) -> Result<()> {
             ..
         }));
     }
+
+    // Duplicate assignments once crashed lowering; they must fold into one
+    // arithmetic update.
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
+    counter
+        .update()
+        .value(toasty::stmt::add(2))
+        .value(toasty::stmt::add(3))
+        .exec(&mut db)
+        .await?;
+    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
+    assert_eq!(reloaded.value, 15);
+
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
+    // A leading subtract flips later add operands in the batch fold.
+    counter
+        .update()
+        .value(toasty::stmt::subtract(3))
+        .value(toasty::stmt::add(7))
+        .exec(&mut db)
+        .await?;
+    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
+    assert_eq!(reloaded.value, 14);
+
+    let mut counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
+    // Set clobbers prior state and absorbs subsequent arithmetic.
+    counter
+        .update()
+        .value(50)
+        .value(toasty::stmt::add(8))
+        .value(toasty::stmt::subtract(3))
+        .exec(&mut db)
+        .await?;
+    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
+    assert_eq!(reloaded.value, 55);
+
+    let counter = toasty::create!(Counter {
+        id: uuid::Uuid::new_v4(),
+        value: 10,
+    })
+    .exec(&mut db)
+    .await?;
+    Counter::filter_by_id(counter.id)
+        .update()
+        .value(toasty::stmt::add(100))
+        .exec(&mut db)
+        .await?;
+    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
+    assert_eq!(reloaded.value, 110);
+
     Ok(())
 }
 
@@ -182,84 +209,6 @@ pub async fn arithmetic_chains_with_other_updates(t: &mut Test) -> Result<()> {
 
     let reloaded = Profile::get_by_id(&mut db, &profile.id).await?;
     assert_struct!(reloaded, _ { name: "alice2", login_count: 6, .. });
-    Ok(())
-}
-
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn multiple_add_on_one_field(t: &mut Test) -> Result<()> {
-    // Regression: chaining two arithmetic ops on the same field used to crash
-    // lowering. `Assignments::add` batches duplicate keys into
-    // `Assignment::Batch([Add, Add])`, and `fold_append_batch` only handles
-    // `Append`. Two `stmt::add` on the same field should compose to a single
-    // net add of (2 + 3).
-    let mut db = setup(t).await;
-    let mut counter = toasty::create!(Counter {
-        id: uuid::Uuid::new_v4(),
-        value: 10,
-    })
-    .exec(&mut db)
-    .await?;
-
-    counter
-        .update()
-        .value(toasty::stmt::add(2))
-        .value(toasty::stmt::add(3))
-        .exec(&mut db)
-        .await?;
-
-    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
-    assert_eq!(reloaded.value, 15);
-    Ok(())
-}
-
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn subtract_then_add_on_one_field(t: &mut Test) -> Result<()> {
-    // Covers the sign-flip path in the arithmetic-batch fold: when
-    // `Subtract` leads, subsequent `Add` operands must flip to subtraction
-    // inside the running operand (`col - a + b = col - (a - b)`).
-    let mut db = setup(t).await;
-    let mut counter = toasty::create!(Counter {
-        id: uuid::Uuid::new_v4(),
-        value: 10,
-    })
-    .exec(&mut db)
-    .await?;
-
-    counter
-        .update()
-        .value(toasty::stmt::subtract(3))
-        .value(toasty::stmt::add(7))
-        .exec(&mut db)
-        .await?;
-
-    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
-    assert_eq!(reloaded.value, 14);
-    Ok(())
-}
-
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn set_then_arithmetic_on_one_field(t: &mut Test) -> Result<()> {
-    // Covers the Set+arithmetic fold: a literal write followed by an
-    // arithmetic op on the same field should reduce to `Set(literal ± op)`
-    // — Set clobbers prior state and absorbs subsequent arithmetic.
-    let mut db = setup(t).await;
-    let mut counter = toasty::create!(Counter {
-        id: uuid::Uuid::new_v4(),
-        value: 10,
-    })
-    .exec(&mut db)
-    .await?;
-
-    counter
-        .update()
-        .value(50)
-        .value(toasty::stmt::add(8))
-        .value(toasty::stmt::subtract(3))
-        .exec(&mut db)
-        .await?;
-
-    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
-    assert_eq!(reloaded.value, 55);
     Ok(())
 }
 
@@ -334,26 +283,5 @@ pub async fn increment_narrow_integer_column(t: &mut Test) -> Result<()> {
         .await?;
     assert_eq!(Tally::get_by_id(&mut db, &tally.id).await?.count, 10);
 
-    Ok(())
-}
-
-#[driver_test(scenario(crate::scenarios::counter_value))]
-pub async fn filter_update_with_arithmetic(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-    let counter = toasty::create!(Counter {
-        id: uuid::Uuid::new_v4(),
-        value: 10,
-    })
-    .exec(&mut db)
-    .await?;
-
-    Counter::filter_by_id(counter.id)
-        .update()
-        .value(toasty::stmt::add(100))
-        .exec(&mut db)
-        .await?;
-
-    let reloaded = Counter::get_by_id(&mut db, &counter.id).await?;
-    assert_eq!(reloaded.value, 110);
     Ok(())
 }

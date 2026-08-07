@@ -164,7 +164,7 @@ impl stmt::Visit for Verify<'_, '_> {
             }
         }
 
-        if !self.capability.sql && upsert.action == stmt::UpsertAction::Update {
+        if !self.capability.sql() && upsert.action == stmt::UpsertAction::Update {
             for secondary in model
                 .indices
                 .iter()
@@ -280,7 +280,7 @@ impl Verify<'_, '_> {
         // SQL requires ORDER BY for cursor-based pagination.
         // NoSQL drivers (DynamoDB) use a driver-level cursor (ExclusiveStartKey)
         // and do not require ORDER BY.
-        if !self.capability.sql {
+        if !self.capability.sql() {
             return;
         }
 

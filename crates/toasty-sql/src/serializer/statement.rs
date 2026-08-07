@@ -1,7 +1,7 @@
 use super::{ColumnAlias, Comma, Delimited, Ident, ToSql};
 
 use crate::{
-    serializer::Flavor,
+    serializer::Dialect,
     stmt::{self, AlterColumnChanges, ColumnDef},
 };
 use toasty_core::{schema::db, stmt::SourceTableId};
@@ -100,8 +100,8 @@ impl ToSql for &stmt::AlterColumn {
 
         let column_name = Ident(&self.column_def.name);
 
-        match f.serializer.flavor {
-            Flavor::Postgresql => match &self.changes {
+        match f.serializer.dialect {
+            Dialect::Postgresql => match &self.changes {
                 AlterColumnChanges {
                     new_name: Some(name),
                     new_ty: None,
@@ -154,7 +154,7 @@ impl ToSql for &stmt::AlterColumn {
                     "PostgreSQL does not support modifying multiple column properties in one ALTER TABLE statement"
                 ),
             },
-            Flavor::Mysql => {
+            Dialect::Mysql => {
                 let new_column_def = ColumnDef {
                     name: self
                         .changes
@@ -180,7 +180,7 @@ impl ToSql for &stmt::AlterColumn {
                 };
                 fmt!(&mut f, "ALTER TABLE " table_name " CHANGE COLUMN " column_name " " new_column_def)
             }
-            Flavor::Sqlite => match &self.changes {
+            Dialect::Sqlite => match &self.changes {
                 AlterColumnChanges {
                     new_name: Some(name),
                     new_ty: None,
@@ -726,7 +726,7 @@ struct AssignmentColumn(db::ColumnId);
 
 impl ToSql for AssignmentColumn {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
-        if matches!(f.serializer.flavor, Flavor::Postgresql)
+        if matches!(f.serializer.dialect, Dialect::Postgresql)
             && f.assignment_table == Some(self.0.table)
         {
             fmt!(f, f.serializer.table_name(self.0.table) "." f.serializer.column_name(self.0))
@@ -802,12 +802,12 @@ impl ToSql for AssignmentList<'_> {
 ///   canonicalizes the result. This form also works in SQLite-compatible
 ///   engines that reject subqueries inside an upsert assignment.
 fn serialize_append(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
-    match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(f, column " || " expr),
-        Flavor::Mysql => {
+    match f.serializer.dialect {
+        Dialect::Postgresql => fmt!(f, column " || " expr),
+        Dialect::Mysql => {
             fmt!(f, "JSON_MERGE_PRESERVE(" column ", " expr ")")
         }
-        Flavor::Sqlite => fmt!(
+        Dialect::Sqlite => fmt!(
             f,
             "json(substr(" column ", 1, length(" column ") - 1) || \
              CASE WHEN json_array_length(" column ") > 0 \
@@ -824,10 +824,10 @@ fn serialize_append(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr
 /// - MySQL / SQLite: not yet supported — `vec_remove` is gated off and the
 ///   lowering rejects these backends before reaching here.
 fn serialize_remove(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
-    match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(f, "array_remove(" column ", " expr ")"),
-        Flavor::Mysql | Flavor::Sqlite => panic!(
-            "stmt::remove on a Vec<scalar> field is not yet implemented for this SQL flavor; \
+    match f.serializer.dialect {
+        Dialect::Postgresql => fmt!(f, "array_remove(" column ", " expr ")"),
+        Dialect::Mysql | Dialect::Sqlite => panic!(
+            "stmt::remove on a Vec<scalar> field is not yet implemented for this SQL dialect; \
              the lowering should have rejected this before reaching the serializer",
         ),
     }
@@ -840,10 +840,10 @@ fn serialize_remove(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr
 /// - MySQL / SQLite: not yet supported — `vec_pop` is gated off and the
 ///   lowering rejects these backends before reaching here.
 fn serialize_pop(f: &mut super::Formatter<'_>, column: AssignmentColumn) {
-    match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(f, column "[1:cardinality(" column ") - 1]"),
-        Flavor::Mysql | Flavor::Sqlite => panic!(
-            "stmt::pop on a Vec<scalar> field is not yet implemented for this SQL flavor; \
+    match f.serializer.dialect {
+        Dialect::Postgresql => fmt!(f, column "[1:cardinality(" column ") - 1]"),
+        Dialect::Mysql | Dialect::Sqlite => panic!(
+            "stmt::pop on a Vec<scalar> field is not yet implemented for this SQL dialect; \
              the lowering should have rejected this before reaching the serializer",
         ),
     }
@@ -864,13 +864,13 @@ fn serialize_pop(f: &mut super::Formatter<'_>, column: AssignmentColumn) {
 /// - MySQL / SQLite: not yet supported — `vec_remove_at` is gated off
 ///   and the lowering rejects these backends before reaching here.
 fn serialize_remove_at(f: &mut super::Formatter<'_>, column: AssignmentColumn, expr: &stmt::Expr) {
-    match f.serializer.flavor {
-        Flavor::Postgresql => fmt!(
+    match f.serializer.dialect {
+        Dialect::Postgresql => fmt!(
             f,
             column "[1:" expr "] || " column "[" expr " + 2:cardinality(" column ")]"
         ),
-        Flavor::Mysql | Flavor::Sqlite => panic!(
-            "stmt::remove_at on a Vec<scalar> field is not yet implemented for this SQL flavor; \
+        Dialect::Mysql | Dialect::Sqlite => panic!(
+            "stmt::remove_at on a Vec<scalar> field is not yet implemented for this SQL dialect; \
              the lowering should have rejected this before reaching the serializer",
         ),
     }

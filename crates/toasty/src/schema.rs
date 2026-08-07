@@ -43,15 +43,4 @@ pub use scope::Scope;
 mod via;
 pub use via::{ViaMany, ViaManyField, ViaPath, ViaTarget};
 
-use crate::Result;
-
 pub use toasty_core::schema::{app, app::ModelSet, db, diff, mapping};
-
-/// Build an [`app::Schema`] from a slice of model definitions produced by
-/// `#[derive(Model)]`.
-///
-/// This is a thin wrapper around [`app::Schema::from_macro`] exposed for
-/// use by generated code.
-pub fn from_macro(models: impl IntoIterator<Item = app::Model>) -> Result<app::Schema> {
-    app::Schema::from_macro(models)
-}

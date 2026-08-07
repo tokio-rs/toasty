@@ -1,12 +1,12 @@
 # MySQL
 
-Toasty's MySQL driver uses [`mysql_async`] under the hood. It covers
+Toasty's MySQL driver uses [SQLx's MySQL driver]. It covers
 the SQL feature set Toasty exercises — row locking, native temporal
 types, inline enum columns, full unsigned 64-bit integers, and both
 fixed-precision and arbitrary-precision decimals — and integrates
 with Toasty's connection pool for retry and recovery.
 
-[`mysql_async`]: https://docs.rs/mysql_async
+[SQLx's MySQL driver]: https://docs.rs/sqlx-mysql
 
 ## Enabling the driver
 
@@ -26,38 +26,38 @@ let db = toasty::Db::builder()
     .await?;
 ```
 
-The URL must include a database name in the path; `mysql_async`
-refuses URLs without one. TLS uses `native-tls` and is built in.
+The URL must include a database name in the path. TLS uses rustls by
+default.
+
+To select native TLS instead:
+
+```toml
+[dependencies]
+toasty = { version = "{{toasty_version}}", default-features = false, features = ["mysql", "native-tls"] }
+```
 
 ## Connection URL options
 
-`mysql_async` parses query parameters out of the URL. The ones worth
-knowing about for a typical service:
+The driver accepts SQLx MySQL connection parameters:
 
 | Parameter | Purpose |
 |---|---|
-| `require_ssl=<bool>` | Require TLS. Without it, the driver connects in plaintext. |
-| `verify_ca=<bool>` | When `true` (the default once TLS is on), verify the server certificate chains to a trusted root. Set `false` to accept any certificate. |
-| `verify_identity=<bool>` | When `true` (default), verify the certificate matches the server hostname. Set `false` to skip hostname validation. |
-| `built_in_roots=<bool>` | When `false`, do not trust the system root store — useful when pinning a private CA. |
+| `ssl-mode=<mode>` | Set the TLS policy: `disabled`, `preferred` (default), `required`, `verify_ca`, or `verify_identity`. `preferred` falls back to plaintext if TLS is unavailable. |
+| `ssl-ca=<path-or-pem>` | Set a trusted CA certificate file or inline PEM. |
+| `ssl-cert=<path-or-pem>` | Set the client certificate for mutual TLS. |
+| `ssl-key=<path-or-pem>` | Set the client private key for mutual TLS. |
 | `socket=<path>` | Connect over a Unix socket instead of TCP. |
-| `prefer_socket=<bool>` | When connecting to `localhost`, try a Unix socket first and fall back to TCP. |
-| `compression=<level>` | Enable wire-protocol compression. Accepts `fast`, `on`, `best`, or a digit 0–9. |
-| `tcp_keepalive=<ms>` | TCP keepalive interval in milliseconds. |
-| `tcp_nodelay=<bool>` | Disable Nagle's algorithm on the TCP socket. |
-| `max_allowed_packet=<bytes>` | Cap the client-side max packet size, clamped to 1024–1073741824. |
-| `wait_timeout=<secs>` | Server-side `wait_timeout` for the session. |
-| `stmt_cache_size=<n>` | Per-connection prepared-statement cache size. Defaults to 32; set to `0` to disable caching. |
+| `statement-cache-capacity=<n>` | Set the per-connection prepared-statement cache size. Defaults to 100; set to `0` to disable caching. |
+| `charset=<name>` | Set the connection character set. Defaults to `utf8mb4`. |
+| `collation=<name>` | Set the connection collation. |
+| `timezone=<value>` | Set the session time zone, such as `%2B00:00` for `+00:00`. |
 
-Client certificates for mutual TLS are not exposed through URL
-parameters; build them programmatically with `mysql_async`'s
-`SslOpts::with_client_identity` and pass a constructed driver to
-`Db::builder().build(driver)` (see
-[Database Setup](./database-setup.md#using-a-driver-directly)).
+SQLx ignores unrecognized connection parameters. Use the option names
+listed above.
 
 ```rust,ignore
 .connect("mysql://app:secret@db.internal/store\
-          ?require_ssl=true&verify_identity=true&compression=on")
+          ?ssl-mode=verify_identity&ssl-ca=/etc/ssl/private-ca.pem")
 ```
 
 ## Type mapping
@@ -228,7 +228,7 @@ schema for their duration.
 
 ## Errors and the connection pool
 
-The driver classifies `mysql_async` errors into Toasty's typed error
+The driver classifies SQLx MySQL errors into Toasty's typed error
 variants so the pool and caller can react sensibly.
 
 | MySQL error or condition | Toasty error |
@@ -248,8 +248,8 @@ rather than one per pooled connection. See
 knobs (`max_pool_size`, `pool_pre_ping`,
 `pool_health_check_interval`, …) and what they do.
 
-`mysql_async` caches prepared statements per connection (up to 32 by
-default, tunable via the `stmt_cache_size` URL parameter). The cache
+SQLx caches prepared statements per connection (up to 100 by default,
+tunable via the `statement-cache-capacity` URL parameter). The cache
 is bound to the connection and is dropped when the connection is
 evicted, so it does not cause stale-state issues after a backend
 restart.

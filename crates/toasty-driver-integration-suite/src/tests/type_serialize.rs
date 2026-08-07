@@ -13,7 +13,7 @@ use toasty_core::{
 /// (as a JSON-serialized string). Covers both SQL (bind parameter at `pos`)
 /// and non-SQL (inline value) representations.
 fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str) {
-    let sql = t.capability().sql;
+    let sql = t.capability().sql();
     let val_pat = if sql {
         ArgOr::Arg(pos)
     } else {
@@ -124,7 +124,7 @@ pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
     record.update().tags(new_tags.clone()).exec(&mut db).await?;
 
     let (op, resp) = t.log().pop();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
@@ -551,7 +551,7 @@ pub async fn json_value_jsonb_native_round_trip(t: &mut Test) -> Result<(), BoxE
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn json_data_enum_field(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Payload {
@@ -566,7 +566,7 @@ pub async fn json_data_enum_field(t: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         payload: Payload,
     }
 
