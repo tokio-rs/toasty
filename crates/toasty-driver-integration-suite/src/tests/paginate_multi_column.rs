@@ -44,7 +44,10 @@ pub async fn paginate_first_page_has_no_previous_page(test: &mut Test) -> Result
     Ok(())
 }
 
-#[driver_test(requires(and(sql, backward_pagination)))]
+// The outer query never references the CTE, so `cte_unreferenced` gates out
+// drivers that cannot prepare a statement whose eliminated CTE holds
+// placeholders.
+#[driver_test(requires(and(sql, backward_pagination, cte_unreferenced)))]
 pub async fn paginate_first_page_ignores_subquery_cursor(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
