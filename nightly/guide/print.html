@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7b307464.js";
+            window.path_to_searchindex_js = "searchindex-22438e6c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -8956,6 +8956,7 @@ pulls in <code>rustls</code>. To build the driver without TLS, depend on
 </thead>
 <tbody>
 <tr><td><code>application_name=&lt;string&gt;</code></td><td>Reported to PostgreSQL as the connecting client. Appears in <code>pg_stat_activity</code> and the server log — useful for distinguishing services sharing a database.</td></tr>
+<tr><td><code>options=&lt;string&gt;</code></td><td>Server startup options, as libpq’s <code>options</code> parameter. Use <code>-c name=value</code> pairs to set session defaults on every pooled connection — see <a href="#setting-the-schema-search-path">Setting the schema search path</a>.</td></tr>
 <tr><td><code>sslmode=&lt;mode&gt;</code></td><td>TLS negotiation mode. See the table below.</td></tr>
 <tr><td><code>sslrootcert=&lt;path&gt;</code></td><td>PEM file with root certificates to trust.</td></tr>
 <tr><td><code>sslcert=&lt;path&gt;</code> and <code>sslkey=&lt;path&gt;</code></td><td>Client certificate and matching private key, for mutual TLS.</td></tr>
@@ -8966,6 +8967,22 @@ pulls in <code>rustls</code>. To build the driver without TLS, depend on
 </div>
 <pre><code class="language-rust ignore">.connect("postgresql://app:secret@db.internal/store\
           ?sslmode=verify-full&amp;application_name=store-api")</code></pre>
+<h3 id="setting-the-schema-search-path"><a class="header" href="#setting-the-schema-search-path">Setting the schema search path</a></h3>
+<p>The <code>options</code> parameter passes server startup options to every
+connection the pool creates. Its main use is setting <code>search_path</code>,
+which controls the schema that unqualified table names resolve to:</p>
+<pre><code class="language-rust ignore">.connect("postgresql://user:pass@localhost/mydb?options=-c%20search_path%3Dtenant_a")</code></pre>
+<p>The value is form-decoded (<code>%20</code> is a space, <code>%3D</code> is <code>=</code>), so the URL
+above sends <code>-c search_path=tenant_a</code> to the server. Queries,
+<code>push_schema</code>, and migrations then all operate on the <code>tenant_a</code>
+schema, which must already exist.</p>
+<p>Because the setting applies at connection startup, every connection in
+the pool uses it. Executing <code>SET search_path</code> through a <code>Db</code> does not
+work for this: the statement runs on one pooled connection and leaves
+the others unchanged.</p>
+<p>One <code>Db</code> uses one search path. For test isolation, create a schema per
+test and connect a separate <code>Db</code> whose <code>search_path</code> names it; drop the
+schema when the test finishes.</p>
 <h3 id="tls-modes"><a class="header" href="#tls-modes">TLS modes</a></h3>
 <div class="table-wrapper">
 <table>
