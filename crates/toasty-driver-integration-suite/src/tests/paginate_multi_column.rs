@@ -6,14 +6,130 @@
 //! into a WHERE filter; NoSQL drivers use a driver-level cursor instead.
 
 use crate::prelude::*;
-use toasty::stmt::Page;
-use toasty_core::stmt::Value;
+use toasty::{
+    Executor,
+    stmt::{IntoStatement, Page},
+};
+use toasty_core::stmt::{self, Value};
 
 fn cursor_len(cursor: Option<&Value>) -> usize {
     let Some(Value::Record(cursor)) = cursor else {
         panic!("expected a record cursor");
     };
     cursor.fields.len()
+}
+
+#[driver_test(requires(and(sql, backward_pagination)))]
+pub async fn paginate_first_page_has_no_previous_page(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[{ id: 1 }, { id: 2 }])
+        .exec(&mut db)
+        .await?;
+
+    let first: Page<Item> = Item::all()
+        .order_by(Item::fields().id().asc())
+        .paginate(1)
+        .exec(&mut db)
+        .await?;
+
+    assert!(!first.has_prev());
+    assert!(first.prev(&mut db).await?.is_none());
+
+    Ok(())
+}
+
+#[driver_test(requires(and(sql, backward_pagination)))]
+pub async fn paginate_first_page_ignores_subquery_cursor(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[{ id: 1 }, { id: 2 }])
+        .exec(&mut db)
+        .await?;
+
+    let mut inner = Item::all()
+        .order_by(Item::fields().id().asc())
+        .select((Item::fields().id(), Item::fields().id()))
+        .into_statement()
+        .into_untyped()
+        .into_query_unwrap();
+    inner.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+        page_size: stmt::Value::from(2_i64).into(),
+        after: Some(stmt::Value::from(0_i64).into()),
+    }));
+
+    let mut statement = Item::all()
+        .order_by(Item::fields().id().asc())
+        .into_statement()
+        .into_untyped();
+
+    let outer = statement.as_query_mut().unwrap();
+    outer.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+        page_size: stmt::Value::from(1_i64).into(),
+        after: None,
+    }));
+    outer.with = Some(stmt::With {
+        ctes: vec![stmt::Cte { query: inner }],
+    });
+
+    let response = db.exec_untyped(statement).await?;
+    assert!(response.prev_cursor.is_none());
+
+    Ok(())
+}
+
+#[driver_test(requires(and(sql, backward_pagination)))]
+pub async fn paginate_first_page_ignores_nested_statement_cursor(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: i64,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    toasty::create!(Item::[{ id: 1 }, { id: 2 }])
+        .exec(&mut db)
+        .await?;
+
+    let mut nested = Item::all()
+        .order_by(Item::fields().id().asc())
+        .into_statement()
+        .into_untyped();
+    nested.as_query_mut().unwrap().limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+        page_size: stmt::Value::from(1_i64).into(),
+        after: Some(stmt::Value::from(0_i64).into()),
+    }));
+
+    let mut statement = Item::all()
+        .order_by(Item::fields().id().asc())
+        .select((Item::fields().id(), Item::fields().id()))
+        .into_statement()
+        .into_untyped();
+    let outer = statement.as_query_mut().unwrap();
+    outer.limit = Some(stmt::Limit::Cursor(stmt::LimitCursor {
+        page_size: stmt::Value::from(1_i64).into(),
+        after: None,
+    }));
+
+    let stmt::Expr::Record(returning) = outer.returning_mut_unwrap().as_project_mut_unwrap() else {
+        panic!("expected a record projection");
+    };
+    returning.fields[1] = stmt::Expr::stmt(nested);
+
+    let response = db.exec_untyped(statement).await?;
+    assert!(response.prev_cursor.is_none());
+
+    Ok(())
 }
 
 #[driver_test(requires(sql))]

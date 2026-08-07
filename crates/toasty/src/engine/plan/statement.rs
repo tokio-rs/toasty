@@ -131,6 +131,7 @@ struct ReturningInfo {
 
 struct PaginationInfo {
     page_size: i64,
+    has_previous_page: bool,
     cursor_column_indices: Vec<usize>,
 }
 
@@ -1107,6 +1108,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         Ok(Some(PaginationInfo {
             page_size,
+            has_previous_page: self.stmt_info.has_pagination_cursor,
             cursor_column_indices,
         }))
     }
@@ -1137,6 +1139,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         exec::PaginationConfig {
             page_size: info.page_size,
+            has_previous_page: info.has_previous_page,
             extract_cursor: Some(extract_cursor_func),
         }
     }

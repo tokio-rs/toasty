@@ -611,6 +611,19 @@ impl LowerStatement<'_, '_> {
 }
 
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
+    fn visit_stmt_mut(&mut self, stmt: &mut stmt::Statement) {
+        if let stmt::Statement::Query(query) = stmt
+            && matches!(
+                &query.limit,
+                Some(stmt::Limit::Cursor(cursor)) if cursor.after.is_some()
+            )
+        {
+            self.curr_stmt_info().has_pagination_cursor = true;
+        }
+
+        visit_mut::visit_stmt_mut(self, stmt);
+    }
+
     fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
         // First, run the default visitor to lower sub-expressions
         self.visit_expr_mut(&mut node.expr);
