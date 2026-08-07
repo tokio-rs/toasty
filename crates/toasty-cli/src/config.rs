@@ -1,4 +1,4 @@
-use crate::migration::MigrationConfig;
+use crate::migrate::MigrationConfig;
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
@@ -100,6 +100,18 @@ mod tests {
         let default = Config::default();
 
         assert_eq!(reparsed, default);
+    }
+
+    #[test]
+    fn load_ignores_removed_config_keys() {
+        // Toasty.toml files written by earlier versions contain keys that no
+        // longer exist; they must still parse.
+        let config: Config = toml::from_str(
+            "[migration]\npath = \"toasty\"\nprefix_style = \"Sequential\"\n\
+             checksums = false\nstatement_breakpoints = true\n",
+        )
+        .unwrap();
+        assert_eq!(config, Config::default());
     }
 
     #[test]

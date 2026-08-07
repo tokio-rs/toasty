@@ -1,3 +1,5 @@
+use crate::Flavor;
+
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
@@ -5,11 +7,9 @@ use std::path::PathBuf;
 ///
 /// Controls where migration files, snapshot files, and the history file are
 /// stored, how migration file names are prefixed (sequential numbers or
-/// timestamps), and optional behaviors like checksum verification and
-/// statement breakpoint comments.
+/// timestamps), and which database flavor migrations target by default.
 ///
-/// The default configuration uses a `toasty/` base path with sequential
-/// numbering, no checksums, and statement breakpoints enabled.
+/// All paths are relative to the target package's directory.
 ///
 /// # Examples
 ///
@@ -41,16 +41,9 @@ pub struct MigrationConfig {
     /// Style of migration file prefixes
     pub prefix_style: MigrationPrefixStyle,
 
-    /// Whether the history file should store and verify checksums of the migration files so that
-    /// they may not be changed.
-    pub checksums: bool,
-
-    /// Whether to add statement breakpoint comments to generated SQL migration files.
-    /// These comments mark boundaries where SQL statements should be split for execution.
-    /// This is needed because different databases have different batching capabilities:
-    /// some (like PostgreSQL) can execute multiple statements in one batch, while others
-    /// require each statement to be executed separately.
-    pub statement_breakpoints: bool,
+    /// Database flavor migrations target when `--flavor` is not passed.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub flavor: Option<Flavor>,
 }
 
 /// Controls the prefix format used when naming generated migration files.
@@ -81,8 +74,7 @@ impl Default for MigrationConfig {
         Self {
             path: PathBuf::from("toasty"),
             prefix_style: MigrationPrefixStyle::Sequential,
-            checksums: false,
-            statement_breakpoints: true,
+            flavor: None,
         }
     }
 }
@@ -102,6 +94,12 @@ impl MigrationConfig {
     /// Set the migration prefix style
     pub fn prefix_style(mut self, style: MigrationPrefixStyle) -> Self {
         self.prefix_style = style;
+        self
+    }
+
+    /// Set the default database flavor
+    pub fn flavor(mut self, flavor: Flavor) -> Self {
+        self.flavor = Some(flavor);
         self
     }
 
