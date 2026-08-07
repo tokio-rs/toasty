@@ -587,7 +587,7 @@
 <a href=#587 id=587 data-nosnippet>587</a>    }
 <a href=#588 id=588 data-nosnippet>588</a>
 <a href=#589 id=589 data-nosnippet>589</a>    <span class="kw">fn </span>rewrite_stmt_for_batch_load(<span class="kw-2">&amp;mut </span><span class="self">self</span>, stmt: <span class="kw-2">&amp;mut </span>stmt::Statement) {
-<a href=#590 id=590 data-nosnippet>590</a>        <span class="kw">if </span><span class="self">self</span>.planner.engine.capability().sql {
+<a href=#590 id=590 data-nosnippet>590</a>        <span class="kw">if </span><span class="self">self</span>.planner.engine.capability().sql() {
 <a href=#591 id=591 data-nosnippet>591</a>            <span class="self">self</span>.rewrite_stmt_query_for_batch_load_sql(stmt);
 <a href=#592 id=592 data-nosnippet>592</a>        } <span class="kw">else </span>{
 <a href=#593 id=593 data-nosnippet>593</a>            <span class="self">self</span>.rewrite_stmt_query_for_batch_load_nosql(stmt);
@@ -798,7 +798,7 @@
 <a href=#798 id=798 data-nosnippet>798</a>    ) -&gt; <span class="prelude-ty">Result</span>&lt;mir::NodeId&gt; {
 <a href=#799 id=799 data-nosnippet>799</a>        <span class="comment">// COUNT(*) is SQL-only
 <a href=#800 id=800 data-nosnippet>800</a>        </span><span class="kw">if </span><span class="self">self</span>.load_data.select_items.contains(<span class="kw-2">&amp;</span>SelectItem::CountStar)
-<a href=#801 id=801 data-nosnippet>801</a>            &amp;&amp; !<span class="self">self</span>.planner.engine.capability().sql
+<a href=#801 id=801 data-nosnippet>801</a>            &amp;&amp; !<span class="self">self</span>.planner.engine.capability().sql()
 <a href=#802 id=802 data-nosnippet>802</a>        {
 <a href=#803 id=803 data-nosnippet>803</a>            <span class="kw">return </span><span class="prelude-val">Err</span>(toasty_core::Error::unsupported_feature(<span class="macro">format!</span>(
 <a href=#804 id=804 data-nosnippet>804</a>                <span class="string">"{} does not support count() queries"</span>,
@@ -815,7 +815,7 @@
 <a href=#815 id=815 data-nosnippet>815</a>            <span class="prelude-val">Ok</span>(node_id)
 <a href=#816 id=816 data-nosnippet>816</a>        } <span class="kw">else if </span>stmt.is_insert() {
 <a href=#817 id=817 data-nosnippet>817</a>            <span class="self">self</span>.plan_insert(stmt)
-<a href=#818 id=818 data-nosnippet>818</a>        } <span class="kw">else if </span><span class="self">self</span>.planner.engine.capability().sql {
+<a href=#818 id=818 data-nosnippet>818</a>        } <span class="kw">else if </span><span class="self">self</span>.planner.engine.capability().sql() {
 <a href=#819 id=819 data-nosnippet>819</a>            <span class="self">self</span>.plan_data_loading_sql(stmt)
 <a href=#820 id=820 data-nosnippet>820</a>        } <span class="kw">else </span>{
 <a href=#821 id=821 data-nosnippet>821</a>            <span class="self">self</span>.plan_data_loading_nosql(stmt)
@@ -884,7 +884,7 @@
 <a href=#884 id=884 data-nosnippet>884</a>        <span class="kw">let </span>ty = <span class="self">self</span>.planner.engine.infer_ty(<span class="kw-2">&amp;</span>stmt, <span class="kw-2">&amp;</span>input_args[..]);
 <a href=#885 id=885 data-nosnippet>885</a>        <span class="kw">let </span>inputs = mem::take(<span class="kw-2">&amp;mut </span><span class="self">self</span>.load_data.inputs);
 <a href=#886 id=886 data-nosnippet>886</a>
-<a href=#887 id=887 data-nosnippet>887</a>        <span class="kw">let </span>node = <span class="kw">if </span>!<span class="self">self</span>.planner.engine.capability().sql &amp;&amp; stmt.is_upsert() {
+<a href=#887 id=887 data-nosnippet>887</a>        <span class="kw">let </span>node = <span class="kw">if </span>!<span class="self">self</span>.planner.engine.capability().sql() &amp;&amp; stmt.is_upsert() {
 <a href=#888 id=888 data-nosnippet>888</a>            mir::Operation::Upsert(Box::new(mir::Upsert {
 <a href=#889 id=889 data-nosnippet>889</a>                inputs,
 <a href=#890 id=890 data-nosnippet>890</a>                stmt: stmt.into_insert_unwrap(),
@@ -918,7 +918,7 @@
 <a href=#918 id=918 data-nosnippet>918</a>    <span class="comment">// ===== SQL execution =====
 <a href=#919 id=919 data-nosnippet>919</a>
 <a href=#920 id=920 data-nosnippet>920</a>    </span><span class="kw">fn </span>plan_data_loading_sql(<span class="kw-2">&amp;mut </span><span class="self">self</span>, <span class="kw-2">mut </span>stmt: stmt::Statement) -&gt; <span class="prelude-ty">Result</span>&lt;mir::NodeId&gt; {
-<a href=#921 id=921 data-nosnippet>921</a>        <span class="macro">debug_assert!</span>(<span class="self">self</span>.planner.engine.capability().sql, <span class="string">"stmt={stmt:#?}"</span>);
+<a href=#921 id=921 data-nosnippet>921</a>        <span class="macro">debug_assert!</span>(<span class="self">self</span>.planner.engine.capability().sql(), <span class="string">"stmt={stmt:#?}"</span>);
 <a href=#922 id=922 data-nosnippet>922</a>        <span class="macro">debug_assert!</span>(!stmt.is_insert(), <span class="string">"stmt={stmt:#?}"</span>);
 <a href=#923 id=923 data-nosnippet>923</a>
 <a href=#924 id=924 data-nosnippet>924</a>        <span class="comment">// Phase 1: Detect pagination and add ORDER BY columns to load_data

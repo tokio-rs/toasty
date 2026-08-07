@@ -164,7 +164,7 @@
 <a href=#164 id=164 data-nosnippet>164</a>            }
 <a href=#165 id=165 data-nosnippet>165</a>        }
 <a href=#166 id=166 data-nosnippet>166</a>
-<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.sql &amp;&amp; upsert.action == stmt::UpsertAction::Update {
+<a href=#167 id=167 data-nosnippet>167</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.sql() &amp;&amp; upsert.action == stmt::UpsertAction::Update {
 <a href=#168 id=168 data-nosnippet>168</a>            <span class="kw">for </span>secondary <span class="kw">in </span>model
 <a href=#169 id=169 data-nosnippet>169</a>                .indices
 <a href=#170 id=170 data-nosnippet>170</a>                .iter()
@@ -280,7 +280,7 @@
 <a href=#280 id=280 data-nosnippet>280</a>        <span class="comment">// SQL requires ORDER BY for cursor-based pagination.
 <a href=#281 id=281 data-nosnippet>281</a>        // NoSQL drivers (DynamoDB) use a driver-level cursor (ExclusiveStartKey)
 <a href=#282 id=282 data-nosnippet>282</a>        // and do not require ORDER BY.
-<a href=#283 id=283 data-nosnippet>283</a>        </span><span class="kw">if </span>!<span class="self">self</span>.capability.sql {
+<a href=#283 id=283 data-nosnippet>283</a>        </span><span class="kw">if </span>!<span class="self">self</span>.capability.sql() {
 <a href=#284 id=284 data-nosnippet>284</a>            <span class="kw">return</span>;
 <a href=#285 id=285 data-nosnippet>285</a>        }
 <a href=#286 id=286 data-nosnippet>286</a>

@@ -7,7 +7,7 @@ inline <code>Expr::Value</code> matching the contained pattern (emitted by non-S
 drivers like DynamoDB).</p>
 <p>Use this when a single assertion needs to cover both representations:</p>
 
-<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>val = <span class="kw">if </span>test.capability().sql {
+<div class="example-wrap ignore"><a href="#" class="tooltip" title="This example is not tested">ⓘ</a><pre class="rust rust-example-rendered"><code><span class="kw">let </span>val = <span class="kw">if </span>test.capability().sql() {
     ArgOr::Arg(<span class="number">0</span>)
 } <span class="kw">else </span>{
     ArgOr::Value(<span class="number">1i64</span>)

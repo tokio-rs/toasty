@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a><span class="kw">impl </span>LowerStatement&lt;<span class="lifetime">'_</span>, <span class="lifetime">'_</span>&gt; {
 <a href=#6 id=6 data-nosnippet>6</a>    <span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>rewrite_offset_after_as_filter(<span class="kw-2">&amp;</span><span class="self">self</span>, stmt: <span class="kw-2">&amp;mut </span>stmt::Query) {
 <a href=#7 id=7 data-nosnippet>7</a>        <span class="comment">// Only do this for SQL statements
-<a href=#8 id=8 data-nosnippet>8</a>        </span><span class="kw">if </span>!<span class="self">self</span>.capability().sql {
+<a href=#8 id=8 data-nosnippet>8</a>        </span><span class="kw">if </span>!<span class="self">self</span>.capability().sql() {
 <a href=#9 id=9 data-nosnippet>9</a>            <span class="kw">return</span>;
 <a href=#10 id=10 data-nosnippet>10</a>        }
 <a href=#11 id=11 data-nosnippet>11</a>

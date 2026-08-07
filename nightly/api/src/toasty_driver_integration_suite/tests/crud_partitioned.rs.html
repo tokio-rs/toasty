@@ -28,7 +28,7 @@
 <a href=#28 id=28 data-nosnippet>28</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(Todo)).<span class="kw">await</span>;
 <a href=#29 id=29 data-nosnippet>29</a>
 <a href=#30 id=30 data-nosnippet>30</a>    <span class="kw">let </span>todo_table_id = table_id(<span class="kw-2">&amp;</span>db, <span class="string">"todos"</span>);
-<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">let </span>is_sql = test.capability().sql;
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="kw">let </span>is_sql = test.capability().sql();
 <a href=#32 id=32 data-nosnippet>32</a>
 <a href=#33 id=33 data-nosnippet>33</a>    <span class="kw">let </span>todo1 = Todo::create()
 <a href=#34 id=34 data-nosnippet>34</a>        .user_id(<span class="string">"alice"</span>)
@@ -136,7 +136,7 @@
 <a href=#136 id=136 data-nosnippet>136</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(Todo)).<span class="kw">await</span>;
 <a href=#137 id=137 data-nosnippet>137</a>
 <a href=#138 id=138 data-nosnippet>138</a>    <span class="kw">let </span>todo_table_id = table_id(<span class="kw-2">&amp;</span>db, <span class="string">"todos"</span>);
-<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">let </span>is_sql = test.capability().sql;
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">let </span>is_sql = test.capability().sql();
 <a href=#140 id=140 data-nosnippet>140</a>
 <a href=#141 id=141 data-nosnippet>141</a>    <span class="kw">let </span>todo1 = Todo::create()
 <a href=#142 id=142 data-nosnippet>142</a>        .user_id(<span class="string">"alice"</span>)

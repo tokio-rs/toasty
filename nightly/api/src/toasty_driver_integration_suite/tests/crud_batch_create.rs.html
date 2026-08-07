@@ -27,7 +27,7 @@
 <a href=#27 id=27 data-nosnippet>27</a>    <span class="macro">assert_eq!</span>(res[<span class="number">0</span>].title, <span class="string">"hello"</span>);
 <a href=#28 id=28 data-nosnippet>28</a>
 <a href=#29 id=29 data-nosnippet>29</a>    <span class="comment">// Single-row batch: no transaction wrapping needed
-<a href=#30 id=30 data-nosnippet>30</a>    </span><span class="kw">if </span>test.capability().sql {
+<a href=#30 id=30 data-nosnippet>30</a>    </span><span class="kw">if </span>test.capability().sql() {
 <a href=#31 id=31 data-nosnippet>31</a>        <span class="macro">assert_struct!</span>(test.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
 <a href=#32 id=32 data-nosnippet>32</a>        <span class="macro">assert!</span>(test.log().is_empty());
 <a href=#33 id=33 data-nosnippet>33</a>    }
@@ -55,7 +55,7 @@
 <a href=#55 id=55 data-nosnippet>55</a>
 <a href=#56 id=56 data-nosnippet>56</a>    <span class="comment">// Multi-row batch in a single INSERT statement: no transaction wrapping
 <a href=#57 id=57 data-nosnippet>57</a>    // needed because single SQL statements are inherently atomic.
-<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">if </span>test.capability().sql {
+<a href=#58 id=58 data-nosnippet>58</a>    </span><span class="kw">if </span>test.capability().sql() {
 <a href=#59 id=59 data-nosnippet>59</a>        <span class="macro">assert_struct!</span>(test.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
 <a href=#60 id=60 data-nosnippet>60</a>        <span class="macro">assert!</span>(test.log().is_empty());
 <a href=#61 id=61 data-nosnippet>61</a>    }

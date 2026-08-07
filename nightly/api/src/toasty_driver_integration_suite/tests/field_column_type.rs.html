@@ -106,7 +106,7 @@
 <a href=#106 id=106 data-nosnippet>106</a>        // Position: id_u64 uses Expr::Default (no param), so val is at
 <a href=#107 id=107 data-nosnippet>107</a>        // params[0]. id_uuid generates the uuid client-side, so val is at
 <a href=#108 id=108 data-nosnippet>108</a>        // params[1].
-<a href=#109 id=109 data-nosnippet>109</a>        </span><span class="kw">let </span>sql = test.capability().sql;
+<a href=#109 id=109 data-nosnippet>109</a>        </span><span class="kw">let </span>sql = test.capability().sql();
 <a href=#110 id=110 data-nosnippet>110</a>        <span class="kw">let </span>val_pos = <span class="kw">if </span><span class="macro">driver_test_cfg!</span>(id_u64) { <span class="number">0 </span>} <span class="kw">else </span>{ <span class="number">1 </span>};
 <a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">let </span>val_pat = <span class="kw">if </span>sql {
 <a href=#112 id=112 data-nosnippet>112</a>            ArgOr::Arg(val_pos)
@@ -135,7 +135,7 @@
 <a href=#135 id=135 data-nosnippet>135</a>
 <a href=#136 id=136 data-nosnippet>136</a>        <span class="kw">let </span>(op, <span class="kw">_</span>) = test.log().pop();
 <a href=#137 id=137 data-nosnippet>137</a>
-<a href=#138 id=138 data-nosnippet>138</a>        <span class="kw">if </span>test.capability().sql {
+<a href=#138 id=138 data-nosnippet>138</a>        <span class="kw">if </span>test.capability().sql() {
 <a href=#139 id=139 data-nosnippet>139</a>            <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
 <a href=#140 id=140 data-nosnippet>140</a>                stmt: Statement::Query(<span class="kw">_</span>),
 <a href=#141 id=141 data-nosnippet>141</a>            }))

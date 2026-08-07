@@ -53,7 +53,7 @@
 <a href=#53 id=53 data-nosnippet>53</a>    // Position: id_u64 uses Expr::Default (no param), so status is at
 <a href=#54 id=54 data-nosnippet>54</a>    // params[1] (name, status). id_uuid adds the uuid at params[0], shifting
 <a href=#55 id=55 data-nosnippet>55</a>    // status to params[2].
-<a href=#56 id=56 data-nosnippet>56</a>    </span><span class="kw">let </span>sql = t.capability().sql;
+<a href=#56 id=56 data-nosnippet>56</a>    </span><span class="kw">let </span>sql = t.capability().sql();
 <a href=#57 id=57 data-nosnippet>57</a>    <span class="kw">let </span>status_pos = <span class="kw">if </span><span class="macro">driver_test_cfg!</span>(id_u64) { <span class="number">1 </span>} <span class="kw">else </span>{ <span class="number">2 </span>};
 <a href=#58 id=58 data-nosnippet>58</a>    <span class="kw">let </span>status_pat = <span class="kw">if </span>sql {
 <a href=#59 id=59 data-nosnippet>59</a>        ArgOr::Arg(status_pos)
@@ -88,7 +88,7 @@
 <a href=#88 id=88 data-nosnippet>88</a>
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="comment">// Verify the status column receives the new discriminant as I64
 <a href=#90 id=90 data-nosnippet>90</a>    // Column index 2 is "status"; value I64(2) = Active discriminant
-<a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">if </span>t.capability().sql {
+<a href=#91 id=91 data-nosnippet>91</a>    </span><span class="kw">if </span>t.capability().sql() {
 <a href=#92 id=92 data-nosnippet>92</a>        <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
 <a href=#93 id=93 data-nosnippet>93</a>            stmt: Statement::Update({
 <a href=#94 id=94 data-nosnippet>94</a>                target: toasty_core::stmt::UpdateTarget::Table(== user_table),
@@ -160,7 +160,7 @@
 <a href=#160 id=160 data-nosnippet>160</a>    <span class="macro">assert_eq!</span>(active.len(), <span class="number">2</span>);
 <a href=#161 id=161 data-nosnippet>161</a>    {
 <a href=#162 id=162 data-nosnippet>162</a>        <span class="kw">let </span>(op, <span class="kw">_</span>) = t.log().pop();
-<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">if </span>t.capability().sql {
+<a href=#163 id=163 data-nosnippet>163</a>        <span class="kw">if </span>t.capability().sql() {
 <a href=#164 id=164 data-nosnippet>164</a>            <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
 <a href=#165 id=165 data-nosnippet>165</a>                stmt: Statement::Query({
 <a href=#166 id=166 data-nosnippet>166</a>                    body: ExprSet::Select({
@@ -192,7 +192,7 @@
 <a href=#192 id=192 data-nosnippet>192</a>    <span class="macro">assert_eq!</span>(pending[<span class="number">0</span>].name, <span class="string">"Task A"</span>);
 <a href=#193 id=193 data-nosnippet>193</a>    {
 <a href=#194 id=194 data-nosnippet>194</a>        <span class="kw">let </span>(op, <span class="kw">_</span>) = t.log().pop();
-<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">if </span>t.capability().sql {
+<a href=#195 id=195 data-nosnippet>195</a>        <span class="kw">if </span>t.capability().sql() {
 <a href=#196 id=196 data-nosnippet>196</a>            <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
 <a href=#197 id=197 data-nosnippet>197</a>                stmt: Statement::Query({
 <a href=#198 id=198 data-nosnippet>198</a>                    body: ExprSet::Select({
@@ -224,7 +224,7 @@
 <a href=#224 id=224 data-nosnippet>224</a>    <span class="macro">assert_eq!</span>(done[<span class="number">0</span>].name, <span class="string">"Task D"</span>);
 <a href=#225 id=225 data-nosnippet>225</a>    {
 <a href=#226 id=226 data-nosnippet>226</a>        <span class="kw">let </span>(op, <span class="kw">_</span>) = t.log().pop();
-<a href=#227 id=227 data-nosnippet>227</a>        <span class="kw">if </span>t.capability().sql {
+<a href=#227 id=227 data-nosnippet>227</a>        <span class="kw">if </span>t.capability().sql() {
 <a href=#228 id=228 data-nosnippet>228</a>            <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
 <a href=#229 id=229 data-nosnippet>229</a>                stmt: Statement::Query({
 <a href=#230 id=230 data-nosnippet>230</a>                    body: ExprSet::Select({

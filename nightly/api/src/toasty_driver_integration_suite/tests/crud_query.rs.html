@@ -291,7 +291,7 @@
 <a href=#291 id=291 data-nosnippet>291</a>    .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#292 id=292 data-nosnippet>292</a>    .<span class="kw">await</span>;
 <a href=#293 id=293 data-nosnippet>293</a>
-<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">if </span>test.capability().sql {
+<a href=#294 id=294 data-nosnippet>294</a>    <span class="kw">if </span>test.capability().sql() {
 <a href=#295 id=295 data-nosnippet>295</a>        <span class="kw">let </span>users = result<span class="question-mark">?</span>;
 <a href=#296 id=296 data-nosnippet>296</a>        <span class="macro">assert_eq!</span>(<span class="number">2</span>, users.len());
 <a href=#297 id=297 data-nosnippet>297</a>        <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = users.iter().map(|u| u.name.as_str()).collect();
@@ -359,7 +359,7 @@
 <a href=#359 id=359 data-nosnippet>359</a>    .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#360 id=360 data-nosnippet>360</a>    .<span class="kw">await</span>;
 <a href=#361 id=361 data-nosnippet>361</a>
-<a href=#362 id=362 data-nosnippet>362</a>    <span class="kw">if </span>test.capability().sql || test.capability().scan {
+<a href=#362 id=362 data-nosnippet>362</a>    <span class="kw">if </span>test.capability().sql() || test.capability().scan {
 <a href=#363 id=363 data-nosnippet>363</a>        <span class="kw">let </span>users = result<span class="question-mark">?</span>;
 <a href=#364 id=364 data-nosnippet>364</a>        <span class="macro">assert_eq!</span>(<span class="number">3</span>, users.len());
 <a href=#365 id=365 data-nosnippet>365</a>        <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = users.iter().map(|u| u.name.as_str()).collect();
@@ -405,7 +405,7 @@
 <a href=#405 id=405 data-nosnippet>405</a>    .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#406 id=406 data-nosnippet>406</a>    .<span class="kw">await</span>;
 <a href=#407 id=407 data-nosnippet>407</a>
-<a href=#408 id=408 data-nosnippet>408</a>    <span class="kw">if </span>test.capability().sql || test.capability().scan {
+<a href=#408 id=408 data-nosnippet>408</a>    <span class="kw">if </span>test.capability().sql() || test.capability().scan {
 <a href=#409 id=409 data-nosnippet>409</a>        <span class="kw">let </span>users = result<span class="question-mark">?</span>;
 <a href=#410 id=410 data-nosnippet>410</a>        <span class="macro">assert_eq!</span>(<span class="number">2</span>, users.len());
 <a href=#411 id=411 data-nosnippet>411</a>        <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = users.iter().map(|u| u.name.as_str()).collect();
@@ -790,7 +790,7 @@
 <a href=#790 id=790 data-nosnippet>790</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#791 id=791 data-nosnippet>791</a>        .<span class="kw">await</span>;
 <a href=#792 id=792 data-nosnippet>792</a>
-<a href=#793 id=793 data-nosnippet>793</a>    <span class="kw">if </span>test.capability().sql || test.capability().scan {
+<a href=#793 id=793 data-nosnippet>793</a>    <span class="kw">if </span>test.capability().sql() || test.capability().scan {
 <a href=#794 id=794 data-nosnippet>794</a>        <span class="kw">let </span>users = result<span class="question-mark">?</span>;
 <a href=#795 id=795 data-nosnippet>795</a>        <span class="macro">assert_eq!</span>(<span class="number">3</span>, users.len());
 <a href=#796 id=796 data-nosnippet>796</a>        <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = users.iter().map(|u| u.name.as_str()).collect();
@@ -836,7 +836,7 @@
 <a href=#836 id=836 data-nosnippet>836</a>    .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#837 id=837 data-nosnippet>837</a>    .<span class="kw">await</span>;
 <a href=#838 id=838 data-nosnippet>838</a>
-<a href=#839 id=839 data-nosnippet>839</a>    <span class="kw">if </span>test.capability().sql || test.capability().scan {
+<a href=#839 id=839 data-nosnippet>839</a>    <span class="kw">if </span>test.capability().sql() || test.capability().scan {
 <a href=#840 id=840 data-nosnippet>840</a>        <span class="kw">let </span>users = result<span class="question-mark">?</span>;
 <a href=#841 id=841 data-nosnippet>841</a>        <span class="macro">assert_eq!</span>(<span class="number">1</span>, users.len());
 <a href=#842 id=842 data-nosnippet>842</a>        <span class="macro">assert_eq!</span>(<span class="string">"Charlie"</span>, users[<span class="number">0</span>].name);
@@ -870,7 +870,7 @@
 <a href=#870 id=870 data-nosnippet>870</a>    .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#871 id=871 data-nosnippet>871</a>    .<span class="kw">await</span>;
 <a href=#872 id=872 data-nosnippet>872</a>
-<a href=#873 id=873 data-nosnippet>873</a>    <span class="kw">if </span>test.capability().sql || test.capability().scan {
+<a href=#873 id=873 data-nosnippet>873</a>    <span class="kw">if </span>test.capability().sql() || test.capability().scan {
 <a href=#874 id=874 data-nosnippet>874</a>        <span class="kw">let </span>users = result<span class="question-mark">?</span>;
 <a href=#875 id=875 data-nosnippet>875</a>        <span class="macro">assert_eq!</span>(<span class="number">2</span>, users.len());
 <a href=#876 id=876 data-nosnippet>876</a>        <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = users.iter().map(|u| u.name.as_str()).collect();

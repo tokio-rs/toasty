@@ -406,7 +406,7 @@
 <a href=#406 id=406 data-nosnippet>406</a>
 <a href=#407 id=407 data-nosnippet>407</a>    <span class="kw">let </span>result: <span class="prelude-ty">Result</span>&lt;()&gt; = item.update().name(<span class="string">"stale"</span>).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span>;
 <a href=#408 id=408 data-nosnippet>408</a>    <span class="kw">let </span>err = <span class="macro">assert_err!</span>(result);
-<a href=#409 id=409 data-nosnippet>409</a>    <span class="kw">if </span>test.capability().sql {
+<a href=#409 id=409 data-nosnippet>409</a>    <span class="kw">if </span>test.capability().sql() {
 <a href=#410 id=410 data-nosnippet>410</a>        <span class="macro">assert!</span>(
 <a href=#411 id=411 data-nosnippet>411</a>            err.is_record_not_found(),
 <a href=#412 id=412 data-nosnippet>412</a>            <span class="string">"expected record_not_found, got {err:?}"
@@ -437,7 +437,7 @@
 <a href=#437 id=437 data-nosnippet>437</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#438 id=438 data-nosnippet>438</a>        .<span class="kw">await</span>;
 <a href=#439 id=439 data-nosnippet>439</a>    <span class="kw">let </span>err = <span class="macro">assert_err!</span>(result);
-<a href=#440 id=440 data-nosnippet>440</a>    <span class="kw">if </span>test.capability().sql {
+<a href=#440 id=440 data-nosnippet>440</a>    <span class="kw">if </span>test.capability().sql() {
 <a href=#441 id=441 data-nosnippet>441</a>        <span class="macro">assert!</span>(
 <a href=#442 id=442 data-nosnippet>442</a>            err.is_record_not_found(),
 <a href=#443 id=443 data-nosnippet>443</a>            <span class="string">"expected record_not_found, got {err:?}"

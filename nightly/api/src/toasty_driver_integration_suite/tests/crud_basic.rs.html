@@ -87,7 +87,7 @@
 <a href=#87 id=87 data-nosnippet>87</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await</span>;
 <a href=#88 id=88 data-nosnippet>88</a>
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">let </span>item_table_id = table_id(<span class="kw-2">&amp;</span>db, <span class="string">"items"</span>);
-<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span>is_sql = test.capability().sql;
+<a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">let </span>is_sql = test.capability().sql();
 <a href=#91 id=91 data-nosnippet>91</a>
 <a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">let </span><span class="kw-2">mut </span>created = Item::create().val(<span class="string">"hello world"</span>).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#93 id=93 data-nosnippet>93</a>

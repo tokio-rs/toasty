@@ -41,7 +41,7 @@
 <a href=#41 id=41 data-nosnippet>41</a>    </span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>prepare_for_driver(<span class="kw-2">&amp;</span><span class="self">self</span>, stmt: <span class="kw-2">&amp;mut </span>stmt::Statement) -&gt; Vec&lt;TypedValue&gt; {
 <a href=#42 id=42 data-nosnippet>42</a>        <span class="self">self</span>.legalize_statement(stmt);
 <a href=#43 id=43 data-nosnippet>43</a>
-<a href=#44 id=44 data-nosnippet>44</a>        <span class="kw">if </span><span class="self">self</span>.capability().sql {
+<a href=#44 id=44 data-nosnippet>44</a>        <span class="kw">if </span><span class="self">self</span>.capability().sql() {
 <a href=#45 id=45 data-nosnippet>45</a>            <span class="kw">super</span>::bind::run(stmt, <span class="kw-2">&amp;</span><span class="self">self</span>.schema.db, <span class="self">self</span>.capability())
 <a href=#46 id=46 data-nosnippet>46</a>        } <span class="kw">else </span>{
 <a href=#47 id=47 data-nosnippet>47</a>            <span class="macro">vec!</span>[]

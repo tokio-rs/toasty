@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a>    /// tie-breakers internal to execution and cursor generation. Physical
 <a href=#16 id=16 data-nosnippet>16</a>    /// column references keep embedded newtype keys scalar after lowering.
 <a href=#17 id=17 data-nosnippet>17</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>normalize_cursor_order(<span class="kw-2">&amp;mut </span><span class="self">self</span>, query: <span class="kw-2">&amp;mut </span>stmt::Query) {
-<a href=#18 id=18 data-nosnippet>18</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.sql || !<span class="macro">matches!</span>(query.limit, <span class="prelude-val">Some</span>(stmt::Limit::Cursor(<span class="kw">_</span>))) {
+<a href=#18 id=18 data-nosnippet>18</a>        <span class="kw">if </span>!<span class="self">self</span>.capability.sql() || !<span class="macro">matches!</span>(query.limit, <span class="prelude-val">Some</span>(stmt::Limit::Cursor(<span class="kw">_</span>))) {
 <a href=#19 id=19 data-nosnippet>19</a>            <span class="kw">return</span>;
 <a href=#20 id=20 data-nosnippet>20</a>        }
 <a href=#21 id=21 data-nosnippet>21</a>

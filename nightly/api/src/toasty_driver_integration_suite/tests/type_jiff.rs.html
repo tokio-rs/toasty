@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a>
 <a href=#40 id=40 data-nosnippet>40</a>    <span class="comment">// Position: id_u64 uses Expr::Default (no param), so val is at
 <a href=#41 id=41 data-nosnippet>41</a>    // params[0]. id_uuid adds the uuid at params[0], shifting val to params[1].
-<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">let </span>sql = test.capability().sql;
+<a href=#42 id=42 data-nosnippet>42</a>    </span><span class="kw">let </span>sql = test.capability().sql();
 <a href=#43 id=43 data-nosnippet>43</a>    <span class="kw">let </span>val_pos = <span class="kw">if </span><span class="macro">driver_test_cfg!</span>(id_u64) { <span class="number">0 </span>} <span class="kw">else </span>{ <span class="number">1 </span>};
 <a href=#44 id=44 data-nosnippet>44</a>    <span class="kw">let </span>val_pat = <span class="kw">if </span>sql {
 <a href=#45 id=45 data-nosnippet>45</a>        ArgOr::Arg(val_pos)
@@ -340,7 +340,7 @@
 <a href=#340 id=340 data-nosnippet>340</a>    <span class="comment">// Verify the INSERT encodes the timestamp as a fixed-precision text string.
 <a href=#341 id=341 data-nosnippet>341</a>    // The #[column(type = text)] forces text encoding on all drivers.
 <a href=#342 id=342 data-nosnippet>342</a>    </span><span class="kw">let </span>(op, <span class="kw">_</span>) = test.log().pop();
-<a href=#343 id=343 data-nosnippet>343</a>    <span class="kw">let </span>sql = test.capability().sql;
+<a href=#343 id=343 data-nosnippet>343</a>    <span class="kw">let </span>sql = test.capability().sql();
 <a href=#344 id=344 data-nosnippet>344</a>    <span class="kw">let </span>val_pos = <span class="kw">if </span><span class="macro">driver_test_cfg!</span>(id_u64) { <span class="number">0 </span>} <span class="kw">else </span>{ <span class="number">1 </span>};
 <a href=#345 id=345 data-nosnippet>345</a>    <span class="kw">let </span>val_pat = <span class="kw">if </span>sql {
 <a href=#346 id=346 data-nosnippet>346</a>        ArgOr::Arg(val_pos)

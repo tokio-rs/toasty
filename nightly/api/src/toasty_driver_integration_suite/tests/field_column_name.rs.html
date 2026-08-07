@@ -36,7 +36,7 @@
 <a href=#36 id=36 data-nosnippet>36</a>    // Position: id_u64 uses Expr::Default for auto-increment (no param), so "foo"
 <a href=#37 id=37 data-nosnippet>37</a>    // is at params[0]. id_uuid generates the uuid client-side, so "foo" is at
 <a href=#38 id=38 data-nosnippet>38</a>    // params[1].
-<a href=#39 id=39 data-nosnippet>39</a>    </span><span class="kw">let </span>sql = test.capability().sql;
+<a href=#39 id=39 data-nosnippet>39</a>    </span><span class="kw">let </span>sql = test.capability().sql();
 <a href=#40 id=40 data-nosnippet>40</a>    <span class="kw">let </span>val_pos = <span class="kw">if </span><span class="macro">driver_test_cfg!</span>(id_u64) { <span class="number">0 </span>} <span class="kw">else </span>{ <span class="number">1 </span>};
 <a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">let </span>val = <span class="kw">if </span>sql {
 <a href=#42 id=42 data-nosnippet>42</a>        ArgOr::Arg(val_pos)

@@ -559,7 +559,7 @@
 <a href=#559 id=559 data-nosnippet>559</a>        ]))
 <a href=#560 id=560 data-nosnippet>560</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#561 id=561 data-nosnippet>561</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#562 id=562 data-nosnippet>562</a>    <span class="kw">if </span>test.capability().sql {
+<a href=#562 id=562 data-nosnippet>562</a>    <span class="kw">if </span>test.capability().sql() {
 <a href=#563 id=563 data-nosnippet>563</a>        <span class="comment">// Dissociate executes before associate.
 <a href=#564 id=564 data-nosnippet>564</a>        </span><span class="macro">assert_eq!</span>(fk_writes(test), [<span class="string">"unlink"</span>, <span class="string">"link"</span>]);
 <a href=#565 id=565 data-nosnippet>565</a>    }
@@ -576,7 +576,7 @@
 <a href=#576 id=576 data-nosnippet>576</a>        ]))
 <a href=#577 id=577 data-nosnippet>577</a>        .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#578 id=578 data-nosnippet>578</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">if </span>test.capability().sql {
+<a href=#579 id=579 data-nosnippet>579</a>    <span class="kw">if </span>test.capability().sql() {
 <a href=#580 id=580 data-nosnippet>580</a>        <span class="comment">// Associate executes before dissociate.
 <a href=#581 id=581 data-nosnippet>581</a>        </span><span class="macro">assert_eq!</span>(fk_writes(test), [<span class="string">"link"</span>, <span class="string">"unlink"</span>]);
 <a href=#582 id=582 data-nosnippet>582</a>    }

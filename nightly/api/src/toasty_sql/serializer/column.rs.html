@@ -5,7 +5,7 @@
 <a href=#5 id=5 data-nosnippet>5</a>
 <a href=#6 id=6 data-nosnippet>6</a><span class="kw">impl </span>ToSql <span class="kw">for </span>ColumnAlias {
 <a href=#7 id=7 data-nosnippet>7</a>    <span class="kw">fn </span>to_sql(<span class="self">self</span>, f: <span class="kw-2">&amp;mut </span><span class="kw">super</span>::Formatter&lt;<span class="lifetime">'_</span>&gt;) {
-<a href=#8 id=8 data-nosnippet>8</a>        <span class="comment">// The per-flavor format matches each engine's auto-naming convention
+<a href=#8 id=8 data-nosnippet>8</a>        <span class="comment">// The per-dialect format matches each engine's auto-naming convention
 <a href=#9 id=9 data-nosnippet>9</a>        // for derived-table columns. MySQL's `VALUES ROW(...) AS t` exposes
 <a href=#10 id=10 data-nosnippet>10</a>        // columns as `column_0`, `column_1`, ...; PG and SQLite use
 <a href=#11 id=11 data-nosnippet>11</a>        // `column1`, `column2`, ... in equivalent contexts. The engine emits

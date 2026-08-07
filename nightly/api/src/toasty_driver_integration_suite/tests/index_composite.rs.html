@@ -73,7 +73,7 @@
 <a href=#73 id=73 data-nosnippet>73</a>
 <a href=#74 id=74 data-nosnippet>74</a>    <span class="comment">// Verify that an indexed operation was issued (not a full scan)
 <a href=#75 id=75 data-nosnippet>75</a>    </span><span class="kw">let </span>op = t.log().pop_op();
-<a href=#76 id=76 data-nosnippet>76</a>    <span class="kw">if </span>t.capability().sql {
+<a href=#76 id=76 data-nosnippet>76</a>    <span class="kw">if </span>t.capability().sql() {
 <a href=#77 id=77 data-nosnippet>77</a>        <span class="macro">assert_struct!</span>(op, Operation::QuerySql(<span class="kw">_</span>));
 <a href=#78 id=78 data-nosnippet>78</a>    } <span class="kw">else </span>{
 <a href=#79 id=79 data-nosnippet>79</a>        <span class="macro">assert_struct!</span>(op, Operation::QueryPk(<span class="kw">_</span>));
@@ -120,7 +120,7 @@
 <a href=#120 id=120 data-nosnippet>120</a>    <span class="macro">assert_eq!</span>(scores.len(), <span class="number">3</span>);
 <a href=#121 id=121 data-nosnippet>121</a>
 <a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">let </span>op = t.log().pop_op();
-<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">if </span>t.capability().sql {
+<a href=#123 id=123 data-nosnippet>123</a>    <span class="kw">if </span>t.capability().sql() {
 <a href=#124 id=124 data-nosnippet>124</a>        <span class="macro">assert_struct!</span>(op, Operation::QuerySql(<span class="kw">_</span>));
 <a href=#125 id=125 data-nosnippet>125</a>    } <span class="kw">else </span>{
 <a href=#126 id=126 data-nosnippet>126</a>        <span class="macro">assert_struct!</span>(op, Operation::QueryPk(<span class="kw">_</span>));
@@ -136,7 +136,7 @@
 <a href=#136 id=136 data-nosnippet>136</a>    <span class="macro">assert_eq!</span>(scores[<span class="number">0</span>].user_id, <span class="string">"u1"</span>);
 <a href=#137 id=137 data-nosnippet>137</a>
 <a href=#138 id=138 data-nosnippet>138</a>    <span class="kw">let </span>op = t.log().pop_op();
-<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">if </span>t.capability().sql {
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">if </span>t.capability().sql() {
 <a href=#140 id=140 data-nosnippet>140</a>        <span class="macro">assert_struct!</span>(op, Operation::QuerySql(<span class="kw">_</span>));
 <a href=#141 id=141 data-nosnippet>141</a>    } <span class="kw">else </span>{
 <a href=#142 id=142 data-nosnippet>142</a>        <span class="macro">assert_struct!</span>(op, Operation::QueryPk(<span class="kw">_</span>));
@@ -447,7 +447,7 @@
 <a href=#447 id=447 data-nosnippet>447</a>    <span class="macro">assert_eq!</span>(products[<span class="number">1</span>].name, <span class="string">"Widget B"</span>);
 <a href=#448 id=448 data-nosnippet>448</a>
 <a href=#449 id=449 data-nosnippet>449</a>    <span class="kw">let </span>op = t.log().pop_op();
-<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">if </span>t.capability().sql {
+<a href=#450 id=450 data-nosnippet>450</a>    <span class="kw">if </span>t.capability().sql() {
 <a href=#451 id=451 data-nosnippet>451</a>        <span class="macro">assert_struct!</span>(op, Operation::QuerySql(<span class="kw">_</span>));
 <a href=#452 id=452 data-nosnippet>452</a>    } <span class="kw">else </span>{
 <a href=#453 id=453 data-nosnippet>453</a>        <span class="macro">assert_struct!</span>(op, Operation::QueryPk(<span class="kw">_</span>));
@@ -464,7 +464,7 @@
 <a href=#464 id=464 data-nosnippet>464</a>    <span class="macro">assert_eq!</span>(products[<span class="number">1</span>].name, <span class="string">"Shirt C"</span>);
 <a href=#465 id=465 data-nosnippet>465</a>
 <a href=#466 id=466 data-nosnippet>466</a>    <span class="kw">let </span>op = t.log().pop_op();
-<a href=#467 id=467 data-nosnippet>467</a>    <span class="kw">if </span>t.capability().sql {
+<a href=#467 id=467 data-nosnippet>467</a>    <span class="kw">if </span>t.capability().sql() {
 <a href=#468 id=468 data-nosnippet>468</a>        <span class="macro">assert_struct!</span>(op, Operation::QuerySql(<span class="kw">_</span>));
 <a href=#469 id=469 data-nosnippet>469</a>    } <span class="kw">else </span>{
 <a href=#470 id=470 data-nosnippet>470</a>        <span class="macro">assert_struct!</span>(op, Operation::QueryPk(<span class="kw">_</span>));
