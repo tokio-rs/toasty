@@ -137,7 +137,7 @@ toml = "1.1.0"
 toml_edit = "0.25.8"
 tempfile = "3.27"
 proptest = "1"
-tokio = { version = "1.50", features = ["full"] }
+tokio = { version = "1.50", default-features = false, features = ["macros", "rt", "sync", "time"] }
 tokio-postgres = "0.7.17"
 tokio-postgres-rustls = { version = "0.14.0", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
