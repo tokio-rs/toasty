@@ -1499,9 +1499,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let key_ty = self.table_primary_key_ty(table_id);
         let keys = self.plan_scan_execution(stmt, key_columns, key_ty)?;
 
-        // The scan applied the full filter, so there is no residual filter
-        // left for the mutation to re-apply.
-        Ok(self.build_key_operation_for_table(stmt, table_id, None, keys, &stmt::Type::Unit))
+        // The scan and the per-key mutations are separate round trips, and the
+        // scan itself may read a stale snapshot, so a row can stop matching the
+        // filter in between. Re-apply the filter as a condition on each
+        // mutation so those rows are left alone — matching the per-row
+        // semantics a SQL UPDATE/DELETE has. Without it a row deleted since the
+        // scan would be resurrected as a partial item, because a key-value
+        // update of a missing key inserts it.
+        let filter = {
+            let expr = stmt.filter_expr_unwrap();
+            (!expr.is_true()).then(|| expr.clone())
+        };
+
+        Ok(self.build_key_operation_for_table(stmt, table_id, filter, keys, &stmt::Type::Unit))
     }
 
     /// Resolves the table a scanned statement targets.
