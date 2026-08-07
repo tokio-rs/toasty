@@ -103,7 +103,17 @@ impl std::fmt::Debug for PostgreSQL {
 }
 
 impl PostgreSQL {
-    /// Create a new PostgreSQL driver from a connection URL
+    /// Create a new PostgreSQL driver from a connection URL.
+    ///
+    /// The URL takes the `postgresql://user:password@host:port/dbname`
+    /// form (`postgres://` also works). Query parameters supplement or
+    /// override the URL components, following libpq: `host`, `port`,
+    /// `user`, `password`, `dbname`, `application_name`, and `options`
+    /// (server startup options such as `-c search_path=my_schema`,
+    /// applied to every connection the pool creates), plus the TLS
+    /// parameters `sslmode`, `sslrootcert`, `sslcert`, `sslkey`,
+    /// `channel_binding`, and `sslnegotiation`. Unrecognized parameters
+    /// are ignored.
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
         let url = ConnectionUrl::parse(&url_str)?;
@@ -140,8 +150,8 @@ impl PostgreSQL {
         // libpq lets standard connection parameters appear in the query
         // string; honor the ones a Toasty user can reasonably set so that
         // `postgresql:///mydb?host=/tmp&user=alice` reaches the server.
-        // Single-valued setters (user, password, dbname, application_name)
-        // replace earlier calls, so we can apply them inline; host and
+        // Single-valued setters (user, password, dbname, application_name,
+        // options) replace earlier calls, so we can apply them inline; host and
         // port are list-valued — staged into Options below so a query
         // parameter cleanly overrides the URL component instead of being
         // appended as a fallback tokio-postgres would try first.
@@ -169,6 +179,9 @@ impl PostgreSQL {
                 }
                 "application_name" => {
                     config.application_name(&*value);
+                }
+                "options" => {
+                    config.options(&*value);
                 }
                 _ => {}
             }
@@ -740,6 +753,15 @@ mod tests {
     fn application_name_query_param() {
         let c = cfg("postgresql://localhost/mydb?application_name=my_app");
         assert_eq!(c.get_application_name(), Some("my_app"));
+    }
+
+    #[test]
+    fn options_query_param() {
+        // libpq's `options` startup parameter passes through, e.g. to set
+        // a per-connection `search_path`. Form-decoding maps `%20` (and
+        // `+`) to a space and `%3D` to `=`.
+        let c = cfg("postgresql://localhost/mydb?options=-c%20search_path%3Dtenant_a%2Cpublic");
+        assert_eq!(c.get_options(), Some("-c search_path=tenant_a,public"));
     }
 
     #[test]
