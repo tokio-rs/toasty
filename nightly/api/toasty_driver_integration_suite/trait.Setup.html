@@ -3,7 +3,7 @@
     + <a class="trait" href="https://doc.rust-lang.org/1.97.1/core/marker/trait.Sync.html" title="trait core::marker::Sync">Sync</a>
     + 'static {
     // Required methods
-    fn <a href="#tymethod.driver" class="fn">driver</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.97.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn Driver&gt;;
+    fn <a href="#tymethod.driver" class="fn">driver</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.97.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="../toasty_core/driver/trait.Driver.html" title="trait toasty_core::driver::Driver">Driver</a>&gt;;
 <span class="item-spacer"></span>    fn <a href="#tymethod.delete_table" class="fn">delete_table</a>&lt;'life0, 'life1, 'async_trait&gt;(
         &amp;'life0 self,
         name: &amp;'life1 <a class="primitive" href="https://doc.rust-lang.org/1.97.1/std/primitive.str.html">str</a>,
@@ -11,7 +11,7 @@
        <span class="where">where Self: 'async_trait,
              'life0: 'async_trait,
              'life1: 'async_trait</span>;
-}</code></pre><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.driver" class="method"><a class="src rightside" href="../src/toasty_driver_integration_suite/setup.rs.html#6">Source</a><h4 class="code-header">fn <a href="#tymethod.driver" class="fn">driver</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.97.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn Driver&gt;</h4></section></summary><div class="docblock"><p>Return a new instance of the driver</p>
+}</code></pre><h2 id="required-methods" class="section-header">Required Methods<a href="#required-methods" class="anchor">§</a></h2><div class="methods"><details class="toggle method-toggle" open><summary><section id="tymethod.driver" class="method"><a class="src rightside" href="../src/toasty_driver_integration_suite/setup.rs.html#6">Source</a><h4 class="code-header">fn <a href="#tymethod.driver" class="fn">driver</a>(&amp;self) -&gt; <a class="struct" href="https://doc.rust-lang.org/1.97.1/alloc/boxed/struct.Box.html" title="struct alloc::boxed::Box">Box</a>&lt;dyn <a class="trait" href="../toasty_core/driver/trait.Driver.html" title="trait toasty_core::driver::Driver">Driver</a>&gt;</h4></section></summary><div class="docblock"><p>Return a new instance of the driver</p>
 </div></details><details class="toggle method-toggle" open><summary><section id="tymethod.delete_table" class="method"><a class="src rightside" href="../src/toasty_driver_integration_suite/setup.rs.html#10">Source</a><h4 class="code-header">fn <a href="#tymethod.delete_table" class="fn">delete_table</a>&lt;'life0, 'life1, 'async_trait&gt;(
     &amp;'life0 self,
     name: &amp;'life1 <a class="primitive" href="https://doc.rust-lang.org/1.97.1/std/primitive.str.html">str</a>,
