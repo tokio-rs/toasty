@@ -16,8 +16,8 @@ use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
-        self, Assignments, Expr, ExprColumn, ExprIncoming, Filter, Insert, InsertTable,
-        InsertTarget, Update, UpdateTarget, Values,
+        self, Assignments, Expr, ExprIncoming, Filter, Insert, InsertTable, InsertTarget, Update,
+        UpdateTarget, Values,
     },
 };
 use toasty_sql::{Serializer, Statement as SqlStatement};
@@ -238,14 +238,7 @@ fn append_assignment_sqlite() {
 fn upsert_self_references_qualify_postgresql_target() {
     let schema = users_schema();
     let mut assignments = Assignments::default();
-    assignments.set(
-        1usize,
-        Expr::column(ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: 1,
-        }),
-    );
+    assignments.set(1usize, Expr::ref_column(0, 1));
     assignments.append(2usize, Expr::list([Expr::from(7i64)]));
 
     expect![[r#"INSERT INTO "users" ("id", "name", "tags") VALUES (1, 'a', (7)) ON CONFLICT ("id") DO UPDATE SET "name" = "users"."name", "tags" = "users"."tags" || (7);"#]].assert_eq(&render(

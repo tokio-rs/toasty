@@ -683,7 +683,7 @@ mod tests {
     use std::collections::HashMap;
     use toasty_core::{
         schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},
-        stmt::{self, BinaryOp, Expr, ExprBinaryOp, ExprColumn, ExprReference},
+        stmt::{self, BinaryOp, Expr, ExprBinaryOp},
     };
 
     fn make_table() -> db::Table {
@@ -717,11 +717,8 @@ mod tests {
     /// Build `status = "active"` as a column-reference filter expression.
     fn status_eq_active() -> Expr {
         Expr::BinaryOp(ExprBinaryOp {
-            lhs: Box::new(Expr::Reference(ExprReference::Column(ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: 0, // column 0 in the table → "status"
-            }))),
+            // column 0 in the table → "status"
+            lhs: Box::new(Expr::ref_column(0, 0)),
             op: BinaryOp::Eq,
             rhs: Box::new(Expr::Value(stmt::Value::String("active".to_string()))),
         })

@@ -624,11 +624,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
                     // Rewrite reference the new `FROM`.
-                    *expr = stmt::Expr::column(stmt::ExprColumn {
-                        nesting: 0,
-                        table: batch_load_table_ref_index.get().unwrap(),
-                        column,
-                    });
+                    *expr =
+                        stmt::Expr::ref_column(batch_load_table_ref_index.get().unwrap(), column);
                 }
                 _ => {}
             }
@@ -1177,7 +1174,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 .into(),
                 filter: stmt::Filter::new(true),
-                returning: stmt::Returning::Project(conditional_probe_projection(cte_column(0, 0))),
+                returning: stmt::Returning::Project(conditional_probe_projection(
+                    stmt::Expr::ref_column(0, 0),
+                )),
                 distinct: false,
             })
             .build(),
@@ -1195,16 +1194,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .into(),
             filter: true.into(),
             returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![stmt::Expr::eq(
-                stmt::ExprColumn {
-                    nesting: 0,
-                    table: 0,
-                    column: 0,
-                },
-                stmt::ExprColumn {
-                    nesting: 0,
-                    table: 0,
-                    column: 1,
-                },
+                stmt::Expr::ref_column(0, 0),
+                stmt::Expr::ref_column(0, 1),
             )])),
             distinct: false,
         });
@@ -1249,8 +1240,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 .into(),
                 filter: stmt::Filter::new(true),
                 returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
-                    cte_column(0, 0),
-                    cte_column(0, 1),
+                    stmt::Expr::ref_column(0, 0),
+                    stmt::Expr::ref_column(0, 1),
                 ])),
                 distinct: false,
             })
@@ -1259,9 +1250,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             // exactly one row, so the LEFT JOIN repeats the counts across every
             // changed row (and yields a single NULL-padded row when nothing
             // changed).
-            let mut columns = vec![cte_column(0, 0), cte_column(0, 1)];
+            let mut columns = vec![stmt::Expr::ref_column(0, 0), stmt::Expr::ref_column(0, 1)];
             for i in 0..returning_len {
-                columns.push(cte_column(1, i));
+                columns.push(stmt::Expr::ref_column(1, i));
             }
 
             stmt::Query::builder(stmt::Select {
@@ -1487,13 +1478,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let key_columns = primary_key
             .columns
             .iter()
-            .map(|index_column| {
-                stmt::ExprReference::Column(stmt::ExprColumn {
-                    nesting: 0,
-                    table: 0,
-                    column: index_column.column.index,
-                })
-            })
+            .map(|index_column| stmt::ExprReference::column(0, index_column.column.index))
             .collect();
 
         let key_ty = self.table_primary_key_ty(table_id);
@@ -1580,11 +1565,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 assert!(columns.is_empty());
 
                 for index_col in &index_plan.index.columns {
-                    columns.insert(stmt::ExprReference::Column(stmt::ExprColumn {
-                        nesting: 0,
-                        table: 0,
-                        column: index_col.column.index,
-                    }));
+                    columns.insert(stmt::ExprReference::column(0, index_col.column.index));
                 }
 
                 let mut row_filter = index_plan.result_filter.take();
@@ -2104,16 +2085,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn stmt(&self) -> &stmt::Statement {
         self.stmt_info.stmt.as_deref().unwrap()
     }
-}
-
-/// A reference to column `column` of CTE `table` in the outer query's `FROM`
-/// (both at zero nesting).
-fn cte_column(table: usize, column: usize) -> stmt::Expr {
-    stmt::Expr::column(stmt::ExprColumn {
-        nesting: 0,
-        table,
-        column,
-    })
 }
 
 /// The probe query shared by both SQL conditional-write strategies:
