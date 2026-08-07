@@ -150,7 +150,7 @@ turso = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"
-uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng"] }
+uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng", "js"] }
 
 [profile.dev]
 debug = "line-tables-only"
