@@ -1,7 +1,7 @@
 [package]
 name = "toasty-cli"
 version = "0.9.0"
-description = "Command-line interface for Toasty schema management"
+description = "Standalone command-line interface for Toasty schema management"
 authors.workspace = true
 edition.workspace = true
 homepage.workspace = true
@@ -13,18 +13,32 @@ categories.workspace = true
 readme.workspace = true
 documentation = "https://docs.rs/toasty-cli"
 
+[[bin]]
+name = "toasty"
+path = "src/bin/toasty.rs"
+
+[features]
+default = ["sqlite", "postgresql", "mysql"]
+sqlite = ["toasty/sqlite"]
+postgresql = ["toasty/postgresql"]
+mysql = ["toasty/mysql"]
+turso = ["toasty/turso"]
+
 [dependencies]
 toasty = { workspace = true, features = ["migration"] }
 toasty-core.workspace = true
 
 anyhow = "1.0.102"
-clap.workspace = true
+clap = { workspace = true, features = ["env"] }
 console.workspace = true
 dialoguer.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
+libloading.workspace = true
 rand.workspace = true
 serde.workspace = true
+serde_json.workspace = true
+tokio = { workspace = true, features = ["rt-multi-thread", "macros"] }
 toml.workspace = true
 
 [dev-dependencies]

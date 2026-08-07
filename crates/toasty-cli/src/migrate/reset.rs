@@ -1,11 +1,10 @@
 use super::apply::apply_migrations;
-use crate::Config;
+use crate::Project;
 use crate::theme::dialoguer_theme;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Confirm;
-use toasty::Db;
 
 /// Drops all tables in the database, then optionally re-applies migrations.
 ///
@@ -14,44 +13,56 @@ use toasty::Db;
 /// is passed.
 #[derive(Parser, Debug)]
 pub struct ResetCommand {
+    /// Database URL to reset
+    #[arg(long, env = "DATABASE_URL")]
+    url: String,
+
     /// Skip applying migrations after reset
     #[arg(long)]
     skip_migrations: bool,
+
+    /// Skip the confirmation prompt
+    #[arg(short = 'y', long)]
+    yes: bool,
 }
 
 impl ResetCommand {
-    pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
+    pub(crate) async fn run(self, project: &Project) -> Result<()> {
         println!();
         println!("  {}", style("Reset Database").cyan().bold().underlined());
         println!();
+
+        let db = crate::utility::connect(&self.url).await?;
         println!(
             "  {}",
             style(format!(
                 "Connected to {}",
-                crate::utility::redact_url_password(&db.driver().url())
+                crate::utility::redact_url_password(&self.url)
             ))
             .dim()
         );
         println!();
 
-        let theme = {
-            let mut t = dialoguer_theme();
-            t.success_prefix = style(" ".to_string());
-            t.prompt_prefix = style(" ".to_string());
-            t.prompt_style = console::Style::new().red().bold();
-            t
-        };
+        if !self.yes {
+            let theme = {
+                let mut t = dialoguer_theme();
+                t.success_prefix = style(" ".to_string());
+                t.prompt_prefix = style(" ".to_string());
+                t.prompt_style = console::Style::new().red().bold();
+                t
+            };
 
-        let confirmed = Confirm::with_theme(&theme)
-            .with_prompt("This will drop all tables and data. Are you sure?")
-            .default(false)
-            .interact()?;
+            let confirmed = Confirm::with_theme(&theme)
+                .with_prompt("This will drop all tables and data. Are you sure?")
+                .default(false)
+                .interact()?;
 
-        if !confirmed {
-            println!();
-            println!("  {}", style("Aborted.").dim());
-            println!();
-            return Ok(());
+            if !confirmed {
+                println!();
+                println!("  {}", style("Aborted.").dim());
+                println!();
+                return Ok(());
+            }
         }
 
         println!();
@@ -67,7 +78,7 @@ impl ResetCommand {
         println!();
 
         if !self.skip_migrations {
-            apply_migrations(db, config).await?;
+            apply_migrations(&db, project).await?;
         }
 
         Ok(())

@@ -61,6 +61,7 @@ Toasty is a Rust ORM supporting SQL (SQLite, PostgreSQL, MySQL) and NoSQL (Dynam
 | Crate | Purpose |
 |---|---|
 | `toasty` | User-facing API: `Db`, query engine, runtime |
+| `toasty-cli` | Standalone `toasty` binary: schema extraction and migration commands |
 | `toasty-core` | Shared types: schema representations, statement AST, driver interface |
 | `toasty-macros` | Proc-macro entry points and code generation (`#[derive(Model)]`, `#[derive(Embed)]`) |
 | `toasty-sql` | SQL serialization (statement AST → SQL string), used by SQL drivers |
