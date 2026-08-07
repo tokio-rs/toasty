@@ -5,7 +5,7 @@ use super::LowerStatement;
 impl LowerStatement<'_, '_> {
     pub(super) fn rewrite_offset_after_as_filter(&self, stmt: &mut stmt::Query) {
         // Only do this for SQL statements
-        if !self.capability().sql {
+        if !self.capability().sql() {
             return;
         }
 
