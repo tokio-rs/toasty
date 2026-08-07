@@ -215,6 +215,8 @@ impl deadpool::managed::Manager for Manager {
         obj: &mut Self::Type,
         metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
+        // deadpool::managed::Metrics::age() only exist when the target is not wasm32
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(max) = self.max_connection_lifetime
             && metrics.age() >= max
         {
@@ -223,6 +225,8 @@ impl deadpool::managed::Manager for Manager {
                 "connection exceeded max lifetime",
             ));
         }
+        // deadpool::managed::Metrics::last_used() only exist when the target is not wasm32
+        #[cfg(not(target_arch = "wasm32"))]
         if let Some(max) = self.max_connection_idle_time
             && metrics.last_used() >= max
         {
