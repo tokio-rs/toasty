@@ -49,11 +49,12 @@ use toasty_core::{
 /// `ApplyInsertScope::apply_expr`) see the already-lifted form.
 pub(super) struct LiftInSubquery<'a> {
     cx: ExprContext<'a>,
+    exclude_nulls: bool,
 }
 
 impl<'a> LiftInSubquery<'a> {
-    pub(super) fn new(cx: ExprContext<'a>) -> Self {
-        Self { cx }
+    pub(super) fn new(cx: ExprContext<'a>, exclude_nulls: bool) -> Self {
+        Self { cx, exclude_nulls }
     }
 
     pub(super) fn rewrite(&mut self, stmt: &mut stmt::Statement) {
@@ -63,6 +64,32 @@ impl<'a> LiftInSubquery<'a> {
     fn scope<'scope>(&'scope self, target: impl IntoExprTarget<'scope>) -> LiftInSubquery<'scope> {
         LiftInSubquery {
             cx: self.cx.scope(target),
+            exclude_nulls: self.exclude_nulls,
+        }
+    }
+
+    fn exclude_nulls(&self, expr: &mut stmt::Expr) {
+        if !self.exclude_nulls {
+            return;
+        }
+
+        let stmt::Expr::InSubquery(expr) = expr else {
+            return;
+        };
+        let select = expr.query.body.as_select_mut_unwrap();
+        let target = select.source.model_id_unwrap();
+        let returning = select.returning.as_project_unwrap().clone();
+
+        for field in returning
+            .as_record()
+            .map_or(std::slice::from_ref(&returning), |record| &record.fields)
+        {
+            let stmt::Expr::Reference(stmt::ExprReference::Field { index, .. }) = field else {
+                unreachable!();
+            };
+            if self.cx.schema().app.field(target.field(*index)).nullable {
+                select.add_filter(stmt::Expr::is_not_null(field.clone()));
+            }
         }
     }
 }
@@ -74,24 +101,28 @@ impl VisitMut for LiftInSubquery<'_> {
         // would not introduce relation references that were not there.
         match expr {
             stmt::Expr::InSubquery(e) => {
-                if let Some(lifted) = lift_in_subquery(&self.cx, &e.expr, &e.query) {
+                if let Some(mut lifted) = lift_in_subquery(&self.cx, &e.expr, &e.query) {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 }
             }
             stmt::Expr::BinaryOp(e) => {
-                if let Some(lifted) =
+                if let Some(mut lifted) =
                     try_lift_relation_path_comparison(&self.cx, e.op, &e.lhs, &e.rhs)
                 {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 } else if let Some(commuted) = e.op.commute()
-                    && let Some(lifted) =
+                    && let Some(mut lifted) =
                         try_lift_relation_path_comparison(&self.cx, commuted, &e.rhs, &e.lhs)
                 {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 }
             }
             stmt::Expr::Like(e) => {
-                if let Some(lifted) = try_lift_relation_path_like(&self.cx, e) {
+                if let Some(mut lifted) = try_lift_relation_path_like(&self.cx, e) {
+                    self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 }
             }

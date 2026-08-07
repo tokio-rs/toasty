@@ -1,8 +1,5 @@
 use crate::{
-    schema::{
-        app::{Model, ModelId, Schema},
-        db,
-    },
+    schema::{app::ModelId, db},
     stmt,
 };
 
@@ -18,8 +15,8 @@ use crate::{
 /// use toasty_core::schema::app::Embedded;
 ///
 /// // Embedded is typically constructed by the schema builder.
-/// let embedded: &Embedded = field.ty.as_embedded_unwrap();
-/// let target_model = embedded.target(&schema);
+/// let embedded: &Embedded = embedded_field;
+/// let target_model = schema.model(embedded.target);
 /// ```
 #[derive(Debug, Clone)]
 pub struct Embedded {
@@ -34,11 +31,4 @@ pub struct Embedded {
     /// column. Embedded structs do not accept a type override because they may
     /// map to more than one column.
     pub storage_ty: Option<db::Type>,
-}
-
-impl Embedded {
-    /// Resolves the target [`Model`] from the given schema.
-    pub fn target<'a>(&self, schema: &'a Schema) -> &'a Model {
-        schema.model(self.target)
-    }
 }

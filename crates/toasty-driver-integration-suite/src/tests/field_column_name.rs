@@ -62,13 +62,13 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_varchar))]
+#[driver_test(requires(native_varchar))]
 pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column("my_name", type = varchar(5))]
         name: String,

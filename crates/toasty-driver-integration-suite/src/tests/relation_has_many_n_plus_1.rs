@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use hashbrown::HashSet;
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn hello_world(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -25,7 +25,7 @@ pub async fn hello_world(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn query_by_index_optimization(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

@@ -2,13 +2,13 @@ use crate::prelude::*;
 
 // A bare `#[belongs_to]` infers `key` from the field name (`user` -> `user_id`)
 // and `references` from the target's primary key.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn infers_key_and_references(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
         posts: toasty::Deferred<Vec<Post>>,
@@ -18,10 +18,10 @@ pub async fn infers_key_and_references(test: &mut Test) -> Result<()> {
     struct Post {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to]
         user: toasty::Deferred<User>,
@@ -43,23 +43,23 @@ pub async fn infers_key_and_references(test: &mut Test) -> Result<()> {
 }
 
 // A nullable `#[belongs_to]` also infers `key` and `references`.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn infers_optional_relation(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Post {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to]
         user: toasty::Deferred<Option<User>>,
@@ -82,23 +82,23 @@ pub async fn infers_optional_relation(test: &mut Test) -> Result<()> {
 
 // An explicit `key` with `references` omitted still infers the target's primary
 // key.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn infers_references_only(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Post {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        owner_id: ID,
+        owner_id: uuid::Uuid,
 
         #[belongs_to(key = owner_id)]
         owner: toasty::Deferred<User>,

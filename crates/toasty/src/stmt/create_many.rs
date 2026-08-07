@@ -10,9 +10,8 @@ use toasty_core::stmt as core_stmt;
 ///
 /// Records are accumulated with [`item`](CreateMany::item) or
 /// [`with_item`](CreateMany::with_item), then executed with
-/// [`exec`](CreateMany::exec). Alternatively, call
-/// [`into_expr`](CreateMany::into_expr) to embed the batch insert as an
-/// expression inside another statement (e.g., a has-many association insert).
+/// [`exec`](CreateMany::exec). `CreateMany` also implements [`IntoExpr`] so a
+/// batch insert can be embedded inside another statement.
 ///
 /// # Examples
 ///
@@ -28,11 +27,9 @@ use toasty_core::stmt as core_stmt;
 /// # let driver = toasty_driver_sqlite::Sqlite::in_memory();
 /// # let mut db = toasty::Db::builder().models(toasty::models!(User)).build(driver).await.unwrap();
 /// # db.push_schema().await.unwrap();
-/// use toasty::stmt::CreateMany;
-///
-/// let users = CreateMany::<User>::new()
-///     .with_item(|u| u.name("Alice"))
-///     .with_item(|u| u.name("Bob"))
+/// let users = User::create_many()
+///     .item(User::create().name("Alice"))
+///     .item(User::create().name("Bob"))
 ///     .exec(&mut db)
 ///     .await
 ///     .unwrap();
@@ -44,11 +41,6 @@ pub struct CreateMany<M: Model> {
 }
 
 impl<M: Model> CreateMany<M> {
-    /// Create an empty `CreateMany` builder with no records queued.
-    pub fn new() -> Self {
-        Self::default()
-    }
-
     /// Append a record from any value that implements [`IntoInsert`]
     /// for model `M`.
     ///
@@ -66,8 +58,8 @@ impl<M: Model> CreateMany<M> {
     /// Append a record using a closure that configures the model's generated
     /// create builder.
     ///
-    /// `f` receives a default create builder and must return it after setting
-    /// the desired fields.
+    /// `f` receives a default create builder and returns it after setting the
+    /// desired fields.
     ///
     /// Returns `self` for method chaining.
     pub fn with_item(
@@ -88,7 +80,7 @@ impl<M: Model> CreateMany<M> {
     /// embedding in a parent insert statement (e.g., as a nested HasMany value).
     ///
     /// Unlike `exec`, this does not run any database query.
-    pub fn into_expr(self) -> Expr<List<M>> {
+    fn into_expr(self) -> Expr<List<M>> {
         if self.stmts.is_empty() {
             return Expr::from_untyped(
                 core_stmt::Expr::list(std::iter::empty::<core_stmt::Expr>()),

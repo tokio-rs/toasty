@@ -14,7 +14,7 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(not(sql)), scenario(crate::scenarios::user_with_age))]
+#[driver_test(requires(not(sql)), scenario(crate::scenarios::user_with_age))]
 pub async fn update_via_secondary_index_uses_primary_key_type(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

@@ -39,14 +39,14 @@ Tests in `crates/toasty-driver-integration-suite/src/tests/` run against every s
 ```rust
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn my_test(t: &mut Test) -> Result<()> {
     // 1. Define model(s) inline
     #[derive(Debug, toasty::Model)]
     struct Foo {
         #[key]
         #[auto]
-        id: ID,       // placeholder: rewritten to u64 and uuid::Uuid by macro
+        id: uuid::Uuid,
         name: String,
     }
 
@@ -63,19 +63,33 @@ pub async fn my_test(t: &mut Test) -> Result<()> {
 }
 ```
 
-The `id(ID)` argument names a placeholder identifier — `ID` by convention — that the macro replaces with a concrete type everywhere it appears as a type in the function body. The function is emitted twice: once with every `ID` replaced by `u64`, once with every `ID` replaced by `uuid::Uuid`. Both variants are wrapped with `#[tokio::test]` and each gets an isolated table prefix that is cleaned up after the test runs.
+`#[driver_test]` emits one test using the model's concrete ID type.
+
+The `id(ID)` argument names a placeholder identifier — `ID` by convention —
+that the macro replaces everywhere it appears as a type in the function body.
+The UUID expansion adds no ID-specific capability requirement. The `u64`
+expansion implicitly requires `auto_increment`. An explicit `requires(...)`
+expression applies to both expansions. Both variants get an isolated table
+prefix that is cleaned up after the test runs.
 
 This is why FK fields are also typed `ID` (e.g. `user_id: ID`): the substitution is textual across the whole function, so the FK gets the same concrete type as the primary key it references.
 
 **Attribute forms:**
-- `#[driver_test(id(ID))]` — expands to two variants (u64 and uuid::Uuid); only use when it genuinely makes sense to test both ID types
-- `#[driver_test(id(ID), requires(sql))]` — ID expansion with a capability gate
-- `#[driver_test(requires(native_decimal))]` — no ID expansion, just a capability gate
 - `#[driver_test]` — single variant, no capability gate, use a concrete ID type in the model
+- `#[driver_test(requires(native_decimal))]` — no ID expansion, just a capability gate
+- `#[driver_test(scenario(crate::scenarios::two_models))]` — one concrete UUID scenario
+- `#[driver_test(requires(auto_increment), scenario(crate::scenarios::has_many_belongs_to::id_u64))]` — one concrete auto-increment scenario
+- `#[driver_test(id(ID))]` — expands to `u64` and `uuid::Uuid` variants
+- `#[driver_test(id(ID), requires(sql))]` — ID expansion with a capability gate
+- `#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]` — matching UUID and u64 scenarios
 
-**Choosing an ID type:** Only use `id(ID)` expansion when running against both u64 and uuid::Uuid adds meaningful coverage. Otherwise pick the type that fits the test:
-- Use `uuid::Uuid` when the test must run on non-SQL drivers (DynamoDB does not support auto-increment)
-- Use `u64` when testing auto-increment behavior specifically
+**Choosing an ID type:** Use `id(ID)` only when UUID and auto-increment IDs
+exercise different code paths or assertions. Examples include generated-value
+retrieval, serialized column positions, and associations that consume a
+generated ID. Otherwise write the concrete ID type in the model.
+
+- Use `uuid::Uuid` when ID generation is not under test, including in SQL-only tests
+- Use `u64` with `#[driver_test(requires(auto_increment))]` when testing auto-increment behavior
 - Use a string, manual integer, composite key, etc. when that is what the test is about
 
 Always use `requires(...)` to gate tests on capabilities. Never use runtime `if !t.capability().foo { return Ok(()); }` — that is what the macro is for.
@@ -215,7 +229,7 @@ Common attributes used in inline test model definitions:
 ```rust
 #[derive(Debug, toasty::Model)]
 struct User {
-    #[key] #[auto]          id: ID,            // primary key, auto-generated
+    #[key] #[auto]          id: uuid::Uuid,    // primary key, auto-generated
     #[unique]               email: String,     // generates get_by_email / filter_by_email
     #[index]                name: String,      // generates filter_by_name
     #[default(0)]           score: i64,        // default value on create
@@ -224,8 +238,8 @@ struct User {
 
 #[derive(Debug, toasty::Model)]
 struct Todo {
-    #[key] #[auto]  id: ID,
-    #[index]        user_id: ID,
+    #[key] #[auto]  id: uuid::Uuid,
+    #[index]        user_id: uuid::Uuid,
     #[belongs_to(key = user_id, references = id)]
     user: toasty::BelongsTo<User>,
 }

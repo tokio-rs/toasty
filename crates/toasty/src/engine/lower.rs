@@ -101,7 +101,8 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
-        lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql())
+            .rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
@@ -768,8 +769,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         panic!()
                     };
 
-                    let arg =
-                        self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
+                    let mut stmt: stmt::Statement = (*e.query).into();
+
+                    // Post-lower simplify. The sub-statement detaches into its
+                    // own HIR entry (`new_sub_statement`), so the parent's
+                    // post-lower simplify never sees it — without this, raw
+                    // lowered shapes (e.g. an embedded-field path, lowered to
+                    // `Project(Record([column]), [i])`) reach the driver.
+                    self.state.engine.simplify_stmt(&mut stmt);
+
+                    let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
                     *expr = stmt::ExprInList {
                         expr: e.expr,
@@ -1743,7 +1752,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            lift_in_subquery::LiftInSubquery::new(child.expr_cx).rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(
+                child.expr_cx,
+                child.state.engine.capability.sql(),
+            )
+            .rewrite(&mut stmt);
             // Pre-lower simplify: remaining heavyweight rules the lowering
             // visitor expects to have already fired.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)

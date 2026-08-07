@@ -1,13 +1,11 @@
 use crate::prelude::*;
 
 scenario! {
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -22,12 +20,12 @@ scenario! {
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         bio: String,
 
         #[unique]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<Option<User>>,
@@ -37,12 +35,12 @@ scenario! {
     struct Settings {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         theme: String,
 
         #[unique]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<Option<User>>,
