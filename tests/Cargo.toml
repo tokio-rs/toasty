@@ -16,7 +16,12 @@ default = ["sqlite"]
 sql = ["sqlite", "mysql", "postgresql"]
 sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
 turso = ["toasty/turso", "dep:toasty-driver-turso"]
-mysql = ["toasty/mysql", "dep:toasty-driver-mysql", "dep:mysql_async"]
+mysql = [
+    "toasty/mysql",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
 dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
 postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql", "dep:tokio-postgres"]
 
@@ -44,7 +49,8 @@ toasty-driver-dynamodb = { workspace = true, optional = true }
 
 # Database clients used directly by per-driver integration test binaries
 tokio-postgres = { workspace = true, optional = true }
-mysql_async = { workspace = true, optional = true }
+sqlx-core = { workspace = true, optional = true }
+sqlx-mysql = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 
