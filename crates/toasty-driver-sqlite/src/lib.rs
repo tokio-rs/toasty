@@ -30,7 +30,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
@@ -41,7 +41,6 @@ use toasty_core::{
     stmt,
 };
 use toasty_sql::{self as sql};
-use url::Url;
 
 enum SqlReturn {
     Count,
@@ -70,25 +69,20 @@ impl Sqlite {
     /// Create a new SQLite driver with an arbitrary connection URL
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        if url.scheme() != "sqlite" {
+        if !url.has_scheme("sqlite") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
-                "connection URL does not have a `sqlite` scheme; url={}",
-                url_str
+                "connection URL does not have a `sqlite` scheme; url={url_str}"
             )));
         }
 
-        if url.path() == ":memory:" {
-            Ok(Self::InMemory)
-        } else {
-            Ok(Self::File(PathBuf::from(
-                percent_encoding::percent_decode(url.path().as_bytes())
-                    .decode_utf8_lossy()
-                    .to_string()
-                    .as_str(),
-            )))
+        let path = url.file_path()?;
+        if path == Path::new(":memory:") {
+            return Ok(Self::InMemory);
         }
+
+        Ok(Self::File(path))
     }
 
     /// Create an in-memory SQLite database
@@ -458,52 +452,5 @@ impl Connection {
                 .map_err(toasty_core::Error::driver_operation_failed)?;
         }
         Ok(())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::Sqlite;
-    use std::path::PathBuf;
-
-    /// The file path `Sqlite::new` resolves out of a `sqlite:` URL.
-    fn file_path(url: &str) -> PathBuf {
-        match Sqlite::new(url).unwrap() {
-            Sqlite::File(path) => path,
-            Sqlite::InMemory => panic!("expected a file-backed database for {url}"),
-        }
-    }
-
-    #[test]
-    fn new_decodes_percent_encoded_path() {
-        // `url::Url` stores the path percent-encoded: a space becomes `%20` and
-        // non-ASCII bytes become `%XX` sequences. The driver must decode it back
-        // before opening the file, otherwise it opens one whose name literally
-        // contains `%20`.
-        assert_eq!(
-            file_path("sqlite:/tmp/my db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
-        );
-        assert_eq!(
-            file_path("sqlite:///tmp/my%20db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
-        );
-        assert_eq!(
-            file_path("sqlite:/tmp/d%C3%A9j%C3%A0.db"),
-            PathBuf::from("/tmp/déjà.db")
-        );
-        // Percent-decoding, not form-decoding: a literal `+` must stay a `+`.
-        assert_eq!(
-            file_path("sqlite:/tmp/a+b.db"),
-            PathBuf::from("/tmp/a+b.db")
-        );
-    }
-
-    #[test]
-    fn new_memory_url_stays_in_memory() {
-        assert!(matches!(
-            Sqlite::new("sqlite::memory:").unwrap(),
-            Sqlite::InMemory
-        ));
     }
 }

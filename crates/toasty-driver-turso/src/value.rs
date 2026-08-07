@@ -6,7 +6,7 @@
 //! `experimental_custom_types`, decimal, native date/time — is still
 //! moving upstream, so we leave those cases as `todo!()` for now and
 //! revisit once the upstream surface settles. The current shape lets
-//! Turso ride on the SQLite-flavored serializer without an
+//! Turso ride on the SQLite-dialect serializer without an
 //! independent type system.
 
 use toasty_core::stmt::{self, Value as CoreValue};

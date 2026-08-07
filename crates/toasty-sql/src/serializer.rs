@@ -10,8 +10,7 @@ mod cte;
 mod delim;
 use delim::{Comma, Delimited, Period};
 
-mod flavor;
-use flavor::Flavor;
+mod dialect;
 
 mod ident;
 use ident::Ident;
@@ -30,7 +29,10 @@ mod value;
 use crate::stmt::Statement;
 
 use toasty_core::{
-    driver::operation::{IsolationLevel, Transaction, TransactionMode},
+    driver::{
+        Dialect,
+        operation::{IsolationLevel, Transaction, TransactionMode},
+    },
     schema::db::{self, Index, Table},
     stmt::IntoExprTarget,
 };
@@ -41,11 +43,11 @@ pub struct Serializer<'a> {
     /// Schema against which the statement is to be serialized
     schema: &'a db::Schema,
 
-    /// The database flavor handles the differences between SQL dialects and
+    /// The SQL dialect handles the differences between databases and
     /// supported features.
-    flavor: Flavor,
+    dialect: Dialect,
 
-    /// SQL emitted for [`TransactionMode::Default`] under the SQLite flavor.
+    /// SQL emitted for [`TransactionMode::Default`] under the SQLite dialect.
     /// Constructors that don't override this leave it at `"BEGIN"`, which is
     /// SQLite's natural default (DEFERRED). A driver that wants `Default` to
     /// mean something engine-specific — Turso under `concurrent_writes()`
@@ -160,7 +162,7 @@ impl<'a> Serializer<'a> {
 
     /// Serialize a transaction control operation to a SQL string.
     ///
-    /// The generated SQL is flavor-specific (e.g., MySQL uses `START TRANSACTION`
+    /// The generated SQL is dialect-specific (e.g., MySQL uses `START TRANSACTION`
     /// while other databases use `BEGIN`). Savepoints are named `sp_{id}`.
     pub fn serialize_transaction(&self, op: &Transaction) -> String {
         let mut ret = String::new();
@@ -220,10 +222,10 @@ impl<'a> Serializer<'a> {
             }
         }
 
-        match self.flavor {
+        match self.dialect {
             // MySQL has no SQLite-style lock-mode keyword; drivers
             // reject non-Default `mode` before reaching the serializer.
-            Flavor::Mysql => {
+            Dialect::Mysql => {
                 let mut sql = String::new();
                 if let Some(level) = isolation {
                     sql.push_str("SET TRANSACTION ISOLATION LEVEL ");
@@ -238,7 +240,7 @@ impl<'a> Serializer<'a> {
             }
             // PostgreSQL has no SQLite-style lock-mode keyword; drivers
             // reject non-Default `mode` before reaching the serializer.
-            Flavor::Postgresql => {
+            Dialect::Postgresql => {
                 let mut sql = String::from("BEGIN");
                 if let Some(level) = isolation {
                     sql.push_str(" ISOLATION LEVEL ");
@@ -255,7 +257,7 @@ impl<'a> Serializer<'a> {
             // construction (`BEGIN` by default, or e.g. `BEGIN CONCURRENT`
             // for Turso under MVCC). `Deferred`/`Immediate`/`Exclusive` are
             // explicit caller requests with fixed SQL.
-            Flavor::Sqlite => match mode {
+            Dialect::Sqlite => match mode {
                 TransactionMode::Default => self.sqlite_default_begin.to_string(),
                 TransactionMode::Deferred => "BEGIN".to_string(),
                 TransactionMode::Immediate => "BEGIN IMMEDIATE".to_string(),

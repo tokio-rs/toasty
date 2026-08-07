@@ -36,14 +36,12 @@ bigdecimal = { workspace = true, optional = true }
 jiff = { workspace = true, optional = true }
 lru.workspace = true
 tracing.workspace = true
-percent-encoding.workspace = true
 postgres-protocol.workspace = true
 postgres-types.workspace = true
 fallible-iterator.workspace = true
 tokio.workspace = true
 tokio-postgres.workspace = true
 uuid.workspace = true
-url.workspace = true
 rustls = { workspace = true, optional = true }
 tokio-postgres-rustls = { workspace = true, optional = true }
 rustls-platform-verifier = { workspace = true, optional = true }

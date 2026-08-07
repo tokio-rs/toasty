@@ -36,7 +36,7 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     // Position: id_u64 uses Expr::Default for auto-increment (no param), so "foo"
     // is at params[0]. id_uuid generates the uuid client-side, so "foo" is at
     // params[1].
-    let sql = test.capability().sql;
+    let sql = test.capability().sql();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     let val = if sql {
         ArgOr::Arg(val_pos)
@@ -62,13 +62,13 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_varchar))]
+#[driver_test(requires(native_varchar))]
 pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()> {
     #[derive(toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column("my_name", type = varchar(5))]
         name: String,

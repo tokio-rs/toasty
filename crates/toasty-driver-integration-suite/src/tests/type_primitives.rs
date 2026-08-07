@@ -43,7 +43,7 @@ macro_rules! num_ty_test_body {
 
             // Verify the INSERT operation stored the correct value
             let (op, _resp) = test.log().pop();
-            let sql = test.capability().sql;
+            let sql = test.capability().sql();
             let val_pat = if sql { ArgOr::Arg(1) } else { ArgOr::Value(val) };
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Insert({
@@ -97,7 +97,7 @@ macro_rules! num_ty_test_body {
 
                 // Verify the UPDATE operation sent the correct value
                 let (op, _resp) = test.log().pop();
-                if test.capability().sql {
+                if test.capability().sql() {
                     assert_struct!(op, Operation::QuerySql({
                         stmt: Statement::Update({
                             assignments: #{ [1]: Assignment::Set(_)},
@@ -275,7 +275,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation stored the string value
         let (op, _resp) = test.log().pop();
-        let sql = test.capability().sql;
+        let sql = test.capability().sql();
         let val_pat = if sql {
             ArgOr::Arg(1)
         } else {
@@ -313,7 +313,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
 
         // Verify the UPDATE operation sent the string value
         let (op, _resp) = test.log().pop();
-        if test.capability().sql {
+        if test.capability().sql() {
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Update({
                     assignments: #{ [1]: Assignment::Set(_)},
@@ -377,7 +377,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
 
         // Verify the INSERT operation stored the bytes value
         let (op, _resp) = test.log().pop();
-        let sql = test.capability().sql;
+        let sql = test.capability().sql();
         let val_pat = if sql {
             ArgOr::Arg(1)
         } else {
@@ -418,7 +418,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
 
         // Verify the UPDATE operation sent the bytes value
         let (op, _resp) = test.log().pop();
-        if test.capability().sql {
+        if test.capability().sql() {
             assert_struct!(op, Operation::QuerySql({
                 stmt: Statement::Update({
                     assignments: #{ [1]: Assignment::Set(_)},
@@ -465,7 +465,7 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
             db::Type::Text | db::Type::VarChar(..) => Value::String(val.to_string()),
             ty => todo!("ty={ty:#?}"),
         };
-        let sql = test.capability().sql;
+        let sql = test.capability().sql();
         let val_pat = if sql {
             ArgOr::Arg(1)
         } else {

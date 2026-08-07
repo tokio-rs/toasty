@@ -58,6 +58,12 @@
 mod capability;
 pub use capability::{Capability, SchemaMutations, SqlPlaceholder, StorageTypes};
 
+mod connection_url;
+pub use connection_url::ConnectionUrl;
+
+mod dialect;
+pub use dialect::Dialect;
+
 pub mod log;
 pub use log::QueryLogConfig;
 
@@ -112,7 +118,7 @@ pub struct ConnectContext {
 /// assert!(!driver.url().is_empty());
 ///
 /// let capability = driver.capability();
-/// assert!(capability.sql);
+/// assert!(capability.sql());
 ///
 /// let conn = driver.connect(&ConnectContext::default()).await.unwrap();
 /// ```

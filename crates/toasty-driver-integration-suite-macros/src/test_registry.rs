@@ -244,6 +244,10 @@ fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
     }
 
     let requires_list = &structure.requires;
+    let requires_read: Vec<_> = requires_list
+        .iter()
+        .map(|cap| crate::parse::read_capability(quote! { capability }, cap))
+        .collect();
 
     quote! {
         #[test]
@@ -272,12 +276,12 @@ fn generate_capability_runtime_test(structure: &TestStructure) -> TokenStream2 {
                 #(
                     let expected = expected_capabilities.get(stringify!(#requires_list)).copied().unwrap_or(true);
                     assert_eq!(
-                        capability.#requires_list,
+                        #requires_read,
                         expected,
                         "Capability mismatch for {}: expected {}, got {}",
                         stringify!(#requires_list),
                         expected,
-                        capability.#requires_list
+                        #requires_read
                     );
                 )*
             });

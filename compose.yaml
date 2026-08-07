@@ -28,7 +28,7 @@ services:
       - "8000:8000"
 
   mysql:
-    image: mysql:9
+    image: mysql:26
     environment:
       MYSQL_ROOT_PASSWORD: toasty_root_password
       MYSQL_USER: toasty

@@ -2,13 +2,13 @@ use crate::prelude::*;
 use toasty::stmt::Page;
 
 /// Scan with no filter predicate returns all rows.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn scan_no_filter(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
     }
 
@@ -144,13 +144,13 @@ pub async fn scan_delete_by_filter_composite_key(t: &mut Test) -> Result<()> {
 }
 
 /// Scan with an OR filter on non-indexed fields.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn scan_or_filter(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
     }
 
@@ -182,13 +182,13 @@ pub async fn scan_or_filter(t: &mut Test) -> Result<()> {
 }
 
 /// Scan respects a limit — at most `limit` rows are returned.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn scan_with_limit(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
     }
 
@@ -218,13 +218,13 @@ pub async fn scan_with_limit(t: &mut Test) -> Result<()> {
 /// Scan with a filter AND a limit returns exactly `limit` matching rows even
 /// when the table contains more non-matching rows than `limit`. This exercises
 /// the loop-with-ExclusiveStartKey path in the DynamoDB driver.
-#[driver_test(id(ID), requires(not(sql)))]
+#[driver_test(requires(not(sql)))]
 pub async fn scan_limit_with_filter_returns_correct_count(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         category: String,
     }
 
@@ -264,13 +264,13 @@ pub async fn scan_limit_with_filter_returns_correct_count(t: &mut Test) -> Resul
 
 /// Cursor-based pagination over a full-table scan returns all rows across
 /// multiple pages with no duplicates.
-#[driver_test(id(ID), requires(not(sql)))]
+#[driver_test(requires(not(sql)))]
 pub async fn scan_paginate_multi_page(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         score: i64,
     }
 
@@ -308,13 +308,13 @@ pub async fn scan_paginate_multi_page(t: &mut Test) -> Result<()> {
 /// ORDER BY on a scan-path query is an error on DynamoDB — the Scan API
 /// returns items in an unspecified order so sorted results cannot be
 /// guaranteed.
-#[driver_test(id(ID), requires(not(sql)))]
+#[driver_test(requires(not(sql)))]
 pub async fn scan_order_by_is_error(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         score: i64,
     }
 
@@ -345,13 +345,13 @@ pub async fn scan_order_by_is_error(t: &mut Test) -> Result<()> {
 
 /// ORDER BY on a full-table scan works on SQL drivers — the database sorts
 /// natively via ORDER BY in the SQL query.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn scan_order_by_sql(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         score: i64,
     }
 

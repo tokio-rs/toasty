@@ -164,7 +164,7 @@ impl stmt::Visit for Verify<'_, '_> {
             }
         }
 
-        if !self.capability.sql && upsert.action == stmt::UpsertAction::Update {
+        if !self.capability.sql() && upsert.action == stmt::UpsertAction::Update {
             for secondary in model
                 .indices
                 .iter()
@@ -268,7 +268,7 @@ impl Verify<'_, '_> {
         }
     }
 
-    fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
+    fn verify_offset_key_matches_order_by(&mut self, i: &stmt::Query) {
         let Some(stmt::Limit::Cursor(cursor)) = i.limit.as_ref() else {
             return;
         };
@@ -280,33 +280,37 @@ impl Verify<'_, '_> {
         // SQL requires ORDER BY for cursor-based pagination.
         // NoSQL drivers (DynamoDB) use a driver-level cursor (ExclusiveStartKey)
         // and do not require ORDER BY.
-        if !self.capability.sql {
+        if !self.capability.sql() {
             return;
         }
 
         let Some(order_by) = i.order_by.as_ref() else {
-            todo!("specified offset but no order; stmt={i:#?}");
+            self.record(Error::invalid_statement(
+                "cursor-based pagination requires an ORDER BY clause",
+            ));
+            return;
         };
 
         match after {
             stmt::Expr::Value(stmt::Value::Record(record)) => {
-                if self.capability.sql {
-                    assert!(
-                        order_by.exprs.len() == record.fields.len(),
-                        "order_by = {order_by:#?}"
-                    );
-                }
-                // DDB requires a Record, but the columns counts do not match.
-                // The value is a full key, but the order by clause is just the sort key.
-            }
-            stmt::Expr::Value(_) => {
-                if self.capability.sql {
-                    assert!(order_by.exprs.len() == 1, "order_by = {order_by:#?}");
-                } else {
-                    panic!("NoSQL requires a Record as offset");
+                if record.fields.is_empty() {
+                    self.record(Error::invalid_statement(
+                        "cursor must contain at least one ORDER BY value",
+                    ));
+                } else if record.fields.len() > order_by.exprs.len() {
+                    self.record(Error::invalid_statement(format!(
+                        "cursor contains {} values but the query has {} ORDER BY fields",
+                        record.fields.len(),
+                        order_by.exprs.len(),
+                    )));
                 }
             }
-            _ => todo!("unsupported offset expression; stmt={i:#?}"),
+            // A scalar cursor specifies the first ORDER BY value. This remains
+            // valid when normalization appends hidden tie-breaker fields.
+            stmt::Expr::Value(_) => {}
+            _ => self.record(Error::invalid_statement(
+                "cursor must be a literal value or record",
+            )),
         }
     }
 

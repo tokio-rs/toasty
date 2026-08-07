@@ -39,7 +39,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     // Position: id_u64 uses Expr::Default (no param), so val is at
     // params[0]. id_uuid adds the uuid at params[0], shifting val to params[1].
-    let sql = test.capability().sql;
+    let sql = test.capability().sql();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     let val_pat = if sql {
         ArgOr::Arg(val_pos)
@@ -79,7 +79,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Zoned;
 
@@ -88,7 +88,7 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         val: Zoned,
     }
 
@@ -110,7 +110,7 @@ pub async fn ty_zoned(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_date(test: &mut Test) -> Result<()> {
     use jiff::civil::Date;
 
@@ -119,7 +119,7 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         val: Date,
     }
 
@@ -144,7 +144,7 @@ pub async fn ty_date(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_time(test: &mut Test) -> Result<()> {
     use jiff::civil::Time;
 
@@ -153,7 +153,7 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         val: Time,
     }
 
@@ -176,7 +176,7 @@ pub async fn ty_time(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_datetime(test: &mut Test) -> Result<()> {
     use jiff::civil::DateTime;
 
@@ -185,7 +185,7 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         val: DateTime,
     }
 
@@ -210,7 +210,7 @@ pub async fn ty_datetime(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_timestamp))]
+#[driver_test(requires(native_timestamp))]
 pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -219,7 +219,7 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = timestamp(2))]
         val: Timestamp,
     }
@@ -246,7 +246,7 @@ pub async fn ty_timestamp_precision_2(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_time))]
+#[driver_test(requires(native_time))]
 pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
     use jiff::civil::Time;
 
@@ -255,7 +255,7 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = time(2))]
         val: Time,
     }
@@ -280,7 +280,7 @@ pub async fn ty_time_precision_2(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_datetime))]
+#[driver_test(requires(native_datetime))]
 pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
     use jiff::civil::DateTime;
 
@@ -289,7 +289,7 @@ pub async fn ty_datetime_precision_2(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = datetime(2))]
         val: DateTime,
     }
@@ -340,7 +340,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     // Verify the INSERT encodes the timestamp as a fixed-precision text string.
     // The #[column(type = text)] forces text encoding on all drivers.
     let (op, _) = test.log().pop();
-    let sql = test.capability().sql;
+    let sql = test.capability().sql();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     let val_pat = if sql {
         ArgOr::Arg(val_pos)
@@ -371,7 +371,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     use jiff::civil::Date;
 
@@ -380,7 +380,7 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = text)]
         val: Date,
     }
@@ -401,7 +401,7 @@ pub async fn ty_date_as_text(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
     use jiff::civil::Time;
 
@@ -410,7 +410,7 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = text)]
         val: Time,
     }
@@ -432,7 +432,7 @@ pub async fn ty_time_as_text(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     use jiff::civil::DateTime;
 
@@ -441,7 +441,7 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = text)]
         val: DateTime,
     }
@@ -462,7 +462,7 @@ pub async fn ty_datetime_as_text(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -471,7 +471,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column(type = text)]
         val: Timestamp,
@@ -510,7 +510,7 @@ pub async fn order_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn latest_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -519,7 +519,7 @@ pub async fn latest_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[column(type = text)]
         val: Timestamp,
@@ -546,7 +546,7 @@ pub async fn latest_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     use jiff::Timestamp;
 
@@ -555,7 +555,7 @@ pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
     struct Event {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[index]
         at: Timestamp,
         name: String,

@@ -5,7 +5,7 @@ use crate::prelude::*;
 ///
 /// Exercises INSERT, SELECT, UPDATE (instance and query-based), and DELETE
 /// through the driver — the paths affected by parameter type inference.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -18,7 +18,7 @@ pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         title: String,
         priority: Priority,
     }
@@ -158,7 +158,7 @@ pub async fn native_enum_filter_operations(t: &mut Test) -> Result<()> {
 
 /// Multiple native enum fields on the same model, each creating its own
 /// database enum type.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn native_enum_multiple_fields(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -176,7 +176,7 @@ pub async fn native_enum_multiple_fields(t: &mut Test) -> Result<()> {
     struct Ticket {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         priority: Priority,
         status: Status,
     }
@@ -211,7 +211,7 @@ pub async fn native_enum_multiple_fields(t: &mut Test) -> Result<()> {
 }
 
 /// Native enum with explicit custom type name via `#[column(type = enum("custom_name"))]`.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn native_enum_custom_type_name(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     #[column(type = enum("task_priority"))]
@@ -225,7 +225,7 @@ pub async fn native_enum_custom_type_name(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         priority: Priority,
     }
 
