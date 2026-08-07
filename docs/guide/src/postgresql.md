@@ -36,6 +36,7 @@ Append query parameters to the URL to tune the connection:
 | Parameter | Purpose |
 |---|---|
 | `application_name=<string>` | Reported to PostgreSQL as the connecting client. Appears in `pg_stat_activity` and the server log — useful for distinguishing services sharing a database. |
+| `options=<string>` | Server startup options, as libpq's `options` parameter. Use `-c name=value` pairs to set session defaults on every pooled connection — see [Setting the schema search path](#setting-the-schema-search-path). |
 | `sslmode=<mode>` | TLS negotiation mode. See the table below. |
 | `sslrootcert=<path>` | PEM file with root certificates to trust. |
 | `sslcert=<path>` and `sslkey=<path>` | Client certificate and matching private key, for mutual TLS. |
@@ -46,6 +47,30 @@ Append query parameters to the URL to tune the connection:
 .connect("postgresql://app:secret@db.internal/store\
           ?sslmode=verify-full&application_name=store-api")
 ```
+
+### Setting the schema search path
+
+The `options` parameter passes server startup options to every
+connection the pool creates. Its main use is setting `search_path`,
+which controls the schema that unqualified table names resolve to:
+
+```rust,ignore
+.connect("postgresql://user:pass@localhost/mydb?options=-c%20search_path%3Dtenant_a")
+```
+
+The value is form-decoded (`%20` is a space, `%3D` is `=`), so the URL
+above sends `-c search_path=tenant_a` to the server. Queries,
+`push_schema`, and migrations then all operate on the `tenant_a`
+schema, which must already exist.
+
+Because the setting applies at connection startup, every connection in
+the pool uses it. Executing `SET search_path` through a `Db` does not
+work for this: the statement runs on one pooled connection and leaves
+the others unchanged.
+
+One `Db` uses one search path. For test isolation, create a schema per
+test and connect a separate `Db` whose `search_path` names it; drop the
+schema when the test finishes.
 
 ### TLS modes
 
