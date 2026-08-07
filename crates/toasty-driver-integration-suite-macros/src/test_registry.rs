@@ -103,8 +103,14 @@ fn scan_test_directory(dir: &Path) -> TestStructure {
 fn extract_capability_names(expr: &BoolExpr, result: &mut hashbrown::HashSet<String>) {
     match expr {
         BoolExpr::Ident(name) => {
-            // Skip common matrix identifiers
-            if name != "single" && name != "composite" && name != "id_u64" && name != "id_uuid" {
+            // Skip common matrix identifiers, and test flags, which have no
+            // `Capability` field to validate against.
+            if name != "single"
+                && name != "composite"
+                && name != "id_u64"
+                && name != "id_uuid"
+                && !crate::parse::is_test_flag(name)
+            {
                 result.insert(name.clone());
             }
         }
