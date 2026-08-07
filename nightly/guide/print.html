@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-60a19065.js";
+            window.path_to_searchindex_js = "searchindex-7b307464.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -9117,7 +9117,7 @@ connection is dropped, so they do not cause stale-state issues after
 an eviction.</p>
 <div style="break-before: page; page-break-before: always;"></div>
 <h1 id="mysql"><a class="header" href="#mysql">MySQL</a></h1>
-<p>Toasty’s MySQL driver uses <a href="https://docs.rs/mysql_async"><code>mysql_async</code></a> under the hood. It covers
+<p>Toasty’s MySQL driver uses <a href="https://docs.rs/sqlx-mysql">SQLx’s MySQL driver</a>. It covers
 the SQL feature set Toasty exercises — row locking, native temporal
 types, inline enum columns, full unsigned 64-bit integers, and both
 fixed-precision and arbitrary-precision decimals — and integrates
@@ -9132,39 +9132,36 @@ toasty = { version = "0.9", features = ["mysql"] }
     .models(toasty::models!(crate::*))
     .connect("mysql://user:pass@localhost:3306/mydb")
     .await?;</code></pre>
-<p>The URL must include a database name in the path; <code>mysql_async</code>
-refuses URLs without one. TLS uses <code>native-tls</code> and is built in.</p>
+<p>The URL must include a database name in the path. TLS uses rustls by
+default.</p>
+<p>To select native TLS instead:</p>
+<pre><code class="language-toml">[dependencies]
+toasty = { version = "0.9", default-features = false, features = ["mysql", "native-tls"] }
+</code></pre>
 <h2 id="connection-url-options-1"><a class="header" href="#connection-url-options-1">Connection URL options</a></h2>
-<p><code>mysql_async</code> parses query parameters out of the URL. The ones worth
-knowing about for a typical service:</p>
+<p>The driver accepts SQLx MySQL connection parameters:</p>
 <div class="table-wrapper">
 <table>
 <thead>
 <tr><th>Parameter</th><th>Purpose</th></tr>
 </thead>
 <tbody>
-<tr><td><code>require_ssl=&lt;bool&gt;</code></td><td>Require TLS. Without it, the driver connects in plaintext.</td></tr>
-<tr><td><code>verify_ca=&lt;bool&gt;</code></td><td>When <code>true</code> (the default once TLS is on), verify the server certificate chains to a trusted root. Set <code>false</code> to accept any certificate.</td></tr>
-<tr><td><code>verify_identity=&lt;bool&gt;</code></td><td>When <code>true</code> (default), verify the certificate matches the server hostname. Set <code>false</code> to skip hostname validation.</td></tr>
-<tr><td><code>built_in_roots=&lt;bool&gt;</code></td><td>When <code>false</code>, do not trust the system root store — useful when pinning a private CA.</td></tr>
+<tr><td><code>ssl-mode=&lt;mode&gt;</code></td><td>Set the TLS policy: <code>disabled</code>, <code>preferred</code> (default), <code>required</code>, <code>verify_ca</code>, or <code>verify_identity</code>. <code>preferred</code> falls back to plaintext if TLS is unavailable.</td></tr>
+<tr><td><code>ssl-ca=&lt;path-or-pem&gt;</code></td><td>Set a trusted CA certificate file or inline PEM.</td></tr>
+<tr><td><code>ssl-cert=&lt;path-or-pem&gt;</code></td><td>Set the client certificate for mutual TLS.</td></tr>
+<tr><td><code>ssl-key=&lt;path-or-pem&gt;</code></td><td>Set the client private key for mutual TLS.</td></tr>
 <tr><td><code>socket=&lt;path&gt;</code></td><td>Connect over a Unix socket instead of TCP.</td></tr>
-<tr><td><code>prefer_socket=&lt;bool&gt;</code></td><td>When connecting to <code>localhost</code>, try a Unix socket first and fall back to TCP.</td></tr>
-<tr><td><code>compression=&lt;level&gt;</code></td><td>Enable wire-protocol compression. Accepts <code>fast</code>, <code>on</code>, <code>best</code>, or a digit 0–9.</td></tr>
-<tr><td><code>tcp_keepalive=&lt;ms&gt;</code></td><td>TCP keepalive interval in milliseconds.</td></tr>
-<tr><td><code>tcp_nodelay=&lt;bool&gt;</code></td><td>Disable Nagle’s algorithm on the TCP socket.</td></tr>
-<tr><td><code>max_allowed_packet=&lt;bytes&gt;</code></td><td>Cap the client-side max packet size, clamped to 1024–1073741824.</td></tr>
-<tr><td><code>wait_timeout=&lt;secs&gt;</code></td><td>Server-side <code>wait_timeout</code> for the session.</td></tr>
-<tr><td><code>stmt_cache_size=&lt;n&gt;</code></td><td>Per-connection prepared-statement cache size. Defaults to 32; set to <code>0</code> to disable caching.</td></tr>
+<tr><td><code>statement-cache-capacity=&lt;n&gt;</code></td><td>Set the per-connection prepared-statement cache size. Defaults to 100; set to <code>0</code> to disable caching.</td></tr>
+<tr><td><code>charset=&lt;name&gt;</code></td><td>Set the connection character set. Defaults to <code>utf8mb4</code>.</td></tr>
+<tr><td><code>collation=&lt;name&gt;</code></td><td>Set the connection collation.</td></tr>
+<tr><td><code>timezone=&lt;value&gt;</code></td><td>Set the session time zone, such as <code>%2B00:00</code> for <code>+00:00</code>.</td></tr>
 </tbody>
 </table>
 </div>
-<p>Client certificates for mutual TLS are not exposed through URL
-parameters; build them programmatically with <code>mysql_async</code>’s
-<code>SslOpts::with_client_identity</code> and pass a constructed driver to
-<code>Db::builder().build(driver)</code> (see
-<a href="#using-a-driver-directly">Database Setup</a>).</p>
+<p>SQLx ignores unrecognized connection parameters. Use the option names
+listed above.</p>
 <pre><code class="language-rust ignore">.connect("mysql://app:secret@db.internal/store\
-          ?require_ssl=true&amp;verify_identity=true&amp;compression=on")</code></pre>
+          ?ssl-mode=verify_identity&amp;ssl-ca=/etc/ssl/private-ca.pem")</code></pre>
 <h2 id="type-mapping-1"><a class="header" href="#type-mapping-1">Type mapping</a></h2>
 <p>Toasty maps Rust types to MySQL columns as follows. MySQL has a few
 quirks worth knowing about; the notes below the table call them out.</p>
@@ -9306,7 +9303,7 @@ migrations on MySQL (<code>pt-online-schema-change</code>-style copy and swap,
 gh-ost integration, etc.); migrations assume exclusive access to the
 schema for their duration.</p>
 <h2 id="errors-and-the-connection-pool-1"><a class="header" href="#errors-and-the-connection-pool-1">Errors and the connection pool</a></h2>
-<p>The driver classifies <code>mysql_async</code> errors into Toasty’s typed error
+<p>The driver classifies SQLx MySQL errors into Toasty’s typed error
 variants so the pool and caller can react sensibly.</p>
 <div class="table-wrapper">
 <table>
@@ -9330,8 +9327,8 @@ rather than one per pooled connection. See
 <a href="#connection-pool">Database Setup</a> for the pool
 knobs (<code>max_pool_size</code>, <code>pool_pre_ping</code>,
 <code>pool_health_check_interval</code>, …) and what they do.</p>
-<p><code>mysql_async</code> caches prepared statements per connection (up to 32 by
-default, tunable via the <code>stmt_cache_size</code> URL parameter). The cache
+<p>SQLx caches prepared statements per connection (up to 100 by default,
+tunable via the <code>statement-cache-capacity</code> URL parameter). The cache
 is bound to the connection and is dropped when the connection is
 evicted, so it does not cause stale-state issues after a backend
 restart.</p>
