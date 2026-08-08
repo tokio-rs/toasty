@@ -142,6 +142,19 @@ struct Human {
 let objects: Vec<Object> = human.objects().collect(&mut db).await?;
 ```
 
+Nothing about the field name drives this — resolution is type-directed,
+and the rule is today's rule with a larger search space. A bare
+`#[has_many]` collects every `belongs_to` whose target is the declaring
+model, searching the target model's top-level fields and recursing through
+its embed tree: each field of an embedded struct, each variant of an
+embedded enum. Exactly one candidate is the pair; zero candidates is a
+build error; two or more is a build error asking for an explicit `pair`.
+`Human.objects` resolves to the `Human` variant because that variant holds
+the only `belongs_to` on `Object` targeting `Human` — the `Animal` and
+`Bot` variants target other models, so they are never candidates.
+Candidates are locations, not declarations: a relation-carrying embed used
+by two fields contributes one candidate per embedding.
+
 The generated query filters on both the key and the discriminant —
 `human.objects()` matches only rows whose `owner` column says `Human`, even
 though `Animal` rows store their key in the same `owner_id` column. Users do
@@ -157,11 +170,12 @@ embed fields and enum variants:
 objects: toasty::Deferred<Vec<Object>>,
 ```
 
-The path may stop at any prefix from which the `belongs_to` targeting the
-declaring model is unambiguous: bare `#[has_many]` is the empty path and
-works when the whole target model has one candidate; `pair = owner` narrows
-to the embed field; `pair = owner.human` narrows to the variant. Remaining
-ambiguity is a schema build error naming the candidates.
+An explicit path is a prefix filter over the same candidate set, and the
+exactly-one rule applies to what survives the filter: bare `#[has_many]`
+is the empty prefix and keeps every candidate; `pair = owner` keeps
+candidates inside that embed field; `pair = owner.human` keeps the
+variant's; the full path names a single field. Ambiguity after filtering
+is the same build error, naming the surviving candidates.
 
 A relation-carrying embed stays reusable like any other embedded type, and
 each embedding pairs independently. With `Owner` embedded by both `Object`
