@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.9.0...toasty-driver-integration-suite-macros-v0.10.0) - 2026-08-08
+
+### Changed
+
+- [**breaking**] Name the SQL dialect on `Capability::sql` ([#1155])
+
+[#1155]: https://github.com/tokio-rs/toasty/pull/1155
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-macros-v0.8.0...toasty-driver-integration-suite-macros-v0.9.0) - 2026-07-23
 
 - Internal improvements only.

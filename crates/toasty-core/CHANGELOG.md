@@ -7,6 +7,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.9.0...toasty-core-v0.10.0) - 2026-08-08
+
+### Added
+
+- Embed migrations in application binaries ([#1095])
+
+### Fixed
+
+- Cursor pagination is now deterministic ([#1142])
+
+### Changed
+
+- [**breaking**] TLS features are now additive with SQLx in the MySQL driver ([#1147])
+- [**breaking**] SQL dialect is explicitly named on `Capability::sql` ([#1155])
+- [**breaking**] Schema and statement APIs have been removed ([#1149])
+
+[#1095]: https://github.com/tokio-rs/toasty/pull/1095
+[#1142]: https://github.com/tokio-rs/toasty/pull/1142
+[#1147]: https://github.com/tokio-rs/toasty/pull/1147
+[#1149]: https://github.com/tokio-rs/toasty/pull/1149
+[#1155]: https://github.com/tokio-rs/toasty/pull/1155
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.8.0...toasty-core-v0.9.0) - 2026-07-23
 
 ### Added
