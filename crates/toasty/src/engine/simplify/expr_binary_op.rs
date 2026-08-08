@@ -94,6 +94,25 @@ impl Simplify<'_> {
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
             }
+            // Decode-cast stripping on comparisons with a constant. A stored
+            // column whose type differs from the model type decodes through
+            // `cast(col, <model ty>)` (see `map_table_column_to_model`). When
+            // such a cast surfaces in a comparison — e.g. out of an enum
+            // decode `Match` arm, which only unfolds via match elimination
+            // after lowering has run — move the conversion onto the constant
+            // side so the driver compares the stored form directly. Other
+            // cast shapes are handled during lowering
+            // (`lower_expr_binary_op`); this rule fires only on the
+            // post-lower column shape.
+            (Expr::Cast(cast), Expr::Value(value)) | (Expr::Value(value), Expr::Cast(cast))
+                if (op.is_eq() || op.is_ne()) && cast.from.is_none() && cast.expr.is_column() =>
+            {
+                let target_ty = self.capability.native_type_for(&cast.ty);
+                let value = target_ty
+                    .cast(self.cx.schema(), value.take())
+                    .expect("failed to cast value");
+                Some(Expr::binary_op(cast.expr.take(), op, value))
+            }
             // Self-comparison with projections, e.g.,
             //
             //  - `address.city = address.city` → `true`

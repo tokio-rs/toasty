@@ -120,3 +120,55 @@ pub async fn cross_variant_or(t: &mut Test) -> Result<()> {
     assert_eq!(rows.len(), 2);
     Ok(())
 }
+
+/// A variant field whose model type differs from its stored column type
+/// (`uuid::Uuid`, stored as a string) is filterable. The decode cast the
+/// enum's `Match` arm wraps around the column used to reach the SQL
+/// serializer unchanged and panic; simplify now moves the conversion onto
+/// the constant side.
+#[driver_test]
+pub async fn filter_variant_field_with_cast_storage(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Owner {
+        #[column(variant = 1)]
+        Human { id: uuid::Uuid },
+        #[column(variant = 2)]
+        Animal { tag: uuid::Uuid },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+
+    let mut db = t.setup_db(models!(Object)).await;
+
+    let target = uuid::Uuid::new_v4();
+    let expected = toasty::create!(Object {
+        owner: Owner::Human { id: target }
+    })
+    .exec(&mut db)
+    .await?;
+    // Same UUID in the other variant's column: must not match.
+    toasty::create!(Object {
+        owner: Owner::Animal { tag: target }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found = Object::filter(
+        Object::fields()
+            .owner()
+            .human()
+            .matches(|h| h.id().eq(target)),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, expected.id);
+
+    Ok(())
+}
