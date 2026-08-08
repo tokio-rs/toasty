@@ -322,9 +322,9 @@ missing — the exclusivity that the status-quo encoding cannot enforce.
 
 ## Pair resolution and lowering
 
-This section resolves two questions the first draft left open: the scope of
-relations inside embeds, and how the inverse pair is represented and
-lowered.
+This section covers the machinery behind the inverse side: how a `pair`
+names a relation inside an embed, how the schema represents it, and how
+queries and mutations lower through it.
 
 ### `pair` is a path
 
@@ -621,11 +621,7 @@ encoding and index rules for embedded enums apply as-is.
 
 ## Open questions
 
-None. Questions raised during review are resolved in place: the scope of
-relations inside embedded structs, the inverse-pair representation, embed
-reuse with the `BelongsTo` back-link, and index requirements in "Pair
-resolution and lowering"; discriminant column naming as documented
-behavior in "Declaring a polymorphic relation".
+None.
 
 ## Out of scope
 
