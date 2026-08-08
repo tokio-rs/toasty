@@ -1,4 +1,4 @@
-use super::{Field, FieldId, FieldPrimitive, Index, Name, PrimaryKey};
+use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
 use crate::{Result, driver, stmt};
 use indexmap::IndexMap;
 use std::fmt;
@@ -49,8 +49,8 @@ pub enum Model {
 /// ```
 /// use toasty_core::schema::app::{Model, ModelSet};
 ///
-/// let mut set = ModelSet::new();
-/// assert_eq!(set.iter().len(), 0);
+/// let set = ModelSet::new();
+/// assert_eq!((&set).into_iter().len(), 0);
 /// ```
 #[derive(Debug, Clone, Default)]
 pub struct ModelSet {
@@ -83,11 +83,6 @@ impl ModelSet {
     /// If a model with the same ID already exists, it is replaced.
     pub fn add(&mut self, model: Model) {
         self.models.insert(model.id(), model);
-    }
-
-    /// Returns an iterator over the models in insertion order.
-    pub fn iter(&self) -> impl ExactSizeIterator<Item = &Model> {
-        self.models.values()
     }
 }
 
@@ -156,9 +151,11 @@ pub struct ModelRoot {
     /// The primary key definition. Root models always have a primary key.
     pub primary_key: PrimaryKey,
 
-    /// Optional explicit table name. When `None`, a name is derived from the
-    /// model name.
-    pub table_name: Option<String>,
+    /// The table this model maps to, before any builder-level prefix is
+    /// applied. Always set by the caller constructing the schema: `#[derive(Model)]`
+    /// derives the default (snake_case + pluralized) name at compile time, or
+    /// uses the explicit `#[table = "..."]` override.
+    pub table_name: String,
 
     /// Secondary indices defined on this model.
     pub indices: Vec<Index>,
@@ -222,6 +219,20 @@ impl ModelRoot {
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
         for field in &self.fields {
             field.verify(db)?;
+
+            // Multi-step (`via`) relations lower to nested `IN` subqueries.
+            // Only SQL drivers can evaluate them today; key-value drivers
+            // would need a separate per-step batched fetch strategy that
+            // is not yet implemented.
+            if matches!(&field.ty, FieldTy::Via(_)) && !db.sql() {
+                return Err(crate::Error::invalid_schema(format!(
+                    "field `{}::{}` declares a multi-step `via` relation, which \
+                     requires a SQL-capable driver; the configured driver does not \
+                     support SQL",
+                    self.name.upper_camel_case(),
+                    field.name,
+                )));
+            }
         }
         Ok(())
     }
@@ -400,16 +411,21 @@ impl Model {
         matches!(self, Model::EmbeddedStruct(_) | Model::EmbeddedEnum(_))
     }
 
-    /// Returns true if this model can be the target of a relation
-    pub fn can_be_relation_target(&self) -> bool {
-        self.is_root()
-    }
-
     /// Returns the inner [`ModelRoot`] if this is a root model.
     pub fn as_root(&self) -> Option<&ModelRoot> {
         match self {
             Model::Root(root) => Some(root),
             _ => None,
+        }
+    }
+
+    /// The model's fields. For an [`EmbeddedEnum`] these are the flattened
+    /// variant fields ([`EmbeddedEnum::fields`]), not the variants themselves.
+    pub fn fields(&self) -> &[Field] {
+        match self {
+            Model::Root(root) => &root.fields,
+            Model::EmbeddedStruct(embedded) => &embedded.fields,
+            Model::EmbeddedEnum(e) => &e.fields,
         }
     }
 
@@ -479,9 +495,9 @@ impl Model {
 /// # Examples
 ///
 /// ```
-/// use toasty_core::schema::app::ModelId;
+/// use toasty_core::schema::app::{ModelId, VariantId};
 ///
-/// let variant_id = ModelId(1).variant(0);
+/// let variant_id = VariantId { model: ModelId(1), index: 0 };
 /// assert_eq!(variant_id.model, ModelId(1));
 /// assert_eq!(variant_id.index, 0);
 /// ```
@@ -504,12 +520,6 @@ impl ModelId {
     /// `index`.
     pub const fn field(self, index: usize) -> FieldId {
         FieldId { model: self, index }
-    }
-
-    /// Create a `VariantId` representing the current model's variant at
-    /// `index`.
-    pub const fn variant(self, index: usize) -> VariantId {
-        VariantId { model: self, index }
     }
 
     pub(crate) const fn placeholder() -> Self {

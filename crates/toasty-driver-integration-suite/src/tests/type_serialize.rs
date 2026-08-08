@@ -2,16 +2,18 @@ use crate::prelude::*;
 
 use hashbrown::HashMap;
 use serde::{Deserialize, Serialize};
+use toasty::Json;
 use toasty_core::{
     driver::{Operation, Rows},
-    stmt::{Assignment, Expr, ExprSet, Statement, Value},
+    schema::db,
+    stmt::{Assignment, Expr, ExprSet, InsertTarget, Source, Statement, Type, UpdateTarget, Value},
 };
 
 /// Assert the INSERT emitted a single row whose last column carries `expected`
 /// (as a JSON-serialized string). Covers both SQL (bind parameter at `pos`)
 /// and non-SQL (inline value) representations.
 fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str) {
-    let sql = t.capability().sql;
+    let sql = t.capability().sql();
     let val_pat = if sql {
         ArgOr::Arg(pos)
     } else {
@@ -31,20 +33,76 @@ fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str
     }
 }
 
+fn assert_native_json_insert(
+    op: &Operation,
+    table: db::TableId,
+    storage_ty: db::Type,
+    expected: &str,
+) {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Insert({
+            target: InsertTarget::Table({
+                table: == table,
+            }),
+            source.body: ExprSet::Values({
+                rows: [=~ (Any, ArgOr::<Any>::Arg(0))],
+            }),
+        }),
+        params: [{
+            value: == expected,
+            ty: == storage_ty,
+        }],
+    }));
+}
+
+fn assert_native_json_query(op: &Operation, table: db::TableId) {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Query({
+            body: ExprSet::Select({
+                source: Source::Table({
+                    tables: [== table, ..],
+                }),
+            }),
+        }),
+        ret: Some([Type::U64, Type::String]),
+    }));
+}
+
+fn assert_native_json_update(
+    op: &Operation,
+    table: db::TableId,
+    storage_ty: db::Type,
+    expected: &str,
+) {
+    assert_struct!(op, Operation::QuerySql({
+        stmt: Statement::Update({
+            target: UpdateTarget::Table(== table),
+            assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
+        }),
+        params: [{
+            value: == expected,
+            ty: == storage_ty,
+        }, ..],
+        ret: None,
+    }));
+}
+
 #[driver_test(id(ID))]
-pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_vec_string(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json)]
-        tags: Vec<String>,
+        #[column(type = text)]
+        tags: Json<Vec<String>>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // Insert — driver receives JSON string
+    // Insert — driver receives JSON string. The bare `Vec<String>` is
+    // accepted via the `IntoExpr<Json<T>> for T` blanket on `Json<T>`,
+    // so callers don't need to spell `Json(value)` at setter sites.
     t.log().clear();
     let tags = vec!["rust".to_string(), "toasty".to_string()];
     let expected_json = serde_json::to_string(&tags).unwrap();
@@ -54,16 +112,19 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, tags);
+    assert_eq!(
+        Item::get_by_id(&mut db, &record.id).await?.tags,
+        Json(tags.clone())
+    );
 
-    // Update — driver receives JSON string
+    // Update — same blanket lets the update builder take the bare value.
     t.log().clear();
     let new_tags = vec!["b".to_string(), "c".to_string()];
     let expected_json = serde_json::to_string(&new_tags).unwrap();
     record.update().tags(new_tags.clone()).exec(&mut db).await?;
 
     let (op, resp) = t.log().pop();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Update({
                 assignments: #{ [1]: Assignment::Set(Expr::Arg({ position: 0 }))},
@@ -77,38 +138,46 @@ pub async fn serialize_vec_string(t: &mut Test) -> Result<(), BoxError> {
     }
     assert_struct!(resp, { values: Rows::Count(1) });
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.tags, new_tags);
+    assert_eq!(
+        Item::get_by_id(&mut db, &record.id).await?.tags,
+        Json(new_tags)
+    );
 
     Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_option_outside_sql_null(t: &mut Test) -> Result<(), BoxError> {
+    // `Option<Json<T>>` — None maps to SQL `NULL`, Some(v) to a JSON string.
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json, nullable)]
-        data: Option<HashMap<String, String>>,
+        #[column(type = text)]
+        data: Option<Json<HashMap<String, String>>>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // Some — driver receives JSON string
+    // Some — driver receives JSON string. The `Option<Json<T>>` field
+    // also accepts a bare `Json(value)` via the `IntoExpr<Option<T>> for T`
+    // blanket, so the `Some(...)` wrapping is optional.
     t.log().clear();
     let map = HashMap::from([("key".to_string(), "value".to_string())]);
     let expected_json = serde_json::to_string(&map).unwrap();
-    let record = Item::create().data(Some(map.clone())).exec(&mut db).await?;
+    let record = Item::create().data(Json(map.clone())).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.data, Some(map));
+    assert_eq!(
+        Item::get_by_id(&mut db, &record.id).await?.data,
+        Some(Json(map))
+    );
 
-    // None — driver receives SQL NULL. NULL stays inline (extractable scalars
-    // only), so the row structure matches for both paths.
+    // None — driver receives SQL NULL.
     t.log().clear();
     let empty_record = Item::create().data(None).exec(&mut db).await?;
 
@@ -127,19 +196,22 @@ pub async fn serialize_nullable(t: &mut Test) -> Result<(), BoxError> {
 }
 
 #[driver_test(id(ID))]
-pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_option_inside_json_null(t: &mut Test) -> Result<(), BoxError> {
+    // `Json<Option<T>>` — None maps to the JSON literal `"null"`, not SQL `NULL`.
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json)]
-        extra: Option<String>,
+        #[column(type = text)]
+        extra: Json<Option<String>>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
 
-    // None → JSON text "null", not SQL NULL
+    // None → JSON text "null", not SQL NULL.
+    // `Option<String>` decodes through the `IntoExpr<Json<T>> for T`
+    // blanket — `T` here is `Option<String>`, which is `Serialize`.
     t.log().clear();
     let empty_record = Item::create().extra(None).exec(&mut db).await?;
 
@@ -149,7 +221,7 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
 
     assert_eq!(
         Item::get_by_id(&mut db, &empty_record.id).await?.extra,
-        None
+        Json(None)
     );
 
     // Some → JSON string with quotes
@@ -166,14 +238,14 @@ pub async fn serialize_non_nullable_option(t: &mut Test) -> Result<(), BoxError>
 
     assert_eq!(
         Item::get_by_id(&mut db, &record.id).await?.extra,
-        Some("hello".to_string())
+        Json(Some("hello".to_string()))
     );
 
     Ok(())
 }
 
 #[driver_test(id(ID))]
-pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
+pub async fn json_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
     struct Metadata {
         version: u32,
@@ -185,8 +257,8 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
         #[key]
         #[auto]
         id: ID,
-        #[serialize(json)]
-        meta: Metadata,
+        #[column(type = text)]
+        meta: Json<Metadata>,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
@@ -203,7 +275,316 @@ pub async fn serialize_custom_struct(t: &mut Test) -> Result<(), BoxError> {
     let val_pos = if driver_test_cfg!(id_u64) { 0 } else { 1 };
     assert_insert_serialized(t, &op, val_pos, &expected_json);
 
-    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, meta);
+    assert_eq!(Item::get_by_id(&mut db, &record.id).await?.meta, Json(meta));
+
+    Ok(())
+}
+
+#[driver_test(requires(native_json))]
+pub async fn json_native_round_trip(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+    struct Metadata {
+        title: String,
+        labels: Vec<String>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = json)]
+        metadata: Json<Metadata>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    assert_eq!(column_storage_ty(&db, "items", "metadata"), db::Type::Json);
+    let item_table = table_id(&db, "items");
+
+    let metadata = Metadata {
+        title: "quoted \"text\" and 日本語".to_string(),
+        labels: vec!["one".to_string(), "two".to_string()],
+    };
+    let expected_json = serde_json::to_string(&metadata).unwrap();
+    t.log().clear();
+    let mut item = toasty::create!(Item {
+        metadata: Json(metadata.clone()),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let (op, _) = t.log().pop();
+    assert_native_json_insert(&op, item_table, db::Type::Json, &expected_json);
+    assert!(t.log().is_empty());
+
+    let read = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(read.metadata, Json(metadata));
+    let (op, _) = t.log().pop();
+    assert_native_json_query(&op, item_table);
+    assert!(t.log().is_empty());
+
+    let updated = Metadata {
+        title: "updated".to_string(),
+        labels: vec![],
+    };
+    let expected_json = serde_json::to_string(&updated).unwrap();
+    item.update()
+        .metadata(updated.clone())
+        .exec(&mut db)
+        .await?;
+
+    let (op, resp) = t.log().pop();
+    assert_native_json_update(&op, item_table, db::Type::Json, &expected_json);
+    assert_struct!(resp, { values: Rows::Count(1) });
+    assert!(t.log().is_empty());
+
+    let read = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(read.metadata, Json(updated));
+    let (op, _) = t.log().pop();
+    assert_native_json_query(&op, item_table);
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
+#[driver_test(requires(native_json))]
+pub async fn json_value_native_round_trip(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = json)]
+        payload: serde_json::Value,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    assert_eq!(column_storage_ty(&db, "items", "payload"), db::Type::Json);
+    let item_table = table_id(&db, "items");
+
+    let payload = serde_json::json!({
+        "array": [1, true, null, "quoted \"text\""],
+        "nested": {"language": "日本語"},
+    });
+    let expected_json = serde_json::to_string(&payload).unwrap();
+    t.log().clear();
+    let mut item = toasty::create!(Item {
+        payload: payload.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let (op, _) = t.log().pop();
+    assert_native_json_insert(&op, item_table, db::Type::Json, &expected_json);
+    assert!(t.log().is_empty());
+
+    let read = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(read.payload, payload);
+    let (op, _) = t.log().pop();
+    assert_native_json_query(&op, item_table);
+    assert!(t.log().is_empty());
+
+    let updated = serde_json::json!([{"version": 2}, "updated", false]);
+    let expected_json = serde_json::to_string(&updated).unwrap();
+    item.update().payload(updated.clone()).exec(&mut db).await?;
+
+    let (op, resp) = t.log().pop();
+    assert_native_json_update(&op, item_table, db::Type::Json, &expected_json);
+    assert_struct!(resp, { values: Rows::Count(1) });
+    assert!(t.log().is_empty());
+
+    let read = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(read.payload, updated);
+    let (op, _) = t.log().pop();
+    assert_native_json_query(&op, item_table);
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
+#[driver_test(requires(native_json))]
+pub async fn json_native_nulls(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = json)]
+        sql_null: Option<Json<String>>,
+        #[column(type = json)]
+        json_null: Json<Option<String>>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let item = toasty::create!(Item {
+        sql_null: None,
+        json_null: Json(None),
+    })
+    .exec(&mut db)
+    .await?;
+    let item = Item::get_by_id(&mut db, &item.id).await?;
+
+    assert_eq!(item.sql_null, None);
+    assert_eq!(item.json_null, Json(None));
+
+    Ok(())
+}
+
+#[driver_test(requires(native_json))]
+pub async fn json_value_native_nulls(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = json)]
+        sql_null: Option<serde_json::Value>,
+        #[column(type = json)]
+        json_null: serde_json::Value,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let item = toasty::create!(Item {
+        sql_null: None,
+        json_null: serde_json::Value::Null,
+    })
+    .exec(&mut db)
+    .await?;
+    let item = Item::get_by_id(&mut db, &item.id).await?;
+
+    assert_eq!(item.sql_null, None);
+    assert_eq!(item.json_null, serde_json::Value::Null);
+
+    Ok(())
+}
+
+#[driver_test(requires(native_jsonb))]
+pub async fn jsonb_native_round_trip(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = "jsonb")]
+        payload: Json<String>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    assert_eq!(column_storage_ty(&db, "items", "payload"), db::Type::Jsonb);
+    let item_table = table_id(&db, "items");
+
+    let payload = "quoted \"text\" and 日本語".to_string();
+    let expected_json = serde_json::to_string(&payload).unwrap();
+    t.log().clear();
+    let item = toasty::create!(Item {
+        payload: Json(payload.clone()),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let (op, _) = t.log().pop();
+    assert_native_json_insert(&op, item_table, db::Type::Jsonb, &expected_json);
+    assert!(t.log().is_empty());
+
+    let read = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(read.payload, Json(payload));
+    let (op, _) = t.log().pop();
+    assert_native_json_query(&op, item_table);
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
+#[driver_test(requires(native_jsonb))]
+pub async fn json_value_jsonb_native_round_trip(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        #[column(type = jsonb)]
+        payload: serde_json::Value,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    assert_eq!(column_storage_ty(&db, "items", "payload"), db::Type::Jsonb);
+    let item_table = table_id(&db, "items");
+
+    let payload = serde_json::json!({
+        "array": [{"name": "one"}, {"name": "two"}],
+        "enabled": true,
+        "nullable": null,
+    });
+    let expected_json = serde_json::to_string(&payload).unwrap();
+    t.log().clear();
+    let mut item = toasty::create!(Item {
+        payload: payload.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let (op, _) = t.log().pop();
+    assert_native_json_insert(&op, item_table, db::Type::Jsonb, &expected_json);
+    assert!(t.log().is_empty());
+
+    let read = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(read.payload, payload);
+    let (op, _) = t.log().pop();
+    assert_native_json_query(&op, item_table);
+    assert!(t.log().is_empty());
+
+    let updated = serde_json::json!({"version": 2, "items": []});
+    let expected_json = serde_json::to_string(&updated).unwrap();
+    item.update().payload(updated.clone()).exec(&mut db).await?;
+
+    let (op, resp) = t.log().pop();
+    assert_native_json_update(&op, item_table, db::Type::Jsonb, &expected_json);
+    assert_struct!(resp, { values: Rows::Count(1) });
+    assert!(t.log().is_empty());
+
+    let read = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(read.payload, updated);
+    let (op, _) = t.log().pop();
+    assert_native_json_query(&op, item_table);
+    assert!(t.log().is_empty());
+
+    Ok(())
+}
+
+#[driver_test]
+pub async fn json_data_enum_field(t: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Payload {
+        Data {
+            #[column(type = text)]
+            tags: Json<Vec<String>>,
+        },
+        Empty,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        payload: Payload,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let tags = vec!["rust".to_string(), "toasty".to_string()];
+
+    let item = toasty::create!(Item {
+        payload: Payload::Data {
+            tags: Json(tags.clone()),
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(
+        Item::get_by_id(&mut db, &item.id).await?.payload,
+        Payload::Data { tags: Json(tags) }
+    );
 
     Ok(())
 }

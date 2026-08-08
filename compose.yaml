@@ -28,7 +28,7 @@ services:
       - "8000:8000"
 
   mysql:
-    image: mysql:9
+    image: mysql:26
     environment:
       MYSQL_ROOT_PASSWORD: toasty_root_password
       MYSQL_USER: toasty
@@ -43,7 +43,7 @@ services:
       retries: 5
 
   postgresql:
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_USER: toasty
       POSTGRES_PASSWORD: toasty
@@ -57,7 +57,7 @@ services:
       retries: 5
 
   postgresql-tls:
-    image: postgres:17
+    image: postgres:18
     environment:
       POSTGRES_USER: toasty
       POSTGRES_PASSWORD: toasty

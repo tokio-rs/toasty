@@ -1,8 +1,7 @@
-use super::{Column, ColumnId, DiffContext, Schema, TableId};
+use super::{Column, ColumnId, Schema, TableId};
 use crate::stmt;
 
-use hashbrown::{HashMap, HashSet};
-use std::{fmt, ops::Deref};
+use std::fmt;
 
 /// A database index over one or more columns of a table.
 ///
@@ -188,683 +187,76 @@ impl fmt::Debug for IndexId {
     }
 }
 
-/// The set of differences between two index lists.
-///
-/// Computed by [`IndicesDiff::from`] and dereferences to
-/// `Vec<IndicesDiffItem>` for iteration.
-///
-/// # Examples
-///
-/// ```ignore
-/// use toasty_core::schema::db::{IndicesDiff, DiffContext, RenameHints, Schema};
-///
-/// let previous = Schema::default();
-/// let next = Schema::default();
-/// let hints = RenameHints::new();
-/// let cx = DiffContext::new(&previous, &next, &hints);
-/// let diff = IndicesDiff::from(&cx, &[], &[]);
-/// assert!(diff.is_empty());
-/// ```
-pub struct IndicesDiff<'a> {
-    items: Vec<IndicesDiffItem<'a>>,
-}
+#[cfg(all(test, feature = "serde"))]
+mod serde_tests {
+    use crate::schema::db::{ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, TableId};
 
-impl<'a> IndicesDiff<'a> {
-    /// Computes the diff between two index slices.
-    ///
-    /// Uses [`DiffContext`] to resolve rename hints for both indices and columns.
-    /// Indices matched by name (or by rename hint) are compared; unmatched
-    /// indices in `previous` become drops, and unmatched indices in `next`
-    /// become creates.
-    pub fn from(cx: &DiffContext<'a>, previous: &'a [Index], next: &'a [Index]) -> Self {
-        fn has_diff(cx: &DiffContext<'_>, previous: &Index, next: &Index) -> bool {
-            // Check basic properties
-            if previous.name != next.name
-                || previous.columns.len() != next.columns.len()
-                || previous.unique != next.unique
-                || previous.primary_key != next.primary_key
-            {
-                return true;
-            }
-
-            // Check if index columns have changed
-            for (previous_col, next_col) in previous.columns.iter().zip(next.columns.iter()) {
-                // Check if op or scope changed
-                if previous_col.op != next_col.op || previous_col.scope != next_col.scope {
-                    return true;
-                }
-
-                // Check if the column changed (accounting for renames)
-                let columns_match =
-                    if let Some(renamed_to) = cx.rename_hints().get_column(previous_col.column) {
-                        // Column was renamed - check if it matches the target column
-                        renamed_to == next_col.column
-                    } else {
-                        // No rename hint - check if columns match by name
-                        let previous_column = cx.previous().column(previous_col.column);
-                        let next_column = cx.next().column(next_col.column);
-                        previous_column.name == next_column.name
-                    };
-
-                if !columns_match {
-                    return true;
-                }
-            }
-
-            false
-        }
-
-        let mut items = vec![];
-        let mut create_ids: HashSet<_> = next.iter().map(|to| to.id).collect();
-
-        let next_map =
-            HashMap::<&str, &'a Index>::from_iter(next.iter().map(|to| (to.name.as_str(), to)));
-
-        for previous in previous {
-            let next = if let Some(next_id) = cx.rename_hints().get_index(previous.id) {
-                cx.next().index(next_id)
-            } else if let Some(next) = next_map.get(previous.name.as_str()) {
-                next
-            } else {
-                items.push(IndicesDiffItem::DropIndex(previous));
-                continue;
-            };
-
-            create_ids.remove(&next.id);
-
-            if has_diff(cx, previous, next) {
-                items.push(IndicesDiffItem::AlterIndex { previous, next });
-            }
-        }
-
-        for index_id in create_ids {
-            items.push(IndicesDiffItem::CreateIndex(cx.next().index(index_id)));
-        }
-
-        Self { items }
-    }
-
-    /// Returns `true` if there are no index changes.
-    pub const fn is_empty(&self) -> bool {
-        self.items.is_empty()
-    }
-}
-
-impl<'a> Deref for IndicesDiff<'a> {
-    type Target = Vec<IndicesDiffItem<'a>>;
-
-    fn deref(&self) -> &Self::Target {
-        &self.items
-    }
-}
-
-/// A single change detected between two index lists.
-pub enum IndicesDiffItem<'a> {
-    /// A new index was created.
-    CreateIndex(&'a Index),
-    /// An existing index was dropped.
-    DropIndex(&'a Index),
-    /// An index was modified (name, columns, uniqueness, or other property changed).
-    AlterIndex {
-        /// The index definition before the change.
-        previous: &'a Index,
-        /// The index definition after the change.
-        next: &'a Index,
-    },
-}
-
-#[cfg(test)]
-mod tests {
-    use crate::schema::db::{
-        Column, ColumnId, DiffContext, Index, IndexColumn, IndexId, IndexOp, IndexScope,
-        IndicesDiff, IndicesDiffItem, PrimaryKey, RenameHints, Schema, Table, TableId, Type,
-    };
-    use crate::stmt;
-
-    fn make_column(table_id: usize, index: usize, name: &str) -> Column {
-        Column {
-            id: ColumnId {
-                table: TableId(table_id),
-                index,
-            },
-            name: name.to_string(),
-            ty: stmt::Type::String,
-            storage_ty: Type::Text,
-            nullable: false,
-            primary_key: false,
-            auto_increment: false,
-            versionable: false,
-        }
-    }
-
-    fn make_index(
-        table_id: usize,
-        index: usize,
-        name: &str,
-        columns: Vec<(usize, IndexOp, IndexScope)>,
-        unique: bool,
-    ) -> Index {
+    fn base_index() -> Index {
         Index {
             id: IndexId {
-                table: TableId(table_id),
-                index,
-            },
-            name: name.to_string(),
-            on: TableId(table_id),
-            columns: columns
-                .into_iter()
-                .map(|(col_idx, op, scope)| IndexColumn {
-                    column: ColumnId {
-                        table: TableId(table_id),
-                        index: col_idx,
-                    },
-                    op,
-                    scope,
-                })
-                .collect(),
-            unique,
-            primary_key: false,
-        }
-    }
-
-    fn make_schema_with_indices(
-        table_id: usize,
-        columns: Vec<Column>,
-        indices: Vec<Index>,
-    ) -> Schema {
-        let mut schema = Schema::default();
-        schema.tables.push(Table {
-            id: TableId(table_id),
-            name: "test_table".to_string(),
-            columns,
-            primary_key: PrimaryKey {
-                columns: vec![],
-                index: IndexId {
-                    table: TableId(table_id),
-                    index: 0,
-                },
-            },
-            indices,
-        });
-        schema
-    }
-
-    #[test]
-    fn test_no_diff_same_indices() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert!(diff.is_empty());
-    }
-
-    #[test]
-    fn test_create_index() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 1);
-        assert!(matches!(diff.items[0], IndicesDiffItem::CreateIndex(_)));
-        if let IndicesDiffItem::CreateIndex(idx) = diff.items[0] {
-            assert_eq!(idx.name, "idx_name");
-        }
-    }
-
-    #[test]
-    fn test_drop_index() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 1);
-        assert!(matches!(diff.items[0], IndicesDiffItem::DropIndex(_)));
-        if let IndicesDiffItem::DropIndex(idx) = diff.items[0] {
-            assert_eq!(idx.name, "idx_name");
-        }
-    }
-
-    #[test]
-    fn test_alter_index_unique() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            true, // changed to unique
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 1);
-        assert!(matches!(diff.items[0], IndicesDiffItem::AlterIndex { .. }));
-    }
-
-    #[test]
-    fn test_alter_index_columns() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-            make_column(0, 2, "email"),
-        ];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![
-                (1, IndexOp::Eq, IndexScope::Local),
-                (2, IndexOp::Eq, IndexScope::Local),
-            ],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 1);
-        assert!(matches!(diff.items[0], IndicesDiffItem::AlterIndex { .. }));
-    }
-
-    #[test]
-    fn test_alter_index_op() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Sort(stmt::Direction::Asc), IndexScope::Local)],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 1);
-        assert!(matches!(diff.items[0], IndicesDiffItem::AlterIndex { .. }));
-    }
-
-    #[test]
-    fn test_alter_index_scope() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Partition)],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 1);
-        assert!(matches!(diff.items[0], IndicesDiffItem::AlterIndex { .. }));
-    }
-
-    #[test]
-    fn test_rename_index_with_hint() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "old_idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "new_idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-
-        let mut hints = RenameHints::new();
-        hints.add_index_hint(
-            IndexId {
                 table: TableId(0),
                 index: 0,
             },
-            IndexId {
-                table: TableId(0),
-                index: 0,
-            },
-        );
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 1);
-        assert!(matches!(diff.items[0], IndicesDiffItem::AlterIndex { .. }));
-        if let IndicesDiffItem::AlterIndex { previous, next } = diff.items[0] {
-            assert_eq!(previous.name, "old_idx_name");
-            assert_eq!(next.name, "new_idx_name");
-        }
-    }
-
-    #[test]
-    fn test_rename_index_without_hint_is_drop_and_create() {
-        let columns = vec![make_column(0, 0, "id"), make_column(0, 1, "name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "old_idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "new_idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
-        let hints = RenameHints::new();
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        assert_eq!(diff.items.len(), 2);
-
-        let has_drop = diff
-            .items
-            .iter()
-            .any(|item| matches!(item, IndicesDiffItem::DropIndex(_)));
-        let has_create = diff
-            .items
-            .iter()
-            .any(|item| matches!(item, IndicesDiffItem::CreateIndex(_)));
-        assert!(has_drop);
-        assert!(has_create);
-    }
-
-    #[test]
-    fn test_index_with_renamed_column() {
-        let from_columns = vec![make_column(0, 0, "id"), make_column(0, 1, "old_name")];
-        let to_columns = vec![make_column(0, 0, "id"), make_column(0, 1, "new_name")];
-
-        let from_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-        let to_indices = vec![make_index(
-            0,
-            0,
-            "idx_name",
-            vec![(1, IndexOp::Eq, IndexScope::Local)],
-            false,
-        )];
-
-        let from_schema = make_schema_with_indices(0, from_columns, from_indices.clone());
-        let to_schema = make_schema_with_indices(0, to_columns, to_indices.clone());
-
-        let mut hints = RenameHints::new();
-        hints.add_column_hint(
-            ColumnId {
-                table: TableId(0),
-                index: 1,
-            },
-            ColumnId {
-                table: TableId(0),
-                index: 1,
-            },
-        );
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
-
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        // Index should remain unchanged when column is renamed with hint
-        assert!(diff.is_empty());
-    }
-
-    #[cfg(feature = "serde")]
-    mod serde_tests {
-        use crate::schema::db::{
-            ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, TableId,
-        };
-
-        fn base_index() -> Index {
-            Index {
-                id: IndexId {
+            name: "idx".to_string(),
+            on: TableId(0),
+            columns: vec![IndexColumn {
+                column: ColumnId {
                     table: TableId(0),
                     index: 0,
                 },
-                name: "idx".to_string(),
-                on: TableId(0),
-                columns: vec![IndexColumn {
-                    column: ColumnId {
-                        table: TableId(0),
-                        index: 0,
-                    },
-                    op: IndexOp::Eq,
-                    scope: IndexScope::Local,
-                }],
-                unique: false,
-                primary_key: false,
-            }
-        }
-
-        #[test]
-        fn false_booleans_are_omitted() {
-            let toml = toml::to_string(&base_index()).unwrap();
-            assert!(!toml.contains("unique"), "toml: {toml}");
-            assert!(!toml.contains("primary_key"), "toml: {toml}");
-        }
-
-        #[test]
-        fn unique_true_is_included() {
-            let idx = Index {
-                unique: true,
-                ..base_index()
-            };
-            let toml = toml::to_string(&idx).unwrap();
-            assert!(toml.contains("unique = true"), "toml: {toml}");
-        }
-
-        #[test]
-        fn primary_key_true_is_included() {
-            let idx = Index {
-                primary_key: true,
-                ..base_index()
-            };
-            let toml = toml::to_string(&idx).unwrap();
-            assert!(toml.contains("primary_key = true"), "toml: {toml}");
-        }
-
-        #[test]
-        fn missing_bool_fields_deserialize_as_false() {
-            let toml = "name = \"idx\"\non = 0\n\n[id]\ntable = 0\nindex = 0\n\n[[columns]]\nop = \"Eq\"\nscope = \"Local\"\n\n[columns.column]\ntable = 0\nindex = 0\n";
-            let idx: Index = toml::from_str(toml).unwrap();
-            assert!(!idx.unique);
-            assert!(!idx.primary_key);
-        }
-
-        #[test]
-        fn round_trip_all_true() {
-            let original = Index {
-                unique: true,
-                primary_key: true,
-                ..base_index()
-            };
-            let decoded: Index = toml::from_str(&toml::to_string(&original).unwrap()).unwrap();
-            assert_eq!(decoded.unique, original.unique);
-            assert_eq!(decoded.primary_key, original.primary_key);
-            assert_eq!(decoded.name, original.name);
+                op: IndexOp::Eq,
+                scope: IndexScope::Local,
+            }],
+            unique: false,
+            primary_key: false,
         }
     }
 
     #[test]
-    fn test_multiple_operations() {
-        let columns = vec![
-            make_column(0, 0, "id"),
-            make_column(0, 1, "name"),
-            make_column(0, 2, "email"),
-        ];
+    fn false_booleans_are_omitted() {
+        let toml = toml::to_string(&base_index()).unwrap();
+        assert!(!toml.contains("unique"), "toml: {toml}");
+        assert!(!toml.contains("primary_key"), "toml: {toml}");
+    }
 
-        let from_indices = vec![
-            make_index(
-                0,
-                0,
-                "idx_name",
-                vec![(1, IndexOp::Eq, IndexScope::Local)],
-                false,
-            ),
-            make_index(
-                0,
-                1,
-                "old_idx",
-                vec![(2, IndexOp::Eq, IndexScope::Local)],
-                false,
-            ),
-            make_index(
-                0,
-                2,
-                "idx_to_drop",
-                vec![(0, IndexOp::Eq, IndexScope::Local)],
-                false,
-            ),
-        ];
-        let to_indices = vec![
-            make_index(
-                0,
-                0,
-                "idx_name",
-                vec![(1, IndexOp::Eq, IndexScope::Local)],
-                true, // changed to unique
-            ),
-            make_index(
-                0,
-                1,
-                "new_idx",
-                vec![(2, IndexOp::Eq, IndexScope::Local)],
-                false,
-            ),
-            make_index(
-                0,
-                2,
-                "idx_added",
-                vec![(1, IndexOp::Sort(stmt::Direction::Asc), IndexScope::Local)],
-                false,
-            ),
-        ];
+    #[test]
+    fn unique_true_is_included() {
+        let idx = Index {
+            unique: true,
+            ..base_index()
+        };
+        let toml = toml::to_string(&idx).unwrap();
+        assert!(toml.contains("unique = true"), "toml: {toml}");
+    }
 
-        let from_schema = make_schema_with_indices(0, columns.clone(), from_indices.clone());
-        let to_schema = make_schema_with_indices(0, columns, to_indices.clone());
+    #[test]
+    fn primary_key_true_is_included() {
+        let idx = Index {
+            primary_key: true,
+            ..base_index()
+        };
+        let toml = toml::to_string(&idx).unwrap();
+        assert!(toml.contains("primary_key = true"), "toml: {toml}");
+    }
 
-        let mut hints = RenameHints::new();
-        hints.add_index_hint(
-            IndexId {
-                table: TableId(0),
-                index: 1,
-            },
-            IndexId {
-                table: TableId(0),
-                index: 1,
-            },
-        );
-        let cx = DiffContext::new(&from_schema, &to_schema, &hints);
+    #[test]
+    fn missing_bool_fields_deserialize_as_false() {
+        let toml = "name = \"idx\"\non = 0\n\n[id]\ntable = 0\nindex = 0\n\n[[columns]]\nop = \"Eq\"\nscope = \"Local\"\n\n[columns.column]\ntable = 0\nindex = 0\n";
+        let idx: Index = toml::from_str(toml).unwrap();
+        assert!(!idx.unique);
+        assert!(!idx.primary_key);
+    }
 
-        let diff = IndicesDiff::from(&cx, &from_indices, &to_indices);
-        // Should have: 1 alter (idx_name unique changed), 1 alter (renamed), 1 drop (idx_to_drop), 1 create (idx_added)
-        assert_eq!(diff.items.len(), 4);
+    #[test]
+    fn round_trip_all_true() {
+        let original = Index {
+            unique: true,
+            primary_key: true,
+            ..base_index()
+        };
+        let decoded: Index = toml::from_str(&toml::to_string(&original).unwrap()).unwrap();
+        assert_eq!(decoded.unique, original.unique);
+        assert_eq!(decoded.primary_key, original.primary_key);
+        assert_eq!(decoded.name, original.name);
     }
 }

@@ -69,6 +69,42 @@ impl<T> Expr<T> {
             _p: PhantomData,
         }
     }
+
+    /// Test whether this expression equals `rhs`.
+    pub fn eq(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+        let rhs = rhs.into_expr().untyped;
+        Expr::from_untyped(stmt::Expr::eq(self.untyped, rhs))
+    }
+
+    /// Test whether this expression does not equal `rhs`.
+    pub fn ne(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+        let rhs = rhs.into_expr().untyped;
+        Expr::from_untyped(stmt::Expr::ne(self.untyped, rhs))
+    }
+
+    /// Test whether this expression is greater than `rhs`.
+    pub fn gt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+        let rhs = rhs.into_expr().untyped;
+        Expr::from_untyped(stmt::Expr::gt(self.untyped, rhs))
+    }
+
+    /// Test whether this expression is greater than or equal to `rhs`.
+    pub fn ge(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+        let rhs = rhs.into_expr().untyped;
+        Expr::from_untyped(stmt::Expr::ge(self.untyped, rhs))
+    }
+
+    /// Test whether this expression is less than `rhs`.
+    pub fn lt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+        let rhs = rhs.into_expr().untyped;
+        Expr::from_untyped(stmt::Expr::lt(self.untyped, rhs))
+    }
+
+    /// Test whether this expression is less than or equal to `rhs`.
+    pub fn le(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
+        let rhs = rhs.into_expr().untyped;
+        Expr::from_untyped(stmt::Expr::le(self.untyped, rhs))
+    }
 }
 
 impl<T> Expr<List<T>> {

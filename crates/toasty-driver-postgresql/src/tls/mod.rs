@@ -1,14 +1,13 @@
 mod config;
-mod connect;
 
 use config::{SslVerifyMode, build_client_config};
-pub(crate) use connect::MakeRustlsConnect;
 
+use toasty_core::driver::ConnectionUrl;
 use tokio_postgres::Config;
-use url::Url;
+use tokio_postgres_rustls::MakeRustlsConnect;
 
 pub(crate) fn configure_tls(
-    url: &Url,
+    url: &ConnectionUrl<'_>,
     config: &mut Config,
 ) -> Result<Option<MakeRustlsConnect>, toasty_core::Error> {
     let mut sslmode = SslVerifyMode::Prefer;

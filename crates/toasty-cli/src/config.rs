@@ -1,5 +1,5 @@
 use crate::migration::MigrationConfig;
-use anyhow::Result;
+use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::Path;
@@ -46,8 +46,17 @@ impl Config {
 
     /// Load configuration from a specific path.
     pub fn load_from(path: &Path) -> Result<Self> {
-        let contents = fs::read_to_string(path)?;
-        let config: Config = toml::from_str(&contents)?;
+        let contents = fs::read_to_string(path).with_context(|| {
+            format!(
+                "failed to read Toasty config file at `{}` — check that the file exists \
+                 at this path relative to the working directory (a common cause in Docker \
+                 multi-stage builds is forgetting to copy it into the final image)",
+                path.display()
+            )
+        })?;
+        let config: Config = toml::from_str(&contents).with_context(|| {
+            format!("failed to parse Toasty config file at `{}`", path.display())
+        })?;
         Ok(config)
     }
 
@@ -91,5 +100,19 @@ mod tests {
         let default = Config::default();
 
         assert_eq!(reparsed, default);
+    }
+
+    #[test]
+    fn load_from_missing_file_reports_path() {
+        let dir = tempdir().unwrap();
+        let path = dir.path().join("Toasty.toml");
+
+        let err = Config::load_from(&path).unwrap_err();
+
+        let message = format!("{err:#}");
+        assert!(
+            message.contains(&path.display().to_string()),
+            "error message should mention the missing path: {message}"
+        );
     }
 }

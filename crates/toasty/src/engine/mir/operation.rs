@@ -6,7 +6,7 @@ use crate::engine::mir::Eval;
 
 use super::{
     Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Node,
-    Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey,
+    Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey, Upsert,
 };
 
 /// A step in the query execution plan.
@@ -53,6 +53,9 @@ pub(crate) enum Operation {
     Scan(Scan),
 
     UpdateByKey(UpdateByKey),
+
+    /// Atomically insert or update one record on a non-SQL database.
+    Upsert(Box<Upsert>),
 }
 
 impl From<Operation> for Node {
@@ -78,6 +81,7 @@ impl From<Operation> for Node {
             Operation::QueryPk(m) => m.input.into_iter().collect(),
             Operation::Scan(m) => m.input.into_iter().collect(),
             Operation::UpdateByKey(m) => indexset![m.input],
+            Operation::Upsert(m) => m.inputs.clone(),
         };
 
         Node {

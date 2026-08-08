@@ -42,7 +42,7 @@ impl Exec<'_> {
             inputs.push(data);
         }
 
-        let pass = action.guard.eval_bool(&inputs)?;
+        let pass = action.guard.eval_bool(&self.engine.schema, &inputs)?;
 
         let res = if pass {
             // Guard passed — forward the input unchanged.

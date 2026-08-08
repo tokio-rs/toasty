@@ -22,8 +22,11 @@ fn ca_cert_path() -> String {
 }
 
 async fn smoke_query(driver: &PostgreSQL) {
-    use toasty_core::driver::Driver;
-    let conn = driver.connect().await.expect("connection failed");
+    use toasty_core::driver::{ConnectContext, Driver};
+    let conn = driver
+        .connect(&ConnectContext::default())
+        .await
+        .expect("connection failed");
     drop(conn);
 }
 
@@ -68,8 +71,8 @@ async fn tls_channel_binding() {
 async fn tls_disable_against_tls_server() {
     let url = format!("{}?sslmode=disable", tls_url());
     let driver = PostgreSQL::new(&url).expect("driver creation failed");
-    use toasty_core::driver::Driver;
-    let result = driver.connect().await;
+    use toasty_core::driver::{ConnectContext, Driver};
+    let result = driver.connect(&ConnectContext::default()).await;
     assert!(
         result.is_err(),
         "expected connection to fail with sslmode=disable against TLS-only server"
@@ -97,13 +100,13 @@ async fn sslrootcert_require() {
 )]
 #[tokio::test]
 async fn sslrootcert_wrong_ca() {
-    use toasty_core::driver::Driver;
+    use toasty_core::driver::{ConnectContext, Driver};
 
     let wrong_ca = format!("{}/client.crt", certs_dir());
 
     let url = format!("{}?sslmode=require&sslrootcert={}", tls_url(), wrong_ca);
     let driver = PostgreSQL::new(&url).expect("driver creation failed");
-    let result = driver.connect().await;
+    let result = driver.connect(&ConnectContext::default()).await;
     assert!(
         result.is_err(),
         "expected connection to fail with wrong CA certificate"
@@ -146,7 +149,7 @@ async fn verify_full() {
 )]
 #[tokio::test]
 async fn verify_full_hostname_mismatch() {
-    use toasty_core::driver::Driver;
+    use toasty_core::driver::{ConnectContext, Driver};
 
     // test.localtest.me resolves to 127.0.0.1 but is not in the certificate
     // SAN (DNS:localhost,IP:127.0.0.1), so verify-full should reject it.
@@ -155,7 +158,7 @@ async fn verify_full_hostname_mismatch() {
     let url = format!("{}?sslmode=verify-full&sslrootcert={}", url, ca_cert_path());
 
     let driver = PostgreSQL::new(&url).expect("driver creation failed");
-    let result = driver.connect().await;
+    let result = driver.connect(&ConnectContext::default()).await;
     assert!(
         result.is_err(),
         "expected connection to fail with hostname mismatch"
@@ -185,12 +188,12 @@ async fn verify_ca_hostname_mismatch() {
 )]
 #[tokio::test]
 async fn verify_ca_wrong_ca() {
-    use toasty_core::driver::Driver;
+    use toasty_core::driver::{ConnectContext, Driver};
 
     let wrong_ca = format!("{}/client.crt", certs_dir());
     let url = format!("{}?sslmode=verify-ca&sslrootcert={}", tls_url(), wrong_ca);
     let driver = PostgreSQL::new(&url).expect("driver creation failed");
-    let result = driver.connect().await;
+    let result = driver.connect(&ConnectContext::default()).await;
     assert!(
         result.is_err(),
         "expected verify-ca to reject certificate signed by untrusted CA"

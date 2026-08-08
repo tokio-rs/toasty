@@ -40,10 +40,13 @@ Toasty supports these Rust types as model fields:
 | `String` | Text |
 | `i8`, `i16`, `i32`, `i64` | Integer (1, 2, 4, 8 bytes) |
 | `u8`, `u16`, `u32`, `u64` | Unsigned integer |
+| `f32`, `f64` | Floating point |
 | `uuid::Uuid` | UUID |
 | `Vec<u8>` | Binary / Blob |
+| `Vec<T>` (T scalar, not `u8`) | Native array column on PostgreSQL (`text[]`, `int8[]`, …); JSON on MySQL / SQLite; List `L` on DynamoDB. See [`Vec<scalar>` Fields](./vec-scalar-fields.md). |
 | `Option<T>` | Nullable version of `T` |
 | Embedded types (`#[derive(toasty::Embed)]`) | Flattened into parent table columns (see [Embedded Types](./embedded-types.md)) |
+| Document fields (`#[document]`) | One structured column whose scalar leaves remain queryable (see [`#[document]` Fields](./document-fields.md)) |
 
 With optional feature flags:
 
@@ -55,6 +58,7 @@ With optional feature flags:
 | `jiff` | `jiff::civil::Date` | Date |
 | `jiff` | `jiff::civil::Time` | Time |
 | `jiff` | `jiff::civil::DateTime` | DateTime |
+| `serde` | `toasty::Json<T>`, `serde_json::Value` | Explicit text, `json`, or `jsonb` column (see [JSON Encoding](./json-encoding.md)) |
 
 Enable feature flags in your `Cargo.toml`:
 
@@ -62,6 +66,9 @@ Enable feature flags in your `Cargo.toml`:
 [dependencies]
 toasty = { version = "{{toasty_version}}", features = ["sqlite", "jiff"] }
 ```
+
+> **Runnable example:** [`crm-embedded`] flattens embedded structs and enums, keys a model with a newtype, and patches embedded fields.
+
 
 ## Optional fields
 
@@ -132,6 +139,9 @@ struct User {
 ```
 
 This maps to a table named `people` instead of the default `users`.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
 
 ## What gets generated
 
@@ -243,8 +253,7 @@ user.delete();
   ```
 
 - The **query builder** returned by `User::all()` or `User::filter()` has
-  methods like `.exec()`, `.first()`, `.get()`, and `.collect::<Vec<_>>()` to
-  execute the query.
+  methods like `.exec()`, `.get()`, and `.first()` to execute the query.
 
 ### What types can you pass to setters?
 
@@ -284,3 +293,9 @@ pass the value in whatever form you have it.
 
 Additional methods are generated when you add attributes like `#[key]`,
 `#[unique]`, and `#[index]`. The next chapters cover these.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`crm-embedded`]: https://github.com/tokio-rs/toasty/tree/main/examples/crm-embedded
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields

@@ -236,6 +236,7 @@ fn variant_index(v: &Value) -> u8 {
         Value::Record(_) => 15,
         Value::List(_) => 16,
         Value::SparseRecord(_) => 17,
+        Value::Object(_) => 25,
         #[cfg(feature = "rust_decimal")]
         Value::Decimal(_) => 18,
         #[cfg(feature = "bigdecimal")]

@@ -45,7 +45,7 @@ impl Exec<'_> {
         }
 
         // Evaluate the function with the collected inputs
-        let result = action.eval.eval(&input)?;
+        let result = action.eval.eval(&self.engine.schema, &input)?;
 
         // Store the result in the output variable with preserved pagination metadata
         self.vars.store(

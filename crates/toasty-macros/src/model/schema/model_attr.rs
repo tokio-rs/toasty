@@ -35,6 +35,17 @@ impl ModelAttr {
                     Ok(index_attr) => self.indices.push(index_attr),
                     Err(e) => errs.push(e),
                 }
+            } else if attr.path().is_ident("unique") {
+                // A struct-level `#[unique(...)]` is a composite unique index. It
+                // mirrors `#[index(...)]` (simple and partition/local modes, plus
+                // `name = "..."`) but enforces uniqueness across the listed fields.
+                match KeyAttr::from_ast(attr, names) {
+                    Ok(mut index_attr) => {
+                        index_attr.unique = true;
+                        self.indices.push(index_attr);
+                    }
+                    Err(e) => errs.push(e),
+                }
             } else if attr.path().is_ident("table") {
                 if self.table.is_some() {
                     return Err(syn::Error::new_spanned(attr, "duplicate `table` attribute"));

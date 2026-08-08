@@ -1,28 +1,9 @@
 use crate::prelude::*;
 
 /// Tests basic CRUD with a unit enum using explicit string discriminants.
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::task_with_string_status))]
 pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = "pending")]
-        Pending,
-        #[column(variant = "active")]
-        Active,
-        #[column(variant = "done")]
-        Done,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = setup(t).await;
 
     let task = toasty::create!(Task {
         title: "Ship it",
@@ -45,7 +26,7 @@ pub async fn string_discriminant_unit_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests unit enum with default labels (variant ident used as string label).
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn default_string_labels(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -58,12 +39,12 @@ pub async fn default_string_labels(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         title: String,
         priority: Priority,
     }
 
-    let mut db = t.setup_db(models!(Task, Priority)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     let task = toasty::create!(Task {
         title: "Fix bug",
@@ -80,7 +61,7 @@ pub async fn default_string_labels(t: &mut Test) -> Result<()> {
 }
 
 /// Tests mixing explicit string labels with default labels.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Status {
@@ -94,11 +75,11 @@ pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     // "waiting" is the explicit label for Pending
     let t1 = toasty::create!(Task {
@@ -124,7 +105,7 @@ pub async fn mixed_explicit_and_default_labels(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum with string discriminants.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -139,12 +120,12 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         contact: ContactMethod,
     }
 
-    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     let user = toasty::create!(User {
         name: "Alice",
@@ -184,7 +165,7 @@ pub async fn string_discriminant_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum with default string labels (variant ident as discriminant).
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -197,12 +178,12 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         contact: ContactMethod,
     }
 
-    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     let user = toasty::create!(User {
         name: "Alice",
@@ -242,7 +223,7 @@ pub async fn default_string_labels_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests data-carrying enum mixing explicit string labels with defaults.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum ContactMethod {
@@ -260,12 +241,12 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         name: String,
         contact: ContactMethod,
     }
 
-    let mut db = t.setup_db(models!(User, ContactMethod)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     // Create with the explicit-label variant
     let u1 = toasty::create!(User {
@@ -324,27 +305,9 @@ pub async fn mixed_string_labels_data_enum(t: &mut Test) -> Result<()> {
 }
 
 /// Tests filtering by variant with string discriminants.
-#[driver_test(requires(sql))]
+#[driver_test(requires(scan), scenario(crate::scenarios::task_with_string_status))]
 pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Status {
-        #[column(variant = "pending")]
-        Pending,
-        #[column(variant = "active")]
-        Active,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct Task {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        title: String,
-        status: Status,
-    }
-
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = setup(t).await;
 
     toasty::create!(Task {
         title: "A",
@@ -370,34 +333,27 @@ pub async fn filter_by_string_variant(t: &mut Test) -> Result<()> {
 }
 
 /// Verifies the schema registers string discriminants with the correct type.
-#[driver_test]
+#[driver_test(scenario(crate::scenarios::task_with_string_status))]
 pub async fn string_discriminant_schema_registration(t: &mut Test) {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum Color {
-        #[column(variant = "red")]
-        Red,
-        #[column(variant = "green")]
-        Green,
-        #[column(variant = "blue")]
-        Blue,
-    }
-
-    let db = t.setup_db(models!(Color)).await;
+    let db = setup(t).await;
     let schema = db.schema();
 
-    let color_model = schema.app.model(Color::id()).as_embedded_enum_unwrap();
-    assert_eq!(color_model.discriminant.ty, toasty_core::stmt::Type::String);
-    assert_eq!(color_model.variants.len(), 3);
+    let status_model = schema.app.model(Status::id()).as_embedded_enum_unwrap();
     assert_eq!(
-        color_model.variants[0].discriminant,
-        toasty_core::stmt::Value::String("red".to_string())
+        status_model.discriminant.ty,
+        toasty_core::stmt::Type::String
+    );
+    assert_eq!(status_model.variants.len(), 3);
+    assert_eq!(
+        status_model.variants[0].discriminant,
+        toasty_core::stmt::Value::String("pending".to_string())
     );
     assert_eq!(
-        color_model.variants[1].discriminant,
-        toasty_core::stmt::Value::String("green".to_string())
+        status_model.variants[1].discriminant,
+        toasty_core::stmt::Value::String("active".to_string())
     );
     assert_eq!(
-        color_model.variants[2].discriminant,
-        toasty_core::stmt::Value::String("blue".to_string())
+        status_model.variants[2].discriminant,
+        toasty_core::stmt::Value::String("done".to_string())
     );
 }

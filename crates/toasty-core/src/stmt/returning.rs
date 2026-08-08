@@ -1,4 +1,4 @@
-use super::{Expr, Path};
+use super::{Expr, Include};
 use crate::stmt::{self, ExprSet, Node, Query, Statement};
 
 /// Specifies what data a statement returns.
@@ -18,8 +18,9 @@ use crate::stmt::{self, ExprSet, Node, Query, Statement};
 pub enum Returning {
     /// Return the full model with the specified association includes.
     Model {
-        /// Paths to associations that should be eagerly loaded.
-        include: Vec<Path>,
+        /// Associations that should be eagerly loaded, with optional
+        /// per-relation filters.
+        include: Vec<Include>,
     },
 
     /// Return whether the operation changed any rows.
@@ -47,22 +48,22 @@ impl Returning {
         matches!(self, Self::Model { .. })
     }
 
-    /// Returns the association include paths for a `Model` variant, or an
+    /// Returns the association includes for a `Model` variant, or an
     /// empty slice for other variants.
-    pub fn model_includes(&self) -> &[Path] {
+    pub fn model_includes(&self) -> &[Include] {
         match self {
             Self::Model { include } => include,
             _ => &[],
         }
     }
 
-    /// Returns a mutable reference to the `Model` variant's include paths.
+    /// Returns a mutable reference to the `Model` variant's includes.
     ///
     /// # Panics
     ///
     /// Panics if this is not the `Model` variant.
     #[track_caller]
-    pub fn model_includes_mut_unwrap(&mut self) -> &mut Vec<Path> {
+    pub fn model_includes_mut_unwrap(&mut self) -> &mut Vec<Include> {
         match self {
             Self::Model { include } => include,
             _ => panic!("not a Model variant"),

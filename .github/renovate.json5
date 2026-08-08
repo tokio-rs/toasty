@@ -2,7 +2,6 @@
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: [
     "config:recommended",
-    "schedule:weekly",
     "group:allNonMajor",
   ],
   // The Rust stable toolchain is pinned in two places:
@@ -33,6 +32,16 @@
       matchManagers: ["custom.regex"],
       matchDepNames: ["rust"],
       commitMessageTopic: "Rust",
+      automerge: true,
+      platformAutomerge: true,
+    },
+    {
+      matchUpdateTypes: ["minor", "patch", "pin", "digest"],
+      automerge: true,
+      platformAutomerge: true,
+    },
+    {
+      matchDepTypes: ["devDependencies"],
       automerge: true,
       platformAutomerge: true,
     },

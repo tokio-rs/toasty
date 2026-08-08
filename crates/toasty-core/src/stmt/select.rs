@@ -1,4 +1,4 @@
-use super::{Node, Path, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
+use super::{Include, Node, Query, Returning, Source, SourceModel, Statement, Visit, VisitMut};
 use crate::{
     schema::db::TableId,
     stmt::{ExprSet, Filter},
@@ -32,6 +32,12 @@ pub struct Select {
 
     /// The filter (`WHERE` clause).
     pub filter: Filter,
+
+    /// When `true`, the query removes duplicate rows (`SELECT DISTINCT`).
+    /// Used by multi-step (`via`) `.include()` lowering, where a `JOIN`
+    /// through the path can yield duplicate target rows that must collapse
+    /// to distinct targets.
+    pub distinct: bool,
 }
 
 impl Select {
@@ -42,17 +48,18 @@ impl Select {
             returning: Returning::Model { include: vec![] },
             source: source.into(),
             filter: filter.into(),
+            distinct: false,
         }
     }
 
-    /// Adds an association include path to the returning clause.
+    /// Adds an association include to the returning clause.
     ///
     /// # Panics
     ///
     /// Panics if the returning clause is not `Returning::Model`.
-    pub(crate) fn include(&mut self, path: impl Into<Path>) {
+    pub(crate) fn include(&mut self, include: impl Into<Include>) {
         match &mut self.returning {
-            Returning::Model { include } => include.push(path.into()),
+            Returning::Model { include: includes } => includes.push(include.into()),
             _ => panic!("Expected Returning::Model for include operation"),
         }
     }

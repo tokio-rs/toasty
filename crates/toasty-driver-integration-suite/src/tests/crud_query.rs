@@ -6,29 +6,13 @@ use toasty_core::{
     stmt::{Expr, ExprSet, Statement},
 };
 
-#[driver_test(id(ID))]
-pub async fn query_index_eq(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        name: String,
-
-        email: String,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+#[driver_test(scenario(crate::scenarios::two_models))]
+pub async fn query_index_eq(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
 
     // Create a few users
-    for &(name, email) in &[
-        ("one", "one@example.com"),
-        ("two", "two@example.com"),
-        ("three", "three@example.com"),
-    ] {
-        User::create().name(name).email(email).exec(&mut db).await?;
+    for name in ["one", "two", "three"] {
+        User::create().name(name).exec(&mut db).await?;
     }
 
     let users = User::filter_by_name("one").exec(&mut db).await?;
@@ -38,26 +22,16 @@ pub async fn query_index_eq(test: &mut Test) -> Result<()> {
 
     // Create a second user named "one"
 
-    User::create()
-        .name("one")
-        .email("one-two@example.com")
-        .exec(&mut db)
-        .await?;
+    User::create().name("one").exec(&mut db).await?;
 
-    let mut users = User::filter_by_name("one").exec(&mut db).await?;
-
-    users.sort_by_key(|u| u.email.clone());
+    let users = User::filter_by_name("one").exec(&mut db).await?;
 
     assert_eq!(2, users.len());
-    assert_eq!("one", users[0].name);
-    assert_eq!("one-two@example.com", users[0].email);
-
-    assert_eq!("one", users[1].name);
-    assert_eq!("one@example.com", users[1].email);
+    assert!(users.iter().all(|u| u.name == "one"));
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = league, local = name)]
@@ -175,7 +149,7 @@ pub async fn query_partition_key_string_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = kind, local = timestamp)]
@@ -269,21 +243,33 @@ pub async fn query_local_key_cmp(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
+pub async fn set_filter_overwrites(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 20 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // `set_filter` replaces the existing filter rather than AND-combining it.
+    // If it combined, `name = "Alice" AND name = "Bob"` would match nothing.
+    use toasty::stmt::{List, Query};
+    let mut q = Query::<List<User>>::all().filter(User::fields().name().eq("Alice"));
+    q.set_filter(User::fields().name().eq("Bob"));
+
+    let users = q.exec(&mut db).await?;
+
+    assert_eq!(1, users.len());
+    assert_eq!("Bob", users[0].name);
+    Ok(())
+}
+
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_or_basic(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[allow(dead_code)]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
     let _name_column = db.schema().table_for(User::id()).columns[1].id;
     let _age_column = db.schema().table_for(User::id()).columns[2].id;
 
@@ -305,7 +291,7 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql {
+    if test.capability().sql() {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -353,21 +339,9 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[allow(dead_code)]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
@@ -385,7 +359,7 @@ pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(3, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -400,24 +374,9 @@ pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::user_with_active))]
 pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[allow(dead_code)]
-        age: i64,
-
-        #[allow(dead_code)]
-        active: bool,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Create some users
     for (name, age, active) in [
@@ -446,7 +405,7 @@ pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -461,8 +420,8 @@ pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
-pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
+#[driver_test]
+pub async fn query_boolean_filters_with_index(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     #[key(partition = team, local = name)]
     struct Player {
@@ -534,11 +493,85 @@ pub async fn query_or_with_index(test: &mut Test) -> Result<()> {
     let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
     names.sort();
     assert_eq!(names, ["Diego Chara", "Diego Valeri", "Fanendo Adi"]);
+
+    // OR conditions using comparisons are not optimized to an IN list.
+    let players = Player::filter(
+        Player::fields().team().eq("Timbers").and(
+            Player::fields()
+                .number()
+                .gt(20)
+                .or(Player::fields().number().lt(2)),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Diego Chara"]);
+
+    // NOT on a non-indexed field.
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .and(Player::fields().position().eq("Midfielder").not()),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
+
+    // NOT wrapping a comparison.
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .and(Player::fields().number().gt(8).not()),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(3, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Darlington Nagbe", "Diego Valeri"]);
+
+    // The `!` operator is equivalent to `.not()`.
+    let players = Player::filter(
+        Player::fields()
+            .team()
+            .eq("Timbers")
+            .and(!Player::fields().position().eq("Midfielder")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
+
+    // `!` on a compound expression.
+    let players = Player::filter(
+        Player::fields().team().eq("Timbers").and(
+            !(Player::fields()
+                .number()
+                .gt(8)
+                .or(Player::fields().position().eq("Goalkeeper"))),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(2, players.len());
+    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
+    names.sort();
+    assert_eq!(names, ["Darlington Nagbe", "Diego Valeri"]);
     Ok(())
 }
 
-#[driver_test(id(ID))]
-pub async fn query_or_on_partition_key(test: &mut Test) -> Result<()> {
+#[driver_test]
+pub async fn query_or_on_keys(test: &mut Test) -> Result<()> {
     // OR directly on the partition key of a composite primary key.
     //
     // SQL: plain OR in WHERE clause.
@@ -594,44 +627,9 @@ pub async fn query_or_on_partition_key(test: &mut Test) -> Result<()> {
             "Osvaldo Alonso"
         ]
     );
-    Ok(())
-}
 
-#[driver_test(id(ID))]
-pub async fn query_or_on_composite_pk(test: &mut Test) -> Result<()> {
-    // OR where each branch fully specifies all composite primary key columns.
-    //
-    // SQL: plain OR in WHERE clause.
-    // DynamoDB: routes to GetByKey (BatchGetItem) because all key columns
-    //           have exact equality predicates, so key_values is populated.
-    #[derive(Debug, toasty::Model)]
-    #[key(partition = team, local = name)]
-    struct Player {
-        team: String,
-
-        name: String,
-
-        #[allow(dead_code)]
-        position: String,
-    }
-
-    let mut db = test.setup_db(models!(Player)).await;
-
-    for (team, name, position) in [
-        ("Timbers", "Diego Valeri", "Midfielder"),
-        ("Timbers", "Fanendo Adi", "Forward"),
-        ("Sounders", "Clint Dempsey", "Forward"),
-        ("Sounders", "Osvaldo Alonso", "Midfielder"),
-    ] {
-        Player::create()
-            .team(team)
-            .name(name)
-            .position(position)
-            .exec(&mut db)
-            .await?;
-    }
-
-    // (team = "Timbers" AND name = "Diego Valeri") OR (team = "Sounders" AND name = "Clint Dempsey")
+    // Each OR branch specifies a full composite key. DynamoDB can therefore
+    // route this through GetByKey instead of partition-query fan-out.
     let players = Player::filter(
         Player::fields()
             .team()
@@ -652,81 +650,11 @@ pub async fn query_or_on_composite_pk(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
-pub async fn query_or_with_comparisons(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    #[key(partition = team, local = name)]
-    struct Player {
-        team: String,
-
-        name: String,
-
-        #[allow(dead_code)]
-        position: String,
-
-        #[allow(dead_code)]
-        number: i64,
-    }
-
-    let mut db = test.setup_db(models!(Player)).await;
-
-    // Create some players on different teams
-    for (team, name, position, number) in [
-        ("Timbers", "Diego Valeri", "Midfielder", 8),
-        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
-        ("Timbers", "Diego Chara", "Midfielder", 21),
-        ("Timbers", "Fanendo Adi", "Forward", 9),
-        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
-        ("Sounders", "Clint Dempsey", "Forward", 2),
-        ("Sounders", "Obafemi Martins", "Forward", 9),
-        ("Sounders", "Osvaldo Alonso", "Midfielder", 6),
-    ] {
-        Player::create()
-            .team(team)
-            .name(name)
-            .position(position)
-            .number(number)
-            .exec(&mut db)
-            .await?;
-    }
-
-    // Query with partition key AND OR conditions using comparisons (not equality)
-    // This won't be optimized to IN list, so tests actual OR expression handling
-    // Using gt/lt instead of ge/le to avoid boundary condition confusion
-    let players = Player::filter(
-        Player::fields().team().eq("Timbers").and(
-            Player::fields()
-                .number()
-                .gt(20)
-                .or(Player::fields().number().lt(2)),
-        ),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(2, players.len());
-    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
-    names.sort();
-    assert_eq!(names, ["Adam Kwarasey", "Diego Chara"]);
-    Ok(())
-}
-
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(scan), scenario(crate::scenarios::user_with_active))]
 pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Event {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        kind: String,
-
-        timestamp: i64,
-    }
-
-    let mut db = test.setup_db(models!(Event)).await;
-
-    // Create a bunch of entries
+    // Create a bunch of entries. kind -> name, timestamp -> age; active is unused.
     for (kind, ts) in [
         ("info", 0),
         ("warn", 1),
@@ -749,125 +677,105 @@ pub async fn query_arbitrary_constraint(test: &mut Test) -> Result<()> {
         ("info", 18),
         ("warn", 19),
     ] {
-        Event::create()
-            .kind(kind)
-            .timestamp(ts)
+        User::create()
+            .name(kind)
+            .age(ts)
+            .active(true)
             .exec(&mut db)
             .await?;
     }
 
-    let events: Vec<_> = Event::filter(Event::fields().timestamp().gt(12))
+    let events: Vec<_> = User::filter(User::fields().age().gt(12))
         .exec(&mut db)
         .await?;
 
     assert_eq_unordered!(
-        events.iter().map(|event| event.timestamp),
+        events.iter().map(|event| event.age),
         [&13, &14, &15, &16, &17, &18, &19,]
     );
 
-    let events: Vec<_> = Event::filter(
-        Event::fields()
-            .timestamp()
+    let events: Vec<_> = User::filter(
+        User::fields()
+            .age()
             .gt(12)
-            .and(Event::fields().kind().ne("info")),
+            .and(User::fields().name().ne("info")),
     )
     .exec(&mut db)
     .await?;
 
-    assert!(events.iter().all(|event| event.kind != "info"));
+    assert!(events.iter().all(|event| event.name != "info"));
 
-    assert_eq_unordered!(
-        events.iter().map(|event| event.timestamp),
-        [&13, &15, &17, &19,]
-    );
+    assert_eq_unordered!(events.iter().map(|event| event.age), [&13, &15, &17, &19,]);
 
-    let events: Vec<_> = Event::filter(
-        Event::fields()
-            .kind()
+    let events: Vec<_> = User::filter(
+        User::fields()
+            .name()
             .eq("info")
-            .and(Event::fields().timestamp().ne(10)),
+            .and(User::fields().age().ne(10)),
     )
     .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
-        events.iter().map(|event| event.timestamp),
+        events.iter().map(|event| event.age),
         [&0, &2, &4, &6, &8, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = Event::filter(
-        Event::fields()
-            .kind()
+    let events: Vec<_> = User::filter(
+        User::fields()
+            .name()
             .eq("info")
-            .and(Event::fields().timestamp().gt(10)),
+            .and(User::fields().age().gt(10)),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq_unordered!(events.iter().map(|event| event.age), [&12, &14, &16, &18,]);
+
+    let events: Vec<_> = User::filter(
+        User::fields()
+            .name()
+            .eq("info")
+            .and(User::fields().age().ge(10)),
     )
     .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
-        events.iter().map(|event| event.timestamp),
-        [&12, &14, &16, &18,]
-    );
-
-    let events: Vec<_> = Event::filter(
-        Event::fields()
-            .kind()
-            .eq("info")
-            .and(Event::fields().timestamp().ge(10)),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq_unordered!(
-        events.iter().map(|event| event.timestamp),
+        events.iter().map(|event| event.age),
         [&10, &12, &14, &16, &18,]
     );
 
-    let events: Vec<_> = Event::filter(
-        Event::fields()
-            .kind()
+    let events: Vec<_> = User::filter(
+        User::fields()
+            .name()
             .eq("info")
-            .and(Event::fields().timestamp().lt(10)),
+            .and(User::fields().age().lt(10)),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq_unordered!(events.iter().map(|event| event.age), [&0, &2, &4, &6, &8]);
+
+    let events: Vec<_> = User::filter(
+        User::fields()
+            .name()
+            .eq("info")
+            .and(User::fields().age().le(10)),
     )
     .exec(&mut db)
     .await?;
 
     assert_eq_unordered!(
-        events.iter().map(|event| event.timestamp),
-        [&0, &2, &4, &6, &8]
-    );
-
-    let events: Vec<_> = Event::filter(
-        Event::fields()
-            .kind()
-            .eq("info")
-            .and(Event::fields().timestamp().le(10)),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq_unordered!(
-        events.iter().map(|event| event.timestamp),
+        events.iter().map(|event| event.age),
         [&0, &2, &4, &6, &8, &10]
     );
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_not_basic(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[allow(dead_code)]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
@@ -882,7 +790,7 @@ pub async fn query_not_basic(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(3, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -897,24 +805,9 @@ pub async fn query_not_basic(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::user_with_active))]
 pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[allow(dead_code)]
-        age: i64,
-
-        #[allow(dead_code)]
-        active: bool,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Create some users
     for (name, age, active) in [
@@ -943,7 +836,7 @@ pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(1, users.len());
         assert_eq!("Charlie", users[0].name);
@@ -956,21 +849,9 @@ pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[allow(dead_code)]
-        age: i64,
-    }
-
-    let mut db = test.setup_db(models!(User)).await;
+    let mut db = setup(test).await;
 
     // Create some users
     for (name, age) in [("Alice", 25), ("Bob", 30), ("Charlie", 35), ("Diana", 40)] {
@@ -989,7 +870,7 @@ pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -1001,150 +882,5 @@ pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
             "Expected error for NOT query without key condition on non-SQL database"
         );
     }
-    Ok(())
-}
-
-#[driver_test(id(ID))]
-pub async fn query_not_with_index(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    #[key(partition = team, local = name)]
-    struct Player {
-        team: String,
-
-        name: String,
-
-        #[allow(dead_code)]
-        position: String,
-
-        #[allow(dead_code)]
-        number: i64,
-    }
-
-    let mut db = test.setup_db(models!(Player)).await;
-
-    // Create some players
-    for (team, name, position, number) in [
-        ("Timbers", "Diego Valeri", "Midfielder", 8),
-        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
-        ("Timbers", "Diego Chara", "Midfielder", 21),
-        ("Timbers", "Fanendo Adi", "Forward", 9),
-        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
-        ("Sounders", "Clint Dempsey", "Forward", 2),
-        ("Sounders", "Obafemi Martins", "Forward", 9),
-        ("Sounders", "Osvaldo Alonso", "Midfielder", 6),
-    ] {
-        Player::create()
-            .team(team)
-            .name(name)
-            .position(position)
-            .number(number)
-            .exec(&mut db)
-            .await?;
-    }
-
-    // Query with partition key AND NOT condition on non-indexed field
-    // team = "Timbers" AND NOT (position = "Midfielder")
-    // Should return Fanendo Adi (Forward) and Adam Kwarasey (Goalkeeper)
-    let players = Player::filter(
-        Player::fields()
-            .team()
-            .eq("Timbers")
-            .and(Player::fields().position().eq("Midfielder").not()),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(2, players.len());
-    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
-    names.sort();
-    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
-
-    // Query with partition key AND NOT with comparison
-    // team = "Timbers" AND NOT (number > 8)
-    // Should return players with number <= 8: Diego Valeri (8), Darlington Nagbe (6), Adam Kwarasey (1)
-    let players = Player::filter(
-        Player::fields()
-            .team()
-            .eq("Timbers")
-            .and(Player::fields().number().gt(8).not()),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(3, players.len());
-    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
-    names.sort();
-    assert_eq!(names, ["Adam Kwarasey", "Darlington Nagbe", "Diego Valeri"]);
-    Ok(())
-}
-
-#[driver_test(id(ID))]
-pub async fn query_not_operator_syntax(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    #[key(partition = team, local = name)]
-    struct Player {
-        team: String,
-
-        name: String,
-
-        #[allow(dead_code)]
-        position: String,
-
-        #[allow(dead_code)]
-        number: i64,
-    }
-
-    let mut db = test.setup_db(models!(Player)).await;
-
-    for (team, name, position, number) in [
-        ("Timbers", "Diego Valeri", "Midfielder", 8),
-        ("Timbers", "Darlington Nagbe", "Midfielder", 6),
-        ("Timbers", "Diego Chara", "Midfielder", 21),
-        ("Timbers", "Fanendo Adi", "Forward", 9),
-        ("Timbers", "Adam Kwarasey", "Goalkeeper", 1),
-    ] {
-        Player::create()
-            .team(team)
-            .name(name)
-            .position(position)
-            .number(number)
-            .exec(&mut db)
-            .await?;
-    }
-
-    // Use the ! operator instead of .not()
-    // team = "Timbers" AND !(position = "Midfielder")
-    let players = Player::filter(
-        Player::fields()
-            .team()
-            .eq("Timbers")
-            .and(!Player::fields().position().eq("Midfielder")),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(2, players.len());
-    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
-    names.sort();
-    assert_eq!(names, ["Adam Kwarasey", "Fanendo Adi"]);
-
-    // ! on a compound expression: !(number > 8 OR position = "Goalkeeper")
-    let players = Player::filter(
-        Player::fields().team().eq("Timbers").and(
-            !(Player::fields()
-                .number()
-                .gt(8)
-                .or(Player::fields().position().eq("Goalkeeper"))),
-        ),
-    )
-    .exec(&mut db)
-    .await?;
-
-    // Excludes Diego Chara (21), Fanendo Adi (9), Adam Kwarasey (Goalkeeper)
-    // Keeps Diego Valeri (8, Midfielder), Darlington Nagbe (6, Midfielder)
-    assert_eq!(2, players.len());
-    let mut names: Vec<_> = players.iter().map(|p| p.name.as_str()).collect();
-    names.sort();
-    assert_eq!(names, ["Darlington Nagbe", "Diego Valeri"]);
     Ok(())
 }

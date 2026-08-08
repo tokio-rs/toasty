@@ -5,19 +5,39 @@ body:
   - type: markdown
     attributes:
       value: |
-        A small, self-contained reproducer is the single most useful thing
-        you can include.
+        Describe what you observed — what you did, what you expected, and
+        what happened instead. A small, self-contained reproducer is the
+        single most useful thing you can include.
+
+        Leave the diagnosis to maintainers. Describe what happened, not why
+        you think it happens — a guess at the cause tends to send triage
+        down the wrong path.
 
   - type: textarea
-    id: summary
+    id: what_you_did
     attributes:
-      label: Summary
-      description: What did you expect to happen, and what happened instead?
+      label: What you did
+      description: The query or operation you ran, in prose or code.
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What you expected
+      description: The result you expected.
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: What actually happened
+      description: |
+        What happened instead — the error, wrong result, or panic. Quote
+        the exact message, generated SQL, or backtrace. Describe what you
+        saw, not why you think it happened.
 
   - type: textarea
     id: reproducer
     attributes:
-      label: Reproducer
+      label: Minimal reproducer
       description: |
         A minimal example that demonstrates the issue. A failing test in
         `crates/toasty-driver-integration-suite/src/tests/` is ideal; a
@@ -47,4 +67,4 @@ body:
     id: notes
     attributes:
       label: Additional context
-      description: Backtrace, generated SQL, related issues, anything else relevant.
+      description: Related issues, environment details, anything else relevant.

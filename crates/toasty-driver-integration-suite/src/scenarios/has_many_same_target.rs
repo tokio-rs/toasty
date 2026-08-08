@@ -1,42 +1,40 @@
 use crate::prelude::*;
 
 scenario! {
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
         #[has_many(pair = author)]
-        authored_articles: toasty::HasMany<Article>,
+        authored_articles: toasty::Deferred<Vec<Article>>,
 
         #[has_many(pair = reviewer)]
-        reviewed_articles: toasty::HasMany<Article>,
+        reviewed_articles: toasty::Deferred<Vec<Article>>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Article {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         title: String,
 
         #[index]
-        author_id: ID,
+        author_id: uuid::Uuid,
 
         #[index]
-        reviewer_id: ID,
+        reviewer_id: uuid::Uuid,
 
         #[belongs_to(key = author_id, references = id)]
-        author: toasty::BelongsTo<User>,
+        author: toasty::Deferred<User>,
 
         #[belongs_to(key = reviewer_id, references = id)]
-        reviewer: toasty::BelongsTo<User>,
+        reviewer: toasty::Deferred<User>,
     }
 
     async fn setup(test: &mut Test) -> toasty::Db {

@@ -43,7 +43,9 @@ The compilation pipeline below transforms user queries into this instruction/var
 ```
 User Query (Statement AST)
     ↓
-[Verification] - Validate statement structure (debug builds only)
+[Normalization] - Expand implicit application-level semantics
+    ↓
+[Verification] - Validate normalized statement structure
     ↓
 [Simplification] - Normalize and optimize the statement AST
     ↓
@@ -58,7 +60,20 @@ User Query (Statement AST)
 Result Stream
 ```
 
-## Phase 1: Simplification
+## Phase 1: Normalization
+
+**Location**: `engine/normalize.rs`
+
+Normalization converts implicit application-level behavior into explicit AST
+nodes before verification and lowering. One mutable visitor walks the complete
+statement. Each visitor method applies all normalization rules for its node;
+individual rules do not recursively traverse the AST.
+
+Current normalization rules route model upsert defaults to their create and
+update branches and add primary-key ordering fields when SQL cursor pagination
+needs a deterministic tie-breaker.
+
+## Phase 2: Simplification
 
 **Location**: `engine/simplify.rs`
 
@@ -93,7 +108,7 @@ Delete {
 
 Converting relationship navigation into explicit filters early means downstream phases only need to handle standard query patterns with filters and subqueries - no special-case logic for each relationship type.
 
-## Phase 2: Lowering
+## Phase 3: Lowering
 
 **Location**: `engine/lower.rs`
 

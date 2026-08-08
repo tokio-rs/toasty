@@ -8,6 +8,7 @@
 
 mod adhoc;
 mod condition_failed;
+mod connection_lost;
 mod connection_pool;
 mod driver_operation_failed;
 mod expression_evaluation_failed;
@@ -27,6 +28,7 @@ mod validation;
 
 use adhoc::Adhoc;
 use condition_failed::ConditionFailed;
+use connection_lost::ConnectionLost;
 use connection_pool::ConnectionPool;
 use driver_operation_failed::DriverOperationFailed;
 use expression_evaluation_failed::ExpressionEvaluationFailed;
@@ -105,6 +107,7 @@ struct ErrorInner {
 enum ErrorKind {
     Adhoc(Adhoc),
     DriverOperationFailed(DriverOperationFailed),
+    ConnectionLost(ConnectionLost),
     ConnectionPool(ConnectionPool),
     ExpressionEvaluationFailed(ExpressionEvaluationFailed),
     InvalidConnectionUrl(InvalidConnectionUrl),
@@ -178,6 +181,7 @@ impl std::error::Error for Error {
     fn source(&self) -> Option<&(dyn std::error::Error + 'static)> {
         match self.kind() {
             ErrorKind::DriverOperationFailed(err) => Some(err),
+            ErrorKind::ConnectionLost(err) => Some(err),
             ErrorKind::ConnectionPool(err) => Some(err),
             _ => None,
         }
@@ -217,6 +221,7 @@ impl core::fmt::Display for ErrorKind {
         match self {
             Adhoc(err) => core::fmt::Display::fmt(err, f),
             DriverOperationFailed(err) => core::fmt::Display::fmt(err, f),
+            ConnectionLost(err) => core::fmt::Display::fmt(err, f),
             ConnectionPool(err) => core::fmt::Display::fmt(err, f),
             ExpressionEvaluationFailed(err) => core::fmt::Display::fmt(err, f),
             InvalidConnectionUrl(err) => core::fmt::Display::fmt(err, f),
@@ -510,6 +515,15 @@ mod tests {
     fn read_only_transaction_predicate_false_for_other_errors() {
         let err = Error::serialization_failure("concurrent update conflict");
         assert!(!err.is_read_only_transaction());
+    }
+
+    #[test]
+    fn connection_lost_predicate_and_display() {
+        let io_err = std::io::Error::new(std::io::ErrorKind::ConnectionReset, "broken pipe");
+        let err = Error::connection_lost(io_err);
+        assert!(err.is_connection_lost());
+        assert!(!err.is_driver_operation_failed());
+        assert_eq!(err.to_string(), "connection lost: broken pipe");
     }
 
     #[test]

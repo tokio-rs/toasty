@@ -1,4 +1,4 @@
-use super::has_many::parse_pair_attr;
+use super::has_many::parse_has_relation_attrs;
 
 #[derive(Debug)]
 pub(crate) struct HasOne {
@@ -7,6 +7,9 @@ pub(crate) struct HasOne {
 
     /// Field on target that the relation references
     pub(crate) pair: Option<syn::Ident>,
+
+    /// Field-name segments of a `#[has_one(via = a.b)]` multi-step relation.
+    pub(crate) via: Option<Vec<syn::Ident>>,
 
     pub(crate) span: proc_macro2::Span,
 }
@@ -17,9 +20,12 @@ impl HasOne {
         ty: &syn::Type,
         span: proc_macro2::Span,
     ) -> syn::Result<Self> {
+        let (pair, via) = parse_has_relation_attrs(attr)?;
+
         Ok(Self {
             ty: ty.clone(),
-            pair: parse_pair_attr(attr)?,
+            pair,
+            via,
             span,
         })
     }

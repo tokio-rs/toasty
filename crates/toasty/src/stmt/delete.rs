@@ -30,7 +30,7 @@ use toasty_core::stmt;
 /// # db.push_schema().await.unwrap();
 /// use toasty::stmt::{List, Query};
 ///
-/// Query::<List<User>>::filter(User::fields().id().eq(1))
+/// Query::<List<User>>::all().filter(User::fields().id().eq(1))
 ///     .delete()
 ///     .exec(&mut db)
 ///     .await

@@ -28,8 +28,8 @@ use toasty_core::stmt;
 /// # db.push_schema().await.unwrap();
 /// use toasty::stmt::{List, Paginate, Query};
 ///
-/// let mut q = Query::<List<User>>::all();
-/// q.order_by(User::fields().name().asc());
+/// let q = Query::<List<User>>::all()
+///     .order_by(User::fields().name().asc());
 /// let page = Paginate::new(q, 20)
 ///     .exec(&mut db)
 ///     .await
@@ -69,8 +69,8 @@ impl<M> Paginate<M> {
     /// # }
     /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.order_by(User::fields().name().asc());
+    /// let q = Query::<List<User>>::all()
+    ///     .order_by(User::fields().name().asc());
     /// let _paginator = Paginate::new(q, 20);
     /// ```
     pub fn new(mut query: Query<List<M>>, per_page: usize) -> Self {
@@ -95,7 +95,14 @@ impl<M> Paginate<M> {
     ///
     /// Records returned will come **after** `key` in the current sort order.
     /// Obtain `key` from [`Page::next_cursor`](super::Page::next_cursor) of a
-    /// previous page.
+    /// previous page. Toasty-generated cursors include any internal
+    /// primary-key fields needed to distinguish rows with equal ordering
+    /// values.
+    ///
+    /// A caller-provided cursor may contain only a prefix of the ordering
+    /// fields. Such a cursor cannot select a position within rows that tie on
+    /// that prefix. Pages fetched from it produce complete cursors for
+    /// subsequent navigation.
     ///
     /// # Panics
     ///
@@ -112,8 +119,8 @@ impl<M> Paginate<M> {
     /// # }
     /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.order_by(User::fields().id().asc());
+    /// let q = Query::<List<User>>::all()
+    ///     .order_by(User::fields().id().asc());
     /// let paginator = Paginate::new(q, 10)
     ///     .after(toasty_core::stmt::Value::from(42_i64));
     /// ```
@@ -132,6 +139,13 @@ impl<M> Paginate<M> {
     /// The result set is still returned in the original sort order (not
     /// reversed). Obtain `key` from
     /// [`Page::prev_cursor`](super::Page::prev_cursor) of a previous page.
+    /// Toasty-generated cursors include any internal primary-key fields needed
+    /// to distinguish rows with equal ordering values.
+    ///
+    /// A caller-provided cursor may contain only a prefix of the ordering
+    /// fields. Such a cursor cannot select a position within rows that tie on
+    /// that prefix. Pages fetched from it produce complete cursors for
+    /// subsequent navigation.
     ///
     /// # Panics
     ///
@@ -148,8 +162,8 @@ impl<M> Paginate<M> {
     /// # }
     /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.order_by(User::fields().id().asc());
+    /// let q = Query::<List<User>>::all()
+    ///     .order_by(User::fields().id().asc());
     /// let paginator = Paginate::new(q, 10)
     ///     .before(toasty_core::stmt::Value::from(100_i64));
     /// ```
@@ -188,8 +202,8 @@ impl<M: Load> Paginate<M> {
     /// # db.push_schema().await.unwrap();
     /// use toasty::stmt::{List, Paginate, Query};
     ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.order_by(User::fields().name().asc());
+    /// let q = Query::<List<User>>::all()
+    ///     .order_by(User::fields().name().asc());
     /// let page = Paginate::new(q, 20)
     ///     .exec(&mut db)
     ///     .await

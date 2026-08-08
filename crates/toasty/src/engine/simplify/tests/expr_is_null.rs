@@ -5,7 +5,7 @@ use toasty_core::stmt::{Expr, ExprIsNull, ExprReference, Value};
 #[test]
 fn is_null_non_nullable_field() {
     use crate as toasty;
-    use crate::schema::Register;
+    use crate::schema::Model;
 
     #[allow(dead_code)]
     #[derive(toasty::Model)]
@@ -17,7 +17,7 @@ fn is_null_non_nullable_field() {
 
     let schema = test_schema_with(&[User::schema()]);
     let model = schema.app.model(User::id());
-    let simplify = Simplify::new(&schema);
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
     let simplify = simplify.scope(model.as_root_unwrap());
 
     // `is_null(field)` → `false` (non-nullable field)

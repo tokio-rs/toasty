@@ -2,38 +2,12 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to_with_flags)
+)]
 pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-
-        complete: bool,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create users
     let alice = User::create().name("Alice").exec(&mut db).await?;
@@ -46,6 +20,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("buy groceries")
         .complete(false)
+        .priority(0)
         .exec(&mut db)
         .await?;
 
@@ -54,6 +29,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("read book")
         .complete(true)
+        .priority(0)
         .exec(&mut db)
         .await?;
 
@@ -63,6 +39,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("clean house")
         .complete(true)
+        .priority(0)
         .exec(&mut db)
         .await?;
     carol
@@ -70,6 +47,7 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
         .create()
         .title("write report")
         .complete(false)
+        .priority(0)
         .exec(&mut db)
         .await?;
 
@@ -98,43 +76,18 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to_with_flags)
+)]
 pub async fn filter_parent_no_matching_children(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        name: String,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: ID,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
-
-        title: String,
-
-        priority: i64,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     let user = User::create().name("Alice").exec(&mut db).await?;
     user.todos()
         .create()
         .title("low priority")
+        .complete(false)
         .priority(1)
         .exec(&mut db)
         .await?;
@@ -149,7 +102,10 @@ pub async fn filter_parent_no_matching_children(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(
+    requires(scan),
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid)
+)]
 pub async fn filter_parent_all_children_match(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -184,6 +140,28 @@ pub async fn filter_parent_all_children_match(test: &mut Test) -> Result<()> {
     .await?;
 
     assert_eq_unordered!(users.iter().map(|u| &u.name[..]), ["Bob", "Dan"]);
+
+    Ok(())
+}
+
+#[driver_test(requires(scan), scenario(crate::scenarios::has_many_nullable_fk))]
+pub async fn filter_parent_all_ignores_unlinked_children(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User {}).exec(&mut db).await?;
+    toasty::create!(Todo { title: "later" })
+        .exec(&mut db)
+        .await?;
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .todos()
+            .all(Todo::fields().title().eq("urgent")),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(users.len(), 1);
 
     Ok(())
 }

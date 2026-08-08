@@ -18,6 +18,7 @@ use crate::schema::db::{IndexOp, IndexScope};
 ///
 /// let index = Index {
 ///     id: IndexId { model: ModelId(0), index: 0 },
+///     name: None,
 ///     fields: vec![IndexField {
 ///         field: ModelId(0).field(0),
 ///         op: IndexOp::Eq,
@@ -33,6 +34,11 @@ use crate::schema::db::{IndexOp, IndexScope};
 pub struct Index {
     /// Uniquely identifies this index within the schema.
     pub id: IndexId,
+
+    /// User-provided index name from `#[index(name = "...", ...)]` or
+    /// `#[key(name = "...", ...)]`. When `None`, the schema builder generates
+    /// a name automatically.
+    pub name: Option<String>,
 
     /// Fields included in the index, in order.
     pub fields: Vec<IndexField>,
@@ -92,31 +98,4 @@ pub struct IndexField {
 
     /// Whether this field is a partition key or a local (sort) key.
     pub scope: IndexScope,
-}
-
-impl Index {
-    /// Returns the partition-scoped fields of this index.
-    ///
-    /// Partition fields come before local fields and determine data
-    /// distribution in NoSQL backends.
-    pub fn partition_fields(&self) -> &[IndexField] {
-        let i = self.index_of_first_local_field();
-        &self.fields[0..i]
-    }
-
-    /// Returns the local (sort-key) fields of this index.
-    ///
-    /// Local fields follow partition fields and determine ordering within a
-    /// partition.
-    pub fn local_fields(&self) -> &[IndexField] {
-        let i = self.index_of_first_local_field();
-        &self.fields[i..]
-    }
-
-    fn index_of_first_local_field(&self) -> usize {
-        self.fields
-            .iter()
-            .position(|field| field.scope.is_local())
-            .unwrap_or(self.fields.len())
-    }
 }

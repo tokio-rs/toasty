@@ -1,4 +1,4 @@
-use super::apply_migrations;
+use super::apply::apply_migrations;
 use crate::Config;
 use crate::theme::dialoguer_theme;
 use anyhow::Result;

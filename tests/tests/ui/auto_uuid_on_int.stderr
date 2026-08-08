@@ -1,0 +1,23 @@
+error[E0277]: field type `i64` is not compatible with the requested auto strategy `toasty::codegen_support::auto::tag::Uuid`
+ --> tests/ui/auto_uuid_on_int.rs:9:9
+  |
+9 |     id: i64,
+  |         ^^^ incompatible Rust type for `#[auto(...)]`
+  |
+  = note: see `toasty::codegen_support::auto` for the compatibility table
+help: the trait `AutoCompatible<toasty::codegen_support::auto::tag::Uuid>` is not implemented for `i64`
+      but trait `AutoCompatible<toasty::codegen_support::auto::tag::Increment>` is implemented for it
+ --> $WORKSPACE/crates/toasty/src/codegen_support/auto.rs
+  |
+  | impl AutoCompatible<tag::Increment> for i64 {}
+  | ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  = help: for that trait implementation, expected `toasty::codegen_support::auto::tag::Increment`, found `toasty::codegen_support::auto::tag::Uuid`
+note: required by a bound in `_check`
+ --> tests/ui/auto_uuid_on_int.rs:5:17
+  |
+5 | #[derive(Debug, toasty::Model)]
+  |                 ^^^^^^^^^^^^^ required by this bound in `_check`
+...
+9 |     id: i64,
+  |         --- required by a bound in this function
+  = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)

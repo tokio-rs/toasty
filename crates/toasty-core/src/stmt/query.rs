@@ -1,5 +1,5 @@
 use super::{
-    Delete, Expr, ExprSet, Limit, Node, OrderBy, Path, Returning, Select, Source, Statement,
+    Delete, Expr, ExprSet, Include, Limit, Node, OrderBy, Returning, Select, Source, Statement,
     Update, UpdateTarget, Values, Visit, VisitMut, With,
 };
 use crate::stmt::{self, Filter};
@@ -180,10 +180,19 @@ impl Query {
         self.body.as_select_mut_unwrap().add_filter(filter);
     }
 
-    /// Adds an association include path to this query's `SELECT` body.
-    pub fn include(&mut self, path: impl Into<Path>) {
+    /// Sets the filter for this query's `SELECT` body overwriting any existing one.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the query body is not a `SELECT`.
+    pub fn set_filter(&mut self, filter: impl Into<Filter>) {
+        self.body.as_select_mut_unwrap().filter = filter.into();
+    }
+
+    /// Adds an association include to this query's `SELECT` body.
+    pub fn include(&mut self, include: impl Into<Include>) {
         match &mut self.body {
-            ExprSet::Select(body) => body.include(path),
+            ExprSet::Select(body) => body.include(include),
             _ => todo!(),
         }
     }

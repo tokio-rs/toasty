@@ -19,7 +19,10 @@ impl IdRewriter {
 
 impl VisitMut for IdRewriter {
     fn visit_type_mut(&mut self, ty: &mut Type) {
-        if let Type::Path(TypePath { qself: None, path }) = ty {
+        if let Type::Path(TypePath {
+            qself: None, path, ..
+        }) = ty
+        {
             // Check if this matches the identifier we're looking for
             if path.segments.len() == 1 && path.segments[0].ident == self.ident {
                 // Replace with target type

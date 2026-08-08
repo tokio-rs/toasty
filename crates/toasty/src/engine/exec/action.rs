@@ -1,6 +1,6 @@
 use crate::engine::exec::{
     DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Project,
-    QueryPk, ReadModifyWrite, Scan, SetVar, UpdateByKey,
+    QueryPk, ReadModifyWrite, Scan, SetVar, UpdateByKey, Upsert,
 };
 
 use std::fmt;
@@ -51,6 +51,9 @@ pub(crate) enum Action {
 
     /// Update a record by the primary key
     UpdateByKey(UpdateByKey),
+
+    /// Atomically insert or update one record on a non-SQL database.
+    Upsert(Upsert),
 }
 
 impl Action {
@@ -71,6 +74,7 @@ impl Action {
             Action::Scan(_) => "scan",
             Action::SetVar(_) => "set_var",
             Action::UpdateByKey(_) => "update_by_key",
+            Action::Upsert(_) => "upsert",
         }
     }
 
@@ -87,7 +91,8 @@ impl Action {
             | Action::QueryPk(_)
             | Action::ReadModifyWrite(_)
             | Action::Scan(_)
-            | Action::UpdateByKey(_) => true,
+            | Action::UpdateByKey(_)
+            | Action::Upsert(_) => true,
 
             Action::Eval(_)
             | Action::Filter(_)
@@ -116,6 +121,7 @@ impl fmt::Debug for Action {
             Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),
             Self::UpdateByKey(a) => a.fmt(f),
+            Self::Upsert(a) => a.fmt(f),
         }
     }
 }

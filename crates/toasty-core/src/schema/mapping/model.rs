@@ -68,7 +68,7 @@ pub struct Model {
 
     /// Pre-computed default `RETURNING` expression for this model.
     ///
-    /// Same shape as `table_to_model`'s record, but with every `#[deferred]`
+    /// Same shape as `table_to_model`'s record, but with every deferred
     /// field — at this level or nested inside an embedded type — pre-masked
     /// to `Null`. Lowering starts from this expression and splices loaded
     /// forms in for fields named by `.include()` (or for every deferred

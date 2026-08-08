@@ -6,6 +6,10 @@ struct DiscoverTestAlphaModel {
     #[key]
     id: u64,
     name: String,
+    // Embeds are discovered transitively through the fields of the models
+    // that contain them, so reference the embed here.
+    #[allow(dead_code)]
+    beta: DiscoverTestBetaEmbed,
 }
 
 #[derive(Debug, toasty::Embed)]

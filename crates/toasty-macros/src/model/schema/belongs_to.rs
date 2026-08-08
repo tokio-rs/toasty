@@ -12,70 +12,131 @@ pub(crate) struct BelongsTo {
 impl BelongsTo {
     pub(super) fn from_ast(
         attr: &syn::Attribute,
+        field_name: &syn::Ident,
         ty: &syn::Type,
         names: &[syn::Ident],
     ) -> syn::Result<Self> {
-        let mut fk_sources: Vec<syn::Ident> = vec![];
-        let mut fk_targets: Vec<syn::Ident> = vec![];
-        let mut foreign_key = vec![];
+        let mut fk_sources: Option<Vec<syn::Ident>> = None;
+        let mut fk_targets: Option<Vec<syn::Ident>> = None;
 
-        attr.parse_nested_meta(|meta| {
-            if meta.path.is_ident("key") {
-                let value = meta.value()?;
-                fk_sources.push(value.parse()?);
-            } else if meta.path.is_ident("references") {
-                let value = meta.value()?;
-                fk_targets.push(value.parse()?);
-            } else {
-                return Err(syn::Error::new_spanned(
-                    &meta.path,
-                    "expected `key` or `references`",
-                ));
-            }
-
-            Ok(())
-        })?;
-
-        if fk_sources.len() != fk_targets.len() {
-            return Err(syn::Error::new_spanned(
-                attr,
-                "number of `key` and `references` attributes must match",
-            ));
+        // `#[belongs_to]` with no arguments infers both `key` and `references`;
+        // only parse nested meta when arguments are actually present.
+        if !matches!(attr.meta, syn::Meta::Path(_)) {
+            attr.parse_nested_meta(|meta| {
+                if meta.path.is_ident("key") {
+                    if fk_sources.is_some() {
+                        return Err(meta.error(
+                            "`key` specified more than once; use `key = [a, b]` for composite foreign keys",
+                        ));
+                    }
+                    fk_sources = Some(parse_idents(&meta)?);
+                    Ok(())
+                } else if meta.path.is_ident("references") {
+                    if fk_targets.is_some() {
+                        return Err(meta.error(
+                            "`references` specified more than once; use `references = [a, b]` for composite foreign keys",
+                        ));
+                    }
+                    fk_targets = Some(parse_idents(&meta)?);
+                    Ok(())
+                } else {
+                    Err(meta.error("expected `key` or `references`"))
+                }
+            })?;
         }
+
+        // `key` defaults to `<field>_id` when omitted.
+        let fk_sources = match fk_sources {
+            Some(sources) => sources,
+            None => vec![syn::Ident::new(
+                &format!("{field_name}_id"),
+                field_name.span(),
+            )],
+        };
 
         if fk_sources.is_empty() {
             return Err(syn::Error::new_spanned(
                 attr,
-                "expected at least one `key` and `references` attribute",
+                "`key` must name at least one field",
             ));
         }
 
-        let parts = fk_sources.into_iter().zip(fk_targets);
+        // `references` defaults to `id`, the conventional primary key. A
+        // composite key cannot be inferred, so it must be spelled out.
+        let fk_targets = match fk_targets {
+            Some(targets) => {
+                if targets.is_empty() {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "`references` must name at least one field",
+                    ));
+                }
 
-        for (source, target) in parts {
-            let source = names
+                if fk_sources.len() != targets.len() {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        format!(
+                            "`key` has {} field(s) but `references` has {} field(s); they must match",
+                            fk_sources.len(),
+                            targets.len(),
+                        ),
+                    ));
+                }
+
+                targets
+            }
+            None => {
+                if fk_sources.len() != 1 {
+                    return Err(syn::Error::new_spanned(
+                        attr,
+                        "`references` cannot be inferred for a composite `key`; \
+                         name the referenced fields with `references = [...]`",
+                    ));
+                }
+
+                vec![syn::Ident::new("id", field_name.span())]
+            }
+        };
+
+        let mut foreign_key = vec![];
+
+        for (source, target) in fk_sources.into_iter().zip(fk_targets) {
+            let source_idx = names
                 .iter()
                 .position(|name| name == &source)
                 .ok_or_else(|| {
                     syn::Error::new_spanned(
                         &source,
-                        format!("source field `{source}` not found in names"),
+                        format!(
+                            "foreign key field `{source}` not found on the model; \
+                             add the field or name it explicitly with `key = ...`"
+                        ),
                     )
                 })?;
 
-            foreign_key.push(ForeignKeyField { source, target });
+            foreign_key.push(ForeignKeyField {
+                source: source_idx,
+                target,
+            });
         }
-
-        // let syn::Meta::List(list) = &attr.meta else {
-        //     return Err(syn::Error::new_spanned(
-        //         &attr.meta,
-        //         "expected #[relation(key = <field>, references = <field>)]",
-        //     ));
-        // };
 
         Ok(Self {
             ty: ty.clone(),
             foreign_key,
         })
+    }
+}
+
+fn parse_idents(meta: &syn::meta::ParseNestedMeta<'_>) -> syn::Result<Vec<syn::Ident>> {
+    let value = meta.value()?;
+
+    if value.peek(syn::token::Bracket) {
+        let content;
+        syn::bracketed!(content in value);
+        let punctuated =
+            syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated(&content)?;
+        Ok(punctuated.into_iter().collect())
+    } else {
+        Ok(vec![value.parse::<syn::Ident>()?])
     }
 }

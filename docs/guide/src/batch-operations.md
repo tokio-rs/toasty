@@ -236,3 +236,7 @@ Both can insert multiple records, but they differ:
 
 Use `create_many()` when inserting multiple records of the same model. Use
 `batch()` when combining different operations or models.
+
+> **Runnable example:** [`store-operations`] runs transactions, savepoints, batches, query-based updates and deletes, and raw SQL.
+
+[`store-operations`]: https://github.com/tokio-rs/toasty/tree/main/examples/store-operations

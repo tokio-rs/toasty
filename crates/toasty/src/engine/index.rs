@@ -147,11 +147,12 @@ impl IndexPlanner<'_> {
                 // No index found but driver supports scan — signal caller to use a Scan node.
                 return Ok(None);
             }
-            return Err(toasty_core::Error::unsupported_feature(
-                "This database requires queries to use an index. The current filter cannot be \
-                 satisfied by any available index. Consider adding an index that matches your \
-                 query filter, or restructure the query to use indexed fields.",
-            ));
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{} requires queries to use an index. The current filter cannot be satisfied by \
+                 any available index. Consider adding an index that matches your query filter, or \
+                 restructure the query to use indexed fields.",
+                self.capability.driver_name
+            )));
         }
 
         Ok(Some(

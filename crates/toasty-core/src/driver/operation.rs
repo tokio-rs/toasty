@@ -2,10 +2,11 @@
 //!
 //! An [`Operation`] is the unit of work sent to [`Connection::exec`](super::Connection::exec).
 //! The query engine compiles user queries into one or more `Operation` values.
-//! SQL drivers handle [`QuerySql`] and [`Insert`]; key-value drivers handle
-//! [`GetByKey`], [`QueryPk`], [`DeleteByKey`], [`FindPkByIndex`], [`UpdateByKey`],
-//! and (when [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`].
-//! Both driver types handle [`Transaction`] operations.
+//! SQL drivers handle [`QuerySql`], [`RawSql`], and [`Insert`]; key-value
+//! drivers handle [`GetByKey`], [`QueryPk`], [`DeleteByKey`],
+//! [`FindPkByIndex`], [`UpdateByKey`], and (when
+//! [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`]. Both
+//! driver types handle [`Transaction`] operations.
 
 mod delete_by_key;
 pub use delete_by_key::DeleteByKey;
@@ -28,17 +29,23 @@ pub use query_pk::QueryPk;
 mod query_sql;
 pub use query_sql::QuerySql;
 
+mod raw_sql;
+pub use raw_sql::{RawSql, RawSqlRet};
+
 mod scan;
 pub use scan::Scan;
 
 mod transaction;
-pub use transaction::{IsolationLevel, Transaction};
+pub use transaction::{IsolationLevel, Transaction, TransactionMode};
 
 mod typed_value;
 pub use typed_value::TypedValue;
 
 mod update_by_key;
 pub use update_by_key::UpdateByKey;
+
+mod upsert;
+pub use upsert::Upsert;
 
 /// A single database operation to be executed by a driver.
 ///
@@ -77,14 +84,21 @@ pub enum Operation {
     /// ordering, and pagination.
     QueryPk(QueryPk),
 
-    /// Execute a raw SQL statement. Only sent to SQL-capable drivers.
+    /// Execute SQL generated from a lowered Toasty statement AST. Only sent to
+    /// SQL-capable drivers.
     QuerySql(QuerySql),
+
+    /// Execute user-authored SQL text. Only sent to SQL-capable drivers.
+    RawSql(RawSql),
 
     /// A transaction lifecycle operation (begin, commit, rollback, savepoint).
     Transaction(Transaction),
 
     /// Update one or more records identified by primary key.
     UpdateByKey(UpdateByKey),
+
+    /// Atomically creates or updates one record by a unique key on a non-SQL driver.
+    Upsert(Upsert),
 
     /// Full-table scan with optional filter and pagination.
     ///
@@ -94,7 +108,7 @@ pub enum Operation {
 
 impl Operation {
     /// Returns the operation variant name for logging.
-    pub fn name(&self) -> &str {
+    pub fn name(&self) -> &'static str {
         match self {
             Operation::Insert(_) => "insert",
             Operation::DeleteByKey(_) => "delete_by_key",
@@ -102,8 +116,10 @@ impl Operation {
             Operation::GetByKey(_) => "get_by_key",
             Operation::QueryPk(_) => "query_pk",
             Operation::QuerySql(_) => "query_sql",
+            Operation::RawSql(_) => "raw_sql",
             Operation::Transaction(_) => "transaction",
             Operation::UpdateByKey(_) => "update_by_key",
+            Operation::Upsert(_) => "upsert",
             Operation::Scan(_) => "scan",
         }
     }

@@ -4,6 +4,32 @@
 
 Toasty is an ORM for Rust that supports SQL and NoSQL databases. The codebase is a Cargo workspace with separate crates for each layer.
 
+## Design Principles
+
+### Exposing database operations
+
+Toasty does not hide differences between the databases it targets. When a query
+method maps onto an operator the database already has, Toasty passes it through
+and keeps the database's behavior instead of normalizing it to match the other
+backends.
+
+This produces two rules for query methods:
+
+- A pass-through method keeps each backend's behavior, and the documentation
+  states what each backend does. `.like()` lowers to the database's own `LIKE`,
+  whose case sensitivity differs between SQLite, PostgreSQL, and MySQL.
+- A method that maps to a backend-specific operator is offered only on backends
+  that have that operator. `.ilike()` maps to PostgreSQL's `ILIKE`, which no
+  other target has, so it is rejected elsewhere (`engine/verify.rs`, gated on
+  `Capability::native_ilike`) rather than emulated.
+
+Toasty implements an operation on every backend only when it can give the
+operation identical semantics on all of them. `.starts_with()` is exactly
+that: a case-sensitive prefix match has one meaning that every backend can
+express (DynamoDB's `begins_with`, PostgreSQL's `^@`, SQLite's `GLOB`, MySQL's
+`BINARY ... LIKE`), so it is offered everywhere. A uniform `.ilike()` would not
+qualify, because the backends disagree on how to fold case.
+
 ## Crates
 
 ### 1. toasty
@@ -18,7 +44,7 @@ User-facing crate with query engine and runtime.
 
 **Query Execution Pipeline** (high-level):
 ```
-Statement AST → Simplify → Lower → Plan → Execute → Results
+Statement AST → Normalize → Verify → Simplify → Lower → Plan → Execute → Results
 ```
 
 The engine compiles queries into a mini-program of actions executed by an interpreter. For details on HIR, MIR, and the full compilation pipeline, see [Query Engine Architecture](./query-engine.md).
@@ -75,3 +101,4 @@ Converts statement AST to SQL strings. Used by SQL-based drivers.
 
 - [Query Engine Architecture](./query-engine.md) - Query compilation and execution pipeline
 - [Type System](./type-system.md) - Type system design and conversions
+- [Path System](./path-system.md) - Field references, the typed/untyped layers, and variant paths

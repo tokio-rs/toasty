@@ -1,5 +1,5 @@
 use assert_struct::assert_struct;
-use toasty::codegen_support::Register;
+use toasty::schema::Model;
 use toasty::stmt::IntoStatement;
 use toasty_core::stmt::{self as core_stmt, ExprReference};
 
@@ -419,7 +419,7 @@ fn source_model_matches_user_id() {
 
     // Verify the source references the User model specifically
     let source_model = sel.source.as_model_unwrap();
-    assert_eq!(source_model.id, <User as Register>::id());
+    assert_eq!(source_model.id, <User as Model>::id());
     assert!(source_model.via.is_none());
 }
 
@@ -428,7 +428,7 @@ fn filter_source_model_matches_user_id() {
     let sel = select(toasty::query!(User filter .name == "test"));
 
     let source_model = sel.source.as_model_unwrap();
-    assert_eq!(source_model.id, <User as Register>::id());
+    assert_eq!(source_model.id, <User as Model>::id());
 }
 
 // ---------------------------------------------------------------------------

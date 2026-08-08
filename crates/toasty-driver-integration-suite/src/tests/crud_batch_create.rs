@@ -4,41 +4,22 @@ use crate::prelude::*;
 
 use toasty_core::driver::{Operation, operation::Transaction};
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        #[allow(dead_code)]
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(Todo)).await;
-
-    let res = Todo::create_many().exec(&mut db).await?;
+    let res = Post::create_many().exec(&mut db).await?;
     assert!(res.is_empty());
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn batch_create_one(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(Todo)).await;
+    let mut db = setup(test).await;
 
     test.log().clear();
-    let res = Todo::create_many()
-        .item(Todo::create().title("hello"))
+    let res = Post::create_many()
+        .item(Post::create().title("hello"))
         .exec(&mut db)
         .await?;
 
@@ -46,34 +27,25 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
     assert_eq!(res[0].title, "hello");
 
     // Single-row batch: no transaction wrapping needed
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
         assert!(test.log().is_empty());
     }
 
-    let reloaded: Vec<_> = Todo::filter_by_id(res[0].id).exec(&mut db).await?;
+    let reloaded: Vec<_> = Post::filter_by_id(res[0].id).exec(&mut db).await?;
     assert_eq!(1, reloaded.len());
     assert_eq!(reloaded[0].id, res[0].id);
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn batch_create_many(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        title: String,
-    }
-
-    let mut db = test.setup_db(models!(Todo)).await;
+    let mut db = setup(test).await;
 
     test.log().clear();
-    let res = Todo::create_many()
-        .item(Todo::create().title("todo 1"))
-        .item(Todo::create().title("todo 2"))
+    let res = Post::create_many()
+        .item(Post::create().title("todo 1"))
+        .item(Post::create().title("todo 2"))
         .exec(&mut db)
         .await?;
 
@@ -83,21 +55,21 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
 
     // Multi-row batch in a single INSERT statement: no transaction wrapping
     // needed because single SQL statements are inherently atomic.
-    if test.capability().sql {
+    if test.capability().sql() {
         assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
         assert!(test.log().is_empty());
     }
 
-    for todo in &res {
-        let reloaded: Vec<_> = Todo::filter_by_id(todo.id).exec(&mut db).await?;
+    for post in &res {
+        let reloaded: Vec<_> = Post::filter_by_id(post.id).exec(&mut db).await?;
         assert_eq!(1, reloaded.len());
-        assert_eq!(reloaded[0].id, todo.id);
+        assert_eq!(reloaded[0].id, post.id);
     }
     Ok(())
 }
 
 // TODO: is a batch supposed to be atomic? Probably not.
-#[driver_test(id(ID))]
+#[driver_test]
 #[should_panic]
 pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -127,7 +99,7 @@ pub async fn batch_create_fails_if_any_record_missing_fields(test: &mut Test) ->
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -157,7 +129,7 @@ pub async fn batch_create_model_with_unique_field_index_all_unique(test: &mut Te
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(scenario(crate::scenarios::user_unique_email))]
 #[should_panic]
 pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -172,7 +144,7 @@ pub async fn batch_create_model_with_unique_field_index_all_dups(test: &mut Test
 
 /// Unique constraint violation on a multi-row batch is atomic because a single
 /// INSERT statement is inherently atomic in SQL databases.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(requires(sql), scenario(crate::scenarios::user_unique_email))]
 pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -203,17 +175,9 @@ pub async fn batch_create_unique_violation_rolls_back(t: &mut Test) -> Result<()
 
 /// Multi-row batch inside an explicit transaction executes as a single INSERT
 /// without extra savepoint wrapping (the statement is inherently atomic).
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-        title: String,
-    }
-
-    let mut db = t.setup_db(models!(Todo)).await;
+    let mut db = setup(t).await;
 
     t.log().clear();
     let mut tx = db.transaction().await?;
@@ -222,13 +186,14 @@ pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Re
         t.log().pop_op(),
         Operation::Transaction(Transaction::Start {
             isolation: None,
-            read_only: false
+            read_only: false,
+            ..
         })
     );
 
-    Todo::create_many()
-        .item(Todo::create().title("a"))
-        .item(Todo::create().title("b"))
+    Post::create_many()
+        .item(Post::create().title("a"))
+        .item(Post::create().title("b"))
         .exec(&mut tx)
         .await?;
 

@@ -26,6 +26,9 @@
 - name: C-docs
   description: "User docs, dev docs, rustdoc"
   color: "f5f1fd"
+- name: C-design
+  description: "A pull request that proposes a new design (adds a doc under docs/dev/design/)"
+  color: "f5f1fd"
 - name: C-chore
   description: "CI, release tooling, scripts, lint fixes"
   color: "f5f1fd"

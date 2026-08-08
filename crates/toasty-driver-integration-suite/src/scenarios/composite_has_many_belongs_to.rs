@@ -1,0 +1,35 @@
+use crate::prelude::*;
+
+scenario! {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+
+        #[index]
+        name: String,
+
+        #[has_many]
+        todos: toasty::Deferred<Vec<Todo>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = user_id, local = id)]
+    struct Todo {
+        #[auto]
+        id: uuid::Uuid,
+
+        user_id: uuid::Uuid,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+
+        #[index]
+        title: String,
+    }
+
+    async fn setup(test: &mut Test) -> toasty::Db {
+        test.setup_db(models!(User, Todo)).await
+    }
+}

@@ -2,12 +2,12 @@ use crate::{
     Schema,
     schema::{
         app::{Field, Model, ModelId, ModelRoot},
-        db::{self, Column, ColumnId, Table, TableId},
+        db::{self, Column, Table, TableId},
     },
     stmt::{
-        Delete, Expr, ExprArg, ExprColumn, ExprFunc, ExprReference, ExprSet, Insert, InsertTarget,
-        Query, Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor,
-        TableRef, Type, TypeUnion, Update, UpdateTarget,
+        Delete, Expr, ExprArg, ExprFunc, ExprReference, ExprSet, Insert, InsertTarget, Query,
+        Returning, Select, Source, SourceTable, Statement, TableDerived, TableFactor, TableRef,
+        Type, TypeUnion, Update, UpdateTarget,
     },
 };
 
@@ -169,21 +169,30 @@ pub enum ExprTarget<'a> {
 /// and `()` (which resolves nothing).
 pub trait Resolve {
     /// Returns the database table that stores the given model, if any.
-    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table>;
+    fn table_for_model(&self, model: &ModelRoot) -> Option<&Table> {
+        let _ = model;
+        None
+    }
 
     /// Returns a reference to the application Model with the specified ID.
     ///
     /// Used during high-level query building to access model metadata such as
     /// field definitions, relationships, and validation rules. Returns None if
     /// the model ID is not found in the application schema.
-    fn model(&self, id: ModelId) -> Option<&Model>;
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        let _ = id;
+        None
+    }
 
     /// Returns a reference to the database Table with the specified ID.
     ///
     /// Used during SQL generation and query execution to access table metadata
     /// including column definitions, constraints, and indexes. Returns None if
     /// the table ID is not found in the database schema.
-    fn table(&self, id: TableId) -> Option<&Table>;
+    fn table(&self, id: TableId) -> Option<&Table> {
+        let _ = id;
+        None
+    }
 }
 
 /// Conversion trait for producing an [`ExprTarget`] from a statement or
@@ -387,6 +396,11 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 ExprSet::Select(body) => cx.infer_returning_ty(&body.returning, args, stmt.single),
                 ExprSet::SetOp(_body) => todo!(),
                 ExprSet::Update(_body) => todo!(),
+                ExprSet::Delete(body) => body
+                    .returning
+                    .as_ref()
+                    .map(|returning| cx.infer_returning_ty(returning, args, stmt.single))
+                    .unwrap_or(Type::Unit),
                 ExprSet::Values(_body) => todo!(),
                 ExprSet::Insert(body) => body
                     .returning
@@ -502,6 +516,19 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                         Type::Record(mut fields) => {
                             std::mem::replace(&mut fields[*step], Type::Null)
                         }
+                        // A path into an embedded-model document value: descend
+                        // by field index through the embedded model's fields.
+                        // Keeping document projections type-able in the engine is
+                        // what lets them survive as plain `ExprProject` nodes
+                        // (rather than rewritten to a JSON function) until the
+                        // SQL edge.
+                        Type::Model(id) => match self.schema.model(id) {
+                            Some(Model::Root(model)) => model.fields[*step].expr_ty().clone(),
+                            Some(Model::EmbeddedStruct(embedded)) => {
+                                embedded.fields[*step].expr_ty().clone()
+                            }
+                            _ => todo!("project into non-embedded model {id:?}"),
+                        },
                         Type::List(items) => *items,
                         expr => todo!(
                             "returning_expr={returning_expr:#?}; expr={expr:#?}; project={e:#?}"
@@ -548,6 +575,22 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             Expr::Exists(_) => Type::Bool,
             Expr::Func(ExprFunc::Count(_)) => Type::U64,
             Expr::Func(ExprFunc::LastInsertId(_)) => Type::I64,
+            Expr::Func(ExprFunc::JsonExtract(func)) => func.ty.clone(),
+            Expr::Incoming(incoming) => match incoming {
+                super::ExprIncoming::Model(model) => Type::Model(*model),
+                super::ExprIncoming::Table(table) => {
+                    let table = self.schema.table(*table).unwrap_or_else(|| {
+                        panic!("incoming table {table:?} is not present in the schema")
+                    });
+                    Type::Record(
+                        table
+                            .columns
+                            .iter()
+                            .map(|column| column.ty.clone())
+                            .collect(),
+                    )
+                }
+            },
             _ => todo!("{expr:#?}"),
         }
     }
@@ -571,49 +614,6 @@ impl<'a> ExprContext<'a, Schema> {
     /// model.
     pub fn target_as_model(&self) -> Option<&'a ModelRoot> {
         self.target.as_model()
-    }
-
-    /// Creates an `ExprReference::Column` for the given column ID.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the context has no table target (`ExprTarget::Free`), if the column does not
-    /// belong to the table associated with the current target, or if the target's model has no
-    /// mapped database table.
-    pub fn expr_ref_column(&self, column_id: impl Into<ColumnId>) -> ExprReference {
-        let column_id = column_id.into();
-
-        match self.target {
-            ExprTarget::Free => {
-                panic!("Cannot create ExprColumn in free context - no table target available")
-            }
-            ExprTarget::Model(model) => {
-                let Some(table) = self.schema.table_for_model(model) else {
-                    panic!(
-                        "Failed to find database table for model '{:?}' - model may not be mapped to a table",
-                        model.name
-                    )
-                };
-
-                assert_eq!(table.id, column_id.table);
-            }
-            ExprTarget::Table(table) => assert_eq!(table.id, column_id.table),
-            ExprTarget::Source(source_table) => {
-                let [TableRef::Table(table_id)] = source_table.tables[..] else {
-                    panic!(
-                        "Expected exactly one table reference, found {} tables",
-                        source_table.tables.len()
-                    );
-                };
-                assert_eq!(table_id, column_id.table);
-            }
-        }
-
-        ExprReference::Column(ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: column_id.index,
-        })
     }
 }
 
@@ -680,33 +680,19 @@ impl Resolve for Schema {
     }
 }
 
-impl Resolve for db::Schema {
-    fn model(&self, _id: ModelId) -> Option<&Model> {
-        None
+impl Resolve for crate::schema::app::Schema {
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        self.get_model(id)
     }
+}
 
+impl Resolve for db::Schema {
     fn table(&self, id: TableId) -> Option<&Table> {
         Some(db::Schema::table(self, id))
     }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
-    }
 }
 
-impl Resolve for () {
-    fn model(&self, _id: ModelId) -> Option<&Model> {
-        None
-    }
-
-    fn table(&self, _id: TableId) -> Option<&Table> {
-        None
-    }
-
-    fn table_for_model(&self, _model: &ModelRoot) -> Option<&Table> {
-        None
-    }
-}
+impl Resolve for () {}
 
 impl<'a> ExprTarget<'a> {
     /// Returns the model if this target is [`ExprTarget::Model`], or `None`.
@@ -731,30 +717,11 @@ impl<'a> ExprTarget<'a> {
     }
 
     /// Returns the model ID if this target is [`ExprTarget::Model`], or `None`.
-    pub fn model_id(self) -> Option<ModelId> {
+    fn model_id(self) -> Option<ModelId> {
         Some(match self {
             ExprTarget::Model(model) => model.id,
             _ => return None,
         })
-    }
-
-    /// Returns the table if this target is [`ExprTarget::Table`], or `None`.
-    pub fn as_table(self) -> Option<&'a Table> {
-        match self {
-            ExprTarget::Table(table) => Some(table),
-            _ => None,
-        }
-    }
-
-    /// Returns the table, panicking if not [`ExprTarget::Table`].
-    ///
-    /// # Panics
-    ///
-    /// Panics if the target is not `Table`.
-    #[track_caller]
-    pub fn as_table_unwrap(self) -> &'a Table {
-        self.as_table()
-            .unwrap_or_else(|| panic!("expected ExprTarget::Table; was {self:#?}"))
     }
 }
 
@@ -810,6 +777,7 @@ impl<'a, T: Resolve> IntoExprTarget<'a, T> for &'a ExprSet {
             ExprSet::Select(select) => select.into_expr_target(schema),
             ExprSet::SetOp(_) => todo!(),
             ExprSet::Update(update) => update.into_expr_target(schema),
+            ExprSet::Delete(delete) => delete.into_expr_target(schema),
             ExprSet::Values(_) => ExprTarget::Free,
             ExprSet::Insert(insert) => insert.into_expr_target(schema),
         }

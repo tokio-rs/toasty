@@ -20,7 +20,7 @@ use toasty_core::{
     stmt,
 };
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_string(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -44,7 +44,7 @@ pub async fn in_list_string(t: &mut Test) -> Result<()> {
     names.sort();
     assert_eq!(names, vec!["a".to_string(), "c".to_string()]);
 
-    if t.capability().sql {
+    if t.capability().sql() {
         let elem = column_storage_ty(&db, "items", "name");
         assert_in_list_bind(&pop_select(t), t.capability(), &elem, Some(2));
     }
@@ -52,7 +52,7 @@ pub async fn in_list_string(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(scenario(crate::scenarios::in_list_item))]
 pub async fn not_in_list_string(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -77,7 +77,7 @@ pub async fn not_in_list_string(t: &mut Test) -> Result<()> {
     names.sort();
     assert_eq!(names, vec!["b".to_string(), "d".to_string()]);
 
-    if t.capability().sql {
+    if t.capability().sql() {
         let elem = column_storage_ty(&db, "items", "name");
         assert_in_list_bind(&pop_select(t), t.capability(), &elem, Some(2));
     }
@@ -85,7 +85,7 @@ pub async fn not_in_list_string(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_empty(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -117,7 +117,7 @@ pub async fn in_list_empty(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_i64_large(t: &mut Test) -> Result<()> {
     // Regression guard: with PG's gate on, the engine must bind the whole
     // list as a single `Value::List` param. With the gate off (SQLite,
@@ -144,7 +144,7 @@ pub async fn in_list_i64_large(t: &mut Test) -> Result<()> {
 
     assert_eq!(items.len(), expected);
 
-    if t.capability().sql {
+    if t.capability().sql() {
         let elem = column_storage_ty(&db, "items", "n");
         assert_in_list_bind(&pop_select(t), t.capability(), &elem, Some(expected));
     }
@@ -152,7 +152,7 @@ pub async fn in_list_i64_large(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_id(t: &mut Test) -> Result<()> {
     // Filter by the auto-generated id. Runs once per ID variant, so this
     // exercises the PG driver's per-element-type dispatch for both `u64`
@@ -182,7 +182,7 @@ pub async fn in_list_id(t: &mut Test) -> Result<()> {
     names.sort();
     assert_eq!(names, vec!["a".to_string(), "c".to_string()]);
 
-    if t.capability().sql {
+    if t.capability().sql() {
         let elem = column_storage_ty(&db, "items", "id");
         assert_in_list_bind(&pop_select(t), t.capability(), &elem, Some(2));
     }
@@ -190,7 +190,7 @@ pub async fn in_list_id(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::in_list_item))]
+#[driver_test(scenario(crate::scenarios::in_list_item))]
 pub async fn in_list_with_null(t: &mut Test) -> Result<()> {
     // Exercises the PG driver's `Vec<Option<T>>` bind path: a `None` in the
     // list maps to a SQL NULL inside the bound array.
@@ -219,7 +219,7 @@ pub async fn in_list_with_null(t: &mut Test) -> Result<()> {
     assert_eq!(items.len(), 1);
     assert_eq!(items[0].name, "a");
 
-    if t.capability().sql {
+    if t.capability().sql() {
         // The per-item path's scalar count is implementation-defined here
         // (the engine may drop the null operand at extract time), so pass
         // `None` to skip the count check; element-type assertions still run.
@@ -245,27 +245,6 @@ fn pop_select(t: &mut Test) -> QuerySql {
         }
     }
     panic!("expected a SELECT QuerySql op in the log");
-}
-
-/// Look up the storage type of a column from the schema. Drives element-
-/// type assertions per driver, since the same model maps to different
-/// storage types (e.g. `String` → `Text` on PG/SQLite vs. `VarChar(191)`
-/// on MySQL).
-fn column_storage_ty(db: &toasty::Db, table_name: &str, column_name: &str) -> db::Type {
-    let schema = db.schema();
-    let table = schema
-        .db
-        .tables
-        .iter()
-        .find(|t| t.name == table_name || t.name.ends_with(table_name))
-        .unwrap_or_else(|| panic!("table '{table_name}' not in schema"));
-    table
-        .columns
-        .iter()
-        .find(|c| c.name == column_name)
-        .unwrap_or_else(|| panic!("column '{column_name}' not in table '{table_name}'"))
-        .storage_ty
-        .clone()
 }
 
 /// Assert that an `IN`-list query was bound according to the driver's

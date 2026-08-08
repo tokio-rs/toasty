@@ -1,11 +1,8 @@
 mod primitive;
 pub use primitive::{FieldPrimitive, SerializeFormat};
 
-use super::{
-    AutoStrategy, BelongsTo, Constraint, Embedded, HasMany, HasOne, Model, ModelId, Schema,
-    VariantId,
-};
-use crate::{Result, driver, stmt};
+use super::{AutoStrategy, BelongsTo, Constraint, Embedded, Has, ModelId, VariantId, Via};
+use crate::{Result, driver, schema::Name, stmt};
 use std::fmt;
 
 /// A single field within a model.
@@ -59,6 +56,12 @@ pub struct Field {
     /// If this field belongs to an enum variant, identifies that variant.
     /// `None` for fields on root models and embedded structs.
     pub variant: Option<VariantId>,
+
+    /// The shared logical field this variant field participates in, from
+    /// `#[shared(<ident>)]`. Variant fields declaring the same identifier are
+    /// backed by a single shared column. `None` for fields that own their
+    /// column outright (including all fields outside enum variants).
+    pub shared: Option<Name>,
 }
 
 /// Uniquely identifies a [`Field`] within a schema.
@@ -153,19 +156,6 @@ impl FieldName {
     pub fn storage_name(&self) -> Option<&str> {
         self.storage.as_deref().or(self.app.as_deref())
     }
-
-    /// Returns the storage (database column) name for this field.
-    ///
-    /// This is a convenience wrapper around [`storage_name`](FieldName::storage_name)
-    /// for callers that expect a name to always be present.
-    ///
-    /// # Panics
-    ///
-    /// Panics if both `storage` and `app` are `None`.
-    pub fn storage_name_unwrap(&self) -> &str {
-        self.storage_name()
-            .expect("must specify app name or storage name")
-    }
 }
 
 impl fmt::Display for FieldName {
@@ -188,7 +178,7 @@ impl fmt::Display for FieldName {
 ///     storage_ty: None,
 ///     serialize: None,
 /// });
-/// assert!(ty.is_primitive());
+/// assert!(ty.as_primitive().is_some());
 /// assert!(!ty.is_relation());
 /// ```
 #[derive(Clone)]
@@ -199,10 +189,10 @@ pub enum FieldTy {
     Embedded(Embedded),
     /// The owning side of a relationship (stores the foreign key).
     BelongsTo(BelongsTo),
-    /// The inverse side of a one-to-many relationship.
-    HasMany(HasMany),
-    /// The inverse side of a one-to-one relationship.
-    HasOne(HasOne),
+    /// The inverse side of a relationship.
+    Has(Has),
+    /// A relation reached by following a path of existing relations.
+    Via(Via),
 }
 
 impl Field {
@@ -216,19 +206,9 @@ impl Field {
         &self.name
     }
 
-    /// Returns a reference to this field's [`FieldTy`].
-    pub fn ty(&self) -> &FieldTy {
-        &self.ty
-    }
-
     /// Returns `true` if this field is nullable.
     pub fn nullable(&self) -> bool {
         self.nullable
-    }
-
-    /// Returns `true` if this field is part of the primary key.
-    pub fn primary_key(&self) -> bool {
-        self.primary_key
     }
 
     /// Returns the auto-population strategy, if one is configured.
@@ -246,32 +226,20 @@ impl Field {
         self.versionable
     }
 
-    /// Returns `true` if this field is a relation (`BelongsTo`, `HasMany`, or
-    /// `HasOne`).
+    /// Returns `true` if this field is a relation (`BelongsTo`, `Has`, or
+    /// `Via`).
     pub fn is_relation(&self) -> bool {
         self.ty.is_relation()
-    }
-
-    /// Returns a fully qualified name for the field.
-    pub fn full_name(&self, schema: &Schema) -> Option<String> {
-        self.name.app.as_ref().map(|app_name| {
-            let model = schema.model(self.id.model);
-            format!("{}::{}", model.name().upper_camel_case(), app_name)
-        })
     }
 
     /// If the field is a relation, return the relation's target ModelId.
     pub fn relation_target_id(&self) -> Option<ModelId> {
         match &self.ty {
             FieldTy::BelongsTo(belongs_to) => Some(belongs_to.target),
-            FieldTy::HasMany(has_many) => Some(has_many.target),
+            FieldTy::Has(has) => Some(has.target),
+            FieldTy::Via(via) => Some(via.target),
             _ => None,
         }
-    }
-
-    /// If the field is a relation, return the target of the relation.
-    pub fn relation_target<'a>(&self, schema: &'a Schema) -> Option<&'a Model> {
-        self.relation_target_id().map(|id| schema.model(id))
     }
 
     /// Returns the expression type this field evaluates to.
@@ -283,23 +251,24 @@ impl Field {
             FieldTy::Primitive(primitive) => &primitive.ty,
             FieldTy::Embedded(embedded) => &embedded.expr_ty,
             FieldTy::BelongsTo(belongs_to) => &belongs_to.expr_ty,
-            FieldTy::HasMany(has_many) => &has_many.expr_ty,
-            FieldTy::HasOne(has_one) => &has_one.expr_ty,
+            FieldTy::Has(has) => &has.expr_ty,
+            FieldTy::Via(via) => &via.expr_ty,
         }
     }
 
     /// Returns the paired relation field, if this field is a relation.
     ///
-    /// For `BelongsTo` this returns the inverse `HasMany`/`HasOne` (if linked).
-    /// For `HasMany` and `HasOne` this returns the paired `BelongsTo`.
-    /// Returns `None` for primitive and embedded fields.
+    /// For `BelongsTo` this returns the inverse `Has` relation (if linked).
+    /// For `Has` this returns the paired `BelongsTo`.
+    /// Returns `None` for primitive and embedded fields, and for multi-step
+    /// (`via`) relations, which have no pair.
     pub fn pair(&self) -> Option<FieldId> {
         match &self.ty {
             FieldTy::Primitive(_) => None,
             FieldTy::Embedded(_) => None,
             FieldTy::BelongsTo(belongs_to) => belongs_to.pair,
-            FieldTy::HasMany(has_many) => Some(has_many.pair),
-            FieldTy::HasOne(has_one) => Some(has_one.pair),
+            FieldTy::Has(has) => Some(has.pair_id),
+            FieldTy::Via(_) => None,
         }
     }
 
@@ -315,11 +284,6 @@ impl Field {
 }
 
 impl FieldTy {
-    /// Returns `true` if this is a [`FieldTy::Primitive`].
-    pub fn is_primitive(&self) -> bool {
-        matches!(self, Self::Primitive(..))
-    }
-
     /// Returns the inner [`FieldPrimitive`] if this is a primitive field.
     pub fn as_primitive(&self) -> Option<&FieldPrimitive> {
         match self {
@@ -342,154 +306,82 @@ impl FieldTy {
         }
     }
 
-    /// Returns a mutable reference to the inner [`FieldPrimitive`], panicking
-    /// if this is not a primitive field.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self` is not [`FieldTy::Primitive`].
-    #[track_caller]
-    pub fn as_primitive_mut_unwrap(&mut self) -> &mut FieldPrimitive {
-        match self {
-            Self::Primitive(simple) => simple,
-            _ => panic!("expected simple field, but was {self:?}"),
-        }
-    }
-
-    /// Returns `true` if this is a [`FieldTy::Embedded`].
-    pub fn is_embedded(&self) -> bool {
-        matches!(self, Self::Embedded(..))
-    }
-
-    /// Returns the inner [`Embedded`] if this is an embedded field.
-    pub fn as_embedded(&self) -> Option<&Embedded> {
-        match self {
-            Self::Embedded(embedded) => Some(embedded),
-            _ => None,
-        }
-    }
-
-    /// Returns the inner [`Embedded`], panicking if this is not an embedded
-    /// field.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self` is not [`FieldTy::Embedded`].
-    #[track_caller]
-    pub fn as_embedded_unwrap(&self) -> &Embedded {
-        match self {
-            Self::Embedded(embedded) => embedded,
-            _ => panic!("expected embedded field, but was {self:?}"),
-        }
-    }
-
-    /// Returns a mutable reference to the inner [`Embedded`], panicking if
-    /// this is not an embedded field.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self` is not [`FieldTy::Embedded`].
-    #[track_caller]
-    pub fn as_embedded_mut_unwrap(&mut self) -> &mut Embedded {
-        match self {
-            Self::Embedded(embedded) => embedded,
-            _ => panic!("expected embedded field, but was {self:?}"),
-        }
-    }
-
-    /// Returns `true` if this is a relation type (`BelongsTo`, `HasMany`, or
-    /// `HasOne`).
+    /// Returns `true` if this is a relation type (`BelongsTo`, `Has`, or
+    /// `Via`).
     pub fn is_relation(&self) -> bool {
-        matches!(
-            self,
-            Self::BelongsTo(..) | Self::HasMany(..) | Self::HasOne(..)
-        )
+        matches!(self, Self::BelongsTo(..) | Self::Has(..) | Self::Via(..))
     }
 
-    /// Returns `true` if this is a `HasMany` or `HasOne` relation.
-    pub fn is_has_n(&self) -> bool {
-        matches!(self, Self::HasMany(..) | Self::HasOne(..))
-    }
-
-    /// Returns `true` if this is a [`FieldTy::HasMany`].
-    pub fn is_has_many(&self) -> bool {
-        matches!(self, Self::HasMany(..))
-    }
-
-    /// Returns the inner [`HasMany`] if this is a has-many field.
-    pub fn as_has_many(&self) -> Option<&HasMany> {
+    /// Returns the inner [`Has`] if this is a has field.
+    pub fn as_has(&self) -> Option<&Has> {
         match self {
-            Self::HasMany(has_many) => Some(has_many),
+            Self::Has(has) => Some(has),
             _ => None,
         }
     }
 
-    /// Returns the inner [`HasMany`], panicking if this is not a has-many
+    /// Returns a mutable reference to the inner [`Has`], panicking if this is
+    /// not a has field.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self` is not [`FieldTy::Has`].
+    #[track_caller]
+    pub fn as_has_mut_unwrap(&mut self) -> &mut Has {
+        match self {
+            Self::Has(has) => has,
+            _ => panic!("expected field to be `Has`, but was {self:?}"),
+        }
+    }
+
+    /// Returns `true` if this is a many-valued [`FieldTy::Has`].
+    pub fn is_has_many(&self) -> bool {
+        self.as_has().is_some_and(Has::is_many)
+    }
+
+    /// Returns the inner [`Has`] if this is a many-valued has field.
+    pub fn as_has_many(&self) -> Option<&Has> {
+        match self {
+            Self::Has(has) if has.is_many() => Some(has),
+            _ => None,
+        }
+    }
+
+    /// Returns the inner [`Has`], panicking if this is not a many-valued has
     /// field.
     ///
     /// # Panics
     ///
-    /// Panics if `self` is not [`FieldTy::HasMany`].
+    /// Panics if `self` is not a many-valued [`FieldTy::Has`].
     #[track_caller]
-    pub fn as_has_many_unwrap(&self) -> &HasMany {
-        match self {
-            Self::HasMany(has_many) => has_many,
-            _ => panic!("expected field to be `HasMany`, but was {self:?}"),
-        }
+    pub fn as_has_many_unwrap(&self) -> &Has {
+        self.as_has_many()
+            .unwrap_or_else(|| panic!("expected field to be `HasMany`, but was {self:?}"))
     }
 
-    /// Returns a mutable reference to the inner [`HasMany`], panicking if
-    /// this is not a has-many field.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self` is not [`FieldTy::HasMany`].
-    #[track_caller]
-    pub fn as_has_many_mut_unwrap(&mut self) -> &mut HasMany {
+    /// Returns the inner [`Has`] if this is a one-valued has field.
+    pub fn as_has_one(&self) -> Option<&Has> {
         match self {
-            Self::HasMany(has_many) => has_many,
-            _ => panic!("expected field to be `HasMany`, but was {self:?}"),
-        }
-    }
-
-    /// Returns the inner [`HasOne`] if this is a has-one field.
-    pub fn as_has_one(&self) -> Option<&HasOne> {
-        match self {
-            Self::HasOne(has_one) => Some(has_one),
+            Self::Has(has) if has.is_one() => Some(has),
             _ => None,
         }
     }
 
-    /// Returns `true` if this is a [`FieldTy::HasOne`].
+    /// Returns `true` if this is a one-valued [`FieldTy::Has`].
     pub fn is_has_one(&self) -> bool {
-        matches!(self, Self::HasOne(..))
+        self.as_has().is_some_and(Has::is_one)
     }
 
-    /// Returns the inner [`HasOne`], panicking if this is not a has-one field.
+    /// Returns the inner [`Has`], panicking if this is not a one-valued has
+    /// field.
     ///
     /// # Panics
     ///
-    /// Panics if `self` is not [`FieldTy::HasOne`].
+    /// Panics if `self` is not a one-valued [`FieldTy::Has`].
     #[track_caller]
-    pub fn as_has_one_unwrap(&self) -> &HasOne {
-        match self {
-            Self::HasOne(has_one) => has_one,
-            _ => panic!("expected field to be `HasOne`, but it was {self:?}"),
-        }
-    }
-
-    /// Returns a mutable reference to the inner [`HasOne`], panicking if
-    /// this is not a has-one field.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self` is not [`FieldTy::HasOne`].
-    #[track_caller]
-    pub fn as_has_one_mut_unwrap(&mut self) -> &mut HasOne {
-        match self {
-            Self::HasOne(has_one) => has_one,
-            _ => panic!("expected field to be `HasOne`, but it was {self:?}"),
-        }
+    pub fn as_has_one_unwrap(&self) -> &Has {
+        self.as_has_one()
+            .unwrap_or_else(|| panic!("expected field to be `HasOne`, but it was {self:?}"))
     }
 
     /// Returns `true` if this is a [`FieldTy::BelongsTo`].
@@ -540,8 +432,8 @@ impl fmt::Debug for FieldTy {
             Self::Primitive(ty) => ty.fmt(fmt),
             Self::Embedded(ty) => ty.fmt(fmt),
             Self::BelongsTo(ty) => ty.fmt(fmt),
-            Self::HasMany(ty) => ty.fmt(fmt),
-            Self::HasOne(ty) => ty.fmt(fmt),
+            Self::Has(ty) => ty.fmt(fmt),
+            Self::Via(ty) => ty.fmt(fmt),
         }
     }
 }

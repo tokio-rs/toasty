@@ -17,7 +17,7 @@ use std::ops::{BitAnd, BitOr, BitOrAssign};
 /// set.insert(2);
 /// assert!(set.contains(0_usize));
 /// assert!(!set.contains(1_usize));
-/// assert_eq!(set.len(), 2);
+/// assert_eq!(set.iter().len(), 2);
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -26,12 +26,16 @@ pub struct PathFieldSet {
 }
 
 /// An iterator over the field indices in a [`PathFieldSet`].
-pub struct PathFieldSetIter<'a> {
-    inner: bit_set::Iter<'a, u32>,
+///
+/// Generic over the underlying `bit-set` iterator rather than naming it: as of
+/// `bit-set` 0.10.1 the concrete `Iter` type lives in a private module and can
+/// no longer be referred to directly.
+pub struct PathFieldSetIter<I> {
+    inner: I,
     len: usize,
 }
 
-impl<'a> Iterator for PathFieldSetIter<'a> {
+impl<I: Iterator<Item = usize>> Iterator for PathFieldSetIter<I> {
     type Item = usize;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -47,22 +51,12 @@ impl<'a> Iterator for PathFieldSetIter<'a> {
     }
 }
 
-impl<'a> ExactSizeIterator for PathFieldSetIter<'a> {}
+impl<I: Iterator<Item = usize>> ExactSizeIterator for PathFieldSetIter<I> {}
 
 impl PathFieldSet {
     /// Creates an empty field set.
     pub fn new() -> Self {
         Self::default()
-    }
-
-    /// Creates a field set from a slice of values convertible to `usize`.
-    pub fn from_slice<T>(fields: &[T]) -> Self
-    where
-        for<'a> &'a T: Into<usize>,
-    {
-        Self {
-            container: fields.iter().map(Into::into).collect(),
-        }
     }
 
     /// Returns `true` if the set contains the given field index.
@@ -71,7 +65,7 @@ impl PathFieldSet {
     }
 
     /// Returns an iterator over the field indices in ascending order.
-    pub fn iter(&self) -> PathFieldSetIter<'_> {
+    pub fn iter(&self) -> PathFieldSetIter<impl Iterator<Item = usize> + '_> {
         PathFieldSetIter {
             inner: self.container.iter(),
             len: self.container.count(),
@@ -81,11 +75,6 @@ impl PathFieldSet {
     /// Returns `true` if the set contains no field indices.
     pub fn is_empty(&self) -> bool {
         self.container.is_empty()
-    }
-
-    /// Returns the number of field indices in the set.
-    pub fn len(&self) -> usize {
-        self.container.count()
     }
 
     /// Inserts a field index into the set.

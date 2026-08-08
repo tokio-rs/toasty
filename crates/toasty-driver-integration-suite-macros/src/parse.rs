@@ -35,6 +35,51 @@ pub struct DriverTest {
     pub attr: DriverTestAttr,
 }
 
+/// Gate names in `requires(...)` that are properties of the test suite rather
+/// than of the database.
+///
+/// A `Capability` states what a backend can do, and the engine reads it to
+/// decide what to emit. A test flag states only that some driver cannot run a
+/// particular test — usually a limitation of the client library rather than of
+/// the database — so it has no business being consulted by the engine.
+///
+/// Flags are named in `requires(...)` exactly like capabilities, and drivers
+/// set them in the `generate_driver_tests!` list alongside capability
+/// overrides. Unlike capabilities, they generate no `Capability` field read,
+/// so they are skipped by both the per-test runtime assertion and the
+/// `validate_driver_capabilities` cross-check.
+pub const TEST_FLAGS: &[&str] = &[
+    // MySQL eliminates a CTE that nothing references before it resolves
+    // placeholder types, then reports every placeholder inside it as
+    // `MYSQL_TYPE_INVALID` (0xf3). SQLx has no mapping for that type and fails
+    // the prepare with an unknown-column-type protocol error, dropping the
+    // connection.
+    "cte_unreferenced",
+];
+
+/// Returns `true` if `name` is a [test flag](TEST_FLAGS) rather than a driver
+/// capability.
+pub fn is_test_flag(name: &str) -> bool {
+    TEST_FLAGS.contains(&name)
+}
+
+/// Builds the expression that reads capability `cap` off `capability`, a
+/// `&Capability` expression.
+///
+/// Capabilities are plain `bool` fields, with one exception: `sql` holds the
+/// driver's SQL dialect as an `Option<Dialect>` and exposes the boolean
+/// view as a method, so `requires(sql)` has to call it.
+pub fn read_capability(
+    capability: proc_macro2::TokenStream,
+    cap: &Ident,
+) -> proc_macro2::TokenStream {
+    if cap == "sql" {
+        quote::quote! { #capability.sql() }
+    } else {
+        quote::quote! { #capability.#cap }
+    }
+}
+
 /// Three-valued boolean logic for predicate evaluation
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ThreeValuedBool {

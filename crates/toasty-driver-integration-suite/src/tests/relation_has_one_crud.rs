@@ -90,30 +90,30 @@ pub async fn crud_has_one_bi_direction_optional(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 #[should_panic]
 pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::Deferred<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         bio: String,
     }
@@ -142,29 +142,29 @@ pub async fn crud_has_one_required_belongs_to_optional(test: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::Deferred<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         bio: String,
     }
@@ -248,29 +248,29 @@ pub async fn update_belongs_to_with_required_has_one_pair(test: &mut Test) -> Re
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
 
         bio: String,
     }
@@ -295,35 +295,12 @@ pub async fn crud_has_one_optional_belongs_to_required(test: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid))]
 pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
+    let mut db = setup(test).await;
 
-        #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Profile {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[unique]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Profile)).await;
-
-    let user = User::create().exec(&mut db).await?;
-    let profile = Profile::create().exec(&mut db).await?;
+    let user = User::create().name("Jane Doe").exec(&mut db).await?;
+    let profile = Profile::create().bio("a person").exec(&mut db).await?;
 
     User::filter_by_id(user.id)
         .update()
@@ -338,32 +315,32 @@ pub async fn set_has_one_by_value_in_update_query(test: &mut Test) -> Result<()>
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn unset_has_one_in_batch_update(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
         name: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -408,29 +385,29 @@ pub async fn unset_has_one_in_batch_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -454,7 +431,7 @@ pub async fn unset_has_one_with_required_pair_in_pk_query_update(test: &mut Test
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(
     test: &mut Test,
 ) -> Result<()> {
@@ -462,26 +439,26 @@ pub async fn unset_has_one_with_required_pair_in_non_pk_query_update(
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
         email: String,
 
         #[has_one]
-        profile: toasty::HasOne<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;
@@ -514,7 +491,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
         id: ID,
 
         #[has_one]
-        profile: toasty::HasOne<Profile>,
+        profile: toasty::Deferred<Profile>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -527,7 +504,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
         user_id: Option<ID>,
 
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
+        user: toasty::Deferred<Option<User>>,
 
         bio: String,
     }
@@ -547,7 +524,7 @@ pub async fn associate_has_one_by_val_on_insert(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid))]
 pub async fn associate_has_one_by_val_on_update_query_with_filter_1(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -588,7 +565,7 @@ pub async fn associate_has_one_by_val_on_update_query_with_filter_1(test: &mut T
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_one_optional_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid))]
 pub async fn associate_has_one_by_val_on_update_query_with_filter_2(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

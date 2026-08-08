@@ -2,24 +2,24 @@ use crate::prelude::*;
 
 /// Registering only the Parent model should auto-discover the Child model
 /// through the BelongsTo relation.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
-        child_id: ID,
+        child_id: uuid::Uuid,
         #[belongs_to(key = child_id, references = id)]
-        child: toasty::BelongsTo<Child>,
+        child: toasty::Deferred<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Child {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
     }
 
     // Auto-discovery should find Child through the BelongsTo relation.
@@ -30,28 +30,28 @@ pub async fn missing_registration_belongs_to(t: &mut Test) -> Result<()> {
 
 /// Registering only the Parent model should auto-discover the Child model
 /// through the HasOne relation.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_one]
-        child: toasty::HasOne<Child>,
+        child: toasty::Deferred<Child>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Child {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        parent_id: ID,
+        parent_id: uuid::Uuid,
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::BelongsTo<Parent>,
+        parent: toasty::Deferred<Parent>,
     }
 
     // Auto-discovery should find Child through the HasOne relation.
@@ -62,28 +62,28 @@ pub async fn missing_registration_has_one(t: &mut Test) -> Result<()> {
 
 /// Registering only the Parent model should auto-discover the Child model
 /// through the HasMany relation.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
-        children: toasty::HasMany<Child>,
+        children: toasty::Deferred<Vec<Child>>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Child {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        parent_id: ID,
+        parent_id: uuid::Uuid,
         #[belongs_to(key = parent_id, references = id)]
-        parent: toasty::BelongsTo<Parent>,
+        parent: toasty::Deferred<Parent>,
     }
 
     // Auto-discovery should find Child through the HasMany relation.
@@ -94,13 +94,13 @@ pub async fn missing_registration_has_many(t: &mut Test) -> Result<()> {
 
 /// Registering only the Parent model should auto-discover the Detail embedded
 /// model through the embedded field.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn missing_registration_embedded(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         detail: Detail,
     }

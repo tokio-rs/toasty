@@ -7,7 +7,7 @@ impl Simplify<'_> {
         if expr.as_map_unwrap().base.is_value() {
             let eval = Func::try_from_stmt(expr, vec![])?;
 
-            let ret = eval.eval_const();
+            let ret = eval.eval_const(self.cx.schema());
             Some(stmt::Expr::Value(ret))
         } else {
             None

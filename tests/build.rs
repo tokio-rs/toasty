@@ -29,7 +29,7 @@ mod readme_usage {
         #[unique]
         email: String,
         #[has_many]
-        todos: toasty::HasMany<Todo>,
+        todos: toasty::Deferred<Vec<Todo>>,
     }
 
     #[derive(Debug, toasty::Model)]
@@ -40,7 +40,7 @@ mod readme_usage {
         #[index]
         user_id: u64,
         #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<User>,
+        user: toasty::Deferred<User>,
         title: String,
     }
 

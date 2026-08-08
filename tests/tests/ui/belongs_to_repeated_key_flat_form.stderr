@@ -1,0 +1,5 @@
+error: `key` specified more than once; use `key = [a, b]` for composite foreign keys
+  --> tests/ui/belongs_to_repeated_key_flat_form.rs:23:9
+   |
+23 |         key = parent_revision, references = revision,
+   |         ^^^

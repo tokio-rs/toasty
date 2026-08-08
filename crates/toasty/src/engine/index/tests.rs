@@ -5,7 +5,7 @@ use toasty_core::{
 };
 
 use crate as toasty;
-use crate::schema::Register;
+use crate::schema::Model;
 
 #[allow(dead_code)]
 #[derive(toasty::Model)]

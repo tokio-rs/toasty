@@ -2,37 +2,14 @@
 
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with some todos
     let user = User::create()
-        .todo(Todo::create())
-        .todo(Todo::create())
+        .todos([Todo::create().title("todo")])
+        .todos([Todo::create().title("todo")])
         .exec(&mut db)
         .await?;
 
@@ -40,7 +17,7 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
     assert_eq!(2, todos.len());
 
     // Remove a todo from the list.
-    user.todos().remove(&mut db, &todos[0]).await?;
+    user.todos().remove(&todos[0]).exec(&mut db).await?;
 
     let todos_reloaded: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(1, todos_reloaded.len());
@@ -55,18 +32,21 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
 
     // Create a second user w/ a TODO. We will ensure that unlinking *only*
     // unlinks records currently associated with the base model.
-    let u2 = User::create().todo(Todo::create()).exec(&mut db).await?;
+    let u2 = User::create()
+        .todos([Todo::create().title("todo")])
+        .exec(&mut db)
+        .await?;
     let u2_todos = u2.todos().exec(&mut db).await?;
 
     // Try unlinking u2's todo via user. This should fail
-    assert_err!(user.todos().remove(&mut db, &u2_todos[0]).await);
+    assert_err!(user.todos().remove(&u2_todos[0]).exec(&mut db).await);
 
     // Reload u2's todo
     let u2_todo = Todo::get_by_id(&mut db, u2_todos[0].id).await?;
     assert_eq!(*u2_todo.user_id.as_ref().unwrap(), u2.id);
 
     // Link the TODO back up
-    user.todos().insert(&mut db, &todos[0]).await?;
+    user.todos().insert(&todos[0]).exec(&mut db).await?;
 
     // The TODO is in the association again
     let todos_reloaded: Vec<_> = user.todos().exec(&mut db).await?;
@@ -75,7 +55,7 @@ pub async fn remove_add_single_relation_option_belongs_to(test: &mut Test) -> Re
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -97,7 +77,10 @@ pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) -> 
     }
 
     // Unlinking a todo deletes it
-    user.todos().remove(&mut db, &todos_reloaded[0]).await?;
+    user.todos()
+        .remove(&todos_reloaded[0])
+        .exec(&mut db)
+        .await?;
 
     // The TODO no longer exists
     assert_err!(Todo::get_by_id(&mut db, todos_reloaded[0].id).await);
@@ -108,7 +91,7 @@ pub async fn add_remove_single_relation_required_belongs_to(test: &mut Test) -> 
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_belongs_to))]
+#[driver_test(scenario(crate::scenarios::has_many_belongs_to::id_uuid))]
 pub async fn reassign_relation_required_belongs_to(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -120,7 +103,7 @@ pub async fn reassign_relation_required_belongs_to(test: &mut Test) -> Result<()
     let t1 = u1.todos().create().title("a todo").exec(&mut db).await?;
 
     // Associate the todo with user 2
-    u2.todos().insert(&mut db, &t1).await?;
+    u2.todos().insert(&t1).exec(&mut db).await?;
 
     // The TODO is no longer associated with user 1
     assert!(u1.todos().exec(&mut db).await?.is_empty());
@@ -132,47 +115,24 @@ pub async fn reassign_relation_required_belongs_to(test: &mut Test) -> Result<()
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(scenario(crate::scenarios::has_many_nullable_fk))]
 pub async fn add_remove_multiple_relation_option_belongs_to(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct User {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[has_many]
-        todos: toasty::HasMany<Todo>,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Todo {
-        #[key]
-        #[auto]
-        id: ID,
-
-        #[index]
-        user_id: Option<ID>,
-
-        #[belongs_to(key = user_id, references = id)]
-        user: toasty::BelongsTo<Option<User>>,
-    }
-
-    let mut db = test.setup_db(models!(User, Todo)).await;
+    let mut db = setup(test).await;
 
     // Create a user with no todos
     let user = User::create().exec(&mut db).await?;
 
     // Create some TODOs
-    let t1 = Todo::create().exec(&mut db).await?;
-    let t2 = Todo::create().exec(&mut db).await?;
-    let t3 = Todo::create().exec(&mut db).await?;
+    let t1 = Todo::create().title("todo").exec(&mut db).await?;
+    let t2 = Todo::create().title("todo").exec(&mut db).await?;
+    let t3 = Todo::create().title("todo").exec(&mut db).await?;
 
     let ids = vec![t1.id, t2.id, t3.id];
 
     // Associate the todos with the user
-    user.todos().insert(&mut db, &t1).await?;
-    user.todos().insert(&mut db, &t2).await?;
-    user.todos().insert(&mut db, &t3).await?;
+    user.todos().insert(&t1).exec(&mut db).await?;
+    user.todos().insert(&t2).exec(&mut db).await?;
+    user.todos().insert(&t3).exec(&mut db).await?;
 
     let todos_reloaded: Vec<_> = user.todos().exec(&mut db).await?;
     assert_eq!(todos_reloaded.len(), 3);

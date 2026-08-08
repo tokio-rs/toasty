@@ -1,6 +1,6 @@
 [package]
 name = "toasty-core"
-version = "0.5.0"
+version = "0.9.0"
 description = "Core types, schema representations, and driver interface for Toasty"
 authors.workspace = true
 edition.workspace = true
@@ -17,15 +17,19 @@ documentation = "https://docs.rs/toasty-core"
 assert-struct = { workspace = true, optional = true }
 async-trait.workspace = true
 bit-set.workspace = true
+fluent-uri.workspace = true
+form_urlencoded.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true
 jiff = { workspace = true, optional = true }
+percent-encoding.workspace = true
 rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 serde = { workspace = true, optional = true }
+toml = { workspace = true, optional = true }
 heck.workspace = true
-pluralizer.workspace = true
 tokio-stream.workspace = true
+tracing.workspace = true
 uuid.workspace = true
 
 [features]
@@ -34,6 +38,7 @@ assert-struct = ["dep:assert-struct"]
 rust_decimal = ["dep:rust_decimal"]
 bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
+migration = ["serde", "dep:toml"]
 serde = ["dep:serde", "bit-set/serde"]
 
 [dev-dependencies]

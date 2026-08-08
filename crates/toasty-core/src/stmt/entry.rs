@@ -1,6 +1,6 @@
 use crate::Result;
 
-use super::{Expr, Input, Value};
+use super::{Expr, Value};
 
 /// A borrowed reference to either an [`Expr`] or a [`Value`] within a
 /// composite structure.
@@ -17,7 +17,7 @@ use super::{Expr, Input, Value};
 /// let value = Value::from(42_i64);
 /// let entry = Entry::from(&value);
 /// assert!(entry.is_value());
-/// assert!(!entry.is_expr());
+/// assert!(matches!(entry, Entry::Value(_)));
 /// ```
 #[derive(Debug)]
 pub enum Entry<'a> {
@@ -28,28 +28,6 @@ pub enum Entry<'a> {
 }
 
 impl Entry<'_> {
-    /// Evaluates the entry to a value using the provided input.
-    ///
-    /// For `Entry::Expr`, evaluates the expression with the given input context.
-    /// For `Entry::Value`, returns a clone of the value directly.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use toasty_core::stmt::{Entry, Value, ConstInput};
-    /// let value = Value::from(42);
-    /// let entry = Entry::from(&value);
-    ///
-    /// let result = entry.eval(ConstInput::new()).unwrap();
-    /// assert_eq!(result, Value::from(42));
-    /// ```
-    pub fn eval(&self, input: impl Input) -> Result<Value> {
-        match self {
-            Entry::Expr(expr) => expr.eval(input),
-            Entry::Value(value) => Ok((*value).clone()),
-        }
-    }
-
     /// Evaluates the entry as a constant expression.
     ///
     /// For `Entry::Expr`, attempts to evaluate the expression without any input context.
@@ -106,11 +84,6 @@ impl Entry<'_> {
             Entry::Value(_) => true,
             Entry::Expr(expr) => expr.is_const(),
         }
-    }
-
-    /// Returns `true` if this entry contains an expression.
-    pub fn is_expr(&self) -> bool {
-        matches!(self, Entry::Expr(_))
     }
 
     /// Converts this entry to an owned [`Expr`] by cloning the contained

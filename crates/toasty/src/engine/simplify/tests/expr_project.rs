@@ -5,7 +5,7 @@ use toasty_core::stmt::{self, Expr, ExprMatch, MatchArm, Projection, Value};
 #[test]
 fn project_non_constant_not_simplified() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `project(arg(0), [0])` is not simplified (non-constant base)
     let mut expr = stmt::ExprProject {
@@ -21,7 +21,7 @@ fn project_non_constant_not_simplified() {
 #[test]
 fn project_identity_path() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // `project(42, [])` → `42` (identity projection)
     let mut expr = stmt::ExprProject {
@@ -37,7 +37,7 @@ fn project_identity_path() {
 #[test]
 fn project_into_match_distributes() {
     let schema = test_schema();
-    let mut simplify = Simplify::new(&schema);
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
 
     // project(Match(arg(0), [1 => Record([arg(0), arg(1)]), 2 => Record([arg(0), arg(2)])],
     //               else: Record([arg(0), Error])), [0])

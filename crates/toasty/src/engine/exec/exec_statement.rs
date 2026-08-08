@@ -11,11 +11,34 @@ use crate::{
     },
 };
 
+/// How to interpret a statement's output rows.
+///
+/// A conditional write (the SQL `#[version]` / OCC path compiled as a single
+/// CTE statement) prefixes its result with two probe columns: the number of
+/// rows matching the filter and, of those, the number satisfying the condition.
+/// The write applied only when the two agree; a mismatch is a condition
+/// failure, and zero matched rows means the record no longer exists.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(crate) enum ConditionalOutput {
+    /// Not a conditional write. Output is passed through unchanged.
+    None,
+
+    /// Conditional write with no `RETURNING`. The two probe columns are the
+    /// only output; the action reports the matched-row count.
+    Count,
+
+    /// Conditional write with a `RETURNING`. The two probe columns are followed
+    /// by the changed rows' columns, which become the action's output.
+    Returning,
+}
+
 /// Configuration for pagination at the execution level.
 #[derive(Debug, Clone)]
 pub(crate) struct PaginationConfig {
     /// Number of items per page
     pub page_size: i64,
+    /// Whether the query starts after a cursor and can have a previous page.
+    pub has_previous_page: bool,
     /// Function to extract cursor from a row (SQL only).
     /// For NoSQL drivers, this is None (driver provides cursor).
     pub extract_cursor: Option<eval::Func>,
@@ -37,6 +60,21 @@ struct MySQLInsertReturning {
     auto_column_type: stmt::Type,
 }
 
+/// Information about a MySQL UPDATE with RETURNING that needs special handling.
+///
+/// MySQL doesn't support `RETURNING` on `UPDATE`. The workaround is to strip
+/// the returning, run the UPDATE, then run a follow-up `SELECT` over the same
+/// table and filter to fetch the post-update column values. The two
+/// statements are not atomic relative to concurrent writers — see #881 for
+/// the broader design discussion.
+#[derive(Debug)]
+pub(super) struct MySQLUpdateReturning {
+    /// The `SELECT` statement that returns the post-update values. Carries
+    /// the same filter as the original `UPDATE` plus the projected
+    /// returning expression.
+    select_stmt: stmt::Statement,
+}
+
 #[derive(Debug)]
 pub(crate) struct ExecStatement {
     /// Where to get arguments for this action.
@@ -48,8 +86,8 @@ pub(crate) struct ExecStatement {
     /// The query to execute. This may require input to generate the query.
     pub stmt: stmt::Statement,
 
-    /// When true, the statement is a conditional update without any returning.
-    pub conditional_update_with_no_returning: bool,
+    /// How to interpret this statement's output. See [`ConditionalOutput`].
+    pub conditional: ConditionalOutput,
 
     /// Pagination configuration (None if not paginated)
     pub pagination: Option<PaginationConfig>,
@@ -93,12 +131,16 @@ impl Exec<'_> {
         // IDs.
         let mysql_insert_returning = self.process_stmt_insert_with_returning_on_mysql(&mut stmt);
 
+        // MySQL does not support `RETURNING` on `UPDATE`. Strip the returning
+        // and capture an equivalent `SELECT` to run after the UPDATE.
+        let mysql_update_returning = self.process_stmt_update_with_returning_on_mysql(&mut stmt);
+
         // Short circuit if we can statically determine there are no results
         if let stmt::Statement::Query(query) = &stmt
             && let stmt::ExprSet::Values(values) = &query.body
             && values.is_empty()
         {
-            assert!(!action.conditional_update_with_no_returning);
+            assert_eq!(action.conditional, ConditionalOutput::None);
 
             let rows = if action.output.ty.is_some() {
                 Rows::Stream(stmt::ValueStream::default())
@@ -115,60 +157,103 @@ impl Exec<'_> {
             return Ok(());
         }
 
-        // Only extract bind parameters for SQL drivers. Key-value drivers
-        // (e.g., DynamoDB) read values directly from the statement.
-        let params = if self.engine.capability().sql {
-            self.engine.extract_params(&mut stmt)
-        } else {
-            vec![]
+        // Legalize the statement for the target backend and extract bind
+        // parameters (SQL drivers only; key-value drivers read values
+        // directly from the statement).
+        let params = self.engine.prepare_for_driver(&mut stmt);
+
+        let ret = match action.conditional {
+            // A conditional write prefixes its result with two `I64` probe
+            // counts; the `Returning` variant follows them with the changed
+            // rows' columns.
+            ConditionalOutput::Count => Some(vec![stmt::Type::I64, stmt::Type::I64]),
+            ConditionalOutput::Returning => {
+                let mut tys = vec![stmt::Type::I64, stmt::Type::I64];
+                tys.extend(
+                    action
+                        .output
+                        .ty
+                        .clone()
+                        .expect("conditional write with RETURNING has output columns"),
+                );
+                Some(tys)
+            }
+            ConditionalOutput::None if mysql_insert_returning.is_some() => {
+                // For MySQL INSERT with RETURNING, we don't send RETURNING to the database
+                // (it doesn't support it). The driver will fetch auto-increment IDs using LAST_INSERT_ID().
+                None
+            }
+            ConditionalOutput::None if mysql_update_returning.is_some() => {
+                // The UPDATE has had its RETURNING stripped; the driver runs
+                // a plain UPDATE that returns no rows. The follow-up SELECT
+                // below produces the returning values.
+                None
+            }
+            ConditionalOutput::None => action.output.ty.clone(),
         };
 
         let op = operation::QuerySql {
             stmt,
             params,
-            ret: if action.conditional_update_with_no_returning {
-                Some(vec![stmt::Type::I64, stmt::Type::I64])
-            } else if mysql_insert_returning.is_some() {
-                // For MySQL INSERT with RETURNING, we don't send RETURNING to the database
-                // (it doesn't support it). The driver will fetch auto-increment IDs using LAST_INSERT_ID().
-                None
-            } else {
-                action.output.ty.clone()
-            },
+            ret,
             last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
         };
 
         let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
-        if action.conditional_update_with_no_returning {
-            let Rows::Stream(rows) = res.values else {
-                return Err(toasty_core::Error::invalid_result(format!(
-                    "conditional update expected Stream, got {:?}",
-                    res.values
-                )));
-            };
-
-            let rows = rows.collect().await?;
-            assert_eq!(rows.len(), 1);
-
-            let stmt::Value::Record(record) = &rows[0] else {
-                return Err(toasty_core::Error::invalid_result(format!(
-                    "conditional update expected Record, got {:?}",
-                    rows[0]
-                )));
-            };
-
-            assert_eq!(record.len(), 2);
-
-            if record[0] != record[1] {
-                return Err(toasty_core::Error::condition_failed(
-                    "update condition did not match",
-                ));
+        match action.conditional {
+            ConditionalOutput::None => {
+                if let Some(mysql_info) = mysql_insert_returning {
+                    res.values = mysql_info.reconstruct_returning(res.values).await?;
+                } else if let Some(mysql_update) = mysql_update_returning {
+                    res = self
+                        .run_mysql_update_returning_select(mysql_update, action.output.ty.clone())
+                        .await?;
+                }
             }
+            ConditionalOutput::Count | ConditionalOutput::Returning => {
+                let rows = collect_conditional_probe(res.values).await?;
+                let (matched, conditioned) = conditional_probe_counts(&rows[0])?;
 
-            res.values = Rows::Count(record[0].to_u64_unwrap());
-        } else if let Some(mysql_info) = mysql_insert_returning {
-            res.values = mysql_info.reconstruct_returning(res.values).await?;
+                // A conditional write targets a row the caller holds an
+                // instance of: zero matched rows means it has since been
+                // deleted.
+                if matched == 0 {
+                    return Err(toasty_core::Error::record_not_found(
+                        "conditional write matched no rows",
+                    ));
+                }
+                if matched != conditioned {
+                    return Err(toasty_core::Error::condition_failed(
+                        "write condition did not match",
+                    ));
+                }
+
+                res.values = match action.conditional {
+                    ConditionalOutput::Count => Rows::Count(matched as u64),
+                    _ => {
+                        // The probe locked the matched rows, so the write
+                        // applied to exactly those rows and every result row is
+                        // a real changed row — strip the two leading probe
+                        // columns.
+                        let changed = rows
+                            .into_iter()
+                            .map(|row| {
+                                let stmt::Value::Record(record) = row else {
+                                    return Err(toasty_core::Error::invalid_result(
+                                        "conditional write expected Record",
+                                    ));
+                                };
+                                Ok(stmt::Value::record_from_vec(
+                                    record.fields.into_iter().skip(2).collect(),
+                                ))
+                            })
+                            .collect::<Result<Vec<_>>>()?;
+
+                        Rows::value_stream(changed)
+                    }
+                };
+            }
         }
 
         // Apply pagination if configured
@@ -207,16 +292,19 @@ impl Exec<'_> {
         // Extract cursors for potential next/prev pages
         res.next_cursor = if row_vec.len() == page_size {
             let cursor_row = &row_vec[page_size - 1];
-            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
+            Some(extract_cursor.eval(&self.engine.schema, std::slice::from_ref(cursor_row))?)
         } else {
             // Got fewer than page_size rows, no more data
             None
         };
 
-        // Extract prev cursor from first row only when the driver supports backward pagination
-        res.prev_cursor = if !row_vec.is_empty() && self.engine.capability().backward_pagination {
+        // Extract a previous cursor only when this query started after another page.
+        res.prev_cursor = if pagination.has_previous_page
+            && !row_vec.is_empty()
+            && self.engine.capability().backward_pagination
+        {
             let cursor_row = &row_vec[0];
-            Some(extract_cursor.eval(std::slice::from_ref(cursor_row))?)
+            Some(extract_cursor.eval(&self.engine.schema, std::slice::from_ref(cursor_row))?)
         } else {
             None
         };
@@ -226,6 +314,70 @@ impl Exec<'_> {
 }
 
 impl Exec<'_> {
+    /// Detects an UPDATE with a non-empty `RETURNING` on a MySQL backend
+    /// and rewrites the statement for the workaround path:
+    ///
+    /// - The returning clause is stripped from the UPDATE so the SQL
+    ///   serializer doesn't reject it.
+    /// - An equivalent `SELECT` over the same table + filter is captured,
+    ///   carrying the original returning expression as its projection.
+    ///
+    /// Returns `None` when the backend supports `RETURNING` natively (PG,
+    /// SQLite) or when the statement is not an UPDATE with a returning
+    /// project. The two-statement path is not atomic relative to concurrent
+    /// writers — see #881.
+    pub(super) fn process_stmt_update_with_returning_on_mysql(
+        &self,
+        stmt: &mut stmt::Statement,
+    ) -> Option<MySQLUpdateReturning> {
+        if self.engine.capability().returning_from_mutation || !self.engine.capability().sql() {
+            return None;
+        }
+
+        let stmt::Statement::Update(update) = stmt else {
+            return None;
+        };
+
+        let table_id = match &update.target {
+            stmt::UpdateTarget::Table(table_id) => *table_id,
+            _ => return None,
+        };
+
+        let returning = update.returning.take()?;
+
+        let select = stmt::Select {
+            returning,
+            source: stmt::Source::table(table_id),
+            filter: update.filter.clone(),
+            distinct: false,
+        };
+        let select_stmt =
+            stmt::Statement::Query(stmt::Query::new(stmt::ExprSet::Select(Box::new(select))));
+
+        Some(MySQLUpdateReturning { select_stmt })
+    }
+
+    /// Runs the follow-up `SELECT` for a MySQL UPDATE with stripped
+    /// `RETURNING`. The driver receives a plain query whose result rows
+    /// take the place of the original RETURNING output.
+    pub(super) async fn run_mysql_update_returning_select(
+        &mut self,
+        mysql_update: MySQLUpdateReturning,
+        ret_ty: Option<Vec<stmt::Type>>,
+    ) -> Result<toasty_core::driver::ExecResponse> {
+        let mut select_stmt = mysql_update.select_stmt;
+        let select_params = self.engine.prepare_for_driver(&mut select_stmt);
+
+        let op = operation::QuerySql {
+            stmt: select_stmt,
+            params: select_params,
+            ret: ret_ty,
+            last_insert_id_hack: None,
+        };
+
+        self.connection.exec(&self.engine.schema, op.into()).await
+    }
+
     /// Processes INSERT statements with RETURNING on MySQL, which doesn't support RETURNING.
     ///
     /// Returns information needed to reconstruct the RETURNING results using LAST_INSERT_ID()
@@ -239,7 +391,7 @@ impl Exec<'_> {
         &self,
         stmt: &mut stmt::Statement,
     ) -> Option<MySQLInsertReturning> {
-        if self.engine.capability().returning_from_mutation {
+        if !self.engine.capability().sql() || self.engine.capability().returning_from_mutation {
             return None;
         }
 
@@ -318,6 +470,44 @@ impl Exec<'_> {
     }
 }
 
+/// Collects a conditional write's result rows. The probe (a `COUNT` aggregate)
+/// always yields at least one row, so an empty result is a driver bug.
+async fn collect_conditional_probe(rows: Rows) -> Result<Vec<stmt::Value>> {
+    let Rows::Stream(rows) = rows else {
+        return Err(toasty_core::Error::invalid_result(format!(
+            "conditional write expected Stream, got {rows:?}"
+        )));
+    };
+
+    let rows = rows.collect().await?;
+    if rows.is_empty() {
+        return Err(toasty_core::Error::invalid_result(
+            "conditional write probe returned no rows",
+        ));
+    }
+
+    Ok(rows)
+}
+
+/// Reads the two leading probe counts (`matched`, `conditioned`) from a
+/// conditional write's result row.
+fn conditional_probe_counts(row: &stmt::Value) -> Result<(i64, i64)> {
+    let stmt::Value::Record(record) = row else {
+        return Err(toasty_core::Error::invalid_result(format!(
+            "conditional write expected Record, got {row:?}"
+        )));
+    };
+
+    match (record.fields.first(), record.fields.get(1)) {
+        (Some(stmt::Value::I64(matched)), Some(stmt::Value::I64(conditioned))) => {
+            Ok((*matched, *conditioned))
+        }
+        _ => Err(toasty_core::Error::invalid_result(format!(
+            "conditional write probe columns are not I64; row={row:?}"
+        ))),
+    }
+}
+
 impl From<ExecStatement> for Action {
     fn from(value: ExecStatement) -> Self {
         Self::ExecStatement(value.into())
@@ -368,8 +558,9 @@ impl MySQLInsertReturning {
                 "Expected record with one field from driver"
             );
 
-            // Cast the ID to the correct type for the auto-increment column
-            let id_value = self.auto_column_type.cast(record.fields[0].clone())?;
+            // Cast the ID to the correct type for the auto-increment column.
+            // An auto-increment ID is a scalar, so the cast is schema-free.
+            let id_value = self.auto_column_type.cast(&(), record.fields[0].clone())?;
             let input = vec![id_value];
 
             // Evaluate the returning expression with the auto-increment ID

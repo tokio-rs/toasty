@@ -10,6 +10,8 @@ use crate::{
         mir::{self, LogicalPlan},
     },
 };
+use std::sync::Arc;
+use toasty_core::Schema;
 
 #[derive(Debug)]
 struct HirPlanner<'a> {
@@ -28,6 +30,7 @@ struct ExecPlanner<'a> {
     var_decls: VarDecls,
     actions: Vec<exec::Action>,
     use_transactions: bool,
+    schema: Arc<Schema>,
 }
 
 impl Engine {
@@ -49,7 +52,8 @@ impl Engine {
             logical_plan: &logical_plan,
             var_decls: VarDecls::default(),
             actions: vec![],
-            use_transactions: self.capability().sql,
+            use_transactions: self.capability().sql(),
+            schema: self.schema.clone(),
         }
         .plan_execution()
     }

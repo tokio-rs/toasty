@@ -24,8 +24,14 @@ pub(crate) use value::Value;
 use async_trait::async_trait;
 use toasty_core::{
     Error, Result, Schema,
-    driver::{Capability, Driver, ExecResponse, operation::Operation},
-    schema::db::{self, Column, ColumnId, Migration, SchemaDiff, Table},
+    driver::{
+        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig, log::QueryLog,
+        operation::Operation,
+    },
+    schema::{
+        db::{self, Column, ColumnId, Migration, Table},
+        diff,
+    },
     stmt::{self, ExprContext},
 };
 
@@ -64,6 +70,18 @@ impl DynamoDb {
     pub async fn from_env(url: String) -> Result<Self> {
         use aws_config::BehaviorVersion;
 
+        // The URL does not name the endpoint — that comes from the ambient AWS
+        // config — but validate it anyway, so a typo fails here instead of
+        // silently connecting to whatever the environment points at.
+        let parsed = toasty_core::driver::ConnectionUrl::parse(&url)?;
+        parsed.validate_authority()?;
+
+        if !parsed.has_scheme("dynamodb") {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "connection URL does not have a `dynamodb` scheme; url={url}"
+            )));
+        }
+
         let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;
         let client = Client::new(&sdk_config);
         Ok(Self::new(url, client))
@@ -86,12 +104,17 @@ impl Driver for DynamoDb {
         &Capability::DYNAMODB
     }
 
-    async fn connect(&self) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> toasty_core::Result<Box<dyn toasty_core::driver::Connection>> {
         // Clone the shared client - cheap operation (Client uses Arc internally)
-        Ok(Box::new(Connection::new(self.client.clone())))
+        let mut connection = Connection::new(self.client.clone());
+        connection.query_log = cx.query_log;
+        Ok(Box::new(connection))
     }
 
-    fn generate_migration(&self, _schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, _schema_diff: &diff::Schema<'_>) -> Migration {
         unimplemented!(
             "DynamoDB migrations are not yet supported. DynamoDB schema changes require manual table updates through the AWS console or SDK."
         )
@@ -137,19 +160,46 @@ impl Driver for DynamoDb {
 pub struct Connection {
     /// Handle to the AWS SDK client
     client: Client,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
     /// Wrap an existing [`aws_sdk_dynamodb::Client`] as a Toasty connection.
     pub fn new(client: Client) -> Self {
-        Self { client }
+        Self {
+            client,
+            query_log: QueryLogConfig::default(),
+        }
     }
+}
+
+/// Resolves the table an operation targets, for the per-query event.
+fn op_table_name<'a>(schema: &'a Schema, op: &Operation) -> Option<&'a str> {
+    let table_id = match op {
+        Operation::GetByKey(op) => op.table,
+        Operation::QueryPk(op) => op.table,
+        Operation::DeleteByKey(op) => op.table,
+        Operation::UpdateByKey(op) => op.table,
+        Operation::Upsert(op) => op.stmt.target.as_table_unwrap().table,
+        Operation::FindPkByIndex(op) => op.table,
+        Operation::Scan(op) => op.table,
+        _ => return None,
+    };
+    Some(&schema.db.table(table_id).name)
 }
 
 #[async_trait]
 impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
-        self.exec2(schema, op).await
+        let log = QueryLog::operation(
+            &self.query_log,
+            "dynamodb",
+            op.name(),
+            op_table_name(schema, &op),
+        );
+        let result = self.exec2(schema, op).await;
+        log.finish(&result);
+        result
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
@@ -183,6 +233,7 @@ impl Connection {
             Operation::QueryPk(op) => self.exec_query_pk(schema, op).await,
             Operation::DeleteByKey(op) => self.exec_delete_by_key(&schema.db, op).await,
             Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
+            Operation::Upsert(op) => self.exec_upsert(&schema.db, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(
@@ -195,6 +246,9 @@ impl Connection {
                 }
             }
             Operation::Scan(op) => self.exec_scan(schema, op).await,
+            Operation::RawSql(_) => Err(Error::unsupported_feature(
+                "raw SQL is only supported by SQL drivers",
+            )),
             Operation::Transaction(_) => Err(Error::unsupported_feature(
                 "transactions are not supported by the DynamoDB driver",
             )),
@@ -324,6 +378,12 @@ fn ddb_expression(
     expr: &stmt::Expr,
 ) -> String {
     match expr {
+        stmt::Expr::Between(expr_between) => {
+            let field = ddb_expression(cx, attrs, primary, &expr_between.expr);
+            let low = ddb_expression(cx, attrs, primary, &expr_between.low);
+            let high = ddb_expression(cx, attrs, primary, &expr_between.high);
+            format!("{field} BETWEEN {low} AND {high}")
+        }
         stmt::Expr::BinaryOp(expr_binary_op) => {
             let lhs = ddb_expression(cx, attrs, primary, &expr_binary_op.lhs);
             let rhs = ddb_expression(cx, attrs, primary, &expr_binary_op.rhs);
@@ -338,15 +398,22 @@ fn ddb_expression(
                 stmt::BinaryOp::Ge => format!("{lhs} >= {rhs}"),
                 stmt::BinaryOp::Lt => format!("{lhs} < {rhs}"),
                 stmt::BinaryOp::Le => format!("{lhs} <= {rhs}"),
+                // DynamoDB condition expressions don't support arithmetic
+                // between operands. Arithmetic ops belong in update
+                // expressions (handled by `update_by_key.rs`), not in
+                // condition/filter expressions.
+                stmt::BinaryOp::Add | stmt::BinaryOp::Sub => {
+                    todo!(
+                        "arithmetic operators in DynamoDB condition expressions are not supported"
+                    )
+                }
             }
         }
         stmt::Expr::Reference(expr_reference) => {
-            let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
-            let is_bool = column.ty.is_bool();
-            let col_alias = attrs.column(column).to_string();
+            let (column, col_alias) = column_alias(cx, attrs, expr_reference);
             // A bare boolean column reference used as a predicate (result of
             // `field = true` simplification) needs an explicit equality check.
-            if is_bool {
+            if column.ty.is_bool() {
                 let true_val = attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::Bool(true));
                 format!("{col_alias} = {true_val}")
             } else {
@@ -354,6 +421,21 @@ fn ddb_expression(
             }
         }
         stmt::Expr::Value(val) => attrs.value(val),
+        // A projection into a `#[document]` column (`profile().name()`)
+        // arrives lowered as a `FuncJsonExtract` name path. DynamoDB filter
+        // expressions address nested Map attributes natively, so it renders
+        // as `#col_0.#doc_1.#doc_2`.
+        stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
+            let (path, leaf_ty) = document_path(cx, attrs, func);
+            // Like a bare bool column reference, a bool leaf in predicate
+            // position needs an explicit equality check.
+            if leaf_ty.is_bool() {
+                let true_val = attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::Bool(true));
+                format!("{path} = {true_val}")
+            } else {
+                path
+            }
+        }
         stmt::Expr::And(expr_and) => {
             let operands = expr_and
                 .operands
@@ -389,7 +471,20 @@ fn ddb_expression(
             format!("{expr} IN ({items})")
         }
         stmt::Expr::IsNull(expr_is_null) => {
-            let inner = ddb_expression(cx, attrs, primary, &expr_is_null.expr);
+            // `attribute_not_exists` takes a bare attribute path. Resolve a
+            // column alias or document path directly rather than through
+            // `ddb_expression`, which would expand a bool column/leaf to
+            // `#col = :true` — a comparison valid only in predicate position,
+            // not as a function argument. (Without this, `.is_none()` on any
+            // `Option<bool>` — including an `Option<Embed>` presence column —
+            // produces invalid syntax.)
+            let inner = match &*expr_is_null.expr {
+                stmt::Expr::Reference(expr_reference) => column_alias(cx, attrs, expr_reference).1,
+                stmt::Expr::Func(stmt::ExprFunc::JsonExtract(func)) => {
+                    document_path(cx, attrs, func).0
+                }
+                other => ddb_expression(cx, attrs, primary, other),
+            };
             format!("attribute_not_exists({inner})")
         }
         stmt::Expr::Not(expr_not) => {
@@ -406,13 +501,76 @@ fn ddb_expression(
                 "LIKE is not supported by the DynamoDB driver; use starts_with for prefix matching"
             )
         }
+        stmt::Expr::AnyOp(any) if matches!(any.op, stmt::BinaryOp::Eq) => {
+            // `Path::contains(value)` lowers to `value = ANY(col)`. On
+            // DynamoDB that's `contains(path, value)` — the standard List
+            // membership filter.
+            let value = ddb_expression(cx, attrs, primary, &any.lhs);
+            let path = ddb_expression(cx, attrs, primary, &any.rhs);
+            format!("contains({path}, {value})")
+        }
+        stmt::Expr::Length(expr) => {
+            let inner = ddb_expression(cx, attrs, primary, &expr.expr);
+            format!("size({inner})")
+        }
+        stmt::Expr::Cast(expr_cast) if expr_cast.ty == stmt::Type::Bool => {
+            // Bool key/index fields bridge through I8 (db::Type::Integer(1) via
+            // bridge_type). The lowering wraps the I8 column ref in
+            // Cast(col_ref, Bool) when the field appears as a bare predicate
+            // (result of `field = true` simplification). In predicate position
+            // this means "is true"; the `field = false` case arrives as
+            // Not(Cast(col_ref, Bool)) and is handled by the Not arm above.
+            let col_alias = ddb_expression(cx, attrs, primary, &expr_cast.expr);
+            let true_val =
+                attrs.ddb_value(aws_sdk_dynamodb::types::AttributeValue::N("1".to_string()));
+            format!("{col_alias} = {true_val}")
+        }
         _ => todo!("FILTER = {:#?}", expr),
     }
+}
+
+/// Resolves a column reference to its DynamoDB attribute alias (e.g. `#col_3`),
+/// registering the underlying attribute name in `attrs`. Returns the resolved
+/// column alongside the alias so callers can inspect its storage type.
+fn column_alias<'a>(
+    cx: &ExprContext<'a, db::Schema>,
+    attrs: &mut ExprAttrs,
+    expr_reference: &stmt::ExprReference,
+) -> (&'a Column, String) {
+    let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
+    let alias = attrs.column(column).to_string();
+    (column, alias)
+}
+
+/// Renders a lowered document path ([`stmt::FuncJsonExtract`]) as a DynamoDB
+/// attribute path (`#col_0.#doc_1.#doc_2`), registering each path segment as
+/// an expression attribute name. The path arrives fully resolved from the
+/// engine's document lowering — segment names and leaf type live in the node,
+/// so no schema is consulted. Returns the rendered path and the leaf type.
+fn document_path<'a>(
+    cx: &ExprContext<'a, db::Schema>,
+    attrs: &mut ExprAttrs,
+    func: &'a stmt::FuncJsonExtract,
+) -> (String, &'a stmt::Type) {
+    let stmt::Expr::Reference(expr_reference) = func.base.as_ref() else {
+        todo!("document path base must be a column reference; func={func:#?}")
+    };
+    let (_, mut path) = column_alias(cx, attrs, expr_reference);
+
+    for name in &func.path {
+        path.push('.');
+        path.push_str(attrs.document_segment(name));
+    }
+
+    (path, &func.ty)
 }
 
 #[derive(Default)]
 struct ExprAttrs {
     columns: HashMap<ColumnId, String>,
+    /// Placeholder per document path segment, keyed by the segment (field)
+    /// name so repeated mentions of the same key share one placeholder.
+    document_segments: HashMap<String, String>,
     attr_names: HashMap<String, String>,
     attr_values: HashMap<String, AttributeValue>,
 }
@@ -426,6 +584,21 @@ impl ExprAttrs {
                 let name = format!("#col_{}", column.id.index);
                 self.attr_names.insert(name.clone(), column.name.clone());
                 e.insert(name)
+            }
+            Entry::Occupied(e) => e.into_mut(),
+        }
+    }
+
+    /// Registers one segment of a document path (a field name inside a Map
+    /// attribute) and returns its placeholder.
+    fn document_segment(&mut self, name: &str) -> &str {
+        use std::collections::hash_map::Entry;
+
+        match self.document_segments.entry(name.to_owned()) {
+            Entry::Vacant(e) => {
+                let placeholder = format!("#doc_{}", self.attr_names.len());
+                self.attr_names.insert(placeholder.clone(), name.to_owned());
+                e.insert(placeholder)
             }
             Entry::Occupied(e) => e.into_mut(),
         }

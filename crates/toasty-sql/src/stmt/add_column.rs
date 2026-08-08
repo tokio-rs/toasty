@@ -17,9 +17,9 @@ pub struct AddColumn {
 
 impl Statement {
     /// Adds a column to a table.
-    pub fn add_column(column: &Column, capability: &Capability) -> Self {
+    pub fn add_column(table: TableId, column: &Column, capability: &Capability) -> Self {
         AddColumn {
-            table: column.id.table,
+            table,
             column: ColumnDef::from_schema(column, &capability.storage_types, capability),
         }
         .into()

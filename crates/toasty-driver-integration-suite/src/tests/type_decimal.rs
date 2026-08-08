@@ -3,13 +3,13 @@ use crate::prelude::*;
 use rust_decimal::Decimal;
 use std::str::FromStr;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn ty_decimal(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         val: Decimal,
     }
 
@@ -36,7 +36,35 @@ pub async fn ty_decimal(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test(requires(and(native_array, native_decimal)))]
+pub async fn ty_decimal_vec(test: &mut Test) -> Result<(), BoxError> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+        values: Vec<Decimal>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let values = vec![
+        Decimal::from_str("123.456")?,
+        Decimal::from_str("-0.0000000001")?,
+    ];
+
+    let item = toasty::create!(Item {
+        values: values.clone(),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
+#[driver_test]
 pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     use rust_decimal::Decimal;
     use std::str::FromStr;
@@ -45,7 +73,7 @@ pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = text)]
         val: Decimal,
     }
@@ -67,13 +95,13 @@ pub async fn ty_decimal_as_text(test: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
-#[driver_test(id(ID), requires(decimal_arbitrary_precision))]
+#[driver_test(requires(decimal_arbitrary_precision))]
 pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = numeric)]
         val: Decimal,
     }
@@ -96,13 +124,13 @@ pub async fn ty_decimal_as_numeric_arbitrary_precision(test: &mut Test) -> Resul
     Ok(())
 }
 
-#[driver_test(id(ID), requires(native_decimal))]
+#[driver_test(requires(native_decimal))]
 pub async fn ty_decimal_as_numeric_fixed_precision(test: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         #[column(type = numeric(28, 10))]
         val: Decimal,
     }

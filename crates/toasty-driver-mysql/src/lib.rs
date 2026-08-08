@@ -2,7 +2,7 @@
 #![allow(clippy::needless_range_loop)]
 
 //! Toasty driver for [MySQL](https://www.mysql.com/) using
-//! [`mysql_async`](https://docs.rs/mysql_async).
+//! [SQLx](https://docs.rs/sqlx).
 //!
 //! # Examples
 //!
@@ -16,21 +16,76 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use mysql_async::{
-    Conn, OptsBuilder,
-    prelude::{Queryable, ToValue},
+use sqlx_core::{
+    connection::{ConnectOptions as _, Connection as SqlxConnection},
+    row::Row,
+    sql_str::AssertSqlSafe,
 };
-use std::{borrow::Cow, sync::Arc};
+use sqlx_mysql::{MySqlArguments, MySqlConnectOptions, MySqlConnection, MySqlDatabaseError};
+use std::{borrow::Cow, cell::Cell, sync::Arc};
 use toasty_core::{
     Result, Schema,
-    driver::{Capability, Driver, ExecResponse, Operation},
-    schema::db::{self, Migration, SchemaDiff, Table},
+    driver::{
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, Operation, QueryLogConfig,
+        log::QueryLog,
+        operation::{RawSqlRet, Transaction, TransactionMode},
+    },
+    schema::{
+        db::{self, Migration, Table},
+        diff,
+    },
     stmt::{self, ValueRecord},
 };
 use toasty_sql::{self as sql};
-use url::Url;
 
-/// A MySQL [`Driver`] that connects via `mysql_async`.
+enum SqlReturn {
+    Count {
+        last_insert_id_hack: Option<u64>,
+        sql_is_insert: bool,
+    },
+    Infer,
+    Types(Vec<stmt::Type>),
+}
+
+/// Classifies a SQLx MySQL error into a Toasty error.
+///
+/// Transport and protocol failures become `ConnectionLost`. MySQL
+/// errors with numbers that Toasty understands become typed errors.
+/// Everything else becomes `DriverOperationFailed`.
+fn classify_mysql_error(e: sqlx_core::Error) -> toasty_core::Error {
+    match e {
+        error @ (sqlx_core::Error::Io(_)
+        | sqlx_core::Error::Protocol(_)
+        | sqlx_core::Error::WorkerCrashed) => toasty_core::Error::connection_lost(error),
+        sqlx_core::Error::Database(database_error) => {
+            let mysql_error = database_error
+                .try_downcast_ref::<MySqlDatabaseError>()
+                .expect("SQLx returned a non-MySQL database error from a MySQL connection");
+            let number = mysql_error.number();
+            let message = mysql_error.message().to_owned();
+
+            match number {
+                1213 => toasty_core::Error::serialization_failure(message),
+                1792 => toasty_core::Error::read_only_transaction(message),
+                _ => toasty_core::Error::driver_operation_failed(sqlx_core::Error::Database(
+                    database_error,
+                )),
+            }
+        }
+        other => toasty_core::Error::driver_operation_failed(other),
+    }
+}
+
+/// Classifies a SQLx error and records whether the connection is still usable.
+fn record_mysql_err(valid: &Cell<bool>, e: sqlx_core::Error) -> toasty_core::Error {
+    let err = classify_mysql_error(e);
+    if err.is_connection_lost() {
+        valid.set(false);
+    }
+    err
+}
+
+/// A MySQL [`Driver`] that connects through SQLx.
 ///
 /// # Examples
 ///
@@ -42,42 +97,44 @@ use url::Url;
 #[derive(Debug)]
 pub struct MySQL {
     url: String,
-    opts: OptsBuilder,
+    opts: MySqlConnectOptions,
 }
 
 impl MySQL {
-    /// Create a new MySQL driver from a connection URL.
+    /// Creates a MySQL driver from a SQLx connection URL.
     ///
-    /// The URL must use the `mysql` scheme and include a database path, e.g.
+    /// The URL must use the `mysql` scheme and include a database path, such as
     /// `mysql://user:pass@host:3306/dbname`.
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        if url.scheme() != "mysql" {
+        if !url.has_scheme("mysql") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection url does not have a `mysql` scheme; url={}",
-                url
+                url.as_str()
             )));
         }
 
-        url.host_str().ok_or_else(|| {
+        url.host()?.ok_or_else(|| {
             toasty_core::Error::invalid_connection_url(format!(
                 "missing host in connection URL; url={}",
-                url
+                url.as_str()
             ))
         })?;
 
         if url.path().is_empty() {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
-                url
+                url.as_str()
             )));
         }
 
-        let opts = mysql_async::Opts::from_url(url.as_ref())
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-        let opts = mysql_async::OptsBuilder::from_opts(opts).client_found_rows(true);
+        let opts = url
+            .as_str()
+            .parse::<MySqlConnectOptions>()
+            .map_err(toasty_core::Error::driver_operation_failed)?
+            .disable_statement_logging();
 
         Ok(Self { url: url_str, opts })
     }
@@ -93,14 +150,19 @@ impl Driver for MySQL {
         &Capability::MYSQL
     }
 
-    async fn connect(&self) -> Result<Box<dyn toasty_core::driver::Connection>> {
-        let conn = Conn::new(self.opts.clone())
+    async fn connect(
+        &self,
+        cx: &ConnectContext,
+    ) -> Result<Box<dyn toasty_core::driver::Connection>> {
+        let conn = MySqlConnection::connect_with(&self.opts)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-        Ok(Box::new(Connection::new(conn)))
+            .map_err(classify_mysql_error)?;
+        let mut connection = Connection::new(conn);
+        connection.query_log = cx.query_log;
+        Ok(Box::new(connection))
     }
 
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         let statements = sql::MigrationStatement::from_diff(schema_diff, &Capability::MYSQL);
 
         let sql_strings: Vec<String> = statements
@@ -111,30 +173,28 @@ impl Driver for MySQL {
         Migration::new_sql_with_breakpoints(&sql_strings)
     }
 
-    async fn reset_db(&self) -> toasty_core::Result<()> {
-        let mut conn = Conn::new(self.opts.clone())
+    async fn reset_db(&self) -> Result<()> {
+        let mut conn = MySqlConnection::connect_with(&self.opts)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_mysql_error)?;
+        let dbname = self.opts.get_database().ok_or_else(|| {
+            toasty_core::Error::invalid_connection_url("no database name configured")
+        })?;
 
-        let dbname = conn
-            .opts()
-            .db_name()
-            .ok_or_else(|| {
-                toasty_core::Error::invalid_connection_url("no database name configured")
-            })?
-            .to_string();
+        let dbname = format!("`{}`", dbname.replace('`', "``"));
 
-        conn.query_drop(format!("DROP DATABASE IF EXISTS `{}`", dbname))
+        sqlx_core::raw_sql::raw_sql(AssertSqlSafe(format!("DROP DATABASE IF EXISTS {dbname}")))
+            .execute(&mut conn)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        conn.query_drop(format!("CREATE DATABASE `{}`", dbname))
+            .map_err(classify_mysql_error)?;
+        sqlx_core::raw_sql::raw_sql(AssertSqlSafe(format!("CREATE DATABASE {dbname}")))
+            .execute(&mut conn)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        conn.query_drop(format!("USE `{}`", dbname))
+            .map_err(classify_mysql_error)?;
+        sqlx_core::raw_sql::raw_sql(AssertSqlSafe(format!("USE {dbname}")))
+            .execute(&mut conn)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(classify_mysql_error)?;
 
         Ok(())
     }
@@ -143,46 +203,141 @@ impl Driver for MySQL {
 /// An open connection to a MySQL database.
 #[derive(Debug)]
 pub struct Connection {
-    conn: Conn,
+    conn: MySqlConnection,
+    /// Set to `false` after a connection-level failure. SQLx does not expose a
+    /// passive validity flag, so the driver records one for [`is_valid`].
+    valid: Cell<bool>,
+    query_log: QueryLogConfig,
 }
 
 impl Connection {
-    /// Wrap an existing [`mysql_async::Conn`] as a Toasty connection.
-    pub fn new(conn: Conn) -> Self {
-        Self { conn }
+    /// Wraps an existing SQLx [`MySqlConnection`] as a Toasty connection.
+    pub fn new(conn: MySqlConnection) -> Self {
+        Self {
+            conn,
+            valid: Cell::new(true),
+            query_log: QueryLogConfig::default(),
+        }
     }
 
-    /// Create a table and its indices from a schema definition.
+    async fn exec_sql(
+        &mut self,
+        sql_as_str: &str,
+        args: MySqlArguments,
+        ret: SqlReturn,
+        log: &mut QueryLog<'_>,
+    ) -> Result<ExecResponse> {
+        if let SqlReturn::Count {
+            last_insert_id_hack,
+            sql_is_insert,
+        } = ret
+        {
+            let result = sqlx_core::query::query_with(AssertSqlSafe(sql_as_str), args)
+                .execute(&mut self.conn)
+                .await
+                .map_err(|e| record_mysql_err(&self.valid, e))?;
+            let count = result.rows_affected();
+
+            if let Some(num_rows) = last_insert_id_hack {
+                assert!(
+                    sql_is_insert,
+                    "last_insert_id_hack should only be used with INSERT statements"
+                );
+
+                let first_id = result.last_insert_id();
+                let results = (0..num_rows).map(move |offset| {
+                    let id = first_id + offset;
+                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
+                });
+
+                log.rows(num_rows);
+                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
+                    results,
+                )));
+            }
+
+            return Ok(ExecResponse::count(count));
+        }
+
+        let rows = sqlx_core::query::query_with(AssertSqlSafe(sql_as_str), args)
+            .fetch_all(&mut self.conn)
+            .await
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
+
+        log.rows(rows.len() as u64);
+        let mut records = Vec::with_capacity(rows.len());
+
+        for row in rows {
+            let mut values = Vec::with_capacity(row.len());
+
+            match &ret {
+                SqlReturn::Count { .. } => unreachable!(),
+                SqlReturn::Infer => {
+                    for i in 0..row.len() {
+                        let column = row.column(i);
+                        values.push(
+                            Value::from_sql_infer(i, &row, column)
+                                .map_err(|e| record_mysql_err(&self.valid, e))?
+                                .into_inner(),
+                        );
+                    }
+                }
+                SqlReturn::Types(returning) => {
+                    assert_eq!(
+                        row.len(),
+                        returning.len(),
+                        "row={row:#?}; returning={returning:#?}"
+                    );
+
+                    for i in 0..row.len() {
+                        let column = row.column(i);
+                        values.push(
+                            Value::from_sql(i, &row, column, &returning[i])
+                                .map_err(|e| record_mysql_err(&self.valid, e))?
+                                .into_inner(),
+                        );
+                    }
+                }
+            }
+
+            records.push(Ok(ValueRecord::from_vec(values)));
+        }
+
+        Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
+            records.into_iter(),
+        )))
+    }
+
+    /// Creates a table and its indices from a schema definition.
     pub async fn create_table(&mut self, schema: &db::Schema, table: &Table) -> Result<()> {
         let serializer = sql::Serializer::mysql(schema);
+        let statement =
+            serializer.serialize(&sql::Statement::create_table(table, &Capability::MYSQL));
 
-        let sql = serializer.serialize(&sql::Statement::create_table(table, &Capability::MYSQL));
-
-        self.conn
-            .exec_drop(&sql, ())
+        sqlx_core::query::query(AssertSqlSafe(statement))
+            .execute(&mut self.conn)
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
         for index in &table.indices {
             if index.primary_key {
                 continue;
             }
 
-            let sql = serializer.serialize(&sql::Statement::create_index(index));
-
-            self.conn
-                .exec_drop(&sql, ())
+            let statement = serializer.serialize(&sql::Statement::create_index(index));
+            sqlx_core::query::query(AssertSqlSafe(statement))
+                .execute(&mut self.conn)
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
+                .map_err(|e| record_mysql_err(&self.valid, e))?;
         }
 
         Ok(())
     }
 }
 
-impl From<Conn> for Connection {
-    fn from(conn: Conn) -> Self {
-        Self { conn }
+impl From<MySqlConnection> for Connection {
+    fn from(conn: MySqlConnection) -> Self {
+        Self::new(conn)
     }
 }
 
@@ -198,127 +353,98 @@ impl toasty_core::driver::Connection for Connection {
                 op.ret,
                 op.last_insert_id_hack,
             ),
-            Operation::Transaction(op) => {
-                let sql = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
-                self.conn.query_drop(sql).await.map_err(|e| match e {
-                    mysql_async::Error::Server(se) => match se.code {
-                        1213 => toasty_core::Error::serialization_failure(se.message),
-                        1792 => toasty_core::Error::read_only_transaction(se.message),
-                        _ => toasty_core::Error::driver_operation_failed(
-                            mysql_async::Error::Server(se),
-                        ),
+            Operation::RawSql(op) => {
+                let ret = match op.ret {
+                    RawSqlRet::None => SqlReturn::Count {
+                        last_insert_id_hack: None,
+                        sql_is_insert: false,
                     },
-                    other => toasty_core::Error::driver_operation_failed(other),
-                })?;
+                    RawSqlRet::Infer => SqlReturn::Infer,
+                    RawSqlRet::Types(types) => SqlReturn::Types(types),
+                };
+                let mut log = QueryLog::sql(
+                    &self.query_log,
+                    "mysql",
+                    &op.sql,
+                    op.params.iter().map(|tv| &tv.value),
+                );
+                let mut args = MySqlArguments::default();
+                for param in op.params {
+                    Value::from(param.value)
+                        .add_to(&mut args)
+                        .map_err(|e| record_mysql_err(&self.valid, e))?;
+                }
+                let result = self.exec_sql(&op.sql, args, ret, &mut log).await;
+                log.finish(&result);
+                return result;
+            }
+            Operation::Transaction(op) => {
+                if let Transaction::Start {
+                    mode: mode @ (TransactionMode::Immediate | TransactionMode::Exclusive),
+                    ..
+                } = &op
+                {
+                    return Err(toasty_core::Error::unsupported_feature(format!(
+                        "MySQL does not support TransactionMode::{mode:?}"
+                    )));
+                }
+                let statement = sql::Serializer::mysql(&schema.db).serialize_transaction(&op);
+                sqlx_core::raw_sql::raw_sql(AssertSqlSafe(statement))
+                    .execute(&mut self.conn)
+                    .await
+                    .map_err(|e| record_mysql_err(&self.valid, e))?;
                 return Ok(ExecResponse::count(0));
             }
-            op => todo!("op={:#?}", op),
+            op => todo!("op={op:#?}"),
         };
 
         let (sql_as_str, arg_order) =
             sql::Serializer::mysql(&schema.db).serialize_with_arg_order(&sql);
 
-        tracing::debug!(db.system = "mysql", db.statement = %sql_as_str, params = typed_params.len(), "executing SQL");
+        let mut log = QueryLog::sql(
+            &self.query_log,
+            "mysql",
+            &sql_as_str,
+            arg_order.iter().map(|&pos| &typed_params[pos].value),
+        );
 
-        // MySQL uses positional `?` without indices, so params must be reordered
-        // to match the order `Expr::Arg(n)` placeholders appear in the SQL.
-        let params: Vec<_> = arg_order
-            .iter()
-            .map(|&pos| Value::from(typed_params[pos].value.clone()))
-            .collect();
-        let args = params
-            .iter()
-            .map(|param| param.to_value())
+        // MySQL uses positional `?` placeholders, so parameters must follow the
+        // order in which their `Expr::Arg(n)` values appear in serialized SQL.
+        let mut remaining = vec![0usize; typed_params.len()];
+        for &pos in &arg_order {
+            remaining[pos] += 1;
+        }
+        let mut values = typed_params
+            .into_iter()
+            .map(|param| Some(param.value))
             .collect::<Vec<_>>();
-
-        let statement = self
-            .conn
-            .prep(&sql_as_str)
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if ret.is_none() {
-            let count = self
-                .conn
-                .exec_iter(&statement, mysql_async::Params::Positional(args))
-                .await
-                .map_err(toasty_core::Error::driver_operation_failed)?
-                .affected_rows();
-
-            // Handle the last_insert_id_hack for MySQL INSERT with RETURNING
-            if let Some(num_rows) = last_insert_id_hack {
-                // Assert the previous statement was an INSERT
-                assert!(
-                    matches!(sql, sql::Statement::Insert(_)),
-                    "last_insert_id_hack should only be used with INSERT statements"
-                );
-
-                // Execute SELECT LAST_INSERT_ID() on the same connection
-                let first_id: u64 = self
-                    .conn
-                    .query_first("SELECT LAST_INSERT_ID()")
-                    .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?
-                    .ok_or_else(|| {
-                        toasty_core::Error::driver_operation_failed(std::io::Error::other(
-                            "LAST_INSERT_ID() returned no rows",
-                        ))
-                    })?;
-
-                // Generate rows with sequential IDs
-                let results = (0..num_rows).map(move |offset| {
-                    let id = first_id + offset;
-                    // Return a record with a single field containing the ID
-                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
-                });
-
-                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-                    results,
-                )));
-            }
-
-            return Ok(ExecResponse::count(count));
-        }
-
-        let rows: Vec<mysql_async::Row> = self
-            .conn
-            .exec(&statement, &args)
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
-
-        if let Some(returning) = ret {
-            let results = rows.into_iter().map(move |mut row| {
-                assert_eq!(
-                    row.len(),
-                    returning.len(),
-                    "row={row:#?}; returning={returning:#?}"
-                );
-
-                let mut results = Vec::new();
-                for i in 0..row.len() {
-                    let column = &row.columns()[i];
-                    results.push(Value::from_sql(i, &mut row, column, &returning[i]).into_inner());
-                }
-
-                Ok(ValueRecord::from_vec(results))
-            });
-
-            Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-                results,
-            )))
-        } else {
-            let [row] = &rows[..] else { todo!() };
-            let total = row.get::<i64, usize>(0).unwrap();
-            let condition_matched = row.get::<i64, usize>(1).unwrap();
-
-            if total == condition_matched {
-                Ok(ExecResponse::count(total as _))
+        let mut args = MySqlArguments::default();
+        for pos in arg_order {
+            remaining[pos] -= 1;
+            let value = if remaining[pos] == 0 {
+                values[pos].take().expect("MySQL parameter already moved")
             } else {
-                Err(toasty_core::Error::condition_failed(
-                    "update condition did not match",
-                ))
-            }
+                values[pos]
+                    .as_ref()
+                    .expect("MySQL parameter missing")
+                    .clone()
+            };
+            Value::from(value)
+                .add_to(&mut args)
+                .map_err(|e| record_mysql_err(&self.valid, e))?;
         }
+
+        let ret = match ret {
+            Some(types) => SqlReturn::Types(types),
+            None => SqlReturn::Count {
+                last_insert_id_hack,
+                sql_is_insert: matches!(sql, sql::Statement::Insert(_)),
+            },
+        };
+
+        let result = self.exec_sql(&sql_as_str, args, ret, &mut log).await;
+        log.finish(&result);
+        result
     }
 
     async fn push_schema(&mut self, schema: &Schema) -> Result<()> {
@@ -332,27 +458,25 @@ impl toasty_core::driver::Connection for Connection {
     async fn applied_migrations(
         &mut self,
     ) -> Result<Vec<toasty_core::schema::db::AppliedMigration>> {
-        // Ensure the migrations table exists
-        self.conn
-            .exec_drop(
-                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+        sqlx_core::query::query(
+            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id BIGINT UNSIGNED PRIMARY KEY,
                 name TEXT NOT NULL,
                 applied_at TIMESTAMP NOT NULL
             )",
-                (),
-            )
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+        )
+        .execute(&mut self.conn)
+        .await
+        .map_err(|e| record_mysql_err(&self.valid, e))?;
 
-        // Query all applied migrations
-        let rows: Vec<u64> = self
-            .conn
-            .exec("SELECT id FROM __toasty_migrations ORDER BY applied_at", ())
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+        let ids = sqlx_core::query_scalar::query_scalar::<sqlx_mysql::MySql, u64>(
+            "SELECT id FROM __toasty_migrations ORDER BY applied_at",
+        )
+        .fetch_all(&mut self.conn)
+        .await
+        .map_err(|e| record_mysql_err(&self.valid, e))?;
 
-        Ok(rows
+        Ok(ids
             .into_iter()
             .map(toasty_core::schema::db::AppliedMigration::new)
             .collect())
@@ -364,63 +488,72 @@ impl toasty_core::driver::Connection for Connection {
         name: &str,
         migration: &toasty_core::schema::db::Migration,
     ) -> Result<()> {
-        tracing::info!(id = id, name = %name, "applying migration");
-        // Ensure the migrations table exists
-        self.conn
-            .exec_drop(
-                "CREATE TABLE IF NOT EXISTS __toasty_migrations (
+        tracing::info!(id, name, "applying migration");
+        sqlx_core::query::query(
+            "CREATE TABLE IF NOT EXISTS __toasty_migrations (
                 id BIGINT UNSIGNED PRIMARY KEY,
                 name TEXT NOT NULL,
                 applied_at TIMESTAMP NOT NULL
             )",
-                (),
-            )
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+        )
+        .execute(&mut self.conn)
+        .await
+        .map_err(|e| record_mysql_err(&self.valid, e))?;
 
-        // Start transaction
         let mut transaction = self
             .conn
-            .start_transaction(Default::default())
+            .begin()
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
 
-        // Execute each migration statement
         for statement in migration.statements() {
-            if let Err(e) = transaction
-                .query_drop(statement)
+            if let Err(error) = sqlx_core::raw_sql::raw_sql(AssertSqlSafe(statement))
+                .execute(&mut *transaction)
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)
             {
+                let error = record_mysql_err(&self.valid, error);
                 transaction
                     .rollback()
                     .await
-                    .map_err(toasty_core::Error::driver_operation_failed)?;
-                return Err(e);
+                    .map_err(|e| record_mysql_err(&self.valid, e))?;
+                return Err(error);
             }
         }
 
-        // Record the migration
-        if let Err(e) = transaction
-            .exec_drop(
-                "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?, ?, NOW())",
-                (id, name),
-            )
-            .await
-            .map_err(toasty_core::Error::driver_operation_failed)
+        if let Err(error) = sqlx_core::query::query(
+            "INSERT INTO __toasty_migrations (id, name, applied_at) VALUES (?, ?, NOW())",
+        )
+        .bind(id)
+        .bind(name)
+        .execute(&mut *transaction)
+        .await
         {
+            let error = record_mysql_err(&self.valid, error);
             transaction
                 .rollback()
                 .await
-                .map_err(toasty_core::Error::driver_operation_failed)?;
-            return Err(e);
+                .map_err(|e| record_mysql_err(&self.valid, e))?;
+            return Err(error);
         }
 
-        // Commit transaction
         transaction
             .commit()
             .await
-            .map_err(toasty_core::Error::driver_operation_failed)?;
+            .map_err(|e| record_mysql_err(&self.valid, e))?;
         Ok(())
+    }
+
+    fn is_valid(&self) -> bool {
+        self.valid.get()
+    }
+
+    async fn ping(&mut self) -> Result<()> {
+        match self.conn.ping().await {
+            Ok(()) => Ok(()),
+            Err(error) => {
+                self.valid.set(false);
+                Err(toasty_core::Error::connection_lost(error))
+            }
+        }
     }
 }

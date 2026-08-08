@@ -50,6 +50,32 @@ impl Expr {
         }
         .into()
     }
+
+    /// Creates a `expr LIKE pattern` expression with escape character.
+    pub fn like_with_escape(expr: impl Into<Self>, pattern: impl Into<Self>, escape: char) -> Self {
+        ExprLike {
+            expr: Box::new(expr.into()),
+            pattern: Box::new(pattern.into()),
+            escape: Some(escape),
+            case_insensitive: false,
+        }
+        .into()
+    }
+
+    /// Creates a `expr ILIKE pattern` expression with escape character.
+    pub fn ilike_with_escape(
+        expr: impl Into<Self>,
+        pattern: impl Into<Self>,
+        escape: char,
+    ) -> Self {
+        ExprLike {
+            expr: Box::new(expr.into()),
+            pattern: Box::new(pattern.into()),
+            escape: Some(escape),
+            case_insensitive: true,
+        }
+        .into()
+    }
 }
 
 impl From<ExprLike> for Expr {

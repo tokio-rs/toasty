@@ -30,16 +30,20 @@ have them.
 ## User-facing API
 
 Write this section as a chapter of the Toasty user guide — prose that can
-drop into [`docs/guide/src/`](../../guide/src/) once the feature ships.
-Introduce the concept, then show idiomatic usage with runnable code
+be adapted into [`docs/guide/src/`](../../guide/src/) once the feature
+ships. Introduce the concept, then show idiomatic usage with code
 examples. Tell the reader what to call, when to reach for it, and how it
 fits with features they already know.
 
 Match the existing guide's style: narrative prose broken up by `##`
-subsections, Rust code blocks with the doctest preamble (`# use …`,
-`# async fn __example(mut db: toasty::Db) -> toasty::Result<()> { … # Ok(()) # }`),
-and direct instructional voice ("Call `.foo()` on a query…"). Favor worked
-examples over bullet-list API catalogs.
+subsections, Rust code blocks, and direct instructional voice ("Call
+`.foo()` on a query…"). Favor worked examples over bullet-list API
+catalogs.
+
+Code blocks here are illustrative only — they do not need to compile and
+are not tested. Do **not** add doctest boilerplate (`# use …`,
+`# async fn __example(…) { … }`, etc.); show only the lines that matter.
+The doctest preamble belongs in the user guide, not in design docs.
 
 When this changes existing API, include a short "Before and after"
 showing how user code migrates.

@@ -54,14 +54,22 @@ impl OidCache {
         // makes the cached `Type` indistinguishable from one tokio_postgres
         // would build itself — so future `Type` equality / `Kind` checks
         // can't trip over an empty variant list.
+        //
+        // `to_regtype` resolves each name through the session's
+        // `search_path`, exactly as an unqualified name in a statement
+        // would. Matching `pg_type.typname` directly would also match
+        // same-named enums in schemas outside the search path — under
+        // schema-per-tenant setups the cache could then bind the wrong
+        // schema's OID.
         let rows = client
             .query(
-                "SELECT t.typname, t.oid, t.typarray, \
+                "SELECT t.typname, t.oid, t.typarray, n.nspname, \
                         array_agg(e.enumlabel ORDER BY e.enumsortorder) \
-                 FROM pg_type t \
+                 FROM unnest($1::text[]) AS name \
+                 JOIN pg_type t ON t.oid = to_regtype(quote_ident(name))::oid \
+                 JOIN pg_namespace n ON n.oid = t.typnamespace \
                  JOIN pg_enum e ON e.enumtypid = t.oid \
-                 WHERE t.typname = ANY($1) \
-                 GROUP BY t.typname, t.oid, t.typarray",
+                 GROUP BY t.typname, t.oid, t.typarray, n.nspname",
                 &[&uncached],
             )
             .await
@@ -71,19 +79,15 @@ impl OidCache {
             let name: String = row.get(0);
             let oid: u32 = row.get(1);
             let array_oid: u32 = row.get(2);
-            let variants: Vec<String> = row.get(3);
+            let schema: String = row.get(3);
+            let variants: Vec<String> = row.get(4);
 
-            let enum_type = Type::new(
-                name.clone(),
-                oid,
-                Kind::Enum(variants),
-                "public".to_string(),
-            );
+            let enum_type = Type::new(name.clone(), oid, Kind::Enum(variants), schema.clone());
             let array_type = Type::new(
                 format!("_{name}"),
                 array_oid,
                 Kind::Array(enum_type.clone()),
-                "public".to_string(),
+                schema,
             );
             self.enum_types.insert(name.clone(), enum_type);
             self.enum_array_types.insert(name, array_type);
@@ -298,6 +302,56 @@ mod tests {
         assert_eq!(&first, second);
 
         drop_enum(&client, &name).await;
+    }
+
+    /// preload resolves enum names through the session `search_path`, so
+    /// a same-named enum in another schema cannot shadow the visible one.
+    #[tokio::test]
+    async fn preload_resolves_via_search_path() {
+        let Some(client) = try_connect().await else {
+            return;
+        };
+        let schema_a = enum_name("nsp_a");
+        let schema_b = enum_name("nsp_b");
+        for (schema, labels) in [(&schema_a, "'a1', 'a2'"), (&schema_b, "'b1'")] {
+            client
+                .simple_query(&format!("CREATE SCHEMA \"{schema}\""))
+                .await
+                .unwrap();
+            client
+                .simple_query(&format!(
+                    "CREATE TYPE \"{schema}\".status AS ENUM ({labels})"
+                ))
+                .await
+                .unwrap();
+        }
+
+        client
+            .simple_query(&format!("SET search_path TO \"{schema_a}\""))
+            .await
+            .unwrap();
+        let mut cache = OidCache::new();
+        cache.preload(&client, [&db_enum("status")]).await.unwrap();
+        let ty = cache.get(&db_enum("status"));
+        assert_eq!(ty.kind(), &Kind::Enum(vec!["a1".into(), "a2".into()]));
+        assert_eq!(ty.schema(), schema_a);
+
+        client
+            .simple_query(&format!("SET search_path TO \"{schema_b}\""))
+            .await
+            .unwrap();
+        let mut cache = OidCache::new();
+        cache.preload(&client, [&db_enum("status")]).await.unwrap();
+        assert_eq!(
+            cache.get(&db_enum("status")).kind(),
+            &Kind::Enum(vec!["b1".into()])
+        );
+
+        for schema in [&schema_a, &schema_b] {
+            let _ = client
+                .simple_query(&format!("DROP SCHEMA \"{schema}\" CASCADE"))
+                .await;
+        }
     }
 
     /// Multiple uncached enums are resolved in a single round-trip and each

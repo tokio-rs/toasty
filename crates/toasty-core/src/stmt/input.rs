@@ -1,5 +1,6 @@
 use crate::{
     Schema,
+    schema::app::{Model, ModelId},
     stmt::{Expr, ExprArg, ExprContext, ExprReference, Project, Projection, Resolve, Type, Value},
 };
 
@@ -41,6 +42,29 @@ pub trait Input {
         let _ = (expr_reference, projection);
         None
     }
+
+    /// Resolves the application model with the given ID, for casts whose
+    /// conversion is schema-directed (a `#[document]` embed's record ↔
+    /// object conversions).
+    ///
+    /// Defaults to `None`: inputs without schema access evaluate only
+    /// schema-free casts, and a schema-directed cast reaching one fails
+    /// loudly at evaluation.
+    fn resolve_model(&self, id: ModelId) -> Option<&Model> {
+        let _ = id;
+        None
+    }
+}
+
+/// Adapts an [`Input`]'s model resolution to the [`Resolve`] trait, so
+/// expression evaluation can hand it to schema-directed casts
+/// ([`Type::cast`](crate::stmt::Type::cast)).
+pub(crate) struct InputResolve<'a, I: ?Sized>(pub(crate) &'a I);
+
+impl<I: Input + ?Sized> Resolve for InputResolve<'_, I> {
+    fn model(&self, id: ModelId) -> Option<&Model> {
+        self.0.resolve_model(id)
+    }
 }
 
 /// An [`Input`] implementation that resolves nothing.
@@ -64,8 +88,8 @@ pub struct ConstInput {}
 /// expected types at resolution time.
 ///
 /// `TypedInput` delegates resolution to an inner `Input` and then checks
-/// that the resolved expression's inferred type is a subtype of the
-/// expected argument type from `tys`.
+/// that the resolved expression can evaluate to a value of the expected
+/// argument type from `tys` (via [`Expr::is_a`]).
 pub struct TypedInput<'a, I, T = Schema> {
     cx: ExprContext<'a, T>,
     tys: &'a [Type],
@@ -93,26 +117,26 @@ impl<I: Input, T: Resolve> Input for TypedInput<'_, I, T> {
     fn resolve_arg(&mut self, expr_arg: &ExprArg, projection: &Projection) -> Option<Expr> {
         let expr = self.input.resolve_arg(expr_arg, projection)?;
 
-        if !expr.is_value_null() {
-            let actual_ty = self.cx.infer_expr_ty(&expr, &[]);
+        let mut ty = &self.tys[expr_arg.position];
 
-            let mut ty = &self.tys[expr_arg.position];
-
-            for step in projection {
-                ty = match ty {
-                    Type::Record(tys) => &tys[step],
-                    Type::List(item) => item,
-                    _ => todo!("ty={ty:#?}"),
-                };
-            }
-
-            assert!(
-                actual_ty.is_subtype_of(ty),
-                "resolved input did not match requested argument type; expected={ty:#?}; actual={actual_ty:#?}"
-            )
+        for step in projection {
+            ty = match ty {
+                Type::Record(tys) => &tys[step],
+                Type::List(item) => item,
+                _ => todo!("ty={ty:#?}"),
+            };
         }
 
+        assert!(
+            expr.is_a(self.cx.schema(), ty),
+            "resolved input cannot evaluate to the requested argument type; expected={ty:#?}; actual={expr:#?}"
+        );
+
         Some(expr)
+    }
+
+    fn resolve_model(&self, id: ModelId) -> Option<&Model> {
+        self.cx.schema().model(id)
     }
 }
 

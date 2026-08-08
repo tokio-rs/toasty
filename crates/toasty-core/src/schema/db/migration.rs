@@ -1,4 +1,4 @@
-/// A database migration generated from a [`SchemaDiff`](super::SchemaDiff) by a driver.
+/// A database migration generated from a [`diff::Schema`](super::super::diff::Schema) by a driver.
 ///
 /// Currently only SQL migrations are supported. Multiple SQL statements
 /// within a single migration are separated by breakpoint markers
@@ -12,6 +12,7 @@
 /// let m = Migration::new_sql("CREATE TABLE users (id INTEGER PRIMARY KEY)".to_string());
 /// assert_eq!(m.statements(), vec!["CREATE TABLE users (id INTEGER PRIMARY KEY)"]);
 /// ```
+#[derive(Debug)]
 pub enum Migration {
     /// A SQL migration containing one or more statements.
     Sql(String),

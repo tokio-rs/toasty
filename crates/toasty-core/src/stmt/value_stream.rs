@@ -1,3 +1,4 @@
+use crate::schema::Schema;
 use crate::stmt::Type;
 
 use super::Value;
@@ -7,6 +8,7 @@ use std::{
     fmt, mem,
     panic::Location,
     pin::Pin,
+    sync::Arc,
     task::{Context, Poll},
 };
 use tokio_stream::{Stream, StreamExt};
@@ -36,8 +38,9 @@ pub struct ValueStream {
     buffer: Buffer,
     stream: Option<DynStream>,
 
-    /// If set, check values to ensure they are the correct type.
-    ty: Option<(Type, &'static Location<'static>)>,
+    /// If set, check values to ensure they are the correct type. The schema
+    /// resolves `Type::Model` (`#[document]`) field layouts for the check.
+    ty: Option<(Arc<Schema>, Type, &'static Location<'static>)>,
 }
 
 #[derive(Debug)]
@@ -178,9 +181,9 @@ impl ValueStream {
             while let Some(res) = stream.next().await {
                 let value = res?;
 
-                if let Some((ty, location)) = &self.ty {
+                if let Some((schema, ty, location)) = &self.ty {
                     assert!(
-                        value.is_a(ty),
+                        value.is_a(&schema.app, ty),
                         "expected `{ty:?}`; was={value:#?}; origin={location}"
                     );
                 }
@@ -236,29 +239,26 @@ impl ValueStream {
     /// Panics if an already-buffered value is not compatible with `ty`,
     /// or if a previously set type differs from `ty`.
     #[track_caller]
-    pub fn typed(mut self, ty: Type) -> ValueStream {
+    pub fn typed(mut self, schema: Arc<Schema>, ty: Type) -> ValueStream {
         let location = Location::caller();
 
         match &self.ty {
-            Some((prev, _)) => assert_eq!(*prev, ty),
+            Some((_, prev, _)) => assert_eq!(*prev, ty),
             None => {
-                match &self.buffer {
-                    Buffer::One(value) => assert!(
-                        value.is_a(&ty),
+                // Validate already-buffered values against the new type.
+                // Document values have already been raised to their positional
+                // `Value::Record` form by the engine (see the engine's
+                // document raising), so this is a shape check only.
+                let mut tmp = mem::take(&mut self.buffer);
+                while let Some(value) = tmp.next() {
+                    assert!(
+                        value.is_a(&schema.app, &ty),
                         "expected `{ty:?}`; was={value:#?}; origin={location}"
-                    ),
-                    Buffer::Many(values) => {
-                        for value in values {
-                            assert!(
-                                value.is_a(&ty),
-                                "expected `{ty:?}`; was={value:#?}; origin={location}"
-                            );
-                        }
-                    }
-                    _ => {}
+                    );
+                    self.buffer.push(value);
                 }
 
-                self.ty = Some((ty, location));
+                self.ty = Some((schema, ty, location));
             }
         }
 
@@ -273,16 +273,19 @@ impl Stream for ValueStream {
         if let Some(next) = self.buffer.next() {
             Poll::Ready(Some(Ok(next)))
         } else if let Some(stream) = self.stream.as_mut() {
-            let next = Pin::new(stream).poll_next(cx);
-            if let Poll::Ready(Some(Ok(value))) = &next
-                && let Some((ty, location)) = &self.ty
-            {
-                assert!(
-                    value.is_a(ty),
-                    "expected `{ty:?}`; was={value:#?}; origin={location}"
-                );
+            match Pin::new(stream).poll_next(cx) {
+                Poll::Ready(Some(Ok(value))) => {
+                    if let Some((schema, ty, location)) = &self.ty {
+                        assert!(
+                            value.is_a(&schema.app, ty),
+                            "expected `{ty:?}`; was={value:#?}; origin={location}"
+                        );
+                    }
+                    Poll::Ready(Some(Ok(value)))
+                }
+
+                other => other,
             }
-            next
         } else {
             Poll::Ready(None)
         }

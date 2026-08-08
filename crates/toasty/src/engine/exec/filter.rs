@@ -31,7 +31,10 @@ impl Exec<'_> {
         while let Some(res) = input_stream.next().await {
             let value = res?;
 
-            if action.filter.eval_bool(std::slice::from_ref(&value))? {
+            if action
+                .filter
+                .eval_bool(&self.engine.schema, std::slice::from_ref(&value))?
+            {
                 filtered_rows.push(value);
             }
         }

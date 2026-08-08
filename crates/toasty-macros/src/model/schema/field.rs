@@ -4,17 +4,19 @@ use super::{BelongsTo, Column, ErrorSet, HasMany, HasOne, Name};
 
 use syn::spanned::Spanned;
 
-/// Codegen-level representation of a serialization format.
+/// Parsed `#[document]` / `#[document(text)]` attribute data.
+///
+/// `#[document]` forces a field into document storage. The `text` modifier
+/// (`#[document(text)]`) selects PostgreSQL's text `json` over `jsonb`; it is
+/// parsed here but rejected during validation until the text encoding path is
+/// wired up.
 #[derive(Debug, Clone)]
-pub(crate) enum SerializeFormat {
-    Json,
-}
+pub(crate) struct DocumentAttr {
+    /// True if `#[document(text)]` was written (the `binary: false` encoding).
+    pub(crate) text: bool,
 
-/// Parsed `#[serialize(...)]` attribute data.
-#[derive(Debug, Clone)]
-pub(crate) struct SerializeAttr {
-    pub(crate) format: SerializeFormat,
-    pub(crate) nullable: bool,
+    /// The originating attribute, retained for span-accurate diagnostics.
+    pub(crate) attr: syn::Attribute,
 }
 
 #[derive(Debug)]
@@ -56,20 +58,22 @@ pub(crate) struct FieldAttr {
     /// Optional database column name and / or type
     pub(crate) column: Option<Column>,
 
+    /// Shared logical field this enum variant field participates in:
+    /// `#[shared(<ident>)]`. Variant fields declaring the same identifier are
+    /// backed by a single shared column. Only valid on enum variant fields.
+    pub(crate) shared: Option<syn::Ident>,
+
     /// Expression to use as default value on create: `#[default(<expr>)]`
     pub(crate) default_expr: Option<syn::Expr>,
 
     /// Expression to apply on create and update: `#[update(<expr>)]`
     pub(crate) update_expr: Option<syn::Expr>,
 
-    /// Serialization info for the field: `#[serialize(json)]` or `#[serialize(json, nullable)]`
-    pub(crate) serialize: Option<SerializeAttr>,
+    /// Document-storage info for the field: `#[document]` or `#[document(text)]`
+    pub(crate) document: Option<DocumentAttr>,
 
     /// True if the field tracks an OCC version counter
     pub(crate) versionable: bool,
-
-    /// True if the field is annotated with `#[deferred]`
-    pub(crate) deferred: bool,
 }
 
 #[derive(Debug)]
@@ -88,7 +92,8 @@ impl FieldAttr {
     /// Parse `FieldAttr`-related attributes from an attribute list.
     ///
     /// Handles `#[key]`, `#[auto]`, `#[unique]`, `#[index]`, `#[column]`,
-    /// `#[default]`, and `#[update]`. Other attributes are silently skipped.
+    /// `#[shared]`, `#[default]`, and `#[update]`. Other attributes are
+    /// silently skipped.
     pub(crate) fn from_attrs(attrs: &[syn::Attribute]) -> syn::Result<Self> {
         let mut errs = ErrorSet::new();
         let mut field_attr = FieldAttr {
@@ -97,11 +102,11 @@ impl FieldAttr {
             auto: None,
             index: false,
             column: None,
+            shared: None,
             default_expr: None,
             update_expr: None,
-            serialize: None,
+            document: None,
             versionable: false,
-            deferred: false,
         };
 
         for attr in attrs {
@@ -130,7 +135,14 @@ impl FieldAttr {
                     field_attr.unique = true;
                 }
             } else if attr.path().is_ident("index") {
-                if field_attr.index {
+                if !matches!(attr.meta, syn::Meta::Path(_)) {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "field-level `#[index]` does not take arguments; \
+                         for a composite index spanning multiple fields, use a \
+                         struct-level `#[index(field1, field2, ...)]` attribute on the model",
+                    ));
+                } else if field_attr.index {
                     errs.push(syn::Error::new_spanned(
                         attr,
                         "duplicate #[index] attribute",
@@ -148,6 +160,22 @@ impl FieldAttr {
                     match Column::from_ast(attr) {
                         Ok(col) => field_attr.column = Some(col),
                         Err(e) => errs.push(e),
+                    }
+                }
+            } else if attr.path().is_ident("shared") {
+                if field_attr.shared.is_some() {
+                    errs.push(syn::Error::new_spanned(
+                        attr,
+                        "duplicate #[shared] attribute",
+                    ));
+                } else {
+                    match attr.parse_args::<syn::Ident>() {
+                        Ok(ident) => field_attr.shared = Some(ident),
+                        Err(_) => errs.push(syn::Error::new_spanned(
+                            attr,
+                            "expected `#[shared(<identifier>)]`; the argument names \
+                             the logical field shared across enum variants",
+                        )),
                     }
                 }
             } else if attr.path().is_ident("default") {
@@ -183,63 +211,62 @@ impl FieldAttr {
                 } else {
                     field_attr.versionable = true;
                 }
-            } else if attr.path().is_ident("deferred") {
-                if field_attr.deferred {
-                    errs.push(syn::Error::new_spanned(
-                        attr,
-                        "duplicate #[deferred] attribute",
-                    ));
-                } else {
-                    field_attr.deferred = true;
-                }
             } else if attr.path().is_ident("serialize") {
-                if field_attr.serialize.is_some() {
+                // The `#[serialize(json)]` attribute has been replaced by the
+                // `toasty::Json<T>` field wrapper. The wrapper handles the
+                // same encoding through trait dispatch, composes cleanly with
+                // `Option<T>` and `Deferred<T>`, and works in expressions
+                // (e.g. `.eq(Json("hello"))`).
+                errs.push(syn::Error::new_spanned(
+                    attr,
+                    "the `#[serialize(json)]` attribute has been removed; \
+                     wrap the field type in `toasty::Json<T>` instead \
+                     (e.g. `tags: toasty::Json<Vec<String>>`)",
+                ));
+            } else if attr.path().is_ident("document") {
+                if field_attr.document.is_some() {
                     errs.push(syn::Error::new_spanned(
                         attr,
-                        "duplicate #[serialize] attribute",
+                        "duplicate #[document] attribute",
                     ));
                 } else {
-                    match attr.parse_args_with(
-                        syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated,
-                    ) {
-                        Ok(args) => {
-                            let mut format = None;
-                            let mut nullable = false;
+                    let mut text = false;
 
-                            for arg in &args {
-                                if arg == "json" {
-                                    if format.is_some() {
-                                        errs.push(syn::Error::new_spanned(
-                                            arg,
-                                            "duplicate format specifier",
-                                        ));
-                                    } else {
-                                        format = Some(SerializeFormat::Json);
+                    match &attr.meta {
+                        // Bare `#[document]`.
+                        syn::Meta::Path(_) => {}
+                        // `#[document(text)]` and friends.
+                        syn::Meta::List(_) => {
+                            match attr.parse_args_with(
+                                syn::punctuated::Punctuated::<syn::Ident, syn::Token![,]>::parse_terminated,
+                            ) {
+                                Ok(args) => {
+                                    for arg in &args {
+                                        if arg == "text" {
+                                            text = true;
+                                        } else {
+                                            errs.push(syn::Error::new_spanned(
+                                                arg,
+                                                "unsupported document argument; expected `text`",
+                                            ));
+                                        }
                                     }
-                                } else if arg == "nullable" {
-                                    nullable = true;
-                                } else {
-                                    errs.push(syn::Error::new_spanned(
-                                        arg,
-                                        "unsupported serialize argument; expected `json` or `nullable`",
-                                    ));
                                 }
-                            }
-
-                            match format {
-                                Some(format) => {
-                                    field_attr.serialize = Some(SerializeAttr { format, nullable });
-                                }
-                                None => {
-                                    errs.push(syn::Error::new_spanned(
-                                        attr,
-                                        "missing serialization format; expected `json`",
-                                    ));
-                                }
+                                Err(e) => errs.push(e),
                             }
                         }
-                        Err(e) => errs.push(e),
+                        syn::Meta::NameValue(_) => {
+                            errs.push(syn::Error::new_spanned(
+                                attr,
+                                "#[document] does not take a value; use `#[document]` or `#[document(text)]`",
+                            ));
+                        }
                     }
+
+                    field_attr.document = Some(DocumentAttr {
+                        text,
+                        attr: attr.clone(),
+                    });
                 }
             }
         }
@@ -286,7 +313,10 @@ impl Field {
                     ));
                 } else {
                     ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
-                        attr, &field.ty, names,
+                        attr,
+                        field.ident.as_ref().unwrap(),
+                        &field.ty,
+                        names,
                     )?));
                 }
             } else if attr.path().is_ident("has_many") {
@@ -358,13 +388,6 @@ impl Field {
             ));
         }
 
-        if ty.is_some() && attrs.serialize.is_some() {
-            errs.push(syn::Error::new_spanned(
-                field,
-                "#[serialize] cannot be used on relation fields",
-            ));
-        }
-
         if attrs.auto.is_some() && attrs.default_expr.is_some() {
             errs.push(syn::Error::new_spanned(
                 field,
@@ -393,35 +416,55 @@ impl Field {
             ));
         }
 
-        if attrs.versionable {
-            let is_u64 = matches!(&field.ty, syn::Type::Path(p) if p.path.is_ident("u64"));
-            if !is_u64 {
+        if let Some(doc) = &attrs.document {
+            // `#[document(text)]` is parsed but the text-encoding path is not
+            // yet implemented.
+            if doc.text {
                 errs.push(syn::Error::new_spanned(
-                    &field.ty,
-                    "#[version] can only be applied to a u64 field",
+                    &doc.attr,
+                    "#[document(text)] is not yet supported",
                 ));
             }
-        }
 
-        if attrs.deferred {
             if ty.is_some() {
                 errs.push(syn::Error::new_spanned(
                     field,
-                    "#[deferred] cannot be combined with relation attributes",
-                ));
-            }
-
-            if attrs.versionable {
-                errs.push(syn::Error::new_spanned(
-                    field,
-                    "#[deferred] cannot be combined with #[version]",
+                    "#[document] cannot be combined with relation attributes",
                 ));
             }
 
             if attrs.key.is_some() {
                 errs.push(syn::Error::new_spanned(
                     field,
-                    "#[deferred] cannot be combined with #[key]",
+                    "#[document] cannot be combined with #[key]",
+                ));
+            }
+
+            if attrs.versionable {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[version]",
+                ));
+            }
+
+            if attrs.auto.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[document] cannot be combined with #[auto]",
+                ));
+            }
+
+            if attrs.is_indexed() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[index] / #[unique] on a #[document] field is not yet supported",
+                ));
+            }
+
+            if attrs.column.is_some() {
+                errs.push(syn::Error::new_spanned(
+                    field,
+                    "#[column] on a #[document] field is not yet supported",
                 ));
             }
         }

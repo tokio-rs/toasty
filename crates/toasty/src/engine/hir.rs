@@ -47,6 +47,9 @@ pub(super) struct StatementInfo {
     /// are complete. Contains the table-level statement ready for planning.
     pub(super) stmt: Option<Box<stmt::Statement>>,
 
+    /// Whether cursor pagination resumed this query after an earlier page.
+    pub(super) has_pagination_cursor: bool,
+
     /// Statement IDs that must execute before this statement.
     ///
     /// Dependencies ensure execution order for consistency, even when this
@@ -106,6 +109,7 @@ impl StatementInfo {
     pub(super) fn new(deps: HashSet<StmtId>) -> StatementInfo {
         StatementInfo {
             stmt: None,
+            has_pagination_cursor: false,
             deps,
             args: vec![],
             back_refs: HashMap::new(),

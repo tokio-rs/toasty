@@ -25,10 +25,15 @@
 //! [`Auto`](schema::Auto), a wrapper for auto-generated values such as
 //! database-assigned IDs.
 //!
-//! The module also provides the types that represent associations between
-//! models: [`HasMany`](schema::HasMany), [`HasOne`](schema::HasOne), and
-//! [`BelongsTo`](schema::BelongsTo). These appear as fields on model structs
-//! and are populated through the generated relation accessors.
+//! Relation fields can use [`Deferred`](schema::Deferred) for lazy loading or
+//! direct relation values for eager loading. Lazy relations are populated
+//! through `.include(...)` or generated relation accessors. Eager relations are
+//! loaded whenever the model is loaded.
+//!
+//! A many-to-many relationship uses a join model with one `BelongsTo` relation
+//! to each endpoint. Endpoint models can expose the opposite side with
+//! `#[has_many(via = memberships.group)]`; code mutates the join model and uses
+//! the derived `via` field for read-only traversal.
 //!
 //! The module also re-exports from `toasty-core` for inspecting the
 //! app-level and db-level schema representations at runtime.
@@ -37,11 +42,17 @@
 //!
 //! Contains the typed wrappers around the statement AST:
 //! [`Query`](stmt::Query), [`Insert`](stmt::Insert),
-//! [`Update`](stmt::Update), [`Delete`](stmt::Delete), and
+//! [`Update`](stmt::Update), [`Upsert`](stmt::Upsert),
+//! [`Delete`](stmt::Delete), and
 //! [`Statement`]. Also includes expression helpers like [`Expr`](stmt::Expr),
 //! [`Path`](stmt::Path), and the [`in_list`](stmt::in_list) function.
 //! Generated query builders (e.g. `find_by_*`, `filter_by_*`) produce these
 //! types.
+//!
+//! ## [`sql`] — raw SQL execution helpers
+//!
+//! Contains [`sql::statement`] and [`sql::query`] for running backend SQL
+//! through [`Db`], [`Connection`], or [`Transaction`] handles.
 //!
 //! # Key traits
 //!
@@ -63,13 +74,15 @@
 //! - [`Page`](stmt::Page) — a page of results from a paginated query, with cursor-based
 //!   navigation.
 //! - [`Batch`](stmt::Batch) — groups multiple queries into a single round-trip.
+//! - [`Capability`] / [`Dialect`] / [`SqlPlaceholder`] — driver metadata,
+//!   including the SQL dialect spoken and placeholder syntax for raw SQL.
 //! - [`Error`] / [`Result`] — re-exported from `toasty-core`.
 //!
 //! # Derive macros
 //!
 //! - [`#[derive(Model)]`](derive@Model) — generates the
-//!   [`Model`](schema::Model) impl, query builders, create/update builders,
-//!   relation accessors, and schema registration for a struct.
+//!   [`Model`](schema::Model) impl, query builders, create/update/upsert
+//!   builders, relation accessors, and schema registration for a struct.
 //! - [`#[derive(Embed)]`](derive@Embed) — generates the
 //!   [`Embed`](schema::Embed) impl for a type whose fields are stored inline
 //!   in a parent model's table.
@@ -84,6 +97,7 @@
 //! | `postgresql`   | `toasty-driver-postgresql`   |
 //! | `mysql`        | `toasty-driver-mysql`        |
 //! | `dynamodb`     | `toasty-driver-dynamodb`     |
+//! | `turso`        | `toasty-driver-turso`        |
 //!
 //! Additional feature flags: `rust_decimal`, `bigdecimal`, `jiff` (date/time
 //! via the `jiff` crate), and `serde` (JSON serialization support).
@@ -110,65 +124,37 @@ pub use stmt::{Batch, batch};
 
 /// Database handle, connection pool, executor trait, and transaction support.
 pub mod db;
-pub use db::{Connection, Db, Executor, Transaction, TransactionBuilder};
+pub use db::{
+    Capability, Connection, Db, Dialect, Executor, SqlPlaceholder, Transaction, TransactionBuilder,
+};
 
 mod engine;
 
+mod instrument;
+
+/// Schema migration types: history files, snapshots, and generation helpers.
+#[cfg(feature = "migration")]
+pub mod migration;
+
 /// Model, relation, and schema inspection types.
 pub mod schema;
-pub use schema::{BelongsTo, Deferred, HasMany, HasOne};
+pub use schema::Deferred;
 
 // `Page` lives in `stmt`.
 
 /// Typed statement, expression, and query builder types.
 pub mod stmt;
+#[cfg(feature = "serde")]
+pub use stmt::Json;
 pub use stmt::Statement;
 
-pub use toasty_macros::{Embed, Model, create, query};
+/// Raw SQL execution helpers.
+pub mod sql;
+
+#[cfg(feature = "migration")]
+pub use toasty_macros::embed_migrations;
+pub use toasty_macros::{Embed, Model, create, query, update};
 
 pub use toasty_core::{Error, Result, schema::app::ModelSet};
 
-#[doc(hidden)]
-pub mod codegen_support {
-    pub use crate::schema::inventory;
-    pub use crate::{
-        Db, Error, Executor, Result, Statement,
-        schema::create_meta::{assert_create_fields, const_contains},
-        schema::{
-            Auto, BelongsTo, CreateField, CreateMeta, Defer, Deferred, DiscoverItem, Embed, Field,
-            HasMany, HasOne, Load, Model, Register, Relation, Scope, ValidateCreate,
-            build_deferred_load, generate_unique_id,
-        },
-        stmt::CreateMany,
-        stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
-        update_target::UpdateTarget,
-    };
-    #[cfg(feature = "serde")]
-    pub use serde_json;
-    pub use std::{convert::Into, default::Default, option::Option};
-
-    pub use toasty_core as core;
-
-    /// Infer the [`Scope`] type from a scope expression and return its fields
-    /// path.
-    ///
-    /// The `create!` macro uses this in the scoped form (`in expr { ... }`) to
-    /// obtain the field struct for nested builders. Because the macro has no
-    /// type information, it cannot call `S::new_path_root()` directly — this function
-    /// lets Rust infer `S` from the scope argument.
-    pub fn scope_fields<S: Scope>(_scope: &S) -> S::Path<S::Item> {
-        S::new_path_root()
-    }
-
-    /// Convert a value into an untyped [`core::stmt::Expr`] via the typed
-    /// [`IntoExpr<T>`] trait.
-    ///
-    /// Generated code (`#[derive(Model)]`, `#[derive(Embed)]`) splices this in
-    /// instead of inlining the `let expr: Expr<T> = value.into_expr(); expr.into()`
-    /// pattern at every field site. The explicit `T` type parameter
-    /// disambiguates which `IntoExpr` impl to use.
-    pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
-        let expr: stmt::Expr<T> = value.into_expr();
-        expr.into()
-    }
-}
+pub mod codegen_support;

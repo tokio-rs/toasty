@@ -57,7 +57,17 @@ if ! command -v claude >/dev/null 2>&1; then
 fi
 
 read -r -d '' PROMPT <<'PROMPT_EOF' || true
-You are rewriting one release section of a Rust crate changelog so that only changes that matter to LIBRARY CONSUMERS appear. Output ONLY the rewritten markdown — no preamble, no commentary, no code fences, no XML tags, no system reminders.
+You are rewriting one release section of a Rust crate changelog so that only changes that matter to LIBRARY CONSUMERS appear.
+
+Wrap the rewritten section between two marker lines so it can be extracted exactly: emit a line containing only
+
+===BEGIN CHANGELOG===
+
+then a blank line, then the section (starting with the version heading), then the marker line
+
+===END CHANGELOG===
+
+Output NOTHING outside these markers — no preamble, no commentary, no code fences, no XML tags, no system reminders, no closing remarks. The very first line of your response must be ===BEGIN CHANGELOG=== and the very last must be ===END CHANGELOG===.
 
 Rules:
 
@@ -110,22 +120,52 @@ if [ -z "$OUTPUT" ] \
   exit 0
 fi
 
-# Strip any leaked <system-reminder>...</system-reminder> blocks and trim
-# leading/trailing blank lines from Claude's output. release-plz / git-cliff
-# expect each rendered section to be wrapped with one leading and one
-# trailing blank line so consecutive sections in the assembled
-# CHANGELOG.md are separated; we re-add those wrappers at the bottom.
+# Extract the changelog body from Claude's raw output, discarding any
+# leaked commentary. We prefer the explicit ===BEGIN/END CHANGELOG===
+# markers the prompt asks for: keeping only the lines between them drops
+# both leading preamble (e.g. "Now I'll output the rewritten changelog:")
+# and trailing closing remarks. If the markers are absent (model didn't
+# follow instructions), we fall back to dropping everything before the
+# first version heading (## [...]) — that still strips a leading preamble
+# so we keep filtering rather than emitting the raw section. In both modes
+# we also strip any <system-reminder>...</system-reminder> blocks and trim
+# leading/trailing blank lines. release-plz / git-cliff expect each rendered
+# section to be wrapped with one leading and one trailing blank line so
+# consecutive sections in the assembled CHANGELOG.md are separated; we
+# re-add those wrappers at the bottom.
 BODY="$(printf '%s\n' "$OUTPUT" | awk '
-  /<system-reminder>/ { skip=1; next }
-  /<\/system-reminder>/ { skip=0; next }
-  skip { next }
-  { lines[++n] = $0 }
+  { raw[++R] = $0 }
+  $0 == "===BEGIN CHANGELOG===" { hasbegin = 1 }
+  $0 == "===END CHANGELOG===" { hasend = 1 }
   END {
+    use_markers = (hasbegin && hasend)
+    for (i = 1; i <= R; i++) {
+      line = raw[i]
+      if (line ~ /<system-reminder>/) { skip = 1; continue }
+      if (line ~ /<\/system-reminder>/) { skip = 0; continue }
+      if (skip) continue
+      if (use_markers) {
+        if (line == "===BEGIN CHANGELOG===") { inmarker = 1; continue }
+        if (line == "===END CHANGELOG===") { inmarker = 0; continue }
+        if (!inmarker) continue
+      }
+      if (!started && line ~ /^## \[/) started = 1
+      if (!started) continue
+      lines[++n] = line
+    }
     s = 1; while (s <= n && lines[s] == "") s++
     e = n; while (e >= s && lines[e] == "") e--
     for (i = s; i <= e; i++) print lines[i]
   }
 ')"
+
+# If preamble-stripping left nothing (e.g. the heading didn't render where
+# we expected), fall back to the original input rather than emit a blank
+# section.
+if [ -z "$BODY" ]; then
+  printf '%s' "$INPUT"
+  exit 0
+fi
 
 # Collect a sorted, deduped list of `[#NNN]: <url>` definitions from every
 # inline PR reference Claude kept. Then strip the URL out of each inline

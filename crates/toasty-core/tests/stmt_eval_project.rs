@@ -1,4 +1,4 @@
-use toasty_core::stmt::{ConstInput, Expr, ExprArg, Project, Projection, Value};
+use toasty_core::stmt::{BinaryOp, ConstInput, Expr, ExprArg, Project, Projection, Value};
 
 // ---------------------------------------------------------------------------
 // Project from an evaluated record (non-Arg, non-Reference base)
@@ -241,4 +241,46 @@ fn eval_with_input_agrees() {
         expr.eval(ConstInput::new()).unwrap(),
         expr.eval_const().unwrap()
     );
+}
+
+// ---------------------------------------------------------------------------
+// In-memory evaluation of a `#[document]` path
+//
+// A path into a document-stored embed lowers to a plain `ExprProject` and
+// stays one through the engine — only the SQL serializer turns it into a JSON
+// extraction. When a document predicate can't be pushed to the driver
+// (DynamoDB's post-filter, or any SQL in-memory `Filter` fallback), the
+// interpreter evaluates that projection directly against the loaded
+// `Value::Record`, never a JSON function. These guard that path.
+// ---------------------------------------------------------------------------
+
+#[test]
+fn project_nested_document_leaf_in_memory() {
+    // A decoded document, positional after the load boundary:
+    // { theme: "dark", notifications: { email: true, sms: false } }
+    let notifications = Value::record_from_vec(vec![Value::from(true), Value::from(false)]);
+    let doc = Value::record_from_vec(vec![Value::from("dark"), notifications]);
+    let row = vec![doc];
+
+    // `preferences.notifications.email` -> path [1, 0].
+    let expr = Expr::arg_project(ExprArg::new(0), Projection::from([1usize, 0]));
+    assert_eq!(expr.eval(&row).unwrap(), Value::from(true));
+}
+
+#[test]
+fn document_path_predicate_in_memory() {
+    // The full predicate `preferences.notifications.email == true`, evaluated
+    // against a loaded row with no driver pushdown and no JSON function — the
+    // shape the in-memory `Filter` fallback runs. The old design rewrote this
+    // projection to a `FuncJsonExtract`, which eval rejects outright.
+    let notifications = Value::record_from_vec(vec![Value::from(true)]);
+    let doc = Value::record_from_vec(vec![Value::from("dark"), notifications]);
+    let row = vec![doc];
+
+    let predicate = Expr::binary_op(
+        Expr::arg_project(ExprArg::new(0), Projection::from([1usize, 0])),
+        BinaryOp::Eq,
+        true,
+    );
+    assert!(predicate.eval_bool(&row).unwrap());
 }

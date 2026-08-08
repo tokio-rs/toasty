@@ -2,13 +2,11 @@ use crate::Result;
 
 use async_trait::async_trait;
 use std::borrow::Cow;
-use toasty_core::driver::{Capability, Driver};
+use toasty_core::driver::{Capability, ConnectContext, ConnectionUrl, Driver};
 use toasty_core::{
     driver::Connection,
-    schema::db::{Migration, SchemaDiff},
+    schema::{db::Migration, diff},
 };
-
-use url::Url;
 
 /// A connection to a database, wrapping the specific driver implementation.
 pub struct Connect {
@@ -35,6 +33,7 @@ impl Connect {
     /// | `postgresql` / `postgres` | PostgreSQL | `postgresql` |
     /// | `mysql` | MySQL | `mysql` |
     /// | `dynamodb` | DynamoDB | `dynamodb` |
+    /// | `turso` | Turso | `turso` |
     ///
     /// # Errors
     ///
@@ -46,19 +45,21 @@ impl Connect {
                 feature = "dynamodb",
                 feature = "mysql",
                 feature = "postgresql",
-                feature = "sqlite"
+                feature = "sqlite",
+                feature = "turso"
             )),
             allow(unused_variables, unreachable_code)
         )]
 
-        let url = Url::parse(url).map_err(toasty_core::Error::driver_operation_failed)?;
+        let url = ConnectionUrl::parse(url)?;
+        let scheme = url.scheme().to_ascii_lowercase();
 
-        let driver: Box<dyn Driver> = match url.scheme() {
+        let driver: Box<dyn Driver> = match scheme.as_str() {
             #[cfg(feature = "dynamodb")]
             "dynamodb" => {
                 // DynamoDB driver requires async initialization to load AWS config from environment
                 // Spawn a new thread to avoid runtime context issues
-                let url = url.to_string();
+                let url = url.as_str().to_string();
                 let driver = toasty_driver_dynamodb::DynamoDb::from_env(url).await?;
                 Box::new(driver)
             }
@@ -70,7 +71,7 @@ impl Connect {
             }
 
             #[cfg(feature = "mysql")]
-            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.to_string())?),
+            "mysql" => Box::new(toasty_driver_mysql::MySQL::new(url.as_str())?),
             #[cfg(not(feature = "mysql"))]
             "mysql" => {
                 return Err(toasty_core::Error::unsupported_feature(
@@ -79,7 +80,9 @@ impl Connect {
             }
 
             #[cfg(feature = "postgresql")]
-            "postgresql" | "postgres" => Box::new(toasty_driver_postgresql::PostgreSQL::new(url)?),
+            "postgresql" | "postgres" => {
+                Box::new(toasty_driver_postgresql::PostgreSQL::new(url.as_str())?)
+            }
             #[cfg(not(feature = "postgresql"))]
             "postgresql" | "postgres" => {
                 return Err(toasty_core::Error::unsupported_feature(
@@ -88,11 +91,20 @@ impl Connect {
             }
 
             #[cfg(feature = "sqlite")]
-            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url)?),
+            "sqlite" => Box::new(toasty_driver_sqlite::Sqlite::new(url.as_str())?),
             #[cfg(not(feature = "sqlite"))]
             "sqlite" => {
                 return Err(toasty_core::Error::unsupported_feature(
                     "`sqlite` feature not enabled",
+                ));
+            }
+
+            #[cfg(feature = "turso")]
+            "turso" => Box::new(toasty_driver_turso::Turso::new(url.as_str())?),
+            #[cfg(not(feature = "turso"))]
+            "turso" => {
+                return Err(toasty_core::Error::unsupported_feature(
+                    "`turso` feature not enabled",
                 ));
             }
 
@@ -117,11 +129,11 @@ impl Driver for Connect {
         self.driver.capability()
     }
 
-    async fn connect(&self) -> Result<Box<dyn Connection>> {
-        self.driver.connect().await
+    async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn Connection>> {
+        self.driver.connect(cx).await
     }
 
-    fn generate_migration(&self, schema_diff: &SchemaDiff<'_>) -> Migration {
+    fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         self.driver.generate_migration(schema_diff)
     }
 

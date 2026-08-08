@@ -1,0 +1,5 @@
+error[E0080]: evaluation panicked: `toasty::Json<T>` fields require `#[column(type = ...)]`; use `#[column(type = text)]` for text-backed JSON storage
+  --> tests/ui/json_requires_column_type.rs:12:14
+   |
+12 |     payload: Option<Payload>,
+   |              ^^^^^^ evaluation of `_::_` failed here

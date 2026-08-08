@@ -27,7 +27,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     // Clear any setup operations (from reset_db, etc.)
     test.log().clear();
 
-    let is_sql = test.capability().sql;
+    let is_sql = test.capability().sql();
 
     // ========== CREATE ==========
     let user = User::create().name("Alice").age(30).exec(&mut db).await?;
@@ -154,7 +154,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
             filter: None,
             keys: _,
             assignments: #{ [2]: Assignment::Set(== 31i32)},
-            returning: false,
+            returning: None,
         }));
     }
 

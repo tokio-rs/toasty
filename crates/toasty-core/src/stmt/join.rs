@@ -26,8 +26,6 @@ pub struct Join {
 
 /// The type of join and its ON condition.
 ///
-/// Currently only left joins are supported.
-///
 /// # Examples
 ///
 /// ```ignore
@@ -37,6 +35,9 @@ pub struct Join {
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub enum JoinOp {
+    /// An `INNER JOIN` with the given ON condition.
+    Inner(Expr),
+
     /// A `LEFT JOIN` with the given ON condition.
     Left(Expr),
 }

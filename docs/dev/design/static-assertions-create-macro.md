@@ -17,7 +17,7 @@ struct User {
     id: Id<User>,
     name: String,
     #[has_many]
-    todos: HasMany<Todo>,
+    todos: Deferred<Vec<Todo>>,
 }
 
 #[derive(Model)]
@@ -28,7 +28,7 @@ struct Todo {
     #[index]
     user_id: Id<User>,
     #[belongs_to(key = user_id, references = id)]
-    user: BelongsTo<User>,
+    user: Deferred<User>,
     title: String,
 }
 ```
@@ -368,7 +368,7 @@ struct Person {
     #[key] #[auto] id: Id<Person>,
     name: String,
     #[has_many]
-    children: HasMany<Person>,
+    children: Deferred<Vec<Person>>,
 }
 ```
 

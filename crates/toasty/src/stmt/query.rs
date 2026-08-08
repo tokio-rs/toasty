@@ -1,4 +1,6 @@
-use super::{Delete, Expr, IntoExpr, IntoStatement, List, Statement, Value};
+use super::{
+    Delete, Expr, IntoExpr, IntoStatement, List, RelationInsert, RelationRemove, Statement, Value,
+};
 use crate::{
     Executor, Result,
     schema::{Load, Model},
@@ -22,7 +24,7 @@ use toasty_core::stmt::{self, Returning};
 /// # Building queries
 ///
 /// Start with a generated finder (e.g., `User::filter_by_name("Alice")`) or
-/// use [`Query::all`] / [`Query::filter`] directly:
+/// use [`Query::all`] and chain [`filter`](Query::filter):
 ///
 /// ```
 /// # #[derive(Debug, toasty::Model)]
@@ -38,12 +40,12 @@ use toasty_core::stmt::{self, Returning};
 /// let q = Query::<List<User>>::all();
 ///
 /// // Filtered
-/// let q = Query::<List<User>>::filter(User::fields().age().gt(18));
+/// let q = Query::<List<User>>::all().filter(User::fields().age().gt(18));
 ///
 /// // Chained
-/// let mut q = Query::<List<User>>::all()
-///     .and(User::fields().name().eq("Alice"));
-/// q.limit(10);
+/// let q = Query::<List<User>>::all()
+///     .filter(User::fields().name().eq("Alice"))
+///     .limit(10);
 /// ```
 ///
 /// # Execution
@@ -77,6 +79,21 @@ impl<T> Query<T> {
             untyped,
             _p: PhantomData,
         }
+    }
+
+    /// Take the via association out of this query's source, if any.
+    ///
+    /// Returns `Some(_)` when the query was scoped from a relation traversal
+    /// (e.g. built via [`Association::many`](crate::stmt::Association::many)).
+    /// After the call the query no longer carries the association on its source.
+    pub(crate) fn take_via_assoc(&mut self) -> Option<stmt::Association> {
+        let stmt::ExprSet::Select(select) = &mut self.untyped.body else {
+            return None;
+        };
+        let stmt::Source::Model(model) = &mut select.source else {
+            return None;
+        };
+        model.via.take()
     }
 
     /// Convert a model expression to a query.
@@ -117,43 +134,14 @@ impl<T> Query<T> {
     /// use toasty::stmt::{List, Query};
     ///
     /// let q = Query::<List<User>>::all()
-    ///     .and(User::fields().name().eq("Alice"));
+    ///     .filter(User::fields().name().eq("Alice"));
     /// ```
-    pub fn and(mut self, filter: Expr<bool>) -> Self {
+    pub fn filter(mut self, filter: Expr<bool>) -> Self {
         self.untyped.add_filter(filter.untyped);
         self
     }
 
-    /// Eagerly load a related association when this query executes.
-    ///
-    /// `path` identifies the relation to include (e.g., a has-many or
-    /// belongs-to field). The related records are loaded in the same
-    /// round-trip and attached to the parent model.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::{List, Path, Query};
-    ///
-    /// let mut q = Query::<List<User>>::all();
-    /// // Include the field at index 1 (name)
-    /// q.include(Path::<User, String>::from_field_index(1));
-    /// ```
-    pub fn include(&mut self, path: impl Into<stmt::Path>) -> &mut Self {
-        self.untyped.include(path.into());
-        self
-    }
-
-    /// Set the sort order for this query.
-    ///
-    /// Pass an [`OrderByExpr`](toasty_core::stmt::OrderByExpr) obtained from
-    /// [`Path::asc`] or [`Path::desc`]:
+    /// Sets the filter, combined with AND, for this query overwriting existing ones.
     ///
     /// # Examples
     ///
@@ -167,10 +155,103 @@ impl<T> Query<T> {
     /// use toasty::stmt::{List, Query};
     ///
     /// let mut q = Query::<List<User>>::all();
-    /// q.order_by(User::fields().name().desc());
+    /// q.set_filter(User::fields().name().eq("Alice"));
     /// ```
-    pub fn order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
-        self.untyped.order_by = Some(order_by.into());
+    pub fn set_filter(&mut self, filter: Expr<bool>) -> &mut Self {
+        self.untyped.set_filter(filter);
+        self
+    }
+
+    /// Eagerly load a related association when this query executes.
+    ///
+    /// `path` identifies the relation to include (e.g., a has-many or
+    /// belongs-to field). The related records are loaded in the same
+    /// round-trip and attached to the parent model.
+    ///
+    /// A multi-step (`via`) relation can also be included. Its targets are
+    /// reached through the relation path and grouped under each parent, with
+    /// duplicate targets collapsed so each one appears once. Including a `via`
+    /// relation is supported on SQL backends (SQLite, PostgreSQL, MySQL); it
+    /// is not yet available on DynamoDB.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    /// use toasty::schema::Model;
+    ///
+    /// // Include the field at index 1 (name)
+    /// let q = Query::<List<User>>::all().include(User::path_field::<String>(1));
+    /// ```
+    pub fn include(mut self, include: impl Into<stmt::Include>) -> Self {
+        self.untyped.include(include.into());
+        self
+    }
+
+    /// Add a sort order to this query.
+    ///
+    /// Pass an [`OrderByExpr`](toasty_core::stmt::OrderByExpr) obtained from
+    /// [`Path::asc`] or [`Path::desc`], or a tuple of them to sort by several
+    /// fields at once. Calling `order_by` multiple times appends each
+    /// expression to the existing order, so later calls act as tie-breakers
+    /// for earlier ones.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     age: i64,
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let q = Query::<List<User>>::all()
+    ///     .order_by((User::fields().age().desc(), User::fields().name().asc()));
+    /// ```
+    pub fn order_by(mut self, order_by: impl Into<stmt::OrderBy>) -> Self {
+        let order_by = order_by.into();
+        match &mut self.untyped.order_by {
+            Some(existing) => existing.exprs.extend(order_by.exprs),
+            None => self.untyped.order_by = Some(order_by),
+        }
+        self
+    }
+
+    /// Sets the sort order for this query overwriting existing ones.
+    ///
+    /// Pass an [`OrderByExpr`](toasty_core::stmt::OrderByExpr) obtained from
+    /// [`Path::asc`] or [`Path::desc`], or a tuple of them to sort by several
+    /// fields at once. Calling `order_by` multiple times appends each
+    /// expression to the existing order, so later calls act as tie-breakers
+    /// for earlier ones.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// #     age: i64
+    /// # }
+    /// use toasty::stmt::{List, Query};
+    ///
+    /// let mut q = Query::<List<User>>::all();
+    /// q.set_order_by(User::fields().name().desc());
+    /// ```
+    pub fn set_order_by(&mut self, order_by: impl Into<stmt::OrderBy>) -> &mut Self {
+        let order_by = order_by.into();
+        self.untyped.order_by = Some(order_by);
         self
     }
 
@@ -193,10 +274,9 @@ impl<T> Query<T> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.limit(10);
+    /// let q = Query::<List<User>>::all().limit(10);
     /// ```
-    pub fn limit(&mut self, n: usize) -> &mut Self {
+    pub fn limit(mut self, n: usize) -> Self {
         let n = i64::try_from(n).expect("limit exceeds i64::MAX");
         self.untyped.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
             limit: stmt::Value::from(n).into(),
@@ -222,11 +302,9 @@ impl<T> Query<T> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.limit(10);
-    /// q.offset(20);
+    /// let q = Query::<List<User>>::all().limit(10).offset(20);
     /// ```
-    pub fn offset(&mut self, n: usize) -> &mut Self {
+    pub fn offset(mut self, n: usize) -> Self {
         let n = i64::try_from(n).expect("offset exceeds i64::MAX");
         self.untyped.limit = match self.untyped.limit.take() {
             Some(stmt::Limit::Offset(limit_offset)) => {
@@ -259,7 +337,7 @@ impl<T> Query<T> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let delete = Query::<List<User>>::filter(User::fields().name().eq("Alice"))
+    /// let delete = Query::<List<User>>::all().filter(User::fields().name().eq("Alice"))
     ///     .delete();
     /// ```
     pub fn delete(self) -> Delete<()> {
@@ -365,12 +443,36 @@ impl<T> Query<List<T>> {
     }
 }
 
+impl<T: Model> Query<List<T>> {
+    /// Convert this query into a [`RelationInsert`] statement that inserts `item` into the
+    /// relation that produced this list query.
+    pub fn insert(self, item: impl IntoExpr<T>) -> RelationInsert<T> {
+        RelationInsert {
+            query: self,
+            item: item.into_expr(),
+        }
+    }
+
+    /// Convert this query into a [`RelationRemove`] statement that removes `item` from the
+    /// relation that produced this list query.
+    pub fn remove(self, item: impl IntoExpr<T>) -> RelationRemove<T> {
+        RelationRemove {
+            query: self,
+            item: item.into_expr(),
+        }
+    }
+}
+
 fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
+    let offset = match &query.limit {
+        Some(stmt::Limit::Offset(limit_offset)) => limit_offset.offset.clone(),
+        _ => None,
+    };
     query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
-        limit: stmt::Expr::from(1i64),
-        offset: None,
+        limit: stmt::Expr::Static(stmt::Value::I64(1)),
+        offset,
     }));
 }
 
@@ -410,27 +512,6 @@ impl<T: Load> Query<T> {
 
 /// Methods for list queries: `Query<List<M>>`
 impl<M: Model> Query<List<M>> {
-    /// Create a query that selects records of `M` matching `expr`.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// use toasty::stmt::{List, Query};
-    ///
-    /// let q = Query::<List<User>>::filter(User::fields().name().eq("Alice"));
-    /// ```
-    pub fn filter(expr: Expr<bool>) -> Self {
-        let mut query = stmt::Query::new_select(M::id(), expr.untyped);
-        query.single = false;
-        Self::from_untyped(query)
-    }
-
     /// Convert this list query into a count query that returns the number of
     /// matching records as a `u64`.
     ///
@@ -465,6 +546,12 @@ impl<M: Model> Query<List<M>> {
     /// (returning `Vec` of a tuple), or any other type that implements
     /// `IntoExpr<T>`.  The default model projection is replaced wholesale by
     /// the columns the projection expression references.
+    ///
+    /// A multi-step (`via`) relation can be projected as well: a `has_many`
+    /// `via` yields a `Vec` of the distinct targets reached through the path
+    /// per row, and a single (`has_one`) `via` yields one target (or `None`).
+    /// This is supported on SQL backends (SQLite, PostgreSQL, MySQL); it is
+    /// not yet available on DynamoDB.
     ///
     /// # Examples
     ///
@@ -545,10 +632,9 @@ impl<M: Model> Query<List<M>> {
     /// # }
     /// use toasty::stmt::{List, Query};
     ///
-    /// let mut q = Query::<List<User>>::all();
-    /// q.latest_by(User::fields().id());
+    /// let q = Query::<List<User>>::all().latest_by(User::fields().id());
     /// ```
-    pub fn latest_by<U>(&mut self, field: Path<M, U>) -> &mut Self {
+    pub fn latest_by<U>(self, field: Path<M, U>) -> Self {
         self.order_by(field.desc())
     }
 }

@@ -1,0 +1,38 @@
+name: Setup Turso sync server
+description: Install tursodb and start a local sync server
+
+outputs:
+  sync-url:
+    description: Base URL for sync clients
+    value: ${{ steps.start.outputs.url }}
+
+runs:
+  using: composite
+  steps:
+    - name: Get turso version
+      shell: bash
+      run: |
+        TURSO_VERSION=$(cargo metadata --format-version=1 \
+          | jq -r '.packages[] | select(.name == "turso") | .version')
+
+        echo "TURSO_VERSION=$TURSO_VERSION" >> $GITHUB_ENV
+
+    - name: Install tursodb
+      shell: bash
+      run: |
+        curl --proto '=https' --tlsv1.2 -LsSf \
+          https://github.com/tursodatabase/turso/releases/download/v$TURSO_VERSION/turso_cli-installer.sh | sh
+        echo "$HOME/.turso" >> "$GITHUB_PATH"
+
+    - name: Start sync server
+      id: start
+      shell: bash
+      run: |
+        tursodb :memory: --sync-server 127.0.0.1:8080 \
+          >/dev/null 2>&1 &
+        echo $! > /tmp/tursodb-sync.pid
+        for i in $(seq 1 30); do
+          curl -sf http://127.0.0.1:8080 >/dev/null && break
+          sleep 1
+        done
+        echo "url=http://127.0.0.1:8080" >> "$GITHUB_OUTPUT"

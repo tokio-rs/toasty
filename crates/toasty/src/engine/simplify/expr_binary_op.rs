@@ -1,5 +1,4 @@
 use super::Simplify;
-use toasty_core::schema::app::{FieldId, FieldTy};
 use toasty_core::stmt::{self, Expr, ResolvedRef, VisitMut};
 
 impl Simplify<'_> {
@@ -83,13 +82,14 @@ impl Simplify<'_> {
             //   → OR(subj == p1 AND e1 <op> rhs, subj == p2 AND e2 <op> rhs)
             //
             // Each arm is fully simplified inline. Arms that fold to false/null
-            // are pruned.
-            (Expr::Match(m), _) if m.subject.is_stable() => {
+            // are pruned. Comparison ops only — distributing arithmetic this
+            // way would produce a malformed boolean from a non-boolean term.
+            (Expr::Match(m), _) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let match_expr = lhs.take();
                 let other = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, true))
             }
-            (_, Expr::Match(m)) if m.subject.is_stable() => {
+            (_, Expr::Match(m)) if !op.is_arithmetic() && m.subject.is_stable() => {
                 let other = lhs.take();
                 let match_expr = rhs.take();
                 Some(self.eliminate_match_in_binary_op(op, match_expr, other, false))
@@ -126,67 +126,9 @@ impl Simplify<'_> {
             return Some(Expr::null());
         }
 
-        // Relation field traversal: project(ref_self_field(relation), [idx...]) op rhs
-        // → relation_field IN (SELECT * FROM Target WHERE Target.idx op rhs)
-        // The commute on the swapped call preserves comparison direction for
-        // non-commutative ops (e.g. `5 < user.profile.score` becomes
-        // `user.profile.score > 5` once lifted).
-        if let Some(r) = self.try_lift_relation_path_comparison(op, lhs, rhs) {
-            return Some(r);
-        }
-        self.try_lift_relation_path_comparison(op.commute(), rhs, lhs)
-    }
-
-    /// Rewrites `project(ref_self_field(relation_field), [idx, ..]) op other`
-    /// into an IN subquery on the relation's target model, then defers to
-    /// [`lift_in_subquery`] to translate the relation reference into a
-    /// foreign-key comparison.
-    ///
-    /// Returns `None` if `project_side` is not a project through a relation
-    /// field reference.
-    fn try_lift_relation_path_comparison(
-        &mut self,
-        op: stmt::BinaryOp,
-        project_side: &stmt::Expr,
-        other_side: &stmt::Expr,
-    ) -> Option<stmt::Expr> {
-        let Expr::Project(project_expr) = project_side else {
-            return None;
-        };
-        let Expr::Reference(expr_ref) = &*project_expr.base else {
-            return None;
-        };
-        let ResolvedRef::Field(field) = self.cx.resolve_expr_reference(expr_ref) else {
-            return None;
-        };
-
-        let target_model_id = match &field.ty {
-            FieldTy::HasOne(rel) => rel.target,
-            FieldTy::BelongsTo(rel) => rel.target,
-            FieldTy::HasMany(rel) => rel.target,
-            _ => return None,
-        };
-
-        // Re-root the projection at the target model: the leading index
-        // points at the relation field itself, the rest indexes into the
-        // related model's fields.
-        let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
-        let target_field = Expr::ref_self_field(FieldId {
-            model: target_model_id,
-            index: *head_idx,
-        });
-        let target_lhs = if tail.is_empty() {
-            target_field
-        } else {
-            Expr::project(target_field, stmt::Projection::from(tail))
-        };
-
-        let subquery = stmt::Query::new_select(
-            stmt::Source::from(target_model_id),
-            Expr::binary_op(target_lhs, op, other_side.clone()),
-        );
-
-        self.lift_in_subquery(&project_expr.base, &subquery)
+        // Relation-path-comparison and IN-subquery lifting fire in the
+        // pre-lowering `lower::lift_in_subquery::*` pass, not here.
+        None
     }
 
     /// Returns `true` if `expr` is a column reference that resolves to a
@@ -238,7 +180,7 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if term.is_false() || matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if is_dead_filter_term(&term) {
                 continue;
             }
 
@@ -270,11 +212,64 @@ impl Simplify<'_> {
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
-            if !term.is_false() && !matches!(&term, Expr::Value(stmt::Value::Null)) {
+            if !is_dead_filter_term(&term) {
                 operands.push(term);
             }
         }
 
         Expr::or_from_vec(operands)
     }
+}
+
+/// Returns `true` when a distributed-comparison term can never be `true`, so it
+/// adds nothing to the surrounding `OR` and can be dropped.
+///
+/// Three shapes qualify:
+///
+/// 1. The term is `false` or a bare `NULL`.
+///
+/// 2. The term is an `AND` with a `NULL` conjunct, such as `x AND NULL`. This
+///    comes from comparing against a decode `Match`'s `null` else branch — for
+///    example `eq(option_embed, Some(..))` on a `None` row. `x AND NULL` never
+///    holds in three-valued logic, and DynamoDB rejects the bare `NULL`
+///    placeholder it would otherwise serialize to.
+///
+/// 3. The term compares against an `Expr::Error`, the placeholder a total enum
+///    decode puts in its unreachable else branch. For a two-variant enum,
+///    distributing `field == "x"` over the decode produces a term like
+///    `disc != 1 AND disc != 2 AND Error == "x"`. A surrounding variant gate
+///    usually contradicts the `disc != k` guards and folds this away, but
+///    factoring a shared predicate out from under its gates removes that gate
+///    (issue #1061). Since `Error` marks a branch that never runs, the
+///    comparison can never hold. Dropping the term also keeps `Error` out of
+///    the SQL serializer, which cannot render it.
+fn is_dead_filter_term(term: &Expr) -> bool {
+    if term.is_unsatisfiable() {
+        return true;
+    }
+    if contains_error(term) {
+        return true;
+    }
+    matches!(
+        term,
+        Expr::And(and) if and.operands.iter().any(Expr::is_value_null)
+    )
+}
+
+/// Returns `true` if `expr` contains an `Expr::Error` node anywhere in its
+/// subtree — the unreachable-branch placeholder produced by enum decode.
+fn contains_error(expr: &Expr) -> bool {
+    use toasty_core::stmt::Visit;
+
+    struct FindError(bool);
+
+    impl Visit for FindError {
+        fn visit_expr_error(&mut self, _: &stmt::ExprError) {
+            self.0 = true;
+        }
+    }
+
+    let mut find = FindError(false);
+    find.visit_expr(expr);
+    find.0
 }

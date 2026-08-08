@@ -32,8 +32,12 @@ impl Connection {
             .scan()
             .table_name(&table.name)
             .set_filter_expression(filter_expression)
-            .set_expression_attribute_names(Some(expr_attrs.attr_names))
-            .set_expression_attribute_values(Some(expr_attrs.attr_values));
+            .set_expression_attribute_names(
+                (!expr_attrs.attr_names.is_empty()).then_some(expr_attrs.attr_names),
+            )
+            .set_expression_attribute_values(
+                (!expr_attrs.attr_values.is_empty()).then_some(expr_attrs.attr_values),
+            );
 
         let table_id = op.table;
         let col_indices = op.columns;

@@ -429,11 +429,19 @@ fn entry_panic_on_string_with_step() {
     let _ = v.entry(&Projection::single(0));
 }
 
+// Projecting a field out of a NULL composite is NULL (e.g. an Option<Embed>
+// whose value is None), and stays NULL for the rest of the path.
 #[test]
-#[should_panic]
-fn entry_panic_on_null_with_step() {
+fn entry_null_with_step_is_null() {
     let v = Value::Null;
-    let _ = v.entry(&Projection::single(0));
+    assert_eq!(
+        v.entry(&Projection::single(0)).as_value_unwrap(),
+        &Value::Null
+    );
+    assert_eq!(
+        v.entry(&Projection::from([1usize, 2])).as_value_unwrap(),
+        &Value::Null
+    );
 }
 
 #[test]

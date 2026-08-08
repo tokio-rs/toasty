@@ -1,25 +1,25 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn crud_user_optional_profile_one_direction(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        profile_id: Option<ID>,
+        profile_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = profile_id, references = id)]
-        profile: toasty::BelongsTo<Option<Profile>>,
+        profile: toasty::Deferred<Option<Profile>>,
     }
 
     #[derive(Debug, toasty::Model)]
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
     }
 
     let mut db = test.setup_db(models!(User, Profile)).await;

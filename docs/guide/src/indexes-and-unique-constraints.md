@@ -6,13 +6,12 @@ generated.
 
 ## Unique fields
 
-Add `#[unique]` to a field to create a unique index. On databases that support
-unique constraints (SQLite, PostgreSQL, MySQL), the database enforces that no
-two records can have the same value for this field. Toasty applies the
-constraint on a best-effort basis — if the underlying database does not support
-unique indexes (e.g., DynamoDB on non-key attributes), the `#[unique]` attribute
-still generates the same query methods but uniqueness is not enforced at the
-storage level.
+Add `#[unique]` to a field to create a unique index. Toasty enforces uniqueness
+on all supported databases. SQL databases (SQLite/Turso, PostgreSQL, MySQL) use a
+native unique index. DynamoDB uses a separate index table keyed on the unique
+attribute; inserts and updates write to both tables in a single
+`TransactWriteItems` call with an `attribute_not_exists` condition that rejects
+duplicates.
 
 ```rust
 # use toasty::Model;
@@ -97,7 +96,8 @@ let user = User::get_by_email(&mut db, "alice@example.com").await?;
 # }
 ```
 
-Toasty also generates `filter_by_*`, `update_by_*`, and `delete_by_*` methods:
+Toasty also generates `filter_by_*`, `update_by_*`, `upsert_by_*`, and
+`delete_by_*` methods:
 
 ```rust
 # use toasty::Model;
@@ -118,6 +118,12 @@ let user = User::filter_by_email("alice@example.com")
 
 // Update by email
 User::update_by_email("alice@example.com")
+    .name("Alice Smith")
+    .exec(&mut db)
+    .await?;
+
+// Create by email, or update the matching user
+let user = User::upsert_by_email("alice@example.com")
     .name("Alice Smith")
     .exec(&mut db)
     .await?;
@@ -332,6 +338,32 @@ On SQL databases, the `partition`/`local` distinction is ignored — all fields
 are placed in the composite index in the order they appear, producing
 `CREATE INDEX ... ON matches (tournament_id, region, round)`.
 
+### Custom index names
+
+Toasty generates an index name from the table and field list (e.g.,
+`idx_users_email`). Override it with `name = "..."` inside `#[index(...)]`
+or `#[key(...)]`:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[index(name = "scores_by_game", game_title, top_score)]
+struct GameScore {
+    #[key]
+    #[auto]
+    id: u64,
+    user_id: String,
+    game_title: String,
+    top_score: i64,
+}
+```
+
+This becomes `CREATE INDEX scores_by_game ON game_scores (...)` on SQL
+drivers and is used as the GSI name on DynamoDB. The name must be
+non-empty and may only appear once per attribute. Use a custom name
+when a migration tool or external query references it by name, or to
+keep generated names within a database's identifier-length limit.
+
 ### SQL vs DynamoDB behavior
 
 | Behavior | SQL | DynamoDB |
@@ -340,6 +372,53 @@ are placed in the composite index in the order they appear, producing
 | Partition / local distinction | Ignored — all columns form a flat composite index | `partition` = `KeyType::Hash`, `local` = `KeyType::Range` |
 | Query matching | Database uses leftmost-prefix matching | All `partition` fields required; `local` fields optional left-to-right |
 | Column limits | No artificial limits | Up to 4 partition and 4 local attributes per index |
+
+> **Runnable example:** [`product-search`] builds filter expressions, sorts, cursor-paginates, and projects columns.
+
+
+## Multi-column unique constraints
+
+A struct-level `#[unique(...)]` defines a composite unique index. It takes the
+same field list as `#[index(...)]` — simple mode, named `partition`/`local`
+mode, and a `name = "..."` override — but the database enforces uniqueness
+across the combination of columns.
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+#[unique(coa_id, combination_hash)]
+struct AccountCombination {
+    #[key]
+    #[auto]
+    id: u64,
+    coa_id: i64,
+    combination_hash: String,
+}
+```
+
+On SQL databases this produces a unique index over both columns:
+
+```sql
+CREATE UNIQUE INDEX idx_account_combinations_coa_id_combination_hash
+    ON account_combinations (coa_id, combination_hash);
+```
+
+The constraint applies to the combination, not either column alone — two rows
+may share a `coa_id` or a `combination_hash`, but not both. Inserting a row that
+duplicates an existing `(coa_id, combination_hash)` pair returns an error.
+
+Toasty generates the same prefix query methods as a composite `#[index(...)]`:
+`filter_by_coa_id`, `filter_by_coa_id_and_combination_hash`, and the matching
+`get_by_*`, `update_by_*`, and `delete_by_*` methods. It also generates
+`upsert_by_coa_id_and_combination_hash`, which requires every field in the
+unique constraint so the database can select one conflict target.
+
+DynamoDB does not support composite unique constraints. Toasty backs each unique
+index with a dedicated index table guarded by an `attribute_not_exists`
+condition, and that mechanism enforces a single column. Declaring a multi-column
+`#[unique(...)]` returns an `unsupported_feature` error when the schema is
+created. A single-column `#[unique(field)]` works on DynamoDB and is equivalent
+to a field-level `#[unique]`.
 
 ## Indexing newtype fields
 
@@ -378,8 +457,10 @@ individual fields inside the embedded struct instead (see
 
 ## Choosing between `#[unique]` and `#[index]`
 
-Both attributes tell Toasty that a field is a query target and generate the same
-set of methods: `get_by_*`, `filter_by_*`, `update_by_*`, and `delete_by_*`.
+Both attributes tell Toasty that a field is a query target and generate
+`get_by_*`, `filter_by_*`, `update_by_*`, and `delete_by_*`. Only `#[unique]`
+also generates `upsert_by_*`, because an upsert conflict must identify at most
+one record.
 
 The difference is in the constraint they express:
 
@@ -401,6 +482,7 @@ For a model with `#[unique]` on `email` and `#[index]` on `country`:
 | `User::get_by_email(&mut db, email)` | One record by unique field |
 | `User::filter_by_email(email)` | Query builder for unique field |
 | `User::update_by_email(email)` | Update builder for unique field |
+| `User::upsert_by_email(email)` | Create or update by unique field |
 | `User::delete_by_email(&mut db, email)` | Delete by unique field |
 | `User::get_by_country(&mut db, country)` | One record by indexed field |
 | `User::filter_by_country(country)` | Query builder for indexed field |
@@ -409,6 +491,12 @@ For a model with `#[unique]` on `email` and `#[index]` on `country`:
 
 These methods follow the same patterns as key-generated methods. See
 [Querying Records](./querying-records.md),
-[Updating Records](./updating-records.md), and
+[Updating Records](./updating-records.md),
+[Upserting Records](./upserting-records.md), and
 [Deleting Records](./deleting-records.md) for details on terminal methods and
 builders.
+
+> **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
+
+[`quickstart-blog`]: https://github.com/tokio-rs/toasty/tree/main/examples/quickstart-blog
+[`product-search`]: https://github.com/tokio-rs/toasty/tree/main/examples/product-search

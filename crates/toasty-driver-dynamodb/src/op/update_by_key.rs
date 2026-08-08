@@ -3,7 +3,7 @@ use super::{
     TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
     ddb_key, item_to_record, operation, stmt,
 };
-use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason};
+use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
 
@@ -155,35 +155,108 @@ impl Connection {
 
         let mut update_expression_set = String::new();
         let mut update_expression_remove = String::new();
-        let mut ret = vec![];
+
+        // Bound value per assigned column index. Used below to seed the
+        // returning-row placeholders; only the transact path (which can't
+        // fetch `UPDATED_NEW`) actually surfaces these seeds.
+        let mut bound_values: HashMap<usize, &stmt::Value> = HashMap::new();
 
         for (projection, assignment) in op.assignments.iter() {
-            let stmt::Assignment::Set(expr) = assignment else {
-                todo!("only SET supported in DynamoDB; got {assignment:#?}");
+            enum AssignKind {
+                Set,
+                Append,
+                Add,
+                Subtract,
+            }
+
+            let (expr, kind) = match assignment {
+                stmt::Assignment::Set(expr) => (expr, AssignKind::Set),
+                stmt::Assignment::Append(expr) => (expr, AssignKind::Append),
+                stmt::Assignment::Add(expr) => (expr, AssignKind::Add),
+                stmt::Assignment::Subtract(expr) => (expr, AssignKind::Subtract),
+                stmt::Assignment::Remove(_)
+                | stmt::Assignment::Pop
+                | stmt::Assignment::RemoveAt(_) => {
+                    // Collection mutations are gated by `vec_remove` /
+                    // `vec_pop` / `vec_remove_at` capability flags, all
+                    // currently `false` on DynamoDB. The lowering rejects
+                    // them before reaching the driver; if one slips through
+                    // it's a bug worth surfacing.
+                    unreachable!(
+                        "collection mutation reached DynamoDB driver — capability flag is off; assignment={assignment:#?}",
+                    )
+                }
+                _ => todo!(
+                    "only SET / APPEND / ADD / SUBTRACT supported in DynamoDB; got {assignment:#?}"
+                ),
             };
             let value = match expr {
                 stmt::Expr::Value(value) => value,
                 _ => todo!("op = {:#?}", op),
             };
 
-            ret.push(value.clone());
+            let column_ref = table.resolve(projection);
+            bound_values.insert(column_ref.id.index, value);
 
-            let column = expr_attrs.column(table.resolve(projection)).to_string();
+            let column = expr_attrs.column(column_ref).to_string();
 
-            if value.is_null() {
-                if !update_expression_remove.is_empty() {
-                    write!(update_expression_remove, ", ").unwrap();
+            match kind {
+                AssignKind::Append => {
+                    // `stmt::push` / `stmt::extend` on a `Vec<scalar>` field
+                    // map to DynamoDB's `list_append(path, :v)`, which
+                    // atomically concatenates the given List `L` onto the
+                    // existing list attribute (creating the attribute if
+                    // absent).
+                    let value = expr_attrs.value(value);
+
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(
+                        update_expression_set,
+                        "{column} = list_append(if_not_exists({column}, :__toasty_empty_list), {value})"
+                    )
+                    .unwrap();
+                    expr_attrs.attr_values.insert(
+                        ":__toasty_empty_list".to_string(),
+                        aws_sdk_dynamodb::types::AttributeValue::L(Vec::new()),
+                    );
                 }
+                AssignKind::Set if value.is_null() => {
+                    if !update_expression_remove.is_empty() {
+                        write!(update_expression_remove, ", ").unwrap();
+                    }
 
-                write!(update_expression_remove, "{column}").unwrap();
-            } else {
-                let value = expr_attrs.value(value);
-
-                if !update_expression_set.is_empty() {
-                    write!(update_expression_set, ", ").unwrap();
+                    write!(update_expression_remove, "{column}").unwrap();
                 }
+                AssignKind::Set => {
+                    let value = expr_attrs.value(value);
 
-                write!(update_expression_set, "{column} = {value}").unwrap();
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(update_expression_set, "{column} = {value}").unwrap();
+                }
+                // `stmt::add` / `stmt::subtract` / `stmt::increment` /
+                // `stmt::decrement` map to DynamoDB's `SET col = col + :v` /
+                // `SET col = col - :v` form, which atomically combines the
+                // bound value with the current attribute value.
+                AssignKind::Add | AssignKind::Subtract => {
+                    let op = if matches!(kind, AssignKind::Add) {
+                        "+"
+                    } else {
+                        "-"
+                    };
+                    let value = expr_attrs.value(value);
+
+                    if !update_expression_set.is_empty() {
+                        write!(update_expression_set, ", ").unwrap();
+                    }
+
+                    write!(update_expression_set, "{column} = {column} {op} {value}").unwrap();
+                }
             }
         }
 
@@ -197,97 +270,88 @@ impl Connection {
             write!(update_expression, " REMOVE {update_expression_remove}").unwrap();
         }
 
+        // Build the returning row from the explicit column list the engine
+        // requested — exactly these columns, in this order. The engine inlines
+        // `Set` values at plan time and injects the engine-managed `#[version]`
+        // bump outside the returning projection, so neither appears in
+        // `op.returning`; the driver no longer has to infer the row shape from
+        // the assignments. Each column is seeded with a placeholder, then
+        // refreshed below from the `UPDATED_NEW` response with its post-update
+        // value.
+        let mut ret = vec![];
+        let mut refresh_after_update: Vec<(usize, &db::Column)> = vec![];
+
+        if let Some(columns) = &op.returning {
+            for column_id in columns {
+                let column = schema.column(*column_id);
+                let placeholder = bound_values
+                    .get(&column_id.index)
+                    .map(|value| (*value).clone())
+                    .unwrap_or(stmt::Value::Null);
+                refresh_after_update.push((ret.len(), column));
+                ret.push(placeholder);
+            }
+        }
+
+        // The seeded placeholders are not the post-update column values.
+        // Request `UPDATED_NEW` so the response carries the actual new
+        // attribute values and we can replace the placeholders below.
+        let needs_updated_new = !refresh_after_update.is_empty();
+
         match &unique_indices[..] {
             [] => {
-                if op.keys.len() == 1 {
-                    let key = &op.keys[0];
+                // The engine shreds multi-key updates into one op per key, so a
+                // non-unique-index update always carries exactly one key.
+                let [key] = &op.keys[..] else {
+                    panic!("expected exactly 1 key, got {}", op.keys.len());
+                };
 
-                    let res = self
-                        .client
-                        .update_item()
-                        .table_name(&table.name)
-                        .set_key(Some(ddb_key(table, key)))
-                        .set_update_expression(Some(update_expression))
-                        .set_expression_attribute_names(Some(expr_attrs.attr_names))
-                        .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
-                            Some(expr_attrs.attr_values)
-                        } else {
-                            None
-                        })
-                        .set_condition_expression(filter_expression)
-                        .return_values_on_condition_check_failure(
-                            ReturnValuesOnConditionCheckFailure::AllOld,
-                        )
-                        .send()
-                        .await;
+                let res = self
+                    .client
+                    .update_item()
+                    .table_name(&table.name)
+                    .set_key(Some(ddb_key(table, key)))
+                    .set_update_expression(Some(update_expression))
+                    .set_expression_attribute_names(Some(expr_attrs.attr_names))
+                    .set_expression_attribute_values(if !expr_attrs.attr_values.is_empty() {
+                        Some(expr_attrs.attr_values)
+                    } else {
+                        None
+                    })
+                    .set_condition_expression(filter_expression)
+                    .return_values_on_condition_check_failure(
+                        ReturnValuesOnConditionCheckFailure::AllOld,
+                    )
+                    .set_return_values(needs_updated_new.then_some(ReturnValue::UpdatedNew))
+                    .send()
+                    .await;
 
-                    if let Err(SdkError::ServiceError(e)) = res {
+                let output = match res {
+                    Ok(output) => output,
+                    Err(SdkError::ServiceError(e)) => {
                         if let UpdateItemError::ConditionalCheckFailedException(cce) = e.err() {
                             return on_update_item_condition_failed(
                                 cce.item(),
                                 cce.message.as_deref(),
                                 table,
                                 op.filter.as_ref(),
-                                op.returning,
+                                op.returning.is_some(),
                             );
                         }
                         return Err(toasty_core::Error::driver_operation_failed(
                             SdkError::ServiceError(e),
                         ));
                     }
-                } else {
-                    let mut transact_items = vec![];
-
-                    for key in &op.keys {
-                        transact_items.push(
-                            TransactWriteItem::builder()
-                                .update(
-                                    Update::builder()
-                                        .table_name(&table.name)
-                                        .set_key(Some(ddb_key(table, key)))
-                                        .set_update_expression(Some(update_expression.clone()))
-                                        .set_expression_attribute_names(Some(
-                                            expr_attrs.attr_names.clone(),
-                                        ))
-                                        .set_expression_attribute_values(
-                                            if !expr_attrs.attr_values.is_empty() {
-                                                Some(expr_attrs.attr_values.clone())
-                                            } else {
-                                                None
-                                            },
-                                        )
-                                        .set_condition_expression(filter_expression.clone())
-                                        .return_values_on_condition_check_failure(
-                                            ReturnValuesOnConditionCheckFailure::AllOld,
-                                        )
-                                        .build()
-                                        .unwrap(),
-                                )
-                                .build(),
-                        );
+                    Err(other) => {
+                        return Err(toasty_core::Error::driver_operation_failed(other));
                     }
+                };
 
-                    let res = self
-                        .client
-                        .transact_write_items()
-                        .set_transact_items(Some(transact_items))
-                        .send()
-                        .await;
-
-                    if let Err(SdkError::ServiceError(e)) = res {
-                        if let TransactWriteItemsError::TransactionCanceledException(tce) = e.err()
-                        {
-                            return on_transaction_cancelled(
-                                tce.cancellation_reasons(),
-                                tce.message(),
-                                table,
-                                op.filter.as_ref(),
-                                op.returning,
-                            );
+                if needs_updated_new && let Some(attrs) = output.attributes() {
+                    for (idx, column) in &refresh_after_update {
+                        if let Some(attr) = attrs.get(&column.name) {
+                            ret[*idx] = Value::from_ddb(&column.ty, attr).into_inner();
                         }
-                        return Err(toasty_core::Error::driver_operation_failed(
-                            SdkError::ServiceError(e),
-                        ));
                     }
                 }
             }
@@ -361,29 +425,70 @@ impl Connection {
                     )));
                 };
 
+                // Resolve each unique-column assignment to a concrete post-update
+                // value. `Set(v)` resolves to `v`; `Add(x)` / `Subtract(x)` resolve
+                // to `prev ± x` using the GET result above. The main-table update
+                // expression keeps the atomic `SET col = col ± :v` form, so
+                // atomicity is preserved by the transaction's `<col> = <prev>`
+                // condition below — if the column changed concurrently, the
+                // transaction is cancelled before the precomputed index entry is
+                // written.
+                let mut resolved_unique_values = HashMap::new();
+                for index_column in &index.columns {
+                    let column = index_column.table_column(schema);
+                    for (projection, assignment) in op.assignments.iter() {
+                        if *projection != column.id.index {
+                            continue;
+                        }
+                        let resolved = match assignment {
+                            stmt::Assignment::Set(stmt::Expr::Value(v)) => v.clone(),
+                            stmt::Assignment::Add(stmt::Expr::Value(delta))
+                            | stmt::Assignment::Subtract(stmt::Expr::Value(delta)) => {
+                                let prev = curr_unique_values.get(&column.name).ok_or_else(
+                                    || {
+                                        toasty_core::Error::invalid_statement(format!(
+                                            "arithmetic update on unique column {} requires an existing value",
+                                            column.name,
+                                        ))
+                                    },
+                                )?;
+                                let prev_value = Value::from_ddb(&column.ty, prev).into_inner();
+                                let result = match assignment {
+                                    stmt::Assignment::Add(_) => prev_value.checked_add(delta),
+                                    _ => prev_value.checked_sub(delta),
+                                };
+                                result.ok_or_else(|| {
+                                    toasty_core::Error::invalid_statement(format!(
+                                        "arithmetic overflow on unique column {}",
+                                        column.name,
+                                    ))
+                                })?
+                            }
+                            other => {
+                                return Err(toasty_core::Error::invalid_statement(format!(
+                                    "unsupported assignment on unique column {}: {other:#?}",
+                                    column.name,
+                                )));
+                            }
+                        };
+                        resolved_unique_values.insert(column.id, resolved);
+                    }
+                }
+
                 for index_column in &index.columns {
                     let column = index_column.table_column(schema);
 
-                    for (projection, assignment) in op.assignments.iter() {
-                        if *projection == column.id.index {
-                            if let Some(prev) = curr_unique_values.remove(&column.name) {
-                                let stmt::Assignment::Set(expr) = assignment else {
-                                    unreachable!(
-                                        "unique index assignments are always Set; got {assignment:#?}"
-                                    );
-                                };
-                                let stmt::Expr::Value(value) = expr else {
-                                    unreachable!(
-                                        "unique index assignment expression is always a Value; got {expr:#?}"
-                                    );
-                                };
-
-                                if Value::from_ddb(&column.ty, &prev).into_inner() != *value {
-                                    updated_unique_attrs.insert(column.id, prev);
-                                }
-                            } else {
-                                set_unique_attrs.insert(column.id, ());
+                    for (projection, _) in op.assignments.iter() {
+                        if *projection != column.id.index {
+                            continue;
+                        }
+                        let new_value = &resolved_unique_values[&column.id];
+                        if let Some(prev) = curr_unique_values.remove(&column.name) {
+                            if Value::from_ddb(&column.ty, &prev).into_inner() != *new_value {
+                                updated_unique_attrs.insert(column.id, prev);
                             }
+                        } else {
+                            set_unique_attrs.insert(column.id, ());
                         }
                     }
                 }
@@ -418,7 +523,7 @@ impl Connection {
                                 cce.message.as_deref(),
                                 table,
                                 op.filter.as_ref(),
-                                op.returning,
+                                op.returning.is_some(),
                             );
                         }
                         return Err(toasty_core::Error::driver_operation_failed(
@@ -488,23 +593,7 @@ impl Connection {
 
                         for index_column in &index.columns {
                             let column = index_column.table_column(schema);
-                            let (_, assignment) = op
-                                .assignments
-                                .iter()
-                                .find(|(projection, _)| **projection == column_id.index)
-                                .unwrap();
-
-                            let stmt::Assignment::Set(expr) = assignment else {
-                                unreachable!(
-                                    "unique index assignments are always Set; got {assignment:#?}"
-                                );
-                            };
-                            let stmt::Expr::Value(value) = expr else {
-                                unreachable!(
-                                    "unique index assignment expression is always a Value; got {expr:#?}"
-                                );
-                            };
-
+                            let value = &resolved_unique_values[column_id];
                             if !value.is_null() {
                                 index_insert_items.insert(
                                     column.name.clone(),
@@ -564,7 +653,7 @@ impl Connection {
                                 tce.message(),
                                 table,
                                 op.filter.as_ref(),
-                                op.returning,
+                                op.returning.is_some(),
                             );
                         }
                         return Err(toasty_core::Error::driver_operation_failed(
@@ -576,8 +665,8 @@ impl Connection {
             _ => todo!(),
         }
 
-        // If we get here, then returning should be false
-        Ok(if op.returning {
+        // If we get here, then returning should be None
+        Ok(if op.returning.is_some() {
             let values = stmt::ValueStream::from_value(stmt::Value::record_from_vec(ret));
             ExecResponse::value_stream(values)
         } else {

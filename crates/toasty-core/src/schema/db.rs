@@ -17,21 +17,13 @@
 //! | [`PrimaryKey`] | The primary key definition for a table |
 //! | [`Migration`] | A SQL migration generated from a schema diff |
 //!
-//! # Schema diffing
-//!
-//! The module provides diff types ([`SchemaDiff`], [`TablesDiff`], [`ColumnsDiff`],
-//! [`IndicesDiff`]) that compare two schema versions and produce a list of
-//! structural changes. [`RenameHints`] lets callers indicate which items were
-//! renamed (rather than dropped and recreated).
+//! Schema diffing types live in [`super::diff`].
 
 mod column;
-pub use column::{Column, ColumnId, ColumnsDiff, ColumnsDiffItem};
-
-mod diff;
-pub use diff::{DiffContext, RenameHints};
+pub use column::{Column, ColumnId};
 
 mod index;
-pub use index::{Index, IndexColumn, IndexId, IndexOp, IndexScope, IndicesDiff, IndicesDiffItem};
+pub use index::{Index, IndexColumn, IndexId, IndexOp, IndexScope};
 
 mod migration;
 pub use migration::{AppliedMigration, Migration};
@@ -40,16 +32,13 @@ mod pk;
 pub use pk::PrimaryKey;
 
 mod schema;
-pub use schema::{Schema, SchemaDiff};
+pub use schema::Schema;
 
 mod table;
-pub use table::{Table, TableId, TablesDiff, TablesDiffItem};
+pub use table::{Table, TableId};
 
 mod ty;
 mod ty_enum;
 pub use ty_enum::{EnumVariant, TypeEnum};
-
-mod ty_enum_diff;
-pub use ty_enum_diff::{TypesDiff, TypesDiffItem};
 
 pub use ty::Type;

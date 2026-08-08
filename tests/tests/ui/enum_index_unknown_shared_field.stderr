@@ -1,0 +1,11 @@
+error: unknown shared field `nope`
+ --> tests/ui/enum_index_unknown_shared_field.rs:6:10
+  |
+6 | #[unique(nope)]
+  |          ^^^^
+
+error: `profession` is not a shared field; reference the variant field as `human::profession`
+ --> tests/ui/enum_index_unknown_shared_field.rs:7:9
+  |
+7 | #[index(profession)]
+  |         ^^^^^^^^^^

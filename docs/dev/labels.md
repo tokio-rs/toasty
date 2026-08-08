@@ -25,6 +25,7 @@ What kind of work the issue represents.
 | `C-enhancement` | An improvement to an existing feature |
 | `C-refactor` | An internal code change with no user-visible effect |
 | `C-docs` | User docs, dev docs, rustdoc |
+| `C-design` | A PR that proposes a new design (adds a doc under `docs/dev/design/`) |
 | `C-chore` | CI, release tooling, scripts, lint fixes |
 | `C-tracking` | An umbrella issue that tracks related work |
 | `C-discussion` | Open-ended design discussion or RFC |
@@ -101,5 +102,6 @@ default names so GitHub's UI highlights them.
 - A request for native PostgreSQL enums: `C-feature`, `A-driver`, `A-schema`.
 - An umbrella issue tracking simplification rules: `C-tracking`, `A-engine`.
 - A typo fix in `docs/dev/architecture/README.md`: `C-docs`, `A-docs`.
+- A new design doc proposing partial-update semantics: `C-design`, `A-engine`.
 - A release-plz config change: `C-chore`, `A-ci`.
 - A cross-cutting API naming discussion: `C-discussion` — no `A-` needed.

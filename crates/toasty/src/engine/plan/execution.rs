@@ -17,7 +17,7 @@ impl ExecPlanner<'_> {
             self.use_transactions && self.actions.iter().filter(|a| a.is_db_op()).count() > 1;
 
         ExecPlan {
-            vars: VarStore::new(self.var_decls),
+            vars: VarStore::new(self.var_decls, self.schema),
             actions: self.actions,
             returning,
             needs_transaction,

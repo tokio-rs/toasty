@@ -5,7 +5,7 @@ use crate::prelude::*;
 ///
 /// Exercises INSERT, SELECT, UPDATE (instance and query-based), and DELETE
 /// through the driver — the paths affected by parameter type inference.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -18,12 +18,12 @@ pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         title: String,
         priority: Priority,
     }
 
-    let mut db = t.setup_db(models!(Task, Priority)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     // -- Create with each variant --
     let t1 = toasty::create!(Task {
@@ -91,6 +91,11 @@ pub async fn native_enum_crud_lifecycle(t: &mut Test) -> Result<()> {
 }
 
 /// Filter operations on native database enums: eq, ne, in_list.
+///
+/// Gated on `requires(sql)` until [#855] is fixed — scan over a native enum
+/// panics in the engine with `not yet implemented: ty=Unit`.
+///
+/// [#855]: https://github.com/tokio-rs/toasty/issues/855
 #[driver_test(requires(sql))]
 pub async fn native_enum_filter_operations(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
@@ -110,7 +115,7 @@ pub async fn native_enum_filter_operations(t: &mut Test) -> Result<()> {
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Task, Status)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     for (name, status) in [
         ("A", Status::Pending),
@@ -158,7 +163,7 @@ pub async fn native_enum_filter_operations(t: &mut Test) -> Result<()> {
 
 /// Multiple native enum fields on the same model, each creating its own
 /// database enum type.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn native_enum_multiple_fields(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     enum Priority {
@@ -176,12 +181,12 @@ pub async fn native_enum_multiple_fields(t: &mut Test) -> Result<()> {
     struct Ticket {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         priority: Priority,
         status: Status,
     }
 
-    let mut db = t.setup_db(models!(Ticket, Priority, Status)).await;
+    let mut db = t.setup_db(models!(Ticket)).await;
 
     let ticket = toasty::create!(Ticket {
         priority: Priority::High,
@@ -211,7 +216,7 @@ pub async fn native_enum_multiple_fields(t: &mut Test) -> Result<()> {
 }
 
 /// Native enum with explicit custom type name via `#[column(type = enum("custom_name"))]`.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn native_enum_custom_type_name(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
     #[column(type = enum("task_priority"))]
@@ -225,11 +230,11 @@ pub async fn native_enum_custom_type_name(t: &mut Test) -> Result<()> {
     struct Task {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
         priority: Priority,
     }
 
-    let mut db = t.setup_db(models!(Task, Priority)).await;
+    let mut db = t.setup_db(models!(Task)).await;
 
     let task = toasty::create!(Task {
         priority: Priority::Medium

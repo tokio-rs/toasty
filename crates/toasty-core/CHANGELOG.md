@@ -7,6 +7,176 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.8.0...toasty-core-v0.9.0) - 2026-07-23
+
+### Added
+
+- Native JSON and JSONB column storage ([#1114])
+- Filter associations when including related data ([#1089])
+- Inline SQL literals with LIMIT/OFFSET support ([#1001])
+- Integer storage for enum discriminants ([#1101])
+- Upsert support ([#1091])
+- Shared variant fields and enum-level #[index]/#[unique] attributes ([#1078])
+- Document storage for embedded types with nested-path filtering ([#1028])
+
+### Fixed
+
+- Serialization of unconstrained numeric migration snapshots ([#1115])
+- Support for any() on many-to-many relations ([#1097])
+- *(postgres)* Storage of Vec<native-enum> as native enum arrays ([#1092])
+
+[#1001]: https://github.com/tokio-rs/toasty/pull/1001
+[#1028]: https://github.com/tokio-rs/toasty/pull/1028
+[#1078]: https://github.com/tokio-rs/toasty/pull/1078
+[#1089]: https://github.com/tokio-rs/toasty/pull/1089
+[#1091]: https://github.com/tokio-rs/toasty/pull/1091
+[#1092]: https://github.com/tokio-rs/toasty/pull/1092
+[#1097]: https://github.com/tokio-rs/toasty/pull/1097
+[#1101]: https://github.com/tokio-rs/toasty/pull/1101
+[#1114]: https://github.com/tokio-rs/toasty/pull/1114
+[#1115]: https://github.com/tokio-rs/toasty/pull/1115
+
+## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.7.0...toasty-core-v0.8.0) - 2026-07-06
+
+### Added
+
+- Emit one toasty::query event per statement and propagate caller spans ([#1071])
+- Support #[version] optimistic concurrency on SQL drivers ([#1065])
+- Automatically infer `key` and `references` in `#[belongs_to]` ([#1063])
+- Share columns across enum variants via #[column("name")] ([#1064])
+- Add escape support for LIKE expressions ([#1039])
+- Add set_* replace-variants to Query builder ([#1037])
+- Allow indexes on unit enums ([#1027])
+- Add between operator to query DSL ([#1029])
+- Support Option<EmbeddedType> model fields ([#1021])
+- Support scalar terminal fields in has_many relations ([#1012])
+
+### Fixed
+
+- Avoid panic when updating a mixed enum to a unit variant ([#1069])
+- Truncate auto-generated index names that exceed the backend limit ([#1023])
+- Encode bool values correctly in DynamoDB to match key attribute type ([#945])
+
+### Changed
+
+- [**breaking**] Derive default table names at compile time ([#1070])
+- [**breaking**] Make UpdateByKey returning columns explicit ([#1024])
+
+[#945]: https://github.com/tokio-rs/toasty/pull/945
+[#1012]: https://github.com/tokio-rs/toasty/pull/1012
+[#1021]: https://github.com/tokio-rs/toasty/pull/1021
+[#1023]: https://github.com/tokio-rs/toasty/pull/1023
+[#1024]: https://github.com/tokio-rs/toasty/pull/1024
+[#1027]: https://github.com/tokio-rs/toasty/pull/1027
+[#1029]: https://github.com/tokio-rs/toasty/pull/1029
+[#1037]: https://github.com/tokio-rs/toasty/pull/1037
+[#1039]: https://github.com/tokio-rs/toasty/pull/1039
+[#1063]: https://github.com/tokio-rs/toasty/pull/1063
+[#1064]: https://github.com/tokio-rs/toasty/pull/1064
+[#1065]: https://github.com/tokio-rs/toasty/pull/1065
+[#1069]: https://github.com/tokio-rs/toasty/pull/1069
+[#1070]: https://github.com/tokio-rs/toasty/pull/1070
+[#1071]: https://github.com/tokio-rs/toasty/pull/1071
+
+## [0.7.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.1...toasty-core-v0.7.0) - 2026-05-29
+
+### Added
+
+- [**breaking**] Increment, decrement, add, and subtract update operators ([#979])
+- Raw SQL execution API ([#965])
+- `Deferred<T>` type for relation fields, replacing `#[deferred]` attribute ([#961])
+- Eager loading of relation fields ([#958])
+- `.include()` support for multi-step `via` relations ([#946])
+- Migration core API export ([#944])
+- Turso driver with concurrent writes via TransactionMode ([#938])
+- TransactionMode for SQLite lock-acquisition control ([#931])
+- `SELECT DISTINCT` query serialization ([#934])
+- INNER join variant ([#922])
+- Multi-step (via) has_many and has_one relations ([#890])
+
+### Fixed
+
+- `starts_with` is now case-sensitive on SQLite and MySQL ([#983])
+- SQLite auto-increment integers limited to 4-byte storage ([#969])
+- [**breaking**] `.ilike()` operator is now PostgreSQL-only ([#937])
+
+### Changed
+
+- [**breaking**] Relation field variants consolidated into single `has` type ([#964])
+- [**breaking**] Deferred relation fields are now required ([#954])
+- [**breaking**] Schema diff types moved to `toasty_core::schema::diff` module ([#929])
+
+[#890]: https://github.com/tokio-rs/toasty/pull/890
+[#922]: https://github.com/tokio-rs/toasty/pull/922
+[#929]: https://github.com/tokio-rs/toasty/pull/929
+[#931]: https://github.com/tokio-rs/toasty/pull/931
+[#934]: https://github.com/tokio-rs/toasty/pull/934
+[#937]: https://github.com/tokio-rs/toasty/pull/937
+[#938]: https://github.com/tokio-rs/toasty/pull/938
+[#944]: https://github.com/tokio-rs/toasty/pull/944
+[#946]: https://github.com/tokio-rs/toasty/pull/946
+[#954]: https://github.com/tokio-rs/toasty/pull/954
+[#958]: https://github.com/tokio-rs/toasty/pull/958
+[#961]: https://github.com/tokio-rs/toasty/pull/961
+[#964]: https://github.com/tokio-rs/toasty/pull/964
+[#965]: https://github.com/tokio-rs/toasty/pull/965
+[#969]: https://github.com/tokio-rs/toasty/pull/969
+[#979]: https://github.com/tokio-rs/toasty/pull/979
+[#983]: https://github.com/tokio-rs/toasty/pull/983
+
+## [0.6.1](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.6.0...toasty-core-v0.6.1) - 2026-05-16
+
+### Added
+
+- Field-level `#[index]` attributes now reject arguments ([#909])
+- Support ordering by multiple fields ([#901])
+
+### Fixed
+
+- Fixed equality operations with composite keys ([#906])
+- Improved `belongs_to` syntax and error messages for composite keys ([#905])
+
+[#901]: https://github.com/tokio-rs/toasty/pull/901
+[#905]: https://github.com/tokio-rs/toasty/pull/905
+[#906]: https://github.com/tokio-rs/toasty/pull/906
+[#909]: https://github.com/tokio-rs/toasty/pull/909
+
+## [0.6.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.5.0...toasty-core-v0.6.0) - 2026-05-14
+
+### Added
+
+- Add Vec<scalar> model fields with push, extend, clear, pop, remove_at, and remove methods on PostgreSQL, MySQL, SQLite, and DynamoDB ([#866], [#880], [#887], [#872])
+- Improve connection pool reliability by detecting broken connections before the next query and evicting them after backend restart ([#874], [#867])
+- Support custom index names via `name = "..."` in macros ([#842])
+- Proxy Auto through tuple-newtype Embed types ([#836])
+- Add .select() projection through BelongsTo relations ([#827])
+- Optimize IN-list queries on PostgreSQL by binding as a single array parameter ([#818])
+- Add full-table scan support for DynamoDB ([#821])
+- Add #[deferred] field attribute and Deferred<T> wrapper, with support for embedded types ([#793], [#799])
+- Add backward pagination driver capability ([#757])
+- Add ilike() filter method ([#801])
+
+### Changed
+
+- [**breaking**] Rename Returning enum variants (Expr→Project, Value→Expr) ([#790])
+
+[#757]: https://github.com/tokio-rs/toasty/pull/757
+[#790]: https://github.com/tokio-rs/toasty/pull/790
+[#793]: https://github.com/tokio-rs/toasty/pull/793
+[#799]: https://github.com/tokio-rs/toasty/pull/799
+[#801]: https://github.com/tokio-rs/toasty/pull/801
+[#818]: https://github.com/tokio-rs/toasty/pull/818
+[#821]: https://github.com/tokio-rs/toasty/pull/821
+[#827]: https://github.com/tokio-rs/toasty/pull/827
+[#836]: https://github.com/tokio-rs/toasty/pull/836
+[#842]: https://github.com/tokio-rs/toasty/pull/842
+[#866]: https://github.com/tokio-rs/toasty/pull/866
+[#867]: https://github.com/tokio-rs/toasty/pull/867
+[#872]: https://github.com/tokio-rs/toasty/pull/872
+[#874]: https://github.com/tokio-rs/toasty/pull/874
+[#880]: https://github.com/tokio-rs/toasty/pull/880
+[#887]: https://github.com/tokio-rs/toasty/pull/887
+
 ## [0.5.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.4.0...toasty-core-v0.5.0) - 2026-04-27
 
 ### Added

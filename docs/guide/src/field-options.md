@@ -1,8 +1,7 @@
 # Field Options
 
-Toasty provides several field-level attributes to control how fields map to
-database columns: custom column names, explicit types, default values, update
-expressions, and JSON serialization.
+Field-level attributes control column names, explicit types, default values,
+and update expressions.
 
 ## Custom column names
 
@@ -77,6 +76,8 @@ Supported type values:
 | `uint`, `u8`, `u16`, `u32`, `u64` | Unsigned integer |
 | `text` | Text |
 | `varchar(N)` | Variable-length string with max length |
+| `json` | Native JSON on PostgreSQL and MySQL |
+| `jsonb` | Native binary JSON on PostgreSQL |
 | `numeric`, `numeric(P, S)` | Decimal with optional precision and scale |
 | `binary(N)`, `blob` | Binary data |
 | `timestamp(P)` | Timestamp with precision |
@@ -87,8 +88,9 @@ Supported type values:
 Not all databases support all column types. Toasty validates explicit column
 types against the database's capabilities when you call `db.push_schema()`. If a
 type is not supported, schema creation fails with an error. For example,
-`varchar` is supported by PostgreSQL and MySQL but not by SQLite or DynamoDB —
-using `#[column(type = varchar(100))]` with SQLite produces an error like
+`varchar` is supported by PostgreSQL and MySQL but not by SQLite, Turso, or
+DynamoDB — using `#[column(type = varchar(100))]` with SQLite produces an
+error like
 `"unsupported feature: VARCHAR type is not supported by this database"`. If the
 requested size exceeds the database's maximum, Toasty reports that as well.
 
@@ -146,13 +148,19 @@ assert_eq!(post.view_count, 100);
 The expression inside `#[default(...)]` is any valid Rust expression. It runs at
 insert time, not at compile time.
 
-`#[default]` only applies on create. It has no effect on updates.
+`#[default]` applies to a create builder and to the create branch of an
+[upsert](./upserting-records.md). It does not change an existing record on the
+update branch. A shared upsert mutation applies to this value when it creates a
+record; for example, `#[default(10)]` with `subtract(3)` inserts seven.
 
 ## Update expressions
 
 Use `#[update(expr)]` to set an expression that applies on both create and
 update. Each time the record is created or updated, Toasty evaluates the
 expression and sets the field — unless you explicitly override it.
+
+An [upsert](./upserting-records.md) applies `#[update]` on both its create and
+update branches.
 
 ```rust
 # use toasty::Model;
@@ -225,7 +233,8 @@ assert_eq!(post.updated_at, explicit_ts);
 ### Combining `#[default]` and `#[update]`
 
 You can use both attributes on the same field. `#[default]` applies on create,
-`#[update]` applies on update:
+and `#[update]` applies on update. An upsert selects the corresponding value for
+each branch:
 
 ```rust
 # use toasty::Model;
@@ -346,109 +355,12 @@ struct Event {
 }
 ```
 
-## JSON serialization
+## JSON-encoded fields
 
-Use `#[serialize(json)]` to store a Rust value as a JSON string in the database.
-The field type must implement `serde::Serialize` and `serde::Deserialize`.
-
-```rust,ignore
-# use toasty::Model;
-use serde::{Serialize, Deserialize};
-
-#[derive(Debug, Clone, Serialize, Deserialize)]
-struct Metadata {
-    version: u32,
-    labels: Vec<String>,
-}
-
-#[derive(Debug, toasty::Model)]
-struct Post {
-    #[key]
-    #[auto]
-    id: u64,
-
-    title: String,
-
-    #[serialize(json)]
-    tags: Vec<String>,
-
-    #[serialize(json)]
-    meta: Metadata,
-}
-```
-
-Toasty serializes the value to a JSON string on insert and update, and
-deserializes it back when reading. The default database column type is `TEXT`.
-You can override this with `#[column(type = ...)]` if needed — for example,
-`#[column(type = varchar(1000))]` to limit the stored JSON size on databases
-that support `varchar`.
-
-```rust,ignore
-# use toasty::Model;
-# use serde::{Serialize, Deserialize};
-# #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-# struct Metadata {
-#     version: u32,
-#     labels: Vec<String>,
-# }
-# #[derive(Debug, toasty::Model)]
-# struct Post {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     title: String,
-#     #[serialize(json)]
-#     tags: Vec<String>,
-#     #[serialize(json)]
-#     meta: Metadata,
-# }
-# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
-let post = toasty::create!(Post {
-    title: "Hello",
-    tags: vec!["rust".to_string(), "toasty".to_string()],
-    meta: Metadata {
-        version: 1,
-        labels: vec!["alpha".to_string()],
-    },
-})
-.exec(&mut db)
-.await?;
-
-assert_eq!(post.tags, vec!["rust", "toasty"]);
-assert_eq!(post.meta.version, 1);
-# Ok(())
-# }
-```
-
-### Nullable JSON fields
-
-By default, `#[serialize(json)]` creates a `NOT NULL` column. An `Option<T>`
-field with `#[serialize(json)]` serializes `None` as the JSON text `"null"` —
-the column still stores a non-null string.
-
-To allow SQL `NULL` in the column, add the `nullable` modifier:
-
-```rust
-# use toasty::Model;
-# use std::collections::HashMap;
-# #[derive(Debug, toasty::Model)]
-# struct Post {
-#     #[key]
-#     #[auto]
-#     id: u64,
-#     title: String,
-#[serialize(json, nullable)]
-metadata: Option<HashMap<String, String>>,
-# }
-```
-
-With `nullable`:
-- `None` maps to SQL `NULL` in the database
-- `Some(value)` maps to the JSON string representation
-
-Without `nullable`:
-- `None` maps to the JSON text `"null"` (a non-null string)
-- `Some(value)` maps to the JSON string representation
+`toasty::Json<T>` and `serde_json::Value` fields require
+`#[column(type = text)]`, `varchar(...)`, `json`, or `jsonb`. See [JSON
+Encoding](./json-encoding.md) for feature setup, storage support, null
+representations, setters, deferred loading, and query limitations.
 
 ## Attribute summary
 
@@ -456,12 +368,14 @@ Without `nullable`:
 |---|---|---|
 | `#[column("name")]` | Custom column name | — |
 | `#[column(type = ...)]` | Explicit column type | — |
-| `#[default(expr)]` | Default value | Create only |
-| `#[update(expr)]` | Automatic value | Create and update |
-| `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create only |
-| `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create and update |
-| `#[serialize(json)]` | Store as JSON text | Create and update |
-| `#[serialize(json, nullable)]` | Store as JSON text with SQL NULL support | Create and update |
+| `#[default(expr)]` | Default value | Create and the create branch of upsert |
+| `#[update(expr)]` | Automatic value | Create, update, and both upsert branches |
+| `#[auto]` on `created_at` | Shorthand for `#[default(jiff::Timestamp::now())]` | Create and the create branch of upsert |
+| `#[auto]` on `updated_at` | Shorthand for `#[update(jiff::Timestamp::now())]` | Create, update, and both upsert branches |
 
 See [Concurrency Control](./concurrency-control.md) for the `#[version]`
 attribute.
+
+> **Runnable example:** [`cms-article-fields`] covers field options — defaults, auto timestamps, `Json<T>`, a queryable `Vec<scalar>`, and deferred columns.
+
+[`cms-article-fields`]: https://github.com/tokio-rs/toasty/tree/main/examples/cms-article-fields

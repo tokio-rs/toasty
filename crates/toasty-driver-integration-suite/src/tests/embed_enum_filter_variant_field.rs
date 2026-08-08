@@ -1,94 +1,5 @@
 use crate::prelude::*;
 
-/// Filtering by a field within a specific enum variant using the closure-based
-/// `.matches()` API: `contact().email().matches(|e| e.address().eq("x"))`.
-#[driver_test(requires(sql))]
-pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
-    #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
-        #[column(variant = 1)]
-        Email { address: String },
-        #[column(variant = 2)]
-        Phone { number: String },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    #[allow(dead_code)]
-    struct User {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
-    }
-
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
-
-    User::create()
-        .name("Alice")
-        .contact(ContactInfo::Email {
-            address: "alice@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    User::create()
-        .name("Bob")
-        .contact(ContactInfo::Phone {
-            number: "555-1234".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    User::create()
-        .name("Carol")
-        .contact(ContactInfo::Email {
-            address: "carol@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    // Filter by email address field
-    let results = User::filter(
-        User::fields()
-            .contact()
-            .email()
-            .matches(|e| e.address().eq("alice@example.com")),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].name, "Alice");
-
-    // Filter by phone number field
-    let results = User::filter(
-        User::fields()
-            .contact()
-            .phone()
-            .matches(|e| e.number().eq("555-1234")),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].name, "Bob");
-
-    // Filter by email address that doesn't match any record
-    let results = User::filter(
-        User::fields()
-            .contact()
-            .email()
-            .matches(|e| e.address().eq("nobody@example.com")),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(results.len(), 0);
-
-    Ok(())
-}
-
 /// Variant+field filter combined with a partition key so DynamoDB can execute it.
 #[driver_test]
 pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()> {
@@ -111,7 +22,7 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
         contact: ContactInfo,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     User::create()
         .group("eng")
@@ -158,15 +69,13 @@ pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()>
     Ok(())
 }
 
-/// Filtering directly via a variant-rooted path comparison (no `matches`
-/// closure). The implicit gate on filter methods means
-/// `email().address().eq("x")` is equivalent to
-/// `email().matches(|e| e.address().eq("x"))` — the variant predicate is
-/// added automatically, so Phone-variant rows are excluded.
-#[driver_test(requires(sql))]
-pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
+/// OR of two variant-rooted field predicates — one per variant. Each predicate
+/// on its own works; only the `OR` used to panic in the SQL serializer with
+/// "unexpected enum discriminant" (issue #1061).
+#[driver_test(requires(scan))]
+pub async fn cross_variant_or(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
-    enum ContactInfo {
+    enum Contact {
         #[column(variant = 1)]
         Email { address: String },
         #[column(variant = 2)]
@@ -179,42 +88,35 @@ pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
         #[key]
         #[auto]
         id: uuid::Uuid,
-        name: String,
-        contact: ContactInfo,
+        contact: Contact,
     }
 
-    let mut db = t.setup_db(models!(User, ContactInfo)).await;
+    let mut db = t.setup_db(models!(User)).await;
 
     User::create()
-        .name("Alice")
-        .contact(ContactInfo::Email {
-            address: "alice@example.com".to_string(),
+        .contact(Contact::Email {
+            address: "x".to_string(),
+        })
+        .exec(&mut db)
+        .await?;
+    User::create()
+        .contact(Contact::Phone {
+            number: "x".to_string(),
         })
         .exec(&mut db)
         .await?;
 
-    // Bob shares the same string but in the Phone column — the gate must
-    // reject him because his variant is Phone, not Email.
-    User::create()
-        .name("Bob")
-        .contact(ContactInfo::Phone {
-            number: "alice@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    let results = User::filter(
+    let rows = User::filter(
         User::fields()
             .contact()
             .email()
             .address()
-            .eq("alice@example.com"),
+            .eq("x")
+            .or(User::fields().contact().phone().number().eq("x")),
     )
     .exec(&mut db)
     .await?;
 
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].name, "Alice");
-
+    assert_eq!(rows.len(), 2);
     Ok(())
 }

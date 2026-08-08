@@ -31,6 +31,9 @@ pub use builder::Builder;
 /// Database-level (table/column-oriented) schema definitions.
 pub mod db;
 
+/// Schema-diff types: compare two schema versions and produce structural changes.
+pub mod diff;
+
 /// Mapping between the app layer and the database layer.
 pub mod mapping;
 use mapping::Mapping;
@@ -74,19 +77,6 @@ pub struct Schema {
 }
 
 impl Schema {
-    /// Returns a new [`Builder`] for constructing a `Schema`.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use toasty_core::Schema;
-    ///
-    /// let builder = Schema::builder();
-    /// ```
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Returns the mapping for the given model.
     ///
     /// # Panics

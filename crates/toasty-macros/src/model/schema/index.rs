@@ -8,6 +8,11 @@ pub(crate) struct Index {
 
     /// True when the index is the primary key
     pub(crate) primary_key: bool,
+
+    /// User-provided index name from `#[index(name = "...", ...)]` or
+    /// `#[key(name = "...", ...)]`. When `None`, the schema builder generates
+    /// a name automatically.
+    pub(crate) name: Option<String>,
 }
 
 #[derive(Debug)]

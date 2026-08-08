@@ -8,6 +8,29 @@ struct ApplyInsertScope<'a> {
     expr: &'a mut stmt::Expr,
 }
 
+/// How to encode an auto-generated value for a given field. Each newtype
+/// embed layer adds one record wrapping around the leaf primitive value.
+struct AutoTarget<'a> {
+    ty: &'a stmt::Type,
+    wrap_depth: usize,
+}
+
+impl AutoTarget<'_> {
+    fn wrap(&self, mut value: stmt::Value) -> stmt::Value {
+        for _ in 0..self.wrap_depth {
+            value = stmt::Value::record_from_vec(vec![value]);
+        }
+        value
+    }
+
+    fn wrap_expr(&self, mut expr: stmt::Expr) -> stmt::Expr {
+        for _ in 0..self.wrap_depth {
+            expr = stmt::Expr::record_from_vec(vec![expr]);
+        }
+        expr
+    }
+}
+
 impl LowerStatement<'_, '_> {
     // First, apply the insertion scope to the insertion values
     pub(super) fn apply_insert_scope(
@@ -39,6 +62,7 @@ impl LowerStatement<'_, '_> {
         &mut self,
         source: &mut stmt::Query,
         returning: &mut Option<stmt::Returning>,
+        preserve_returning_projection: bool,
     ) {
         let stmt::ExprSet::Values(values) = &mut source.body else {
             todo!()
@@ -60,7 +84,9 @@ impl LowerStatement<'_, '_> {
         // If there are any has_n associations included in the insertion, the
         // statement returning has to be transformed to accomodate the nested
         // structure.
-        self.convert_returning_for_insert(values, returning, source.single);
+        if !preserve_returning_projection {
+            self.convert_returning_for_insert(values, returning, source.single);
+        }
 
         for (index, row) in values.rows.iter_mut().enumerate() {
             self.lower_insert_with_row(index, |lower| {
@@ -87,27 +113,54 @@ impl LowerStatement<'_, '_> {
         // values
         for field in &model.fields {
             if let app::FieldTy::BelongsTo(rel) = &field.ty {
-                let [fk_field] = &rel.foreign_key.fields[..] else {
-                    todo!()
-                };
-
                 let mut field_expr = expr.entry_mut(field.id.index);
 
-                if !field_expr.is_value() || field_expr.is_value_null() {
+                if field_expr.is_value_null() {
                     continue;
                 }
 
-                let e = field_expr.take();
-                expr.entry_mut(fk_field.source.index).insert(e);
+                let fk_fields = &rel.foreign_key.fields;
+
+                // Distribute the BelongsTo value into its FK source column(s):
+                //   - composite FK (`fk_fields.len() > 1`): the value is a
+                //     record (`Expr::Record` from the tuple `IntoExpr` for
+                //     composite-PK targets, or `Expr::Value(Value::Record)`
+                //     from a literal); one item per FK column via
+                //     `into_record_items`.
+                //   - single FK: the value goes whole into the single FK
+                //     column, whether it is a scalar or a record (an
+                //     `Embed`-typed PK produces an `Expr::Record` whose shape
+                //     matches the embed-typed FK source).
+                if fk_fields.len() > 1 && field_expr.is_record() {
+                    let items = field_expr.take().into_record_items().unwrap();
+                    let mut count = 0;
+                    for (fk_field, item) in fk_fields.iter().zip(items) {
+                        expr.entry_mut(fk_field.source.index).insert(item);
+                        count += 1;
+                    }
+                    assert_eq!(count, fk_fields.len());
+                } else {
+                    if !field_expr.is_value() && !field_expr.is_record() {
+                        continue;
+                    }
+                    let [fk_field] = &fk_fields[..] else {
+                        panic!("composite FK expected a record value, got scalar");
+                    };
+                    let e = field_expr.take();
+                    expr.entry_mut(fk_field.source.index).insert(e);
+                }
             }
         }
 
         // Initialize version fields to 1 if not already set by the user.
+        // For embedded newtypes (e.g. `Version(u64)`), wrap in one Record per
+        // embed layer so the value round-trips through the embed's `Load` impl.
         for field in &model.fields {
             if field.is_versionable() {
                 let mut field_expr = expr.entry_mut(field.id.index);
                 if field_expr.is_default() || field_expr.is_value_null() {
-                    field_expr.insert(stmt::Value::U64(1).into());
+                    let target = self.auto_target(field.id);
+                    field_expr.insert(target.wrap(stmt::Value::U64(1)).into());
                 }
             }
         }
@@ -121,28 +174,34 @@ impl LowerStatement<'_, '_> {
                 // If the field is defined to be auto-populated, then populate
                 // it here.
                 if let Some(auto) = &field.auto {
-                    let ty = match &field.ty {
-                        app::FieldTy::Primitive(primitive) => &primitive.ty,
-                        _ => panic!("#[auto] not allowed on non-primitive fields"),
-                    };
+                    // For an embedded newtype, the auto value is generated as
+                    // the inner primitive and wrapped in a single-element
+                    // record so it round-trips through the embed `Load` impl.
+                    let target = self.auto_target(field.id);
                     match auto {
                         app::AutoStrategy::Uuid(version) => {
                             let id = match version {
                                 app::UuidVersion::V4 => uuid::Uuid::new_v4(),
                                 app::UuidVersion::V7 => uuid::Uuid::now_v7(),
                             };
-                            match ty {
-                                stmt::Type::String => {
-                                    field_expr.insert(stmt::Value::String(id.to_string()).into())
-                                }
-                                stmt::Type::Uuid => field_expr.insert(stmt::Value::Uuid(id).into()),
-                                _ => panic!(
-                                    "auto-generated UUID cannot be inserted into column of type {ty:?}"
+                            let primitive = match &target.ty {
+                                stmt::Type::String => stmt::Value::String(id.to_string()),
+                                stmt::Type::Uuid => stmt::Value::Uuid(id),
+                                other => panic!(
+                                    "auto-generated UUID cannot be inserted into column of type {other:?}"
                                 ),
                             };
+                            field_expr.insert(target.wrap(primitive).into());
                         }
                         app::AutoStrategy::Increment => {
-                            // Leave value as `Expr::Default` and let the database handle it.
+                            // Leave value as `Expr::Default` for primitives so
+                            // the database fills it in. For embedded newtypes
+                            // the column-projection step needs a Record of the
+                            // right shape (one wrapping per nested embed) so
+                            // it can extract `Default` per column.
+                            if target.wrap_depth > 0 {
+                                field_expr.insert(target.wrap_expr(stmt::Expr::Default));
+                            }
                         }
                     }
                 }
@@ -174,7 +233,8 @@ impl LowerStatement<'_, '_> {
                 expr_arg: &stmt::ExprArg,
                 projection: &stmt::Projection,
             ) -> Option<stmt::Expr> {
-                todo!("self={self:#?}; expr_arg={expr_arg:#?}; projection={projection:#?}");
+                let _ = (expr_arg, projection);
+                None
             }
 
             fn resolve_ref(
@@ -237,6 +297,90 @@ impl LowerStatement<'_, '_> {
                 }
             }
         }
+    }
+}
+
+impl<'b> LowerStatement<'_, 'b> {
+    /// Returns the primitive type the auto value should be encoded as, plus
+    /// how many record wrappings to apply for the embed chain. Walks down
+    /// through nested newtype embeds (`Outer(Inner(u64))`) until it reaches
+    /// the leaf primitive.
+    fn auto_target(&self, field_id: app::FieldId) -> AutoTarget<'b> {
+        let mut ty = &self.schema().app.field(field_id).ty;
+        let mut wrap_depth = 0;
+        loop {
+            match ty {
+                app::FieldTy::Primitive(primitive) => {
+                    return AutoTarget {
+                        ty: &primitive.ty,
+                        wrap_depth,
+                    };
+                }
+                app::FieldTy::Embedded(embedded) => {
+                    let target = self.schema().app.model(embedded.target);
+                    let app::Model::EmbeddedStruct(es) = target else {
+                        panic!(
+                            "#[auto] on embedded enum is not supported (target {:?})",
+                            embedded.target
+                        );
+                    };
+                    let [inner] = es.fields.as_slice() else {
+                        panic!(
+                            "#[auto] on embedded type with {} fields; expected exactly one",
+                            es.fields.len()
+                        );
+                    };
+                    ty = &inner.ty;
+                    wrap_depth += 1;
+                }
+                _ => panic!("#[auto] not allowed on non-primitive fields"),
+            }
+        }
+    }
+
+    /// The target projection and per-row delta for a versionable field's update
+    /// assignment, used to build an atomic `version = version + 1` via
+    /// [`Assignment::Add`](stmt::Assignment::Add).
+    ///
+    /// The projection walks past any embed-newtype layers (`Version(u64)`) to
+    /// the leaf primitive column — `[field, 0, …]` — and the delta is the bare
+    /// literal `1`. Arithmetic operators apply only to primitive columns, so
+    /// unlike the whole-record `Set` the instance path uses, the increment must
+    /// reach the leaf rather than sit on the embed field.
+    pub(super) fn version_increment_target(
+        &self,
+        field_id: app::FieldId,
+    ) -> (stmt::Projection, stmt::Expr) {
+        let target = self.auto_target(field_id);
+
+        // `[field_id.index]` then one `0` per embed layer, reaching the leaf.
+        let mut steps = vec![field_id.index];
+        steps.resize(1 + target.wrap_depth, 0);
+
+        (
+            stmt::Projection::from(steps.as_slice()),
+            stmt::Expr::Value(stmt::Value::U64(1)),
+        )
+    }
+
+    /// Adds an atomic version increment unless the statement already assigns
+    /// the version field.
+    pub(super) fn inject_version_increment(
+        &self,
+        assignments: &mut stmt::Assignments,
+    ) -> Option<stmt::Projection> {
+        let version_id = self.model().and_then(|m| m.version_field()).map(|f| f.id)?;
+
+        let already_assigned = assignments
+            .keys()
+            .any(|projection| projection.as_slice().first() == Some(&version_id.index));
+        if already_assigned {
+            return None;
+        }
+
+        let (projection, delta) = self.version_increment_target(version_id);
+        assignments.add(projection.clone(), delta);
+        Some(projection)
     }
 }
 

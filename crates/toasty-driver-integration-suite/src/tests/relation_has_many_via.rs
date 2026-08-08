@@ -1,0 +1,1008 @@
+//! Multi-step (`via`) has_many relations: a `has_many` reached by following a
+//! path of existing relations rather than a single foreign key.
+//!
+//! The shape under test is `User` → `Comment` → `Article`: a user has many
+//! comments, each comment belongs to an article, so a user has many
+//! `commented_articles` via `comments.article`.
+
+use crate::prelude::*;
+
+/// A nullable one-field newtype foreign key uses its leaf column rather than
+/// its presence-guarded embed expression when preloading a via relation.
+#[driver_test(requires(and(sql, auto_increment)))]
+pub async fn include_with_newtype_foreign_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct UserId(u64);
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: UserId,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+
+        #[has_many(via = comments.article)]
+        commented_articles: toasty::Deferred<Vec<Article>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Comment {
+        #[key]
+        #[auto]
+        id: u64,
+
+        #[index]
+        user_id: Option<UserId>,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<Option<User>>,
+
+        #[index]
+        article_id: u64,
+
+        #[belongs_to(key = article_id, references = id)]
+        article: toasty::Deferred<Article>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Article {
+        #[key]
+        #[auto]
+        id: u64,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Comment, Article)).await;
+    let user = toasty::create!(User {}).exec(&mut db).await?;
+    let article = toasty::create!(Article {}).exec(&mut db).await?;
+    toasty::create!(Comment {
+        user: &user,
+        article: &article,
+    })
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::all()
+        .include(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [_ {
+        commented_articles.get().len(): 1,
+        ..
+    }]);
+
+    Ok(())
+}
+
+/// A unit enum key and foreign key link through the enum's discriminant column
+/// when preloading a via relation.
+#[driver_test(requires(sql))]
+pub async fn include_with_unit_enum_foreign_key(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    enum UserId {
+        #[column(variant = 1)]
+        Alice,
+        #[column(variant = 2)]
+        Bob,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        id: UserId,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+
+        #[has_many(via = comments.article)]
+        commented_articles: toasty::Deferred<Vec<Article>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Comment {
+        #[key]
+        id: u64,
+
+        #[index]
+        user_id: UserId,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: toasty::Deferred<User>,
+
+        #[index]
+        article_id: u64,
+
+        #[belongs_to(key = article_id, references = id)]
+        article: toasty::Deferred<Article>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Article {
+        #[key]
+        id: u64,
+
+        #[has_many]
+        comments: toasty::Deferred<Vec<Comment>>,
+    }
+
+    let mut db = test.setup_db(models!(User, Comment, Article)).await;
+    let user = toasty::create!(User { id: UserId::Alice })
+        .exec(&mut db)
+        .await?;
+    let article = toasty::create!(Article { id: 1 }).exec(&mut db).await?;
+    toasty::create!(Comment {
+        id: 1,
+        user: &user,
+        article: &article,
+    })
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::all()
+        .include(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(users, [_ {
+        commented_articles.get().len(): 1,
+        ..
+    }]);
+
+    Ok(())
+}
+
+/// Querying and including a two-step `via` returns distinct target models and
+/// scalar terminal values, grouped by parent for includes.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn query_and_include_two_step_targets_and_values(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[
+        { name: "Alice" },
+        { name: "Bob" },
+        { name: "Charlie" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (alice, bob) = (&users[0], &users[1]);
+
+    let articles = toasty::create!(Article::[
+        { title: "Rust" },
+        { title: "Toasty" },
+        { title: "SQL" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (rust, toasty_article, sql) = (&articles[0], &articles[1], &articles[2]);
+
+    // Alice comments on Rust twice and Toasty once; Bob comments on SQL.
+    toasty::create!(Comment::[
+        { body: "a1", user: alice, article: rust },
+        { body: "a2", user: alice, article: rust },
+        { body: "a3", user: alice, article: toasty_article },
+        { body: "b1", user: bob, article: sql },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Alice has commented on Rust and Toasty. Rust appears once even though
+    // she commented on it twice — `via` yields distinct targets.
+    let commented = alice.commented_articles().exec(&mut db).await?;
+    assert_eq_unordered!(commented.iter().map(|a| &a.title[..]), ["Rust", "Toasty"]);
+
+    // Bob has commented only on SQL.
+    let commented = bob.commented_articles().exec(&mut db).await?;
+    assert_eq_unordered!(commented.iter().map(|a| &a.title[..]), ["SQL"]);
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(3, loaded.len());
+    for user in &loaded {
+        let titles: Vec<&str> = user
+            .commented_articles
+            .get()
+            .iter()
+            .map(|a| &a.title[..])
+            .collect();
+        match &user.name[..] {
+            "Alice" => {
+                assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(titles, ["SQL"]);
+            }
+            "Charlie" => assert!(titles.is_empty(), "Charlie has no comments; got {titles:?}"),
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    let titles = alice.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust", "Toasty"]);
+    let titles = bob.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["SQL"]);
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().commented_article_titles())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(3, loaded.len());
+    for user in &loaded {
+        let titles: Vec<&str> = user
+            .commented_article_titles
+            .get()
+            .iter()
+            .map(|t| &t[..])
+            .collect();
+        match &user.name[..] {
+            "Alice" => {
+                assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(titles, ["SQL"]);
+            }
+            "Charlie" => assert!(titles.is_empty(), "Charlie has no comments; got {titles:?}"),
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    Ok(())
+}
+
+/// A user with no comments reaches no articles — an empty result, no error.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn query_with_no_intermediates_is_empty(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    toasty::create!(Article { title: "Rust" })
+        .exec(&mut db)
+        .await?;
+
+    let commented = user.commented_articles().exec(&mut db).await?;
+    assert!(commented.is_empty());
+
+    Ok(())
+}
+
+/// A `via` relation query can be further filtered, like any other relation
+/// query.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn via_relation_query_can_be_filtered(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let articles = toasty::create!(Article::[
+        { title: "Rust" },
+        { title: "Toasty" },
+        { title: "SQL" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (rust, toasty_article, sql) = (&articles[0], &articles[1], &articles[2]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust },
+        { body: "a2", user: &alice, article: toasty_article },
+        { body: "a3", user: &alice, article: sql },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let filtered: Vec<_> = alice
+        .commented_articles()
+        .filter(Article::fields().title().eq("Toasty"))
+        .exec(&mut db)
+        .await?;
+    assert_eq_unordered!(filtered.iter().map(|a| &a.title[..]), ["Toasty"]);
+
+    Ok(())
+}
+
+/// `.any()` on a `via` field filters parent records through the expanded
+/// relation path. The same predicate works when the path contains another
+/// `via` field.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_org_project_todo))]
+pub async fn filter_parent_by_via_any(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+    let alice_org = toasty::create!(Organization {
+        name: "Alice Org",
+        user: &users[0]
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_org = toasty::create!(Organization {
+        name: "Bob Org",
+        user: &users[1]
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_project = toasty::create!(Project {
+        name: "Alice Project",
+        organization: &alice_org
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_project = toasty::create!(Project {
+        name: "Bob Project",
+        organization: &bob_org
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(Todo::[
+        { title: "match", project: &alice_project },
+        { title: "other", project: &bob_project },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .todos()
+            .any(Todo::fields().title().eq("match")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .nested_todos()
+            .any(Todo::fields().title().eq("match")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(users.len(), 1);
+    assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}
+
+// ===== `.include()` / `.select()` of multi-step `via` relations =====
+//
+// The scenarios below cover via paths of different lengths and shapes:
+//
+//   - `user_comment_article`        — 2 steps (HasMany → BelongsTo)
+//   - `user_org_project_todo`       — 3 steps (HasMany → HasMany → HasMany),
+//                                     plus a via-of-via whose path step is
+//                                     itself a via.
+//   - `user_account_subscription`   — 2 steps (HasOne → HasOne); a
+//                                     single-result via.
+//
+// The engine should fetch parents once, then issue a single child query that
+// `INNER JOIN`s each intermediate model and groups results by the parent FK.
+// `.include()` splices that child query into a record slot; `.select()` uses it
+// as the whole projection.
+
+/// `.include()` over a 3-step `via`: User → Organization → Project → Todo,
+/// all `HasMany` steps. Verifies that the child query joins every
+/// intermediate and groups todos by the root user.
+///
+/// The data shape (Alice has two orgs, one with two projects; Bob one org with
+/// one project; each project has a couple of todos) is shared with
+/// [`include_via_nested_via`] so the two can be compared directly. It can't be
+/// hoisted into a helper. The macro imports the scenario types inside each test
+/// function, so a helper cannot name them.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_org_project_todo))]
+pub async fn include_via_three_step(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[
+        { name: "Alice" },
+        { name: "Bob" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (alice, bob) = (&users[0], &users[1]);
+
+    let alice_org_a = toasty::create!(Organization {
+        name: "A-Co",
+        user: alice
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_org_b = toasty::create!(Organization {
+        name: "B-Co",
+        user: alice
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_org = toasty::create!(Organization {
+        name: "Bob-Inc",
+        user: bob
+    })
+    .exec(&mut db)
+    .await?;
+
+    let alice_proj_1 = toasty::create!(Project {
+        name: "p1",
+        organization: &alice_org_a
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_proj_2 = toasty::create!(Project {
+        name: "p2",
+        organization: &alice_org_a
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_proj_3 = toasty::create!(Project {
+        name: "p3",
+        organization: &alice_org_b
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_proj = toasty::create!(Project {
+        name: "bp",
+        organization: &bob_org
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(Todo::[
+        { title: "a-1", project: &alice_proj_1 },
+        { title: "a-2", project: &alice_proj_1 },
+        { title: "a-3", project: &alice_proj_2 },
+        { title: "a-4", project: &alice_proj_3 },
+        { title: "b-1", project: &bob_proj },
+        { title: "b-2", project: &bob_proj },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().todos())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(2, loaded.len());
+
+    for user in &loaded {
+        let titles: Vec<&str> = user.todos.get().iter().map(|t| &t.title[..]).collect();
+        match &user.name[..] {
+            "Alice" => {
+                assert_eq_unordered!(titles, ["a-1", "a-2", "a-3", "a-4"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(titles, ["b-1", "b-2"]);
+            }
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    Ok(())
+}
+
+/// `.include()` over a via-of-via: `User::nested_todos` reaches todos through
+/// `organizations.todos`, where `Organization::todos` is itself a via. The
+/// outer path's second step expands into a nested via during lowering, so this
+/// exercises recursive via flattening. The result must match the flat 3-step
+/// `User::todos` include in [`include_via_three_step`] exactly — same data
+/// shape, same expected grouping.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_org_project_todo))]
+pub async fn include_via_nested_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[
+        { name: "Alice" },
+        { name: "Bob" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (alice, bob) = (&users[0], &users[1]);
+
+    let alice_org_a = toasty::create!(Organization {
+        name: "A-Co",
+        user: alice
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_org_b = toasty::create!(Organization {
+        name: "B-Co",
+        user: alice
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_org = toasty::create!(Organization {
+        name: "Bob-Inc",
+        user: bob
+    })
+    .exec(&mut db)
+    .await?;
+
+    let alice_proj_1 = toasty::create!(Project {
+        name: "p1",
+        organization: &alice_org_a
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_proj_2 = toasty::create!(Project {
+        name: "p2",
+        organization: &alice_org_a
+    })
+    .exec(&mut db)
+    .await?;
+    let alice_proj_3 = toasty::create!(Project {
+        name: "p3",
+        organization: &alice_org_b
+    })
+    .exec(&mut db)
+    .await?;
+    let bob_proj = toasty::create!(Project {
+        name: "bp",
+        organization: &bob_org
+    })
+    .exec(&mut db)
+    .await?;
+
+    toasty::create!(Todo::[
+        { title: "a-1", project: &alice_proj_1 },
+        { title: "a-2", project: &alice_proj_1 },
+        { title: "a-3", project: &alice_proj_2 },
+        { title: "a-4", project: &alice_proj_3 },
+        { title: "b-1", project: &bob_proj },
+        { title: "b-2", project: &bob_proj },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().nested_todos())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(2, loaded.len());
+
+    for user in &loaded {
+        let titles: Vec<&str> = user
+            .nested_todos
+            .get()
+            .iter()
+            .map(|t| &t.title[..])
+            .collect();
+        match &user.name[..] {
+            "Alice" => {
+                assert_eq_unordered!(titles, ["a-1", "a-2", "a-3", "a-4"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(titles, ["b-1", "b-2"]);
+            }
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    Ok(())
+}
+
+/// A via-of-via with a **scalar terminal**: `nested_todo_titles` routes through
+/// `organizations.todos` — where `Organization::todos` is itself a via — then
+/// projects `Todo::title`. This drives the nested-via splice
+/// (`flatten_via_steps` / `RewriteVia`) on the *scalar*-terminal code paths,
+/// which the model via-of-via ([`include_via_nested_via`]) leaves untested.
+/// Distinct values still apply, so a title shared by todos in different orgs
+/// collapses to one. Navigation and `.include()` must agree.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_org_project_todo))]
+pub async fn scalar_via_of_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let org_a = toasty::create!(Organization {
+        name: "A-Co",
+        user: &alice
+    })
+    .exec(&mut db)
+    .await?;
+    let org_b = toasty::create!(Organization {
+        name: "B-Co",
+        user: &alice
+    })
+    .exec(&mut db)
+    .await?;
+    let proj_a = toasty::create!(Project {
+        name: "p-a",
+        organization: &org_a
+    })
+    .exec(&mut db)
+    .await?;
+    let proj_b = toasty::create!(Project {
+        name: "p-b",
+        organization: &org_b
+    })
+    .exec(&mut db)
+    .await?;
+
+    // "y" appears under todos in *both* orgs — distinct values collapse it.
+    toasty::create!(Todo::[
+        { title: "x", project: &proj_a },
+        { title: "y", project: &proj_a },
+        { title: "y", project: &proj_b },
+        { title: "z", project: &proj_b },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // Navigation projects the titles through the nested via.
+    let titles = alice.nested_todo_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["x", "y", "z"]);
+
+    // `.include()` agrees.
+    let loaded = User::filter_by_id(alice.id)
+        .include(User::fields().nested_todo_titles())
+        .get(&mut db)
+        .await?;
+    let titles: Vec<&str> = loaded
+        .nested_todo_titles
+        .get()
+        .iter()
+        .map(|t| &t[..])
+        .collect();
+    assert_eq_unordered!(titles, ["x", "y", "z"]);
+
+    Ok(())
+}
+
+/// A user with no intermediates yields an empty included set — the
+/// `INNER JOIN` excludes them but the parent row is still returned.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_org_project_todo))]
+pub async fn include_via_three_step_no_intermediates(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let loaded = User::filter_by_id(alice.id)
+        .include(User::fields().todos())
+        .get(&mut db)
+        .await?;
+    assert!(loaded.todos.get().is_empty());
+
+    Ok(())
+}
+
+/// `.select()` of a multi-step `via` relation. `.select()` and `.include()`
+/// share the via-JOIN child query (`build_relation_subquery`); the difference
+/// is that `.select()` uses the subquery as the whole projection (each parent
+/// row decodes to its own `Vec<Article>`) rather than splicing it into a record
+/// slot. Distinct targets still apply, so Rust appears once though commented
+/// twice.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn select_via_two_step(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let articles = toasty::create!(Article::[
+        { title: "Rust" },
+        { title: "Toasty" },
+    ])
+    .exec(&mut db)
+    .await?;
+    let (rust, toasty_article) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust },
+        { body: "a2", user: &alice, article: rust },
+        { body: "a3", user: &alice, article: toasty_article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let articles_per_user: Vec<Vec<Article>> = User::all()
+        .select(User::fields().commented_articles())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, articles_per_user.len());
+    let titles: Vec<&str> = articles_per_user[0].iter().map(|a| &a.title[..]).collect();
+    assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+
+    Ok(())
+}
+
+/// `.include()` of a `has_one` (single-result) `via` relation: `User` →
+/// `Account` → `Subscription`, both steps `has_one`. The via target is a single
+/// record, so this exercises the `query.single` branch of via-include lowering
+/// that the all-`has_many` scenarios never reach. The `INNER JOIN` drops a
+/// parent whose chain is incomplete at *either* step, so a missing leaf and a
+/// missing intermediate both surface as `None`.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_account_subscription))]
+pub async fn include_via_has_one(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    // Alice: account → subscription. Bob: account, no subscription.
+    // Carol: no account at all.
+    toasty::create!(User {
+        name: "Alice",
+        account: Account::create().subscription(Subscription::create().plan("pro")),
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(User {
+        name: "Bob",
+        account: Account::create(),
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(User { name: "Carol" })
+        .exec(&mut db)
+        .await?;
+
+    let loaded: Vec<User> = User::all()
+        .include(User::fields().subscription())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(3, loaded.len());
+
+    for user in &loaded {
+        let plan = user.subscription.get().as_ref().map(|s| &s.plan[..]);
+        match &user.name[..] {
+            "Alice" => assert_eq!(plan, Some("pro")),
+            "Bob" => assert_eq!(plan, None, "Bob has an account but no subscription"),
+            "Carol" => assert_eq!(plan, None, "Carol has no account"),
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    Ok(())
+}
+
+/// `.select()` of a single (`has_one`) `via` relation. Like
+/// [`include_via_has_one`] this drives the `query.single` via path, but through
+/// `.select()`, which projects each parent straight to its target rather than
+/// into a record slot. The missing-row path is already covered by the include
+/// test, so this focuses on a matched chain returning the target.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_account_subscription))]
+pub async fn select_via_has_one(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User {
+        name: "Alice",
+        account: Account::create().subscription(Subscription::create().plan("pro")),
+    })
+    .exec(&mut db)
+    .await?;
+
+    let subscriptions: Vec<Subscription> = User::filter(User::fields().name().eq("Alice"))
+        .select(User::fields().subscription())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, subscriptions.len());
+    assert_eq!(subscriptions[0].plan, "pro");
+
+    Ok(())
+}
+
+// ===== Scalar-terminal `via`: the path ends in a field, not a relation =====
+//
+// `#[has_many(via = comments.article.title)] commented_article_titles:
+// Vec<String>` projects the `title` of every article a user has commented on.
+// The relation chain (`comments.article`) is the same as `commented_articles`;
+// the extra `.title` step makes the field a `Vec<String>` of distinct titles.
+
+/// Pins the **distinct *values*** decision against the alternative (distinct
+/// *targets*). The case that tells them apart is a user commenting on two
+/// *different* articles that happen to share a title: the model-via reaches two
+/// distinct targets, but the scalar via collapses their equal terminal values
+/// to one — `["Rust"]`, not `["Rust", "Rust"]`.
+///
+/// [`query_and_include_two_step_targets_and_values`] can't distinguish the two
+/// semantics: it dedups a single target reached through several comments, which
+/// both semantics collapse identically. Navigation and `.include()` must agree.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn scalar_via_distinct_values_across_distinct_targets(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    // Two *different* articles that happen to share the title "Rust".
+    let articles = toasty::create!(Article::[{ title: "Rust" }, { title: "Rust" }])
+        .exec(&mut db)
+        .await?;
+    let (rust_a, rust_b) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust_a },
+        { body: "a2", user: &alice, article: rust_b },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // The targets are genuinely distinct: the model-via reaches both articles.
+    let commented = alice.commented_articles().exec(&mut db).await?;
+    assert_eq!(commented.len(), 2);
+
+    // ...but the scalar via yields distinct *values*: the shared title collapses
+    // to one. Distinct *targets* would instead give ["Rust", "Rust"].
+    let titles = alice.commented_article_titles().exec(&mut db).await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust"]);
+
+    // `.include()` agrees with navigation.
+    let loaded = User::filter_by_id(alice.id)
+        .include(User::fields().commented_article_titles())
+        .get(&mut db)
+        .await?;
+    let titles: Vec<&str> = loaded
+        .commented_article_titles
+        .get()
+        .iter()
+        .map(|t| &t[..])
+        .collect();
+    assert_eq_unordered!(titles, ["Rust"]);
+
+    Ok(())
+}
+
+/// A 2-step scalar via (`comments.body`): the terminal field sits directly on
+/// the first relation's target, so the relation chain is a single step
+/// (`[comments]`) — the minimal scalar-via walk, distinct from the 3-step
+/// `comments.article.title`. Distinct values still apply, so a body repeated
+/// across comments appears once. Navigation and `.include()` must agree.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn query_scalar_via_two_step(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let article = toasty::create!(Article { title: "Rust" })
+        .exec(&mut db)
+        .await?;
+
+    // "a1" twice, "a2" once — distinct *values* collapse "a1".
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: &article },
+        { body: "a1", user: &alice, article: &article },
+        { body: "a2", user: &alice, article: &article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let bodies = alice.comment_bodies().exec(&mut db).await?;
+    assert_eq_unordered!(bodies.iter().map(|b| &b[..]), ["a1", "a2"]);
+
+    let loaded = User::filter_by_id(alice.id)
+        .include(User::fields().comment_bodies())
+        .get(&mut db)
+        .await?;
+    let bodies: Vec<&str> = loaded.comment_bodies.get().iter().map(|b| &b[..]).collect();
+    assert_eq_unordered!(bodies, ["a1", "a2"]);
+
+    Ok(())
+}
+
+/// A scalar-terminal `via` can also be navigated off a query (not just a
+/// loaded instance): `User::filter(…).article_titles()` yields the distinct
+/// titles reachable from the matched users.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn query_chain_scalar_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let articles = toasty::create!(Article::[{ title: "Rust" }, { title: "Toasty" }])
+        .exec(&mut db)
+        .await?;
+    let (rust, toasty_article) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust },
+        { body: "a2", user: &alice, article: rust },
+        { body: "a3", user: &alice, article: toasty_article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let titles = User::filter(User::fields().name().eq("Alice"))
+        .commented_article_titles()
+        .exec(&mut db)
+        .await?;
+    assert_eq_unordered!(titles.iter().map(|t| &t[..]), ["Rust", "Toasty"]);
+
+    Ok(())
+}
+
+/// `.select()` of a scalar-terminal `via` returns the projected titles per
+/// parent row.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_comment_article))]
+pub async fn select_scalar_via(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let articles = toasty::create!(Article::[{ title: "Rust" }, { title: "Toasty" }])
+        .exec(&mut db)
+        .await?;
+    let (rust, toasty_article) = (&articles[0], &articles[1]);
+
+    toasty::create!(Comment::[
+        { body: "a1", user: &alice, article: rust },
+        { body: "a2", user: &alice, article: rust },
+        { body: "a3", user: &alice, article: toasty_article },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let titles_per_user: Vec<Vec<String>> = User::all()
+        .select(User::fields().commented_article_titles())
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(1, titles_per_user.len());
+    let titles: Vec<&str> = titles_per_user[0].iter().map(|t| &t[..]).collect();
+    assert_eq_unordered!(titles, ["Rust", "Toasty"]);
+
+    Ok(())
+}
+
+/// A **non-deferred** scalar via (`tag_names: Vec<String>`, no `Deferred`) is an
+/// eager relation edge: querying the parent auto-loads the projected terminal
+/// values without an explicit `.include()`. Every other via scenario wraps the
+/// field in `Deferred`, so this is the only test exercising the
+/// `ViaManyField for Vec<E>` (`DEFERRED = false`) impl and via auto-loading. The
+/// load groups per user and collapses duplicate values, like the explicit
+/// `.include()` paths.
+#[driver_test(requires(sql), scenario(crate::scenarios::user_tag_names))]
+pub async fn eager_scalar_via_auto_loads(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    let users = toasty::create!(User::[{ name: "Alice" }, { name: "Bob" }])
+        .exec(&mut db)
+        .await?;
+    let (alice, bob) = (&users[0], &users[1]);
+
+    toasty::create!(Tag::[
+        { name: "rust", user: alice },
+        { name: "rust", user: alice },
+        { name: "db", user: alice },
+        { name: "sql", user: bob },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    // No `.include()`: the eager via loads on a plain query.
+    let loaded: Vec<User> = User::all().exec(&mut db).await?;
+    assert_eq!(2, loaded.len());
+
+    for user in &loaded {
+        let names: Vec<&str> = user.tag_names.iter().map(|n| &n[..]).collect();
+        match &user.name[..] {
+            // "rust" was tagged twice but the via yields distinct values.
+            "Alice" => {
+                assert_eq_unordered!(names, ["rust", "db"]);
+            }
+            "Bob" => {
+                assert_eq_unordered!(names, ["sql"]);
+            }
+            other => panic!("unexpected user {other}"),
+        }
+    }
+
+    Ok(())
+}

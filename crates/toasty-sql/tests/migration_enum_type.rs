@@ -1,8 +1,8 @@
 use toasty_core::{
     driver::Capability,
-    schema::db::{
-        Column, ColumnId, EnumVariant, PrimaryKey, RenameHints, Schema, SchemaDiff, Table, TableId,
-        Type, TypeEnum,
+    schema::{
+        db::{Column, ColumnId, EnumVariant, PrimaryKey, Schema, Table, TableId, Type, TypeEnum},
+        diff,
     },
     stmt as core_stmt,
 };
@@ -91,8 +91,8 @@ fn create_table_with_enum_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -134,8 +134,8 @@ fn add_variant_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -171,8 +171,8 @@ fn add_multiple_variants_postgresql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -210,8 +210,8 @@ fn remove_variant_is_error() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
 }
 
@@ -244,8 +244,8 @@ fn reorder_variant_is_error() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
 }
 
@@ -267,8 +267,8 @@ fn create_table_with_enum_sqlite() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
@@ -296,8 +296,8 @@ fn create_table_with_enum_mysql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
     let sql = serialize_migration(&stmts, "mysql");
 
@@ -324,8 +324,8 @@ fn no_enum_changes_no_statements() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&schema, &schema, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&schema, &schema, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     assert!(stmts.is_empty());
 }
@@ -358,8 +358,8 @@ fn shared_enum_type_created_once() {
         ],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
     let sql = serialize_migration(&stmts, "postgresql");
 
@@ -381,6 +381,121 @@ fn shared_enum_type_created_once() {
         tables
             .iter()
             .any(|s| s.starts_with("CREATE TABLE \"bugs\""))
+    );
+}
+
+// --- PostgreSQL: enum array column (`status[]`) ---
+
+#[test]
+fn create_table_with_enum_array_postgresql() {
+    let status_enum = make_enum_type("status", &["pending", "active", "done"]);
+
+    let from = Schema::default();
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "statuses", Type::list(Type::Enum(status_enum))),
+            ],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    // The enum type must be created even though it only appears as an array
+    // element.
+    assert_eq!(sql.len(), 2);
+    assert_eq!(
+        sql[0],
+        "CREATE TYPE \"status\" AS ENUM ('pending', 'active', 'done');"
+    );
+    assert!(
+        sql[1].contains("\"statuses\" status[] NOT NULL"),
+        "got: {}",
+        sql[1]
+    );
+}
+
+// --- PostgreSQL: add variant to an enum used only by an array column ---
+
+#[test]
+fn add_variant_enum_array_postgresql() {
+    let status_v1 = make_enum_type("status", &["pending", "active", "done"]);
+    let status_v2 = make_enum_type("status", &["pending", "active", "done", "cancelled"]);
+
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "statuses", Type::list(Type::Enum(status_v1))),
+            ],
+        )],
+    };
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "statuses", Type::list(Type::Enum(status_v2))),
+            ],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    // Variant-only change: a single ALTER TYPE, no column-level DDL.
+    assert_eq!(sql.len(), 1, "got: {sql:?}");
+    assert_eq!(sql[0], "ALTER TYPE \"status\" ADD VALUE 'cancelled';");
+}
+
+// --- PostgreSQL: scalar → array is a real column type change ---
+
+#[test]
+fn enum_scalar_to_array_is_column_change() {
+    let status = make_enum_type("status", &["pending", "active"]);
+
+    let from = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "status", Type::Enum(status.clone())),
+            ],
+        )],
+    };
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "tasks",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "status", Type::list(Type::Enum(status))),
+            ],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+    let sql = serialize_migration(&stmts, "postgresql");
+
+    // Same enum name on both sides, but the shape changed — column DDL must
+    // be emitted (not swallowed by the variant-only guard).
+    assert!(
+        sql.iter().any(|s| s.contains("ALTER TABLE")),
+        "expected column-level DDL, got: {sql:?}"
     );
 }
 
@@ -412,8 +527,8 @@ fn add_variant_mysql() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::MYSQL);
     let sql = serialize_migration(&stmts, "mysql");
 
@@ -454,8 +569,8 @@ fn add_variant_sqlite() {
         )],
     };
 
-    let hints = RenameHints::new();
-    let diff = SchemaDiff::from(&from, &to, &hints);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
     let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
     let sql = serialize_migration(&stmts, "sqlite");
 
