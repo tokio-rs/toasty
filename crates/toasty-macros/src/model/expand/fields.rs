@@ -60,6 +60,16 @@ impl Expand<'_> {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
 
+                // Relation fields in embedded types have no filter path yet;
+                // only their key fields are queryable. The offset comes from
+                // the enumeration above, so skipping does not shift later
+                // fields.
+                if !matches!(self.model.kind, ModelKind::Root(_))
+                    && !matches!(&field.ty, Primitive(_))
+                {
+                    return TokenStream::new();
+                }
+
                 match &field.ty {
                     Primitive(ty) => {
                         // The accessor resolves its path through the field
@@ -249,6 +259,12 @@ impl Expand<'_> {
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
+
+                // Relation fields in embedded types have no filter path yet;
+                // see `expand_field_struct`.
+                if !is_root && !matches!(&field.ty, Primitive(_)) {
+                    return TokenStream::new();
+                }
 
                 match &field.ty {
                     Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),

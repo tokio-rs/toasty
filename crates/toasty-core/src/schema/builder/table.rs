@@ -951,7 +951,9 @@ impl<'a, 'b> MapField<'a, 'b> {
                 }
             }
             app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
-                assert!(!self.force_nullable);
+                // A relation field maps to no column, so the nullability
+                // context (`force_nullable`, set inside enum variants and
+                // nullable struct embeds) has nothing to apply to.
                 let bit = self.build.next_bit();
                 Ok(mapping::Field::Relation(mapping::FieldRelation {
                     field_mask: stmt::PathFieldSet::from_iter([bit]),

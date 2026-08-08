@@ -312,9 +312,15 @@ impl Field {
                         "field has more than one relation attribute",
                     ));
                 } else {
+                    let Some(field_ident) = field.ident.as_ref() else {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "#[belongs_to] requires a named field",
+                        ));
+                    };
                     ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
                         attr,
-                        field.ident.as_ref().unwrap(),
+                        field_ident,
                         &field.ty,
                         names,
                     )?));

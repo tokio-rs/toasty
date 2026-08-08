@@ -1169,6 +1169,39 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// `#[index]` / `#[unique]` on a `#[shared]` field is a compile error
 /// pointing at the enum-level form.
 ///
+/// ## `#[belongs_to(...)]` — relations stored in embedded types
+///
+/// A field of an embedded struct or enum variant may declare
+/// `#[belongs_to]`, referencing a sibling key field of the same struct or
+/// variant. The relation itself maps to no column — the key field owns the
+/// storage — and the field type must be `toasty::Deferred<..>`: reads
+/// return it unloaded, and the referenced model loads with an ordinary
+/// `get_by_*` / `find_by_*` on the stored key.
+///
+/// ```no_run
+/// # #[derive(Debug, toasty::Model)]
+/// # struct Human {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: uuid::Uuid,
+/// # }
+/// #[derive(Debug, toasty::Embed)]
+/// enum Owner {
+///     Human {
+///         #[index]
+///         id: uuid::Uuid,
+///         #[belongs_to(key = id)]
+///         human: toasty::Deferred<Human>,
+///     },
+///     // ... other owner kinds
+/// }
+/// ```
+///
+/// Creating and updating supply the embed value with explicit keys and the
+/// relation left unloaded (`Deferred::default()`). Setting the relation
+/// from a model value, preloading it with `.include()`, and pairing it
+/// with a `has_many` on the target are not supported yet.
+///
 /// # Using embedded types in a model
 ///
 /// Reference an embedded type as a field on a [`Model`][`derive@Model`]
@@ -1234,8 +1267,10 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - `#[column(rename_all = "...")]` applies only to string labels.
 /// - Enum variants may be unit variants or have named fields. Tuple
 ///   variants are not supported.
-/// - Embedded types cannot have primary keys, relations, `#[auto]`,
-///   `#[default]`, or `#[update]` attributes.
+/// - Embedded types cannot have primary keys, `has_many` / `has_one`
+///   relations, `#[auto]`, `#[default]`, or `#[update]` attributes.
+///   `#[belongs_to]` is supported; the field must be
+///   `toasty::Deferred<..>`.
 ///
 /// # Full example
 ///
@@ -1299,7 +1334,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ```
 ///
 /// [`Embed`]: toasty::Embed
-#[proc_macro_derive(Embed, attributes(column, document, index, unique, shared))]
+#[proc_macro_derive(Embed, attributes(belongs_to, column, document, index, unique, shared))]
 pub fn derive_embed(input: TokenStream) -> TokenStream {
     match model::generate_embed(input.into()) {
         Ok(output) => output.into(),
