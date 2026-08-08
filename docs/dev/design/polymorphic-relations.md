@@ -557,7 +557,10 @@ The work ships in steps, each providing user value on its own.
    (`Owner::Human { human: &alice }`) with the key fields filled in.
 3. **Preloading with `.include()`.** `.include(Object::fields().owner())`
    issues one query per variant present and merges results into each
-   row's enum value.
+   row's enum value. This step also lifts the `Deferred`-only requirement
+   on embedded relation fields: a non-deferred field (`human: Human`)
+   needs its value present on every load, which only works once includes
+   can populate it — with them, it behaves as at model level.
 4. **Inverse pairs, queries.** `pair` paths, the `Pair` struct, the
    per-embedding instance records, linker recursion, and the removals
    listed above land together; `has_many` / `has_one` declarations on
