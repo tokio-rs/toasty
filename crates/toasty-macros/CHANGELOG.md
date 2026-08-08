@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.9.0...toasty-macros-v0.10.0) - 2026-08-08
+
+### Added
+
+- Embed migrations in application binaries ([#1095])
+
+[#1095]: https://github.com/tokio-rs/toasty/pull/1095
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.8.0...toasty-macros-v0.9.0) - 2026-07-23
 
 ### Added
