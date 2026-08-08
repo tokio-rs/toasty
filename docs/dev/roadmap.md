@@ -120,6 +120,9 @@ the entry lands here.
 ## Drivers
 
 - DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
+- Backends without interactive transactions — read-only plans without a
+  snapshot, writes delivered as one atomic set
+  ([design](design/transaction-less-backends.md), [#1128])
 - Connection pooling improvements ([#384])
 - Retry-safe transparent recovery from connection loss ([design](design/retry-safe-recovery.md), [#863])
 - New driver backends
@@ -138,6 +141,7 @@ the entry lands here.
 [#669]: https://github.com/tokio-rs/toasty/issues/669
 [#741]: https://github.com/tokio-rs/toasty/issues/741
 [#863]: https://github.com/tokio-rs/toasty/issues/863
+[#1128]: https://github.com/tokio-rs/toasty/issues/1128
 
 ## Macros
 
