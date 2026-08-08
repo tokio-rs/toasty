@@ -9,10 +9,10 @@ use crate::{
     engine::exec::{Action, Exec, Output, VarId},
 };
 
-/// Schema: `self` references [index-fields, input-fields] flattened
 #[derive(Debug)]
 pub(crate) struct FindPkByIndex {
-    /// How to access input from the variable table.
+    /// Input variables providing runtime args for the filter. `Arg` positions
+    /// in `filter` index into this list.
     pub input: Vec<VarId>,
 
     /// Where to store the output
@@ -33,7 +33,6 @@ impl Exec<'_> {
         let mut filter = action.filter.clone();
 
         if !action.input.is_empty() {
-            assert!(action.input.len() == 1);
             let input = self.collect_input(&action.input).await?;
             filter.substitute(&input);
         }

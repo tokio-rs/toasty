@@ -62,11 +62,7 @@ impl From<Operation> for Node {
     fn from(value: Operation) -> Self {
         let deps = match &value {
             Operation::Const(_m) => IndexSet::new(),
-            Operation::DeleteByKey(m) => {
-                let mut deps = indexset![m.input];
-                deps.extend(m.args);
-                deps
-            }
+            Operation::DeleteByKey(m) => m.inputs.clone(),
             Operation::Eval(m) => m.inputs.clone(),
             Operation::ExecStatement(m) => m.inputs.clone(),
             Operation::Filter(m) => indexset![m.input],
@@ -82,13 +78,9 @@ impl From<Operation> for Node {
             Operation::NestedMerge(m) => m.inputs.clone(),
             Operation::Project(m) => indexset![m.input],
             Operation::ReadModifyWrite(m) => m.inputs.clone(),
-            Operation::QueryPk(m) => m.input.into_iter().collect(),
-            Operation::Scan(m) => m.input.into_iter().collect(),
-            Operation::UpdateByKey(m) => {
-                let mut deps = indexset![m.input];
-                deps.extend(m.args);
-                deps
-            }
+            Operation::QueryPk(m) => m.inputs.clone(),
+            Operation::Scan(m) => m.inputs.clone(),
+            Operation::UpdateByKey(m) => m.inputs.clone(),
             Operation::Upsert(m) => m.inputs.clone(),
         };
 

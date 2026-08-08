@@ -8,15 +8,11 @@ use crate::engine::exec::{Action, Output, VarId};
 
 use super::{Exec, Result};
 
-/// Input is the key to delete
 #[derive(Debug)]
 pub(crate) struct DeleteByKey {
-    /// How to access input from the variable table.
-    pub input: VarId,
-
-    /// Optional input variable providing runtime args for the filter and
-    /// condition.
-    pub args: Option<VarId>,
+    /// Input variables. The first holds the list of keys to delete; `Arg`
+    /// positions in `filter` and `condition` index into this list.
+    pub input: Vec<VarId>,
 
     /// Where to store the output (impacted row count)
     pub output: Output,
@@ -33,17 +29,8 @@ pub(crate) struct DeleteByKey {
 
 impl Exec<'_> {
     pub(super) async fn action_delete_by_key(&mut self, action: &DeleteByKey) -> Result<()> {
-        let keys = self
-            .vars
-            .load(action.input)
-            .await?
-            .values
-            .collect_as_value()
-            .await?
-            .into_list_unwrap();
-
-        let (filter, condition) = self
-            .resolve_key_op_args(action.args, &action.filter, &action.condition)
+        let (keys, filter, condition) = self
+            .load_key_op_inputs(&action.input, &action.filter, &action.condition)
             .await?;
 
         let res = if keys.is_empty() {

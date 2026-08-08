@@ -16,8 +16,9 @@ use crate::engine::{
 /// additional row filtering.
 #[derive(Debug)]
 pub(crate) struct QueryPk {
-    /// Optional node providing input arguments for the filter.
-    pub(crate) input: Option<mir::NodeId>,
+    /// Nodes providing input arguments for the filters. `Arg` positions in
+    /// `pk_filter` and `row_filter` index into this list.
+    pub(crate) inputs: IndexSet<mir::NodeId>,
 
     /// The table to query.
     pub(crate) table: TableId,
@@ -52,8 +53,10 @@ impl QueryPk {
         var_table: &mut exec::VarDecls,
     ) -> exec::QueryPk {
         let input = self
-            .input
-            .map(|node_id| logical_plan[node_id].var.get().unwrap());
+            .inputs
+            .iter()
+            .map(|node_id| logical_plan[node_id].var.get().unwrap())
+            .collect();
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 

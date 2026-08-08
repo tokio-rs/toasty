@@ -11,8 +11,9 @@ use toasty_core::{
 
 #[derive(Debug)]
 pub(crate) struct QueryPk {
-    /// Where to get the input
-    pub input: Option<VarId>,
+    /// Input variables providing runtime args for the filters. `Arg` positions
+    /// in `pk_filter` and `row_filter` index into this list.
+    pub input: Vec<VarId>,
 
     /// Where to store the result
     pub output: Output,
@@ -44,8 +45,8 @@ impl Exec<'_> {
         let mut pk_filter = action.pk_filter.clone();
         let mut row_filter = action.row_filter.clone();
 
-        if let Some(input) = &action.input {
-            let input = self.collect_input(&[*input]).await?;
+        if !action.input.is_empty() {
+            let input = self.collect_input(&action.input).await?;
             pk_filter.substitute(&input);
 
             // The row filter is handed to the driver as-is, so it needs the

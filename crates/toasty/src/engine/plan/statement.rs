@@ -68,8 +68,9 @@
 //! ## During MIR node construction (`rewrite_expr_for_mir`)
 //!
 //! When building MIR nodes that carry their own expressions (Guard, Project
-//! for key expressions), the expression may reference a subset of the
-//! statement's `load_data.inputs`. `rewrite_expr_for_mir` does two things:
+//! for key expressions, key-mutation filters via `key_operation_inputs`), the
+//! expression may reference a subset of the statement's `load_data.inputs`.
+//! `rewrite_expr_for_mir` does two things:
 //!
 //! 1. Resolves each `Arg(hir_pos)` through `stmt_info.args[hir_pos]` to
 //!    find the `load_data.inputs` index and MIR node ID
@@ -89,9 +90,9 @@
 
 use std::mem;
 
-use indexmap::{IndexMap, IndexSet};
+use indexmap::{IndexMap, IndexSet, indexset};
 use toasty_core::schema::db;
-use toasty_core::stmt::{self, visit, visit_mut};
+use toasty_core::stmt::{self, visit_mut};
 
 use toasty_core::driver::operation::Pagination;
 
@@ -1413,14 +1414,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         columns: IndexSet<stmt::ExprReference>,
         ty: stmt::Type,
     ) -> Result<mir::NodeId> {
-        let input = if self.load_data.inputs.is_empty() {
-            None
-        } else if self.load_data.inputs.len() == 1 {
-            Some(self.load_data.inputs[0])
-        } else {
-            todo!("scan with multiple inputs")
-        };
-
         let table_id = self.scan_target_table(stmt)?;
 
         // Reject ORDER BY on drivers whose scan operation returns items in an
@@ -1442,10 +1435,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
         self.legalize_kv_expr(&mut row_filter);
 
+        let inputs = self.driver_read_inputs(row_filter.as_mut());
+
         let limit = extract_pagination(stmt);
 
         Ok(self.insert_mir_with_deps(mir::Scan {
-            input,
+            inputs,
             table: table_id,
             columns,
             row_filter,
@@ -1482,7 +1477,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .collect();
 
         let key_ty = self.table_primary_key_ty(table_id);
-        let args = self.filter_args_input();
         let keys = self.plan_scan_execution(stmt, key_columns, key_ty)?;
 
         // The scan and the per-key mutations are separate round trips, and the
@@ -1497,21 +1491,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             (!expr.is_true()).then(|| expr.clone())
         };
 
-        Ok(self.build_key_operation_for_table(
-            stmt,
-            table_id,
-            filter,
-            keys,
-            args,
-            &stmt::Type::Unit,
-        ))
-    }
-
-    /// The MIR node supplying the runtime arguments a filter expression
-    /// references. Filters resolve their arguments from a single input, so any
-    /// further inputs — which feed other parts of the statement — are ignored.
-    fn filter_args_input(&self) -> Option<mir::NodeId> {
-        self.load_data.inputs.first().copied()
+        Ok(self.build_key_operation_for_table(stmt, table_id, filter, keys, &stmt::Type::Unit))
     }
 
     /// Resolves the table a scanned statement targets.
@@ -1539,68 +1519,63 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
             let get_by_key_input = self.build_get_by_key_input(keys, self.index_key_ty(index_plan));
-            let filter_args = self.filter_args_input();
 
-            self.build_key_operation(&stmt, index_plan, get_by_key_input, filter_args, ty)
+            self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
+        } else if stmt.is_query() {
+            let limit = extract_pagination(&stmt);
+            let order = extract_query_pk_order(&stmt);
+
+            let mut row_filter = index_plan.result_filter.take();
+            self.legalize_kv_expr(&mut row_filter);
+
+            let mut pk_filter = index_plan.index_filter.take();
+            let inputs = self.query_pk_inputs(&mut pk_filter, &mut row_filter);
+
+            // For queries, stream all matching records with the requested columns.
+            self.insert_mir_with_deps(mir::QueryPk {
+                inputs,
+                table: index_plan.table_id(),
+                index: None, // Querying primary key
+                columns: self.load_data.select_items.extract_expr_references(),
+                pk_filter,
+                row_filter,
+                ty: ty.clone(),
+                limit,
+                order,
+            })
         } else {
-            let input = if self.load_data.inputs.is_empty() {
-                None
-            } else if self.load_data.inputs.len() == 1 {
-                Some(self.load_data.inputs[0])
-            } else {
-                todo!()
-            };
+            // For mutations (UPDATE/DELETE) with a partial primary-key filter,
+            // first collect the full primary keys of all matching records via
+            // QueryPk, then apply the mutation to each key. The index key columns
+            // were pre-populated into load_data.select_items in plan_data_loading_nosql.
+            let index_key_ty = self.index_key_ty(index_plan);
 
-            if stmt.is_query() {
-                let limit = extract_pagination(&stmt);
-                let order = extract_query_pk_order(&stmt);
+            let mut columns = self.load_data.select_items.extract_expr_references();
+            assert!(columns.is_empty());
 
-                let mut row_filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(&mut row_filter);
-
-                // For queries, stream all matching records with the requested columns.
-                self.insert_mir_with_deps(mir::QueryPk {
-                    input,
-                    table: index_plan.table_id(),
-                    index: None, // Querying primary key
-                    columns: self.load_data.select_items.extract_expr_references(),
-                    pk_filter: index_plan.index_filter.take(),
-                    row_filter,
-                    ty: ty.clone(),
-                    limit,
-                    order,
-                })
-            } else {
-                // For mutations (UPDATE/DELETE) with a partial primary-key filter,
-                // first collect the full primary keys of all matching records via
-                // QueryPk, then apply the mutation to each key. The index key columns
-                // were pre-populated into load_data.select_items in plan_data_loading_nosql.
-                let index_key_ty = self.index_key_ty(index_plan);
-
-                let mut columns = self.load_data.select_items.extract_expr_references();
-                assert!(columns.is_empty());
-
-                for index_col in &index_plan.index.columns {
-                    columns.insert(stmt::ExprReference::column(0, index_col.column.index));
-                }
-
-                let mut row_filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(&mut row_filter);
-
-                let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
-                    input,
-                    table: index_plan.table_id(),
-                    index: None, // Querying primary key
-                    columns,
-                    pk_filter: index_plan.index_filter.take(),
-                    row_filter,
-                    ty: index_key_ty,
-                    limit: None,
-                    order: None,
-                });
-
-                self.build_key_operation(&stmt, index_plan, query_pk_node, input, ty)
+            for index_col in &index_plan.index.columns {
+                columns.insert(stmt::ExprReference::column(0, index_col.column.index));
             }
+
+            let mut row_filter = index_plan.result_filter.take();
+            self.legalize_kv_expr(&mut row_filter);
+
+            let mut pk_filter = index_plan.index_filter.take();
+            let inputs = self.query_pk_inputs(&mut pk_filter, &mut row_filter);
+
+            let query_pk_node = self.insert_mir_with_deps(mir::QueryPk {
+                inputs,
+                table: index_plan.table_id(),
+                index: None, // Querying primary key
+                columns,
+                pk_filter,
+                row_filter,
+                ty: index_key_ty,
+                limit: None,
+                order: None,
+            });
+
+            self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
         }
     }
 
@@ -1610,9 +1585,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         index_plan: &mut index::IndexPlan,
         ty: &stmt::Type,
     ) -> mir::NodeId {
-        let inputs = mem::take(&mut self.load_data.inputs);
         assert!(index_plan.post_filter.is_none(), "TODO");
-        assert!(inputs.len() <= 1, "TODO: inputs={:#?}", inputs);
 
         // For queries on NON-UNIQUE indexes, use QueryPk optimization
         // Non-unique indexes are created as DynamoDB GSIs with ProjectionType::All,
@@ -1622,26 +1595,23 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // To support DDB's other projection types, Index will need to track projected columns, not
         // just the columns that are part of the index key.
         if stmt.is_query() && !index_plan.index.unique {
-            let input = if inputs.is_empty() {
-                None
-            } else {
-                Some(inputs[0])
-            };
-
             let limit = extract_pagination(&stmt);
             let order = extract_query_pk_order(&stmt);
 
             let mut row_filter = index_plan.result_filter.take();
             self.legalize_kv_expr(&mut row_filter);
 
+            let mut pk_filter = index_plan.index_filter.take();
+            let inputs = self.query_pk_inputs(&mut pk_filter, &mut row_filter);
+
             // Use QueryPk with index to query the secondary index and return full records
             // This eliminates the N+1 pattern of FindPkByIndex + GetByKey
             return self.insert_mir_with_deps(mir::QueryPk {
-                input,
+                inputs,
                 table: index_plan.index.on,
                 index: Some(index_plan.index.id), // Query the secondary index
                 columns: self.load_data.select_items.extract_expr_references(), // Return full records
-                pk_filter: index_plan.index_filter.take(),
+                pk_filter,
                 row_filter,
                 ty: ty.clone(), // Full record type, not just PKs
                 limit,
@@ -1653,17 +1623,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // - Mutations only need primary keys, not full records
         // - Unique indexes don't have full column projections in DynamoDB
         let primary_key_ty = self.table_primary_key_ty(index_plan.index.on);
-        let args = inputs.first().copied();
+
+        let mut filter = index_plan.index_filter.take();
+        let inputs = self.driver_read_inputs([&mut filter]);
 
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
             inputs,
             table: index_plan.index.on,
             index: index_plan.index.id,
-            filter: index_plan.index_filter.take(),
+            filter,
             ty: primary_key_ty,
         });
 
-        self.build_key_operation(&stmt, index_plan, get_by_key_input, args, ty)
+        self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
     }
 
     fn prepare_post_filter(
@@ -1769,7 +1741,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         get_by_key_input: mir::NodeId,
-        args: Option<mir::NodeId>,
         ty: &stmt::Type,
     ) -> mir::NodeId {
         // If there is a pre-filter, wrap the key input in a Guard node that
@@ -1783,20 +1754,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let table = index_plan.table_id();
         let result_filter = index_plan.result_filter.take();
 
-        self.build_key_operation_for_table(stmt, table, result_filter, input, args, ty)
+        self.build_key_operation_for_table(stmt, table, result_filter, input, ty)
     }
 
     /// Builds the driver operation that reads or mutates the rows identified by
     /// the keys `input` produces. `result_filter` is the part of the
-    /// statement's filter the key-collection step could not apply. `args` is
-    /// the node supplying runtime arguments to that filter, if it has any.
+    /// statement's filter the key-collection step could not apply.
     fn build_key_operation_for_table(
         &mut self,
         stmt: &stmt::Statement,
         table: db::TableId,
         result_filter: Option<stmt::Expr>,
         input: mir::NodeId,
-        args: Option<mir::NodeId>,
         ty: &stmt::Type,
     ) -> mir::NodeId {
         let mut filter = result_filter;
@@ -1816,9 +1785,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let mut condition = delete_stmt.condition.expr.clone();
                 self.legalize_kv_expr(&mut condition);
 
+                let inputs = self.key_operation_inputs(input, [&mut filter, &mut condition]);
+
                 self.insert_mir_with_deps(mir::DeleteByKey {
-                    input,
-                    args: args.filter(|_| exprs_have_args([&filter, &condition])),
+                    inputs,
                     table,
                     filter,
                     condition,
@@ -1829,9 +1799,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 let mut condition = update_stmt.condition.expr.clone();
                 self.legalize_kv_expr(&mut condition);
 
+                let inputs = self.key_operation_inputs(input, [&mut filter, &mut condition]);
+
                 self.insert_mir_with_deps(mir::UpdateByKey {
-                    input,
-                    args: args.filter(|_| exprs_have_args([&filter, &condition])),
+                    inputs,
                     table,
                     // Document values in the assignments are already named:
                     // the mapping's lowering casts converted them during
@@ -1845,6 +1816,93 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             }
             _ => todo!("stmt={stmt:#?}"),
         }
+    }
+
+    /// Collects the input list for a key-based mutation node: the key-producing
+    /// node first, then every node whose output the filter or condition
+    /// references.
+    fn key_operation_inputs(
+        &self,
+        keys: mir::NodeId,
+        exprs: [&mut Option<stmt::Expr>; 2],
+    ) -> IndexSet<mir::NodeId> {
+        let mut inputs = indexset![keys];
+
+        for expr in exprs.into_iter().flatten() {
+            self.rewrite_expr_args_to_inputs(&mut inputs, expr);
+        }
+
+        inputs
+    }
+
+    /// Collects the input list for a `QueryPk` node from the nodes its two
+    /// filters reference, rewriting their `Arg` positions into that list.
+    fn query_pk_inputs(
+        &self,
+        pk_filter: &mut stmt::Expr,
+        row_filter: &mut Option<stmt::Expr>,
+    ) -> IndexSet<mir::NodeId> {
+        self.driver_read_inputs([pk_filter].into_iter().chain(row_filter.as_mut()))
+    }
+
+    /// Collects the input list for a driver read node (`Scan`, `QueryPk`,
+    /// `FindPkByIndex`) from the nodes its filters reference.
+    ///
+    /// A statement rewritten for batch loading already had its filter args
+    /// rewritten to `load_data.inputs` positions (and scope-local args inside
+    /// the `any(map(..))` body), so that input list is adopted unchanged.
+    fn driver_read_inputs<'e>(
+        &self,
+        exprs: impl IntoIterator<Item = &'e mut stmt::Expr>,
+    ) -> IndexSet<mir::NodeId> {
+        if !self.load_data.batch_load_args.is_empty() {
+            return self.load_data.inputs.clone();
+        }
+
+        let mut inputs = IndexSet::new();
+
+        for expr in exprs {
+            self.rewrite_expr_args_to_inputs(&mut inputs, expr);
+        }
+
+        inputs
+    }
+
+    /// Rewrites `Arg` positions in a driver-bound expression — HIR arg
+    /// positions up to this point — to positions in `inputs`, inserting each
+    /// referenced node. The executor substitutes args from the values of the
+    /// node's input list, so every expression a node carries must be rewritten
+    /// against that same list.
+    ///
+    /// Walk scope-aware so args local to a `Map`/`Let` body (e.g. the lambda
+    /// parameter of the `any(map(..))` an `IN <list>` compiles to) are not
+    /// mistaken for statement args; statement-level args only appear at the top
+    /// scope.
+    fn rewrite_expr_args_to_inputs(
+        &self,
+        inputs: &mut IndexSet<mir::NodeId>,
+        expr: &mut stmt::Expr,
+    ) {
+        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+            if scope_depth != 0 {
+                return true;
+            }
+
+            if let stmt::Expr::Arg(expr_arg) = expr {
+                let input_idx = match &self.stmt_info.args[expr_arg.position] {
+                    hir::Arg::Sub { input, .. } => input.get().unwrap(),
+                    hir::Arg::Ref {
+                        data_load_input, ..
+                    } => data_load_input.get().unwrap(),
+                };
+                let node_id = self.load_data.inputs[input_idx];
+                let (position, _) = inputs.insert_full(node_id);
+                expr_arg.position = position;
+                false
+            } else {
+                true
+            }
+        });
     }
 
     /// If the index plan has a pre-filter, insert a `Guard` MIR node that
@@ -2107,20 +2165,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn stmt(&self) -> &stmt::Statement {
         self.stmt_info.stmt.as_deref().unwrap()
     }
-}
-
-/// True if any of `exprs` still references a runtime argument, meaning the
-/// expression cannot be handed to a driver until the argument is substituted.
-fn exprs_have_args<'a>(exprs: impl IntoIterator<Item = &'a Option<stmt::Expr>>) -> bool {
-    let mut found = false;
-
-    for expr in exprs.into_iter().flatten() {
-        visit::for_each_expr(expr, |expr| {
-            found |= matches!(expr, stmt::Expr::Arg(_));
-        });
-    }
-
-    found
 }
 
 /// The probe query shared by both SQL conditional-write strategies:

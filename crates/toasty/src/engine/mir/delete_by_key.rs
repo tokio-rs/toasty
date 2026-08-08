@@ -1,3 +1,4 @@
+use indexmap::IndexSet;
 use toasty_core::{schema::db::TableId, stmt};
 
 use crate::engine::{
@@ -8,16 +9,12 @@ use crate::engine::{
 /// Deletes records by primary key.
 ///
 /// Used with NoSQL drivers to delete records given a list of primary key values.
-///
-/// Keys are always specified as an input node, whether a [`Const`] or the
-/// output of a dependent operation.
 #[derive(Debug)]
 pub(crate) struct DeleteByKey {
-    /// The node producing the list of primary keys to delete.
-    pub(crate) input: mir::NodeId,
-
-    /// Optional node supplying runtime arguments for `filter` and `condition`.
-    pub(crate) args: Option<mir::NodeId>,
+    /// Input nodes. The first produces the list of primary keys to delete,
+    /// whether a [`Const`] or the output of a dependent operation. `Arg`
+    /// positions in `filter` and `condition` index into this list.
+    pub(crate) inputs: IndexSet<mir::NodeId>,
 
     /// The table to delete records from.
     pub(crate) table: TableId,
@@ -39,16 +36,16 @@ impl DeleteByKey {
         node: &mir::Node,
         var_table: &mut exec::VarDecls,
     ) -> exec::DeleteByKey {
-        let input = logical_plan[self.input].var.get().unwrap();
-        let args = self
-            .args
-            .map(|node_id| logical_plan[node_id].var.get().unwrap());
+        let input = self
+            .inputs
+            .iter()
+            .map(|node_id| logical_plan[node_id].var.get().unwrap())
+            .collect();
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 
         exec::DeleteByKey {
             input,
-            args,
             output: exec::Output {
                 var: output,
                 num_uses: node.num_uses.get(),

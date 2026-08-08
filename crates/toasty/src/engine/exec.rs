@@ -184,31 +184,30 @@ impl Exec<'_> {
         }
     }
 
-    /// Resolves the filter and condition of a key-based mutation.
+    /// Loads the inputs of a key-based mutation.
     ///
-    /// The key-collection step that feeds the mutation (a `Scan`, `QueryPk`, or
-    /// `FindPkByIndex`) substitutes runtime inputs into its own copy of the
-    /// filter. The mutation carries a separate copy, so when the filter or
-    /// condition still references those inputs, `args` names the variable
-    /// holding them and they are substituted here.
-    async fn resolve_key_op_args(
+    /// The first input holds the list of keys to mutate. The filter and
+    /// condition are handed to the driver, which cannot resolve runtime
+    /// arguments, so their `Arg` nodes — positions into the input list — are
+    /// substituted here.
+    async fn load_key_op_inputs(
         &mut self,
-        args: Option<VarId>,
+        input: &[VarId],
         filter: &Option<stmt::Expr>,
         condition: &Option<stmt::Expr>,
-    ) -> Result<(Option<stmt::Expr>, Option<stmt::Expr>)> {
+    ) -> Result<(Vec<stmt::Value>, Option<stmt::Expr>, Option<stmt::Expr>)> {
+        let inputs = self.collect_input(input).await?;
+
         let mut filter = filter.clone();
         let mut condition = condition.clone();
 
-        if let Some(args) = args {
-            let args = self.collect_input(&[args]).await?;
-
-            for expr in [&mut filter, &mut condition].into_iter().flatten() {
-                expr.substitute(&args);
-            }
+        for expr in [&mut filter, &mut condition].into_iter().flatten() {
+            expr.substitute(&inputs);
         }
 
-        Ok((filter, condition))
+        let keys = inputs.into_iter().next().unwrap().into_list_unwrap();
+
+        Ok((keys, filter, condition))
     }
 
     async fn collect_input(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {
