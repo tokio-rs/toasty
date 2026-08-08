@@ -83,7 +83,7 @@ the entry lands here.
 ## Relationships
 
 - Many-to-many
-- Polymorphic associations
+- Polymorphic associations ([design](design/polymorphic-relations.md))
 - Nested preloading — multi-level `.include()`
 - Filtering included relations — `.filter(...)` on a relation path inside `.include(...)` ([design](design/include-filters.md))
 
