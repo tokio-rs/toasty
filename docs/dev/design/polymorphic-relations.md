@@ -86,11 +86,14 @@ struct Object {
 Everything here is existing embedded-enum machinery. The table for `Object`
 has:
 
-- `owner` — the discriminant column; this is the "owner kind". The
-  discriminant column always takes the embed field's name — there is no
-  separate `owner_kind` column, and the guide documents this for readers
-  expecting one from other ORMs. A different column name uses the ordinary
-  `#[column("...")]` override on the field.
+- `owner` — the discriminant column; this is the "owner kind". It stores
+  each variant's discriminant value — by default the variant name in
+  snake_case (`'human'`, `'animal'`, `'bot'`); `#[column(variant = ...)]`
+  on a variant overrides the stored value. The discriminant column always
+  takes the embed field's name — there is no separate `owner_kind` column,
+  and the guide documents this for readers expecting one from other ORMs.
+  A different column name uses the ordinary `#[column("...")]` override on
+  the field.
 - `owner_id` — the shared key column, used by `Human` and `Animal` (the
   `#[shared(id)]` fields coalesce, following the normal
   `{enum_field}_{shared_ident}` naming rule).
@@ -291,7 +294,7 @@ missing — the exclusivity that the status-quo encoding cannot enforce.
 
 - `human.objects()` and other pair queries add the discriminant predicate
   automatically. On SQL backends the query has the form
-  `WHERE owner = 1 AND owner_id = ?`.
+  `WHERE owner = 'human' AND owner_id = ?`.
 - `.include(Object::fields().owner())` issues one query per variant present
   in the result set and merges the results into each row's enum value.
   Variants not present in the result set cost nothing.
