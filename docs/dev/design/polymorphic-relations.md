@@ -53,21 +53,18 @@ the foreign key for it:
 #[derive(toasty::Embed)]
 #[index(id)]
 enum Owner {
-    #[column(variant = 1)]
     Human {
         #[shared(id)]
         id: uuid::Uuid,
         #[belongs_to(key = id)]
         human: toasty::Deferred<Human>,
     },
-    #[column(variant = 2)]
     Animal {
         #[shared(id)]
         id: uuid::Uuid,
         #[belongs_to(key = id)]
         animal: toasty::Deferred<Animal>,
     },
-    #[column(variant = 3)]
     Bot {
         #[index]
         serial: String,
