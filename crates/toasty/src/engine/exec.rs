@@ -184,6 +184,33 @@ impl Exec<'_> {
         }
     }
 
+    /// Resolves the filter and condition of a key-based mutation.
+    ///
+    /// The key-collection step that feeds the mutation (a `Scan`, `QueryPk`, or
+    /// `FindPkByIndex`) substitutes runtime inputs into its own copy of the
+    /// filter. The mutation carries a separate copy, so when the filter or
+    /// condition still references those inputs, `args` names the variable
+    /// holding them and they are substituted here.
+    async fn resolve_key_op_args(
+        &mut self,
+        args: Option<VarId>,
+        filter: &Option<stmt::Expr>,
+        condition: &Option<stmt::Expr>,
+    ) -> Result<(Option<stmt::Expr>, Option<stmt::Expr>)> {
+        let mut filter = filter.clone();
+        let mut condition = condition.clone();
+
+        if let Some(args) = args {
+            let args = self.collect_input(&[args]).await?;
+
+            for expr in [&mut filter, &mut condition].into_iter().flatten() {
+                expr.substitute(&args);
+            }
+        }
+
+        Ok((filter, condition))
+    }
+
     async fn collect_input(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {
         let mut ret = Vec::new();
 

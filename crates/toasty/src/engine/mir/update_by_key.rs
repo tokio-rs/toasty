@@ -20,6 +20,9 @@ pub(crate) struct UpdateByKey {
     /// The node producing the list of primary keys to update.
     pub(crate) input: mir::NodeId,
 
+    /// Optional node supplying runtime arguments for `filter` and `condition`.
+    pub(crate) args: Option<mir::NodeId>,
+
     /// The table to update records in.
     pub(crate) table: TableId,
 
@@ -48,6 +51,9 @@ impl UpdateByKey {
         var_table: &mut exec::VarDecls,
     ) -> exec::UpdateByKey {
         let input = logical_plan[self.input].var.get().unwrap();
+        let args = self
+            .args
+            .map(|node_id| logical_plan[node_id].var.get().unwrap());
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 
@@ -75,6 +81,7 @@ impl UpdateByKey {
 
         exec::UpdateByKey {
             input,
+            args,
             output: exec::Output {
                 var: output,
                 num_uses: node.num_uses.get(),

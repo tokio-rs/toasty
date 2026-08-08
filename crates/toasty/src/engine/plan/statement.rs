@@ -91,7 +91,7 @@ use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
 use toasty_core::schema::db;
-use toasty_core::stmt::{self, visit_mut};
+use toasty_core::stmt::{self, visit, visit_mut};
 
 use toasty_core::driver::operation::Pagination;
 
@@ -1482,6 +1482,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .collect();
 
         let key_ty = self.table_primary_key_ty(table_id);
+        let args = self.filter_args_input();
         let keys = self.plan_scan_execution(stmt, key_columns, key_ty)?;
 
         // The scan and the per-key mutations are separate round trips, and the
@@ -1496,7 +1497,21 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             (!expr.is_true()).then(|| expr.clone())
         };
 
-        Ok(self.build_key_operation_for_table(stmt, table_id, filter, keys, &stmt::Type::Unit))
+        Ok(self.build_key_operation_for_table(
+            stmt,
+            table_id,
+            filter,
+            keys,
+            args,
+            &stmt::Type::Unit,
+        ))
+    }
+
+    /// The MIR node supplying the runtime arguments a filter expression
+    /// references. Filters resolve their arguments from a single input, so any
+    /// further inputs — which feed other parts of the statement — are ignored.
+    fn filter_args_input(&self) -> Option<mir::NodeId> {
+        self.load_data.inputs.first().copied()
     }
 
     /// Resolves the table a scanned statement targets.
@@ -1524,8 +1539,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
             let get_by_key_input = self.build_get_by_key_input(keys, self.index_key_ty(index_plan));
+            let filter_args = self.filter_args_input();
 
-            self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
+            self.build_key_operation(&stmt, index_plan, get_by_key_input, filter_args, ty)
         } else {
             let input = if self.load_data.inputs.is_empty() {
                 None
@@ -1583,7 +1599,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     order: None,
                 });
 
-                self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
+                self.build_key_operation(&stmt, index_plan, query_pk_node, input, ty)
             }
         }
     }
@@ -1637,6 +1653,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // - Mutations only need primary keys, not full records
         // - Unique indexes don't have full column projections in DynamoDB
         let primary_key_ty = self.table_primary_key_ty(index_plan.index.on);
+        let args = inputs.first().copied();
 
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
             inputs,
@@ -1646,7 +1663,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ty: primary_key_ty,
         });
 
-        self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
+        self.build_key_operation(&stmt, index_plan, get_by_key_input, args, ty)
     }
 
     fn prepare_post_filter(
@@ -1752,6 +1769,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         get_by_key_input: mir::NodeId,
+        args: Option<mir::NodeId>,
         ty: &stmt::Type,
     ) -> mir::NodeId {
         // If there is a pre-filter, wrap the key input in a Guard node that
@@ -1765,18 +1783,20 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let table = index_plan.table_id();
         let result_filter = index_plan.result_filter.take();
 
-        self.build_key_operation_for_table(stmt, table, result_filter, input, ty)
+        self.build_key_operation_for_table(stmt, table, result_filter, input, args, ty)
     }
 
     /// Builds the driver operation that reads or mutates the rows identified by
     /// the keys `input` produces. `result_filter` is the part of the
-    /// statement's filter the key-collection step could not apply.
+    /// statement's filter the key-collection step could not apply. `args` is
+    /// the node supplying runtime arguments to that filter, if it has any.
     fn build_key_operation_for_table(
         &mut self,
         stmt: &stmt::Statement,
         table: db::TableId,
         result_filter: Option<stmt::Expr>,
         input: mir::NodeId,
+        args: Option<mir::NodeId>,
         ty: &stmt::Type,
     ) -> mir::NodeId {
         let mut filter = result_filter;
@@ -1798,6 +1818,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                 self.insert_mir_with_deps(mir::DeleteByKey {
                     input,
+                    args: args.filter(|_| exprs_have_args([&filter, &condition])),
                     table,
                     filter,
                     condition,
@@ -1810,6 +1831,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                 self.insert_mir_with_deps(mir::UpdateByKey {
                     input,
+                    args: args.filter(|_| exprs_have_args([&filter, &condition])),
                     table,
                     // Document values in the assignments are already named:
                     // the mapping's lowering casts converted them during
@@ -2085,6 +2107,20 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn stmt(&self) -> &stmt::Statement {
         self.stmt_info.stmt.as_deref().unwrap()
     }
+}
+
+/// True if any of `exprs` still references a runtime argument, meaning the
+/// expression cannot be handed to a driver until the argument is substituted.
+fn exprs_have_args<'a>(exprs: impl IntoIterator<Item = &'a Option<stmt::Expr>>) -> bool {
+    let mut found = false;
+
+    for expr in exprs.into_iter().flatten() {
+        visit::for_each_expr(expr, |expr| {
+            found |= matches!(expr, stmt::Expr::Arg(_));
+        });
+    }
+
+    found
 }
 
 /// The probe query shared by both SQL conditional-write strategies:

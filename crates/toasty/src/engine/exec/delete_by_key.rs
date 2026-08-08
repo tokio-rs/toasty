@@ -14,6 +14,10 @@ pub(crate) struct DeleteByKey {
     /// How to access input from the variable table.
     pub input: VarId,
 
+    /// Optional input variable providing runtime args for the filter and
+    /// condition.
+    pub args: Option<VarId>,
+
     /// Where to store the output (impacted row count)
     pub output: Output,
 
@@ -38,6 +42,10 @@ impl Exec<'_> {
             .await?
             .into_list_unwrap();
 
+        let (filter, condition) = self
+            .resolve_key_op_args(action.args, &action.filter, &action.condition)
+            .await?;
+
         let res = if keys.is_empty() {
             Rows::Count(0)
         } else {
@@ -47,8 +55,8 @@ impl Exec<'_> {
                 let op = operation::DeleteByKey {
                     table: action.table,
                     keys: vec![key],
-                    filter: action.filter.clone(),
-                    condition: action.condition.clone(),
+                    filter: filter.clone(),
+                    condition: condition.clone(),
                 };
 
                 let res = self.connection.exec(&self.engine.schema, op.into()).await?;
