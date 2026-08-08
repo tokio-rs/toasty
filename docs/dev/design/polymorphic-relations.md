@@ -543,11 +543,19 @@ The work ships in steps, each providing user value on its own.
 1. **Relations stored in embedded types.** `#[belongs_to]` fields are
    accepted inside embedded enums and structs: schema entries, no columns
    for the relation itself, key fields as ordinary indexed columns.
-   Creating and updating supply the variant value with explicit keys;
    `match` gives direct access to the stored keys, and the owner loads
-   with an ordinary `find_by_*`. No `.include()`, no inverse yet — but the
-   polymorphic shape is fully modelable, storable, and queryable by key
-   through the existing variant filter paths.
+   with an ordinary `find_by_*` — the polymorphic shape is fully
+   modelable, storable, and queryable by key through the existing
+   variant filter paths. Three limitations remain, each lifted by a
+   later step:
+   - The relation cannot be set or filtered by model value. Writes set
+     the key fields explicitly and leave the relation unloaded
+     (`Owner::Bot { serial, bot: Deferred::default() }`); a loaded value
+     is rejected at runtime. Lifted in step 2.
+   - The relation field must be declared `Deferred`, and no `.include()`
+     exists to load it. Lifted in step 3.
+   - No inverse: `has_many` / `has_one` cannot pair into the embedding.
+     Lifted in steps 4 (queries) and 5 (mutations).
 2. **Referencing the embedded relation with a model value.** The
    centralized rewrite: a reference to a relation reached through embed
    steps expands into the key comparison with the fused `is_variant`
@@ -555,12 +563,15 @@ The work ships in steps, each providing user value on its own.
    traversal (`.matches(|v| v.human().name().eq("Alice"))`); in `create!`
    and update assignments it enables passing the parent by reference
    (`Owner::Human { human: &alice }`) with the key fields filled in.
+   This lifts step 1's explicit-keys restriction: a loaded relation
+   value in a write is rewritten to its key assignments instead of
+   rejected.
 3. **Preloading with `.include()`.** `.include(Object::fields().owner())`
    issues one query per variant present and merges results into each
-   row's enum value. This step also lifts the `Deferred`-only requirement
-   on embedded relation fields: a non-deferred field (`human: Human`)
-   needs its value present on every load, which only works once includes
-   can populate it — with them, it behaves as at model level.
+   row's enum value. This lifts step 1's `Deferred`-only requirement on
+   embedded relation fields: a non-deferred field (`human: Human`) needs
+   its value present on every load, which only works once includes can
+   populate it — with them, it behaves as at model level.
 4. **Inverse pairs, queries.** `pair` paths, the `Pair` struct, the
    per-embedding instance records, linker recursion, and the removals
    listed above land together; `has_many` / `has_one` declarations on

@@ -1172,11 +1172,18 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// ## `#[belongs_to(...)]` — relations stored in embedded types
 ///
 /// A field of an embedded struct or enum variant may declare
-/// `#[belongs_to]`, referencing a sibling key field of the same struct or
-/// variant. The relation itself maps to no column — the key field owns the
-/// storage — and the field type must be `toasty::Deferred<..>`: reads
-/// return it unloaded, and the referenced model loads with an ordinary
-/// `get_by_*` / `find_by_*` on the stored key.
+/// `#[belongs_to]`, with the same parameters as the model-level attribute
+/// (see [`Model`][`derive@Model`]). The differences:
+///
+/// - `key` references a sibling field of the same struct or variant.
+/// - The field type must be `toasty::Deferred<..>`; the always-loaded
+///   form is not supported.
+/// - There is no `.include()`: load the referenced model with an
+///   ordinary `get_by_*` / `find_by_*` on the stored key.
+/// - Writes set the key field explicitly and leave the relation unloaded
+///   (`Deferred::default()`); setting it from a model value is not
+///   supported.
+/// - A `has_many` on the target cannot pair with it.
 ///
 /// ```no_run
 /// # #[derive(Debug, toasty::Model)]
@@ -1196,11 +1203,6 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///     // ... other owner kinds
 /// }
 /// ```
-///
-/// Creating and updating supply the embed value with explicit keys and the
-/// relation left unloaded (`Deferred::default()`). Setting the relation
-/// from a model value, preloading it with `.include()`, and pairing it
-/// with a `has_many` on the target are not supported yet.
 ///
 /// # Using embedded types in a model
 ///
