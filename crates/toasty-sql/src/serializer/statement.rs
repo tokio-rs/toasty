@@ -485,6 +485,7 @@ impl ToSql for &stmt::OrderByExpr {
 impl ToSql for &stmt::Returning {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match self {
+            stmt::Returning::Star => fmt!(f, "*"),
             stmt::Returning::Project(stmt::Expr::Record(expr_record)) => {
                 // Alias every projected field positionally (`AS column1`, ...).
                 // A nested SELECT/RETURNING referenced from an outer query (e.g.
@@ -631,6 +632,10 @@ impl ToSql for &stmt::TableRef {
                 fmt!(f, table_name);
             }
             stmt::TableRef::Derived(table_derived) => fmt!(f, table_derived),
+            stmt::TableRef::Func(func) => func.to_sql(f),
+            stmt::TableRef::RowsFrom(funcs) => {
+                fmt!(f, "ROWS FROM (" Comma(funcs.iter()) ")")
+            }
             stmt::TableRef::Cte { nesting, index } => {
                 assert!(f.depth >= *nesting, "nesting={nesting} depth={}", f.depth);
 

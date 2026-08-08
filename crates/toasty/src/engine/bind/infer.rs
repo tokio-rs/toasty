@@ -72,33 +72,32 @@ fn ty_from_column(storage_ty: db::Type) -> Ty {
     }
 }
 
-fn refine_insert(
-    insert: &stmt::Insert,
-    _cx: &Cx<'_>,
-    db_schema: &db::Schema,
-    params: &mut [Param],
-) {
+fn refine_insert(insert: &stmt::Insert, cx: &Cx<'_>, db_schema: &db::Schema, params: &mut [Param]) {
     let stmt::InsertTarget::Table(table) = &insert.target else {
         return;
     };
     let db_table = &db_schema.tables[table.table.0];
 
-    // Expected type from the column list (authoritative). `check` pushes it
-    // down into each VALUES row, field by field, typing every `Arg` param —
-    // including a `#[document]` column, whose list/object value resolves to its
-    // scalar `Document` storage type in `merge`.
-    let expected = Ty::Record(
-        table
-            .columns
-            .iter()
-            .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
-            .collect(),
-    );
+    match &insert.source.body {
+        stmt::ExprSet::Values(values) => {
+            // The column list supplies the authoritative type for each field.
+            // This also maps document values to their scalar storage type.
+            let expected = Ty::Record(
+                table
+                    .columns
+                    .iter()
+                    .map(|col_id| ty_from_column(db_table.columns[col_id.index].storage_ty.clone()))
+                    .collect(),
+            );
 
-    if let stmt::ExprSet::Values(values) = &insert.source.body {
-        for row in &values.rows {
-            check(row, &expected, params);
+            for row in &values.rows {
+                check(row, &expected, params);
+            }
         }
+        stmt::ExprSet::Select(select) => {
+            refine_source(&select.source, cx, params);
+        }
+        _ => {}
     }
 
     if let Some(upsert) = &insert.upsert {
@@ -182,6 +181,7 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
 
     match &query.body {
         stmt::ExprSet::Select(select) => {
+            refine_source(&select.source, &cx, params);
             refine_filter(&select.filter, &cx, params);
         }
         stmt::ExprSet::Values(values) => {
@@ -205,6 +205,26 @@ fn refine_query(query: &stmt::Query, cx: &Cx<'_>, params: &mut [Param]) {
     if let Some(with) = &query.with {
         for cte in &with.ctes {
             refine_query(&cte.query, &cx, params);
+        }
+    }
+}
+
+fn refine_source(source: &stmt::Source, cx: &Cx<'_>, params: &mut [Param]) {
+    let stmt::Source::Table(source) = source else {
+        return;
+    };
+
+    for table in &source.tables {
+        match table {
+            stmt::TableRef::Func(func) => {
+                synthesize_func(func, cx, params);
+            }
+            stmt::TableRef::RowsFrom(funcs) => {
+                for func in funcs {
+                    synthesize_func(func, cx, params);
+                }
+            }
+            _ => {}
         }
     }
 }
@@ -276,6 +296,8 @@ pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -
             }
             Ty::List(Box::new(merged))
         }
+
+        stmt::Expr::Func(func) => synthesize_func(func, cx, params),
 
         // BinaryOp (comparison) — synthesize both sides, merge, check both
         stmt::Expr::BinaryOp(binary) => {
@@ -371,6 +393,19 @@ pub(super) fn synthesize(expr: &stmt::Expr, cx: &Cx<'_>, params: &mut [Param]) -
         stmt::Expr::Default => Ty::Unknown,
 
         // Anything else
+        _ => Ty::Unknown,
+    }
+}
+
+fn synthesize_func(func: &stmt::ExprFunc, cx: &Cx<'_>, params: &mut [Param]) -> Ty {
+    match func {
+        stmt::ExprFunc::Unnest(func) => match synthesize(&func.arg, cx, params) {
+            Ty::List(elem) => *elem,
+            Ty::Column(db::Type::List(elem)) => Ty::Column(*elem),
+            Ty::Inferred(db::Type::List(elem)) => Ty::Inferred(*elem),
+            Ty::Unknown => Ty::Unknown,
+            ty => panic!("unnest argument must be a list; ty={ty:?}"),
+        },
         _ => Ty::Unknown,
     }
 }

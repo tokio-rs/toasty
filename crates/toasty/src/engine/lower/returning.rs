@@ -137,6 +137,10 @@ impl LowerStatement<'_, '_> {
     /// 3. Leave other columns as-is (will be evaluated at runtime)
     ///
     /// This reduces the work needed at runtime without fully eliminating it.
+    ///
+    /// Assumes the per-row `VALUES` shape: the bind phase's
+    /// `transpose_insert_unnest` must keep running after lowering, or this
+    /// pass sees a table-function source instead of the rows to constantize.
     pub(super) fn constantize_insert_returning(
         &self,
         returning: &mut stmt::Returning,

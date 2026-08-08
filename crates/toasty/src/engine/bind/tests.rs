@@ -88,6 +88,204 @@ fn null_values_not_extracted() {
     assert_eq!(params[0].value, Value::from("abc"));
 }
 
+// ============================================================================
+// Multi-row INSERT → unnest transpose (Capability::insert_values_unnest)
+// ============================================================================
+
+/// Build `INSERT INTO items (id, name) VALUES ('a1', 'n1'), ('a2', 'n2')`.
+fn two_row_item_insert(schema: &toasty_core::Schema) -> stmt::Statement {
+    stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a1"),
+                Value::from("n1"),
+            ]))),
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a2"),
+                Value::from("n2"),
+            ]))),
+        ])),
+        upsert: None,
+        returning: None,
+    })
+}
+
+fn unnest_source(stmt: &stmt::Statement) -> &[stmt::ExprFunc] {
+    let stmt::Statement::Insert(insert) = stmt else {
+        panic!("expected insert");
+    };
+    let stmt::ExprSet::Select(select) = &insert.source.body else {
+        panic!("expected select source");
+    };
+    assert!(matches!(select.returning, stmt::Returning::Star));
+    let source = select.source.as_table_unwrap();
+    let [stmt::TableRef::RowsFrom(funcs)] = source.tables.as_slice() else {
+        panic!("expected ROWS FROM table source");
+    };
+    funcs
+}
+
+#[test]
+fn multi_row_insert_transposed_to_column_arrays_on_postgres() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: String,
+    }
+
+    let schema = test_schema_postgresql(&[Item::schema()]);
+    let mut stmt = two_row_item_insert(&schema);
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::POSTGRESQL,
+    );
+
+    // One array param per column, each holding that column's values across rows.
+    assert_eq!(params.len(), 2);
+    assert_eq!(
+        params[0].value,
+        Value::List(vec![Value::from("a1"), Value::from("a2")])
+    );
+    assert_eq!(
+        params[1].value,
+        Value::List(vec![Value::from("n1"), Value::from("n2")])
+    );
+
+    assert_eq!(params[0].ty, db::Type::list(db::Type::Text));
+    assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
+
+    // ROWS FROM evaluates one single-argument unnest function per column.
+    let funcs = unnest_source(&stmt);
+    let [
+        stmt::ExprFunc::Unnest(first),
+        stmt::ExprFunc::Unnest(second),
+    ] = funcs
+    else {
+        panic!("expected two unnest functions");
+    };
+    assert!(matches!(first.arg.as_ref(), Expr::Arg(_)));
+    assert!(matches!(second.arg.as_ref(), Expr::Arg(_)));
+}
+
+#[test]
+fn multi_row_insert_with_null_cell_binds_one_array_per_column() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: Option<String>,
+    }
+
+    let schema = test_schema_postgresql(&[Item::schema()]);
+    let mut stmt = stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(&schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a1"),
+                Value::from("n1"),
+            ]))),
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a2"),
+                Value::Null,
+            ]))),
+        ])),
+        upsert: None,
+        returning: None,
+    });
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::POSTGRESQL,
+    );
+
+    // The NULL cell rides inside the column's array param; it must not decay
+    // to an inline NULL literal (which would break the unnest arity).
+    assert_eq!(params.len(), 2);
+    assert_eq!(
+        params[1].value,
+        Value::List(vec![Value::from("n1"), Value::Null])
+    );
+    assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
+
+    let [_, stmt::ExprFunc::Unnest(unnest)] = unnest_source(&stmt) else {
+        panic!("expected two unnest functions");
+    };
+    assert!(matches!(unnest.arg.as_ref(), Expr::Arg(_)));
+}
+
+#[test]
+fn multi_row_insert_all_null_column_typed_from_schema() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: Option<String>,
+    }
+
+    let schema = test_schema_postgresql(&[Item::schema()]);
+    let mut stmt = stmt::Statement::Insert(stmt::Insert {
+        target: insert_target(&schema, "items"),
+        source: stmt::Query::values(stmt::Values::new(vec![
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a1"),
+                Value::Null,
+            ]))),
+            Expr::from(Value::Record(stmt::ValueRecord::from_vec(vec![
+                Value::from("a2"),
+                Value::Null,
+            ]))),
+        ])),
+        upsert: None,
+        returning: None,
+    });
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::POSTGRESQL,
+    );
+
+    // An all-NULL column array carries no value to infer from; its element
+    // type must come from the target column's storage type.
+    assert_eq!(params.len(), 2);
+    assert_eq!(params[1].value, Value::List(vec![Value::Null, Value::Null]));
+    assert_eq!(params[1].ty, db::Type::list(db::Type::Text));
+}
+
+#[test]
+fn multi_row_insert_not_transposed_without_capability() {
+    #[derive(toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: String,
+    }
+
+    let schema = test_schema_with(&[Item::schema()]);
+    let mut stmt = two_row_item_insert(&schema);
+
+    let params = run(
+        &mut stmt,
+        &schema.db,
+        &toasty_core::driver::Capability::SQLITE,
+    );
+
+    // SQLite keeps the per-cell VALUES form with four scalar params.
+    assert_eq!(params.len(), 4);
+    let stmt::Statement::Insert(insert) = &stmt else {
+        panic!("expected insert");
+    };
+    let stmt::ExprSet::Values(values) = &insert.source.body else {
+        panic!("expected values body");
+    };
+    assert_eq!(values.rows.len(), 2);
+}
+
 #[test]
 fn extract_from_where_clause() {
     let schema = test_schema();
@@ -193,6 +391,50 @@ fn non_enum_insert_keeps_default_types() {
     assert_eq!(params.len(), 2);
     assert!(matches!(&params[0].ty, db::Type::Text));
     assert!(matches!(&params[1].ty, db::Type::Integer(8)));
+}
+
+#[test]
+fn synthesize_unnest_returns_array_element_type() {
+    use super::infer::synthesize;
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+    let mut params = vec![Param {
+        value: Value::List(vec![Value::from("a"), Value::from("b")]),
+        ty: Ty::List(Box::new(Ty::Inferred(db::Type::Text))),
+    }];
+    let expr = Expr::Func(
+        stmt::FuncUnnest {
+            arg: Box::new(Expr::arg(0)),
+        }
+        .into(),
+    );
+
+    let ty = synthesize(&expr, &cx, &mut params);
+
+    assert!(matches!(ty, Ty::Inferred(db::Type::Text)));
+}
+
+#[test]
+fn synthesize_unnest_returns_array_column_element_type() {
+    use super::infer::synthesize;
+
+    let schema = test_schema();
+    let cx = stmt::ExprContext::new(&schema.db);
+    let mut params = vec![Param {
+        value: Value::List(vec![Value::from("a"), Value::from("b")]),
+        ty: Ty::Column(db::Type::list(db::Type::Text)),
+    }];
+    let expr = Expr::Func(
+        stmt::FuncUnnest {
+            arg: Box::new(Expr::arg(0)),
+        }
+        .into(),
+    );
+
+    let ty = synthesize(&expr, &cx, &mut params);
+
+    assert!(matches!(ty, Ty::Column(db::Type::Text)));
 }
 
 // ============================================================================

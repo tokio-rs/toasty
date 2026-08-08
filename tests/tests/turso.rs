@@ -37,6 +37,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_json: false,
     native_jsonb: false,
     native_enum: false,
+    insert_values_unnest: false,
     vec_scalar: true,
     vec_remove: false,
     vec_pop: false,
