@@ -2,20 +2,16 @@
 
 ## Summary
 
-Classify every statement as `ReadOnly` or `Mutating` at exec time
-by walking its AST.  When `Connection::exec` returns
-`Error::connection_lost`, the engine retries `ReadOnly` statements
-on a fresh connection (bounded) and propagates everything else.
-Callers stop seeing one `connection_lost` per pool-restart event
-for the common read path.
+When `Connection::exec` returns `Error::connection_lost`, retry the
+statement on a fresh connection (bounded) if the engine's statement
+classifier reports `ReadOnly`; propagate everything else.  Callers stop
+seeing one `connection_lost` per pool-restart event for the common read
+path.
 
-Same retry plumbing also retries the first statement of an
-explicit transaction (a separate rule from classification: the
-transaction has issued no other statements and no `COMMIT` has
-been sent, so the server-side rollback leaves nothing to undo).
-The classifier is also the foundation for any future API that
-wants to know whether a statement mutates (e.g. [#981]'s
-read-only handle).
+The same retry plumbing also retries the first statement of an explicit
+transaction.  That is a separate rule from classification: the
+transaction has issued no other statements and no `COMMIT` has been
+sent, so the server-side rollback leaves nothing to undo.
 
 ## Motivation
 
@@ -32,27 +28,12 @@ Today the user sees a flurry of one-shot errors that disappear by
 themselves; cleaning them up requires hand-rolling a retry layer
 on top of `is_connection_lost()`.
 
-The classifier also unblocks two adjacent items:
-
-1. **First-statement-of-transaction retry** ([#863], same issue).
-   The transaction has issued no other statements and no `COMMIT`
-   has been sent, so a server-side rollback on connection drop
-   leaves nothing to undo.  Different rule from the read-only one,
-   but uses the same retry plumbing.
-2. **Read-only API surfaces** ([#981]).  A runtime-checked
-   `DbReader` handle that rejects mutating statements is a natural
-   consumer of the same classifier.  No separate walk required.
-
-CTE-with-mutation queries (Postgres `WITH ins AS (INSERT ...
-RETURNING *) SELECT * FROM ins`) make a static-only classifier
-unsound: a `Statement::Query` can carry an `ExprSet::Insert` in its
-`WITH` clause, and mutations can appear as `Expr::Stmt` elsewhere in
-the tree.  The walk is the load-bearing piece; everything else is
-policy.
+First-statement-of-transaction retry ([#863], same issue) is a
+different rule, but it uses the same retry plumbing, so both land
+together.
 
 [PR #861]: https://github.com/tokio-rs/toasty/pull/861
 [#863]: https://github.com/tokio-rs/toasty/issues/863
-[#981]: https://github.com/tokio-rs/toasty/issues/981
 
 ## User-facing API
 
@@ -85,15 +66,9 @@ let db = Db::builder(driver)
 
 ## Behavior
 
-- **Classification.**  A statement is `ReadOnly` if it is a
-  `Statement::Query` and contains no `Insert`, `Update`, or `Delete`
-  statement anywhere in its tree (filter, returning, CTE bindings,
-  set-op operands, embedded subqueries).  Otherwise `Mutating`.
-
-- **When the classifier runs.**  At exec time, on the statement
+- **When the statement is classified.**  At exec time, on the statement
   the engine is about to hand to `Connection::exec`.  One pass per
-  top-level statement; cost is linear in the statement tree size
-  and runs once even when no retry occurs.
+  top-level statement, whether or not a retry occurs.
 
 - **Retry trigger.**  `Connection::exec` returns
   `Error::connection_lost`.  No other error variant triggers retry.
@@ -120,18 +95,6 @@ let db = Db::builder(driver)
   behind the same retry plumbing.
 
 ## Edge cases
-
-- **CTE with mutation.**  `WITH ins AS (INSERT INTO t ... RETURNING
-  *) SELECT * FROM ins` parses as `Statement::Query` whose `with`
-  carries a CTE with an `ExprSet::Insert` body.  The classifier walks
-  `with` and classifies the whole statement as `Mutating`.
-
-- **Mutation sub-statements in expressions.**  Same handling — any
-  `Expr::Stmt(Insert | Update | Delete)` reached during the tree
-  walk forces `Mutating`.  Today the verify pass already encounters
-  these via `visit_expr_stmt` (`engine/verify.rs`); the classifier
-  is a separate walk with simpler logic but lives next to it
-  conceptually.
 
 - **Lowering-generated sub-statements.**  `INCLUDE` subqueries and
   the other lowering-synthesized statements (recursive lower per
@@ -162,24 +125,26 @@ let db = Db::builder(driver)
 
 ## Driver integration
 
-Nothing changes.  Drivers continue to surface
-`Error::connection_lost` from `Connection::exec` on connection
-drop; the engine handles the retry on the engine side using the
-existing pool checkout machinery.  No new `Driver` or `Connection`
-methods.
+No new `Driver` or `Connection` methods.  Drivers signal a lost
+connection by returning `Error::connection_lost` from
+`Connection::exec`; the engine performs the retry using the existing
+pool checkout machinery.
 
-The classifier reads only `stmt::Statement` / `stmt::Expr`, which
-is shared across all drivers, so the same retry policy applies
-uniformly to SQL drivers and to DynamoDB.
+Only the PostgreSQL, MySQL, and Turso drivers construct
+`Error::connection_lost` today.  SQLite is embedded and has no
+connection to lose.  DynamoDB reaches a remote endpoint over HTTP but
+reports transport failures as other error variants, so transparent
+retry is a no-op there until that driver classifies them as
+`connection_lost`.
 
 ## Open questions
 
-- **Classifier placement.**  Three options: a free function on
-  `&stmt::Statement` (read by the pool-retry wrapper), a method on
-  `Engine`, or a field cached on the `Operation` enum produced by
-  the planner.  The pool's retry wrapper wants a `bool`-shaped
-  answer; the simplest shape is a free function called once at
-  exec entry.
+- **Where classification runs relative to lowering.**  Classifying the
+  statement handed to `Connection::exec` means classifying lowered
+  statements; the argument in "Lowering-generated sub-statements" is
+  about the pre-lowering AST.  Both placements should agree, but
+  nothing verifies that lowering cannot introduce a mutation the input
+  did not carry.  Blocking implementation.
 
 - **`Builder::disable_transparent_retry` placement.**  On `Builder`
   (per-`Db`) is the proposed default.  Per-call disable
@@ -209,7 +174,9 @@ uniformly to SQL drivers and to DynamoDB.
 - **Mid-transaction retry.**  Server-side state divergence makes
   this unsound; left to the caller.
 - **Read-only API surface (`DbReader`).**  Separate consumer of
-  the classifier; tracked in #981.
+  the classifier; tracked in [#981].
 - **Configurable retry backoff.**  Iteration 1 retries immediately
   on a fresh connection.  Exponential backoff is a follow-on if
   needed.
+
+[#981]: https://github.com/tokio-rs/toasty/issues/981
