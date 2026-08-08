@@ -41,6 +41,13 @@ impl VariantAttr {
             if attr.path().is_ident("column") {
                 match Column::from_ast(attr) {
                     Ok(col) => {
+                        if let Some(comment) = col.comment {
+                            errs.push(syn::Error::new_spanned(
+                                comment,
+                                "#[column(comment = ...)] is not supported on enum variants; \
+                                 place it on a stored field",
+                            ));
+                        }
                         if let Some(d) = col.variant {
                             discriminant = Some(d);
                         }

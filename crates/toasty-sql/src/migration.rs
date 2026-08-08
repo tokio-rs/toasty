@@ -15,6 +15,7 @@ use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, N
 /// (`ALTER TYPE ... ADD VALUE`) and should not produce column-level DDL.
 fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
     if previous.name != next.name
+        || previous.comment != next.comment
         || previous.nullable != next.nullable
         || previous.primary_key != next.primary_key
         || previous.auto_increment != next.auto_increment
@@ -99,6 +100,28 @@ impl<'a> MigrationStatement<'a> {
                         Statement::create_table(table, capability),
                         Cow::Borrowed(schema_diff.next()),
                     ));
+                    if capability.schema_comments.table
+                        && let Some(comment) = table.comment.as_deref()
+                    {
+                        result.push(Self::new(
+                            Statement::set_table_comment(table.name.as_str(), Some(comment)),
+                            Cow::Borrowed(schema_diff.next()),
+                        ));
+                    }
+                    if capability.schema_comments.column {
+                        for column in &table.columns {
+                            if column.comment.is_some() {
+                                result.push(Self::new(
+                                    Statement::set_column_comment(
+                                        table.name.as_str(),
+                                        column,
+                                        capability,
+                                    ),
+                                    Cow::Borrowed(schema_diff.next()),
+                                ));
+                            }
+                        }
+                    }
                     for index in &table.indices {
                         if index.primary_key {
                             continue; // PK indices are created as part of CREATE TABLE
@@ -181,6 +204,16 @@ impl<'a> MigrationStatement<'a> {
                             columns,
                             capability,
                         );
+
+                        if capability.schema_comments.table && previous.comment != next.comment {
+                            result.push(Self::new(
+                                Statement::set_table_comment(
+                                    next.name.as_str(),
+                                    next.comment.as_deref(),
+                                ),
+                                Cow::Borrowed(schema_diff.next()),
+                            ));
+                        }
                     }
 
                     // Create new indices after the column changes so they reference
@@ -297,6 +330,25 @@ impl<'a> MigrationStatement<'a> {
             schema.clone(),
         ));
 
+        if capability.schema_comments.table
+            && let Some(comment) = next.comment.as_deref()
+        {
+            result.push(Self::new(
+                Statement::set_table_comment(current_name.as_str(), Some(comment)),
+                schema.clone(),
+            ));
+        }
+        if capability.schema_comments.column {
+            for column in &next.columns {
+                if column.comment.is_some() {
+                    result.push(Self::new(
+                        Statement::set_column_comment(current_name.as_str(), column, capability),
+                        schema.clone(),
+                    ));
+                }
+            }
+        }
+
         // 6. PRAGMA foreign_keys = ON
         result.push(Self::new(
             Statement::pragma_enable_foreign_keys(),
@@ -318,6 +370,13 @@ impl<'a> MigrationStatement<'a> {
                         Statement::add_column(table, column, capability),
                         schema.clone(),
                     ));
+                    if capability.schema_comments.column && column.comment.is_some() {
+                        let table_name = schema.table(table).name.as_str();
+                        result.push(Self::new(
+                            Statement::set_column_comment(table_name, column, capability),
+                            schema.clone(),
+                        ));
+                    }
                 }
                 diff::Column::Drop(column) => {
                     result.push(Self::new(Statement::drop_column(column), schema.clone()));
@@ -335,15 +394,31 @@ impl<'a> MigrationStatement<'a> {
                     }
 
                     let changes = AlterColumnChanges::from_diff(previous, col_next);
-                    let changes = if capability.schema_mutations.alter_column_properties_atomic {
-                        vec![changes]
-                    } else {
-                        changes.split()
-                    };
+                    let has_structural_change = !changes.is_empty();
+                    if has_structural_change {
+                        let changes = if capability.schema_mutations.alter_column_properties_atomic
+                        {
+                            vec![changes]
+                        } else {
+                            changes.split()
+                        };
 
-                    for changes in changes {
+                        for changes in changes {
+                            result.push(Self::new(
+                                Statement::alter_column(previous, col_next, changes, capability),
+                                schema.clone(),
+                            ));
+                        }
+                    }
+
+                    if capability.schema_comments.column
+                        && previous.comment != col_next.comment
+                        && !(capability.schema_mutations.alter_column_properties_atomic
+                            && has_structural_change)
+                    {
+                        let table_name = schema.table(table).name.as_str();
                         result.push(Self::new(
-                            Statement::alter_column(previous, changes, capability),
+                            Statement::set_column_comment(table_name, col_next, capability),
                             schema.clone(),
                         ));
                     }

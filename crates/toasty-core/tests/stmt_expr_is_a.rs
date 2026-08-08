@@ -145,6 +145,7 @@ fn doc_field(model: app::ModelId, index: usize, name: &str, ty: Type) -> app::Fi
             app: Some(name.to_string()),
             storage: None,
         },
+        comment: None,
         ty: app::FieldTy::Primitive(app::FieldPrimitive {
             ty,
             storage_ty: None,

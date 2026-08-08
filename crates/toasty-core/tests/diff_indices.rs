@@ -14,6 +14,7 @@ fn make_column(table_id: usize, index: usize, name: &str) -> Column {
             index,
         },
         name: name.to_string(),
+        comment: None,
         ty: stmt::Type::String,
         storage_ty: Type::Text,
         nullable: false,
@@ -58,6 +59,7 @@ fn make_schema_with_indices(table_id: usize, columns: Vec<Column>, indices: Vec<
     schema.tables.push(Table {
         id: TableId(table_id),
         name: "test_table".to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: vec![],

@@ -177,6 +177,7 @@ impl ToSql for &stmt::AlterColumn {
                         .new_auto_increment
                         .unwrap_or(self.column_def.auto_increment),
                     check: self.column_def.check.clone(),
+                    comment: self.column_def.comment.clone(),
                 };
                 fmt!(&mut f, "ALTER TABLE " table_name " CHANGE COLUMN " column_name " " new_column_def)
             }
@@ -328,6 +329,46 @@ impl ToSql for &stmt::Pragma {
         match &self.value {
             Some(value) => fmt!(f, "PRAGMA " self.name.as_str() " = " value.as_str()),
             None => fmt!(f, "PRAGMA " self.name.as_str()),
+        }
+    }
+}
+
+impl ToSql for &stmt::SetTableComment {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        match f.serializer.flavor {
+            Flavor::Postgresql => {
+                fmt!(f, "COMMENT ON TABLE " self.table " IS ");
+                match &self.comment {
+                    Some(comment) => toasty_core::stmt::Value::String(comment.clone()).to_sql(f),
+                    None => fmt!(f, "NULL"),
+                }
+            }
+            Flavor::Mysql => {
+                let comment = self.comment.clone().unwrap_or_default();
+                fmt!(f, "ALTER TABLE " self.table " COMMENT = " toasty_core::stmt::Value::String(comment));
+            }
+            Flavor::Sqlite => panic!("SQLite does not support table comments"),
+        }
+    }
+}
+
+impl ToSql for &stmt::SetColumnComment {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        match f.serializer.flavor {
+            Flavor::Postgresql => {
+                fmt!(f, "COMMENT ON COLUMN " self.table "." Ident(&self.column.name) " IS ");
+                match &self.column.comment {
+                    Some(comment) => toasty_core::stmt::Value::String(comment.clone()).to_sql(f),
+                    None => fmt!(f, "NULL"),
+                }
+            }
+            Flavor::Mysql => {
+                fmt!(f, "ALTER TABLE " self.table " MODIFY COLUMN " self.column);
+                if self.column.comment.is_none() {
+                    fmt!(f, " COMMENT ''");
+                }
+            }
+            Flavor::Sqlite => panic!("SQLite does not support column comments"),
         }
     }
 }
@@ -577,6 +618,8 @@ impl ToSql for &stmt::Statement {
             stmt::Statement::DropIndex(stmt) => stmt.to_sql(f),
             stmt::Statement::DropTable(stmt) => stmt.to_sql(f),
             stmt::Statement::Pragma(stmt) => stmt.to_sql(f),
+            stmt::Statement::SetColumnComment(stmt) => stmt.to_sql(f),
+            stmt::Statement::SetTableComment(stmt) => stmt.to_sql(f),
             stmt::Statement::Delete(stmt) => stmt.to_sql(f),
             stmt::Statement::Insert(stmt) => stmt.to_sql(f),
             stmt::Statement::Query(stmt) => stmt.to_sql(f),

@@ -147,6 +147,9 @@ pub(crate) struct Model {
 
     /// Optional table to map the model to
     pub(crate) table: Option<syn::LitStr>,
+
+    /// Optional database table comment for root models.
+    pub(crate) comment: Option<syn::LitStr>,
 }
 
 impl Model {
@@ -360,6 +363,7 @@ impl Model {
             kind,
             indices,
             table: model_attr.table,
+            comment: model_attr.comment,
         })
     }
 
@@ -392,6 +396,13 @@ impl Model {
         for attr in &ast.attrs {
             if attr.path().is_ident("column") {
                 let col = Column::from_ast(attr)?;
+                if let Some(comment) = col.comment {
+                    return Err(syn::Error::new_spanned(
+                        comment,
+                        "#[column(comment = ...)] is not supported on embedded enum types; \
+                         place it on the model field that stores the enum",
+                    ));
+                }
                 if let Some(ty) = col.ty {
                     if enum_column_type.is_some() {
                         return Err(syn::Error::new_spanned(
@@ -662,6 +673,7 @@ impl Model {
             }),
             indices,
             table: None,
+            comment: None,
         })
     }
 }

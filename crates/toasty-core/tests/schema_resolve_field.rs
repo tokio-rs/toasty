@@ -14,6 +14,7 @@ fn id_field(model: ModelId) -> Field {
             app: Some("id".to_string()),
             storage: None,
         },
+        comment: None,
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
@@ -37,6 +38,7 @@ fn prim_field(model: ModelId, index: usize, name: &str) -> Field {
             app: Some(name.to_string()),
             storage: None,
         },
+        comment: None,
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
@@ -60,6 +62,7 @@ fn variant_field(model: ModelId, index: usize, name: &str, variant_index: usize)
             app: Some(name.to_string()),
             storage: None,
         },
+        comment: None,
         ty: FieldTy::Primitive(FieldPrimitive {
             ty: stmt::Type::String,
             storage_ty: None,
@@ -86,6 +89,7 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
             app: Some(name.to_string()),
             storage: None,
         },
+        comment: None,
         ty: FieldTy::Embedded(Embedded {
             target,
             expr_ty: stmt::Type::Model(target),
@@ -168,6 +172,7 @@ fn schema() -> Schema {
     let user = Model::Root(ModelRoot {
         id: USER,
         name: Name::new("User"),
+        comment: None,
         fields: vec![
             id_field(USER),
             prim_field(USER, 1, "name"),
