@@ -90,6 +90,7 @@ the entry lands here.
 ## Data Modification
 
 - Upsert ([#422])
+- Returning models from updates ([design](design/update-returning.md))
 - Mutation result metadata — affected row counts and "matched but unchanged" detection
 - Bulk insert / update
 - Database-side function expressions in create/update — `now()`, `COALESCE`, `LOWER`, `UPPER`, `LENGTH`
