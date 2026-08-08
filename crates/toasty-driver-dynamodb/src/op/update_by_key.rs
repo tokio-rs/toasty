@@ -1,64 +1,11 @@
 use super::{
     Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
     TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
-    ddb_key, item_to_record, operation, stmt,
+    ddb_key, filter_failed, operation, stmt,
 };
 use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
-
-/// An [`stmt::Input`] that resolves column references into a record produced
-/// by `item_to_record`. After lowering, filter/condition expressions reference
-/// columns via `ExprReference::Column { column: i }` where `i` is the column's
-/// position in `table.columns`. `item_to_record` builds the record in that same
-/// order, so indexing by `col.column` gives the right field.
-struct RecordInput<'a>(&'a stmt::ValueRecord);
-
-impl stmt::Input for RecordInput<'_> {
-    fn resolve_ref(
-        &mut self,
-        expr_reference: &stmt::ExprReference,
-        projection: &stmt::Projection,
-    ) -> Option<stmt::Expr> {
-        match expr_reference {
-            stmt::ExprReference::Column(col) => {
-                Some(self.0.fields[col.column].entry(projection).to_expr())
-            }
-            _ => None,
-        }
-    }
-}
-
-/// Returns `true` when the DynamoDB `ConditionalCheckFailedException` was
-/// caused by the *filter* expression failing (→ return count 0), or `false`
-/// when it was caused by the *condition* expression failing (→ return an
-/// error).
-///
-/// Strategy: DynamoDB returns the item's pre-update state when
-/// `ReturnValuesOnConditionCheckFailure::AllOld` is set.  We evaluate the
-/// filter in-memory against that snapshot:
-///
-/// - No old item → the record didn't exist; the filter trivially didn't
-///   match → count 0.
-/// - Old item exists, filter evaluates to `false` → count 0.
-/// - Old item exists, filter evaluates to `true` (or there is no filter) →
-///   the condition must have been the failing part → error.
-fn filter_failed(
-    old_item: Option<&HashMap<String, AttributeValue>>,
-    table: &db::Table,
-    filter: Option<&stmt::Expr>,
-) -> bool {
-    let Some(filter) = filter else {
-        return false;
-    };
-
-    let Some(item) = old_item else {
-        return true;
-    };
-
-    let record = item_to_record(item, table.columns.iter()).unwrap();
-    !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
-}
 
 /// Interprets a `ConditionalCheckFailedException` from `update_item`: if the
 /// filter was the failing predicate return an empty response; otherwise surface
@@ -683,7 +630,7 @@ mod tests {
     use std::collections::HashMap;
     use toasty_core::{
         schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},
-        stmt::{self, BinaryOp, Expr, ExprBinaryOp, ExprColumn, ExprReference},
+        stmt::{self, BinaryOp, Expr, ExprBinaryOp},
     };
 
     fn make_table() -> db::Table {
@@ -717,11 +664,8 @@ mod tests {
     /// Build `status = "active"` as a column-reference filter expression.
     fn status_eq_active() -> Expr {
         Expr::BinaryOp(ExprBinaryOp {
-            lhs: Box::new(Expr::Reference(ExprReference::Column(ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: 0, // column 0 in the table → "status"
-            }))),
+            // column 0 in the table → "status"
+            lhs: Box::new(Expr::ref_column(0, 0)),
             op: BinaryOp::Eq,
             rhs: Box::new(Expr::Value(stmt::Value::String("active".to_string()))),
         })

@@ -91,7 +91,7 @@ use std::mem;
 
 use indexmap::{IndexMap, IndexSet};
 use toasty_core::schema::db;
-use toasty_core::stmt::{self, visit_mut};
+use toasty_core::stmt::{self, visit, visit_mut};
 
 use toasty_core::driver::operation::Pagination;
 
@@ -625,11 +625,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     let column = back_ref.exprs.get_index_of(target_expr_ref).unwrap();
 
                     // Rewrite reference the new `FROM`.
-                    *expr = stmt::Expr::column(stmt::ExprColumn {
-                        nesting: 0,
-                        table: batch_load_table_ref_index.get().unwrap(),
-                        column,
-                    });
+                    *expr =
+                        stmt::Expr::ref_column(batch_load_table_ref_index.get().unwrap(), column);
                 }
                 _ => {}
             }
@@ -1180,7 +1177,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 .into(),
                 filter: stmt::Filter::new(true),
-                returning: stmt::Returning::Project(conditional_probe_projection(cte_column(0, 0))),
+                returning: stmt::Returning::Project(conditional_probe_projection(
+                    stmt::Expr::ref_column(0, 0),
+                )),
                 distinct: false,
             })
             .build(),
@@ -1198,16 +1197,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .into(),
             filter: true.into(),
             returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![stmt::Expr::eq(
-                stmt::ExprColumn {
-                    nesting: 0,
-                    table: 0,
-                    column: 0,
-                },
-                stmt::ExprColumn {
-                    nesting: 0,
-                    table: 0,
-                    column: 1,
-                },
+                stmt::Expr::ref_column(0, 0),
+                stmt::Expr::ref_column(0, 1),
             )])),
             distinct: false,
         });
@@ -1252,8 +1243,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 .into(),
                 filter: stmt::Filter::new(true),
                 returning: stmt::Returning::Project(stmt::Expr::record_from_vec(vec![
-                    cte_column(0, 0),
-                    cte_column(0, 1),
+                    stmt::Expr::ref_column(0, 0),
+                    stmt::Expr::ref_column(0, 1),
                 ])),
                 distinct: false,
             })
@@ -1262,9 +1253,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             // exactly one row, so the LEFT JOIN repeats the counts across every
             // changed row (and yields a single NULL-padded row when nothing
             // changed).
-            let mut columns = vec![cte_column(0, 0), cte_column(0, 1)];
+            let mut columns = vec![stmt::Expr::ref_column(0, 0), stmt::Expr::ref_column(0, 1)];
             for i in 0..returning_len {
-                columns.push(cte_column(1, i));
+                columns.push(stmt::Expr::ref_column(1, i));
             }
 
             stmt::Query::builder(stmt::Select {
@@ -1390,10 +1381,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             };
 
             Ok(self.apply_post_filter(node_id, post_filter, ty))
-        } else {
+        } else if stmt.is_query() {
             // No index covers the filter — emit a full-table scan.
             let ty = self.infer_nosql_record_ty(&stmt);
-            self.plan_scan_execution(stmt, ty)
+            let columns = self.load_data.select_items.extract_expr_references();
+            self.plan_scan_execution(&stmt, columns, ty)
+        } else {
+            // No index covers the filter and the statement mutates rows. A
+            // scan cannot mutate, so collect the primary keys of the matching
+            // rows first, then apply the mutation to those keys.
+            self.plan_scan_mutation_execution(&stmt)
         }
     }
 
@@ -1415,7 +1412,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
     fn plan_scan_execution(
         &mut self,
-        stmt: stmt::Statement,
+        stmt: &stmt::Statement,
+        columns: IndexSet<stmt::ExprReference>,
         ty: stmt::Type,
     ) -> Result<mir::NodeId> {
         let input = if self.load_data.inputs.is_empty() {
@@ -1426,14 +1424,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             todo!("scan with multiple inputs")
         };
 
-        let cx = stmt::ExprContext::new(&*self.planner.engine.schema);
-        let cx = cx.scope(&stmt);
-        let stmt::ExprTarget::Table(table) = cx.target() else {
-            return Err(toasty_core::Error::unsupported_feature(
-                "scan: expected table target",
-            ));
-        };
-        let table_id = table.id;
+        let table_id = self.scan_target_table(stmt)?;
 
         // Reject ORDER BY on drivers whose scan operation returns items in an
         // unspecified order (e.g. DynamoDB Scan has no server-side sort).
@@ -1454,16 +1445,89 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
         self.legalize_kv_expr(&mut row_filter);
 
-        let limit = extract_pagination(&stmt);
+        let limit = extract_pagination(stmt);
 
         Ok(self.insert_mir_with_deps(mir::Scan {
             input,
             table: table_id,
-            columns: self.load_data.select_items.extract_expr_references(),
+            columns,
             row_filter,
             limit,
             ty,
         }))
+    }
+
+    /// Plans an UPDATE or DELETE whose filter no index covers.
+    ///
+    /// A scan cannot mutate rows, so the statement is executed in two steps:
+    /// scan the table for the primary keys of the rows the filter matches,
+    /// then apply the mutation to those keys. This mirrors the shape
+    /// [`plan_primary_key_execution`](Self::plan_primary_key_execution) uses
+    /// for a mutation with a partial primary-key filter, with the `QueryPk`
+    /// key-collection step replaced by a `Scan`.
+    fn plan_scan_mutation_execution(&mut self, stmt: &stmt::Statement) -> Result<mir::NodeId> {
+        // Mutations reach the key-value planner without a returning clause;
+        // whatever the caller reads back is loaded by a separate statement.
+        debug_assert!(
+            self.load_data.select_items.is_empty(),
+            "select_items={:#?}",
+            self.load_data.select_items
+        );
+
+        let table_id = self.scan_target_table(stmt)?;
+        let db = &self.planner.engine.schema.db;
+        let primary_key = db.index(db.table(table_id).primary_key.index);
+
+        let key_columns = primary_key
+            .columns
+            .iter()
+            .map(|index_column| stmt::ExprReference::column(0, index_column.column.index))
+            .collect();
+
+        let key_ty = self.table_primary_key_ty(table_id);
+        let args = self.filter_args_input();
+        let keys = self.plan_scan_execution(stmt, key_columns, key_ty)?;
+
+        // The scan and the per-key mutations are separate round trips, and the
+        // scan itself may read a stale snapshot, so a row can stop matching the
+        // filter in between. Re-apply the filter as a condition on each
+        // mutation so those rows are left alone — matching the per-row
+        // semantics a SQL UPDATE/DELETE has. Without it a row deleted since the
+        // scan would be resurrected as a partial item, because a key-value
+        // update of a missing key inserts it.
+        let filter = {
+            let expr = stmt.filter_expr_unwrap();
+            (!expr.is_true()).then(|| expr.clone())
+        };
+
+        Ok(self.build_key_operation_for_table(
+            stmt,
+            table_id,
+            filter,
+            keys,
+            args,
+            &stmt::Type::Unit,
+        ))
+    }
+
+    /// The MIR node supplying the runtime arguments a filter expression
+    /// references. Filters resolve their arguments from a single input, so any
+    /// further inputs — which feed other parts of the statement — are ignored.
+    fn filter_args_input(&self) -> Option<mir::NodeId> {
+        self.load_data.inputs.first().copied()
+    }
+
+    /// Resolves the table a scanned statement targets.
+    fn scan_target_table(&self, stmt: &stmt::Statement) -> Result<db::TableId> {
+        let cx = stmt::ExprContext::new(&*self.planner.engine.schema);
+        let cx = cx.scope(stmt);
+        let stmt::ExprTarget::Table(table) = cx.target() else {
+            return Err(toasty_core::Error::unsupported_feature(
+                "scan: expected table target",
+            ));
+        };
+
+        Ok(table.id)
     }
 
     fn plan_primary_key_execution(
@@ -1478,8 +1542,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
             let get_by_key_input = self.build_get_by_key_input(keys, self.index_key_ty(index_plan));
+            let filter_args = self.filter_args_input();
 
-            self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
+            self.build_key_operation(&stmt, index_plan, get_by_key_input, filter_args, ty)
         } else {
             let input = if self.load_data.inputs.is_empty() {
                 None
@@ -1519,11 +1584,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 assert!(columns.is_empty());
 
                 for index_col in &index_plan.index.columns {
-                    columns.insert(stmt::ExprReference::Column(stmt::ExprColumn {
-                        nesting: 0,
-                        table: 0,
-                        column: index_col.column.index,
-                    }));
+                    columns.insert(stmt::ExprReference::column(0, index_col.column.index));
                 }
 
                 let mut row_filter = index_plan.result_filter.take();
@@ -1541,7 +1602,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     order: None,
                 });
 
-                self.build_key_operation(&stmt, index_plan, query_pk_node, ty)
+                self.build_key_operation(&stmt, index_plan, query_pk_node, input, ty)
             }
         }
     }
@@ -1595,6 +1656,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // - Mutations only need primary keys, not full records
         // - Unique indexes don't have full column projections in DynamoDB
         let primary_key_ty = self.table_primary_key_ty(index_plan.index.on);
+        let args = inputs.first().copied();
 
         let get_by_key_input = self.insert_mir_with_deps(mir::FindPkByIndex {
             inputs,
@@ -1604,7 +1666,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             ty: primary_key_ty,
         });
 
-        self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
+        self.build_key_operation(&stmt, index_plan, get_by_key_input, args, ty)
     }
 
     fn prepare_post_filter(
@@ -1710,46 +1772,70 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         stmt: &stmt::Statement,
         index_plan: &mut index::IndexPlan,
         get_by_key_input: mir::NodeId,
+        args: Option<mir::NodeId>,
         ty: &stmt::Type,
     ) -> mir::NodeId {
+        // If there is a pre-filter, wrap the key input in a Guard node that
+        // produces an empty list when the guard is false, causing UpdateByKey
+        // to naturally no-op.
+        let input = match stmt {
+            stmt::Statement::Update(_) => self.apply_guard(get_by_key_input, index_plan),
+            _ => get_by_key_input,
+        };
+
+        let table = index_plan.table_id();
+        let result_filter = index_plan.result_filter.take();
+
+        self.build_key_operation_for_table(stmt, table, result_filter, input, args, ty)
+    }
+
+    /// Builds the driver operation that reads or mutates the rows identified by
+    /// the keys `input` produces. `result_filter` is the part of the
+    /// statement's filter the key-collection step could not apply. `args` is
+    /// the node supplying runtime arguments to that filter, if it has any.
+    fn build_key_operation_for_table(
+        &mut self,
+        stmt: &stmt::Statement,
+        table: db::TableId,
+        result_filter: Option<stmt::Expr>,
+        input: mir::NodeId,
+        args: Option<mir::NodeId>,
+        ty: &stmt::Type,
+    ) -> mir::NodeId {
+        let mut filter = result_filter;
+        self.legalize_kv_expr(&mut filter);
+
         match stmt {
             stmt::Statement::Query(_) => {
                 debug_assert!(ty.is_list(), "ty={ty:#?}");
                 self.insert_mir_with_deps(mir::GetByKey {
-                    input: get_by_key_input,
-                    table: index_plan.table_id(),
+                    input,
+                    table,
                     columns: self.load_data.select_items.extract_expr_references(),
                     ty: ty.clone(),
                 })
             }
             stmt::Statement::Delete(delete_stmt) => {
-                let mut filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(&mut filter);
                 let mut condition = delete_stmt.condition.expr.clone();
                 self.legalize_kv_expr(&mut condition);
 
                 self.insert_mir_with_deps(mir::DeleteByKey {
-                    input: get_by_key_input,
-                    table: index_plan.table_id(),
+                    input,
+                    args: args.filter(|_| exprs_have_args([&filter, &condition])),
+                    table,
                     filter,
                     condition,
                     ty: stmt::Type::Unit,
                 })
             }
             stmt::Statement::Update(update_stmt) => {
-                // If there is a pre-filter, wrap the key input in a Guard
-                // node that produces an empty list when the guard is false,
-                // causing UpdateByKey to naturally no-op.
-                let guarded_input = self.apply_guard(get_by_key_input, index_plan);
-
-                let mut filter = index_plan.result_filter.take();
-                self.legalize_kv_expr(&mut filter);
                 let mut condition = update_stmt.condition.expr.clone();
                 self.legalize_kv_expr(&mut condition);
 
                 self.insert_mir_with_deps(mir::UpdateByKey {
-                    input: guarded_input,
-                    table: index_plan.table_id(),
+                    input,
+                    args: args.filter(|_| exprs_have_args([&filter, &condition])),
+                    table,
                     // Document values in the assignments are already named:
                     // the mapping's lowering casts converted them during
                     // statement lowering/simplification.
@@ -2026,14 +2112,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 }
 
-/// A reference to column `column` of CTE `table` in the outer query's `FROM`
-/// (both at zero nesting).
-fn cte_column(table: usize, column: usize) -> stmt::Expr {
-    stmt::Expr::column(stmt::ExprColumn {
-        nesting: 0,
-        table,
-        column,
-    })
+/// True if any of `exprs` still references a runtime argument, meaning the
+/// expression cannot be handed to a driver until the argument is substituted.
+fn exprs_have_args<'a>(exprs: impl IntoIterator<Item = &'a Option<stmt::Expr>>) -> bool {
+    let mut found = false;
+
+    for expr in exprs.into_iter().flatten() {
+        visit::for_each_expr(expr, |expr| {
+            found |= matches!(expr, stmt::Expr::Arg(_));
+        });
+    }
+
+    found
 }
 
 /// The probe query shared by both SQL conditional-write strategies:

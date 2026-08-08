@@ -13,6 +13,10 @@ pub(crate) struct UpdateByKey {
     /// If specified, use the input to generate the list of keys to update
     pub input: VarId,
 
+    /// Optional input variable providing runtime args for the filter and
+    /// condition.
+    pub args: Option<VarId>,
+
     /// Where to store the result of the update
     pub output: Output,
 
@@ -44,6 +48,10 @@ impl Exec<'_> {
             .await?
             .into_list_unwrap();
 
+        let (filter, condition) = self
+            .resolve_key_op_args(action.args, &action.filter, &action.condition)
+            .await?;
+
         // Shred a multi-key update into one single-key op per key so each key's
         // filter is adjudicated independently — matching SQL's per-row
         // semantics, and mirroring how delete fans out. These updates are not
@@ -52,7 +60,10 @@ impl Exec<'_> {
         let mut rows = vec![];
 
         for key in keys {
-            match self.exec_update_one(action, key).await? {
+            match self
+                .exec_update_one(action, &filter, &condition, key)
+                .await?
+            {
                 Rows::Count(n) => total_count += n,
                 other => rows.extend(other.into_value_stream().collect().await?),
             }
@@ -77,13 +88,19 @@ impl Exec<'_> {
     }
 
     /// Execute a single-key `UpdateByKey` op for one resolved key.
-    async fn exec_update_one(&mut self, action: &UpdateByKey, key: stmt::Value) -> Result<Rows> {
+    async fn exec_update_one(
+        &mut self,
+        action: &UpdateByKey,
+        filter: &Option<stmt::Expr>,
+        condition: &Option<stmt::Expr>,
+        key: stmt::Value,
+    ) -> Result<Rows> {
         let op = operation::UpdateByKey {
             table: action.table,
             keys: vec![key],
             assignments: action.assignments.clone(),
-            filter: action.filter.clone(),
-            condition: action.condition.clone(),
+            filter: filter.clone(),
+            condition: condition.clone(),
             returning: action.returning.clone(),
         };
 

@@ -127,6 +127,12 @@ impl Expr {
         column.into().into()
     }
 
+    /// Creates a reference to column `column` of table `table` in the current
+    /// query scope (nesting = 0).
+    pub fn ref_column(table: usize, column: usize) -> Self {
+        ExprReference::column(table, column).into()
+    }
+
     /// Returns `true` if this expression is a column reference.
     pub fn is_column(&self) -> bool {
         matches!(self, Self::Reference(ExprReference::Column(..)))

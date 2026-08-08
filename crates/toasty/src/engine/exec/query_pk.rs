@@ -42,10 +42,17 @@ pub(crate) struct QueryPk {
 impl Exec<'_> {
     pub(super) async fn action_query_pk(&mut self, action: &QueryPk) -> Result<()> {
         let mut pk_filter = action.pk_filter.clone();
+        let mut row_filter = action.row_filter.clone();
 
         if let Some(input) = &action.input {
             let input = self.collect_input(&[*input]).await?;
             pk_filter.substitute(&input);
+
+            // The row filter is handed to the driver as-is, so it needs the
+            // same substitution as the key filter.
+            if let Some(row_filter) = &mut row_filter {
+                row_filter.substitute(&input);
+            }
         }
 
         let filters = self.split_filter(pk_filter, action.table);
@@ -77,7 +84,7 @@ impl Exec<'_> {
                         index: action.index,
                         select: action.columns.clone(),
                         pk_filter: f,
-                        filter: action.row_filter.clone(),
+                        filter: row_filter.clone(),
                         limit: action.limit.clone(),
                         order: action.order,
                     }

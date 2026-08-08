@@ -1,9 +1,27 @@
 use super::{
     Connection, Delete, ExprAttrs, Result, ReturnValuesOnConditionCheckFailure, SdkError,
-    TransactWriteItem, db, ddb_expression, ddb_key, item_to_record, operation,
+    TransactWriteItem, TransactWriteItemsError, db, ddb_expression, ddb_key, filter_failed,
+    operation, stmt,
 };
+use aws_sdk_dynamodb::types::CancellationReason;
 use std::collections::HashMap;
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
+
+/// Interprets a `TransactionCanceledException` from the unique-index delete:
+/// `true` when every failed condition is explained by `filter` no longer
+/// matching the stored row, so the delete is a no-op rather than an error.
+fn cancelled_by_filter(
+    reasons: &[CancellationReason],
+    table: &db::Table,
+    filter: Option<&stmt::Expr>,
+) -> bool {
+    let mut failed = reasons
+        .iter()
+        .filter(|reason| reason.code() == Some("ConditionalCheckFailed"))
+        .peekable();
+
+    failed.peek().is_some() && failed.all(|reason| filter_failed(reason.item(), table, filter))
+}
 
 impl Connection {
     pub(crate) async fn exec_delete_by_key(
@@ -81,33 +99,10 @@ impl Connection {
                         return Ok(ExecResponse::count(0));
                     }
 
-                    if let Some(filter) = filter_expr {
-                        // Both filter and condition set — check if filter matched
-                        if let Some(old_item) = cce.item() {
-                            let record = item_to_record(old_item, table.columns.iter()).unwrap();
-                            use toasty_core::stmt;
-                            struct RecordInput<'a>(&'a stmt::ValueRecord);
-                            impl stmt::Input for RecordInput<'_> {
-                                fn resolve_ref(
-                                    &mut self,
-                                    expr_reference: &stmt::ExprReference,
-                                    projection: &stmt::Projection,
-                                ) -> Option<stmt::Expr> {
-                                    match expr_reference {
-                                        stmt::ExprReference::Column(col) => Some(
-                                            self.0.fields[col.column].entry(projection).to_expr(),
-                                        ),
-                                        _ => None,
-                                    }
-                                }
-                            }
-                            if !filter.eval_bool(RecordInput(&record)).unwrap_or(false) {
-                                return Ok(ExecResponse::count(0));
-                            }
-                        } else {
-                            // Record gone — filter trivially didn't match
-                            return Ok(ExecResponse::count(0));
-                        }
+                    // Both filter and condition set — the delete is only a
+                    // no-op if the filter was the part that failed.
+                    if filter_failed(cce.item(), table, filter_expr) {
+                        return Ok(ExecResponse::count(0));
                     }
 
                     return Err(toasty_core::Error::condition_failed(
@@ -192,6 +187,11 @@ impl Connection {
                         .condition_expression(unique_condition_expression)
                         .set_expression_attribute_names(Some(expression_names))
                         .set_expression_attribute_values(Some(expression_values))
+                        // Needed to tell a filter miss apart from a genuine
+                        // condition failure when the transaction is cancelled.
+                        .return_values_on_condition_check_failure(
+                            ReturnValuesOnConditionCheckFailure::AllOld,
+                        )
                         .build()
                         .unwrap(),
                 )
@@ -220,6 +220,15 @@ impl Connection {
             .await;
 
         if let Err(e) = res {
+            if let SdkError::ServiceError(e) = &e
+                && let TransactWriteItemsError::TransactionCanceledException(tce) = e.err()
+                && cancelled_by_filter(tce.cancellation_reasons(), table, filter_expr)
+            {
+                // The row stopped matching the filter between the read and the
+                // write, so there is nothing to delete.
+                return Ok(ExecResponse::count(0));
+            }
+
             if has_condition {
                 return Err(toasty_core::Error::condition_failed(
                     "DynamoDB conditional check failed",

@@ -792,11 +792,7 @@ impl BuildMapping<'_> {
 
         // NOTE: nesting and table are stubs here (though often the actual values).
         // The engine must substitute these with the actual TableRef index in the query's TableSource.
-        let expr_column = stmt::Expr::column(stmt::ExprColumn {
-            nesting: 0,
-            table: 0,
-            column: column_id.index,
-        });
+        let expr_column = stmt::Expr::ref_column(0, column_id.index);
 
         match &column.ty {
             c_ty if *c_ty == primitive.ty => expr_column,
@@ -844,11 +840,7 @@ impl BuildMapping<'_> {
     /// but not `Not`.
     fn wrap_presence_match(&self, presence_column: usize, record: stmt::Expr) -> stmt::Expr {
         stmt::Expr::match_expr(
-            stmt::Expr::is_null(stmt::Expr::column(stmt::ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: presence_column,
-            })),
+            stmt::Expr::is_null(stmt::Expr::ref_column(0, presence_column)),
             vec![stmt::MatchArm {
                 pattern: stmt::Value::Bool(false),
                 expr: record,
