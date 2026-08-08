@@ -1,10 +1,12 @@
 use crate::prelude::*;
 
 /// The polymorphic-owner shape: `#[belongs_to]` fields inside embedded enum
-/// variants. The relation fields map to no columns — the discriminant and the
-/// key fields own the storage. Creating supplies the variant value with
-/// explicit keys, `match` reads the stored keys back, and the owner loads
-/// with an ordinary `get_by_*`.
+/// variants, exercised through the full CRUD cycle. The relation fields map
+/// to no columns — the discriminant and the key fields own the storage.
+/// Creating supplies the variant value with explicit keys, `match` reads the
+/// stored keys back, the owner loads with an ordinary `get_by_*`, and
+/// changing the owner — including its kind — is a whole-value replacement of
+/// the embed.
 #[driver_test]
 pub async fn belongs_to_in_enum_variants(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -87,7 +89,7 @@ pub async fn belongs_to_in_enum_variants(test: &mut Test) -> Result<()> {
 
     // `match` gives direct access to the stored keys; the owner loads with an
     // ordinary lookup.
-    let obj_a = Object::get_by_id(&mut db, obj_a.id).await?;
+    let mut obj_a = Object::get_by_id(&mut db, obj_a.id).await?;
     match &obj_a.owner {
         Owner::Human { id, human } => {
             assert!(human.is_unloaded());
@@ -107,12 +109,40 @@ pub async fn belongs_to_in_enum_variants(test: &mut Test) -> Result<()> {
         other => panic!("expected Owner::Bot, got {other:?}"),
     }
 
+    // Changing the owner — including its kind — is a whole-value replacement
+    // of the embed.
+    obj_a
+        .update()
+        .owner(Owner::Bot {
+            serial: bot.serial.clone(),
+            bot: toasty::Deferred::default(),
+        })
+        .exec(&mut db)
+        .await?;
+    let reloaded = Object::get_by_id(&mut db, obj_a.id).await?;
+    assert_struct!(
+        reloaded.owner,
+        Owner::Bot {
+            serial: "B-1000",
+            ..
+        }
+    );
+
+    let obj_a_id = obj_a.id;
+    obj_a.delete().exec(&mut db).await?;
+    assert_err!(Object::get_by_id(&mut db, obj_a_id).await);
+    assert!(matches!(
+        Object::get_by_id(&mut db, obj_b.id).await?.owner,
+        Owner::Bot { .. }
+    ));
+
     Ok(())
 }
 
 /// Key fields of relation-carrying variants stay queryable through the
-/// existing variant filter paths: the variant closure gates on the
-/// discriminant and compares the key column.
+/// existing variant filter paths — the variant closure gates on the
+/// discriminant and compares the shared key column — and stay consistent
+/// as rows are re-pointed and deleted.
 #[driver_test]
 pub async fn filter_by_relation_key_through_variant_path(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -178,7 +208,7 @@ pub async fn filter_by_relation_key_through_variant_path(test: &mut Test) -> Res
         .exec(&mut db)
         .await?;
 
-    let human_obj = toasty::create!(Object {
+    let mut human_obj = toasty::create!(Object {
         owner: Owner::Human {
             id: alice.id,
             human: toasty::Deferred::default(),
@@ -197,14 +227,13 @@ pub async fn filter_by_relation_key_through_variant_path(test: &mut Test) -> Res
 
     // Variant-gated key filter: only the Human row matches, even though the
     // Animal row stores its key in the same column.
-    let found: Vec<Object> = Object::filter(
+    let by_key = |id: uuid::Uuid| {
         Object::fields()
             .owner()
             .human()
-            .matches(|h| h.id().eq(alice.id)),
-    )
-    .exec(&mut db)
-    .await?;
+            .matches(move |h| h.id().eq(id))
+    };
+    let found: Vec<Object> = Object::filter(by_key(alice.id)).exec(&mut db).await?;
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, human_obj.id);
 
@@ -215,94 +244,46 @@ pub async fn filter_by_relation_key_through_variant_path(test: &mut Test) -> Res
     assert_eq!(humans.len(), 1);
     assert_eq!(humans[0].id, human_obj.id);
 
-    Ok(())
-}
-
-/// Changing the owner — including its kind — is a whole-value replacement of
-/// the embed, per existing embedded-enum update semantics.
-#[driver_test]
-pub async fn update_replaces_owner_variant(test: &mut Test) -> Result<()> {
-    #[derive(Debug, toasty::Model)]
-    struct Human {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        name: String,
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Bot {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        #[unique]
-        serial: String,
-    }
-
-    #[derive(Debug, toasty::Embed)]
-    enum Owner {
-        Human {
-            #[index]
-            id: uuid::Uuid,
-            #[belongs_to(key = id)]
-            human: toasty::Deferred<Human>,
-        },
-        Bot {
-            #[index]
-            serial: String,
-            #[belongs_to(key = serial, references = serial)]
-            bot: toasty::Deferred<Bot>,
-        },
-    }
-
-    #[derive(Debug, toasty::Model)]
-    struct Object {
-        #[key]
-        #[auto]
-        id: uuid::Uuid,
-        owner: Owner,
-    }
-
-    let mut db = test.setup_db(models!(Object, Human, Bot)).await;
-
-    let alice = toasty::create!(Human { name: "Alice" })
-        .exec(&mut db)
-        .await?;
-    let bot = toasty::create!(Bot { serial: "B-1000" })
-        .exec(&mut db)
-        .await?;
-
-    let mut obj = toasty::create!(Object {
-        owner: Owner::Human {
-            id: alice.id,
+    // Re-point the relation within the same variant by replacing the embed
+    // value; the key filter follows.
+    let bea = toasty::create!(Human { name: "Bea" }).exec(&mut db).await?;
+    human_obj
+        .update()
+        .owner(Owner::Human {
+            id: bea.id,
             human: toasty::Deferred::default(),
-        }
-    })
-    .exec(&mut db)
-    .await?;
-
-    obj.update()
-        .owner(Owner::Bot {
-            serial: bot.serial.clone(),
-            bot: toasty::Deferred::default(),
         })
         .exec(&mut db)
         .await?;
-
-    let reloaded = Object::get_by_id(&mut db, obj.id).await?;
-    assert_struct!(
-        reloaded.owner,
-        Owner::Bot {
-            serial: "B-1000",
-            ..
-        }
+    assert!(
+        Object::filter(by_key(alice.id))
+            .exec(&mut db)
+            .await?
+            .is_empty()
     );
+    let found: Vec<Object> = Object::filter(by_key(bea.id)).exec(&mut db).await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, human_obj.id);
+
+    // Deleting the row empties the key filter; the Animal row is untouched.
+    human_obj.delete().exec(&mut db).await?;
+    assert!(
+        Object::filter(by_key(bea.id))
+            .exec(&mut db)
+            .await?
+            .is_empty()
+    );
+    let animals: Vec<Object> = Object::filter(Object::fields().owner().is_animal())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(animals.len(), 1);
 
     Ok(())
 }
 
 /// `#[belongs_to]` inside an embedded struct: same storage rule — the key
-/// field owns the column, the relation maps to nothing.
+/// field owns the column, the relation maps to nothing — through the full
+/// CRUD cycle.
 #[driver_test]
 pub async fn belongs_to_in_embedded_struct(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -350,7 +331,7 @@ pub async fn belongs_to_in_embedded_struct(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    let post = Post::get_by_id(&mut db, post.id).await?;
+    let mut post = Post::get_by_id(&mut db, post.id).await?;
     assert!(post.attribution.author.is_unloaded());
     assert_eq!(post.attribution.note, "first draft");
     let author = Author::get_by_id(&mut db, &post.attribution.author_id).await?;
@@ -371,7 +352,6 @@ pub async fn belongs_to_in_embedded_struct(test: &mut Test) -> Result<()> {
     let other = toasty::create!(Author { name: "Bea" })
         .exec(&mut db)
         .await?;
-    let mut post = post;
     post.update()
         .attribution(toasty::stmt::patch(
             Attribution::fields().author_id(),
@@ -380,12 +360,24 @@ pub async fn belongs_to_in_embedded_struct(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
     assert_eq!(post.attribution.author_id, other.id);
+    assert_eq!(
+        Post::get_by_id(&mut db, post.id)
+            .await?
+            .attribution
+            .author_id,
+        other.id
+    );
+
+    let post_id = post.id;
+    post.delete().exec(&mut db).await?;
+    assert_err!(Post::get_by_id(&mut db, post_id).await);
 
     Ok(())
 }
 
 /// An `Option<Owner>` field: an ownerless row stores NULL in the discriminant
-/// column, per existing optional-embed support.
+/// column, per existing optional-embed support, and updates move rows in and
+/// out of ownership.
 #[driver_test]
 pub async fn optional_relation_carrying_embed(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -429,17 +421,34 @@ pub async fn optional_relation_carrying_embed(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
 
-    let orphan = Object::get_by_id(&mut db, orphan.id).await?;
+    let mut orphan = Object::get_by_id(&mut db, orphan.id).await?;
     assert!(orphan.owner.is_none());
 
-    let owned = Object::get_by_id(&mut db, owned.id).await?;
-    match owned.owner {
+    let mut owned = Object::get_by_id(&mut db, owned.id).await?;
+    match &owned.owner {
         Some(Owner::Human { id, human: rel }) => {
-            assert_eq!(id, human.id);
+            assert_eq!(*id, human.id);
             assert!(rel.is_unloaded());
         }
         other => panic!("expected Some(Owner::Human), got {other:?}"),
     }
+
+    // Assign an owner to the ownerless row and clear the owned row.
+    orphan
+        .update()
+        .owner(Some(Owner::Human {
+            id: human.id,
+            human: toasty::Deferred::default(),
+        }))
+        .exec(&mut db)
+        .await?;
+    assert!(matches!(
+        Object::get_by_id(&mut db, orphan.id).await?.owner,
+        Some(Owner::Human { .. })
+    ));
+
+    owned.update().owner(None).exec(&mut db).await?;
+    assert!(Object::get_by_id(&mut db, owned.id).await?.owner.is_none());
 
     Ok(())
 }
