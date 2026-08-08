@@ -1,10 +1,9 @@
-use crate::{Config, theme::dialoguer_theme};
+use crate::{Project, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
 use dialoguer::Select;
 use std::fs;
-use toasty::Db;
 use toasty::migration::History;
 
 /// Removes a migration from the history and deletes its files on disk.
@@ -25,8 +24,8 @@ pub struct DropCommand {
 }
 
 impl DropCommand {
-    pub(crate) fn run(self, _db: &Db, config: &Config) -> Result<()> {
-        let history_path = config.migration.get_history_file_path();
+    pub(crate) fn run(self, project: &Project) -> Result<()> {
+        let history_path = project.history_file_path();
         let mut history = History::load_or_default(&history_path)?;
 
         if history.entries().is_empty() {
@@ -71,7 +70,7 @@ impl DropCommand {
         let snapshot_name = migration.snapshot_name.clone();
 
         // Delete migration file
-        let migration_path = config.migration.get_migrations_dir().join(&migration_name);
+        let migration_path = project.migrations_dir().join(&migration_name);
         if migration_path.exists() {
             fs::remove_file(&migration_path)?;
             println!(
@@ -90,7 +89,7 @@ impl DropCommand {
         }
 
         // Delete snapshot file
-        let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
+        let snapshot_path = project.snapshots_dir().join(&snapshot_name);
         if snapshot_path.exists() {
             fs::remove_file(&snapshot_path)?;
             println!(

@@ -33,6 +33,7 @@ Guide-level design documents for specific features. Use
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
 - [Optimistic Concurrency with `#[version]`](./design/field-version.md)
 - [`query!` Macro](./design/query-macro.md)
+- [Standalone `toasty` CLI](./design/standalone-cli.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
 - [Upsert](./design/upsert.md)
 

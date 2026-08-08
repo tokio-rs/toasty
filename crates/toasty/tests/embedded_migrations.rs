@@ -68,10 +68,6 @@ impl Driver for MigrationDriver {
         Some(1)
     }
 
-    fn generate_migration(&self, _schema_diff: &diff::Schema<'_>) -> Migration {
-        Migration::new_sql(String::new())
-    }
-
     async fn reset_db(&self) -> Result<()> {
         for state in self.states.lock().unwrap().iter() {
             state.applied.lock().unwrap().clear();

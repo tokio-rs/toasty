@@ -128,7 +128,7 @@ connection URLs, and supported databases.
 [Migrations and Schema Management](./schema-management.md) for more on managing
 your database schema.
 
-> **Runnable example:** [`service-ops`] lays out a lib + binaries project with connection pooling, tracing, and the `toasty-cli` migration workflow.
+> **Runnable example:** [`service-ops`] lays out a lib + binary project with connection pooling, tracing, and migrations managed with the `toasty` CLI.
 
 > **Runnable example:** [`quickstart-blog`] walks the full create → query → update → delete cycle over a `has_many`/`belongs_to` relationship.
 

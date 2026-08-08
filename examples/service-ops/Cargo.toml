@@ -6,7 +6,6 @@ edition.workspace = true
 license.workspace = true
 readme.workspace = true
 publish = false
-default-run = "server"
 
 [features]
 default = [ "sqlite" ]
@@ -16,7 +15,6 @@ sqlite = [ "toasty/sqlite" ]
 
 [dependencies]
 toasty.workspace = true
-toasty-cli.workspace = true
 tokio.workspace = true
 uuid.workspace = true
 anyhow = "1"
@@ -25,10 +23,6 @@ tracing-subscriber.workspace = true
 [[bin]]
 name = "server"
 path = "src/bin/server.rs"
-
-[[bin]]
-name = "migrate"
-path = "src/bin/migrate.rs"
 
 [lints]
 workspace = true

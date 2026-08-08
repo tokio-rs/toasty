@@ -1,4 +1,4 @@
-use crate::{Config, theme::dialoguer_theme};
+use crate::{Flavor, Project, extract, theme::dialoguer_theme};
 use anyhow::Result;
 use clap::Parser;
 use console::style;
@@ -7,17 +7,14 @@ use hashbrown::{HashMap, HashSet};
 use rand::RngExt;
 use std::fs;
 use toasty::migration::{self, History, HistoryEntry, Snapshot};
-use toasty::{
-    Db,
-    schema::{
-        db::{ColumnId, IndexId, Migration, Schema, TableId},
-        diff,
-    },
+use toasty::schema::{
+    db::{ColumnId, IndexId, Migration, Schema, TableId},
+    diff,
 };
 
 /// Generates a new SQL migration from the current schema diff.
 ///
-/// Compares the current database schema (as registered on the [`Db`]) against
+/// Compiles the target package, extracts its schema, and compares it against
 /// the most recent snapshot. If there are differences, generates a SQL
 /// migration file, writes a new snapshot, and updates the history file.
 ///
@@ -29,9 +26,17 @@ use toasty::{
 /// files.
 #[derive(Parser, Debug)]
 pub struct GenerateCommand {
+    /// Database flavor to generate the migration for
+    #[arg(long, value_enum)]
+    flavor: Option<Flavor>,
+
     /// Name for the migration
     #[arg(short, long)]
     name: Option<String>,
+
+    /// Bin target to extract the schema from, when the package has several
+    #[arg(long)]
+    bin: Option<String>,
 }
 
 /// Collects rename hints by interactively asking the user about potential renames
@@ -228,7 +233,7 @@ fn collect_rename_hints(previous_schema: &Schema, schema: &Schema) -> Result<dif
 }
 
 impl GenerateCommand {
-    pub(crate) fn run(self, db: &Db, config: &Config) -> Result<()> {
+    pub(crate) fn run(self, project: &Project) -> Result<()> {
         println!();
         println!(
             "  {}",
@@ -236,10 +241,13 @@ impl GenerateCommand {
         );
         println!();
 
-        let history_path = config.migration.get_history_file_path();
+        let flavor = project.flavor(self.flavor)?;
+        let schema = extract::extract_schema(project, flavor, self.bin.as_deref())?;
 
-        fs::create_dir_all(config.migration.get_migrations_dir())?;
-        fs::create_dir_all(config.migration.get_snapshots_dir())?;
+        let history_path = project.history_file_path();
+
+        fs::create_dir_all(project.migrations_dir())?;
+        fs::create_dir_all(project.snapshots_dir())?;
         fs::create_dir_all(history_path.parent().unwrap())?;
 
         let mut history = History::load_or_default(&history_path)?;
@@ -247,18 +255,19 @@ impl GenerateCommand {
         let previous_snapshot = history
             .entries()
             .last()
-            .map(|f| Snapshot::load(config.migration.get_snapshots_dir().join(&f.snapshot_name)))
+            .map(|f| Snapshot::load(project.snapshots_dir().join(&f.snapshot_name)))
             .transpose()?;
         let previous_schema = previous_snapshot
             .map(|snapshot| snapshot.schema)
             .unwrap_or_else(Schema::default);
 
-        let schema = toasty::schema::db::Schema::clone(&db.schema().db);
-
         let rename_hints = collect_rename_hints(&previous_schema, &schema)?;
-        let Some(generated) =
-            migration::generate(db.driver(), &previous_schema, &schema, &rename_hints)
-        else {
+        let Some(generated) = migration::generate(
+            flavor.capability(),
+            &previous_schema,
+            &schema,
+            &rename_hints,
+        ) else {
             println!(
                 "  {}",
                 style("The current schema matches the previous snapshot. No migration needed.")
@@ -269,7 +278,7 @@ impl GenerateCommand {
             return Ok(());
         };
 
-        let migration_prefix = match config.migration.prefix_style {
+        let migration_prefix = match project.config.migration.prefix_style {
             crate::MigrationPrefixStyle::Sequential => {
                 format!("{:04}", history.next_migration_number())
             }
@@ -277,15 +286,15 @@ impl GenerateCommand {
                 jiff::Timestamp::now().strftime("%Y%m%d_%H%M%S").to_string()
             }
         };
-        let snapshot_name = format!("{migration_prefix:04}_snapshot.toml");
-        let snapshot_path = config.migration.get_snapshots_dir().join(&snapshot_name);
+        let snapshot_name = format!("{migration_prefix}_snapshot.toml");
+        let snapshot_path = project.snapshots_dir().join(&snapshot_name);
 
         let migration_name = format!(
-            "{:04}_{}.sql",
+            "{}_{}.sql",
             migration_prefix,
             self.name.as_deref().unwrap_or("migration")
         );
-        let migration_path = config.migration.get_migrations_dir().join(&migration_name);
+        let migration_path = project.migrations_dir().join(&migration_name);
 
         history.add_entry(HistoryEntry {
             // Some databases only supported signed 64-bit integers.

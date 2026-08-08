@@ -1,122 +1,69 @@
-#![warn(missing_docs)]
-//! A library for building Toasty command-line tools.
+//! The standalone `toasty` command-line tool.
 //!
-//! `toasty-cli` provides [`ToastyCli`], a ready-made CLI runner that wraps a
-//! [`toasty::Db`] handle and exposes database migration subcommands (generate,
-//! apply, drop, reset, snapshot). It uses [clap] for argument parsing and
-//! [dialoguer] for interactive prompts.
+//! Installed with `cargo install toasty-cli` and run from any Cargo package
+//! that uses Toasty. The CLI extracts the package's resolved schema by
+//! building the package's existing bin target (or its lib as a `cdylib`) and
+//! running the artifact with `TOASTY_DUMP_SCHEMA` set, which triggers a
+//! constructor inside `toasty` that dumps the schema and exits. See
+//! `docs/dev/design/standalone-cli.md` in the Toasty repository.
 //!
-//! The crate also exposes the underlying configuration used by the command
-//! runner. Reusable migration history, snapshot, and generation types live in
-//! [`toasty::migration`].
-//!
-//! # Main types
-//!
-//! - [`ToastyCli`] — parses CLI arguments and dispatches to the appropriate
-//!   migration subcommand.
-//! - [`Config`] / [`MigrationConfig`] — configure migration paths, prefix
-//!   styles, and checksum behavior. Loaded from a `Toasty.toml` file or built
-//!   programmatically.
-//! - [`toasty::migration::History`] / [`toasty::migration::HistoryEntry`] —
-//!   read and write the TOML history that tracks which migrations exist.
-//! - [`toasty::migration::Snapshot`] — read and write schema snapshot TOML
-//!   files.
-//!
-//! # Examples
-//!
-//! ```ignore
-//! use toasty_cli::ToastyCli;
-//!
-//! let db = toasty::Db::builder("sqlite::memory:").build().await?;
-//! let cli = ToastyCli::new(db);
-//! cli.parse_and_run().await?;
-//! ```
+//! This crate is a binary; the library exists for the binary and the crate's
+//! integration tests. Its API is not stable.
 
+mod cargo;
 mod config;
-mod migration;
+mod extract;
+mod flavor;
+mod load_cdylib;
+mod migrate;
+mod project;
 mod theme;
 mod utility;
 
 pub use config::Config;
-pub use migration::{
-    ApplyCommand, DropCommand, GenerateCommand, MigrationCommand, MigrationConfig,
-    MigrationPrefixStyle, ResetCommand, SnapshotCommand,
-};
+pub use flavor::Flavor;
+pub use migrate::{MigrationConfig, MigrationPrefixStyle};
+pub use project::Project;
 
 use anyhow::Result;
 use clap::Parser;
-use toasty::Db;
 
-/// A CLI runner that dispatches migration subcommands against a [`Db`].
-///
-/// `ToastyCli` holds a database connection and a [`Config`]. Call
-/// [`parse_and_run`](Self::parse_and_run) to parse `std::env::args` and
-/// execute the matching subcommand, or [`parse_from`](Self::parse_from) to
-/// parse from an arbitrary iterator (useful for testing).
-///
-/// # Examples
-///
-/// ```ignore
-/// use toasty_cli::{ToastyCli, Config, MigrationConfig};
-///
-/// let config = Config::new()
-///     .migration(MigrationConfig::new().path("db"));
-/// let db = toasty::Db::builder("sqlite::memory:").build().await?;
-/// let cli = ToastyCli::with_config(db, config);
-/// cli.parse_from(["toasty", "migration", "apply"]).await?;
-/// ```
-pub struct ToastyCli {
-    db: Db,
-    config: Config,
+/// Parses `std::env::args` and runs the matching subcommand.
+pub async fn run() -> Result<()> {
+    let cli = Cli::parse();
+    run_parsed(cli).await
 }
 
-impl ToastyCli {
-    /// Create a new ToastyCli instance with the given database connection
-    pub fn new(db: Db) -> Self {
-        Self {
-            db,
-            config: Config::default(),
+/// Parses from an explicit argument list and runs the matching subcommand.
+/// Useful for testing.
+pub async fn run_from<I, T>(args: I) -> Result<()>
+where
+    I: IntoIterator<Item = T>,
+    T: Into<std::ffi::OsString> + Clone,
+{
+    let cli = Cli::parse_from(args);
+    run_parsed(cli).await
+}
+
+async fn run_parsed(cli: Cli) -> Result<()> {
+    match cli.command {
+        Command::Migrate(cmd) => {
+            let project = Project::locate(cli.package.as_deref())?;
+            cmd.run(&project).await
         }
-    }
-
-    /// Create a new ToastyCli instance with a custom configuration
-    pub fn with_config(db: Db, config: Config) -> Self {
-        Self { db, config }
-    }
-
-    /// Get a reference to the configuration
-    pub fn config(&self) -> &Config {
-        &self.config
-    }
-
-    /// Parse and execute CLI commands from command-line arguments
-    pub async fn parse_and_run(&self) -> Result<()> {
-        let cli = Cli::parse();
-        self.run(cli).await
-    }
-
-    /// Parse and execute CLI commands from an iterator of arguments
-    pub async fn parse_from<I, T>(&self, args: I) -> Result<()>
-    where
-        I: IntoIterator<Item = T>,
-        T: Into<std::ffi::OsString> + Clone,
-    {
-        let cli = Cli::parse_from(args);
-        self.run(cli).await
-    }
-
-    async fn run(&self, cli: Cli) -> Result<()> {
-        match cli.command {
-            Command::Migration(cmd) => cmd.run(&self.db, &self.config).await,
-        }
+        Command::LoadCdylib(cmd) => cmd.run(),
     }
 }
 
 #[derive(Parser, Debug)]
 #[command(name = "toasty")]
-#[command(about = "Toasty CLI - Database migration and management tool")]
+#[command(about = "Toasty schema management and migrations")]
 #[command(version)]
 struct Cli {
+    /// Package to operate on, when the workspace has more than one
+    #[arg(short, long, global = true, value_name = "PKG")]
+    package: Option<String>,
+
     #[command(subcommand)]
     command: Command,
 }
@@ -124,5 +71,13 @@ struct Cli {
 #[derive(Parser, Debug)]
 enum Command {
     /// Database migration commands
-    Migration(migration::MigrationCommand),
+    #[command(alias = "migration")]
+    Migrate(migrate::MigrateCommand),
+
+    /// Internal: load a cdylib so its schema-dump constructor runs.
+    ///
+    /// Only invoked by `toasty` itself while extracting a schema from a
+    /// lib-only package.
+    #[command(name = "__load-cdylib", hide = true)]
+    LoadCdylib(load_cdylib::LoadCdylibCommand),
 }

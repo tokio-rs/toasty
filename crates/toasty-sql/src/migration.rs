@@ -1,13 +1,14 @@
 use std::borrow::Cow;
 
 use toasty_core::{
-    driver::Capability,
+    driver::{Capability, Dialect},
     schema::{
-        db::{Column, Schema, Table, TableId, Type, TypeEnum},
+        db::{Column, Migration, Schema, Table, TableId, Type, TypeEnum},
         diff,
     },
 };
 
+use crate::Serializer;
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
 
 /// Returns `true` if the only difference between two columns is the variant
@@ -40,6 +41,42 @@ fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
                 Some(TypeEnum { name: Some(b), .. }),
             ) if a == b
         )
+}
+
+/// Generates the SQL [`Migration`] for a schema diff.
+///
+/// Produces the DDL statements for the diff via
+/// [`MigrationStatement::from_diff`] and serializes each one in the dialect
+/// named by `capability.sql`. On PostgreSQL the statements form a single
+/// batch; other dialects separate them with breakpoint markers so drivers
+/// that execute one statement at a time can split them back apart.
+///
+/// # Panics
+///
+/// Panics if `capability` does not speak SQL (`capability.sql` is `None`).
+pub fn generate_migration(schema_diff: &diff::Schema<'_>, capability: &Capability) -> Migration {
+    let dialect = capability
+        .sql
+        .expect("cannot generate a SQL migration for a non-SQL capability");
+
+    let statements = MigrationStatement::from_diff(schema_diff, capability);
+
+    let sql_strings: Vec<String> = statements
+        .iter()
+        .map(|stmt| {
+            let serializer = match dialect {
+                Dialect::Sqlite => Serializer::sqlite(stmt.schema()),
+                Dialect::Postgresql => Serializer::postgresql(stmt.schema()),
+                Dialect::Mysql => Serializer::mysql(stmt.schema()),
+            };
+            serializer.serialize(stmt.statement())
+        })
+        .collect();
+
+    match dialect {
+        Dialect::Postgresql => Migration::new_sql(sql_strings.join("\n")),
+        Dialect::Sqlite | Dialect::Mysql => Migration::new_sql_with_breakpoints(&sql_strings),
+    }
 }
 
 /// A migration step pairing a DDL [`Statement`] with the [`Schema`] it applies against.

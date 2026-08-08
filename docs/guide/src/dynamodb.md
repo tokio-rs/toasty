@@ -389,9 +389,10 @@ tables plus one auxiliary table per unique index — with the GSIs and
 attribute definitions filled in from the model. Tables are created
 with on-demand billing.
 
-`generate_migration` and `apply_migration` are not implemented and
-will panic if called. The driver does not change column types, add
-GSIs, or rename attributes on an existing table — DynamoDB itself
+The `toasty` CLI does not generate migrations for DynamoDB, and the
+driver's `apply_migration` panics if called. The driver does not
+change column types, add GSIs, or rename attributes on an existing
+table — DynamoDB itself
 treats most of those as expensive or impossible operations, and Toasty
 does not paper over the difference.
 

@@ -16,7 +16,7 @@ documentation = "https://docs.rs/toasty"
 [features]
 default = ["rustls"]
 dynamodb = ["dep:toasty-driver-dynamodb"]
-migration = ["dep:serde", "dep:toml", "dep:toml_edit", "toasty-core/migration"]
+migration = ["dep:toml", "dep:toml_edit", "dep:toasty-sql", "toasty-core/migration"]
 mysql = ["dep:toasty-driver-mysql"]
 native-tls = ["toasty-driver-mysql?/native-tls"]
 postgresql = ["dep:toasty-driver-postgresql"]
@@ -47,12 +47,14 @@ jiff = [
 	"toasty-driver-sqlite?/jiff",
 	"toasty-driver-turso?/jiff",
 ]
-serde = ["dep:serde_core", "dep:serde_json"]
+serde = ["dep:serde_core"]
 
 [dependencies]
 async-trait.workspace = true
 toasty-macros.workspace = true
-toasty-core.workspace = true
+toasty-core = { workspace = true, features = ["serde"] }
+toasty-sql = { workspace = true, optional = true }
+linktime.workspace = true
 
 # Built-in database drivers
 toasty-driver-dynamodb = { workspace = true, optional = true }
@@ -61,7 +63,7 @@ toasty-driver-postgresql = { workspace = true, optional = true }
 toasty-driver-sqlite = { workspace = true, optional = true }
 toasty-driver-turso = { workspace = true, optional = true }
 serde_core = { version = "1.0.228", optional = true }
-serde_json = { workspace = true, optional = true }
+serde_json.workspace = true
 
 bit-set.workspace = true
 by_address.workspace = true
@@ -75,7 +77,7 @@ uuid.workspace = true
 indexmap.workspace = true
 index_vec.workspace = true
 inventory.workspace = true
-serde = { workspace = true, optional = true }
+serde.workspace = true
 tokio.workspace = true
 toml = { workspace = true, optional = true }
 toml_edit = { workspace = true, features = ["serde"], optional = true }
