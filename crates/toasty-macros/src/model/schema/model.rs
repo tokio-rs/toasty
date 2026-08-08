@@ -1,5 +1,5 @@
 use super::{
-    Column, ColumnType, ErrorSet, Field, Index, IndexField, IndexScope, ModelAttr, Name,
+    Column, ColumnType, ErrorSet, Field, FieldTy, Index, IndexField, IndexScope, ModelAttr, Name,
     PrimaryKey, Variant, VariantValue,
 };
 use heck::ToSnakeCase;
@@ -197,6 +197,17 @@ impl Model {
                             shared,
                             "#[shared] is only supported on enum variant fields; \
                              it declares a logical field shared across variants",
+                        ));
+                    }
+
+                    if is_embedded
+                        && !matches!(field.ty, FieldTy::Primitive(_))
+                        && field.attrs.is_indexed()
+                    {
+                        errs.push(syn::Error::new_spanned(
+                            &field.name.ident,
+                            "a relation field cannot be indexed; index its foreign \
+                             key field(s) instead",
                         ));
                     }
 
@@ -456,10 +467,20 @@ impl Model {
                 .filter_map(|ast_field| ast_field.ident.clone())
                 .collect::<Vec<_>>();
 
+            let variant_base = global_field_index;
             for (index, ast_field) in ast_fields.iter().enumerate() {
                 let mut field =
                     Field::from_ast(ast_field, &model_ident, global_field_index, index, &names)?;
                 field.variant = Some(variant_index);
+                // `BelongsTo::from_ast` resolves `key` against the variant's
+                // own field list, so the recorded source indices are
+                // variant-local. Schema `FieldId`s use global indices; shift
+                // by the variant's base offset.
+                if let FieldTy::BelongsTo(rel) = &mut field.ty {
+                    for fk_field in &mut rel.foreign_key {
+                        fk_field.source += variant_base;
+                    }
+                }
                 all_fields.push(field);
                 global_field_index += 1;
             }
@@ -509,6 +530,29 @@ impl Model {
                         s,
                         s.len()
                     ),
+                ));
+            }
+        }
+
+        // A relation field maps to no column, so storage-shaping attributes
+        // do not apply: sharing and indexing target the sibling key fields
+        // that own the storage.
+        for field in &all_fields {
+            if matches!(field.ty, FieldTy::Primitive(_)) {
+                continue;
+            }
+            if let Some(shared) = &field.attrs.shared {
+                errs.push(syn::Error::new_spanned(
+                    shared,
+                    "#[shared] cannot be used on a relation field; declare it \
+                     on the foreign key field instead",
+                ));
+            }
+            if field.attrs.is_indexed() {
+                errs.push(syn::Error::new_spanned(
+                    &field.name.ident,
+                    "a relation field cannot be indexed; index its foreign \
+                     key field(s) instead",
                 ));
             }
         }

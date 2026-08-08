@@ -1,0 +1,41 @@
+error[E0080]: evaluation panicked: a relation stored in an embedded type must be wrapped in `toasty::Deferred`
+  --> tests/ui/embed_relation_not_deferred.rs:18:16
+   |
+18 |         human: Human,
+   |                ^^^^^ evaluation of `_::_` failed here
+
+error[E0308]: mismatched types
+  --> tests/ui/embed_relation_not_deferred.rs:12:17
+   |
+12 | #[derive(Debug, toasty::Embed)]
+   |                 ^^^^^^^^^^^^^
+   |                 |
+   |                 expected `&Deferred<_>`, found `&Human`
+   |                 arguments to this function are incorrect
+   |
+   = note: expected reference `&Deferred<_>`
+              found reference `&Human`
+note: function defined here
+  --> $WORKSPACE/crates/toasty/src/codegen_support.rs
+   |
+   | pub fn embedded_relation_expr<T>(value: &Deferred<T>) -> core::stmt::Expr {
+   |        ^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)
+
+error[E0308]: mismatched types
+  --> tests/ui/embed_relation_not_deferred.rs:12:17
+   |
+12 | #[derive(Debug, toasty::Embed)]
+   |                 ^^^^^^^^^^^^^
+   |                 |
+   |                 expected `&Deferred<_>`, found `&&Human`
+   |                 arguments to this function are incorrect
+   |
+   = note: expected reference `&Deferred<_>`
+              found reference `&&Human`
+note: function defined here
+  --> $WORKSPACE/crates/toasty/src/codegen_support.rs
+   |
+   | pub fn embedded_relation_expr<T>(value: &Deferred<T>) -> core::stmt::Expr {
+   |        ^^^^^^^^^^^^^^^^^^^^^^
+   = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)

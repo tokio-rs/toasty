@@ -458,11 +458,22 @@ impl Expand<'_> {
         let toasty = &self.toasty;
 
         // For embedded types, create a record expression from all fields
-        // Currently only primitive fields are supported in embedded types
         let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
-                _ => panic!("only primitive fields are supported in embedded types"),
+                FieldTy::BelongsTo(_) => {
+                    // The relation slot encodes as `Null`; the sibling key
+                    // fields carry the storage.
+                    let access = if fields_named {
+                        let field_ident = &field.name.ident;
+                        quote!(self.#field_ident)
+                    } else {
+                        let idx = syn::Index::from(index);
+                        quote!(self.#idx)
+                    };
+                    return quote!(#toasty::embedded_relation_expr(&#access));
+                }
+                _ => panic!("only primitive and belongs_to fields are supported in embedded types"),
             };
 
             let value = if fields_named {

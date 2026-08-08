@@ -215,11 +215,21 @@ impl Expand<'_> {
                     .variant_fields(variant_index)
                     .iter()
                     .enumerate()
-                    .map(|(field_index, field)| {
+                    .filter_map(|(field_index, field)| {
+                        // A relation field has no filter path yet; only its
+                        // key fields are queryable. The offset comes from the
+                        // enumeration before this filter, so skipping does not
+                        // shift later fields.
+                        let FieldTy::Primitive(field_ty) = &field.ty else {
+                            return None;
+                        };
                         let field_ident = &field.name.ident;
-                        let field_ty = primitive_ty_unwrap(field);
                         let field_offset = util::int(field_index);
-                        self.expand_primitive_field_method(field_ident, field_ty, &field_offset)
+                        Some(self.expand_primitive_field_method(
+                            field_ident,
+                            field_ty,
+                            &field_offset,
+                        ))
                     })
                     .collect();
 
@@ -388,6 +398,63 @@ impl Expand<'_> {
             .map(|field| {
                 let index = util::int(field.id);
                 let app_name = field.name.as_str();
+                let variant_index = field.variant.expect("enum field must have variant");
+                let variant_idx = util::int(variant_index);
+
+                // A relation field owns no storage: the sibling key fields map
+                // to columns, the relation itself registers only its schema
+                // entry (target + foreign key).
+                if let FieldTy::BelongsTo(rel) = &field.ty {
+                    let ty = &rel.ty;
+                    let fk_fields = rel.foreign_key.iter().map(|fk_field| {
+                        let source = util::int(fk_field.source);
+                        let target = fk_field.target.to_string();
+
+                        quote! {
+                            #toasty::core::schema::app::ForeignKeyField {
+                                source: #toasty::core::schema::app::FieldId {
+                                    model: id,
+                                    index: #source,
+                                },
+                                target: {
+                                    type __RelationTarget =
+                                        <#ty as #toasty::RelationOneField>::Target;
+                                    <__RelationTarget as #toasty::Model>::field_name_to_id(#target)
+                                },
+                            }
+                        }
+                    });
+
+                    return quote! {
+                        #toasty::core::schema::app::Field {
+                            id: #toasty::core::schema::app::FieldId {
+                                model: id,
+                                index: #index,
+                            },
+                            name: #toasty::core::schema::app::FieldName {
+                                app: Some(#app_name.to_string()),
+                                storage: None,
+                            },
+                            ty: <#ty as #toasty::RelationOneField>::belongs_to_relation_field_ty(
+                                #toasty::core::schema::app::ForeignKey {
+                                    fields: vec![ #( #fk_fields ),* ],
+                                },
+                            ),
+                            nullable: <#ty as #toasty::RelationOneField>::NULLABLE,
+                            primary_key: false,
+                            auto: None,
+                            versionable: false,
+                            deferred: <#ty as #toasty::RelationOneField>::DEFERRED,
+                            constraints: vec![],
+                            variant: Some(#toasty::core::schema::app::VariantId {
+                                model: id,
+                                index: #variant_idx,
+                            }),
+                            shared: None,
+                        }
+                    };
+                }
+
                 // A `#[column("name")]` on a variant field overrides its
                 // database column name. For a `#[shared]` field, the override
                 // declared by any member of the group applies to all of them.
@@ -429,8 +496,6 @@ impl Expand<'_> {
                     }
                     None => quote! { None },
                 };
-                let variant_index = field.variant.expect("enum field must have variant");
-                let variant_idx = util::int(variant_index);
                 quote! {
                     #toasty::core::schema::app::Field {
                         id: #toasty::core::schema::app::FieldId {
@@ -676,7 +741,7 @@ impl Expand<'_> {
                         .enumerate()
                         .map(|(i, field)| {
                             let field_ident = &field.name.ident;
-                            let ty = primitive_ty_unwrap(field);
+                            let ty = loadable_ty(field);
                             let record_pos = util::int(i + 1);
                             let load = quote! {
                                 <#ty as #toasty::Load>::load(record[#record_pos].take())?
@@ -751,8 +816,17 @@ impl Expand<'_> {
 
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
-                        let ty = primitive_ty_unwrap(field);
-                        quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#field_ident))
+                        match &field.ty {
+                            // The relation slot encodes as `Null`; the sibling
+                            // key fields carry the storage.
+                            FieldTy::BelongsTo(_) => {
+                                quote!(#toasty::embedded_relation_expr(&#field_ident))
+                            }
+                            _ => {
+                                let ty = primitive_ty_unwrap(field);
+                                quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#field_ident))
+                            }
+                        }
                     });
 
                     quote! {
@@ -848,6 +922,17 @@ fn primitive_ty_unwrap(field: &crate::model::schema::Field) -> &syn::Type {
     match &field.ty {
         FieldTy::Primitive(ty) => ty,
         _ => panic!("expected primitive field type for enum variant field"),
+    }
+}
+
+/// The Rust type a variant field loads through. A relation field loads
+/// through its declared type (`Deferred<..>`); the engine supplies `Null`
+/// for its record slot, which decodes to the unloaded state.
+fn loadable_ty(field: &crate::model::schema::Field) -> &syn::Type {
+    match &field.ty {
+        FieldTy::Primitive(ty) => ty,
+        FieldTy::BelongsTo(rel) => &rel.ty,
+        _ => panic!("unsupported field type in embedded enum"),
     }
 }
 
