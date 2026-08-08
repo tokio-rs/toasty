@@ -107,11 +107,7 @@ impl Simplify<'_> {
             (Expr::Cast(cast), Expr::Value(value)) | (Expr::Value(value), Expr::Cast(cast))
                 if (op.is_eq() || op.is_ne()) && cast.from.is_none() && cast.expr.is_column() =>
             {
-                let target_ty = self.capability.native_type_for(&cast.ty);
-                let value = target_ty
-                    .cast(self.cx.schema(), value.take())
-                    .expect("failed to cast value");
-                Some(Expr::binary_op(cast.expr.take(), op, value))
+                self.strip_decode_cast_comparison(op, cast, value)
             }
             // Self-comparison with projections, e.g.,
             //
@@ -148,6 +144,33 @@ impl Simplify<'_> {
         // Relation-path-comparison and IN-subquery lifting fire in the
         // pre-lowering `lower::lift_in_subquery::*` pass, not here.
         None
+    }
+
+    /// `cast(col, T) <eq/ne> const` → `col <eq/ne> const'`, where `const'` is
+    /// the constant converted to `col`'s stored type.
+    ///
+    /// The target type comes from the referenced column, not from
+    /// `Capability::native_type_for(T)`: a `#[column(type = ...)]` override
+    /// can store the value in a different type than the backend's default
+    /// (e.g. a text-stored UUID on SQLite, whose default UUID storage is a
+    /// blob). Bails on anything that does not resolve to a physical column.
+    fn strip_decode_cast_comparison(
+        &mut self,
+        op: stmt::BinaryOp,
+        cast: &mut stmt::ExprCast,
+        value: &mut stmt::Value,
+    ) -> Option<Expr> {
+        let expr_reference = cast.expr.as_expr_reference()?;
+
+        let ResolvedRef::Column(column) = self.cx.resolve_expr_reference(expr_reference) else {
+            return None;
+        };
+
+        let value = column
+            .ty
+            .cast(self.cx.schema(), value.take())
+            .expect("failed to cast value");
+        Some(Expr::binary_op(cast.expr.take(), op, value))
     }
 
     /// Returns `true` if `expr` is a column reference that resolves to a

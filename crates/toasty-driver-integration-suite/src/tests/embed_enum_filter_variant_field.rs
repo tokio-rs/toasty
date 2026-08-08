@@ -172,3 +172,59 @@ pub async fn filter_variant_field_with_cast_storage(t: &mut Test) -> Result<()> 
 
     Ok(())
 }
+
+/// Same as above, but the variant field overrides its storage type away from
+/// the backend default (`#[column(type = text)]` UUID; SQLite's default UUID
+/// storage is a blob). The comparison constant must be converted to the
+/// referenced column's stored type, not the backend default for the model
+/// type — the latter silently matches zero rows.
+#[driver_test(requires(sql))]
+pub async fn filter_variant_field_with_storage_override(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Owner {
+        #[column(variant = 1)]
+        Human {
+            #[column(type = text)]
+            id: uuid::Uuid,
+        },
+        #[column(variant = 2)]
+        Animal { tag: uuid::Uuid },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+
+    let mut db = t.setup_db(models!(Object)).await;
+
+    let target = uuid::Uuid::new_v4();
+    let expected = toasty::create!(Object {
+        owner: Owner::Human { id: target }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        owner: Owner::Human {
+            id: uuid::Uuid::new_v4()
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found = Object::filter(
+        Object::fields()
+            .owner()
+            .human()
+            .matches(|h| h.id().eq(target)),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, expected.id);
+
+    Ok(())
+}
