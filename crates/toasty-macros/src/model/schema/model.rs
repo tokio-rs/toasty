@@ -200,7 +200,7 @@ impl Model {
                         ));
                     }
 
-                    if is_embedded && !field.ty.is_primitive() && field.attrs.is_indexed() {
+                    if !field.ty.is_primitive() && field.attrs.is_indexed() {
                         errs.push(syn::Error::new_spanned(
                             &field.name.ident,
                             "a relation field cannot be indexed; index its foreign \
@@ -211,6 +211,28 @@ impl Model {
                     fields.push(field);
                 }
                 Err(err) => errs.push(err),
+            }
+        }
+
+        // Struct-level #[index(...)] / #[unique(...)] targets must own
+        // storage; a relation field maps to no column. `KeyAttr::from_ast`
+        // validates that each name exists, so an unresolved name here means
+        // an earlier field failed to parse and its error is already queued.
+        for index_attr in &model_attr.indices {
+            for ident in index_attr.partition.iter().chain(&index_attr.local) {
+                let field = names
+                    .iter()
+                    .position(|name| name == ident)
+                    .and_then(|offset| fields.get(offset));
+                if let Some(field) = field
+                    && !field.ty.is_primitive()
+                {
+                    errs.push(syn::Error::new_spanned(
+                        ident,
+                        "a relation field cannot be indexed; index its foreign \
+                         key field(s) instead",
+                    ));
+                }
             }
         }
 
@@ -866,6 +888,14 @@ fn resolve_enum_index_field(
                         "`{variant_ident}::{field_ident}` declares #[shared({shared})]; \
                          reference the shared field instead: `{shared}`"
                     ),
+                ));
+            }
+
+            if !field.ty.is_primitive() {
+                return Err(syn::Error::new_spanned(
+                    path,
+                    "a relation field cannot be indexed; index its foreign \
+                     key field(s) instead",
                 ));
             }
 

@@ -1,0 +1,5 @@
+error: a relation field cannot be indexed; index its foreign key field(s) instead
+  --> tests/ui/belongs_to_field_indexed.rs:21:5
+   |
+21 |     author: toasty::BelongsTo<Human>,
+   |     ^^^^^^
