@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use toasty::stmt::Page;
+use toasty_core::{driver::Operation, stmt::Expr};
 
 /// Scan with no filter predicate returns all rows.
 #[driver_test]
@@ -104,6 +105,52 @@ pub async fn scan_update_by_filter(t: &mut Test) -> Result<()> {
     assert_eq!("old", results[0].label);
     assert_eq!("new", results[1].label);
     assert_eq!("new", results[2].label);
+
+    Ok(())
+}
+
+/// Unfiltered bulk UPDATE — every row goes through the scan path. The scan
+/// and the per-key updates are separate round trips, so each update must
+/// carry an existence guard: an unconditioned key-value update of a key whose
+/// row was deleted after the scan would recreate the row as a partial item.
+#[driver_test]
+pub async fn scan_update_no_filter_carries_existence_guard(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        label: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { label: "old" },
+        { label: "old" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+
+    Item::all().update().label("new").exec(&mut db).await?;
+
+    if !t.capability().sql() {
+        assert_struct!(t.log().pop_op(), Operation::Scan(_));
+        for _ in 0..2 {
+            assert_struct!(t.log().pop_op(), Operation::UpdateByKey(_ {
+                filter: Some(Expr::Not(_)),
+                ..
+            }));
+        }
+        assert!(t.log().is_empty());
+    }
+
+    let results: Vec<Item> = Item::all().exec(&mut db).await?;
+
+    assert_eq!(2, results.len());
+    assert!(results.iter().all(|r| r.label == "new"));
 
     Ok(())
 }

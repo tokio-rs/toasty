@@ -1476,6 +1476,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .map(|index_column| stmt::ExprReference::column(0, index_column.column.index))
             .collect();
 
+        let guard_column = primary_key.columns[0].column.index;
+
         let key_ty = self.table_primary_key_ty(table_id);
         let keys = self.plan_scan_execution(stmt, key_columns, key_ty)?;
 
@@ -1488,7 +1490,21 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         // update of a missing key inserts it.
         let filter = {
             let expr = stmt.filter_expr_unwrap();
-            (!expr.is_true()).then(|| expr.clone())
+            if !expr.is_true() {
+                Some(expr.clone())
+            } else if stmt.is_update() {
+                // An unfiltered bulk update has no predicate to re-check, but
+                // it must still only touch rows that exist. Guard on the first
+                // key column — present on every stored row — so a key whose
+                // row vanished since the scan is skipped, not resurrected.
+                Some(stmt::Expr::not(stmt::Expr::is_null(
+                    stmt::Expr::ref_column(0, guard_column),
+                )))
+            } else {
+                // A key-value delete of a missing key is already a no-op, so
+                // an unfiltered bulk delete needs no guard.
+                None
+            }
         };
 
         Ok(self.build_key_operation_for_table(stmt, table_id, filter, keys, &stmt::Type::Unit))
