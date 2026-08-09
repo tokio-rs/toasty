@@ -14,7 +14,10 @@ use syn::spanned::Spanned;
 /// that plain Rust would reject (missing key field, mismatched relation
 /// type) — as a `create!` / `update!` field value. Complete literals keep
 /// their meaning: every field maps to the builder setter of the same name,
-/// and an unloaded `Deferred` sets nothing.
+/// and an unloaded `Deferred` sets nothing. The builder panics when a
+/// required field ends up unset — neither written in the literal nor
+/// filled from a loaded relation value — restoring the exhaustiveness
+/// check the rewrite takes away from Rust.
 ///
 /// Returns `None` — leaving the expression untouched — unless the literal
 /// syntactically names a variant: at least two path segments with the last

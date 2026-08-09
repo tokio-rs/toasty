@@ -369,6 +369,21 @@ impl Expand<'_> {
                 let discriminant_expr =
                     self.expand_discriminant_value_expr(&variant.attrs.discriminant);
 
+                // Foreign-key source field id → the relation field that can
+                // fill it from a loaded parent value.
+                let key_sources: std::collections::HashMap<usize, &syn::Ident> = fields
+                    .iter()
+                    .filter_map(|field| match &field.ty {
+                        FieldTy::BelongsTo(rel) => Some((field, rel)),
+                        _ => None,
+                    })
+                    .flat_map(|(field, rel)| {
+                        rel.foreign_key
+                            .iter()
+                            .map(move |fk_field| (fk_field.source, &field.name.ident))
+                    })
+                    .collect();
+
                 let setters = fields.iter().enumerate().map(|(local, field)| {
                     let field_ident = &field.name.ident;
                     let slot = util::int(local + 1);
@@ -434,6 +449,35 @@ impl Expand<'_> {
                     }
                 });
 
+                // The `create!` / `update!` literal rewrite bypasses Rust's
+                // struct-literal exhaustiveness check, so a required slot
+                // could otherwise reach the statement as `Null` and persist
+                // a row that fails to decode. No setter can produce `Null`
+                // for a non-nullable field, so a `Null` slot at `into_expr`
+                // time means unset.
+                let required_checks = fields.iter().enumerate().filter_map(|(local, field)| {
+                    let FieldTy::Primitive(ty) = &field.ty else {
+                        return None;
+                    };
+                    let slot = util::int(local + 1);
+                    let msg = match key_sources.get(&field.id) {
+                        Some(rel_ident) => format!(
+                            "cannot build `{}::{}` expression: key field `{}` is not set \
+                             and relation `{}` has no loaded value to fill it from",
+                            model_ident, variant.ident, field.name.ident, rel_ident,
+                        ),
+                        None => format!(
+                            "cannot build `{}::{}` expression: missing required field `{}`",
+                            model_ident, variant.ident, field.name.ident,
+                        ),
+                    };
+                    Some(quote! {
+                        if !<#ty as #toasty::Field>::NULLABLE && slots[#slot].is_value_null() {
+                            ::std::panic!(#msg);
+                        }
+                    })
+                }).collect::<Vec<_>>();
+
                 quote! {
                     #[derive(Clone)]
                     #vis struct #builder_ident {
@@ -470,6 +514,7 @@ impl Expand<'_> {
                                     *slot = key;
                                 }
                             }
+                            #( #required_checks )*
                             #toasty::stmt::Expr::from_untyped(
                                 #toasty::core::stmt::Expr::record_from_vec(slots)
                             )
