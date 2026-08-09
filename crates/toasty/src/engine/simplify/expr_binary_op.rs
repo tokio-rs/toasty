@@ -109,6 +109,23 @@ impl Simplify<'_> {
             {
                 self.strip_decode_cast_comparison(op, cast, value)
             }
+            // Decode-cast stripping on column-versus-column comparisons —
+            // e.g. one embedded relation compared to another, where both
+            // sides substitute to key columns. A value has one canonical
+            // stored encoding, so when both columns store the same type and
+            // decode to the same type, comparing the stored forms is
+            // equivalent to comparing the decoded forms; drop both casts so
+            // the driver compares the bare columns.
+            (Expr::Cast(lhs_cast), Expr::Cast(rhs_cast))
+                if (op.is_eq() || op.is_ne())
+                    && lhs_cast.from.is_none()
+                    && rhs_cast.from.is_none()
+                    && lhs_cast.expr.is_column()
+                    && rhs_cast.expr.is_column()
+                    && lhs_cast.ty == rhs_cast.ty =>
+            {
+                self.strip_decode_cast_column_comparison(op, lhs_cast, rhs_cast)
+            }
             // Self-comparison with projections, e.g.,
             //
             //  - `address.city = address.city` → `true`
@@ -174,6 +191,35 @@ impl Simplify<'_> {
             .cast(self.cx.schema(), value.take())
             .expect("failed to cast value");
         Some(Expr::binary_op(cast.expr.take(), op, value))
+    }
+
+    /// Rewrites `cast(col_a, T) <eq/ne> cast(col_b, T)` to
+    /// `col_a <eq/ne> col_b` when both columns store the same type. Bails —
+    /// leaving the casts in place — when either side does not resolve to a
+    /// physical column or the stored types differ (a `#[column(type = ...)]`
+    /// override on one side), where stored-form comparison would be
+    /// meaningless.
+    fn strip_decode_cast_column_comparison(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs: &mut stmt::ExprCast,
+        rhs: &mut stmt::ExprCast,
+    ) -> Option<Expr> {
+        let lhs_reference = lhs.expr.as_expr_reference()?;
+        let rhs_reference = rhs.expr.as_expr_reference()?;
+
+        let ResolvedRef::Column(lhs_column) = self.cx.resolve_expr_reference(lhs_reference) else {
+            return None;
+        };
+        let ResolvedRef::Column(rhs_column) = self.cx.resolve_expr_reference(rhs_reference) else {
+            return None;
+        };
+
+        if lhs_column.ty != rhs_column.ty {
+            return None;
+        }
+
+        Some(Expr::binary_op(lhs.expr.take(), op, rhs.expr.take()))
     }
 
     /// Returns `true` if `expr` is a column reference that resolves to a

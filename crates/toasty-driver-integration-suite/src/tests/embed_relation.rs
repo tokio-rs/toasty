@@ -840,3 +840,91 @@ pub async fn filter_struct_embed_relation_by_model_value(test: &mut Test) -> Res
 
     Ok(())
 }
+
+/// Comparing one embedded relation to another substitutes the key on both
+/// sides of the comparison. Rewriting only one side would leave the other
+/// as the relation's storage-less record slot, which lowers to `Null` and
+/// matches nothing.
+#[driver_test]
+pub async fn compare_embedded_relation_to_embedded_relation(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Author {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Attribution {
+        #[index]
+        author_id: uuid::Uuid,
+        #[belongs_to(key = author_id)]
+        author: toasty::Deferred<Author>,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Review {
+        #[index]
+        reviewer_id: uuid::Uuid,
+        #[belongs_to(key = reviewer_id)]
+        reviewer: toasty::Deferred<Author>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        attribution: Attribution,
+        review: Review,
+    }
+
+    let mut db = test.setup_db(models!(Post, Author)).await;
+
+    let ann = toasty::create!(Author { name: "Ann" })
+        .exec(&mut db)
+        .await?;
+    let bea = toasty::create!(Author { name: "Bea" })
+        .exec(&mut db)
+        .await?;
+
+    // Ann reviewed her own post; Ann also reviewed Bea's post.
+    let self_reviewed = toasty::create!(Post {
+        attribution: Attribution {
+            author_id: ann.id,
+            author: toasty::Deferred::default(),
+        },
+        review: Review {
+            reviewer_id: ann.id,
+            reviewer: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Post {
+        attribution: Attribution {
+            author_id: bea.id,
+            author: toasty::Deferred::default(),
+        },
+        review: Review {
+            reviewer_id: ann.id,
+            reviewer: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found: Vec<Post> = Post::filter(
+        Post::fields()
+            .attribution()
+            .author()
+            .eq(Post::fields().review().reviewer()),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, self_reviewed.id);
+
+    Ok(())
+}

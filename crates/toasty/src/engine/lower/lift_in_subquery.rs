@@ -629,7 +629,10 @@ fn lift_relation_path_predicate(
 /// typed layer fused next to the comparison (see `resolve_embedded_relation`).
 ///
 /// Returns `true` when an operand was substituted; the binary op itself
-/// stays in place.
+/// stays in place. Both operands are checked — comparing one embedded
+/// relation to another (key-versus-key) substitutes both sides; stopping
+/// at the first would leave the other side lowering to its storage-less
+/// `Null` slot.
 fn rewrite_embedded_relation_operand(
     cx: &ExprContext,
     e: &mut stmt::ExprBinaryOp,
@@ -639,16 +642,18 @@ fn rewrite_embedded_relation_operand(
         return false;
     }
 
+    let mut rewrote = false;
+
     for side in [&mut e.lhs, &mut e.rhs] {
         if let Some(resolved) = resolve_embedded_relation(cx, side, gates)
             && resolved.tail.is_empty()
         {
             **side = resolved.key_expr;
-            return true;
+            rewrote = true;
         }
     }
 
-    false
+    rewrote
 }
 
 /// A comparison whose one side projects *through* an embedded relation into
