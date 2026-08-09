@@ -87,3 +87,50 @@ pub async fn delete_by_key_with_unmatched_filter_and_unique_index(t: &mut Test) 
 
     Ok(())
 }
+
+/// Same as above, but the filter is a native operator (`starts_with`) rather
+/// than a plain comparison. Adjudicating the transaction cancellation
+/// re-evaluates the filter in-memory, so the evaluator must cover every
+/// operator the driver accepts as a write condition.
+#[driver_test]
+pub async fn delete_by_key_with_unmatched_starts_with_filter_and_unique_index(
+    t: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+
+        #[unique]
+        email: String,
+
+        category: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    let item = toasty::create!(Item {
+        email: "alice@example.com",
+        category: "keep",
+    })
+    .exec(&mut db)
+    .await?;
+
+    Item::filter(
+        Item::fields()
+            .id()
+            .eq(item.id)
+            .and(Item::fields().category().starts_with("drop".to_string())),
+    )
+    .delete()
+    .exec(&mut db)
+    .await?;
+
+    let remaining: Vec<Item> = Item::all().exec(&mut db).await?;
+
+    assert_eq!(1, remaining.len());
+    assert_eq!("keep", remaining[0].category);
+
+    Ok(())
+}

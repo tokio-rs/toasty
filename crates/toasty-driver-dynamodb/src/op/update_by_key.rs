@@ -725,4 +725,22 @@ mod tests {
         let item = item_with_status("inactive");
         assert!(filter_failed(Some(&item), &table, Some(&filter)));
     }
+
+    // Native-operator filters (here `begins_with`) must be evaluable in-memory,
+    // not just plain comparisons.
+    #[test]
+    fn starts_with_filter_is_adjudicated() {
+        let table = make_table();
+        let filter = Expr::starts_with(Expr::ref_column(0, 0), "act");
+        assert!(!filter_failed(
+            Some(&item_with_status("active")),
+            &table,
+            Some(&filter)
+        ));
+        assert!(filter_failed(
+            Some(&item_with_status("inactive")),
+            &table,
+            Some(&filter)
+        ));
+    }
 }

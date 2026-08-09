@@ -214,6 +214,15 @@ impl Expr {
                     }),
                 }
             }
+            Expr::Between(expr_between) => {
+                let value = expr_between.expr.eval_ref(scope, input)?;
+                let low = expr_between.low.eval_ref(scope, input)?;
+                let high = expr_between.high.eval_ref(scope, input)?;
+
+                Ok((cmp_ordered(&value, &low)? != Ordering::Less
+                    && cmp_ordered(&value, &high)? != Ordering::Greater)
+                    .into())
+            }
             Expr::Cast(expr_cast) => {
                 let value = expr_cast.expr.eval_ref(scope, input)?;
                 expr_cast
@@ -362,6 +371,29 @@ impl Expr {
 
                 Ok(items.iter().any(|item| item == &needle).into())
             }
+            Expr::StartsWith(expr_starts_with) => {
+                let value = expr_starts_with.expr.eval_ref(scope, input)?;
+                let prefix = expr_starts_with.prefix.eval_ref(scope, input)?;
+
+                match (&value, &prefix) {
+                    (Value::String(value), Value::String(prefix)) => {
+                        Ok(value.starts_with(prefix.as_str()).into())
+                    }
+                    // A NULL subject never matches a prefix (`begins_with` on a
+                    // missing DynamoDB attribute evaluates to false).
+                    (Value::Null, Value::String(_)) => Ok(false.into()),
+                    _ => Err(crate::Error::expression_evaluation_failed(
+                        "starts_with requires string operands",
+                    )),
+                }
+            }
+            Expr::Length(expr_length) => match expr_length.expr.eval_ref(scope, input)? {
+                Value::List(items) => Ok(Value::I64(items.len() as i64)),
+                Value::Null => Ok(Value::Null),
+                _ => Err(crate::Error::expression_evaluation_failed(
+                    "length requires a list operand",
+                )),
+            },
             Expr::AnyOp(e) => {
                 let lhs = e.lhs.eval_ref(scope, input)?;
                 let rhs = e.rhs.eval_ref(scope, input)?;
