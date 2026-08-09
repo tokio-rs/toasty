@@ -108,6 +108,48 @@ pub async fn scan_update_by_filter(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// UPDATE on the scan path that moves a unique column onto a value already
+/// owned by another row must surface the constraint failure — not classify it
+/// as a filter miss and report zero rows updated.
+#[driver_test]
+pub async fn scan_update_unique_conflict_is_error(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[unique]
+        email: String,
+        category: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { email: "taken@example.com", category: "keep" },
+        { email: "free@example.com", category: "move" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let res = Item::filter(Item::fields().category().eq("move"))
+        .update()
+        .email("taken@example.com")
+        .exec(&mut db)
+        .await;
+
+    assert!(
+        res.is_err(),
+        "expected unique-constraint failure, got {res:?}"
+    );
+
+    // The row targeted by the update keeps its original email.
+    let item = Item::get_by_email(&mut db, "free@example.com").await?;
+    assert_eq!("move", item.category);
+
+    Ok(())
+}
+
 /// DELETE on the scan path for a model with a composite primary key — every
 /// key column has to be read back from the scan.
 #[driver_test]
