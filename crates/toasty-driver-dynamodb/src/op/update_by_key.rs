@@ -366,6 +366,21 @@ impl Connection {
                     .map_err(toasty_core::Error::driver_operation_failed)?;
 
                 let Some(mut curr_unique_values) = res.item else {
+                    // The row is gone (deleted between the engine's
+                    // key-collection read and this per-key update, or the key
+                    // never existed). A filter means the engine asked for
+                    // per-row adjudication, so a missing row is a filter miss
+                    // and the update is a no-op — the same way the plain
+                    // update arm interprets a conditional check failure with
+                    // no item. Without a filter the caller addressed this
+                    // exact record; surface the missing row.
+                    if op.filter.is_some() {
+                        return Ok(if op.returning.is_some() {
+                            ExecResponse::empty_value_stream()
+                        } else {
+                            ExecResponse::count(0)
+                        });
+                    }
                     return Err(toasty_core::Error::record_not_found(format!(
                         "table={} key={:?}",
                         table.name, key

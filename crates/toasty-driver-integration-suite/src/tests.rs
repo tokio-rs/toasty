@@ -116,3 +116,4 @@ pub mod type_document;
 pub mod type_jiff;
 pub mod type_primitives;
 pub mod type_serialize;
+pub mod update_filter_missing_row;
