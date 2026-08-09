@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["cross_variant_or","filter_variant_field_with_partition_key"]};
+window.SIDEBAR_ITEMS = {"fn":["cross_variant_or","filter_variant_field_with_cast_storage","filter_variant_field_with_partition_key","filter_variant_field_with_storage_override"]};

@@ -65,47 +65,63 @@
 <a href=#65 id=65 data-nosnippet>65</a>    expr.into()
 <a href=#66 id=66 data-nosnippet>66</a>}
 <a href=#67 id=67 data-nosnippet>67</a>
-<a href=#68 id=68 data-nosnippet>68</a><span class="doccomment">/// Continue a `has_many` traversal from `query` along `path`.
+<a href=#68 id=68 data-nosnippet>68</a><span class="doccomment">/// Encode a relation field stored in an embedded type.
 <a href=#69 id=69 data-nosnippet>69</a>///
-<a href=#70 id=70 data-nosnippet>70</a>/// If `query` was already scoped from a relation traversal, append
-<a href=#71 id=71 data-nosnippet>71</a>/// `field_offset` to that traversal's path so the result remains a single
-<a href=#72 id=72 data-nosnippet>72</a>/// chained association. Otherwise build a fresh `Association::many` rooted
-<a href=#73 id=73 data-nosnippet>73</a>/// at `query`. Used by generated `.field()` chain methods on the per-model
-<a href=#74 id=74 data-nosnippet>74</a>/// `Query&lt;List&lt;Source&gt;&gt;` for `has_many` relations.
-<a href=#75 id=75 data-nosnippet>75</a></span><span class="kw">pub fn </span>chain_or_build_many&lt;Source, Target&gt;(
-<a href=#76 id=76 data-nosnippet>76</a>    <span class="kw-2">mut </span>query: stmt::Query&lt;List&lt;Source&gt;&gt;,
-<a href=#77 id=77 data-nosnippet>77</a>    field_offset: usize,
-<a href=#78 id=78 data-nosnippet>78</a>    path: stmt::Path&lt;Source, List&lt;Target&gt;&gt;,
-<a href=#79 id=79 data-nosnippet>79</a>) -&gt; stmt::Association&lt;List&lt;Target&gt;&gt;
-<a href=#80 id=80 data-nosnippet>80</a><span class="kw">where
-<a href=#81 id=81 data-nosnippet>81</a>    </span>Source: Model,
-<a href=#82 id=82 data-nosnippet>82</a>    Target: Model,
-<a href=#83 id=83 data-nosnippet>83</a>{
-<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">match </span>query.take_via_assoc() {
-<a href=#85 id=85 data-nosnippet>85</a>        <span class="prelude-val">Some</span>(untyped) =&gt; stmt::Association::&lt;List&lt;Source&gt;&gt;::from_untyped(untyped)
-<a href=#86 id=86 data-nosnippet>86</a>            .chain_field::&lt;Target&gt;(field_offset),
-<a href=#87 id=87 data-nosnippet>87</a>        <span class="prelude-val">None </span>=&gt; stmt::Association::many(query, path),
-<a href=#88 id=88 data-nosnippet>88</a>    }
-<a href=#89 id=89 data-nosnippet>89</a>}
-<a href=#90 id=90 data-nosnippet>90</a>
-<a href=#91 id=91 data-nosnippet>91</a><span class="doccomment">/// Continue a `belongs_to` / `has_one` traversal from `query` along `path`.
-<a href=#92 id=92 data-nosnippet>92</a>///
-<a href=#93 id=93 data-nosnippet>93</a>/// Mirrors [`chain_or_build_many`] for singular relation steps: when no
-<a href=#94 id=94 data-nosnippet>94</a>/// existing traversal is present the fresh association is built via
-<a href=#95 id=95 data-nosnippet>95</a>/// [`stmt::Association::many_via_one`].
-<a href=#96 id=96 data-nosnippet>96</a></span><span class="kw">pub fn </span>chain_or_build_many_via_one&lt;Source, Target&gt;(
-<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw-2">mut </span>query: stmt::Query&lt;List&lt;Source&gt;&gt;,
-<a href=#98 id=98 data-nosnippet>98</a>    field_offset: usize,
-<a href=#99 id=99 data-nosnippet>99</a>    path: stmt::Path&lt;Source, Target&gt;,
-<a href=#100 id=100 data-nosnippet>100</a>) -&gt; stmt::Association&lt;List&lt;Target&gt;&gt;
-<a href=#101 id=101 data-nosnippet>101</a><span class="kw">where
-<a href=#102 id=102 data-nosnippet>102</a>    </span>Source: Model,
-<a href=#103 id=103 data-nosnippet>103</a>    Target: Model,
-<a href=#104 id=104 data-nosnippet>104</a>{
-<a href=#105 id=105 data-nosnippet>105</a>    <span class="kw">match </span>query.take_via_assoc() {
-<a href=#106 id=106 data-nosnippet>106</a>        <span class="prelude-val">Some</span>(untyped) =&gt; stmt::Association::&lt;List&lt;Source&gt;&gt;::from_untyped(untyped)
-<a href=#107 id=107 data-nosnippet>107</a>            .chain_field::&lt;Target&gt;(field_offset),
-<a href=#108 id=108 data-nosnippet>108</a>        <span class="prelude-val">None </span>=&gt; stmt::Association::many_via_one(query, path),
-<a href=#109 id=109 data-nosnippet>109</a>    }
-<a href=#110 id=110 data-nosnippet>110</a>}
+<a href=#70 id=70 data-nosnippet>70</a>/// The relation itself has no storage — the sibling foreign key field(s) own
+<a href=#71 id=71 data-nosnippet>71</a>/// the columns — so its record slot encodes as `Null`. Setting the relation
+<a href=#72 id=72 data-nosnippet>72</a>/// from a model value is not supported; the key fields must be set
+<a href=#73 id=73 data-nosnippet>73</a>/// explicitly and the relation left unloaded.
+<a href=#74 id=74 data-nosnippet>74</a></span><span class="kw">pub fn </span>embedded_relation_expr&lt;T&gt;(value: <span class="kw-2">&amp;</span>Deferred&lt;T&gt;) -&gt; core::stmt::Expr {
+<a href=#75 id=75 data-nosnippet>75</a>    <span class="macro">assert!</span>(
+<a href=#76 id=76 data-nosnippet>76</a>        value.is_unloaded(),
+<a href=#77 id=77 data-nosnippet>77</a>        <span class="string">"a relation stored in an embedded type cannot be set from a model \
+<a href=#78 id=78 data-nosnippet>78</a>         value; set the foreign key field(s) explicitly and leave the \
+<a href=#79 id=79 data-nosnippet>79</a>         relation unloaded (`Deferred::default()`)"
+<a href=#80 id=80 data-nosnippet>80</a>    </span>);
+<a href=#81 id=81 data-nosnippet>81</a>    core::stmt::Expr::null()
+<a href=#82 id=82 data-nosnippet>82</a>}
+<a href=#83 id=83 data-nosnippet>83</a>
+<a href=#84 id=84 data-nosnippet>84</a><span class="doccomment">/// Continue a `has_many` traversal from `query` along `path`.
+<a href=#85 id=85 data-nosnippet>85</a>///
+<a href=#86 id=86 data-nosnippet>86</a>/// If `query` was already scoped from a relation traversal, append
+<a href=#87 id=87 data-nosnippet>87</a>/// `field_offset` to that traversal's path so the result remains a single
+<a href=#88 id=88 data-nosnippet>88</a>/// chained association. Otherwise build a fresh `Association::many` rooted
+<a href=#89 id=89 data-nosnippet>89</a>/// at `query`. Used by generated `.field()` chain methods on the per-model
+<a href=#90 id=90 data-nosnippet>90</a>/// `Query&lt;List&lt;Source&gt;&gt;` for `has_many` relations.
+<a href=#91 id=91 data-nosnippet>91</a></span><span class="kw">pub fn </span>chain_or_build_many&lt;Source, Target&gt;(
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw-2">mut </span>query: stmt::Query&lt;List&lt;Source&gt;&gt;,
+<a href=#93 id=93 data-nosnippet>93</a>    field_offset: usize,
+<a href=#94 id=94 data-nosnippet>94</a>    path: stmt::Path&lt;Source, List&lt;Target&gt;&gt;,
+<a href=#95 id=95 data-nosnippet>95</a>) -&gt; stmt::Association&lt;List&lt;Target&gt;&gt;
+<a href=#96 id=96 data-nosnippet>96</a><span class="kw">where
+<a href=#97 id=97 data-nosnippet>97</a>    </span>Source: Model,
+<a href=#98 id=98 data-nosnippet>98</a>    Target: Model,
+<a href=#99 id=99 data-nosnippet>99</a>{
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">match </span>query.take_via_assoc() {
+<a href=#101 id=101 data-nosnippet>101</a>        <span class="prelude-val">Some</span>(untyped) =&gt; stmt::Association::&lt;List&lt;Source&gt;&gt;::from_untyped(untyped)
+<a href=#102 id=102 data-nosnippet>102</a>            .chain_field::&lt;Target&gt;(field_offset),
+<a href=#103 id=103 data-nosnippet>103</a>        <span class="prelude-val">None </span>=&gt; stmt::Association::many(query, path),
+<a href=#104 id=104 data-nosnippet>104</a>    }
+<a href=#105 id=105 data-nosnippet>105</a>}
+<a href=#106 id=106 data-nosnippet>106</a>
+<a href=#107 id=107 data-nosnippet>107</a><span class="doccomment">/// Continue a `belongs_to` / `has_one` traversal from `query` along `path`.
+<a href=#108 id=108 data-nosnippet>108</a>///
+<a href=#109 id=109 data-nosnippet>109</a>/// Mirrors [`chain_or_build_many`] for singular relation steps: when no
+<a href=#110 id=110 data-nosnippet>110</a>/// existing traversal is present the fresh association is built via
+<a href=#111 id=111 data-nosnippet>111</a>/// [`stmt::Association::many_via_one`].
+<a href=#112 id=112 data-nosnippet>112</a></span><span class="kw">pub fn </span>chain_or_build_many_via_one&lt;Source, Target&gt;(
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="kw-2">mut </span>query: stmt::Query&lt;List&lt;Source&gt;&gt;,
+<a href=#114 id=114 data-nosnippet>114</a>    field_offset: usize,
+<a href=#115 id=115 data-nosnippet>115</a>    path: stmt::Path&lt;Source, Target&gt;,
+<a href=#116 id=116 data-nosnippet>116</a>) -&gt; stmt::Association&lt;List&lt;Target&gt;&gt;
+<a href=#117 id=117 data-nosnippet>117</a><span class="kw">where
+<a href=#118 id=118 data-nosnippet>118</a>    </span>Source: Model,
+<a href=#119 id=119 data-nosnippet>119</a>    Target: Model,
+<a href=#120 id=120 data-nosnippet>120</a>{
+<a href=#121 id=121 data-nosnippet>121</a>    <span class="kw">match </span>query.take_via_assoc() {
+<a href=#122 id=122 data-nosnippet>122</a>        <span class="prelude-val">Some</span>(untyped) =&gt; stmt::Association::&lt;List&lt;Source&gt;&gt;::from_untyped(untyped)
+<a href=#123 id=123 data-nosnippet>123</a>            .chain_field::&lt;Target&gt;(field_offset),
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="prelude-val">None </span>=&gt; stmt::Association::many_via_one(query, path),
+<a href=#125 id=125 data-nosnippet>125</a>    }
+<a href=#126 id=126 data-nosnippet>126</a>}
 </code></pre></div></section></main></body></html>
