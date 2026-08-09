@@ -29,9 +29,21 @@ impl Hoist {
     /// ident that will be bound to it. Both carry the expression's span
     /// so type errors point at the user's code.
     fn hoist(&mut self, expr: &syn::Expr) -> TokenStream {
-        let span = expr.span();
+        // A variant literal (`Enum::Variant { .. }`) hoists as its builder
+        // rewrite; the chain evaluates the user's field values in place.
+        let tokens = match crate::variant_literal::rewrite_variant_literal(expr) {
+            Some(rewritten) => rewritten,
+            None => {
+                let span = expr.span();
+                quote_spanned! { span=> #expr }
+            }
+        };
+        self.hoist_tokens(tokens, expr.span())
+    }
+
+    fn hoist_tokens(&mut self, tokens: TokenStream, span: proc_macro2::Span) -> TokenStream {
         let ident = format_ident!("__value_{}", self.idents.len(), span = span);
-        self.exprs.push(quote_spanned! { span=> #expr });
+        self.exprs.push(tokens);
         self.idents.push(ident.clone());
         quote!(#ident)
     }

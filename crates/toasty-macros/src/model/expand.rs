@@ -259,6 +259,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let field_struct_ident = &embedded_enum.field_struct_ident;
     let field_list_struct_ident = &embedded_enum.field_list_struct_ident;
     let enum_field_struct = e.expand_enum_field_struct();
+    let variant_expr_builders = e.expand_enum_variant_expr_builders();
     let enum_field_list_struct = e.expand_field_list_struct();
     let field_register_calls = e.expand_field_register_calls();
     let storage_compat_checks = e.expand_storage_compat_checks();
@@ -283,6 +284,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     wrap_in_const(quote! {
         #enum_field_struct
         #enum_field_list_struct
+        #variant_expr_builders
 
         #storage_compat_checks
         #column_type_requirement_checks

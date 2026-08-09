@@ -457,45 +457,53 @@ impl Expand<'_> {
     ) -> TokenStream {
         let toasty = &self.toasty;
 
+        let fields: Vec<&crate::model::schema::Field> = self.model.fields.iter().collect();
+        let key_fill = super::embedded_enum::relation_key_fill(&fields);
+
         // For embedded types, create a record expression from all fields
         let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
+            let field_access = if fields_named {
+                let field_ident = &field.name.ident;
+                quote!(self.#field_ident)
+            } else {
+                let idx = syn::Index::from(index);
+                quote!(self.#idx)
+            };
+
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
                 FieldTy::BelongsTo(_) => {
                     // The relation slot encodes as `Null`; the sibling key
                     // fields carry the storage.
-                    let access = if fields_named {
-                        let field_ident = &field.name.ident;
-                        quote!(self.#field_ident)
-                    } else {
-                        let idx = syn::Index::from(index);
-                        quote!(self.#idx)
-                    };
-                    return quote!(#toasty::embedded_relation_expr(&#access));
+                    return quote!(#toasty::embedded_relation_expr(&#field_access));
                 }
                 _ => panic!("only primitive and belongs_to fields are supported in embedded types"),
             };
 
-            let value = if fields_named {
-                let field_ident = &field.name.ident;
-                if by_ref {
-                    quote!((&self.#field_ident))
-                } else {
-                    quote!(self.#field_ident)
-                }
+            let value = if by_ref {
+                quote!((&#field_access))
             } else {
-                let idx = syn::Index::from(index);
-                if by_ref {
-                    quote!((&self.#idx))
-                } else {
-                    quote!(self.#idx)
-                }
+                quote!(#field_access)
             };
 
             // Bind through `Field::ExprTarget` so wrappers such as
             // `Deferred<T>` encode the underlying expression type.
             let target_ty = quote!(FieldExprTarget<#ty>);
-            quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
+            let explicit = quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value));
+
+            // A key field backing a sibling relation takes its value from
+            // the loaded parent model when one is present; the explicit key
+            // stands otherwise.
+            match key_fill.get(&field.id) {
+                Some((rel_ident, target_ident)) => quote!(
+                    match #toasty::embedded_relation_target(&self.#rel_ident) {
+                        #toasty::Option::Some(__rel) =>
+                            #toasty::into_untyped_expr::<#target_ty, _>(&__rel.#target_ident),
+                        #toasty::Option::None => #explicit,
+                    }
+                ),
+                None => explicit,
+            }
         });
 
         quote! {
