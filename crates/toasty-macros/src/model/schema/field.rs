@@ -84,6 +84,12 @@ pub(crate) enum FieldTy {
     HasOne(HasOne),
 }
 
+impl FieldTy {
+    pub(crate) fn is_primitive(&self) -> bool {
+        matches!(self, FieldTy::Primitive(_))
+    }
+}
+
 impl FieldAttr {
     pub(crate) fn is_indexed(&self) -> bool {
         self.unique || self.index
@@ -312,9 +318,15 @@ impl Field {
                         "field has more than one relation attribute",
                     ));
                 } else {
+                    let Some(field_ident) = field.ident.as_ref() else {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "#[belongs_to] requires a named field",
+                        ));
+                    };
                     ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
                         attr,
-                        field.ident.as_ref().unwrap(),
+                        field_ident,
                         &field.ty,
                         names,
                     )?));

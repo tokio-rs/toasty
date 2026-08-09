@@ -486,9 +486,7 @@ declarable.
 
 Declaration uses what embedded enums already define: field-level
 `#[index]` on a per-variant key, and enum-level `#[index(<ident>)]` on a
-shared key. The enum-level non-unique form is designed in
-[enums-and-embedded-structs](enums-and-embedded-structs.md) but only
-`#[unique]` has shipped — shipping it is a prerequisite of this feature.
+shared key.
 
 On DynamoDB the rule guarantees a GSI on the key attribute, which is what
 makes the pair query executable at all. A per-variant key yields a sparse
@@ -542,35 +540,44 @@ Checked for redundancy and deliberately kept:
 
 The work ships in steps, each providing user value on its own.
 
-1. **Enum-level `#[index(...)]`.** The non-unique form designed in
-   [enums-and-embedded-structs](enums-and-embedded-structs.md); only
-   `#[unique]` has shipped. Value independent of this design — non-unique
-   indexes on shared columns for existing embedded-enum users — and a
-   prerequisite for pair queries on shared keys passing the verify rule.
-2. **Relations stored in embedded types.** `#[belongs_to]` fields are
+1. **Relations stored in embedded types.** `#[belongs_to]` fields are
    accepted inside embedded enums and structs: schema entries, no columns
    for the relation itself, key fields as ordinary indexed columns.
-   Creating and updating supply the variant value with explicit keys;
    `match` gives direct access to the stored keys, and the owner loads
-   with an ordinary `find_by_*`. No `.include()`, no inverse yet — but the
-   polymorphic shape is fully modelable, storable, and queryable by key
-   through the existing variant filter paths.
-3. **Referencing the embedded relation with a model value.** The
+   with an ordinary `find_by_*` — the polymorphic shape is fully
+   modelable, storable, and queryable by key through the existing
+   variant filter paths. Three limitations remain, each lifted by a
+   later step:
+   - The relation cannot be set or filtered by model value. Writes set
+     the key fields explicitly and leave the relation unloaded
+     (`Owner::Bot { serial, bot: Deferred::default() }`); a loaded value
+     is rejected at runtime. Lifted in step 2.
+   - The relation field must be declared `Deferred`, and no `.include()`
+     exists to load it. Lifted in step 3.
+   - No inverse: `has_many` / `has_one` cannot pair into the embedding.
+     Lifted in steps 4 (queries) and 5 (mutations).
+2. **Referencing the embedded relation with a model value.** The
    centralized rewrite: a reference to a relation reached through embed
    steps expands into the key comparison with the fused `is_variant`
    gate. In filters this enables `owner().human().eq(&alice)` and
    traversal (`.matches(|v| v.human().name().eq("Alice"))`); in `create!`
    and update assignments it enables passing the parent by reference
    (`Owner::Human { human: &alice }`) with the key fields filled in.
-4. **Preloading with `.include()`.** `.include(Object::fields().owner())`
+   This lifts step 1's explicit-keys restriction: a loaded relation
+   value in a write is rewritten to its key assignments instead of
+   rejected.
+3. **Preloading with `.include()`.** `.include(Object::fields().owner())`
    issues one query per variant present and merges results into each
-   row's enum value.
-5. **Inverse pairs, queries.** `pair` paths, the `Pair` struct, the
+   row's enum value. This lifts step 1's `Deferred`-only requirement on
+   embedded relation fields: a non-deferred field (`human: Human`) needs
+   its value present on every load, which only works once includes can
+   populate it — with them, it behaves as at model level.
+4. **Inverse pairs, queries.** `pair` paths, the `Pair` struct, the
    per-embedding instance records, linker recursion, and the removals
    listed above land together; `has_many` / `has_one` declarations on
    owner models pair into embeddings and read through them
    (`human.objects()`).
-6. **Inverse pairs, mutations.** Creating, associating, and
+5. **Inverse pairs, mutations.** Creating, associating, and
    disassociating through the pair — `has_many` create builders, update
    assignments, and delete behavior over the paired embedding.
 

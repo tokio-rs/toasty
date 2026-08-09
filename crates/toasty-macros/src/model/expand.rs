@@ -105,6 +105,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let storage_compat_checks = expand.expand_storage_compat_checks();
     let column_type_requirement_checks = expand.expand_column_type_requirement_checks();
     let indexable_checks = expand.expand_indexable_checks();
+    let embedded_relation_checks = expand.expand_embedded_relation_checks();
     let newtype_marker = expand.expand_embedded_newtype_marker();
     let newtype_indexable_impl = expand.expand_embedded_indexable_impl();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
@@ -123,6 +124,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #storage_compat_checks
         #column_type_requirement_checks
         #indexable_checks
+        #embedded_relation_checks
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -264,6 +266,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let discriminant_storage_compat_impls = e.expand_enum_discriminant_compat_impls();
     let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
+    let embedded_relation_checks = e.expand_embedded_relation_checks();
 
     // A unit (data-less) enum is a single scalar discriminant: indexable, and a
     // valid `Vec<Enum>` element (`Scalar` unlocks the container operators).
@@ -286,6 +289,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #discriminant_storage_compat_impls
         #shared_column_checks
         #indexable_checks
+        #embedded_relation_checks
         #unit_enum_impls
 
         impl #toasty::Embed for #model_ident {
@@ -387,6 +391,34 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
+    /// For relation fields in embedded types, require the declared type to be
+    /// deferred (`toasty::Deferred<..>`). A non-deferred relation could never
+    /// load: the relation carries no storage, so its record slot always
+    /// decodes from `Null`, which only a deferred type represents (as the
+    /// unloaded state).
+    fn expand_embedded_relation_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            let FieldTy::BelongsTo(rel) = &field.ty else {
+                return None;
+            };
+            let ty = &rel.ty;
+
+            Some(quote_spanned! { syn::spanned::Spanned::span(ty)=>
+                const _: () = {
+                    assert!(
+                        <#ty as #toasty::RelationOneField>::DEFERRED,
+                        "a relation stored in an embedded type must be wrapped \
+                         in `toasty::Deferred`",
+                    );
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
     /// For tuple-newtype `#[derive(Embed)]` types (one unnamed field), emit
     /// the `NewtypeOf` marker carrying the inner field's type. The blanket
     /// `impl<T: NewtypeOf, T::Inner: Auto> Auto for T` in `codegen_support`

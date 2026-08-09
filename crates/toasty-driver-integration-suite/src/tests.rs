@@ -40,6 +40,7 @@ pub mod embed_enum_shared_type;
 pub mod embed_enum_string_discriminant;
 pub mod embed_enum_unit;
 pub mod embed_newtype;
+pub mod embed_relation;
 pub mod embed_struct;
 pub mod embed_struct_index;
 pub mod embed_struct_optional;
