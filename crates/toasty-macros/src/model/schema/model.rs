@@ -200,10 +200,7 @@ impl Model {
                         ));
                     }
 
-                    if is_embedded
-                        && !matches!(field.ty, FieldTy::Primitive(_))
-                        && field.attrs.is_indexed()
-                    {
+                    if is_embedded && !field.ty.is_primitive() && field.attrs.is_indexed() {
                         errs.push(syn::Error::new_spanned(
                             &field.name.ident,
                             "a relation field cannot be indexed; index its foreign \
@@ -538,7 +535,7 @@ impl Model {
         // do not apply: sharing and indexing target the sibling key fields
         // that own the storage.
         for field in &all_fields {
-            if matches!(field.ty, FieldTy::Primitive(_)) {
+            if field.ty.is_primitive() {
                 continue;
             }
             if let Some(shared) = &field.attrs.shared {

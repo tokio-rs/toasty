@@ -84,6 +84,12 @@ pub(crate) enum FieldTy {
     HasOne(HasOne),
 }
 
+impl FieldTy {
+    pub(crate) fn is_primitive(&self) -> bool {
+        matches!(self, FieldTy::Primitive(_))
+    }
+}
+
 impl FieldAttr {
     pub(crate) fn is_indexed(&self) -> bool {
         self.unique || self.index

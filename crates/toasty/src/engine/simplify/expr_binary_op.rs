@@ -146,8 +146,11 @@ impl Simplify<'_> {
         None
     }
 
-    /// `cast(col, T) <eq/ne> const` → `col <eq/ne> const'`, where `const'` is
-    /// the constant converted to `col`'s stored type.
+    /// Rewrites `cast(col, T) <eq/ne> const` so the conversion happens on
+    /// the constant instead of the column: converts `const` to `col`'s
+    /// stored type once, here, and emits `col <eq/ne> const'` so the driver
+    /// compares the bare column against the converted constant rather than
+    /// casting the column on every row.
     ///
     /// The target type comes from the referenced column, not from
     /// `Capability::native_type_for(T)`: a `#[column(type = ...)]` override

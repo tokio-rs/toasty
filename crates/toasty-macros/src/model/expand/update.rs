@@ -38,7 +38,7 @@ impl Expand<'_> {
             // A relation in an embedded type cannot be assigned; re-point it
             // by assigning its key field(s) or replacing the whole embed
             // value.
-            if is_embedded && !matches!(&field.ty, FieldTy::Primitive(_)) {
+            if is_embedded && !field.ty.is_primitive() {
                 return TokenStream::new();
             }
 
