@@ -58,8 +58,9 @@ impl Value {
             (Type::Object, val @ AV::M(_)) => Self::from_ddb_any(val),
             (_, AV::Null(_)) => stmt::Value::Null,
             // Scalars whose DynamoDB representation is their string form
-            // (temporals, decimals): recover the typed value through the same
-            // `Type::cast` conversions the engine uses for scalar columns.
+            // (temporals, decimals, network addresses): recover the typed
+            // value through the same `Type::cast` conversions the engine uses
+            // for scalar columns.
             (ty, AV::S(val)) => ty
                 .cast(&(), stmt::Value::String(val.clone()))
                 .expect("string attribute does not convert to the column type"),
@@ -110,7 +111,8 @@ impl Value {
     ///
     /// - an object's `Null` entries (an `Option` leaf holding `None`) are
     ///   omitted; they decode back from the missing key.
-    /// - temporal and decimal leaves store the shared document text form
+    /// - temporal, decimal, and network-address leaves store the shared
+    ///   document text form
     ///   ([`stmt::Value::document_storage_text`], fixed six-digit sub-second
     ///   precision) — the exact text the engine's document lowering binds as
     ///   a comparison operand, so a stored leaf and an operand cannot drift
@@ -170,11 +172,11 @@ impl Value {
             value @ stmt::Value::Object(_) => Self::to_ddb_document(value),
             stmt::Value::Null => AV::Null(true),
             // Scalars whose DynamoDB representation is their string form
-            // (temporals, decimals): the same `Type::cast` conversions the
-            // engine applies to scalar columns of these types. The fixed
-            // sub-second precision keeps lexicographic string order
-            // chronological, so range filters on these attributes compare
-            // correctly.
+            // (temporals, decimals, network addresses): the same `Type::cast`
+            // conversions the engine applies to scalar columns of these
+            // types. The fixed sub-second precision keeps temporal
+            // lexicographic string order chronological, so range filters on
+            // those attributes compare correctly.
             value => match stmt::Type::String.cast(&(), value.clone()) {
                 Ok(stmt::Value::String(s)) => AV::S(s),
                 _ => todo!("{:#?}", self.0),

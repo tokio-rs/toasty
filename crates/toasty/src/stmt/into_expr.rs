@@ -99,6 +99,14 @@ impl_into_expr_for_copy! {
     DateTime(jiff::civil::DateTime);
 }
 
+#[cfg(feature = "net")]
+impl_into_expr_for_copy! {
+    Cidr(cidr::IpCidr);
+    Inet(cidr::IpInet);
+    MacAddr(macaddr::MacAddr6);
+    MacAddr8(macaddr::MacAddr8);
+}
+
 // Pointer-sized integers convert through their fixed-size equivalents
 impl IntoExpr<isize> for isize {
     fn into_expr(self) -> Expr<isize> {

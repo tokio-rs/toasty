@@ -19,6 +19,7 @@ sync = ["turso/sync"]
 rust_decimal = ["toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
 bigdecimal = ["toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
 jiff = ["toasty-core/jiff", "toasty-sql/jiff"]
+net = ["toasty-core/net", "toasty-sql/net"]
 
 [dependencies]
 async-trait.workspace = true

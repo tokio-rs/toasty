@@ -87,6 +87,10 @@ quirks worth knowing about; the notes below the table call them out.
 | `jiff::civil::Date` *(feature)* | `DATE` |
 | `jiff::civil::Time` *(feature)* | `TIME(6)` |
 | `jiff::civil::DateTime` *(feature)* | `DATETIME(6)` |
+| `cidr::IpCidr` *(feature)* | `VARCHAR(43)` |
+| `cidr::IpInet` *(feature)* | `VARCHAR(43)` |
+| `macaddr::MacAddr6` *(feature)* | `VARCHAR(17)` |
+| `macaddr::MacAddr8` *(feature)* | `VARCHAR(23)` |
 | `Vec<T>` *(T scalar)* | `JSON` |
 | Embedded `enum` | Inline `ENUM('a', 'b', ...)` column |
 
@@ -137,6 +141,10 @@ parses it back on read. Array predicates (`contains`, `is_superset`,
 **`jiff::Zoned` stores as `TEXT`.** MySQL has no column type that
 carries an IANA zone name alongside an instant, so zoned values
 round-trip through text.
+
+**Network addresses use bounded text columns.** MySQL has no native
+network address types. Toasty stores the canonical text form and sizes
+each `VARCHAR` for the longest value of that address family.
 
 ## Behavior specific to MySQL
 

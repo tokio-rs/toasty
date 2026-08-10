@@ -58,6 +58,10 @@ With optional feature flags:
 | `jiff` | `jiff::civil::Date` | Date |
 | `jiff` | `jiff::civil::Time` | Time |
 | `jiff` | `jiff::civil::DateTime` | DateTime |
+| `net` | `cidr::IpCidr` | IP network prefix |
+| `net` | `cidr::IpInet` | IP host address with a network prefix |
+| `net` | `macaddr::MacAddr6` | Six-byte MAC address |
+| `net` | `macaddr::MacAddr8` | Eight-byte MAC address |
 | `serde` | `toasty::Json<T>`, `serde_json::Value` | Explicit text, `json`, or `jsonb` column (see [JSON Encoding](./json-encoding.md)) |
 
 Enable feature flags in your `Cargo.toml`:

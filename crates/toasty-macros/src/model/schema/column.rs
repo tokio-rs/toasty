@@ -213,6 +213,10 @@ mod kw {
     syn::custom_keyword!(date);
     syn::custom_keyword!(time);
     syn::custom_keyword!(datetime);
+    syn::custom_keyword!(cidr);
+    syn::custom_keyword!(inet);
+    syn::custom_keyword!(macaddr);
+    syn::custom_keyword!(macaddr8);
 }
 
 #[derive(Debug)]
@@ -232,6 +236,10 @@ pub enum ColumnType {
     Date,
     Time(u8),
     DateTime(u8),
+    Cidr,
+    Inet,
+    MacAddr,
+    MacAddr8,
     /// Native database enum type. The optional string is a custom PostgreSQL
     /// type name; when `None`, the name is derived from the Rust enum in
     /// snake_case.
@@ -335,6 +343,10 @@ impl syn::parse::Parse for ColumnType {
         peek_ident!(date, Date);
         peek_ident_paren_int!(time, Time);
         peek_ident_paren_int!(datetime, DateTime);
+        peek_ident!(cidr, Cidr);
+        peek_ident!(inet, Inet);
+        peek_ident!(macaddr, MacAddr);
+        peek_ident!(macaddr8, MacAddr8);
 
         // `enum` or `enum("custom_type_name")`
         if lookahead.peek(syn::Token![enum]) {
@@ -395,6 +407,10 @@ impl ColumnType {
             Self::Date => quote! { #tag::Date },
             Self::Time(_) => quote! { #tag::Time },
             Self::DateTime(_) => quote! { #tag::DateTime },
+            Self::Cidr => quote! { #tag::Cidr },
+            Self::Inet => quote! { #tag::Inet },
+            Self::MacAddr => quote! { #tag::MacAddr },
+            Self::MacAddr8 => quote! { #tag::MacAddr8 },
             // No compile-time check for non-standard widths or escape hatches.
             Self::Integer(_)
             | Self::UnsignedInteger(_)
@@ -436,6 +452,10 @@ impl ColumnType {
             Self::DateTime(precision) => {
                 quote! { #toasty::core::schema::db::Type::DateTime(#precision) }
             }
+            Self::Cidr => quote! { #toasty::core::schema::db::Type::Cidr },
+            Self::Inet => quote! { #toasty::core::schema::db::Type::Inet },
+            Self::MacAddr => quote! { #toasty::core::schema::db::Type::MacAddr },
+            Self::MacAddr8 => quote! { #toasty::core::schema::db::Type::MacAddr8 },
             Self::Enum(_) => {
                 // Enum storage type is constructed at the enum level with labels
                 // and name, not via this generic expand path. This arm should not

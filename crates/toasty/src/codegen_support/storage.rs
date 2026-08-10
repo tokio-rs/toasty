@@ -44,6 +44,11 @@ pub mod tag {
     pub struct Date;
     pub struct Time;
     pub struct DateTime;
+
+    pub struct Cidr;
+    pub struct Inet;
+    pub struct MacAddr;
+    pub struct MacAddr8;
 }
 
 /// Asserts that a Rust field type can be stored as the given storage tag.
@@ -217,4 +222,24 @@ mod jiff_impls {
     impl CompatibleWith<tag::VarChar> for jiff::civil::Time {}
     impl CompatibleWith<tag::Text> for jiff::civil::DateTime {}
     impl CompatibleWith<tag::VarChar> for jiff::civil::DateTime {}
+}
+
+#[cfg(feature = "net")]
+mod net_impls {
+    use super::{CompatibleWith, tag};
+
+    impl CompatibleWith<tag::Cidr> for cidr::IpCidr {}
+    impl CompatibleWith<tag::Inet> for cidr::IpInet {}
+    impl CompatibleWith<tag::MacAddr> for macaddr::MacAddr6 {}
+    impl CompatibleWith<tag::MacAddr8> for macaddr::MacAddr8 {}
+
+    // Backends without native network types store their canonical text forms.
+    impl CompatibleWith<tag::Text> for cidr::IpCidr {}
+    impl CompatibleWith<tag::VarChar> for cidr::IpCidr {}
+    impl CompatibleWith<tag::Text> for cidr::IpInet {}
+    impl CompatibleWith<tag::VarChar> for cidr::IpInet {}
+    impl CompatibleWith<tag::Text> for macaddr::MacAddr6 {}
+    impl CompatibleWith<tag::VarChar> for macaddr::MacAddr6 {}
+    impl CompatibleWith<tag::Text> for macaddr::MacAddr8 {}
+    impl CompatibleWith<tag::VarChar> for macaddr::MacAddr8 {}
 }

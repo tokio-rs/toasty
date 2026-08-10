@@ -786,6 +786,28 @@ fn datetime_sqlite_panics() {
 }
 
 // ---------------------------------------------------------------------------
+// Network address types
+// ---------------------------------------------------------------------------
+
+#[test]
+fn network_types_postgresql() {
+    let cases = [
+        (Type::Cidr, "CIDR"),
+        (Type::Inet, "INET"),
+        (Type::MacAddr, "MACADDR"),
+        (Type::MacAddr8, "MACADDR8"),
+    ];
+
+    for (ty, sql_type) in cases {
+        let ddl = render_type("postgresql", ty).join("\n");
+        assert!(
+            ddl.contains(&format!("\"col\" {sql_type} NOT NULL")),
+            "unexpected DDL: {ddl}"
+        );
+    }
+}
+
+// ---------------------------------------------------------------------------
 // Enum
 // ---------------------------------------------------------------------------
 

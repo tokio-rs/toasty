@@ -47,6 +47,15 @@ jiff = [
 	"toasty-driver-sqlite?/jiff",
 	"toasty-driver-turso?/jiff",
 ]
+net = [
+	"dep:cidr",
+	"dep:macaddr",
+	"toasty-core/net",
+	"toasty-driver-postgresql?/net",
+	"toasty-driver-mysql?/net",
+	"toasty-driver-sqlite?/net",
+	"toasty-driver-turso?/net",
+]
 serde = ["dep:serde_core", "dep:serde_json"]
 
 [dependencies]
@@ -70,6 +79,8 @@ rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 deadpool.workspace = true
 jiff = { workspace = true, optional = true }
+cidr = { workspace = true, optional = true }
+macaddr = { workspace = true, optional = true }
 tokio-stream.workspace = true
 uuid.workspace = true
 indexmap.workspace = true

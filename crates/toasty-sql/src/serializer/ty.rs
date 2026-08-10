@@ -102,6 +102,22 @@ impl ToSql for &db::Type {
                 Dialect::Mysql => fmt!(f, "DATETIME(" precision ")"),
                 Dialect::Sqlite => todo!("SQLite does not support DateTime"),
             },
+            db::Type::Cidr => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "CIDR"),
+                _ => todo!("Only PostgreSQL supports CIDR"),
+            },
+            db::Type::Inet => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "INET"),
+                _ => todo!("Only PostgreSQL supports INET"),
+            },
+            db::Type::MacAddr => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "MACADDR"),
+                _ => todo!("Only PostgreSQL supports MACADDR"),
+            },
+            db::Type::MacAddr8 => match f.serializer.dialect {
+                Dialect::Postgresql => fmt!(f, "MACADDR8"),
+                _ => todo!("Only PostgreSQL supports MACADDR8"),
+            },
             db::Type::Enum(type_enum) => match f.serializer.dialect {
                 // PostgreSQL: reference the named enum type created with CREATE TYPE.
                 Dialect::Postgresql => {
