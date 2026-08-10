@@ -73,9 +73,9 @@ compare the underlying column, using the backend's ordering for the inner type:
 
 ```rust,ignore
 #[derive(Debug, toasty::Embed)]
-struct TimestampMillis(i64);
+struct Millis(i64);
 
-let recent = Credit::filter(Credit::fields().timestamp().ge(TimestampMillis(cutoff)))
+let recent = Credit::filter(Credit::fields().timestamp().ge(Millis(cutoff)))
     .exec(&mut db)
     .await?;
 ```

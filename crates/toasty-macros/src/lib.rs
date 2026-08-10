@@ -866,11 +866,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct returned by `<Type>::fields()` for building
-///   filter expressions on individual fields. It compares the whole
-///   embedded value with `eq` and `ne`; a tuple-newtype struct (one
-///   unnamed field) additionally gets `gt`, `ge`, `lt`, and `le`, which
-///   compare the single underlying column using the backend's ordering
-///   for the inner type.
+///   filter expressions on individual fields.
 /// - An `Update` struct used by the parent model's update builder for
 ///   partial field updates.
 ///
@@ -894,12 +890,8 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// let _ = Pin::filter(Pin::fields().location().ge(Point { x: 0, y: 0 }));
 /// ```
 ///
-/// A tuple-newtype must wrap a single-column type. Wrapping a multi-field
-/// embed (or a data-carrying enum) fails to derive — the newtype's
-/// `IndexableField` forwarding impl requires the inner type to map to one
-/// column. The ordering methods above depend on this: every newtype that
-/// derives has a single-column inner, so its comparisons pass through to
-/// one column.
+/// A tuple-newtype must wrap a single-column type. Wrapping a multi-field embed
+/// (or a data-carrying enum) fails to derive.
 ///
 /// ```compile_fail
 /// # #[derive(toasty::Embed)]
