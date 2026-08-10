@@ -393,6 +393,53 @@ pub async fn query_embedded_fields_comparison_ops(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// Tests `eq` and `ne` on a whole multi-field embedded value: both
+/// decompose into per-column comparisons — equality into AND, inequality
+/// into OR — so `ne` matches rows differing in any column.
+#[driver_test(requires(scan))]
+pub async fn whole_embedded_struct_eq_ne(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct Point {
+        x: i64,
+        y: i64,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Pin {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        label: String,
+        location: Point,
+    }
+
+    let mut db = t.setup_db(models!(Pin)).await;
+
+    for (label, x, y) in [("a", 1, 1), ("b", 1, 2), ("c", 2, 1)] {
+        toasty::create!(Pin {
+            label,
+            location: Point { x, y },
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    let hits = Pin::filter(Pin::fields().location().eq(Point { x: 1, y: 2 }))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(hits.len(), 1);
+    assert_eq!(hits[0].label, "b");
+
+    let hits = Pin::filter(Pin::fields().location().ne(Point { x: 1, y: 2 }))
+        .exec(&mut db)
+        .await?;
+    let mut labels: Vec<_> = hits.iter().map(|p| p.label.as_str()).collect();
+    labels.sort();
+    assert_eq!(labels, ["a", "c"]);
+
+    Ok(())
+}
+
 /// Tests querying by multiple embedded fields in a single query (AND conditions).
 /// SQL-only: DynamoDB requires partition key in queries.
 /// Validates that complex filters with multiple embedded fields work correctly.

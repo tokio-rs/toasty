@@ -8,6 +8,7 @@ const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
     "from_path",
     "path",
     "eq",
+    "ne",
     "in_query",
     "into_root",
     "filter",
@@ -139,6 +140,7 @@ impl Expand<'_> {
         };
 
         let include_modifier_methods = self.expand_include_modifier_methods(quote!(#model_ident));
+        let comparison_methods = self.expand_field_struct_comparison_methods();
 
         quote!(
             #struct_def
@@ -152,14 +154,11 @@ impl Expand<'_> {
                     self.path.clone()
                 }
 
-                #vis fn eq(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    use #toasty::IntoExpr;
-                    self.path.eq(rhs.into_expr())
-                }
-
                 #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
                 }
+
+                #comparison_methods
 
                 /// Discard `self`'s origin parameter and return a fresh
                 /// fields struct typed against this model. Used by
@@ -200,6 +199,42 @@ impl Expand<'_> {
                 }
             }
         )
+    }
+
+    /// Comparison methods on the fields struct, forwarding to the
+    /// underlying path.
+    ///
+    /// `eq` and `ne` are duals and every fields struct gets both: on a
+    /// root model they compare a model reference (lowering to its primary
+    /// key), on an embedded struct the engine decomposes the record
+    /// across columns (AND for eq, OR for ne). The ordering methods are
+    /// newtype-only: a single column keeps the backend's own ordering,
+    /// while record ordering has no shared cross-backend definition. The
+    /// syntactic newtype check suffices because a newtype over a
+    /// non-single-column inner fails to derive — see
+    /// `expand_embedded_indexable_impl`.
+    fn expand_field_struct_comparison_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        let names: &[&str] = if self.canonical_newtype_inner().is_some() {
+            &["eq", "ne", "gt", "ge", "lt", "le"]
+        } else {
+            &["eq", "ne"]
+        };
+
+        let methods = names.iter().map(|name| {
+            let method_ident = quote::format_ident!("{name}");
+            quote! {
+                #vis fn #method_ident(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    use #toasty::IntoExpr;
+                    self.path.#method_ident(rhs.into_expr())
+                }
+            }
+        });
+
+        quote!( #( #methods )* )
     }
 
     fn expand_include_modifier_methods(&self, target_ty: TokenStream) -> TokenStream {

@@ -147,9 +147,6 @@ pub async fn crud_newtype_embed(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-// TODO: ne(), gt(), lt(), ge(), le() are not yet generated for newtype field
-// structs. Add comparison operator tests once codegen is extended.
-
 /// Tests `#[unique]` on a newtype field generates `get_by_*` and enforces
 /// uniqueness.
 #[driver_test(requires(sql))]
@@ -492,6 +489,61 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
 
     assert_eq!(users.len(), 1);
     assert_eq!(users[0].name, "Alice");
+
+    Ok(())
+}
+
+/// Tests comparisons directly on a newtype field path: `ne`, `gt`, `ge`,
+/// `lt`, and `le` accept the wrapper value and compare the single
+/// underlying column, so no `._0()` step is needed. The ordering methods
+/// are generated only for canonical newtypes — a newtype is a pass-through
+/// to its inner column, so each backend keeps its own ordering semantics
+/// for the inner type.
+#[driver_test(requires(sql))]
+pub async fn newtype_ordering_comparisons(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Embed)]
+    struct TimestampMillis(i64);
+
+    #[derive(Debug, toasty::Model)]
+    struct Credit {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        timestamp: TimestampMillis,
+    }
+
+    let mut db = t.setup_db(models!(Credit)).await;
+
+    for ts in [100, 200, 300] {
+        toasty::create!(Credit {
+            timestamp: TimestampMillis(ts),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    async fn timestamps(db: &mut toasty::Db, filter: toasty::stmt::Expr<bool>) -> Result<Vec<i64>> {
+        let credits = Credit::filter(filter).exec(db).await?;
+        let mut ts: Vec<i64> = credits.iter().map(|c| c.timestamp.0).collect();
+        ts.sort();
+        Ok(ts)
+    }
+
+    let fields = Credit::fields();
+    let hits = timestamps(&mut db, fields.timestamp().ne(TimestampMillis(200))).await?;
+    assert_eq!(hits, [100, 300]);
+
+    let hits = timestamps(&mut db, fields.timestamp().gt(TimestampMillis(200))).await?;
+    assert_eq!(hits, [300]);
+
+    let hits = timestamps(&mut db, fields.timestamp().ge(TimestampMillis(200))).await?;
+    assert_eq!(hits, [200, 300]);
+
+    let hits = timestamps(&mut db, fields.timestamp().lt(TimestampMillis(200))).await?;
+    assert_eq!(hits, [100]);
+
+    let hits = timestamps(&mut db, fields.timestamp().le(TimestampMillis(200))).await?;
+    assert_eq!(hits, [100, 200]);
 
     Ok(())
 }

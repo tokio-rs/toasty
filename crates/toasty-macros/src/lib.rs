@@ -870,6 +870,40 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - An `Update` struct used by the parent model's update builder for
 ///   partial field updates.
 ///
+/// Multi-field structs do not get the ordering methods — multi-column
+/// values have no ordering shared across backends:
+///
+/// ```compile_fail
+/// # #[derive(toasty::Embed)]
+/// # struct Point {
+/// #     x: i64,
+/// #     y: i64,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Pin {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     location: Point,
+/// # }
+/// // Error: no method `ge` on the fields struct of a multi-field embed
+/// let _ = Pin::filter(Pin::fields().location().ge(Point { x: 0, y: 0 }));
+/// ```
+///
+/// A tuple-newtype must wrap a single-column type. Wrapping a multi-field embed
+/// (or a data-carrying enum) fails to derive.
+///
+/// ```compile_fail
+/// # #[derive(toasty::Embed)]
+/// # struct Point {
+/// #     x: i64,
+/// #     y: i64,
+/// # }
+/// // Error: `Point` spans multiple columns, so `Outer` cannot forward to it
+/// #[derive(toasty::Embed)]
+/// struct Outer(Point);
+/// ```
+///
 /// ## Nesting
 ///
 /// Embedded structs can contain other embedded types. Columns are

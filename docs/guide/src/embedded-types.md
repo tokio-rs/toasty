@@ -68,6 +68,22 @@ user.update()
     .await?;
 ```
 
+Comparison operators (`ne`, `gt`, `ge`, `lt`, `le`) take the wrapper value and
+compare the underlying column, using the backend's ordering for the inner type:
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct Millis(i64);
+
+let recent = Credit::filter(Credit::fields().timestamp().ge(Millis(cutoff)))
+    .exec(&mut db)
+    .await?;
+```
+
+Multi-field embedded structs support `eq` and `ne`, which compare every column.
+The ordering operators are newtype-only — backends do not share an ordering for
+multi-column values.
+
 A newtype can also be used as a primary key:
 
 ```rust,ignore

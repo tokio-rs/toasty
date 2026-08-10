@@ -419,25 +419,32 @@ impl Expand<'_> {
         quote! { #( #checks )* }
     }
 
+    /// For canonical newtype `#[derive(Embed)]` types — a single unnamed
+    /// primitive field — return the inner field's type. Named single-field
+    /// structs are explicit wrappers and stay opaque, so they return `None`,
+    /// as do multi-field and root models.
+    fn canonical_newtype_inner(&self) -> Option<&syn::Type> {
+        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
+            return None;
+        };
+        if embedded.fields_named || self.model.fields.len() != 1 {
+            return None;
+        }
+        match &self.model.fields[0].ty {
+            FieldTy::Primitive(inner_ty) => Some(inner_ty),
+            // Relations are not allowed inside an `Embed` body today; nothing
+            // to mark if that ever changes.
+            _ => None,
+        }
+    }
+
     /// For tuple-newtype `#[derive(Embed)]` types (one unnamed field), emit
     /// the `NewtypeOf` marker carrying the inner field's type. The blanket
     /// `impl<T: NewtypeOf, T::Inner: Auto> Auto for T` in `codegen_support`
     /// then promotes the newtype to `Auto` whenever the inner type is auto,
     /// without errors when the inner type is not auto.
     fn expand_embedded_newtype_marker(&self) -> TokenStream {
-        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
-            return quote! {};
-        };
-        // Only canonical newtypes (single unnamed field) qualify. Named
-        // single-field structs are explicit wrappers and stay opaque.
-        if embedded.fields_named || self.model.fields.len() != 1 {
-            return quote! {};
-        }
-
-        let inner = &self.model.fields[0];
-        let FieldTy::Primitive(inner_ty) = &inner.ty else {
-            // Relations are not allowed inside an `Embed` body today; nothing
-            // to mark if that ever changes.
+        let Some(inner_ty) = self.canonical_newtype_inner() else {
             return quote! {};
         };
 
@@ -467,15 +474,17 @@ impl Expand<'_> {
     /// This is a per-type impl rather than a `NewtypeOf` blanket: a blanket
     /// would conflict with the `Box<T>` forwarding impl in
     /// `codegen_support::index`, because `Box` is `#[fundamental]`.
+    ///
+    /// The where clause names a concrete type, so Rust's trivial-bounds
+    /// rule evaluates it at the impl rather than at use sites: deriving a
+    /// newtype over a non-indexable inner (a multi-field embed, a
+    /// data-carrying enum) is a compile error, not an unindexable-but-valid
+    /// type. Other newtype codegen relies on that rejection — see
+    /// `expand_field_struct_comparison_methods`, whose ordering methods
+    /// assume
+    /// every derivable newtype has a single-column inner.
     fn expand_embedded_indexable_impl(&self) -> TokenStream {
-        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
-            return quote! {};
-        };
-        if embedded.fields_named || self.model.fields.len() != 1 {
-            return quote! {};
-        }
-
-        let FieldTy::Primitive(inner_ty) = &self.model.fields[0].ty else {
+        let Some(inner_ty) = self.canonical_newtype_inner() else {
             return quote! {};
         };
 
