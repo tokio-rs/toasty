@@ -217,6 +217,18 @@ impl Expand<'_> {
     /// and keep the backend's own ordering semantics for the inner type.
     /// Multi-field embeds get no ordering: record ordering would need a
     /// lexicographic definition that backends don't share.
+    ///
+    /// `canonical_newtype_inner` is a syntactic check — it cannot tell a
+    /// scalar inner from another embed, so `struct Outer(Point)` with a
+    /// multi-field `Point` passes it. The single-column guarantee comes
+    /// from `expand_embedded_indexable_impl`: its `IndexableField`
+    /// forwarding impl names the concrete inner type in its where clause,
+    /// which Rust's trivial-bounds rule evaluates at the impl itself, so a
+    /// newtype over a non-single-column inner fails to derive before these
+    /// methods could be reached. A `compile_fail` doctest on the `Embed`
+    /// derive pins that rejection; if the forwarding impl ever becomes
+    /// lazily conditional, that doctest breaks and this gate must move to
+    /// a semantic check.
     fn expand_embedded_comparison_methods(&self) -> TokenStream {
         if !matches!(self.model.kind, ModelKind::EmbeddedStruct(_)) {
             return TokenStream::new();
