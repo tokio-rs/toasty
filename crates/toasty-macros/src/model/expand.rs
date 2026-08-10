@@ -480,7 +480,8 @@ impl Expand<'_> {
     /// newtype over a non-indexable inner (a multi-field embed, a
     /// data-carrying enum) is a compile error, not an unindexable-but-valid
     /// type. Other newtype codegen relies on that rejection — see
-    /// `expand_embedded_comparison_methods`, whose ordering methods assume
+    /// `expand_field_struct_comparison_methods`, whose ordering methods
+    /// assume
     /// every derivable newtype has a single-column inner.
     fn expand_embedded_indexable_impl(&self) -> TokenStream {
         let Some(inner_ty) = self.canonical_newtype_inner() else {

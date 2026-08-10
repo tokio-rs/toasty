@@ -140,7 +140,7 @@ impl Expand<'_> {
         };
 
         let include_modifier_methods = self.expand_include_modifier_methods(quote!(#model_ident));
-        let embedded_comparison_methods = self.expand_embedded_comparison_methods();
+        let comparison_methods = self.expand_field_struct_comparison_methods();
 
         quote!(
             #struct_def
@@ -154,16 +154,11 @@ impl Expand<'_> {
                     self.path.clone()
                 }
 
-                #vis fn eq(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    use #toasty::IntoExpr;
-                    self.path.eq(rhs.into_expr())
-                }
-
                 #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
                 }
 
-                #embedded_comparison_methods
+                #comparison_methods
 
                 /// Discard `self`'s origin parameter and return a fresh
                 /// fields struct typed against this model. Used by
@@ -206,42 +201,27 @@ impl Expand<'_> {
         )
     }
 
-    /// Comparison methods beyond `eq` on an embedded struct's fields
-    /// struct, forwarding to the underlying path.
+    /// Comparison methods on the fields struct, forwarding to the
+    /// underlying path.
     ///
-    /// `ne` is `eq`'s dual and is emitted for every embedded struct: the
-    /// engine decomposes `Record != Record` into a per-column OR the same
-    /// way it decomposes equality into a per-column AND. The ordering
-    /// methods (`gt`/`ge`/`lt`/`le`) are emitted only for canonical
-    /// newtypes, where they pass through to the single underlying column
-    /// and keep the backend's own ordering semantics for the inner type.
-    /// Multi-field embeds get no ordering: record ordering would need a
-    /// lexicographic definition that backends don't share.
-    ///
-    /// `canonical_newtype_inner` is a syntactic check — it cannot tell a
-    /// scalar inner from another embed, so `struct Outer(Point)` with a
-    /// multi-field `Point` passes it. The single-column guarantee comes
-    /// from `expand_embedded_indexable_impl`: its `IndexableField`
-    /// forwarding impl names the concrete inner type in its where clause,
-    /// which Rust's trivial-bounds rule evaluates at the impl itself, so a
-    /// newtype over a non-single-column inner fails to derive before these
-    /// methods could be reached. A `compile_fail` doctest on the `Embed`
-    /// derive pins that rejection; if the forwarding impl ever becomes
-    /// lazily conditional, that doctest breaks and this gate must move to
-    /// a semantic check.
-    fn expand_embedded_comparison_methods(&self) -> TokenStream {
-        if !matches!(self.model.kind, ModelKind::EmbeddedStruct(_)) {
-            return TokenStream::new();
-        }
-
+    /// `eq` and `ne` are duals and every fields struct gets both: on a
+    /// root model they compare a model reference (lowering to its primary
+    /// key), on an embedded struct the engine decomposes the record
+    /// across columns (AND for eq, OR for ne). The ordering methods are
+    /// newtype-only: a single column keeps the backend's own ordering,
+    /// while record ordering has no shared cross-backend definition. The
+    /// syntactic newtype check suffices because a newtype over a
+    /// non-single-column inner fails to derive — see
+    /// `expand_embedded_indexable_impl`.
+    fn expand_field_struct_comparison_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
         let names: &[&str] = if self.canonical_newtype_inner().is_some() {
-            &["ne", "gt", "ge", "lt", "le"]
+            &["eq", "ne", "gt", "ge", "lt", "le"]
         } else {
-            &["ne"]
+            &["eq", "ne"]
         };
 
         let methods = names.iter().map(|name| {
