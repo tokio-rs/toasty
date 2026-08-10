@@ -80,8 +80,9 @@ let recent = Credit::filter(Credit::fields().timestamp().ge(TimestampMillis(cuto
     .await?;
 ```
 
-Multi-field embedded structs only support `eq` — backends do not share an
-ordering for multi-column values.
+Multi-field embedded structs support `eq` and `ne`, which compare every column.
+The ordering operators are newtype-only — backends do not share an ordering for
+multi-column values.
 
 A newtype can also be used as a primary key:
 

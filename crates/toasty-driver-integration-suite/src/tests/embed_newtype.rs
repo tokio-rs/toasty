@@ -493,9 +493,9 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Tests ordering comparisons directly on a newtype field path: `ne`,
-/// `gt`, `ge`, `lt`, and `le` accept the wrapper value and compare the
-/// single underlying column, so no `._0()` step is needed. These methods
+/// Tests comparisons directly on a newtype field path: `ne`, `gt`, `ge`,
+/// `lt`, and `le` accept the wrapper value and compare the single
+/// underlying column, so no `._0()` step is needed. The ordering methods
 /// are generated only for canonical newtypes — a newtype is a pass-through
 /// to its inner column, so each backend keeps its own ordering semantics
 /// for the inner type.

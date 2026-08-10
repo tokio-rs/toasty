@@ -8,6 +8,7 @@ const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
     "from_path",
     "path",
     "eq",
+    "ne",
     "in_query",
     "into_root",
     "filter",
@@ -139,7 +140,7 @@ impl Expand<'_> {
         };
 
         let include_modifier_methods = self.expand_include_modifier_methods(quote!(#model_ident));
-        let newtype_comparison_methods = self.expand_newtype_comparison_methods();
+        let embedded_comparison_methods = self.expand_embedded_comparison_methods();
 
         quote!(
             #struct_def
@@ -162,7 +163,7 @@ impl Expand<'_> {
                     self.path.in_query(rhs)
                 }
 
-                #newtype_comparison_methods
+                #embedded_comparison_methods
 
                 /// Discard `self`'s origin parameter and return a fresh
                 /// fields struct typed against this model. Used by
@@ -205,14 +206,19 @@ impl Expand<'_> {
         )
     }
 
-    /// For canonical newtype embeds, emit the remaining comparison methods
-    /// (`ne`/`gt`/`ge`/`lt`/`le`) on the fields struct, forwarding to the
-    /// underlying path. A newtype is a pass-through to its single column, so
-    /// these keep the backend's own ordering semantics for the inner type.
-    /// Multi-field embeds stay eq-only: record ordering would need a
+    /// Comparison methods beyond `eq` on an embedded struct's fields
+    /// struct, forwarding to the underlying path.
+    ///
+    /// `ne` is `eq`'s dual and is emitted for every embedded struct: the
+    /// engine decomposes `Record != Record` into a per-column OR the same
+    /// way it decomposes equality into a per-column AND. The ordering
+    /// methods (`gt`/`ge`/`lt`/`le`) are emitted only for canonical
+    /// newtypes, where they pass through to the single underlying column
+    /// and keep the backend's own ordering semantics for the inner type.
+    /// Multi-field embeds get no ordering: record ordering would need a
     /// lexicographic definition that backends don't share.
-    fn expand_newtype_comparison_methods(&self) -> TokenStream {
-        if self.canonical_newtype_inner().is_none() {
+    fn expand_embedded_comparison_methods(&self) -> TokenStream {
+        if !matches!(self.model.kind, ModelKind::EmbeddedStruct(_)) {
             return TokenStream::new();
         }
 
@@ -220,7 +226,13 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let methods = ["ne", "gt", "ge", "lt", "le"].map(|name| {
+        let names: &[&str] = if self.canonical_newtype_inner().is_some() {
+            &["ne", "gt", "ge", "lt", "le"]
+        } else {
+            &["ne"]
+        };
+
+        let methods = names.iter().map(|name| {
             let method_ident = quote::format_ident!("{name}");
             quote! {
                 #vis fn #method_ident(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
