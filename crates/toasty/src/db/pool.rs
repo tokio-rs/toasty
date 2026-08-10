@@ -175,7 +175,17 @@ pub(super) struct Manager {
     engine: Engine,
     sweep_waker: Arc<SweepWaker>,
     pre_ping: bool,
+    // Enforcing these caps needs the connection's age, which deadpool only
+    // tracks off wasm32 (`std::time::Instant` has no wasm32 implementation).
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "connection age is unavailable on wasm32")
+    )]
     max_connection_lifetime: Option<Duration>,
+    #[cfg_attr(
+        target_arch = "wasm32",
+        expect(dead_code, reason = "connection age is unavailable on wasm32")
+    )]
     max_connection_idle_time: Option<Duration>,
     /// Per-connection configuration handed to `Driver::connect` for every
     /// connection the pool creates.
@@ -213,9 +223,15 @@ impl deadpool::managed::Manager for Manager {
     async fn recycle(
         &self,
         obj: &mut Self::Type,
+        #[cfg_attr(
+            target_arch = "wasm32",
+            expect(unused_variables, reason = "no timestamps on wasm32")
+        )]
         metrics: &deadpool::managed::Metrics,
     ) -> deadpool::managed::RecycleResult<Self::Error> {
-        // deadpool::managed::Metrics::age() only exist when the target is not wasm32
+        // `Metrics::age()` and `Metrics::last_used()` only exist off wasm32:
+        // deadpool records no timestamps there because `std::time::Instant`
+        // has no wasm32 implementation, so neither cap can be enforced.
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(max) = self.max_connection_lifetime
             && metrics.age() >= max
@@ -225,7 +241,6 @@ impl deadpool::managed::Manager for Manager {
                 "connection exceeded max lifetime",
             ));
         }
-        // deadpool::managed::Metrics::last_used() only exist when the target is not wasm32
         #[cfg(not(target_arch = "wasm32"))]
         if let Some(max) = self.max_connection_idle_time
             && metrics.last_used() >= max
