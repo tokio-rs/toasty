@@ -139,6 +139,7 @@ impl Expand<'_> {
         };
 
         let include_modifier_methods = self.expand_include_modifier_methods(quote!(#model_ident));
+        let newtype_comparison_methods = self.expand_newtype_comparison_methods();
 
         quote!(
             #struct_def
@@ -160,6 +161,8 @@ impl Expand<'_> {
                 #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
                 }
+
+                #newtype_comparison_methods
 
                 /// Discard `self`'s origin parameter and return a fresh
                 /// fields struct typed against this model. Used by
@@ -200,6 +203,34 @@ impl Expand<'_> {
                 }
             }
         )
+    }
+
+    /// For canonical newtype embeds, emit the remaining comparison methods
+    /// (`ne`/`gt`/`ge`/`lt`/`le`) on the fields struct, forwarding to the
+    /// underlying path. A newtype is a pass-through to its single column, so
+    /// these keep the backend's own ordering semantics for the inner type.
+    /// Multi-field embeds stay eq-only: record ordering would need a
+    /// lexicographic definition that backends don't share.
+    fn expand_newtype_comparison_methods(&self) -> TokenStream {
+        if self.canonical_newtype_inner().is_none() {
+            return TokenStream::new();
+        }
+
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        let methods = ["ne", "gt", "ge", "lt", "le"].map(|name| {
+            let method_ident = quote::format_ident!("{name}");
+            quote! {
+                #vis fn #method_ident(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    use #toasty::IntoExpr;
+                    self.path.#method_ident(rhs.into_expr())
+                }
+            }
+        });
+
+        quote!( #( #methods )* )
     }
 
     fn expand_include_modifier_methods(&self, target_ty: TokenStream) -> TokenStream {

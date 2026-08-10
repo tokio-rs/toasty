@@ -866,7 +866,11 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// - An [`Embed`] trait implementation (`id` and `schema` methods).
 /// - A `Fields` struct returned by `<Type>::fields()` for building
-///   filter expressions on individual fields.
+///   filter expressions on individual fields. It compares the whole
+///   embedded value with `eq`; a tuple-newtype struct (one unnamed
+///   field) additionally gets `ne`, `gt`, `ge`, `lt`, and `le`, which
+///   compare the single underlying column using the backend's ordering
+///   for the inner type.
 /// - An `Update` struct used by the parent model's update builder for
 ///   partial field updates.
 ///
