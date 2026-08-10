@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-22438e6c.js";
+            window.path_to_searchindex_js = "searchindex-575db792.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -3337,6 +3337,17 @@ user.update()
     .email(Email("new@example.com".into()))
     .exec(&amp;mut db)
     .await?;</code></pre>
+<p>Comparison operators (<code>ne</code>, <code>gt</code>, <code>ge</code>, <code>lt</code>, <code>le</code>) take the wrapper value and
+compare the underlying column, using the backend’s ordering for the inner type:</p>
+<pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
+struct Millis(i64);
+
+let recent = Credit::filter(Credit::fields().timestamp().ge(Millis(cutoff)))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>Multi-field embedded structs support <code>eq</code> and <code>ne</code>, which compare every column.
+The ordering operators are newtype-only — backends do not share an ordering for
+multi-column values.</p>
 <p>A newtype can also be used as a primary key:</p>
 <pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
 struct UserId(String);
