@@ -87,7 +87,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// #[key(partition = user_id, local = id)]
 /// struct Todo {
 ///     #[auto]
-///     id: uuid::Uuid,
+///     id: toasty::stmt::Uuid,
 ///     user_id: String,
 ///     title: String,
 /// }
@@ -157,16 +157,16 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 ///
 /// | Syntax | Behavior |
 /// |--------|----------|
-/// | `#[auto]` on `uuid::Uuid` | UUID v7 (timestamp-sortable) |
+/// | `#[auto]` on `toasty::stmt::Uuid` | UUID v7 (timestamp-sortable) |
 /// | `#[auto(uuid(v4))]` | UUID v4 (random) |
 /// | `#[auto(uuid(v7))]` | UUID v7 (explicit) |
 /// | `#[auto]` on integer types (`i8`–`i64`, `u8`–`u64`) | Auto-increment |
 /// | `#[auto(increment)]` | Auto-increment (explicit) |
-/// | `#[auto]` on a field named `created_at` | Expands to `#[default(jiff::Timestamp::now())]` |
-/// | `#[auto]` on a field named `updated_at` | Expands to `#[update(jiff::Timestamp::now())]` |
+/// | `#[auto]` on a field named `created_at` | Expands to `#[default(toasty::stmt::Timestamp::now())]` |
+/// | `#[auto]` on a field named `updated_at` | Expands to `#[update(toasty::stmt::Timestamp::now())]` |
 ///
 /// The `created_at`/`updated_at` expansion requires the `jiff` feature and
-/// a field type compatible with `jiff::Timestamp`.
+/// a field type compatible with `toasty::stmt::Timestamp`.
 ///
 /// Cannot be combined with `#[default]` or `#[update]` on the same field.
 ///
@@ -211,8 +211,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
-/// #[update(jiff::Timestamp::now())]
-/// updated_at: jiff::Timestamp,
+/// #[update(toasty::stmt::Timestamp::now())]
+/// updated_at: toasty::stmt::Timestamp,
 /// # }
 /// ```
 ///
@@ -792,11 +792,11 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 ///
 ///     name: String,
 ///
-///     #[default(jiff::Timestamp::now())]
-///     created_at: jiff::Timestamp,
+///     #[default(toasty::stmt::Timestamp::now())]
+///     created_at: toasty::stmt::Timestamp,
 ///
-///     #[update(jiff::Timestamp::now())]
-///     updated_at: jiff::Timestamp,
+///     #[update(toasty::stmt::Timestamp::now())]
+///     updated_at: toasty::stmt::Timestamp,
 ///
 ///     #[has_many]
 ///     posts: toasty::Deferred<Vec<Post>>,
@@ -1016,7 +1016,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// ```
 /// #[derive(toasty::Embed)]
-/// struct UserId(uuid::Uuid);
+/// struct UserId(toasty::stmt::Uuid);
 ///
 /// #[derive(toasty::Model)]
 /// struct User {
@@ -1247,13 +1247,13 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// # struct Human {
 /// #     #[key]
 /// #     #[auto]
-/// #     id: uuid::Uuid,
+/// #     id: toasty::stmt::Uuid,
 /// # }
 /// #[derive(Debug, toasty::Embed)]
 /// enum Owner {
 ///     Human {
 ///         #[index]
-///         id: uuid::Uuid,
+///         id: toasty::stmt::Uuid,
 ///         #[belongs_to(key = id)]
 ///         human: toasty::Deferred<Human>,
 ///     },

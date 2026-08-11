@@ -362,13 +362,13 @@ impl Field {
         }
 
         // Expand #[auto] on timestamp fields:
-        //   created_at → #[default(jiff::Timestamp::now())]
-        //   updated_at → #[update(jiff::Timestamp::now())]
+        //   created_at → #[default(toasty::stmt::Timestamp::now())]
+        //   updated_at → #[update(toasty::stmt::Timestamp::now())]
         if matches!(&attrs.auto, Some(AutoStrategy::Unspecified))
             && let Some(ident) = &field.ident
         {
             let field_name = ident.to_string();
-            let now_expr: syn::Expr = syn::parse_quote!(jiff::Timestamp::now());
+            let now_expr: syn::Expr = syn::parse_quote!(_toasty::stmt::Timestamp::now());
 
             if field_name == "created_at" {
                 attrs.auto = None;
