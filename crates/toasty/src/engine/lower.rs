@@ -628,12 +628,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, run the default visitor to lower sub-expressions
         self.visit_expr_mut(&mut node.expr);
 
-        // An embedded newtype field lowers to a single-element record.
-        // Unwrap it so the ordering applies to the underlying column —
-        // otherwise the eq synthesis below would hit the record-vs-record
-        // arm of `lower_expr_binary_op`, which drains the operand records
-        // and would leave an empty record behind.
-        if let stmt::Expr::Record(rec) = &mut node.expr
+        // An embedded newtype field lowers to a single-element record,
+        // one layer per newtype in the chain. Unwrap them so the ordering
+        // applies to the underlying column — otherwise the eq synthesis
+        // below would hit the record-vs-record arm of
+        // `lower_expr_binary_op`, which drains the operand records and
+        // would leave an empty record behind.
+        while let stmt::Expr::Record(rec) = &mut node.expr
             && rec.len() == 1
         {
             node.expr = rec.fields.pop().unwrap();

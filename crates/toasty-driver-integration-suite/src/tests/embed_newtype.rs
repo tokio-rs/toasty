@@ -556,6 +556,36 @@ pub async fn newtype_ordering_comparisons(t: &mut Test) -> Result<()> {
     let ts = ordered(&mut db, Credit::fields().timestamp().asc()).await?;
     assert_eq!(ts, [100, 200, 300]);
 
+    // A nested newtype chain lowers to one single-element record per
+    // layer; ordering must unwrap every layer to reach the column.
+    #[derive(Debug, toasty::Embed)]
+    struct Wrapped(TimestampMillis);
+
+    #[derive(Debug, toasty::Model)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        at: Wrapped,
+    }
+
+    let mut db = t.setup_db(models!(Event)).await;
+
+    for ts in [200, 100, 300] {
+        toasty::create!(Event {
+            at: Wrapped(TimestampMillis(ts)),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    let events = Event::all()
+        .order_by(Event::fields().at().desc())
+        .exec(&mut db)
+        .await?;
+    let ts: Vec<i64> = events.iter().map(|e| e.at.0.0).collect();
+    assert_eq!(ts, [300, 200, 100]);
+
     Ok(())
 }
 
