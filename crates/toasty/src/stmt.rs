@@ -83,7 +83,7 @@ pub use toasty_core::stmt::Decimal;
 pub use toasty_core::stmt::{Date, DateTime, Time, Timestamp, Zoned};
 #[cfg(feature = "net")]
 pub use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
-pub use toasty_core::stmt::{OrderBy, Projection, Type, Uuid, Value};
+pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Uuid, Value};
 
 use toasty_core::stmt;
 
