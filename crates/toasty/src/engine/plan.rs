@@ -7,6 +7,7 @@ use crate::{
     engine::{
         Engine, HirStatement,
         exec::{self, ExecPlan, VarDecls},
+        hir,
         mir::{self, LogicalPlan},
     },
 };
@@ -22,6 +23,12 @@ struct HirPlanner<'a> {
 
     /// Graph of operations needed to execute the statement
     mir: mir::Store,
+
+    /// Execution-order edges whose target statement was still being planned
+    /// when the edge was requested (a statement-level cycle that is acyclic
+    /// at the operation level). Resolved against the target's data-loading
+    /// node once every statement is planned.
+    deferred_node_deps: Vec<(mir::NodeId, hir::StmtId)>,
 }
 
 #[derive(Debug)]
@@ -40,6 +47,7 @@ impl Engine {
             engine: self,
             hir: &hir,
             mir: mir::Store::new(),
+            deferred_node_deps: vec![],
         }
         .build_logical_plan()?;
 
@@ -63,6 +71,19 @@ impl HirPlanner<'_> {
     fn build_logical_plan(mut self) -> Result<mir::LogicalPlan> {
         let root_id = self.hir.root_id();
         self.plan_statement(root_id)?;
+
+        // Resolve execution-order edges that targeted statements still being
+        // planned when requested. Anchor on the target's data-loading node —
+        // its database effect — rather than its output node, which may
+        // transitively consume the dependent's output (the statement-level
+        // cycle these edges come from).
+        for (node_id, stmt_id) in std::mem::take(&mut self.deferred_node_deps) {
+            let dep_id = self.hir[stmt_id]
+                .load_data_statement
+                .get()
+                .expect("all statements are planned");
+            self.mir[node_id].deps.insert(dep_id);
+        }
 
         let exit = self.hir.root().output.get().unwrap();
         let exit_node = &self.mir.store[exit];

@@ -95,6 +95,14 @@ pub(super) struct StatementInfo {
     /// When true, the statement is independent. An independent statement does
     /// not depend on any anestors itself nor do any of its sub-dependencies.
     pub(super) independent: bool,
+
+    /// True while the statement's own planning pass is on the stack. A
+    /// statement may be reached again through a dependency cycle that is
+    /// acyclic at the operation level (e.g. a `belongs_to` returning-load
+    /// subquery ordered after an enclosing INSERT); re-entrant planning must
+    /// skip it. The ordering edge is resolved after planning completes — see
+    /// `deferred_node_deps`.
+    pub(super) planning: Cell<bool>,
 }
 
 index_vec::define_index_type! {
@@ -117,6 +125,7 @@ impl StatementInfo {
             load_data_select_items: OnceCell::new(),
             output: Cell::new(None),
             independent: true,
+            planning: Cell::new(false),
         }
     }
 

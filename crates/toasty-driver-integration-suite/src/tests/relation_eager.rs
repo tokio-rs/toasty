@@ -185,6 +185,139 @@ pub async fn eager_has_many_create_returning_loads_relations(t: &mut Test) -> Re
 }
 
 #[driver_test]
+pub async fn eager_belongs_to_create_returning_loads_relation(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        title: String,
+
+        #[index]
+        user_id: uuid::Uuid,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
+
+    let mut db = t.setup_db(models!(User, Post)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let post = toasty::create!(Post {
+        title: "hello",
+        user: &user
+    })
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(post.title, "hello");
+    assert_eq!(post.user_id, user.id);
+    assert_eq!(post.user.id, user.id);
+    assert_eq!(post.user.name, "Alice");
+
+    Ok(())
+}
+
+#[driver_test]
+pub async fn eager_belongs_to_batch_create_returning_loads_relation(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        title: String,
+
+        #[index]
+        user_id: uuid::Uuid,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
+
+    let mut db = t.setup_db(models!(User, Post)).await;
+
+    let alice = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let bob = toasty::create!(User { name: "Bob" }).exec(&mut db).await?;
+
+    let posts = toasty::create!(Post::[
+        { title: "a", user: &alice },
+        { title: "b", user: &bob },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(posts.len(), 2);
+    assert_eq!(posts[0].user.name, "Alice");
+    assert_eq!(posts[1].user.name, "Bob");
+
+    Ok(())
+}
+
+#[driver_test]
+pub async fn eager_belongs_to_nested_create_returning_loads_relation(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+
+        #[has_many]
+        posts: toasty::Deferred<Vec<Post>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        title: String,
+
+        #[index]
+        user_id: uuid::Uuid,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
+
+    let mut db = t.setup_db(models!(User, Post)).await;
+
+    // The nested post insert's RETURNING includes its eager `user`, whose FK
+    // value comes from the parent user insert.
+    let user = User::create()
+        .name("Alice")
+        .posts([Post::create().title("hello")])
+        .exec(&mut db)
+        .await?;
+
+    let posts: Vec<_> = user.posts().exec(&mut db).await?;
+    assert_eq!(posts.len(), 1);
+    assert_eq!(posts[0].user.name, "Alice");
+
+    Ok(())
+}
+
+#[driver_test]
 pub async fn eager_nested_relations_load_without_include(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {

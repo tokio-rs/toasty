@@ -91,8 +91,102 @@ impl LowerStatement<'_, '_> {
         for (index, row) in values.rows.iter_mut().enumerate() {
             self.lower_insert_with_row(index, |lower| {
                 lower.plan_stmt_insert_relations(row, returning, index);
+                lower.plan_insert_returning_belongs_to(row, returning, index);
                 lower.verify_field_constraints(model, row);
             });
+        }
+    }
+
+    /// Fill each eager `belongs_to` slot of an INSERT's returning with a
+    /// per-row load subquery.
+    ///
+    /// Runs after [`Self::plan_stmt_insert_relations`], which resolves
+    /// relation values into the row's FK source fields. The subquery
+    /// correlates on those FK fields, and running per row (under
+    /// `lower_insert_with_row`) captures the row index the planner needs to
+    /// bind the subquery's parent reference to this row of the INSERT.
+    fn plan_insert_returning_belongs_to(
+        &mut self,
+        row: &stmt::Expr,
+        returning: &mut Option<stmt::Returning>,
+        index: usize,
+    ) {
+        // Only the shapes `convert_returning_for_insert` produces load
+        // relations. Other shapes (no returning; a preserved projection for
+        // `DO NOTHING` upserts) do not.
+        if !matches!(
+            returning,
+            Some(stmt::Returning::Expr(
+                stmt::Expr::List(_) | stmt::Expr::Record(_)
+            ))
+        ) {
+            return;
+        }
+
+        let Some(model) = self.expr_cx.target_as_model() else {
+            return;
+        };
+
+        for field in &model.fields {
+            let app::FieldTy::BelongsTo(rel) = &field.ty else {
+                continue;
+            };
+            if field.deferred {
+                continue;
+            }
+
+            // An unset FK (optional relation left unassociated) loads as
+            // `None`; keep the slot's `Null`.
+            let fk_unset = rel.foreign_key.fields.iter().any(|fk_field| {
+                row.entry(fk_field.source.index).is_none_or(|entry| {
+                    let expr = entry.to_expr();
+                    expr.is_value_null() || expr.is_default()
+                })
+            });
+            if fk_unset {
+                continue;
+            }
+
+            let arg = self.build_relation_subquery(field.id.index);
+
+            // The related row may itself be inserted by an enclosing insert
+            // of this same plan (a nested create inserts children before the
+            // parent). Depend on every enclosing insert so the load runs
+            // after them.
+            {
+                let stmt::Expr::Arg(expr_arg) = &arg else {
+                    unreachable!("belongs_to subquery lowers to a sub-statement arg");
+                };
+                let crate::engine::hir::Arg::Sub {
+                    stmt_id: sub_id, ..
+                } = self.curr_stmt_info().args[expr_arg.position]
+                else {
+                    unreachable!("subquery arg refers to a sub-statement");
+                };
+                let enclosing = self.state.insert_stmts.clone();
+                self.state.hir[sub_id].deps.extend(enclosing);
+            }
+
+            // The subquery's result is a row list; the slot wants the single
+            // related record. An empty list (dangling FK) becomes `Null`, the
+            // value a single relation with no match loads as everywhere else.
+            let expr = stmt::Expr::match_expr(
+                arg.clone(),
+                vec![stmt::MatchArm {
+                    pattern: stmt::Value::List(vec![]),
+                    expr: stmt::Expr::null(),
+                }],
+                stmt::Expr::project(arg, [0usize]),
+            );
+
+            let record = match returning {
+                Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
+                    rows.items[index].as_record_mut_unwrap()
+                }
+                Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
+                _ => unreachable!("shape checked above"),
+            };
+            record[field.id.index] = expr;
         }
     }
 

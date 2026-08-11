@@ -71,6 +71,7 @@ impl Engine {
             relations: vec![],
             errors: vec![],
             dependencies: HashSet::new(),
+            insert_stmts: vec![],
         };
 
         state.lower_stmt(stmt::ExprContext::new(schema), None, stmt);
@@ -171,6 +172,12 @@ struct LoweringState<'a> {
 
     /// All new statements should include these as part of its dependencies
     dependencies: HashSet<hir::StmtId>,
+
+    /// INSERT statements currently being lowered, outermost first. A
+    /// `belongs_to` returning-load subquery depends on these so it executes
+    /// after enclosing inserts (a nested create inserts children before the
+    /// parent, and the loaded row may be the parent's).
+    insert_stmts: Vec<hir::StmtId>,
 
     /// Tracks errors that occurred while lowering the statement
     errors: Vec<crate::Error>,
@@ -1120,6 +1127,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             return;
         }
 
+        self.state.insert_stmts.push(self.scope_stmt_id());
+
         // Create a new expr scope for the statement, and lower all parts
         // *except* the target field (since it is borrowed).
         let mut lower = self.lower_insert(&stmt.target);
@@ -1187,6 +1196,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
 
         self.visit_insert_target_mut(&mut stmt.target);
+
+        let popped = self.state.insert_stmts.pop();
+        debug_assert_eq!(popped, Some(self.scope_stmt_id()));
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {

@@ -151,10 +151,14 @@ impl HirPlanner<'_> {
     pub(super) fn plan_statement(&mut self, stmt_id: hir::StmtId) -> Result<()> {
         let stmt_info = &self.hir[stmt_id];
 
-        // Check if the statement has already been planned
-        if stmt_info.load_data_statement.get().is_some() {
+        // Check if the statement has already been planned, or is currently
+        // being planned (a statement-level dependency cycle that is acyclic
+        // at the operation level — the edge is enforced via
+        // `deferred_node_deps` instead of recursion).
+        if stmt_info.load_data_statement.get().is_some() || stmt_info.planning.get() {
             return Ok(());
         }
+        stmt_info.planning.set(true);
 
         // First, plan independent dependency statements. These are statments
         // that must run before the current one but do not reference the current
@@ -236,6 +240,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.rewrite_stmt_insert_arg_dependencies(insert);
         } else if let stmt::Statement::Update(update) = &mut stmt {
             self.rewrite_stmt_update_arg_dependencies(update);
+        } else if let stmt::Statement::Query(query) = &mut stmt {
+            self.rewrite_stmt_query_arg_dependencies(query);
         }
 
         let load_data_node_id = self.plan_data_loading(stmt, &mut returning)?;
@@ -270,6 +276,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let output_node_id = self.plan_output_node(load_data_node_id, returning_info);
 
         self.stmt_info.output.set(Some(output_node_id));
+
+        // Deps that never resolved target enclosing statements that are still
+        // being planned; enforce them on this statement's data-loading node
+        // once planning completes.
+        for stmt_id in self.remaining_deps.drain(..) {
+            self.planner
+                .deferred_node_deps
+                .push((load_data_node_id, stmt_id));
+        }
 
         Ok(())
     }
@@ -755,6 +770,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
+    /// Rewrite filter args for a query whose parent references bind to a
+    /// fixed row of the parent statement's output (`batch_load_index` set
+    /// during lowering — e.g. a `belongs_to` load subquery for one row of an
+    /// INSERT's returning). Queries that batch-load against a parent *query*
+    /// take the `rewrite_stmt_for_batch_load` path instead.
+    fn rewrite_stmt_query_arg_dependencies(&mut self, stmt: &mut stmt::Query) {
+        if let stmt::ExprSet::Select(select) = &mut stmt.body
+            && let Some(expr) = &mut select.filter.expr
+        {
+            self.rewrite_arg_dependencies(expr);
+        }
+    }
+
     fn rewrite_arg_dependencies(&mut self, expr: &mut stmt::Expr) {
         visit_mut::for_each_expr_mut(expr, |expr| {
             if let stmt::Expr::Arg(expr_arg) = expr {
@@ -867,7 +895,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let const_returning = self.extract_insert_returning_as_const(&stmt);
 
-        if !self.load_data.select_items.is_empty() {
+        // When the values the back-refs need were extracted as constants
+        // above, the Const node feeds them; skip the RETURNING clause, which
+        // MySQL rejects for non-auto-increment columns.
+        if const_returning.is_none() && !self.load_data.select_items.is_empty() {
             stmt.set_returning_project(stmt::Expr::record(
                 self.load_data
                     .select_items
@@ -1999,7 +2030,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let node = &mut self.planner.mir[node_id];
 
         self.remaining_deps.retain(|stmt_id| {
-            if let Some(dep_id) = self.planner.hir[stmt_id].output.get() {
+            let dep_info = &self.planner.hir[stmt_id];
+
+            // A dependency on an *enclosing* statement (one still being
+            // planned — e.g. a `belongs_to` returning-load subquery ordered
+            // after an ancestor INSERT) has no output node yet; its
+            // data-loading node carries the database effect, so anchoring
+            // there gives the same execution-order guarantee.
+            let dep_id = dep_info
+                .output
+                .get()
+                .or_else(|| dep_info.load_data_statement.get());
+
+            if let Some(dep_id) = dep_id {
                 node.deps.insert(dep_id);
                 false
             } else {
