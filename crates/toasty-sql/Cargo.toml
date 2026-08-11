@@ -16,8 +16,6 @@ documentation = "https://docs.rs/toasty-sql"
 [dependencies]
 toasty-core.workspace = true
 jiff = { workspace = true, optional = true }
-cidr = { workspace = true, optional = true }
-macaddr = { workspace = true, optional = true }
 rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
 serde.workspace = true
@@ -27,7 +25,7 @@ serde_json.workspace = true
 rust_decimal = ["dep:rust_decimal", "toasty-core/rust_decimal"]
 bigdecimal = ["dep:bigdecimal", "toasty-core/bigdecimal"]
 jiff = ["dep:jiff", "toasty-core/jiff"]
-net = ["dep:cidr", "dep:macaddr", "toasty-core/net"]
+net = ["toasty-core/net"]
 
 [dev-dependencies]
 expect-test.workspace = true

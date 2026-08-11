@@ -2,6 +2,8 @@ use std::{rc::Rc, sync::Arc};
 
 use super::assignment::impl_assign_via_expr;
 use super::{Expr, List, Value};
+#[cfg(feature = "net")]
+use super::{IpCidr, IpInet, MacAddr6, MacAddr8};
 use toasty_core::stmt;
 
 /// Convert a value into an [`Expr<T>`].
@@ -101,10 +103,10 @@ impl_into_expr_for_copy! {
 
 #[cfg(feature = "net")]
 impl_into_expr_for_copy! {
-    Cidr(cidr::IpCidr);
-    Inet(cidr::IpInet);
-    MacAddr(macaddr::MacAddr6);
-    MacAddr8(macaddr::MacAddr8);
+    Cidr(IpCidr);
+    Inet(IpInet);
+    MacAddr(MacAddr6);
+    MacAddr8(MacAddr8);
 }
 
 // Pointer-sized integers convert through their fixed-size equivalents

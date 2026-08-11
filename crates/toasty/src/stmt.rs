@@ -75,12 +75,9 @@ pub use update::Update;
 mod upsert;
 pub use upsert::Upsert;
 
+#[cfg(feature = "net")]
+pub use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
 pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
-
-#[cfg(feature = "net")]
-pub use cidr::{IpCidr, IpInet};
-#[cfg(feature = "net")]
-pub use macaddr::{MacAddr6, MacAddr8};
 
 use toasty_core::stmt;
 

@@ -227,19 +227,20 @@ mod jiff_impls {
 #[cfg(feature = "net")]
 mod net_impls {
     use super::{CompatibleWith, tag};
+    use crate::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
 
-    impl CompatibleWith<tag::Cidr> for cidr::IpCidr {}
-    impl CompatibleWith<tag::Inet> for cidr::IpInet {}
-    impl CompatibleWith<tag::MacAddr> for macaddr::MacAddr6 {}
-    impl CompatibleWith<tag::MacAddr8> for macaddr::MacAddr8 {}
+    impl CompatibleWith<tag::Cidr> for IpCidr {}
+    impl CompatibleWith<tag::Inet> for IpInet {}
+    impl CompatibleWith<tag::MacAddr> for MacAddr6 {}
+    impl CompatibleWith<tag::MacAddr8> for MacAddr8 {}
 
     // Backends without native network types store their canonical text forms.
-    impl CompatibleWith<tag::Text> for cidr::IpCidr {}
-    impl CompatibleWith<tag::VarChar> for cidr::IpCidr {}
-    impl CompatibleWith<tag::Text> for cidr::IpInet {}
-    impl CompatibleWith<tag::VarChar> for cidr::IpInet {}
-    impl CompatibleWith<tag::Text> for macaddr::MacAddr6 {}
-    impl CompatibleWith<tag::VarChar> for macaddr::MacAddr6 {}
-    impl CompatibleWith<tag::Text> for macaddr::MacAddr8 {}
-    impl CompatibleWith<tag::VarChar> for macaddr::MacAddr8 {}
+    impl CompatibleWith<tag::Text> for IpCidr {}
+    impl CompatibleWith<tag::VarChar> for IpCidr {}
+    impl CompatibleWith<tag::Text> for IpInet {}
+    impl CompatibleWith<tag::VarChar> for IpInet {}
+    impl CompatibleWith<tag::Text> for MacAddr6 {}
+    impl CompatibleWith<tag::VarChar> for MacAddr6 {}
+    impl CompatibleWith<tag::Text> for MacAddr8 {}
+    impl CompatibleWith<tag::VarChar> for MacAddr8 {}
 }

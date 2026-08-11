@@ -1,5 +1,5 @@
 use super::{Field, Load};
-use crate::stmt::{Expr, List, Path};
+use crate::stmt::{Expr, IpCidr, IpInet, List, MacAddr6, MacAddr8, Path};
 use toasty_core::{
     Result,
     stmt::{Type, Value},
@@ -57,7 +57,7 @@ macro_rules! impl_net_field {
     };
 }
 
-impl_net_field!(cidr::IpCidr, Cidr, "cidr::IpCidr");
-impl_net_field!(cidr::IpInet, Inet, "cidr::IpInet");
-impl_net_field!(macaddr::MacAddr6, MacAddr, "macaddr::MacAddr6");
-impl_net_field!(macaddr::MacAddr8, MacAddr8, "macaddr::MacAddr8");
+impl_net_field!(IpCidr, Cidr, "cidr::IpCidr");
+impl_net_field!(IpInet, Inet, "cidr::IpInet");
+impl_net_field!(MacAddr6, MacAddr, "macaddr::MacAddr6");
+impl_net_field!(MacAddr8, MacAddr8, "macaddr::MacAddr8");

@@ -3,6 +3,8 @@ use postgres_protocol::types::{ArrayDimension, array_from_sql, array_to_sql};
 #[cfg(feature = "net")]
 use postgres_protocol::types::{inet_from_sql, inet_to_sql, macaddr_from_sql};
 use toasty_core::stmt::{self, Value as CoreValue};
+#[cfg(feature = "net")]
+use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
 use tokio_postgres::{
     Column, Row,
     types::{FromSql, IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
@@ -848,28 +850,28 @@ fn value_to_sql(
 }
 
 #[cfg(feature = "net")]
-fn decode_cidr(raw: &[u8]) -> cidr::IpCidr {
+fn decode_cidr(raw: &[u8]) -> IpCidr {
     let value = inet_from_sql(raw).expect("decode PostgreSQL CIDR");
-    cidr::IpCidr::new(value.addr(), value.netmask()).expect("PostgreSQL returned invalid CIDR")
+    IpCidr::new(value.addr(), value.netmask()).expect("PostgreSQL returned invalid CIDR")
 }
 
 #[cfg(feature = "net")]
-fn decode_inet(raw: &[u8]) -> cidr::IpInet {
+fn decode_inet(raw: &[u8]) -> IpInet {
     let value = inet_from_sql(raw).expect("decode PostgreSQL INET");
-    cidr::IpInet::new(value.addr(), value.netmask()).expect("PostgreSQL returned invalid INET")
+    IpInet::new(value.addr(), value.netmask()).expect("PostgreSQL returned invalid INET")
 }
 
 #[cfg(feature = "net")]
-fn decode_macaddr(raw: &[u8]) -> macaddr::MacAddr6 {
+fn decode_macaddr(raw: &[u8]) -> MacAddr6 {
     macaddr_from_sql(raw)
-        .map(macaddr::MacAddr6::from)
+        .map(MacAddr6::from)
         .expect("decode PostgreSQL MACADDR")
 }
 
 #[cfg(feature = "net")]
-fn decode_macaddr8(raw: &[u8]) -> macaddr::MacAddr8 {
+fn decode_macaddr8(raw: &[u8]) -> MacAddr8 {
     let bytes: [u8; 8] = raw
         .try_into()
         .expect("invalid PostgreSQL MACADDR8 wire length");
-    macaddr::MacAddr8::from(bytes)
+    MacAddr8::from(bytes)
 }

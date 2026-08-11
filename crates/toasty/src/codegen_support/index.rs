@@ -88,11 +88,12 @@ mod jiff_impls {
 #[cfg(feature = "net")]
 mod net_impls {
     use super::IndexableField;
+    use crate::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
 
-    impl IndexableField for cidr::IpCidr {}
-    impl IndexableField for cidr::IpInet {}
-    impl IndexableField for macaddr::MacAddr6 {}
-    impl IndexableField for macaddr::MacAddr8 {}
+    impl IndexableField for IpCidr {}
+    impl IndexableField for IpInet {}
+    impl IndexableField for MacAddr6 {}
+    impl IndexableField for MacAddr8 {}
 }
 
 // Tuple-newtype embeds get a per-type `IndexableField` impl from
