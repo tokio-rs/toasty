@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.9.0...toasty-macros-v0.10.0) - 2026-08-11
+
+### Added
+
+- Re-export external statement value types ([#1181])
+- Asc/desc ordering on newtype embedded fields ([#1180])
+- Add network address types ([#1178])
+- Ordering comparisons on newtype embedded fields ([#1177])
+- Support #[belongs_to] fields in embedded types ([#1170])
+- Embed migrations in application binaries ([#1095])
+
+[#1095]: https://github.com/tokio-rs/toasty/pull/1095
+[#1170]: https://github.com/tokio-rs/toasty/pull/1170
+[#1177]: https://github.com/tokio-rs/toasty/pull/1177
+[#1178]: https://github.com/tokio-rs/toasty/pull/1178
+[#1180]: https://github.com/tokio-rs/toasty/pull/1180
+[#1181]: https://github.com/tokio-rs/toasty/pull/1181
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.8.0...toasty-macros-v0.9.0) - 2026-07-23
 
 ### Added

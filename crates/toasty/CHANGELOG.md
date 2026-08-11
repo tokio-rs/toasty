@@ -7,6 +7,54 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.9.0...toasty-v0.10.0) - 2026-08-11
+
+### Added
+
+- Re-export external statement value types ([#1181])
+- *(macros)* Generate asc/desc on newtype embed fields ([#1180])
+- Add network address types ([#1178])
+- Accept #[belongs_to] fields in embedded types ([#1170])
+- Embed migrations in application binaries ([#1095])
+
+### Fixed
+
+- Add wasm32 build support ([#1173])
+- *(mysql)* [**breaking**] Make TLS features additive with SQLx ([#1147])
+- *(engine)* Omit previous cursor on first page ([#1153])
+- *(engine)* Fix IN-subquery statement optimization ([#1138])
+- *(engine)* Preserve pagination cursors through includes ([#1152])
+- Preserve query offset when selecting one row ([#1151])
+- *(engine)* Exclude null foreign keys from relation subqueries ([#1148])
+- *(engine)* Make cursor pagination deterministic ([#1142])
+- Resolve authority-form sqlite and turso URLs to a file path ([#1127])
+- *(engine)* Fix newtype foreign keys in included relations ([#1137])
+- Support pagination with multiple order by keys ([#1124])
+
+### Changed
+
+- *(core)* [**breaking**] Name the SQL dialect on `Capability::sql` ([#1155])
+- [**breaking**] Remove unused schema and statement APIs ([#1149])
+
+[#1095]: https://github.com/tokio-rs/toasty/pull/1095
+[#1124]: https://github.com/tokio-rs/toasty/pull/1124
+[#1127]: https://github.com/tokio-rs/toasty/pull/1127
+[#1137]: https://github.com/tokio-rs/toasty/pull/1137
+[#1138]: https://github.com/tokio-rs/toasty/pull/1138
+[#1142]: https://github.com/tokio-rs/toasty/pull/1142
+[#1147]: https://github.com/tokio-rs/toasty/pull/1147
+[#1148]: https://github.com/tokio-rs/toasty/pull/1148
+[#1149]: https://github.com/tokio-rs/toasty/pull/1149
+[#1151]: https://github.com/tokio-rs/toasty/pull/1151
+[#1152]: https://github.com/tokio-rs/toasty/pull/1152
+[#1153]: https://github.com/tokio-rs/toasty/pull/1153
+[#1155]: https://github.com/tokio-rs/toasty/pull/1155
+[#1170]: https://github.com/tokio-rs/toasty/pull/1170
+[#1173]: https://github.com/tokio-rs/toasty/pull/1173
+[#1178]: https://github.com/tokio-rs/toasty/pull/1178
+[#1180]: https://github.com/tokio-rs/toasty/pull/1180
+[#1181]: https://github.com/tokio-rs/toasty/pull/1181
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.8.0...toasty-v0.9.0) - 2026-07-23
 
 ### Added

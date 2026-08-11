@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.9.0...toasty-cli-v0.10.0) - 2026-08-11
+
+- Internal improvements only.
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.8.0...toasty-cli-v0.9.0) - 2026-07-23
 
 ### Fixed
