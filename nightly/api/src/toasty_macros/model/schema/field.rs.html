@@ -362,13 +362,13 @@
 <a href=#362 id=362 data-nosnippet>362</a>        }
 <a href=#363 id=363 data-nosnippet>363</a>
 <a href=#364 id=364 data-nosnippet>364</a>        <span class="comment">// Expand #[auto] on timestamp fields:
-<a href=#365 id=365 data-nosnippet>365</a>        //   created_at → #[default(jiff::Timestamp::now())]
-<a href=#366 id=366 data-nosnippet>366</a>        //   updated_at → #[update(jiff::Timestamp::now())]
+<a href=#365 id=365 data-nosnippet>365</a>        //   created_at → #[default(toasty::stmt::Timestamp::now())]
+<a href=#366 id=366 data-nosnippet>366</a>        //   updated_at → #[update(toasty::stmt::Timestamp::now())]
 <a href=#367 id=367 data-nosnippet>367</a>        </span><span class="kw">if </span><span class="macro">matches!</span>(<span class="kw-2">&amp;</span>attrs.auto, <span class="prelude-val">Some</span>(AutoStrategy::Unspecified))
 <a href=#368 id=368 data-nosnippet>368</a>            &amp;&amp; <span class="kw">let </span><span class="prelude-val">Some</span>(ident) = <span class="kw-2">&amp;</span>field.ident
 <a href=#369 id=369 data-nosnippet>369</a>        {
 <a href=#370 id=370 data-nosnippet>370</a>            <span class="kw">let </span>field_name = ident.to_string();
-<a href=#371 id=371 data-nosnippet>371</a>            <span class="kw">let </span>now_expr: syn::Expr = <span class="macro">syn::parse_quote!</span>(jiff::Timestamp::now());
+<a href=#371 id=371 data-nosnippet>371</a>            <span class="kw">let </span>now_expr: syn::Expr = <span class="macro">syn::parse_quote!</span>(_toasty::stmt::Timestamp::now());
 <a href=#372 id=372 data-nosnippet>372</a>
 <a href=#373 id=373 data-nosnippet>373</a>            <span class="kw">if </span>field_name == <span class="string">"created_at" </span>{
 <a href=#374 id=374 data-nosnippet>374</a>                attrs.auto = <span class="prelude-val">None</span>;

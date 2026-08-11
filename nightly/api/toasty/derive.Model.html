@@ -52,7 +52,7 @@ field-level <code>#[key]</code>.</p>
 #[key(partition = user_id, local = id)]
 </span><span class="kw">struct </span>Todo {
     <span class="attr">#[auto]
-    </span>id: uuid::Uuid,
+    </span>id: toasty::stmt::Uuid,
     user_id: String,
     title: String,
 }</code></pre></div>
@@ -93,17 +93,17 @@ in <code>#[key(...)]</code> at the struct level).</p>
 <p>Tells Toasty to generate this field’s value automatically. The strategy
 depends on the field type and optional arguments:</p>
 <div><table><thead><tr><th>Syntax</th><th>Behavior</th></tr></thead><tbody>
-<tr><td><code>#[auto]</code> on <code>uuid::Uuid</code></td><td>UUID v7 (timestamp-sortable)</td></tr>
+<tr><td><code>#[auto]</code> on <code>toasty::stmt::Uuid</code></td><td>UUID v7 (timestamp-sortable)</td></tr>
 <tr><td><code>#[auto(uuid(v4))]</code></td><td>UUID v4 (random)</td></tr>
 <tr><td><code>#[auto(uuid(v7))]</code></td><td>UUID v7 (explicit)</td></tr>
 <tr><td><code>#[auto]</code> on integer types (<code>i8</code>–<code>i64</code>, <code>u8</code>–<code>u64</code>)</td><td>Auto-increment</td></tr>
 <tr><td><code>#[auto(increment)]</code></td><td>Auto-increment (explicit)</td></tr>
-<tr><td><code>#[auto]</code> on a field named <code>created_at</code></td><td>Expands to <code>#[default(jiff::Timestamp::now())]</code></td></tr>
-<tr><td><code>#[auto]</code> on a field named <code>updated_at</code></td><td>Expands to <code>#[update(jiff::Timestamp::now())]</code></td></tr>
+<tr><td><code>#[auto]</code> on a field named <code>created_at</code></td><td>Expands to <code>#[default(toasty::stmt::Timestamp::now())]</code></td></tr>
+<tr><td><code>#[auto]</code> on a field named <code>updated_at</code></td><td>Expands to <code>#[update(toasty::stmt::Timestamp::now())]</code></td></tr>
 </tbody></table>
 </div>
 <p>The <code>created_at</code>/<code>updated_at</code> expansion requires the <code>jiff</code> feature and
-a field type compatible with <code>jiff::Timestamp</code>.</p>
+a field type compatible with <code>toasty::stmt::Timestamp</code>.</p>
 <p>Cannot be combined with <code>#[default]</code> or <code>#[update]</code> on the same field.</p>
 <h3 id="defaultexpr--default-value-on-create"><a class="doc-anchor" href="#defaultexpr--default-value-on-create">§</a><code>#[default(expr)]</code> — default value on create</h3>
 <p>Sets a default value that is used when the field is not explicitly
@@ -125,8 +125,8 @@ applies on subsequent updates).</p>
 including both branches of an upsert, unless the field is explicitly set on
 the builder.</p>
 
-<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[update(jiff::Timestamp::now())]
-</span>updated_at: jiff::Timestamp,</code></pre></div>
+<div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[update(toasty::stmt::Timestamp::now())]
+</span>updated_at: toasty::stmt::Timestamp,</code></pre></div>
 <p>Cannot be combined with <code>#[auto]</code> on the same field.</p>
 <h3 id="index--add-a-database-index"><a class="doc-anchor" href="#index--add-a-database-index">§</a><code>#[index]</code> — add a database index</h3>
 <p>Creates a non-unique index on the field. Toasty generates a
@@ -381,11 +381,11 @@ models.</li>
 
     name: String,
 
-    <span class="attr">#[default(jiff::Timestamp::now())]
-    </span>created_at: jiff::Timestamp,
+    <span class="attr">#[default(toasty::stmt::Timestamp::now())]
+    </span>created_at: toasty::stmt::Timestamp,
 
-    <span class="attr">#[update(jiff::Timestamp::now())]
-    </span>updated_at: jiff::Timestamp,
+    <span class="attr">#[update(toasty::stmt::Timestamp::now())]
+    </span>updated_at: toasty::stmt::Timestamp,
 
     <span class="attr">#[has_many]
     </span>posts: toasty::Deferred&lt;Vec&lt;Post&gt;&gt;,

@@ -125,7 +125,7 @@ required. Toasty emits a <code>NewtypeOf</code> marker carrying the inner type
 and a blanket <code>Auto</code> impl resolves through it:</p>
 
 <div class="example-wrap"><pre class="rust rust-example-rendered"><code><span class="attr">#[derive(toasty::Embed)]
-</span><span class="kw">struct </span>UserId(uuid::Uuid);
+</span><span class="kw">struct </span>UserId(toasty::stmt::Uuid);
 
 <span class="attr">#[derive(toasty::Model)]
 </span><span class="kw">struct </span>User {
@@ -302,7 +302,7 @@ supported.</li>
 </span><span class="kw">enum </span>Owner {
     Human {
         <span class="attr">#[index]
-        </span>id: uuid::Uuid,
+        </span>id: toasty::stmt::Uuid,
         <span class="attr">#[belongs_to(key = id)]
         </span>human: toasty::Deferred&lt;Human&gt;,
     },
