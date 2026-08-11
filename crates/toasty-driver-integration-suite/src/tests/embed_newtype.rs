@@ -493,12 +493,12 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Tests comparisons directly on a newtype field path: `ne`, `gt`, `ge`,
-/// `lt`, and `le` accept the wrapper value and compare the single
-/// underlying column, so no `._0()` step is needed. The ordering methods
-/// are generated only for canonical newtypes — a newtype is a pass-through
-/// to its inner column, so each backend keeps its own ordering semantics
-/// for the inner type.
+/// Tests ordering operations directly on a newtype field path: `ne`,
+/// `gt`, `ge`, `lt`, and `le` accept the wrapper value and compare the
+/// single underlying column, and `asc`/`desc` sort by it, so no `._0()`
+/// step is needed. These methods are generated only for canonical
+/// newtypes — a newtype is a pass-through to its inner column, so each
+/// backend keeps its own ordering semantics for the inner type.
 #[driver_test(requires(sql))]
 pub async fn newtype_ordering_comparisons(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
@@ -544,6 +544,47 @@ pub async fn newtype_ordering_comparisons(t: &mut Test) -> Result<()> {
 
     let hits = timestamps(&mut db, fields.timestamp().le(TimestampMillis(200))).await?;
     assert_eq!(hits, [100, 200]);
+
+    async fn ordered(db: &mut toasty::Db, order: toasty::stmt::OrderByExpr) -> Result<Vec<i64>> {
+        let credits = Credit::all().order_by(order).exec(db).await?;
+        Ok(credits.iter().map(|c| c.timestamp.0).collect())
+    }
+
+    let ts = ordered(&mut db, Credit::fields().timestamp().desc()).await?;
+    assert_eq!(ts, [300, 200, 100]);
+
+    let ts = ordered(&mut db, Credit::fields().timestamp().asc()).await?;
+    assert_eq!(ts, [100, 200, 300]);
+
+    // A nested newtype chain lowers to one single-element record per
+    // layer; ordering must unwrap every layer to reach the column.
+    #[derive(Debug, toasty::Embed)]
+    struct Wrapped(TimestampMillis);
+
+    #[derive(Debug, toasty::Model)]
+    struct Event {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        at: Wrapped,
+    }
+
+    let mut db = t.setup_db(models!(Event)).await;
+
+    for ts in [200, 100, 300] {
+        toasty::create!(Event {
+            at: Wrapped(TimestampMillis(ts)),
+        })
+        .exec(&mut db)
+        .await?;
+    }
+
+    let events = Event::all()
+        .order_by(Event::fields().at().desc())
+        .exec(&mut db)
+        .await?;
+    let ts: Vec<i64> = events.iter().map(|e| e.at.0.0).collect();
+    assert_eq!(ts, [300, 200, 100]);
 
     Ok(())
 }

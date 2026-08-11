@@ -894,6 +894,25 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// let _ = Pin::filter(Pin::fields().location().ge(Point { x: 0, y: 0 }));
 /// ```
 ///
+/// The same applies to sorting — `asc`/`desc` exist only on newtype fields:
+///
+/// ```compile_fail
+/// # #[derive(toasty::Embed)]
+/// # struct Point {
+/// #     x: i64,
+/// #     y: i64,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Pin {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     location: Point,
+/// # }
+/// // Error: no method `asc` on the fields struct of a multi-field embed
+/// let _ = Pin::all().order_by(Pin::fields().location().asc());
+/// ```
+///
 /// A tuple-newtype must wrap a single-column type. Wrapping a multi-field embed
 /// (or a data-carrying enum) fails to derive.
 ///

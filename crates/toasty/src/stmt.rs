@@ -77,7 +77,7 @@ pub use upsert::Upsert;
 
 #[cfg(feature = "net")]
 pub use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
-pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
+pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Value};
 
 use toasty_core::stmt;
 
