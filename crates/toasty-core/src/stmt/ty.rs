@@ -172,6 +172,26 @@ pub enum Type {
     #[cfg(feature = "jiff")]
     DateTime,
 
+    /// An IPv4 or IPv6 network prefix.
+    /// See [`cidr::IpCidr`].
+    #[cfg(feature = "net")]
+    Cidr,
+
+    /// An IPv4 or IPv6 host address with a network prefix.
+    /// See [`cidr::IpInet`].
+    #[cfg(feature = "net")]
+    Inet,
+
+    /// A six-byte IEEE EUI-48 address.
+    /// See [`macaddr::MacAddr6`].
+    #[cfg(feature = "net")]
+    MacAddr,
+
+    /// An eight-byte IEEE EUI-64 address.
+    /// See [`macaddr::MacAddr8`].
+    #[cfg(feature = "net")]
+    MacAddr8,
+
     /// The null type. Represents the type of a null value and is cast-able to
     /// any type. Also used as the element type of an empty list whose item type
     /// is not yet known.
@@ -392,6 +412,11 @@ impl Type {
 
         #[cfg(feature = "jiff")]
         if let Some(value) = self.cast_jiff(&value)? {
+            return Ok(value);
+        }
+
+        #[cfg(feature = "net")]
+        if let Some(value) = self.cast_net(&value)? {
             return Ok(value);
         }
 

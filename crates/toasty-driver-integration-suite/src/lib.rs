@@ -44,6 +44,7 @@ mod prelude {
     pub(crate) use toasty::Result;
     pub(crate) use toasty::models;
     pub(crate) use toasty::schema::{Embed, Model};
+    pub(crate) use toasty::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
     pub(crate) type BoxError = Box<dyn std::error::Error + 'static>;
 
     pub(crate) use crate::util::{NumUtil, SliceUtil};

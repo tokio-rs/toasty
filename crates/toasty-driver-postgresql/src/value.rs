@@ -1,6 +1,10 @@
 use fallible_iterator::FallibleIterator;
 use postgres_protocol::types::{ArrayDimension, array_from_sql, array_to_sql};
+#[cfg(feature = "net")]
+use postgres_protocol::types::{inet_from_sql, inet_to_sql, macaddr_from_sql};
 use toasty_core::stmt::{self, Value as CoreValue};
+#[cfg(feature = "net")]
+use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
 use tokio_postgres::{
     Column, Row,
     types::{FromSql, IsNull, Kind, ToSql, Type, private::BytesMut, to_sql_checked},
@@ -146,6 +150,46 @@ impl Value {
             {
                 panic!("TIME requires jiff feature to be enabled")
             }
+        } else if column.type_() == &Type::CIDR {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::Cidr(decode_cidr(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("CIDR requires net feature to be enabled")
+            }
+        } else if column.type_() == &Type::INET {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::Inet(decode_inet(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("INET requires net feature to be enabled")
+            }
+        } else if column.type_() == &Type::MACADDR {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::MacAddr(decode_macaddr(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("MACADDR requires net feature to be enabled")
+            }
+        } else if column.type_() == &Type::MACADDR8 {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::MacAddr8(decode_macaddr8(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("MACADDR8 requires net feature to be enabled")
+            }
         } else if column.type_() == &Type::FLOAT4 {
             float4_to_value(get_or_return_null!(f32), expected_ty)
         } else if column.type_() == &Type::FLOAT8 {
@@ -281,6 +325,46 @@ impl Value {
             #[cfg(not(feature = "jiff"))]
             {
                 panic!("TIME requires jiff feature to be enabled")
+            }
+        } else if column.type_() == &Type::CIDR {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::Cidr(decode_cidr(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("CIDR requires net feature to be enabled")
+            }
+        } else if column.type_() == &Type::INET {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::Inet(decode_inet(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("INET requires net feature to be enabled")
+            }
+        } else if column.type_() == &Type::MACADDR {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::MacAddr(decode_macaddr(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("MACADDR requires net feature to be enabled")
+            }
+        } else if column.type_() == &Type::MACADDR8 {
+            #[cfg(feature = "net")]
+            {
+                let raw = get_or_return_null!(RawBytes<'_>).0;
+                stmt::Value::MacAddr8(decode_macaddr8(raw))
+            }
+            #[cfg(not(feature = "net"))]
+            {
+                panic!("MACADDR8 requires net feature to be enabled")
             }
         } else if column.type_() == &Type::FLOAT4 {
             stmt::Value::F32(get_or_return_null!(f32))
@@ -532,6 +616,42 @@ fn decode_array_element(elem_pg_ty: &Type, bytes: &[u8], elem_ty: &stmt::Type) -
         {
             panic!("TIME requires jiff feature to be enabled")
         }
+    } else if elem_pg_ty == &Type::CIDR {
+        #[cfg(feature = "net")]
+        {
+            stmt::Value::Cidr(decode_cidr(bytes))
+        }
+        #[cfg(not(feature = "net"))]
+        {
+            panic!("CIDR requires net feature to be enabled")
+        }
+    } else if elem_pg_ty == &Type::INET {
+        #[cfg(feature = "net")]
+        {
+            stmt::Value::Inet(decode_inet(bytes))
+        }
+        #[cfg(not(feature = "net"))]
+        {
+            panic!("INET requires net feature to be enabled")
+        }
+    } else if elem_pg_ty == &Type::MACADDR {
+        #[cfg(feature = "net")]
+        {
+            stmt::Value::MacAddr(decode_macaddr(bytes))
+        }
+        #[cfg(not(feature = "net"))]
+        {
+            panic!("MACADDR requires net feature to be enabled")
+        }
+    } else if elem_pg_ty == &Type::MACADDR8 {
+        #[cfg(feature = "net")]
+        {
+            stmt::Value::MacAddr8(decode_macaddr8(bytes))
+        }
+        #[cfg(not(feature = "net"))]
+        {
+            panic!("MACADDR8 requires net feature to be enabled")
+        }
     } else if matches!(elem_pg_ty.kind(), Kind::Enum(_)) {
         // Enum labels are plain UTF-8; `EnumString` accepts `Kind::Enum` where
         // `String` won't.
@@ -578,6 +698,10 @@ impl ToSql for Value {
                 | Type::TIME
                 | Type::JSONB
                 | Type::JSON
+                | Type::CIDR
+                | Type::INET
+                | Type::MACADDR
+                | Type::MACADDR8
         ) || matches!(ty.kind(), Kind::Enum(_) | Kind::Array(_))
     }
     to_sql_checked!();
@@ -657,6 +781,26 @@ fn value_to_sql(
         (stmt::Value::Time(value), _) => value.to_sql(ty, out),
         #[cfg(feature = "jiff")]
         (stmt::Value::DateTime(value), _) => value.to_sql(ty, out),
+        #[cfg(feature = "net")]
+        (stmt::Value::Cidr(value), &Type::CIDR) => {
+            inet_to_sql(value.first_address(), value.network_length(), out);
+            Ok(IsNull::No)
+        }
+        #[cfg(feature = "net")]
+        (stmt::Value::Inet(value), &Type::INET) => {
+            inet_to_sql(value.address(), value.network_length(), out);
+            Ok(IsNull::No)
+        }
+        #[cfg(feature = "net")]
+        (stmt::Value::MacAddr(value), &Type::MACADDR) => {
+            out.extend_from_slice(value.as_bytes());
+            Ok(IsNull::No)
+        }
+        #[cfg(feature = "net")]
+        (stmt::Value::MacAddr8(value), &Type::MACADDR8) => {
+            out.extend_from_slice(value.as_bytes());
+            Ok(IsNull::No)
+        }
         // `#[document]` columns: serialize the structural value (a
         // `Value::List` of `Value::Object`s) to JSON and bind it. The engine
         // has already converted positional records to named objects, so this
@@ -703,4 +847,31 @@ fn value_to_sql(
         }
         (value, _) => todo!("unsupported Value for PostgreSQL type: {value:#?}, type: {ty:#?}"),
     }
+}
+
+#[cfg(feature = "net")]
+fn decode_cidr(raw: &[u8]) -> IpCidr {
+    let value = inet_from_sql(raw).expect("decode PostgreSQL CIDR");
+    IpCidr::new(value.addr(), value.netmask()).expect("PostgreSQL returned invalid CIDR")
+}
+
+#[cfg(feature = "net")]
+fn decode_inet(raw: &[u8]) -> IpInet {
+    let value = inet_from_sql(raw).expect("decode PostgreSQL INET");
+    IpInet::new(value.addr(), value.netmask()).expect("PostgreSQL returned invalid INET")
+}
+
+#[cfg(feature = "net")]
+fn decode_macaddr(raw: &[u8]) -> MacAddr6 {
+    macaddr_from_sql(raw)
+        .map(MacAddr6::from)
+        .expect("decode PostgreSQL MACADDR")
+}
+
+#[cfg(feature = "net")]
+fn decode_macaddr8(raw: &[u8]) -> MacAddr8 {
+    let bytes: [u8; 8] = raw
+        .try_into()
+        .expect("invalid PostgreSQL MACADDR8 wire length");
+    MacAddr8::from(bytes)
 }

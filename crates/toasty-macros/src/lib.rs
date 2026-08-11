@@ -319,6 +319,10 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// | `date` | Date without time |
 /// | `time(P)` | Time with P fractional-second digits |
 /// | `datetime(P)` | Date and time with P fractional-second digits |
+/// | `cidr` | IPv4 or IPv6 network prefix |
+/// | `inet` | IPv4 or IPv6 host address with a network prefix |
+/// | `macaddr` | Six-byte IEEE EUI-48 address |
+/// | `macaddr8` | Eight-byte IEEE EUI-64 address |
 /// | `"custom"` | Arbitrary type string passed through to the driver |
 ///
 /// Cannot be used on relation fields.

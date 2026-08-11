@@ -141,6 +141,18 @@ pub struct Capability {
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
 
+    /// Whether the database has a native CIDR network type.
+    pub native_cidr: bool,
+
+    /// Whether the database has a native INET address type.
+    pub native_inet: bool,
+
+    /// Whether the database has a native six-byte MACADDR type.
+    pub native_macaddr: bool,
+
+    /// Whether the database has a native eight-byte MACADDR8 type.
+    pub native_macaddr8: bool,
+
     /// Whether the database supports native enum types.
     ///
     /// - PostgreSQL: `true` — `CREATE TYPE ... AS ENUM`
@@ -424,6 +436,18 @@ pub struct StorageTypes {
     /// The default storage type for a DateTime (civil datetime).
     pub default_datetime_type: db::Type,
 
+    /// The default storage type for an IP network prefix.
+    pub default_cidr_type: db::Type,
+
+    /// The default storage type for an IP host address and prefix.
+    pub default_inet_type: db::Type,
+
+    /// The default storage type for a six-byte MAC address.
+    pub default_macaddr_type: db::Type,
+
+    /// The default storage type for an eight-byte MAC address.
+    pub default_macaddr8_type: db::Type,
+
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
     pub max_unsigned_integer: Option<u64>,
@@ -596,6 +620,14 @@ impl Capability {
             stmt::Type::Time => self.storage_types.default_time_type.bridge_type(ty),
             #[cfg(feature = "jiff")]
             stmt::Type::DateTime => self.storage_types.default_datetime_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::Cidr => self.storage_types.default_cidr_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::Inet => self.storage_types.default_inet_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr => self.storage_types.default_macaddr_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr8 => self.storage_types.default_macaddr8_type.bridge_type(ty),
             _ => ty.clone(),
         }
     }
@@ -634,6 +666,11 @@ impl Capability {
         native_date: false,
         native_time: false,
         native_datetime: false,
+
+        native_cidr: false,
+        native_inet: false,
+        native_macaddr: false,
+        native_macaddr8: false,
 
         // SQLite does not have native decimal types
         native_decimal: false,
@@ -727,6 +764,12 @@ impl Capability {
         native_date: true,
         native_time: true,
         native_datetime: true,
+
+        // PostgreSQL has native network address types.
+        native_cidr: true,
+        native_inet: true,
+        native_macaddr: true,
+        native_macaddr8: true,
 
         // PostgreSQL has native NUMERIC type with arbitrary precision
         native_decimal: true,
@@ -869,6 +912,11 @@ impl Capability {
         native_time: false,
         native_datetime: false,
 
+        native_cidr: false,
+        native_inet: false,
+        native_macaddr: false,
+        native_macaddr8: false,
+
         // DynamoDB does not have native decimal types
         native_decimal: false,
         decimal_arbitrary_precision: false,
@@ -957,6 +1005,12 @@ impl StorageTypes {
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
 
+        // SQLite stores network address values as canonical text.
+        default_cidr_type: db::Type::Text,
+        default_inet_type: db::Type::Text,
+        default_macaddr_type: db::Type::Text,
+        default_macaddr8_type: db::Type::Text,
+
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
@@ -987,6 +1041,11 @@ impl StorageTypes {
         default_date_type: db::Type::Date,
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
+
+        default_cidr_type: db::Type::Cidr,
+        default_inet_type: db::Type::Inet,
+        default_macaddr_type: db::Type::MacAddr,
+        default_macaddr8_type: db::Type::MacAddr8,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -1026,6 +1085,13 @@ impl StorageTypes {
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
 
+        // MySQL has no native network address types. Bounded text keeps
+        // indexes compact while accommodating IPv6 prefixes and EUI-64.
+        default_cidr_type: db::Type::VarChar(43),
+        default_inet_type: db::Type::VarChar(43),
+        default_macaddr_type: db::Type::VarChar(17),
+        default_macaddr8_type: db::Type::VarChar(23),
+
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -1051,6 +1117,12 @@ impl StorageTypes {
         default_date_type: db::Type::Text,
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
+
+        // DynamoDB stores network address values as canonical strings.
+        default_cidr_type: db::Type::Text,
+        default_inet_type: db::Type::Text,
+        default_macaddr_type: db::Type::Text,
+        default_macaddr8_type: db::Type::Text,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,

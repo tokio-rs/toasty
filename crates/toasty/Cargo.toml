@@ -47,6 +47,13 @@ jiff = [
 	"toasty-driver-sqlite?/jiff",
 	"toasty-driver-turso?/jiff",
 ]
+net = [
+	"toasty-core/net",
+	"toasty-driver-postgresql?/net",
+	"toasty-driver-mysql?/net",
+	"toasty-driver-sqlite?/net",
+	"toasty-driver-turso?/net",
+]
 serde = ["dep:serde_core", "dep:serde_json"]
 
 [dependencies]
