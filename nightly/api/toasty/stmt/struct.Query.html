@@ -58,7 +58,7 @@ is not yet available on DynamoDB.</p>
 
 <span class="comment">// Include the field at index 1 (name)
 </span><span class="kw">let </span>q = Query::&lt;List&lt;User&gt;&gt;::all().include(User::path_field::&lt;String&gt;(<span class="number">1</span>));</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.order_by" class="method"><a class="src rightside" href="../../src/toasty/stmt/query.rs.html#220-227">Source</a><h4 class="code-header">pub fn <a href="#method.order_by" class="fn">order_by</a>(self, order_by: impl <a class="trait" href="https://doc.rust-lang.org/1.97.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.OrderBy.html" title="struct toasty::stmt::OrderBy">OrderBy</a>&gt;) -&gt; Self</h4></section></summary><div class="docblock"><p>Add a sort order to this query.</p>
-<p>Pass an <a href="toasty_core::stmt::OrderByExpr"><code>OrderByExpr</code></a> obtained from
+<p>Pass an <a href="struct.OrderByExpr.html" title="struct toasty::stmt::OrderByExpr"><code>OrderByExpr</code></a> obtained from
 <a href="struct.Path.html#method.asc" title="method toasty::stmt::Path::asc"><code>Path::asc</code></a> or <a href="struct.Path.html#method.desc" title="method toasty::stmt::Path::desc"><code>Path::desc</code></a>, or a tuple of them to sort by several
 fields at once. Calling <code>order_by</code> multiple times appends each
 expression to the existing order, so later calls act as tie-breakers
@@ -68,7 +68,7 @@ for earlier ones.</p>
 
 <span class="kw">let </span>q = Query::&lt;List&lt;User&gt;&gt;::all()
     .order_by((User::fields().age().desc(), User::fields().name().asc()));</code></pre></div></div></details><details class="toggle method-toggle" open><summary><section id="method.set_order_by" class="method"><a class="src rightside" href="../../src/toasty/stmt/query.rs.html#252-256">Source</a><h4 class="code-header">pub fn <a href="#method.set_order_by" class="fn">set_order_by</a>(&amp;mut self, order_by: impl <a class="trait" href="https://doc.rust-lang.org/1.97.1/core/convert/trait.Into.html" title="trait core::convert::Into">Into</a>&lt;<a class="struct" href="struct.OrderBy.html" title="struct toasty::stmt::OrderBy">OrderBy</a>&gt;) -&gt; &amp;mut Self</h4></section></summary><div class="docblock"><p>Sets the sort order for this query overwriting existing ones.</p>
-<p>Pass an <a href="toasty_core::stmt::OrderByExpr"><code>OrderByExpr</code></a> obtained from
+<p>Pass an <a href="struct.OrderByExpr.html" title="struct toasty::stmt::OrderByExpr"><code>OrderByExpr</code></a> obtained from
 <a href="struct.Path.html#method.asc" title="method toasty::stmt::Path::asc"><code>Path::asc</code></a> or <a href="struct.Path.html#method.desc" title="method toasty::stmt::Path::desc"><code>Path::desc</code></a>, or a tuple of them to sort by several
 fields at once. Calling <code>order_by</code> multiple times appends each
 expression to the existing order, so later calls act as tie-breakers

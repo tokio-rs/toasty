@@ -493,12 +493,12 @@
 <a href=#493 id=493 data-nosnippet>493</a>    <span class="prelude-val">Ok</span>(())
 <a href=#494 id=494 data-nosnippet>494</a>}
 <a href=#495 id=495 data-nosnippet>495</a>
-<a href=#496 id=496 data-nosnippet>496</a><span class="doccomment">/// Tests comparisons directly on a newtype field path: `ne`, `gt`, `ge`,
-<a href=#497 id=497 data-nosnippet>497</a>/// `lt`, and `le` accept the wrapper value and compare the single
-<a href=#498 id=498 data-nosnippet>498</a>/// underlying column, so no `._0()` step is needed. The ordering methods
-<a href=#499 id=499 data-nosnippet>499</a>/// are generated only for canonical newtypes — a newtype is a pass-through
-<a href=#500 id=500 data-nosnippet>500</a>/// to its inner column, so each backend keeps its own ordering semantics
-<a href=#501 id=501 data-nosnippet>501</a>/// for the inner type.
+<a href=#496 id=496 data-nosnippet>496</a><span class="doccomment">/// Tests ordering operations directly on a newtype field path: `ne`,
+<a href=#497 id=497 data-nosnippet>497</a>/// `gt`, `ge`, `lt`, and `le` accept the wrapper value and compare the
+<a href=#498 id=498 data-nosnippet>498</a>/// single underlying column, and `asc`/`desc` sort by it, so no `._0()`
+<a href=#499 id=499 data-nosnippet>499</a>/// step is needed. These methods are generated only for canonical
+<a href=#500 id=500 data-nosnippet>500</a>/// newtypes — a newtype is a pass-through to its inner column, so each
+<a href=#501 id=501 data-nosnippet>501</a>/// backend keeps its own ordering semantics for the inner type.
 <a href=#502 id=502 data-nosnippet>502</a></span><span class="attr">#[driver_test(requires(sql))]
 <a href=#503 id=503 data-nosnippet>503</a></span><span class="kw">pub async fn </span>newtype_ordering_comparisons(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
 <a href=#504 id=504 data-nosnippet>504</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
@@ -545,58 +545,99 @@
 <a href=#545 id=545 data-nosnippet>545</a>    <span class="kw">let </span>hits = timestamps(<span class="kw-2">&amp;mut </span>db, fields.timestamp().le(TimestampMillis(<span class="number">200</span>))).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#546 id=546 data-nosnippet>546</a>    <span class="macro">assert_eq!</span>(hits, [<span class="number">100</span>, <span class="number">200</span>]);
 <a href=#547 id=547 data-nosnippet>547</a>
-<a href=#548 id=548 data-nosnippet>548</a>    <span class="prelude-val">Ok</span>(())
-<a href=#549 id=549 data-nosnippet>549</a>}
-<a href=#550 id=550 data-nosnippet>550</a>
-<a href=#551 id=551 data-nosnippet>551</a><span class="doccomment">/// Tests a newtype used as the partition key and in a filter predicate.
-<a href=#552 id=552 data-nosnippet>552</a>/// No `requires(sql)` — this must work on all drivers including DynamoDB.
-<a href=#553 id=553 data-nosnippet>553</a></span><span class="attr">#[driver_test]
-<a href=#554 id=554 data-nosnippet>554</a></span><span class="kw">pub async fn </span>newtype_key_and_predicate(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#555 id=555 data-nosnippet>555</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
-<a href=#556 id=556 data-nosnippet>556</a>    </span><span class="kw">struct </span>Region(String);
-<a href=#557 id=557 data-nosnippet>557</a>
-<a href=#558 id=558 data-nosnippet>558</a>    <span class="attr">#[derive(Debug, toasty::Model)]
-<a href=#559 id=559 data-nosnippet>559</a>    #[key(partition = region, local = id)]
-<a href=#560 id=560 data-nosnippet>560</a>    </span><span class="kw">struct </span>Item {
-<a href=#561 id=561 data-nosnippet>561</a>        <span class="attr">#[auto]
-<a href=#562 id=562 data-nosnippet>562</a>        </span>id: uuid::Uuid,
-<a href=#563 id=563 data-nosnippet>563</a>        region: Region,
-<a href=#564 id=564 data-nosnippet>564</a>        name: String,
-<a href=#565 id=565 data-nosnippet>565</a>    }
-<a href=#566 id=566 data-nosnippet>566</a>
-<a href=#567 id=567 data-nosnippet>567</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await</span>;
-<a href=#568 id=568 data-nosnippet>568</a>
-<a href=#569 id=569 data-nosnippet>569</a>    <span class="macro">toasty::create!</span>(Item {
-<a href=#570 id=570 data-nosnippet>570</a>        region: Region(<span class="string">"us-east"</span>.into()),
-<a href=#571 id=571 data-nosnippet>571</a>        name: <span class="string">"Alpha"</span>,
-<a href=#572 id=572 data-nosnippet>572</a>    })
-<a href=#573 id=573 data-nosnippet>573</a>    .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#574 id=574 data-nosnippet>574</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#575 id=575 data-nosnippet>575</a>
-<a href=#576 id=576 data-nosnippet>576</a>    <span class="macro">toasty::create!</span>(Item {
-<a href=#577 id=577 data-nosnippet>577</a>        region: Region(<span class="string">"us-east"</span>.into()),
-<a href=#578 id=578 data-nosnippet>578</a>        name: <span class="string">"Beta"</span>,
-<a href=#579 id=579 data-nosnippet>579</a>    })
-<a href=#580 id=580 data-nosnippet>580</a>    .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#581 id=581 data-nosnippet>581</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#582 id=582 data-nosnippet>582</a>
-<a href=#583 id=583 data-nosnippet>583</a>    <span class="macro">toasty::create!</span>(Item {
-<a href=#584 id=584 data-nosnippet>584</a>        region: Region(<span class="string">"eu-west"</span>.into()),
-<a href=#585 id=585 data-nosnippet>585</a>        name: <span class="string">"Gamma"</span>,
-<a href=#586 id=586 data-nosnippet>586</a>    })
-<a href=#587 id=587 data-nosnippet>587</a>    .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#588 id=588 data-nosnippet>588</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#589 id=589 data-nosnippet>589</a>
-<a href=#590 id=590 data-nosnippet>590</a>    <span class="comment">// Filter by newtype partition key
-<a href=#591 id=591 data-nosnippet>591</a>    </span><span class="kw">let </span>items = Item::filter(Item::fields().region().eq(Region(<span class="string">"us-east"</span>.into())))
-<a href=#592 id=592 data-nosnippet>592</a>        .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#593 id=593 data-nosnippet>593</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#594 id=594 data-nosnippet>594</a>
-<a href=#595 id=595 data-nosnippet>595</a>    <span class="macro">assert_eq!</span>(items.len(), <span class="number">2</span>);
-<a href=#596 id=596 data-nosnippet>596</a>    <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = items.iter().map(|i| i.name.as_str()).collect();
-<a href=#597 id=597 data-nosnippet>597</a>    names.sort();
-<a href=#598 id=598 data-nosnippet>598</a>    <span class="macro">assert_eq!</span>(names, [<span class="string">"Alpha"</span>, <span class="string">"Beta"</span>]);
-<a href=#599 id=599 data-nosnippet>599</a>
-<a href=#600 id=600 data-nosnippet>600</a>    <span class="prelude-val">Ok</span>(())
-<a href=#601 id=601 data-nosnippet>601</a>}
+<a href=#548 id=548 data-nosnippet>548</a>    <span class="kw">async fn </span>ordered(db: <span class="kw-2">&amp;mut </span>toasty::Db, order: toasty::stmt::OrderByExpr) -&gt; <span class="prelude-ty">Result</span>&lt;Vec&lt;i64&gt;&gt; {
+<a href=#549 id=549 data-nosnippet>549</a>        <span class="kw">let </span>credits = Credit::all().order_by(order).exec(db).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#550 id=550 data-nosnippet>550</a>        <span class="prelude-val">Ok</span>(credits.iter().map(|c| c.timestamp.<span class="number">0</span>).collect())
+<a href=#551 id=551 data-nosnippet>551</a>    }
+<a href=#552 id=552 data-nosnippet>552</a>
+<a href=#553 id=553 data-nosnippet>553</a>    <span class="kw">let </span>ts = ordered(<span class="kw-2">&amp;mut </span>db, Credit::fields().timestamp().desc()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#554 id=554 data-nosnippet>554</a>    <span class="macro">assert_eq!</span>(ts, [<span class="number">300</span>, <span class="number">200</span>, <span class="number">100</span>]);
+<a href=#555 id=555 data-nosnippet>555</a>
+<a href=#556 id=556 data-nosnippet>556</a>    <span class="kw">let </span>ts = ordered(<span class="kw-2">&amp;mut </span>db, Credit::fields().timestamp().asc()).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#557 id=557 data-nosnippet>557</a>    <span class="macro">assert_eq!</span>(ts, [<span class="number">100</span>, <span class="number">200</span>, <span class="number">300</span>]);
+<a href=#558 id=558 data-nosnippet>558</a>
+<a href=#559 id=559 data-nosnippet>559</a>    <span class="comment">// A nested newtype chain lowers to one single-element record per
+<a href=#560 id=560 data-nosnippet>560</a>    // layer; ordering must unwrap every layer to reach the column.
+<a href=#561 id=561 data-nosnippet>561</a>    </span><span class="attr">#[derive(Debug, toasty::Embed)]
+<a href=#562 id=562 data-nosnippet>562</a>    </span><span class="kw">struct </span>Wrapped(TimestampMillis);
+<a href=#563 id=563 data-nosnippet>563</a>
+<a href=#564 id=564 data-nosnippet>564</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#565 id=565 data-nosnippet>565</a>    </span><span class="kw">struct </span>Event {
+<a href=#566 id=566 data-nosnippet>566</a>        <span class="attr">#[key]
+<a href=#567 id=567 data-nosnippet>567</a>        #[auto]
+<a href=#568 id=568 data-nosnippet>568</a>        </span>id: uuid::Uuid,
+<a href=#569 id=569 data-nosnippet>569</a>        at: Wrapped,
+<a href=#570 id=570 data-nosnippet>570</a>    }
+<a href=#571 id=571 data-nosnippet>571</a>
+<a href=#572 id=572 data-nosnippet>572</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Event)).<span class="kw">await</span>;
+<a href=#573 id=573 data-nosnippet>573</a>
+<a href=#574 id=574 data-nosnippet>574</a>    <span class="kw">for </span>ts <span class="kw">in </span>[<span class="number">200</span>, <span class="number">100</span>, <span class="number">300</span>] {
+<a href=#575 id=575 data-nosnippet>575</a>        <span class="macro">toasty::create!</span>(Event {
+<a href=#576 id=576 data-nosnippet>576</a>            at: Wrapped(TimestampMillis(ts)),
+<a href=#577 id=577 data-nosnippet>577</a>        })
+<a href=#578 id=578 data-nosnippet>578</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#579 id=579 data-nosnippet>579</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#580 id=580 data-nosnippet>580</a>    }
+<a href=#581 id=581 data-nosnippet>581</a>
+<a href=#582 id=582 data-nosnippet>582</a>    <span class="kw">let </span>events = Event::all()
+<a href=#583 id=583 data-nosnippet>583</a>        .order_by(Event::fields().at().desc())
+<a href=#584 id=584 data-nosnippet>584</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#585 id=585 data-nosnippet>585</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#586 id=586 data-nosnippet>586</a>    <span class="kw">let </span>ts: Vec&lt;i64&gt; = events.iter().map(|e| e.at.<span class="number">0.0</span>).collect();
+<a href=#587 id=587 data-nosnippet>587</a>    <span class="macro">assert_eq!</span>(ts, [<span class="number">300</span>, <span class="number">200</span>, <span class="number">100</span>]);
+<a href=#588 id=588 data-nosnippet>588</a>
+<a href=#589 id=589 data-nosnippet>589</a>    <span class="prelude-val">Ok</span>(())
+<a href=#590 id=590 data-nosnippet>590</a>}
+<a href=#591 id=591 data-nosnippet>591</a>
+<a href=#592 id=592 data-nosnippet>592</a><span class="doccomment">/// Tests a newtype used as the partition key and in a filter predicate.
+<a href=#593 id=593 data-nosnippet>593</a>/// No `requires(sql)` — this must work on all drivers including DynamoDB.
+<a href=#594 id=594 data-nosnippet>594</a></span><span class="attr">#[driver_test]
+<a href=#595 id=595 data-nosnippet>595</a></span><span class="kw">pub async fn </span>newtype_key_and_predicate(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#596 id=596 data-nosnippet>596</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
+<a href=#597 id=597 data-nosnippet>597</a>    </span><span class="kw">struct </span>Region(String);
+<a href=#598 id=598 data-nosnippet>598</a>
+<a href=#599 id=599 data-nosnippet>599</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#600 id=600 data-nosnippet>600</a>    #[key(partition = region, local = id)]
+<a href=#601 id=601 data-nosnippet>601</a>    </span><span class="kw">struct </span>Item {
+<a href=#602 id=602 data-nosnippet>602</a>        <span class="attr">#[auto]
+<a href=#603 id=603 data-nosnippet>603</a>        </span>id: uuid::Uuid,
+<a href=#604 id=604 data-nosnippet>604</a>        region: Region,
+<a href=#605 id=605 data-nosnippet>605</a>        name: String,
+<a href=#606 id=606 data-nosnippet>606</a>    }
+<a href=#607 id=607 data-nosnippet>607</a>
+<a href=#608 id=608 data-nosnippet>608</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await</span>;
+<a href=#609 id=609 data-nosnippet>609</a>
+<a href=#610 id=610 data-nosnippet>610</a>    <span class="macro">toasty::create!</span>(Item {
+<a href=#611 id=611 data-nosnippet>611</a>        region: Region(<span class="string">"us-east"</span>.into()),
+<a href=#612 id=612 data-nosnippet>612</a>        name: <span class="string">"Alpha"</span>,
+<a href=#613 id=613 data-nosnippet>613</a>    })
+<a href=#614 id=614 data-nosnippet>614</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#615 id=615 data-nosnippet>615</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#616 id=616 data-nosnippet>616</a>
+<a href=#617 id=617 data-nosnippet>617</a>    <span class="macro">toasty::create!</span>(Item {
+<a href=#618 id=618 data-nosnippet>618</a>        region: Region(<span class="string">"us-east"</span>.into()),
+<a href=#619 id=619 data-nosnippet>619</a>        name: <span class="string">"Beta"</span>,
+<a href=#620 id=620 data-nosnippet>620</a>    })
+<a href=#621 id=621 data-nosnippet>621</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#622 id=622 data-nosnippet>622</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#623 id=623 data-nosnippet>623</a>
+<a href=#624 id=624 data-nosnippet>624</a>    <span class="macro">toasty::create!</span>(Item {
+<a href=#625 id=625 data-nosnippet>625</a>        region: Region(<span class="string">"eu-west"</span>.into()),
+<a href=#626 id=626 data-nosnippet>626</a>        name: <span class="string">"Gamma"</span>,
+<a href=#627 id=627 data-nosnippet>627</a>    })
+<a href=#628 id=628 data-nosnippet>628</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#629 id=629 data-nosnippet>629</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="comment">// Filter by newtype partition key
+<a href=#632 id=632 data-nosnippet>632</a>    </span><span class="kw">let </span>items = Item::filter(Item::fields().region().eq(Region(<span class="string">"us-east"</span>.into())))
+<a href=#633 id=633 data-nosnippet>633</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#634 id=634 data-nosnippet>634</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#635 id=635 data-nosnippet>635</a>
+<a href=#636 id=636 data-nosnippet>636</a>    <span class="macro">assert_eq!</span>(items.len(), <span class="number">2</span>);
+<a href=#637 id=637 data-nosnippet>637</a>    <span class="kw">let </span><span class="kw-2">mut </span>names: Vec&lt;<span class="kw">_</span>&gt; = items.iter().map(|i| i.name.as_str()).collect();
+<a href=#638 id=638 data-nosnippet>638</a>    names.sort();
+<a href=#639 id=639 data-nosnippet>639</a>    <span class="macro">assert_eq!</span>(names, [<span class="string">"Alpha"</span>, <span class="string">"Beta"</span>]);
+<a href=#640 id=640 data-nosnippet>640</a>
+<a href=#641 id=641 data-nosnippet>641</a>    <span class="prelude-val">Ok</span>(())
+<a href=#642 id=642 data-nosnippet>642</a>}
 </code></pre></div></section></main></body></html>

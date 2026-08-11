@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-7de5dd68.js";
+            window.path_to_searchindex_js = "searchindex-8fa897ce.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -229,16 +229,22 @@ user.update()
     .exec(&amp;mut db)
     .await?;</code></pre>
 <p>Comparison operators (<code>ne</code>, <code>gt</code>, <code>ge</code>, <code>lt</code>, <code>le</code>) take the wrapper value and
-compare the underlying column, using the backend’s ordering for the inner type:</p>
+compare the underlying column, using the backend’s ordering for the inner type.
+<code>asc()</code> and <code>desc()</code> sort by the underlying column the same way:</p>
 <pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
 struct Millis(i64);
 
 let recent = Credit::filter(Credit::fields().timestamp().ge(Millis(cutoff)))
     .exec(&amp;mut db)
+    .await?;
+
+let newest_first = Credit::all()
+    .order_by(Credit::fields().timestamp().desc())
+    .exec(&amp;mut db)
     .await?;</code></pre>
 <p>Multi-field embedded structs support <code>eq</code> and <code>ne</code>, which compare every column.
-The ordering operators are newtype-only — backends do not share an ordering for
-multi-column values.</p>
+The ordering operators and <code>asc()</code>/<code>desc()</code> are newtype-only — backends do not
+share an ordering for multi-column values.</p>
 <p>A newtype can also be used as a primary key:</p>
 <pre><code class="language-rust ignore">#[derive(Debug, toasty::Embed)]
 struct UserId(String);
