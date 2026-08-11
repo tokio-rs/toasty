@@ -77,6 +77,11 @@ pub use upsert::Upsert;
 
 pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
 
+#[cfg(feature = "net")]
+pub use cidr::{IpCidr, IpInet};
+#[cfg(feature = "net")]
+pub use macaddr::{MacAddr6, MacAddr8};
+
 use toasty_core::stmt;
 
 use std::{fmt, marker::PhantomData};

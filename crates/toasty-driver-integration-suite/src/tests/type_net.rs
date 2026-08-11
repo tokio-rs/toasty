@@ -7,10 +7,10 @@ pub async fn network_address_round_trip(test: &mut Test) -> Result<(), BoxError>
         #[key]
         #[auto]
         id: uuid::Uuid,
-        cidr: cidr::IpCidr,
-        inet: cidr::IpInet,
-        macaddr: macaddr::MacAddr6,
-        macaddr8: macaddr::MacAddr8,
+        cidr: IpCidr,
+        inet: IpInet,
+        macaddr: MacAddr6,
+        macaddr8: MacAddr8,
     }
 
     let mut db = test.setup_db(models!(Item)).await;
@@ -69,7 +69,7 @@ pub async fn network_address_collection_round_trip(test: &mut Test) -> Result<()
         #[key]
         #[auto]
         id: uuid::Uuid,
-        addresses: Vec<cidr::IpInet>,
+        addresses: Vec<IpInet>,
     }
 
     let mut db = test.setup_db(models!(Item)).await;
@@ -94,20 +94,20 @@ pub async fn explicit_native_network_columns(test: &mut Test) -> Result<(), BoxE
         #[auto]
         id: uuid::Uuid,
         #[column(type = cidr)]
-        cidr: cidr::IpCidr,
+        cidr: IpCidr,
         #[column(type = inet)]
-        inet: cidr::IpInet,
+        inet: IpInet,
         #[column(type = macaddr)]
-        macaddr: macaddr::MacAddr6,
+        macaddr: MacAddr6,
         #[column(type = macaddr8)]
-        macaddr8: macaddr::MacAddr8,
+        macaddr8: MacAddr8,
     }
 
     let mut db = test.setup_db(models!(Item)).await;
-    let cidr: cidr::IpCidr = "10.0.0.0/8".parse()?;
-    let inet: cidr::IpInet = "10.0.0.1/8".parse()?;
-    let macaddr: macaddr::MacAddr6 = "ac:de:48:23:45:67".parse()?;
-    let macaddr8: macaddr::MacAddr8 = "ac:de:48:23:45:67:89:ab".parse()?;
+    let cidr: IpCidr = "10.0.0.0/8".parse()?;
+    let inet: IpInet = "10.0.0.1/8".parse()?;
+    let macaddr: MacAddr6 = "ac:de:48:23:45:67".parse()?;
+    let macaddr8: MacAddr8 = "ac:de:48:23:45:67:89:ab".parse()?;
     let item = toasty::create!(Item {
         cidr,
         inet,

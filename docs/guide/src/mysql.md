@@ -87,10 +87,10 @@ quirks worth knowing about; the notes below the table call them out.
 | `jiff::civil::Date` *(feature)* | `DATE` |
 | `jiff::civil::Time` *(feature)* | `TIME(6)` |
 | `jiff::civil::DateTime` *(feature)* | `DATETIME(6)` |
-| `cidr::IpCidr` *(feature)* | `VARCHAR(43)` |
-| `cidr::IpInet` *(feature)* | `VARCHAR(43)` |
-| `macaddr::MacAddr6` *(feature)* | `VARCHAR(17)` |
-| `macaddr::MacAddr8` *(feature)* | `VARCHAR(23)` |
+| `toasty::stmt::IpCidr` *(feature)* | `VARCHAR(43)` |
+| `toasty::stmt::IpInet` *(feature)* | `VARCHAR(43)` |
+| `toasty::stmt::MacAddr6` *(feature)* | `VARCHAR(17)` |
+| `toasty::stmt::MacAddr8` *(feature)* | `VARCHAR(23)` |
 | `Vec<T>` *(T scalar)* | `JSON` |
 | Embedded `enum` | Inline `ENUM('a', 'b', ...)` column |
 

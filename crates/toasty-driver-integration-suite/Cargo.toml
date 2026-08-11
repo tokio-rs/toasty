@@ -19,8 +19,6 @@ async-trait.workspace = true
 bigdecimal.workspace = true
 hashbrown = { workspace = true, features = ["serde"] }
 jiff.workspace = true
-cidr.workspace = true
-macaddr.workspace = true
 rust_decimal.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json.workspace = true

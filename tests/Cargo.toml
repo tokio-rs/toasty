@@ -31,8 +31,6 @@ rust_decimal.workspace = true
 bigdecimal.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
-cidr.workspace = true
-macaddr.workspace = true
 toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "net", "migration"] }
 toasty-cli.workspace = true
 toasty-core.workspace = true
