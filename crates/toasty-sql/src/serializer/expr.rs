@@ -388,9 +388,10 @@ fn mysql_json_cast(ty: &stmt::Type) -> Option<&'static str> {
 /// which PostgreSQL then refuses to compare against a typed parameter
 /// (`operator does not exist: text = ...`). The temporal casts pair with the
 /// microsecond-truncated text the JSON codec writes (see `toasty_sql::json`),
-/// so the extracted value parses cleanly into the SQL temporal type. `Zoned` is
-/// intentionally absent: it is rejected at schema-build because jiff renders it
-/// with an RFC 9557 `[IANA]` annotation that no PostgreSQL cast can parse.
+/// so the extracted value parses cleanly into the SQL temporal type. Network
+/// addresses likewise cast from their canonical text forms. `Zoned` is
+/// intentionally absent: it is rejected at schema-build because jiff renders
+/// it with an RFC 9557 `[IANA]` annotation that no PostgreSQL cast can parse.
 fn pg_json_cast(ty: &stmt::Type) -> Option<&'static str> {
     use crate::stmt::Type;
     Some(match ty {
@@ -411,6 +412,14 @@ fn pg_json_cast(ty: &stmt::Type) -> Option<&'static str> {
         Type::Time => "time",
         #[cfg(feature = "jiff")]
         Type::DateTime => "timestamp",
+        #[cfg(feature = "net")]
+        Type::Cidr => "cidr",
+        #[cfg(feature = "net")]
+        Type::Inet => "inet",
+        #[cfg(feature = "net")]
+        Type::MacAddr => "macaddr",
+        #[cfg(feature = "net")]
+        Type::MacAddr8 => "macaddr8",
         _ => return None,
     })
 }

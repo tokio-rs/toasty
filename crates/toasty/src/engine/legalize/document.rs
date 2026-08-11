@@ -112,6 +112,14 @@ impl LegalizeDocumentPaths<'_> {
             stmt::Type::Decimal => !self.capability.native_decimal,
             #[cfg(feature = "bigdecimal")]
             stmt::Type::BigDecimal => !self.capability.native_decimal,
+            #[cfg(feature = "net")]
+            stmt::Type::Cidr => !self.capability.native_cidr,
+            #[cfg(feature = "net")]
+            stmt::Type::Inet => !self.capability.native_inet,
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr => !self.capability.native_macaddr,
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr8 => !self.capability.native_macaddr8,
             _ => false,
         }
     }

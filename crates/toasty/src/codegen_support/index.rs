@@ -85,6 +85,17 @@ mod jiff_impls {
     impl IndexableField for jiff::civil::DateTime {}
 }
 
+#[cfg(feature = "net")]
+mod net_impls {
+    use super::IndexableField;
+    use crate::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
+
+    impl IndexableField for IpCidr {}
+    impl IndexableField for IpInet {}
+    impl IndexableField for MacAddr6 {}
+    impl IndexableField for MacAddr8 {}
+}
+
 // Tuple-newtype embeds get a per-type `IndexableField` impl from
 // `#[derive(Embed)]` (see `expand_embedded_indexable_impl` in toasty-macros),
 // forwarding to their inner type. A `NewtypeOf` blanket would be more concise

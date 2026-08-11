@@ -128,6 +128,22 @@ pub enum Value {
     /// See [`jiff::civil::DateTime`].
     #[cfg(feature = "jiff")]
     DateTime(jiff::civil::DateTime),
+
+    /// An IPv4 or IPv6 network prefix.
+    #[cfg(feature = "net")]
+    Cidr(cidr::IpCidr),
+
+    /// An IPv4 or IPv6 host address with a network prefix.
+    #[cfg(feature = "net")]
+    Inet(cidr::IpInet),
+
+    /// A six-byte IEEE EUI-48 address.
+    #[cfg(feature = "net")]
+    MacAddr(macaddr::MacAddr6),
+
+    /// An eight-byte IEEE EUI-64 address.
+    #[cfg(feature = "net")]
+    MacAddr8(macaddr::MacAddr8),
 }
 
 impl Value {
@@ -396,6 +412,14 @@ impl Value {
             Value::Time(_) => *ty == Type::Time,
             #[cfg(feature = "jiff")]
             Value::DateTime(_) => *ty == Type::DateTime,
+            #[cfg(feature = "net")]
+            Value::Cidr(_) => *ty == Type::Cidr,
+            #[cfg(feature = "net")]
+            Value::Inet(_) => *ty == Type::Inet,
+            #[cfg(feature = "net")]
+            Value::MacAddr(_) => *ty == Type::MacAddr,
+            #[cfg(feature = "net")]
+            Value::MacAddr8(_) => *ty == Type::MacAddr8,
         }
     }
 
@@ -471,6 +495,14 @@ impl Value {
             Value::Time(_) => Type::Time,
             #[cfg(feature = "jiff")]
             Value::DateTime(_) => Type::DateTime,
+            #[cfg(feature = "net")]
+            Value::Cidr(_) => Type::Cidr,
+            #[cfg(feature = "net")]
+            Value::Inet(_) => Type::Inet,
+            #[cfg(feature = "net")]
+            Value::MacAddr(_) => Type::MacAddr,
+            #[cfg(feature = "net")]
+            Value::MacAddr8(_) => Type::MacAddr8,
         }
     }
 
@@ -480,9 +512,9 @@ impl Value {
     /// lighter-weight alternative to going through [`infer_ty`] and
     /// [`db::Type::from_app`], which first builds the richer [`Type`] only for
     /// the database layer to immediately collapse it again. String, UUID,
-    /// bytes, decimal, and date/time variants resolve through the driver's
-    /// [`StorageTypes`] defaults; a list maps to the storage type of its
-    /// uniform element type.
+    /// bytes, decimal, date/time, and network-address variants resolve through
+    /// the driver's [`StorageTypes`] defaults; a list maps to the storage type
+    /// of its uniform element type.
     ///
     /// Returns an error for values whose storage type cannot be determined from
     /// the value alone — `NULL`, records, and empty, all-`NULL`, or mixed-type
@@ -553,6 +585,14 @@ impl Value {
             Value::Time(_) => storage.default_time_type.clone(),
             #[cfg(feature = "jiff")]
             Value::DateTime(_) => storage.default_datetime_type.clone(),
+            #[cfg(feature = "net")]
+            Value::Cidr(_) => storage.default_cidr_type.clone(),
+            #[cfg(feature = "net")]
+            Value::Inet(_) => storage.default_inet_type.clone(),
+            #[cfg(feature = "net")]
+            Value::MacAddr(_) => storage.default_macaddr_type.clone(),
+            #[cfg(feature = "net")]
+            Value::MacAddr8(_) => storage.default_macaddr8_type.clone(),
             // A list stores as the array type of its element, but only when the
             // elements are uniform at the *app-type* level. Reuse the full
             // inference path to enforce that: comparing storage types alone is
@@ -679,6 +719,16 @@ impl PartialOrd for Value {
             (Value::Time(a), Value::Time(b)) => a.partial_cmp(b),
             #[cfg(feature = "jiff")]
             (Value::DateTime(a), Value::DateTime(b)) => a.partial_cmp(b),
+
+            // Network address types.
+            #[cfg(feature = "net")]
+            (Value::Cidr(a), Value::Cidr(b)) => a.partial_cmp(b),
+            #[cfg(feature = "net")]
+            (Value::Inet(a), Value::Inet(b)) => a.partial_cmp(b),
+            #[cfg(feature = "net")]
+            (Value::MacAddr(a), Value::MacAddr(b)) => a.partial_cmp(b),
+            #[cfg(feature = "net")]
+            (Value::MacAddr8(a), Value::MacAddr8(b)) => a.partial_cmp(b),
 
             // Types without natural ordering or different types.
             _ => None,

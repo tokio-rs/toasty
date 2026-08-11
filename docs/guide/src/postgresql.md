@@ -110,6 +110,10 @@ below the table.
 | `jiff::civil::Date` *(feature)* | `DATE` |
 | `jiff::civil::Time` *(feature)* | `TIME` with microsecond precision |
 | `jiff::civil::DateTime` *(feature)* | `TIMESTAMP` with microsecond precision |
+| `toasty::stmt::IpCidr` *(feature)* | `CIDR` |
+| `toasty::stmt::IpInet` *(feature)* | `INET` |
+| `toasty::stmt::MacAddr6` *(feature)* | `MACADDR` |
+| `toasty::stmt::MacAddr8` *(feature)* | `MACADDR8` |
 | `Vec<T>` *(T scalar)* | Native array (`text[]`, `int8[]`, `uuid[]`, …) |
 | Embedded `enum` | Native `ENUM` type (`CREATE TYPE ... AS ENUM`) |
 

@@ -22,7 +22,7 @@ jiff.workspace = true
 rust_decimal.workspace = true
 serde = { version = "1.0", features = ["derive"] }
 serde_json.workspace = true
-toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "serde"] }
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "net", "serde"] }
 toasty-core = { workspace = true, features = ["assert-struct"] }
 toasty-macros.workspace = true
 toasty-driver-integration-suite-macros.workspace = true

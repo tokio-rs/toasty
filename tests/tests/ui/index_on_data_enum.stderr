@@ -14,11 +14,11 @@ help: the trait `toasty::codegen_support::index::IndexableField` is not implemen
              Arc<T>
              Box<T>
              Deferred<T>
+             IpCidr
+             IpInet
+             MacAddr6
              Option<T>
              Rc<T>
-             Vec<u8>
-             bigdecimal::BigDecimal
-             bool
            and $N others
 note: required by a bound in `_check`
   --> tests/ui/index_on_data_enum.rs:14:17

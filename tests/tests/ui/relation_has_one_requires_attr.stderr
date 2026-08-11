@@ -15,11 +15,11 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              Arc<T>
              Box<T>
              Deferred<T>
+             IpCidr
+             IpInet
+             MacAddr6
              Option<T>
              Rc<T>
-             Vec<T>
-             Vec<bigdecimal::BigDecimal>
-             Vec<bool>
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
@@ -42,11 +42,11 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              Arc<T>
              Box<T>
              Deferred<T>
+             IpCidr
+             IpInet
+             MacAddr6
              Option<T>
              Rc<T>
-             Vec<T>
-             Vec<bigdecimal::BigDecimal>
-             Vec<bool>
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
    = note: this error originates in the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
@@ -84,11 +84,11 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              Arc<T>
              Box<T>
              Deferred<T>
+             IpCidr
+             IpInet
+             MacAddr6
              Option<T>
              Rc<T>
-             Vec<T>
-             Vec<bigdecimal::BigDecimal>
-             Vec<bool>
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
@@ -112,11 +112,11 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              Arc<T>
              Box<T>
              Deferred<T>
+             IpCidr
+             IpInet
+             MacAddr6
              Option<T>
              Rc<T>
-             Vec<T>
-             Vec<bigdecimal::BigDecimal>
-             Vec<bool>
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
    = note: 1 redundant requirement hidden
@@ -139,11 +139,11 @@ help: the trait `toasty::schema::Field` is not implemented for `Profile`
              Arc<T>
              Box<T>
              Deferred<T>
+             IpCidr
+             IpInet
+             MacAddr6
              Option<T>
              Rc<T>
-             Vec<T>
-             Vec<bigdecimal::BigDecimal>
-             Vec<bool>
            and $N others
    = note: required for `Option<Profile>` to implement `toasty::schema::Field`
 
