@@ -75,9 +75,15 @@ pub use update::Update;
 mod upsert;
 pub use upsert::Upsert;
 
+#[cfg(feature = "bigdecimal")]
+pub use toasty_core::stmt::BigDecimal;
+#[cfg(feature = "rust_decimal")]
+pub use toasty_core::stmt::Decimal;
+#[cfg(feature = "jiff")]
+pub use toasty_core::stmt::{Date, DateTime, Time, Timestamp, Zoned};
 #[cfg(feature = "net")]
 pub use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
-pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Value};
+pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Uuid, Value};
 
 use toasty_core::stmt;
 

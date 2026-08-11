@@ -30,6 +30,7 @@ members = [
     # Tests
     "tests",
     "tests/tests/fixtures/post",
+    "tests/tests/fixtures/stmt-reexports",
     "tests/tests/fixtures/user",
 ]
 # Driver crates are excluded so `cargo test` (no `-p`/`--workspace`) and CI's
@@ -53,6 +54,7 @@ default-members = [
     "examples/store-operations",
     "tests",
     "tests/tests/fixtures/post",
+    "tests/tests/fixtures/stmt-reexports",
     "tests/tests/fixtures/user",
 ]
 
