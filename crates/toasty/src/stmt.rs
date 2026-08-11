@@ -75,7 +75,7 @@ pub use update::Update;
 mod upsert;
 pub use upsert::Upsert;
 
-pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
+pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Value};
 
 use toasty_core::stmt;
 
