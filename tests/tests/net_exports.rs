@@ -1,17 +1,30 @@
-use toasty::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
+use std::marker::PhantomData;
+
+use toasty::stmt::{
+    BigDecimal, Date, DateTime, Decimal, IpCidr, IpInet, MacAddr6, MacAddr8, Time, Timestamp, Uuid,
+    Zoned,
+};
 use toasty_core::stmt::{
-    IpCidr as CoreIpCidr, IpInet as CoreIpInet, MacAddr6 as CoreMacAddr6, MacAddr8 as CoreMacAddr8,
+    BigDecimal as CoreBigDecimal, Date as CoreDate, DateTime as CoreDateTime,
+    Decimal as CoreDecimal, IpCidr as CoreIpCidr, IpInet as CoreIpInet, MacAddr6 as CoreMacAddr6,
+    MacAddr8 as CoreMacAddr8, Time as CoreTime, Timestamp as CoreTimestamp, Uuid as CoreUuid,
+    Zoned as CoreZoned,
 };
 
 #[test]
-fn network_types_are_reexported_from_stmt() {
-    let _: IpCidr = "192.0.2.0/24".parse().unwrap();
-    let _: IpInet = "192.0.2.1/24".parse().unwrap();
-    let _: MacAddr6 = "ac:de:48:23:45:67".parse().unwrap();
-    let _: MacAddr8 = "ac:de:48:23:45:67:89:ab".parse().unwrap();
+fn external_types_are_reexported_from_stmt() {
+    fn assert_same<T>(_: PhantomData<T>) {}
 
-    let _: CoreIpCidr = "192.0.2.0/24".parse().unwrap();
-    let _: CoreIpInet = "192.0.2.1/24".parse().unwrap();
-    let _: CoreMacAddr6 = "ac:de:48:23:45:67".parse().unwrap();
-    let _: CoreMacAddr8 = "ac:de:48:23:45:67:89:ab".parse().unwrap();
+    assert_same::<Uuid>(PhantomData::<CoreUuid>);
+    assert_same::<Decimal>(PhantomData::<CoreDecimal>);
+    assert_same::<BigDecimal>(PhantomData::<CoreBigDecimal>);
+    assert_same::<Timestamp>(PhantomData::<CoreTimestamp>);
+    assert_same::<Zoned>(PhantomData::<CoreZoned>);
+    assert_same::<Date>(PhantomData::<CoreDate>);
+    assert_same::<Time>(PhantomData::<CoreTime>);
+    assert_same::<DateTime>(PhantomData::<CoreDateTime>);
+    assert_same::<IpCidr>(PhantomData::<CoreIpCidr>);
+    assert_same::<IpInet>(PhantomData::<CoreIpInet>);
+    assert_same::<MacAddr6>(PhantomData::<CoreMacAddr6>);
+    assert_same::<MacAddr8>(PhantomData::<CoreMacAddr8>);
 }
