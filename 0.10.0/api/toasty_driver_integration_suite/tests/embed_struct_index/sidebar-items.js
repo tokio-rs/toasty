@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["embedded_struct_index_schema","embedded_struct_unique_index_enforced","nested_embedded_struct_index"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["index_custom_name_default_unchanged","index_custom_name_overrides_default","index_long_name_is_truncated","key_custom_name_recorded_on_pk_index"]};

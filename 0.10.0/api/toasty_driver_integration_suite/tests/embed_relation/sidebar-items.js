@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["belongs_to_in_embedded_struct","belongs_to_in_enum_variants","filter_by_relation_key_through_variant_path","optional_relation_carrying_embed"]};

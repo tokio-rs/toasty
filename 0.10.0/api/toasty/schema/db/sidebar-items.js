@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["IndexOp","IndexScope","Migration","Type"],"struct":["AppliedMigration","Column","ColumnId","EnumVariant","Index","IndexColumn","IndexId","PrimaryKey","Schema","Table","TableId","TypeEnum"]};

@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["rename_all_across_storage_mappings","rename_all_derives_labels","rename_all_round_trip"]};

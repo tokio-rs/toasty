@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["default_string_labels","default_string_labels_data_enum","filter_by_string_variant","mixed_explicit_and_default_labels","mixed_string_labels_data_enum","string_discriminant_data_enum","string_discriminant_schema_registration","string_discriminant_unit_enum"]};

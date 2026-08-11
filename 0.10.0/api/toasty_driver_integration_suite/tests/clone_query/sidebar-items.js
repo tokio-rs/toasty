@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"fn":["clone_create_builder","clone_query_with_different_modifiers","clone_update_builder"]};

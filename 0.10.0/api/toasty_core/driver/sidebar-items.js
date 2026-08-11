@@ -1,0 +1,1 @@
+window.SIDEBAR_ITEMS = {"enum":["Dialect","Rows","SqlPlaceholder"],"mod":["log","operation"],"struct":["Capability","ConnectContext","ConnectionUrl","ExecResponse","SchemaMutations","StorageTypes"],"trait":["Connection","Driver"]};
