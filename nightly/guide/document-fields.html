@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-575db792.js";
+            window.path_to_searchindex_js = "searchindex-7de5dd68.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -317,9 +317,10 @@ collections.</p>
 <p>The document root must be a named embedded struct or a collection of
 named embedded structs. Document keys come from Rust field names.</p>
 <p>Nested embedded structs, scalar lists, optional scalar fields, decimal
-types, and supported <code>jiff</code> temporal types can appear inside a document.
-Toasty uses canonical text encodings for temporal and decimal leaves so
-filters compare the same values that reads reconstruct.</p>
+types, supported <code>jiff</code> temporal types, and <code>cidr</code> and <code>macaddr</code> network
+address types can appear inside a document. Toasty uses canonical text
+encodings for temporal, decimal, and network address leaves so filters
+compare the same values that reads reconstruct.</p>
 <p>Current restrictions:</p>
 <ul>
 <li>Embedded enums cannot be encoded inside a document.</li>

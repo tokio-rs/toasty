@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-575db792.js";
+            window.path_to_searchindex_js = "searchindex-7de5dd68.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -419,6 +419,10 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Date</code></td><td>Date</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Time</code></td><td>Time</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::DateTime</code></td><td>DateTime</td></tr>
+<tr><td><code>net</code></td><td><code>toasty::stmt::IpCidr</code></td><td>IP network prefix</td></tr>
+<tr><td><code>net</code></td><td><code>toasty::stmt::IpInet</code></td><td>IP host address with a network prefix</td></tr>
+<tr><td><code>net</code></td><td><code>toasty::stmt::MacAddr6</code></td><td>Six-byte MAC address</td></tr>
+<tr><td><code>net</code></td><td><code>toasty::stmt::MacAddr8</code></td><td>Eight-byte MAC address</td></tr>
 <tr><td><code>serde</code></td><td><code>toasty::Json&lt;T&gt;</code>, <code>serde_json::Value</code></td><td>Explicit text, <code>json</code>, or <code>jsonb</code> column (see <a href="#json-encoding">JSON Encoding</a>)</td></tr>
 </tbody>
 </table>
@@ -2993,6 +2997,10 @@ struct User {
 <tr><td><code>date</code></td><td>Date</td></tr>
 <tr><td><code>time(P)</code></td><td>Time with precision</td></tr>
 <tr><td><code>datetime(P)</code></td><td>Date and time with precision</td></tr>
+<tr><td><code>cidr</code></td><td>IP network prefix</td></tr>
+<tr><td><code>inet</code></td><td>IP host address with a network prefix</td></tr>
+<tr><td><code>macaddr</code></td><td>Six-byte MAC address</td></tr>
+<tr><td><code>macaddr8</code></td><td>Eight-byte MAC address</td></tr>
 </tbody>
 </table>
 </div>
@@ -3872,9 +3880,10 @@ collections.</p>
 <p>The document root must be a named embedded struct or a collection of
 named embedded structs. Document keys come from Rust field names.</p>
 <p>Nested embedded structs, scalar lists, optional scalar fields, decimal
-types, and supported <code>jiff</code> temporal types can appear inside a document.
-Toasty uses canonical text encodings for temporal and decimal leaves so
-filters compare the same values that reads reconstruct.</p>
+types, supported <code>jiff</code> temporal types, and <code>cidr</code> and <code>macaddr</code> network
+address types can appear inside a document. Toasty uses canonical text
+encodings for temporal, decimal, and network address leaves so filters
+compare the same values that reads reconstruct.</p>
 <p>Current restrictions:</p>
 <ul>
 <li>Embedded enums cannot be encoded inside a document.</li>
@@ -4118,9 +4127,10 @@ column.</p>
 scalar values in a single column — <code>tags: Vec&lt;String&gt;</code>, <code>scores: Vec&lt;i64&gt;</code>, <code>weights: Vec&lt;f64&gt;</code>. Toasty stores the collection directly;
 you do not wrap it in JSON by hand or manage a separate join table.</p>
 <p>The element type must be a scalar: any primitive other than <code>u8</code>, plus
-<code>String</code>, <code>Uuid</code>, the decimal types, the <code>jiff</code> date/time types, and a unit
-enum derived with <code>toasty::Embed</code>. <code>Vec&lt;u8&gt;</code> keeps its existing meaning — a
-single binary blob, not a collection of one-byte integers.</p>
+<code>String</code>, <code>Uuid</code>, the decimal types, the <code>jiff</code> date/time types, the <code>cidr</code> and
+<code>macaddr</code> network address types, and a unit enum derived with <code>toasty::Embed</code>.
+<code>Vec&lt;u8&gt;</code> keeps its existing meaning — a single binary blob, not a collection
+of one-byte integers.</p>
 <p>Storage depends on the driver:</p>
 <div class="table-wrapper">
 <table>
@@ -9038,6 +9048,10 @@ below the table.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>DATE</code></td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TIME</code> with microsecond precision</td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>TIMESTAMP</code> with microsecond precision</td></tr>
+<tr><td><code>toasty::stmt::IpCidr</code> <em>(feature)</em></td><td><code>CIDR</code></td></tr>
+<tr><td><code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>INET</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr6</code> <em>(feature)</em></td><td><code>MACADDR</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>MACADDR8</code></td></tr>
 <tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td>Native array (<code>text[]</code>, <code>int8[]</code>, <code>uuid[]</code>, …)</td></tr>
 <tr><td>Embedded <code>enum</code></td><td>Native <code>ENUM</code> type (<code>CREATE TYPE ... AS ENUM</code>)</td></tr>
 </tbody>
@@ -9219,6 +9233,10 @@ quirks worth knowing about; the notes below the table call them out.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>DATE</code></td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TIME(6)</code></td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>DATETIME(6)</code></td></tr>
+<tr><td><code>toasty::stmt::IpCidr</code> <em>(feature)</em></td><td><code>VARCHAR(43)</code></td></tr>
+<tr><td><code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>VARCHAR(43)</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr6</code> <em>(feature)</em></td><td><code>VARCHAR(17)</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>VARCHAR(23)</code></td></tr>
 <tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td><code>JSON</code></td></tr>
 <tr><td>Embedded <code>enum</code></td><td>Inline <code>ENUM('a', 'b', ...)</code> column</td></tr>
 </tbody>
@@ -9262,6 +9280,9 @@ parses it back on read. Array predicates (<code>contains</code>, <code>is_supers
 <p><strong><code>jiff::Zoned</code> stores as <code>TEXT</code>.</strong> MySQL has no column type that
 carries an IANA zone name alongside an instant, so zoned values
 round-trip through text.</p>
+<p><strong>Network addresses use bounded text columns.</strong> MySQL has no native
+network address types. Toasty stores the canonical text form and sizes
+each <code>VARCHAR</code> for the longest value of that address family.</p>
 <h2 id="behavior-specific-to-mysql"><a class="header" href="#behavior-specific-to-mysql">Behavior specific to MySQL</a></h2>
 <p>Toasty enables these features automatically when the driver is MySQL.
 No configuration is required.</p>
@@ -9440,6 +9461,8 @@ underlying SQLite storage class.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
+<tr><td><code>toasty::stmt::IpCidr</code>, <code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>TEXT</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr6</code>, <code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>TEXT</code></td></tr>
 <tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td><code>TEXT</code> holding a JSON array</td></tr>
 <tr><td>Embedded <code>enum</code></td><td><code>TEXT</code> with a <code>CHECK</code> constraint over the variant names</td></tr>
 </tbody>
@@ -9460,6 +9483,8 @@ ISO 8601 matches chronological order.</p>
 type. Both <code>rust_decimal::Decimal</code> and <code>bigdecimal::BigDecimal</code>
 round-trip through text. Arithmetic in SQL coerces to <code>REAL</code>, which
 loses precision — keep decimal math in Rust.</p>
+<p><strong>Network addresses are stored as <code>TEXT</code>.</strong> The <code>net</code> feature stores
+CIDR, INET, EUI-48, and EUI-64 values in their canonical text forms.</p>
 <p><strong><code>VARCHAR(N)</code> does not enforce <code>N</code>.</strong> SQLite ignores the length
 specifier on <code>VARCHAR</code>, <code>CHAR</code>, and <code>TEXT</code>-affinity types. A field
 declared <code>#[column(type = varchar(10))]</code> accepts strings of any
@@ -9988,6 +10013,8 @@ encodes Rust values into them as follows:</p>
 <tr><td><code>rust_decimal::Decimal</code> <em>(feature)</em></td><td><code>S</code></td></tr>
 <tr><td><code>jiff::Timestamp</code> <em>(feature)</em></td><td><code>S</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::Date</code> / <code>Time</code> / <code>DateTime</code> <em>(feature)</em></td><td><code>S</code></td></tr>
+<tr><td><code>toasty::stmt::IpCidr</code>, <code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>S</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr6</code>, <code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>S</code></td></tr>
 <tr><td>Embedded <code>enum</code></td><td><code>S</code> (variant tag) plus per-variant data attributes</td></tr>
 <tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td><code>L</code> (DynamoDB list of element attributes)</td></tr>
 </tbody>

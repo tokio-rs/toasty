@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-575db792.js";
+            window.path_to_searchindex_js = "searchindex-7de5dd68.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -253,6 +253,8 @@ underlying SQLite storage class.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
+<tr><td><code>toasty::stmt::IpCidr</code>, <code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>TEXT</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr6</code>, <code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>TEXT</code></td></tr>
 <tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td><code>TEXT</code> holding a JSON array</td></tr>
 <tr><td>Embedded <code>enum</code></td><td><code>TEXT</code> with a <code>CHECK</code> constraint over the variant names</td></tr>
 </tbody>
@@ -273,6 +275,8 @@ ISO 8601 matches chronological order.</p>
 type. Both <code>rust_decimal::Decimal</code> and <code>bigdecimal::BigDecimal</code>
 round-trip through text. Arithmetic in SQL coerces to <code>REAL</code>, which
 loses precision — keep decimal math in Rust.</p>
+<p><strong>Network addresses are stored as <code>TEXT</code>.</strong> The <code>net</code> feature stores
+CIDR, INET, EUI-48, and EUI-64 values in their canonical text forms.</p>
 <p><strong><code>VARCHAR(N)</code> does not enforce <code>N</code>.</strong> SQLite ignores the length
 specifier on <code>VARCHAR</code>, <code>CHAR</code>, and <code>TEXT</code>-affinity types. A field
 declared <code>#[column(type = varchar(10))]</code> accepts strings of any

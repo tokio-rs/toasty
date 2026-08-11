@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-575db792.js";
+            window.path_to_searchindex_js = "searchindex-7de5dd68.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -249,6 +249,10 @@ quirks worth knowing about; the notes below the table call them out.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>DATE</code></td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TIME(6)</code></td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>DATETIME(6)</code></td></tr>
+<tr><td><code>toasty::stmt::IpCidr</code> <em>(feature)</em></td><td><code>VARCHAR(43)</code></td></tr>
+<tr><td><code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>VARCHAR(43)</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr6</code> <em>(feature)</em></td><td><code>VARCHAR(17)</code></td></tr>
+<tr><td><code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>VARCHAR(23)</code></td></tr>
 <tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td><code>JSON</code></td></tr>
 <tr><td>Embedded <code>enum</code></td><td>Inline <code>ENUM('a', 'b', ...)</code> column</td></tr>
 </tbody>
@@ -292,6 +296,9 @@ parses it back on read. Array predicates (<code>contains</code>, <code>is_supers
 <p><strong><code>jiff::Zoned</code> stores as <code>TEXT</code>.</strong> MySQL has no column type that
 carries an IANA zone name alongside an instant, so zoned values
 round-trip through text.</p>
+<p><strong>Network addresses use bounded text columns.</strong> MySQL has no native
+network address types. Toasty stores the canonical text form and sizes
+each <code>VARCHAR</code> for the longest value of that address family.</p>
 <h2 id="behavior-specific-to-mysql"><a class="header" href="#behavior-specific-to-mysql">Behavior specific to MySQL</a></h2>
 <p>Toasty enables these features automatically when the driver is MySQL.
 No configuration is required.</p>

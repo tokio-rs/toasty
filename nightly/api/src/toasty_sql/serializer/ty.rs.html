@@ -102,52 +102,68 @@
 <a href=#102 id=102 data-nosnippet>102</a>                Dialect::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"DATETIME(" </span>precision <span class="string">")"</span>),
 <a href=#103 id=103 data-nosnippet>103</a>                Dialect::Sqlite =&gt; <span class="macro">todo!</span>(<span class="string">"SQLite does not support DateTime"</span>),
 <a href=#104 id=104 data-nosnippet>104</a>            },
-<a href=#105 id=105 data-nosnippet>105</a>            db::Type::Enum(type_enum) =&gt; <span class="kw">match </span>f.serializer.dialect {
-<a href=#106 id=106 data-nosnippet>106</a>                <span class="comment">// PostgreSQL: reference the named enum type created with CREATE TYPE.
-<a href=#107 id=107 data-nosnippet>107</a>                </span>Dialect::Postgresql =&gt; {
-<a href=#108 id=108 data-nosnippet>108</a>                    <span class="kw">let </span>name = type_enum
-<a href=#109 id=109 data-nosnippet>109</a>                        .name
-<a href=#110 id=110 data-nosnippet>110</a>                        .as_deref()
-<a href=#111 id=111 data-nosnippet>111</a>                        .expect(<span class="string">"PostgreSQL enums require a type name"</span>);
-<a href=#112 id=112 data-nosnippet>112</a>                    <span class="macro">fmt!</span>(f, name);
-<a href=#113 id=113 data-nosnippet>113</a>                }
-<a href=#114 id=114 data-nosnippet>114</a>                <span class="comment">// MySQL: inline ENUM('label1', 'label2', ...) column type.
-<a href=#115 id=115 data-nosnippet>115</a>                </span>Dialect::Mysql =&gt; {
-<a href=#116 id=116 data-nosnippet>116</a>                    <span class="kw">use </span>toasty_core::stmt::Value;
-<a href=#117 id=117 data-nosnippet>117</a>
-<a href=#118 id=118 data-nosnippet>118</a>                    f.dst.push_str(<span class="string">"ENUM("</span>);
-<a href=#119 id=119 data-nosnippet>119</a>                    <span class="kw">for </span>(i, variant) <span class="kw">in </span>type_enum.variants.iter().enumerate() {
-<a href=#120 id=120 data-nosnippet>120</a>                        <span class="kw">if </span>i &gt; <span class="number">0 </span>{
-<a href=#121 id=121 data-nosnippet>121</a>                            f.dst.push_str(<span class="string">", "</span>);
-<a href=#122 id=122 data-nosnippet>122</a>                        }
-<a href=#123 id=123 data-nosnippet>123</a>                        Value::String(variant.name.clone()).to_sql(f);
-<a href=#124 id=124 data-nosnippet>124</a>                    }
-<a href=#125 id=125 data-nosnippet>125</a>                    f.dst.push(<span class="string">')'</span>);
-<a href=#126 id=126 data-nosnippet>126</a>                }
-<a href=#127 id=127 data-nosnippet>127</a>                <span class="comment">// SQLite: TEXT column (CHECK constraint added in ColumnDef).
-<a href=#128 id=128 data-nosnippet>128</a>                </span>Dialect::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
-<a href=#129 id=129 data-nosnippet>129</a>            },
-<a href=#130 id=130 data-nosnippet>130</a>            db::Type::List(elem) =&gt; <span class="kw">match </span>f.serializer.dialect {
-<a href=#131 id=131 data-nosnippet>131</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, elem.as_ref() <span class="string">"[]"</span>),
-<a href=#132 id=132 data-nosnippet>132</a>                <span class="comment">// MySQL stores `Vec&lt;scalar&gt;` as a JSON document; SQLite uses
-<a href=#133 id=133 data-nosnippet>133</a>                // TEXT (JSON1 functions operate on either, but TEXT is the
-<a href=#134 id=134 data-nosnippet>134</a>                // idiomatic affinity). The element type is tracked by the
-<a href=#135 id=135 data-nosnippet>135</a>                // engine — it doesn't surface in the column DDL.
-<a href=#136 id=136 data-nosnippet>136</a>                </span>Dialect::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
-<a href=#137 id=137 data-nosnippet>137</a>                Dialect::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
-<a href=#138 id=138 data-nosnippet>138</a>            },
-<a href=#139 id=139 data-nosnippet>139</a>            db::Type::Document { binary } =&gt; <span class="kw">match </span>f.serializer.dialect {
-<a href=#140 id=140 data-nosnippet>140</a>                <span class="comment">// `binary` selects `jsonb` over `json` on PostgreSQL; the text
-<a href=#141 id=141 data-nosnippet>141</a>                // encoding (`#[document(text)]`) is not yet wired up.
-<a href=#142 id=142 data-nosnippet>142</a>                </span>Dialect::Postgresql <span class="kw">if </span><span class="kw-2">*</span>binary =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSONB"</span>),
-<a href=#143 id=143 data-nosnippet>143</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
-<a href=#144 id=144 data-nosnippet>144</a>                Dialect::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
-<a href=#145 id=145 data-nosnippet>145</a>                Dialect::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
-<a href=#146 id=146 data-nosnippet>146</a>            },
-<a href=#147 id=147 data-nosnippet>147</a>            db::Type::Json =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
-<a href=#148 id=148 data-nosnippet>148</a>            db::Type::Jsonb =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSONB"</span>),
-<a href=#149 id=149 data-nosnippet>149</a>            db::Type::Custom(custom) =&gt; <span class="macro">fmt!</span>(f, custom.as_str()),
-<a href=#150 id=150 data-nosnippet>150</a>        }
-<a href=#151 id=151 data-nosnippet>151</a>    }
-<a href=#152 id=152 data-nosnippet>152</a>}
+<a href=#105 id=105 data-nosnippet>105</a>            db::Type::Cidr =&gt; <span class="kw">match </span>f.serializer.dialect {
+<a href=#106 id=106 data-nosnippet>106</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"CIDR"</span>),
+<a href=#107 id=107 data-nosnippet>107</a>                <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"Only PostgreSQL supports CIDR"</span>),
+<a href=#108 id=108 data-nosnippet>108</a>            },
+<a href=#109 id=109 data-nosnippet>109</a>            db::Type::Inet =&gt; <span class="kw">match </span>f.serializer.dialect {
+<a href=#110 id=110 data-nosnippet>110</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"INET"</span>),
+<a href=#111 id=111 data-nosnippet>111</a>                <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"Only PostgreSQL supports INET"</span>),
+<a href=#112 id=112 data-nosnippet>112</a>            },
+<a href=#113 id=113 data-nosnippet>113</a>            db::Type::MacAddr =&gt; <span class="kw">match </span>f.serializer.dialect {
+<a href=#114 id=114 data-nosnippet>114</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"MACADDR"</span>),
+<a href=#115 id=115 data-nosnippet>115</a>                <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"Only PostgreSQL supports MACADDR"</span>),
+<a href=#116 id=116 data-nosnippet>116</a>            },
+<a href=#117 id=117 data-nosnippet>117</a>            db::Type::MacAddr8 =&gt; <span class="kw">match </span>f.serializer.dialect {
+<a href=#118 id=118 data-nosnippet>118</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"MACADDR8"</span>),
+<a href=#119 id=119 data-nosnippet>119</a>                <span class="kw">_ </span>=&gt; <span class="macro">todo!</span>(<span class="string">"Only PostgreSQL supports MACADDR8"</span>),
+<a href=#120 id=120 data-nosnippet>120</a>            },
+<a href=#121 id=121 data-nosnippet>121</a>            db::Type::Enum(type_enum) =&gt; <span class="kw">match </span>f.serializer.dialect {
+<a href=#122 id=122 data-nosnippet>122</a>                <span class="comment">// PostgreSQL: reference the named enum type created with CREATE TYPE.
+<a href=#123 id=123 data-nosnippet>123</a>                </span>Dialect::Postgresql =&gt; {
+<a href=#124 id=124 data-nosnippet>124</a>                    <span class="kw">let </span>name = type_enum
+<a href=#125 id=125 data-nosnippet>125</a>                        .name
+<a href=#126 id=126 data-nosnippet>126</a>                        .as_deref()
+<a href=#127 id=127 data-nosnippet>127</a>                        .expect(<span class="string">"PostgreSQL enums require a type name"</span>);
+<a href=#128 id=128 data-nosnippet>128</a>                    <span class="macro">fmt!</span>(f, name);
+<a href=#129 id=129 data-nosnippet>129</a>                }
+<a href=#130 id=130 data-nosnippet>130</a>                <span class="comment">// MySQL: inline ENUM('label1', 'label2', ...) column type.
+<a href=#131 id=131 data-nosnippet>131</a>                </span>Dialect::Mysql =&gt; {
+<a href=#132 id=132 data-nosnippet>132</a>                    <span class="kw">use </span>toasty_core::stmt::Value;
+<a href=#133 id=133 data-nosnippet>133</a>
+<a href=#134 id=134 data-nosnippet>134</a>                    f.dst.push_str(<span class="string">"ENUM("</span>);
+<a href=#135 id=135 data-nosnippet>135</a>                    <span class="kw">for </span>(i, variant) <span class="kw">in </span>type_enum.variants.iter().enumerate() {
+<a href=#136 id=136 data-nosnippet>136</a>                        <span class="kw">if </span>i &gt; <span class="number">0 </span>{
+<a href=#137 id=137 data-nosnippet>137</a>                            f.dst.push_str(<span class="string">", "</span>);
+<a href=#138 id=138 data-nosnippet>138</a>                        }
+<a href=#139 id=139 data-nosnippet>139</a>                        Value::String(variant.name.clone()).to_sql(f);
+<a href=#140 id=140 data-nosnippet>140</a>                    }
+<a href=#141 id=141 data-nosnippet>141</a>                    f.dst.push(<span class="string">')'</span>);
+<a href=#142 id=142 data-nosnippet>142</a>                }
+<a href=#143 id=143 data-nosnippet>143</a>                <span class="comment">// SQLite: TEXT column (CHECK constraint added in ColumnDef).
+<a href=#144 id=144 data-nosnippet>144</a>                </span>Dialect::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
+<a href=#145 id=145 data-nosnippet>145</a>            },
+<a href=#146 id=146 data-nosnippet>146</a>            db::Type::List(elem) =&gt; <span class="kw">match </span>f.serializer.dialect {
+<a href=#147 id=147 data-nosnippet>147</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, elem.as_ref() <span class="string">"[]"</span>),
+<a href=#148 id=148 data-nosnippet>148</a>                <span class="comment">// MySQL stores `Vec&lt;scalar&gt;` as a JSON document; SQLite uses
+<a href=#149 id=149 data-nosnippet>149</a>                // TEXT (JSON1 functions operate on either, but TEXT is the
+<a href=#150 id=150 data-nosnippet>150</a>                // idiomatic affinity). The element type is tracked by the
+<a href=#151 id=151 data-nosnippet>151</a>                // engine — it doesn't surface in the column DDL.
+<a href=#152 id=152 data-nosnippet>152</a>                </span>Dialect::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
+<a href=#153 id=153 data-nosnippet>153</a>                Dialect::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
+<a href=#154 id=154 data-nosnippet>154</a>            },
+<a href=#155 id=155 data-nosnippet>155</a>            db::Type::Document { binary } =&gt; <span class="kw">match </span>f.serializer.dialect {
+<a href=#156 id=156 data-nosnippet>156</a>                <span class="comment">// `binary` selects `jsonb` over `json` on PostgreSQL; the text
+<a href=#157 id=157 data-nosnippet>157</a>                // encoding (`#[document(text)]`) is not yet wired up.
+<a href=#158 id=158 data-nosnippet>158</a>                </span>Dialect::Postgresql <span class="kw">if </span><span class="kw-2">*</span>binary =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSONB"</span>),
+<a href=#159 id=159 data-nosnippet>159</a>                Dialect::Postgresql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
+<a href=#160 id=160 data-nosnippet>160</a>                Dialect::Mysql =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
+<a href=#161 id=161 data-nosnippet>161</a>                Dialect::Sqlite =&gt; <span class="macro">fmt!</span>(f, <span class="string">"TEXT"</span>),
+<a href=#162 id=162 data-nosnippet>162</a>            },
+<a href=#163 id=163 data-nosnippet>163</a>            db::Type::Json =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSON"</span>),
+<a href=#164 id=164 data-nosnippet>164</a>            db::Type::Jsonb =&gt; <span class="macro">fmt!</span>(f, <span class="string">"JSONB"</span>),
+<a href=#165 id=165 data-nosnippet>165</a>            db::Type::Custom(custom) =&gt; <span class="macro">fmt!</span>(f, custom.as_str()),
+<a href=#166 id=166 data-nosnippet>166</a>        }
+<a href=#167 id=167 data-nosnippet>167</a>    }
+<a href=#168 id=168 data-nosnippet>168</a>}
 </code></pre></div></section></main></body></html>
