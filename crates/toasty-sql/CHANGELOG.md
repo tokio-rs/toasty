@@ -7,6 +7,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.9.0...toasty-sql-v0.10.0) - 2026-08-11
+
+### Added
+
+- Network address types ([#1178])
+
+### Changed
+
+- [**breaking**] SQL dialect is now named on `Capability::sql` ([#1155])
+
+[#1155]: https://github.com/tokio-rs/toasty/pull/1155
+[#1178]: https://github.com/tokio-rs/toasty/pull/1178
+
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.8.0...toasty-sql-v0.9.0) - 2026-07-23
 
 ### Added
