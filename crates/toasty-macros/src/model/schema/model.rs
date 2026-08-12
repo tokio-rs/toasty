@@ -181,7 +181,7 @@ impl Model {
         }
 
         for (index, node) in ast_fields.iter().enumerate() {
-            match Field::from_ast(node, &ast.ident, index, index, &names) {
+            match Field::from_ast(node, &ast.ident, index, &names) {
                 Ok(field) => {
                     if model_attr.key.is_some()
                         && let Some(field) = &field.attrs.key
@@ -487,9 +487,9 @@ impl Model {
                 .collect::<Vec<_>>();
 
             let variant_base = global_field_index;
-            for (index, ast_field) in ast_fields.iter().enumerate() {
+            for ast_field in &ast_fields {
                 let mut field =
-                    Field::from_ast(ast_field, &model_ident, global_field_index, index, &names)?;
+                    Field::from_ast(ast_field, &model_ident, global_field_index, &names)?;
                 field.variant = Some(variant_index);
                 // `BelongsTo::from_ast` resolves `key` against the variant's
                 // own field list, so the recorded source indices are

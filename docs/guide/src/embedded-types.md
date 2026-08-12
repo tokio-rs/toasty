@@ -34,7 +34,7 @@ parent field's name — no prefix is added:
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    email TEXT NOT NULL     -- not "email_0"
+    email TEXT NOT NULL     -- not "email_inner"
 );
 ```
 
@@ -64,6 +64,16 @@ let users = User::filter(User::fields().email().eq(Email("alice@example.com".int
 // Update a newtype field
 user.update()
     .email(Email("new@example.com".into()))
+    .exec(&mut db)
+    .await?;
+```
+
+The wrapped value has its own field accessor, `inner()`. It returns a path to
+the single column the newtype maps to, so a filter can compare against the
+inner type instead of constructing a wrapper:
+
+```rust,ignore
+let users = User::filter(User::fields().email().inner().eq("alice@example.com"))
     .exec(&mut db)
     .await?;
 ```

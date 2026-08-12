@@ -290,16 +290,19 @@ impl Field {
         field: &syn::Field,
         model_ident: &syn::Ident,
         id: usize,
-        index: usize,
         names: &[syn::Ident],
     ) -> syn::Result<Self> {
         let (name, span) = match &field.ident {
             Some(ident) => (Name::from_ident(ident), ident.span()),
             None => {
+                // A new-type is the only tuple shape Toasty supports (see
+                // `collect_ast_fields`), so the one unnamed field is named
+                // `inner`. Rust's own `_0` would name the generated methods
+                // and bindings `_0`, which clippy's `used_underscore_binding`
+                // and `used_underscore_items` report against the user's struct
+                // definition, where there is nothing to fix.
                 let span = field.ty.span();
-                let ident = syn::Ident::new(&format!("_{index}"), span);
-                let name = Name::from_ident(&ident);
-                (name, span)
+                (Name::from_ident(&syn::Ident::new("inner", span)), span)
             }
         };
 
