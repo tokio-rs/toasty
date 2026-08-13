@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-525af5a5.js";
+            window.path_to_searchindex_js = "searchindex-6d5e74e4.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -203,7 +203,7 @@ parent field’s name — no prefix is added:</p>
 <pre><code class="language-sql">CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    email TEXT NOT NULL     -- not "email_0"
+    email TEXT NOT NULL     -- not "email_inner"
 );
 </code></pre>
 <p>Use newtypes to add type safety to primitive fields. An <code>Email</code> and a <code>Username</code>
@@ -226,6 +226,12 @@ let users = User::filter(User::fields().email().eq(Email("alice@example.com".int
 // Update a newtype field
 user.update()
     .email(Email("new@example.com".into()))
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p>The wrapped value has its own field accessor, <code>inner()</code>. It returns a path to
+the single column the newtype maps to, so a filter can compare against the
+inner type instead of constructing a wrapper:</p>
+<pre><code class="language-rust ignore">let users = User::filter(User::fields().email().inner().eq("alice@example.com"))
     .exec(&amp;mut db)
     .await?;</code></pre>
 <p>Comparison operators (<code>ne</code>, <code>gt</code>, <code>ge</code>, <code>lt</code>, <code>le</code>) take the wrapper value and

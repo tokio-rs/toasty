@@ -21,7 +21,7 @@
 <a href=#21 id=21 data-nosnippet>21</a>
 <a href=#22 id=22 data-nosnippet>22</a><span class="doccomment">/// Tests that a newtype field produces a single column whose name matches the
 <a href=#23 id=23 data-nosnippet>23</a>/// parent field — `email: Email` where `struct Email(String)` produces column
-<a href=#24 id=24 data-nosnippet>24</a>/// `email`, not `email_0`.
+<a href=#24 id=24 data-nosnippet>24</a>/// `email`, not `email_inner`.
 <a href=#25 id=25 data-nosnippet>25</a></span><span class="attr">#[driver_test(requires(sql), scenario(<span class="kw">crate</span>::scenarios::user_with_email))]
 <a href=#26 id=26 data-nosnippet>26</a></span><span class="kw">pub async fn </span>newtype_column_name(test: <span class="kw-2">&amp;mut </span>Test) {
 <a href=#27 id=27 data-nosnippet>27</a>    <span class="kw">let </span>db = setup(test).<span class="kw">await</span>;
@@ -495,7 +495,7 @@
 <a href=#495 id=495 data-nosnippet>495</a>
 <a href=#496 id=496 data-nosnippet>496</a><span class="doccomment">/// Tests ordering operations directly on a newtype field path: `ne`,
 <a href=#497 id=497 data-nosnippet>497</a>/// `gt`, `ge`, `lt`, and `le` accept the wrapper value and compare the
-<a href=#498 id=498 data-nosnippet>498</a>/// single underlying column, and `asc`/`desc` sort by it, so no `._0()`
+<a href=#498 id=498 data-nosnippet>498</a>/// single underlying column, and `asc`/`desc` sort by it, so no `.inner()`
 <a href=#499 id=499 data-nosnippet>499</a>/// step is needed. These methods are generated only for canonical
 <a href=#500 id=500 data-nosnippet>500</a>/// newtypes — a newtype is a pass-through to its inner column, so each
 <a href=#501 id=501 data-nosnippet>501</a>/// backend keeps its own ordering semantics for the inner type.

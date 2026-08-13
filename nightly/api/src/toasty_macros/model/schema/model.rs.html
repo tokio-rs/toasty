@@ -181,7 +181,7 @@
 <a href=#181 id=181 data-nosnippet>181</a>        }
 <a href=#182 id=182 data-nosnippet>182</a>
 <a href=#183 id=183 data-nosnippet>183</a>        <span class="kw">for </span>(index, node) <span class="kw">in </span>ast_fields.iter().enumerate() {
-<a href=#184 id=184 data-nosnippet>184</a>            <span class="kw">match </span>Field::from_ast(node, <span class="kw-2">&amp;</span>ast.ident, index, index, <span class="kw-2">&amp;</span>names) {
+<a href=#184 id=184 data-nosnippet>184</a>            <span class="kw">match </span>Field::from_ast(node, <span class="kw-2">&amp;</span>ast.ident, index, <span class="kw-2">&amp;</span>names) {
 <a href=#185 id=185 data-nosnippet>185</a>                <span class="prelude-val">Ok</span>(field) =&gt; {
 <a href=#186 id=186 data-nosnippet>186</a>                    <span class="kw">if </span>model_attr.key.is_some()
 <a href=#187 id=187 data-nosnippet>187</a>                        &amp;&amp; <span class="kw">let </span><span class="prelude-val">Some</span>(field) = <span class="kw-2">&amp;</span>field.attrs.key
@@ -487,9 +487,9 @@
 <a href=#487 id=487 data-nosnippet>487</a>                .collect::&lt;Vec&lt;<span class="kw">_</span>&gt;&gt;();
 <a href=#488 id=488 data-nosnippet>488</a>
 <a href=#489 id=489 data-nosnippet>489</a>            <span class="kw">let </span>variant_base = global_field_index;
-<a href=#490 id=490 data-nosnippet>490</a>            <span class="kw">for </span>(index, ast_field) <span class="kw">in </span>ast_fields.iter().enumerate() {
+<a href=#490 id=490 data-nosnippet>490</a>            <span class="kw">for </span>ast_field <span class="kw">in </span><span class="kw-2">&amp;</span>ast_fields {
 <a href=#491 id=491 data-nosnippet>491</a>                <span class="kw">let </span><span class="kw-2">mut </span>field =
-<a href=#492 id=492 data-nosnippet>492</a>                    Field::from_ast(ast_field, <span class="kw-2">&amp;</span>model_ident, global_field_index, index, <span class="kw-2">&amp;</span>names)<span class="question-mark">?</span>;
+<a href=#492 id=492 data-nosnippet>492</a>                    Field::from_ast(ast_field, <span class="kw-2">&amp;</span>model_ident, global_field_index, <span class="kw-2">&amp;</span>names)<span class="question-mark">?</span>;
 <a href=#493 id=493 data-nosnippet>493</a>                field.variant = <span class="prelude-val">Some</span>(variant_index);
 <a href=#494 id=494 data-nosnippet>494</a>                <span class="comment">// `BelongsTo::from_ast` resolves `key` against the variant's
 <a href=#495 id=495 data-nosnippet>495</a>                // own field list, so the recorded source indices are
