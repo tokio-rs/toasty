@@ -204,6 +204,10 @@ impl ToSql for &stmt::AlterColumn {
     }
 }
 
+/// Returns the text type used to convert between distinct PostgreSQL enum types.
+/// PostgreSQL does not define casts between separately declared enums, even when
+/// their variants match, so `ALTER COLUMN ... TYPE` must cast each value through
+/// its textual label. See <https://wiki.postgresql.org/wiki/Mass_type_replacement>.
 fn enum_change_intermediate_ty(previous: &db::Type, next: &db::Type) -> Option<&'static str> {
     match (previous, next) {
         (db::Type::Enum(previous), db::Type::Enum(next)) if previous.name != next.name => {
