@@ -25,17 +25,17 @@ Guide-level design documents for specific features. Use
 [`_template.md`](./design/_template.md) when starting a new one.
 
 - [Design Overview](./design/README.md)
-- [Per-Call Column Projection](./design/column-projection.md)
+- [Atomic Batches for DynamoDB](./design/atomic-batches.md)
+- [Completing Column Projection](./design/column-projection.md)
 - [Database Comments for Models and Fields](./design/schema-comments.md)
-- [DynamoDB Driver Error-Handling Convention](./design/ddb-error-handling.md)
-- [DynamoDB Scan Support](./design/ddb-scan.md)
 - [Document and Collection Fields](./design/document-fields.md)
-- [Embedded Migrations](./design/embedded-migrations.md)
+- [DynamoDB Driver Error-Handling Convention](./design/ddb-error-handling.md)
 - [Enums and Embedded Structs](./design/enums-and-embedded-structs.md)
-- [Optimistic Concurrency with `#[version]`](./design/field-version.md)
+- [Filtering Included Relations](./design/include-filters.md)
+- [Lower-then-Simplify Pipeline](./design/lower-then-simplify.md)
 - [`query!` Macro](./design/query-macro.md)
+- [Retry-Safe Recovery from Connection Loss](./design/retry-safe-recovery.md)
 - [Static Assertions for `create!` Required Fields](./design/static-assertions-create-macro.md)
-- [Upsert](./design/upsert.md)
 
 ## Roadmap
 

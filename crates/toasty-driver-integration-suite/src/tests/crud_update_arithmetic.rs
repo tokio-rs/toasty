@@ -89,7 +89,7 @@ pub async fn arithmetic_update_cases(t: &mut Test) -> Result<()> {
     // Column index 1 is `value`. Confirm increment lowers to `Assignment::Add`;
     // the value checks above cover each driver's return path.
     let counter_table_id = table_id(&db, "counters");
-    let is_sql = t.capability().sql;
+    let is_sql = t.capability().sql();
     t.log().clear();
     counter
         .update()

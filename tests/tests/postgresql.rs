@@ -145,6 +145,109 @@ async fn url_encoding() {
         .expect("failed to drop test role");
 }
 
+/// One `Db` per PostgreSQL schema via libpq's `options` startup
+/// parameter (#1077). The pool builds every connection from the same
+/// config, so each one starts with the configured `search_path`:
+/// `push_schema` creates the tables in that schema, and unqualified
+/// names resolve there on every pooled connection.
+#[tokio::test]
+async fn search_path_via_url_options() {
+    #[derive(Debug, toasty::Model)]
+    struct SearchPathTodo {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        title: String,
+    }
+
+    let admin_url = std::env::var("TOASTY_TEST_POSTGRES_URL")
+        .unwrap_or_else(|_| "postgresql://localhost:5432/toasty_test".to_string());
+    let (admin, connection) = tokio_postgres::connect(&admin_url, NoTls)
+        .await
+        .expect("failed to connect as admin");
+    tokio::spawn(async move {
+        if let Err(e) = connection.await {
+            eprintln!("connection error: {e}");
+        }
+    });
+
+    let schema = format!("search_path_test_{}", std::process::id());
+    admin
+        .execute(&format!("DROP SCHEMA IF EXISTS \"{schema}\" CASCADE"), &[])
+        .await
+        .expect("failed to drop leftover schema");
+    admin
+        .execute(&format!("CREATE SCHEMA \"{schema}\""), &[])
+        .await
+        .expect("failed to create schema");
+
+    let options =
+        url::form_urlencoded::byte_serialize(format!("-c search_path={schema}").as_bytes())
+            .collect::<String>();
+    let sep = if admin_url.contains('?') { '&' } else { '?' };
+    let test_url = format!("{admin_url}{sep}options={options}");
+
+    let mut builder = toasty::Db::builder();
+    builder.models(toasty::models!(SearchPathTodo));
+    let mut db = builder.connect(&test_url).await.expect("connect failed");
+    db.push_schema().await.expect("push_schema failed");
+
+    let created_in_schema: bool = admin
+        .query_one(
+            "SELECT EXISTS (SELECT 1 FROM information_schema.tables \
+             WHERE table_schema = $1 AND table_name = 'search_path_todos')",
+            &[&schema],
+        )
+        .await
+        .expect("table lookup failed")
+        .get(0);
+    assert!(
+        created_in_schema,
+        "push_schema did not create the table in schema {schema}"
+    );
+
+    // The table exists only in the test schema, so an insert succeeds
+    // only on a connection whose search_path includes it. Run enough
+    // concurrent inserts to grow the pool past one connection.
+    let tasks: Vec<_> = (0..16)
+        .map(|i| {
+            let mut db = db.clone();
+            tokio::spawn(async move {
+                toasty::create!(SearchPathTodo {
+                    title: format!("todo-{i}"),
+                })
+                .exec(&mut db)
+                .await
+                .expect("insert failed")
+            })
+        })
+        .collect();
+    let mut todos = Vec::new();
+    for task in tasks {
+        todos.push(task.await.expect("insert task panicked"));
+    }
+
+    let count: i64 = admin
+        .query_one(
+            &format!("SELECT count(*) FROM \"{schema}\".search_path_todos"),
+            &[],
+        )
+        .await
+        .expect("count failed")
+        .get(0);
+    assert_eq!(count, 16);
+
+    let reloaded = SearchPathTodo::get_by_id(&mut db, &todos[0].id)
+        .await
+        .expect("get_by_id failed");
+    assert_eq!(reloaded.title, todos[0].title);
+
+    admin
+        .execute(&format!("DROP SCHEMA \"{schema}\" CASCADE"), &[])
+        .await
+        .expect("failed to drop schema");
+}
+
 /// Connectivity smoke test for Unix-domain sockets (regression for #984).
 ///
 /// The driver must accept libpq-style `?host=/path` URLs so the

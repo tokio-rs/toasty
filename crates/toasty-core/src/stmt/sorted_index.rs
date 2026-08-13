@@ -210,6 +210,18 @@ fn value_total_cmp(a: &Value, b: &Value) -> Ordering {
         #[cfg(feature = "jiff")]
         (Value::Zoned(a), Value::Zoned(b)) => a.partial_cmp(b).unwrap_or(Ordering::Equal),
 
+        #[cfg(feature = "net")]
+        (Value::Cidr(a), Value::Cidr(b)) => a.cmp(b),
+
+        #[cfg(feature = "net")]
+        (Value::Inet(a), Value::Inet(b)) => a.cmp(b),
+
+        #[cfg(feature = "net")]
+        (Value::MacAddr(a), Value::MacAddr(b)) => a.cmp(b),
+
+        #[cfg(feature = "net")]
+        (Value::MacAddr8(a), Value::MacAddr8(b)) => a.cmp(b),
+
         // Cross-type: order by a fixed variant index.
         _ => variant_index(a).cmp(&variant_index(b)),
     }
@@ -251,5 +263,13 @@ fn variant_index(v: &Value) -> u8 {
         Value::Time(_) => 23,
         #[cfg(feature = "jiff")]
         Value::DateTime(_) => 24,
+        #[cfg(feature = "net")]
+        Value::Cidr(_) => 26,
+        #[cfg(feature = "net")]
+        Value::Inet(_) => 27,
+        #[cfg(feature = "net")]
+        Value::MacAddr(_) => 28,
+        #[cfg(feature = "net")]
+        Value::MacAddr8(_) => 29,
     }
 }

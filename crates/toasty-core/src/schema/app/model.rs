@@ -227,7 +227,7 @@ impl ModelRoot {
             // Only SQL drivers can evaluate them today; key-value drivers
             // would need a separate per-step batched fetch strategy that
             // is not yet implemented.
-            if matches!(&field.ty, FieldTy::Via(_)) && !db.sql {
+            if matches!(&field.ty, FieldTy::Via(_)) && !db.sql() {
                 return Err(crate::Error::invalid_schema(format!(
                     "field `{}::{}` declares a multi-step `via` relation, which \
                      requires a SQL-capable driver; the configured driver does not \

@@ -83,7 +83,7 @@ the entry lands here.
 ## Relationships
 
 - Many-to-many
-- Polymorphic associations
+- Polymorphic associations ([design](design/polymorphic-relations.md))
 - Nested preloading — multi-level `.include()`
 - Filtering included relations — `.filter(...)` on a relation path inside `.include(...)` ([design](design/include-filters.md))
 
@@ -110,10 +110,9 @@ the entry lands here.
 ## Migrations
 
 - Schema migration system ([#190])
-- `toasty-cli` for schema management ([#190])
+- `toasty-cli` for schema management ([design](design/standalone-cli.md), [#190])
 - Database comments for models and fields, managed optionally by migrations
   ([design](design/schema-comments.md))
-- Compile migration files into application binaries ([design](design/embedded-migrations.md))
 - Schema lock file for tracking applied migrations ([#136])
 
 [#136]: https://github.com/tokio-rs/toasty/issues/136
@@ -121,7 +120,6 @@ the entry lands here.
 
 ## Drivers
 
-- DynamoDB Scan support ([design](design/ddb-scan.md), [#741])
 - Connection pooling improvements ([#384])
 - Retry-safe transparent recovery from connection loss ([design](design/retry-safe-recovery.md), [#863])
 - New driver backends
@@ -138,14 +136,12 @@ the entry lands here.
 [#384]: https://github.com/tokio-rs/toasty/issues/384
 [#608]: https://github.com/tokio-rs/toasty/issues/608
 [#669]: https://github.com/tokio-rs/toasty/issues/669
-[#741]: https://github.com/tokio-rs/toasty/issues/741
 [#863]: https://github.com/tokio-rs/toasty/issues/863
 
 ## Macros
 
 - `toasty::query!()` — succinct query syntax ([design](design/query-macro.md), [#808])
 - `toasty::create!()` — concise record creation ([design](design/static-assertions-create-macro.md))
-- `toasty::update!()` — concise updates ([design](design/update-macro.md))
 - Derive macro for populating a struct from a query result ([#828])
 
 [#808]: https://github.com/tokio-rs/toasty/issues/808

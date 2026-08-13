@@ -35,6 +35,13 @@ impl Expand<'_> {
             let field_ident = &field.name.ident;
             let set_field_ident = &field.set_ident;
 
+            // A relation in an embedded type cannot be assigned; re-point it
+            // by assigning its key field(s) or replacing the whole embed
+            // value.
+            if is_embedded && !field.ty.is_primitive() {
+                return TokenStream::new();
+            }
+
             let index = util::int(field_index);
             let projection = if is_embedded {
                 quote! {{

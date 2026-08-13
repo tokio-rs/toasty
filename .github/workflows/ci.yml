@@ -61,6 +61,27 @@ jobs:
       - name: cargo clippy
         run: cargo clippy --workspace --all-features
 
+  check-wasm:
+    needs: check
+    name: cargo check (wasm32)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: dtolnay/rust-toolchain@master
+        with:
+          toolchain: ${{ env.RUST_STABLE_VERSION }}
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      # Only the backend-agnostic crates are checked: every driver binds a
+      # native client (rusqlite's bundled C, tokio sockets, the AWS SDK), so
+      # the driver features stay off. A wasm consumer supplies its own driver.
+      - name: cargo check
+        run: cargo check --target wasm32-unknown-unknown -p toasty -p toasty-core -p toasty-sql
+      - name: cargo check with optional features
+        run: cargo check --target wasm32-unknown-unknown -p toasty --no-default-features --features migration,serde,jiff,rust_decimal,bigdecimal
+
   feature-combinations:
     needs: check
     name: Check feature combinations (${{ matrix.package }})
@@ -147,7 +168,7 @@ jobs:
     runs-on: ubuntu-latest
     services:
       mysql:
-        image: mysql:9
+        image: mysql:26
         env:
           MYSQL_ROOT_PASSWORD: toasty
           MYSQL_USER: toasty

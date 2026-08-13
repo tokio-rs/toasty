@@ -16,7 +16,12 @@ default = ["sqlite"]
 sql = ["sqlite", "mysql", "postgresql"]
 sqlite = ["toasty/sqlite", "dep:toasty-driver-sqlite"]
 turso = ["toasty/turso", "dep:toasty-driver-turso"]
-mysql = ["toasty/mysql", "dep:toasty-driver-mysql", "dep:mysql_async"]
+mysql = [
+    "toasty/mysql",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
 dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
 postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql", "dep:tokio-postgres"]
 
@@ -26,11 +31,13 @@ rust_decimal.workspace = true
 bigdecimal.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
-toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "migration"] }
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "net", "migration"] }
 toasty-cli.workspace = true
 toasty-core.workspace = true
 toasty-macros.workspace = true
-tokio.workspace = true
+# `tokio::runtime::Runtime::new` builds a multi-thread runtime, which the lean
+# workspace tokio feature set (kept wasm-compatible for `toasty`) omits.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 # Integration test suite
 toasty-driver-integration-suite.workspace = true
@@ -44,7 +51,8 @@ toasty-driver-dynamodb = { workspace = true, optional = true }
 
 # Database clients used directly by per-driver integration test binaries
 tokio-postgres = { workspace = true, optional = true }
-mysql_async = { workspace = true, optional = true }
+sqlx-core = { workspace = true, optional = true }
+sqlx-mysql = { workspace = true, optional = true }
 aws-config = { workspace = true, optional = true }
 aws-sdk-dynamodb = { workspace = true, optional = true }
 

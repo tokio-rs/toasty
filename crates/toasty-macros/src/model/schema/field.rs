@@ -87,6 +87,12 @@ pub(crate) enum FieldTy {
     HasOne(HasOne),
 }
 
+impl FieldTy {
+    pub(crate) fn is_primitive(&self) -> bool {
+        matches!(self, FieldTy::Primitive(_))
+    }
+}
+
 impl FieldAttr {
     pub(crate) fn is_indexed(&self) -> bool {
         self.unique || self.index
@@ -304,16 +310,19 @@ impl Field {
         field: &syn::Field,
         model_ident: &syn::Ident,
         id: usize,
-        index: usize,
         names: &[syn::Ident],
     ) -> syn::Result<Self> {
         let (name, span) = match &field.ident {
             Some(ident) => (Name::from_ident(ident), ident.span()),
             None => {
+                // A new-type is the only tuple shape Toasty supports (see
+                // `collect_ast_fields`), so the one unnamed field is named
+                // `inner`. Rust's own `_0` would name the generated methods
+                // and bindings `_0`, which clippy's `used_underscore_binding`
+                // and `used_underscore_items` report against the user's struct
+                // definition, where there is nothing to fix.
                 let span = field.ty.span();
-                let ident = syn::Ident::new(&format!("_{index}"), span);
-                let name = Name::from_ident(&ident);
-                (name, span)
+                (Name::from_ident(&syn::Ident::new("inner", span)), span)
             }
         };
 
@@ -332,9 +341,15 @@ impl Field {
                         "field has more than one relation attribute",
                     ));
                 } else {
+                    let Some(field_ident) = field.ident.as_ref() else {
+                        return Err(syn::Error::new_spanned(
+                            attr,
+                            "#[belongs_to] requires a named field",
+                        ));
+                    };
                     ty = Some(FieldTy::BelongsTo(BelongsTo::from_ast(
                         attr,
-                        field.ident.as_ref().unwrap(),
+                        field_ident,
                         &field.ty,
                         names,
                     )?));
@@ -370,13 +385,13 @@ impl Field {
         }
 
         // Expand #[auto] on timestamp fields:
-        //   created_at → #[default(jiff::Timestamp::now())]
-        //   updated_at → #[update(jiff::Timestamp::now())]
+        //   created_at → #[default(toasty::stmt::Timestamp::now())]
+        //   updated_at → #[update(toasty::stmt::Timestamp::now())]
         if matches!(&attrs.auto, Some(AutoStrategy::Unspecified))
             && let Some(ident) = &field.ident
         {
             let field_name = ident.to_string();
-            let now_expr: syn::Expr = syn::parse_quote!(jiff::Timestamp::now());
+            let now_expr: syn::Expr = syn::parse_quote!(_toasty::stmt::Timestamp::now());
 
             if field_name == "created_at" {
                 attrs.auto = None;

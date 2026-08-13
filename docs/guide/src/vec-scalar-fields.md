@@ -6,9 +6,10 @@ Vec<i64>`, `weights: Vec<f64>`. Toasty stores the collection directly;
 you do not wrap it in JSON by hand or manage a separate join table.
 
 The element type must be a scalar: any primitive other than `u8`, plus
-`String`, `Uuid`, the decimal types, the `jiff` date/time types, and a unit
-enum derived with `toasty::Embed`. `Vec<u8>` keeps its existing meaning — a
-single binary blob, not a collection of one-byte integers.
+`String`, `Uuid`, the decimal types, the `jiff` date/time types, the `cidr` and
+`macaddr` network address types, and a unit enum derived with `toasty::Embed`.
+`Vec<u8>` keeps its existing meaning — a single binary blob, not a collection
+of one-byte integers.
 
 Storage depends on the driver:
 

@@ -276,6 +276,12 @@ impl LowerStatement<'_, '_> {
                 .zip(&variant_mapping.fields)
                 .enumerate()
             {
+                // A relation in a variant has no include support; its slot
+                // stays `Null` (the unloaded state). The enumeration index is
+                // taken before this skip, so later fields keep their slots.
+                if var_field.ty.is_relation() {
+                    continue;
+                }
                 let field_includes = partition_includes(&arm_sub_includes, j);
                 self.process_field(
                     &mut arm_record[j + 1],
@@ -335,7 +341,7 @@ impl LowerStatement<'_, '_> {
             _ => None,
         };
         if let Some(via) = via {
-            if !self.capability().sql {
+            if !self.capability().sql() {
                 todo!(
                     "`.include()` / `.select()` of a multi-step `via` relation is only \
                      supported on SQL backends; query the relation directly instead"

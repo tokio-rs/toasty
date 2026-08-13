@@ -15,7 +15,7 @@ impl Normalize<'_> {
     /// tie-breakers internal to execution and cursor generation. Physical
     /// column references keep embedded newtype keys scalar after lowering.
     pub(super) fn normalize_cursor_order(&mut self, query: &mut stmt::Query) {
-        if !self.capability.sql || !matches!(query.limit, Some(stmt::Limit::Cursor(_))) {
+        if !self.capability.sql() || !matches!(query.limit, Some(stmt::Limit::Cursor(_))) {
             return;
         }
 

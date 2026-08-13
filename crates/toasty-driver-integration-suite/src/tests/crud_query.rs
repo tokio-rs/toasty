@@ -291,7 +291,7 @@ pub async fn query_or_basic(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql {
+    if test.capability().sql() {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -359,7 +359,7 @@ pub async fn query_or_multiple(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(3, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -405,7 +405,7 @@ pub async fn query_or_and_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -790,7 +790,7 @@ pub async fn query_not_basic(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(3, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();
@@ -836,7 +836,7 @@ pub async fn query_not_and_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(1, users.len());
         assert_eq!("Charlie", users[0].name);
@@ -870,7 +870,7 @@ pub async fn query_not_or_combined(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await;
 
-    if test.capability().sql || test.capability().scan {
+    if test.capability().sql() || test.capability().scan {
         let users = result?;
         assert_eq!(2, users.len());
         let mut names: Vec<_> = users.iter().map(|u| u.name.as_str()).collect();

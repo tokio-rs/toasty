@@ -144,7 +144,7 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     assert_eq!(items.len(), 5);
 
     let (op, _) = t.log().pop();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Query({
                 body: ExprSet::Select({ .. }),
@@ -169,7 +169,7 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     }
 
     let (op, _) = t.log().pop();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Query({
                 body: ExprSet::Select({ .. }),
@@ -242,6 +242,31 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
     assert_struct!(oldest, Some(_ { name: "Carol", .. }));
+
+    Ok(())
+}
+
+#[driver_test(scenario(crate::scenarios::user_with_age), requires(sql))]
+pub async fn first_respects_offset(t: &mut Test) -> Result<()> {
+    let mut db = setup(t).await;
+
+    toasty::create!(User::[
+        { name: "Alice", age: 30 },
+        { name: "Bob", age: 20 },
+        { name: "Carol", age: 40 },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let user = User::all()
+        .order_by(User::fields().age().asc())
+        .limit(3)
+        .offset(1)
+        .first()
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(user, Some(_ { name: "Alice", .. }));
 
     Ok(())
 }

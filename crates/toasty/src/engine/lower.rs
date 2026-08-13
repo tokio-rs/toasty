@@ -101,7 +101,7 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
-        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql)
+        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql())
             .rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
@@ -611,9 +611,34 @@ impl LowerStatement<'_, '_> {
 }
 
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
+    fn visit_stmt_mut(&mut self, stmt: &mut stmt::Statement) {
+        if let stmt::Statement::Query(query) = stmt
+            && matches!(
+                &query.limit,
+                Some(stmt::Limit::Cursor(cursor)) if cursor.after.is_some()
+            )
+        {
+            self.curr_stmt_info().has_pagination_cursor = true;
+        }
+
+        visit_mut::visit_stmt_mut(self, stmt);
+    }
+
     fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
         // First, run the default visitor to lower sub-expressions
         self.visit_expr_mut(&mut node.expr);
+
+        // An embedded newtype field lowers to a single-element record,
+        // one layer per newtype in the chain. Unwrap them so the ordering
+        // applies to the underlying column — otherwise the eq synthesis
+        // below would hit the record-vs-record arm of
+        // `lower_expr_binary_op`, which drains the operand records and
+        // would leave an empty record behind.
+        while let stmt::Expr::Record(rec) = &mut node.expr
+            && rec.len() == 1
+        {
+            node.expr = rec.fields.pop().unwrap();
+        }
 
         // Reuse binary-op lowering: synthesize `expr == expr` so that
         // cast conversions are applied, then keep the LHS result.
@@ -721,7 +746,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::InSubquery(e) => {
-                if self.capability().sql {
+                if self.capability().sql() {
                     self.visit_expr_in_subquery_mut(e);
 
                     self.lower_in_subquery_operands(
@@ -769,8 +794,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         panic!()
                     };
 
-                    let arg =
-                        self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
+                    let mut stmt: stmt::Statement = (*e.query).into();
+
+                    // Post-lower simplify. The sub-statement detaches into its
+                    // own HIR entry (`new_sub_statement`), so the parent's
+                    // post-lower simplify never sees it — without this, raw
+                    // lowered shapes (e.g. an embedded-field path, lowered to
+                    // `Project(Record([column]), [i])`) reach the driver.
+                    self.state.engine.simplify_stmt(&mut stmt);
+
+                    let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
                     *expr = stmt::ExprInList {
                         expr: e.expr,
@@ -961,7 +994,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     self.curr_stmt_info().deps.insert(target_id);
                 }
             }
-            stmt::Expr::Exists(_) if !self.capability().sql => {
+            stmt::Expr::Exists(_) if !self.capability().sql() => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
                 };
@@ -1093,7 +1126,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
-        let sql = self.state.engine.capability.sql;
+        let sql = self.state.engine.capability.sql();
         if let Err(err) = upsert::normalize(stmt, !sql) {
             self.state.errors.push(err);
             return;
@@ -1744,8 +1777,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            lift_in_subquery::LiftInSubquery::new(child.expr_cx, child.state.engine.capability.sql)
-                .rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(
+                child.expr_cx,
+                child.state.engine.capability.sql(),
+            )
+            .rewrite(&mut stmt);
             // Pre-lower simplify: remaining heavyweight rules the lowering
             // visitor expects to have already fired.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)

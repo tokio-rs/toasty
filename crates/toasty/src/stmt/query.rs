@@ -466,9 +466,13 @@ impl<T: Model> Query<List<T>> {
 fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
+    let offset = match &query.limit {
+        Some(stmt::Limit::Offset(limit_offset)) => limit_offset.offset.clone(),
+        _ => None,
+    };
     query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
         limit: stmt::Expr::Static(stmt::Value::I64(1)),
-        offset: None,
+        offset,
     }));
 }
 

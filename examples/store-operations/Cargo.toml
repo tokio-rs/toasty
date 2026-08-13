@@ -16,7 +16,9 @@ sqlite = [ "toasty/sqlite" ]
 [dependencies]
 toasty.workspace = true
 toasty-core.workspace = true
-tokio.workspace = true
+# `#[tokio::main]` defaults to the multi-thread runtime, which the lean
+# workspace tokio feature set (kept wasm-compatible for `toasty`) omits.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 uuid.workspace = true
 
 [lints]

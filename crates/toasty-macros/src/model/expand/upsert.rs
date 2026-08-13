@@ -30,7 +30,7 @@ impl Upsert {
 
                 if target_fields
                     .iter()
-                    .any(|&field| !matches!(model.fields[field].ty, FieldTy::Primitive(_)))
+                    .any(|&field| !model.fields[field].ty.is_primitive())
                 {
                     return None;
                 }

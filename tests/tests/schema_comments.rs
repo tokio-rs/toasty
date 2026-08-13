@@ -13,6 +13,17 @@ struct Profile {
     display_name: String,
 }
 
+#[derive(Debug, toasty::Embed)]
+enum Contact {
+    Email {
+        #[column(comment = "Email address")]
+        address: String,
+    },
+    Phone {
+        number: String,
+    },
+}
+
 #[derive(Debug, toasty::Model)]
 #[table(name = "app_users", comment = "User accounts")]
 struct CommentedUser {
@@ -26,6 +37,8 @@ struct CommentedUser {
     #[document]
     #[column(comment = "Serialized profile")]
     profile: Profile,
+
+    contact: Contact,
 }
 
 #[tokio::test]
@@ -57,4 +70,11 @@ async fn model_comments_reach_the_database_schema() {
         .find(|column| column.name == "profile")
         .unwrap();
     assert_eq!(profile.comment.as_deref(), Some("Serialized profile"));
+
+    let email = table
+        .columns
+        .iter()
+        .find(|column| column.name == "contact_address")
+        .unwrap();
+    assert_eq!(email.comment.as_deref(), Some("Email address"));
 }

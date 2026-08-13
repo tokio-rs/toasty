@@ -110,7 +110,7 @@ impl Engine {
         connection: &mut dyn Connection,
         raw: RawSql,
     ) -> Result<toasty_core::driver::ExecResponse> {
-        if !self.capability.sql {
+        if !self.capability.sql() {
             return Err(toasty_core::Error::unsupported_feature(format!(
                 "{} does not support raw SQL",
                 self.capability.driver_name

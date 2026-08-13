@@ -74,8 +74,8 @@
 //! - [`Page`](stmt::Page) — a page of results from a paginated query, with cursor-based
 //!   navigation.
 //! - [`Batch`](stmt::Batch) — groups multiple queries into a single round-trip.
-//! - [`Capability`] / [`SqlPlaceholder`] — driver metadata, including SQL
-//!   placeholder syntax for raw SQL.
+//! - [`Capability`] / [`Dialect`] / [`SqlPlaceholder`] — driver metadata,
+//!   including the SQL dialect spoken and placeholder syntax for raw SQL.
 //! - [`Error`] / [`Result`] — re-exported from `toasty-core`.
 //!
 //! # Derive macros
@@ -100,7 +100,8 @@
 //! | `turso`        | `toasty-driver-turso`        |
 //!
 //! Additional feature flags: `rust_decimal`, `bigdecimal`, `jiff` (date/time
-//! via the `jiff` crate), and `serde` (JSON serialization support).
+//! via the `jiff` crate), `net` (IP network and MAC address types via the
+//! `cidr` and `macaddr` crates), and `serde` (JSON serialization support).
 //!
 //! # Other crates in the workspace
 //!
@@ -125,7 +126,7 @@ pub use stmt::{Batch, batch};
 /// Database handle, connection pool, executor trait, and transaction support.
 pub mod db;
 pub use db::{
-    Capability, Connection, Db, Executor, SqlPlaceholder, Transaction, TransactionBuilder,
+    Capability, Connection, Db, Dialect, Executor, SqlPlaceholder, Transaction, TransactionBuilder,
 };
 
 mod engine;

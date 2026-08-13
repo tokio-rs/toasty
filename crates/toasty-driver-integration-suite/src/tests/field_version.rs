@@ -406,7 +406,7 @@ pub async fn update_after_delete_fails(test: &mut Test) -> Result<()> {
 
     let result: Result<()> = item.update().name("stale").exec(&mut db).await;
     let err = assert_err!(result);
-    if test.capability().sql {
+    if test.capability().sql() {
         assert!(
             err.is_record_not_found(),
             "expected record_not_found, got {err:?}"
@@ -437,7 +437,7 @@ pub async fn relative_update_after_delete_fails(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await;
     let err = assert_err!(result);
-    if test.capability().sql {
+    if test.capability().sql() {
         assert!(
             err.is_record_not_found(),
             "expected record_not_found, got {err:?}"
