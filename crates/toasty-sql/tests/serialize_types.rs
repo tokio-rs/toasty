@@ -813,12 +813,12 @@ fn network_types_postgresql() {
 
 #[test]
 fn enum_postgresql_named_type() {
-    let status = make_enum_type(Some("status"), &["pending", "active", "done"]);
+    let status = make_enum_type(Some("TaskStatus"), &["pending", "active", "done"]);
     expect![[r#"
-        CREATE TYPE "status" AS ENUM ('pending', 'active', 'done');
+        CREATE TYPE "TaskStatus" AS ENUM ('pending', 'active', 'done');
         CREATE TABLE "t" (
             "id" BIGINT NOT NULL,
-            "col" status NOT NULL,
+            "col" "TaskStatus" NOT NULL,
             PRIMARY KEY ("id")
         );"#]]
     .assert_eq(&render_type("postgresql", Type::Enum(status)).join("\n"));

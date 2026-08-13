@@ -116,7 +116,16 @@ impl ToSql for &stmt::AlterColumn {
                     new_not_null: None,
                     new_auto_increment: None,
                 } => {
-                    fmt!(&mut f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " TYPE " ty)
+                    fmt!(&mut f, "ALTER TABLE " table_name " ALTER COLUMN " column_name " TYPE " ty);
+
+                    if let Some(intermediate_ty) =
+                        enum_change_intermediate_ty(&self.column_def.ty, ty)
+                    {
+                        fmt!(
+                            &mut f,
+                            " USING " Ident(&self.column_def.name) "::" intermediate_ty "::" ty
+                        );
+                    }
                 }
                 AlterColumnChanges {
                     new_name: None,
@@ -195,6 +204,23 @@ impl ToSql for &stmt::AlterColumn {
     }
 }
 
+fn enum_change_intermediate_ty(previous: &db::Type, next: &db::Type) -> Option<&'static str> {
+    match (previous, next) {
+        (db::Type::Enum(previous), db::Type::Enum(next)) if previous.name != next.name => {
+            Some("TEXT")
+        }
+        (db::Type::List(previous), db::Type::List(next)) => {
+            match (previous.as_ref(), next.as_ref()) {
+                (db::Type::Enum(previous), db::Type::Enum(next)) if previous.name != next.name => {
+                    Some("TEXT[]")
+                }
+                _ => None,
+            }
+        }
+        _ => None,
+    }
+}
+
 impl ToSql for &stmt::AlterTable {
     fn to_sql(self, f: &mut super::Formatter<'_>) {
         match &self.action {
@@ -258,6 +284,15 @@ impl ToSql for &stmt::AlterType {
 
         fmt!(f, "ALTER TYPE " name " ADD VALUE ");
         Value::String(self.variant.name.clone()).to_sql(f);
+    }
+}
+
+impl ToSql for &stmt::RenameType {
+    fn to_sql(self, f: &mut super::Formatter<'_>) {
+        fmt!(
+            f,
+            "ALTER TYPE " Ident(&self.type_name) " RENAME TO " Ident(&self.new_name)
+        );
     }
 }
 
@@ -577,6 +612,7 @@ impl ToSql for &stmt::Statement {
             stmt::Statement::DropIndex(stmt) => stmt.to_sql(f),
             stmt::Statement::DropTable(stmt) => stmt.to_sql(f),
             stmt::Statement::Pragma(stmt) => stmt.to_sql(f),
+            stmt::Statement::RenameType(stmt) => stmt.to_sql(f),
             stmt::Statement::Delete(stmt) => stmt.to_sql(f),
             stmt::Statement::Insert(stmt) => stmt.to_sql(f),
             stmt::Statement::Query(stmt) => stmt.to_sql(f),

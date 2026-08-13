@@ -1,4 +1,4 @@
-use super::{Dialect, ToSql};
+use super::{Dialect, Ident, ToSql};
 
 use toasty_core::schema::db;
 
@@ -125,7 +125,7 @@ impl ToSql for &db::Type {
                         .name
                         .as_deref()
                         .expect("PostgreSQL enums require a type name");
-                    fmt!(f, name);
+                    fmt!(f, Ident(name));
                 }
                 // MySQL: inline ENUM('label1', 'label2', ...) column type.
                 Dialect::Mysql => {
