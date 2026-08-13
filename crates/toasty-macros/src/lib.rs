@@ -874,6 +874,25 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// - An `Update` struct used by the parent model's update builder for
 ///   partial field updates.
 ///
+/// A field accessor is named after the field it reads. A newtype's field is
+/// unnamed, so its accessor is `inner()`. It returns a path to the single
+/// column the newtype maps to, which compares against the wrapped type:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// struct Email(String);
+///
+/// #[derive(toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///     email: Email,
+/// }
+///
+/// let query = User::filter(User::fields().email().inner().eq("alice@example.com"));
+/// ```
+///
 /// Multi-field structs do not get the ordering methods — multi-column
 /// values have no ordering shared across backends:
 ///

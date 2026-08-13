@@ -21,7 +21,7 @@ pub async fn basic_newtype_embed(test: &mut Test) {
 
 /// Tests that a newtype field produces a single column whose name matches the
 /// parent field — `email: Email` where `struct Email(String)` produces column
-/// `email`, not `email_0`.
+/// `email`, not `email_inner`.
 #[driver_test(requires(sql), scenario(crate::scenarios::user_with_email))]
 pub async fn newtype_column_name(test: &mut Test) {
     let db = setup(test).await;
@@ -495,7 +495,7 @@ pub async fn nested_newtype(t: &mut Test) -> Result<()> {
 
 /// Tests ordering operations directly on a newtype field path: `ne`,
 /// `gt`, `ge`, `lt`, and `le` accept the wrapper value and compare the
-/// single underlying column, and `asc`/`desc` sort by it, so no `._0()`
+/// single underlying column, and `asc`/`desc` sort by it, so no `.inner()`
 /// step is needed. These methods are generated only for canonical
 /// newtypes — a newtype is a pass-through to its inner column, so each
 /// backend keeps its own ordering semantics for the inner type.
