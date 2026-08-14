@@ -31,10 +31,10 @@ pub async fn upsert_update_increments_version(test: &mut Test) -> Result<()> {
     seed.delete().exec(&mut db).await?;
 
     let mut stale = Item::upsert_by_id(id).name("first").exec(&mut db).await?;
-    assert_struct!(stale, _ { name: "first", version: 1, .. });
+    assert_struct!(stale, { name: "first", version: 1 });
 
     let updated = Item::upsert_by_id(id).name("second").exec(&mut db).await?;
-    assert_struct!(updated, _ { name: "second", version: 2, .. });
+    assert_struct!(updated, { name: "second", version: 2 });
 
     let result: Result<()> = stale.update().name("stale").exec(&mut db).await;
     assert!(result.is_err(), "expected stale update to fail");
@@ -320,11 +320,10 @@ pub async fn upsert_explicit_assignments_override_model_defaults(test: &mut Test
         .branch_defaults("created explicitly")
         .exec(&mut db)
         .await?;
-    assert_struct!(created, _ {
+    assert_struct!(created, {
         default_only: "created explicitly",
         update_only: "created explicitly",
         branch_defaults: "created explicitly",
-        ..
     });
 
     let updated = Item::upsert_by_id(id)
@@ -333,11 +332,10 @@ pub async fn upsert_explicit_assignments_override_model_defaults(test: &mut Test
         .branch_defaults("updated explicitly")
         .exec(&mut db)
         .await?;
-    assert_struct!(updated, _ {
+    assert_struct!(updated, {
         default_only: "updated explicitly",
         update_only: "updated explicitly",
         branch_defaults: "updated explicitly",
-        ..
     });
 
     assert_none!(Item::upsert_by_id(id).or_ignore().exec(&mut db).await?);
@@ -479,14 +477,14 @@ pub async fn upsert_shared_mutations_apply_declared_defaults(test: &mut Test) ->
         .tags(toasty::stmt::push("a"))
         .exec(&mut db)
         .await?;
-    assert_struct!(created, _ { count: 7, tags: ["base", "a"] });
+    assert_struct!(created, { count: 7, tags: ["base", "a"] });
 
     let updated = Item::upsert_by_id("item")
         .count(toasty::stmt::subtract(3))
         .tags(toasty::stmt::push("b"))
         .exec(&mut db)
         .await?;
-    assert_struct!(updated, _ { count: 4, tags: ["base", "a", "b"] });
+    assert_struct!(updated, { count: 4, tags: ["base", "a", "b"] });
     Ok(())
 }
 

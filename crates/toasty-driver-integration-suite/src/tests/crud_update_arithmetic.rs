@@ -103,13 +103,11 @@ pub async fn arithmetic_update_cases(t: &mut Test) -> Result<()> {
                 target: UpdateTarget::Table(== counter_table_id),
                 assignments: #{ [1]: Assignment::Add(_) },
             }),
-            ..
         }));
     } else {
         assert_struct!(op, Operation::UpdateByKey({
             table: == counter_table_id,
             assignments: #{ [1]: Assignment::Add(_) },
-            ..
         }));
     }
 
@@ -208,7 +206,7 @@ pub async fn arithmetic_chains_with_other_updates(t: &mut Test) -> Result<()> {
         .await?;
 
     let reloaded = Profile::get_by_id(&mut db, &profile.id).await?;
-    assert_struct!(reloaded, _ { name: "alice2", login_count: 6, .. });
+    assert_struct!(reloaded, { name: "alice2", login_count: 6 });
     Ok(())
 }
 
