@@ -227,10 +227,10 @@
 <a href=#227 id=227 data-nosnippet>227</a>    .exec(<span class="kw-2">&amp;mut </span>db)
 <a href=#228 id=228 data-nosnippet>228</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#229 id=229 data-nosnippet>229</a>
-<a href=#230 id=230 data-nosnippet>230</a>    <span class="macro">assert_struct!</span>(user, <span class="kw">_ </span>{ active: <span class="bool-val">true</span>, age: <span class="number">31</span>, .. });
+<a href=#230 id=230 data-nosnippet>230</a>    <span class="macro">assert_struct!</span>(user, { active: <span class="bool-val">true</span>, age: <span class="number">31 </span>});
 <a href=#231 id=231 data-nosnippet>231</a>
 <a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">let </span>reloaded = User::get_by_id(<span class="kw-2">&amp;mut </span>db, <span class="kw-2">&amp;</span>user.id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#233 id=233 data-nosnippet>233</a>    <span class="macro">assert_struct!</span>(reloaded, <span class="kw">_ </span>{ active: <span class="bool-val">true</span>, age: <span class="number">31</span>, .. });
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="macro">assert_struct!</span>(reloaded, { active: <span class="bool-val">true</span>, age: <span class="number">31 </span>});
 <a href=#234 id=234 data-nosnippet>234</a>
 <a href=#235 id=235 data-nosnippet>235</a>    <span class="prelude-val">Ok</span>(())
 <a href=#236 id=236 data-nosnippet>236</a>}

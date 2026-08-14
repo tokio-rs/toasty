@@ -263,9 +263,9 @@
 <a href=#263 id=263 data-nosnippet>263</a>    <span class="macro">assert_struct!</span>(status, toasty::schema::app::Model::EmbeddedEnum({
 <a href=#264 id=264 data-nosnippet>264</a>        name.upper_camel_case(): <span class="string">"Status"</span>,
 <a href=#265 id=265 data-nosnippet>265</a>        variants: [
-<a href=#266 id=266 data-nosnippet>266</a>            <span class="kw">_ </span>{ name.upper_camel_case(): <span class="string">"Pending"</span>, discriminant: toasty_core::stmt::Value::I64(<span class="number">1</span>), .. },
-<a href=#267 id=267 data-nosnippet>267</a>            <span class="kw">_ </span>{ name.upper_camel_case(): <span class="string">"Active"</span>, discriminant: toasty_core::stmt::Value::I64(<span class="number">2</span>), .. },
-<a href=#268 id=268 data-nosnippet>268</a>            <span class="kw">_ </span>{ name.upper_camel_case(): <span class="string">"Done"</span>, discriminant: toasty_core::stmt::Value::I64(<span class="number">3</span>), .. },
+<a href=#266 id=266 data-nosnippet>266</a>            { name.upper_camel_case(): <span class="string">"Pending"</span>, discriminant: toasty_core::stmt::Value::I64(<span class="number">1</span>) },
+<a href=#267 id=267 data-nosnippet>267</a>            { name.upper_camel_case(): <span class="string">"Active"</span>, discriminant: toasty_core::stmt::Value::I64(<span class="number">2</span>) },
+<a href=#268 id=268 data-nosnippet>268</a>            { name.upper_camel_case(): <span class="string">"Done"</span>, discriminant: toasty_core::stmt::Value::I64(<span class="number">3</span>) },
 <a href=#269 id=269 data-nosnippet>269</a>        ],
 <a href=#270 id=270 data-nosnippet>270</a>    }));
 <a href=#271 id=271 data-nosnippet>271</a>}
