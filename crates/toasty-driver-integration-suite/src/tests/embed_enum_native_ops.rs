@@ -219,7 +219,7 @@ pub async fn native_enum_multiple_fields(t: &mut Test) -> Result<()> {
 #[driver_test]
 pub async fn native_enum_custom_type_name(t: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]
-    #[column(type = enum("task_priority"))]
+    #[column(type = enum("TaskPriority"))]
     enum Priority {
         Low,
         Medium,
