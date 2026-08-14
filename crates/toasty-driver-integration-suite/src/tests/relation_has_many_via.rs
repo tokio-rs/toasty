@@ -71,9 +71,8 @@ pub async fn include_with_newtype_foreign_key(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ {
+    assert_struct!(users, [{
         commented_articles.get().len(): 1,
-        ..
     }]);
 
     Ok(())
@@ -148,9 +147,8 @@ pub async fn include_with_unit_enum_foreign_key(test: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(users, [_ {
+    assert_struct!(users, [{
         commented_articles.get().len(): 1,
-        ..
     }]);
 
     Ok(())

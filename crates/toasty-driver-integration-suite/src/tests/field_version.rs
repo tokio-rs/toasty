@@ -43,7 +43,7 @@ pub async fn relative_update_increments_value_and_version(test: &mut Test) -> Re
     let mut db = setup(test).await;
 
     let mut counter = toasty::create!(Counter { value: 10 }).exec(&mut db).await?;
-    assert_struct!(counter, _ { value: 10, version: 1, .. });
+    assert_struct!(counter, { value: 10, version: 1 });
 
     counter
         .update()
@@ -53,11 +53,11 @@ pub async fn relative_update_increments_value_and_version(test: &mut Test) -> Re
 
     // The handle is reloaded from the update's returning row: `value` is read
     // back from the driver, `version` is bumped to 2.
-    assert_struct!(counter, _ { value: 11, version: 2, .. });
+    assert_struct!(counter, { value: 11, version: 2 });
 
     // And it is durable.
     let reloaded = Counter::filter_by_id(counter.id).get(&mut db).await?;
-    assert_struct!(reloaded, _ { value: 11, version: 2, .. });
+    assert_struct!(reloaded, { value: 11, version: 2 });
 
     Ok(())
 }
@@ -357,7 +357,7 @@ pub async fn query_relative_update_increments_value_and_version(test: &mut Test)
     let mut db = setup(test).await;
 
     let counter = toasty::create!(Counter { value: 10 }).exec(&mut db).await?;
-    assert_struct!(counter, _ { value: 10, version: 1, .. });
+    assert_struct!(counter, { value: 10, version: 1 });
 
     Counter::filter_by_id(counter.id)
         .update()
@@ -366,7 +366,7 @@ pub async fn query_relative_update_increments_value_and_version(test: &mut Test)
         .await?;
 
     let reloaded = Counter::filter_by_id(counter.id).get(&mut db).await?;
-    assert_struct!(reloaded, _ { value: 11, version: 2, .. });
+    assert_struct!(reloaded, { value: 11, version: 2 });
 
     Ok(())
 }
@@ -470,10 +470,10 @@ pub async fn update_with_float_field_works(test: &mut Test) -> Result<()> {
     let mut gauge = toasty::create!(Gauge { value: 1.5 }).exec(&mut db).await?;
 
     gauge.update().value(2.5).exec(&mut db).await?;
-    assert_struct!(gauge, _ { value: 2.5, version: 2, .. });
+    assert_struct!(gauge, { value: 2.5, version: 2 });
 
     let reloaded = Gauge::filter_by_id(gauge.id).get(&mut db).await?;
-    assert_struct!(reloaded, _ { value: 2.5, version: 2, .. });
+    assert_struct!(reloaded, { value: 2.5, version: 2 });
 
     Ok(())
 }

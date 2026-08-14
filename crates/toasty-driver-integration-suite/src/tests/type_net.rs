@@ -45,7 +45,7 @@ pub async fn network_address_round_trip(test: &mut Test) -> Result<(), BoxError>
         .await?;
         let read = Item::get_by_id(&mut db, &created.id).await?;
 
-        assert_struct!(read, _ {
+        assert_struct!(read, {
             cidr: == cidr,
             inet: == inet,
             macaddr: == macaddr,
