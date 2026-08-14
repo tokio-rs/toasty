@@ -145,6 +145,11 @@ struct PlanStatement<'a, 'b> {
 
     /// True if the statement's dependencies have been tracked
     remaining_deps: Vec<hir::StmtId>,
+
+    /// Node back-refs project from when it differs from the data-loading
+    /// node: a `DO NOTHING` upsert feeds back-refs from its VALUES constants,
+    /// since a conflict returns no row to read them from.
+    back_ref_input: Option<mir::NodeId>,
 }
 
 impl HirPlanner<'_> {
@@ -182,6 +187,7 @@ impl HirPlanner<'_> {
                 batch_load_args: IndexSet::new(),
             },
             remaining_deps: stmt_info.deps.iter().cloned().collect(),
+            back_ref_input: None,
         };
         planner.plan(stmt)?;
 
@@ -253,7 +259,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Now, for each back ref, we need to project the expression to what the
         // next statement expects.
-        self.process_back_ref_projections(load_data_node_id);
+        self.process_back_ref_projections(self.back_ref_input.unwrap_or(load_data_node_id));
 
         // Track the selection for later use.
         // TODO: Do we actually need to track this on the statement?
@@ -382,17 +388,25 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         hir::Arg::Sub {
                             stmt_id: target_id, ..
                         } => {
-                            assert!(
-                                !(self.stmt().is_insert() && is_returning_projection),
-                                "TODO"
-                            );
-
                             let target_stmt_info = &self.planner.hir[target_id];
                             let target_node_id = target_stmt_info.output.get().expect("bug");
 
                             let (index, _) = inputs.insert_full(target_node_id);
 
-                            *expr = stmt::Expr::arg(index);
+                            // An insert's projection returning is evaluated
+                            // per database row inside a `map`, so the Eval's
+                            // inputs sit one scope out (same as `Arg::Ref`
+                            // above).
+                            let nesting = if self.stmt().is_insert() && is_returning_projection {
+                                1
+                            } else {
+                                0
+                            };
+
+                            *expr = stmt::Expr::Arg(stmt::ExprArg {
+                                position: index,
+                                nesting,
+                            });
                         }
                     }
                     false
@@ -893,12 +907,36 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn plan_insert(&mut self, mut stmt: stmt::Statement) -> Result<mir::NodeId> {
         debug_assert!(stmt.is_insert(), "stmt={stmt:#?}");
 
-        let const_returning = self.extract_insert_returning_as_const(&stmt);
+        let is_upsert = stmt.is_upsert();
+
+        // An upsert's output must reflect the database outcome, so constants
+        // never replace its RETURNING clause. For a `DO NOTHING` upsert the
+        // constants still feed back-refs (e.g. an eager `belongs_to` load
+        // subquery correlating on a VALUES column): a conflict returns no
+        // row to read the column from, while the VALUES constants are always
+        // available — and on conflict nothing consumes the back-ref's result.
+        // An update upsert keeps the row feed; its final row may differ from
+        // the VALUES, and one is always returned.
+        let const_back_refs_only = is_upsert
+            && matches!(
+                &stmt,
+                stmt::Statement::Insert(insert)
+                    if insert.upsert.as_ref().is_some_and(|upsert| {
+                        upsert.action == stmt::UpsertAction::Ignore
+                    })
+            )
+            && !self.stmt_info.back_refs.is_empty();
+
+        let const_returning = if is_upsert && !const_back_refs_only {
+            None
+        } else {
+            self.extract_insert_returning_as_const(&stmt)
+        };
 
         // When the values the back-refs need were extracted as constants
         // above, the Const node feeds them; skip the RETURNING clause, which
         // MySQL rejects for non-auto-increment columns.
-        if const_returning.is_none() && !self.load_data.select_items.is_empty() {
+        if (is_upsert || const_returning.is_none()) && !self.load_data.select_items.is_empty() {
             stmt.set_returning_project(stmt::Expr::record(
                 self.load_data
                     .select_items
@@ -935,13 +973,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let mut load_data_node = self.insert_mir_with_deps(node);
 
         if let Some((const_value, const_ty)) = const_returning {
-            load_data_node = self.planner.mir.insert_with_deps(
+            let const_node = self.planner.mir.insert_with_deps(
                 mir::Const {
                     value: const_value,
                     ty: const_ty,
                 },
                 [load_data_node],
             );
+
+            if const_back_refs_only {
+                self.back_ref_input = Some(const_node);
+            } else {
+                load_data_node = const_node;
+            }
         }
 
         Ok(load_data_node)
@@ -1035,10 +1079,6 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let stmt::Statement::Insert(insert) = stmt else {
             return None;
         };
-
-        if insert.upsert.is_some() {
-            return None;
-        }
 
         if self.load_data.select_items.is_empty() {
             return None;

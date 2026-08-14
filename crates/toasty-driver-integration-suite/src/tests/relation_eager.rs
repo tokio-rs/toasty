@@ -273,6 +273,61 @@ pub async fn eager_belongs_to_batch_create_returning_loads_relation(t: &mut Test
     Ok(())
 }
 
+#[driver_test(requires(upsert_targeted_ignore))]
+pub async fn eager_belongs_to_upsert_or_ignore_returning_loads_relation(
+    t: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        id: uuid::Uuid,
+        title: String,
+
+        #[index]
+        user_id: uuid::Uuid,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
+
+    let mut db = t.setup_db(models!(User, Post)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let post_id = uuid::Uuid::from_u128(7);
+    let created = Post::upsert_by_id(post_id)
+        .title("hello")
+        .user_id(user.id)
+        .or_ignore()
+        .exec(&mut db)
+        .await?;
+
+    let created = created.expect("insert succeeded");
+    assert_eq!(created.title, "hello");
+    assert_struct!(created.user, _ { id: == user.id, name: "Alice", .. });
+
+    // On conflict the insert is ignored and the upsert returns `None`.
+    let ignored = Post::upsert_by_id(post_id)
+        .title("other")
+        .user_id(user.id)
+        .or_ignore()
+        .exec(&mut db)
+        .await?;
+    assert_none!(ignored);
+
+    Ok(())
+}
+
 #[driver_test]
 pub async fn eager_belongs_to_nested_create_returning_loads_relation(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]

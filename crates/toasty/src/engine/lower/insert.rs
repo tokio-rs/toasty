@@ -111,15 +111,20 @@ impl LowerStatement<'_, '_> {
         returning: &mut Option<stmt::Returning>,
         index: usize,
     ) {
-        // Only the shapes `convert_returning_for_insert` produces load
-        // relations. Other shapes (no returning; a preserved projection for
-        // `DO NOTHING` upserts) do not.
-        if !matches!(
+        // Only the shapes `convert_returning_for_insert` produces and the
+        // model projection preserved for `DO NOTHING` upserts load relations.
+        let preserved_projection = matches!(
             returning,
-            Some(stmt::Returning::Expr(
-                stmt::Expr::List(_) | stmt::Expr::Record(_)
-            ))
-        ) {
+            Some(stmt::Returning::Project(stmt::Expr::Record(_)))
+        );
+        if !preserved_projection
+            && !matches!(
+                returning,
+                Some(stmt::Returning::Expr(
+                    stmt::Expr::List(_) | stmt::Expr::Record(_)
+                ))
+            )
+        {
             return;
         }
 
@@ -146,6 +151,14 @@ impl LowerStatement<'_, '_> {
             if fk_unset {
                 continue;
             }
+
+            // A preserved projection is shared across rows and evaluated per
+            // returned row, so it cannot hold per-row subqueries. Only the
+            // single-row `DO NOTHING` upsert shape preserves its projection.
+            assert!(
+                !preserved_projection || index == 0,
+                "eager belongs_to in a multi-row insert with a preserved returning projection"
+            );
 
             let arg = self.build_relation_subquery(field.id.index);
 
@@ -183,7 +196,8 @@ impl LowerStatement<'_, '_> {
                 Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
                     rows.items[index].as_record_mut_unwrap()
                 }
-                Some(stmt::Returning::Expr(stmt::Expr::Record(record))) => record,
+                Some(stmt::Returning::Expr(stmt::Expr::Record(record)))
+                | Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
                 _ => unreachable!("shape checked above"),
             };
             record[field.id.index] = expr;
