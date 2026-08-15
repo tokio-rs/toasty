@@ -1,6 +1,9 @@
 mod action;
 pub(crate) use action::Action;
 
+mod alias;
+pub(crate) use alias::Alias;
+
 mod branch;
 pub(crate) use branch::{Cond, If};
 
@@ -188,6 +191,7 @@ impl Exec<'_> {
     async fn exec_leaf_step(&mut self, action: &Action) -> Result<()> {
         match action {
             Action::If(_) => unreachable!("`If` arms never nest"),
+            Action::Alias(action) => self.action_alias(action).await,
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
             Action::Eval(action) => self.action_eval(action).await,
             Action::ExecStatement(action) => self.action_exec_statement(action).await,

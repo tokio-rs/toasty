@@ -24,13 +24,19 @@ impl LogicalPlan {
         let mut execution_order = vec![];
         compute_operation_execution_order(completion, &store, &mut execution_order);
 
+        // Every reserved slot must be filled by the time planning completes —
+        // an unfilled slot means a statement was referenced but never planned.
+        debug_assert!(
+            store.all_filled(),
+            "reserved MIR slot left unfilled at plan completion"
+        );
+
         // Nodes unreachable from the completion node are dropped from the
         // execution order and never run. That is fine for pure nodes; a
         // dropped mutation would silently lose its database effect.
         debug_assert!(
             store
-                .store
-                .iter()
+                .nodes()
                 .all(|node| node.visited.get() || !node.op.is_effectful()),
             "effectful node unreachable from the completion node"
         );

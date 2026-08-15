@@ -1,11 +1,14 @@
 use crate::engine::exec::{
-    DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, If, NestedMerge,
-    Project, QueryPk, ReadModifyWrite, Release, Scan, SetVar, UpdateByKey, Upsert,
+    Alias, DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, If,
+    NestedMerge, Project, QueryPk, ReadModifyWrite, Release, Scan, SetVar, UpdateByKey, Upsert,
 };
 
 use std::fmt;
 
 pub(crate) enum Action {
+    /// Pass a variable's value through to another slot unchanged
+    Alias(Alias),
+
     /// Delete a record by the primary key
     DeleteByKey(DeleteByKey),
 
@@ -66,6 +69,7 @@ impl Action {
     /// Returns the action variant name for logging.
     pub(crate) fn name(&self) -> &'static str {
         match self {
+            Action::Alias(_) => "alias",
             Action::DeleteByKey(_) => "delete_by_key",
             Action::Eval(_) => "eval",
             Action::ExecStatement(_) => "exec_statement",
@@ -108,7 +112,8 @@ impl Action {
 
             Action::If(action) => action.then.iter().map(Action::db_op_count).sum(),
 
-            Action::Eval(_)
+            Action::Alias(_)
+            | Action::Eval(_)
             | Action::Filter(_)
             | Action::Guard(_)
             | Action::NestedMerge(_)
@@ -122,6 +127,7 @@ impl Action {
 impl fmt::Debug for Action {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::Alias(a) => a.fmt(f),
             Self::DeleteByKey(a) => a.fmt(f),
             Self::Eval(a) => a.fmt(f),
             Self::ExecStatement(a) => a.fmt(f),

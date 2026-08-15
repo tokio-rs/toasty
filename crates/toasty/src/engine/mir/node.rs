@@ -46,6 +46,7 @@ pub(crate) struct Node {
 impl Node {
     pub(crate) fn ty(&self) -> &stmt::Type {
         match &self.op {
+            Operation::Alias(m) => &m.ty,
             Operation::Const(m) => &m.ty,
             Operation::DeleteByKey(m) => &m.ty,
             Operation::Eval(m) => &m.eval.ret,
@@ -70,6 +71,7 @@ impl Node {
         var_table: &mut exec::VarDecls,
     ) -> exec::Action {
         match &self.op {
+            Operation::Alias(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Const(op) => op.to_exec(self, var_table).into(),
             Operation::DeleteByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Eval(op) => op.to_exec(logical_plan, self, var_table).into(),

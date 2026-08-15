@@ -153,18 +153,19 @@ impl HirPlanner<'_> {
 
         // Check if the statement has already been planned, or is currently
         // being planned (a statement-level dependency cycle that is acyclic
-        // at the operation level — the edge is enforced via
-        // `deferred_node_deps` instead of recursion).
-        if stmt_info.load_data_statement.get().is_some() || stmt_info.planning.get() {
+        // at the operation level — the edge anchors on a reserved data-load
+        // slot instead of recursing).
+        if stmt_info.planning.get() {
             return Ok(());
         }
         stmt_info.planning.set(true);
 
         // First, plan independent dependency statements. These are statments
         // that must run before the current one but do not reference the current
-        // statement.
-        for &dep_stmt_id in &stmt_info.deps {
-            if self.hir[dep_stmt_id].independent {
+        // statement. Effect deps target ancestors, planned by the enclosing
+        // traversal, so they are never planned from here.
+        for (&dep_stmt_id, &kind) in &stmt_info.deps {
+            if kind == hir::DepKind::Statement && self.hir[dep_stmt_id].independent {
                 self.plan_statement(dep_stmt_id)?;
             }
         }
@@ -181,7 +182,12 @@ impl HirPlanner<'_> {
                 select_items: SelectItems::new(),
                 batch_load_args: IndexSet::new(),
             },
-            remaining_deps: stmt_info.deps.iter().cloned().collect(),
+            remaining_deps: stmt_info
+                .deps
+                .iter()
+                .filter(|&(_, &kind)| kind == hir::DepKind::Statement)
+                .map(|(&stmt_id, _)| stmt_id)
+                .collect(),
         };
         planner.plan(stmt)?;
 
@@ -246,10 +252,42 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         let load_data_node_id = self.plan_data_loading(stmt, &mut returning)?;
 
-        // Track the exec statement operation node.
-        self.stmt_info
-            .load_data_statement
-            .set(Some(load_data_node_id));
+        // Track the exec statement operation node. When the slot was
+        // reserved up front (this statement is the target of an effect dep),
+        // fill it with a pass-through to the node planning actually produced.
+        match self.stmt_info.load_data_statement.get() {
+            Some(reserved) => {
+                let ty = self.planner.mir[load_data_node_id].ty().clone();
+                self.planner.mir.fill(
+                    reserved,
+                    mir::Alias {
+                        input: load_data_node_id,
+                        ty,
+                    },
+                );
+            }
+            None => {
+                self.stmt_info
+                    .load_data_statement
+                    .set(Some(load_data_node_id));
+            }
+        }
+
+        // Order this statement's database operation after every statement
+        // whose effect must precede it. The target may be an ancestor still
+        // being planned; its data-load slot is reserved, so the edge resolves
+        // regardless of planning order.
+        for (&dep, &kind) in &self.stmt_info.deps {
+            if kind != hir::DepKind::Effect {
+                continue;
+            }
+
+            let anchor = self.planner.hir[dep]
+                .load_data_statement
+                .get()
+                .expect("effect dep target's data-load slot is reserved");
+            self.planner.mir[load_data_node_id].deps.insert(anchor);
+        }
 
         // Now, for each back ref, we need to project the expression to what the
         // next statement expects.
@@ -277,14 +315,14 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         self.stmt_info.output.set(Some(output_node_id));
 
-        // Deps that never resolved target enclosing statements that are still
-        // being planned; enforce them on this statement's data-loading node
-        // once planning completes.
-        for stmt_id in self.remaining_deps.drain(..) {
-            self.planner
-                .deferred_node_deps
-                .push((load_data_node_id, stmt_id));
-        }
+        // Ordinary deps only target siblings and children, all planned by the
+        // time this statement's output node exists; ancestors are expressed
+        // as `effect_deps` and were anchored above.
+        debug_assert!(
+            self.remaining_deps.is_empty(),
+            "unresolved statement deps after planning: {:?}",
+            self.remaining_deps
+        );
 
         Ok(())
     }
@@ -1914,9 +1952,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     fn plan_child_statements(&mut self) -> Result<()> {
-        // Plan dependent child statements
-        for &dep_stmt_id in &self.stmt_info.deps {
-            if !self.planner.hir[dep_stmt_id].independent {
+        // Plan dependent child statements. Effect deps target ancestors,
+        // planned by the enclosing traversal.
+        for (&dep_stmt_id, &kind) in &self.stmt_info.deps {
+            if kind == hir::DepKind::Statement && !self.planner.hir[dep_stmt_id].independent {
                 self.planner.plan_statement(dep_stmt_id)?;
             }
         }
@@ -2046,17 +2085,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         self.remaining_deps.retain(|stmt_id| {
             let dep_info = &self.planner.hir[stmt_id];
 
-            // A dependency on an *enclosing* statement (one still being
-            // planned — e.g. a `belongs_to` returning-load subquery ordered
-            // after an ancestor INSERT) has no output node yet; its
-            // data-loading node carries the database effect, so anchoring
-            // there gives the same execution-order guarantee.
-            let dep_id = dep_info
-                .output
-                .get()
-                .or_else(|| dep_info.load_data_statement.get());
-
-            if let Some(dep_id) = dep_id {
+            // A dep not yet planned (e.g. a child sub-statement planned after
+            // this statement's data loading) stays retained and attaches at a
+            // later node — ultimately the output node, by which point every
+            // dep is planned. Ancestors are never in this set; they are
+            // `effect_deps`, anchored on reserved data-load slots.
+            if let Some(dep_id) = dep_info.output.get() {
                 node.deps.insert(dep_id);
                 false
             } else {

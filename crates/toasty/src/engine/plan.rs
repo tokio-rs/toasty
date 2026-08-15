@@ -23,12 +23,6 @@ struct HirPlanner<'a> {
 
     /// Graph of operations needed to execute the statement
     mir: mir::Store,
-
-    /// Execution-order edges whose target statement was still being planned
-    /// when the edge was requested (a statement-level cycle that is acyclic
-    /// at the operation level). Resolved against the target's data-loading
-    /// node once every statement is planned.
-    deferred_node_deps: Vec<(mir::NodeId, hir::StmtId)>,
 }
 
 #[derive(Debug)]
@@ -47,7 +41,6 @@ impl Engine {
             engine: self,
             hir: &hir,
             mir: mir::Store::new(),
-            deferred_node_deps: vec![],
         }
         .build_logical_plan()?;
 
@@ -69,24 +62,31 @@ impl Engine {
 
 impl HirPlanner<'_> {
     fn build_logical_plan(mut self) -> Result<mir::LogicalPlan> {
+        // Reserve a data-load slot for every statement targeted by an effect
+        // dep. An effect dep's target may be an ancestor planned after the
+        // dependent (a statement-level cycle that is acyclic at the operation
+        // level), so the anchor node must exist before planning starts; the
+        // target's planning later fills the slot with an `Alias` to its
+        // actual data-loading node.
+        let hir = self.hir;
+        for stmt_info in hir.statements() {
+            for (&target, &kind) in &stmt_info.deps {
+                if kind != hir::DepKind::Effect {
+                    continue;
+                }
+
+                let slot = &hir[target].load_data_statement;
+                if slot.get().is_none() {
+                    slot.set(Some(self.mir.reserve()));
+                }
+            }
+        }
+
         let root_id = self.hir.root_id();
         self.plan_statement(root_id)?;
 
-        // Resolve execution-order edges that targeted statements still being
-        // planned when requested. Anchor on the target's data-loading node —
-        // its database effect — rather than its output node, which may
-        // transitively consume the dependent's output (the statement-level
-        // cycle these edges come from).
-        for (node_id, stmt_id) in std::mem::take(&mut self.deferred_node_deps) {
-            let dep_id = self.hir[stmt_id]
-                .load_data_statement
-                .get()
-                .expect("all statements are planned");
-            self.mir[node_id].deps.insert(dep_id);
-        }
-
         let exit = self.hir.root().output.get().unwrap();
-        let exit_node = &self.mir.store[exit];
+        let exit_node = &self.mir[exit];
 
         // Increment num uses for the exit node. This counts as the "engines"
         // use of the variable to return to the use.

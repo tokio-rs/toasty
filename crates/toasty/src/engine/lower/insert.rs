@@ -177,7 +177,9 @@ impl LowerStatement<'_, '_> {
                     unreachable!("subquery arg refers to a sub-statement");
                 };
                 let enclosing = self.state.insert_stmts.clone();
-                self.state.hir[sub_id].deps.extend(enclosing);
+                for target in enclosing {
+                    self.state.hir[sub_id].add_dep(target, crate::engine::hir::DepKind::Effect);
+                }
             }
 
             // The subquery's result is a row list; the slot wants the single

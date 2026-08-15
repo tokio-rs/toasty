@@ -1,4 +1,4 @@
-use hashbrown::HashSet;
+use indexmap::IndexSet;
 use toasty_core::{
     schema::app::{self, Field, FieldId, FieldTy},
     stmt,
@@ -178,7 +178,7 @@ impl LowerStatement<'_, '_> {
                 returning_changed,
             };
 
-            let mut prev_deps: HashSet<hir::StmtId> = HashSet::new();
+            let mut prev_deps: IndexSet<hir::StmtId> = IndexSet::new();
             for entry in entries {
                 let emitted = self.collect_dependencies(|lower| {
                     lower.with_dependencies(prev_deps.clone(), |lower| {

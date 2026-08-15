@@ -6,8 +6,8 @@ use crate::engine::exec;
 use crate::engine::mir::Eval;
 
 use super::{
-    Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Node,
-    NodeId, Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey, Upsert,
+    Alias, Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge,
+    Node, NodeId, Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey, Upsert,
 };
 
 /// A step in the query execution plan.
@@ -16,6 +16,9 @@ use super::{
 /// filtering results, transforming records, or combining nested data.
 #[derive(Debug)]
 pub(crate) enum Operation {
+    /// Pass another node's output through unchanged (fills a reserved slot)
+    Alias(Alias),
+
     /// A constant value
     Const(Const),
 
@@ -67,6 +70,7 @@ impl Operation {
     /// ordering-only edges are derivable as `deps − inputs()`.
     pub(crate) fn inputs(&self) -> IndexSet<NodeId> {
         match self {
+            Operation::Alias(m) => indexset![m.input],
             Operation::Const(_m) => IndexSet::new(),
             Operation::DeleteByKey(m) => indexset![m.input],
             Operation::Eval(m) => m.inputs.clone(),
@@ -136,7 +140,8 @@ impl Operation {
                 !m.stmt.is_query() || m.conditional != exec::ConditionalOutput::None
             }
 
-            Operation::Const(_)
+            Operation::Alias(_)
+            | Operation::Const(_)
             | Operation::Eval(_)
             | Operation::Filter(_)
             | Operation::FindPkByIndex(_)

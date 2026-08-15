@@ -15,7 +15,7 @@ mod tests;
 
 use std::cell::Cell;
 
-use hashbrown::HashSet;
+use indexmap::{IndexMap, IndexSet};
 
 use index_vec::IndexVec;
 use toasty_core::{
@@ -70,7 +70,7 @@ impl Engine {
             engine: self,
             relations: vec![],
             errors: vec![],
-            dependencies: HashSet::new(),
+            dependencies: IndexSet::new(),
             insert_stmts: vec![],
         };
 
@@ -108,7 +108,12 @@ impl LoweringState<'_> {
 
         Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
-        let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
+        let stmt_id = self.hir.new_statement_info(
+            self.dependencies
+                .iter()
+                .map(|&dep| (dep, hir::DepKind::Statement))
+                .collect(),
+        );
         let scope_id = self.scopes.push(Scope { stmt_id, row_index });
         let mut collect_dependencies = None;
 
@@ -150,7 +155,7 @@ struct LowerStatement<'a, 'b> {
     cx: LoweringContext<'a>,
 
     /// Track dependencies here.
-    collect_dependencies: &'a mut Option<HashSet<hir::StmtId>>,
+    collect_dependencies: &'a mut Option<IndexSet<hir::StmtId>>,
 }
 
 #[derive(Debug)]
@@ -171,7 +176,7 @@ struct LoweringState<'a> {
     relations: Vec<app::FieldId>,
 
     /// All new statements should include these as part of its dependencies
-    dependencies: HashSet<hir::StmtId>,
+    dependencies: IndexSet<hir::StmtId>,
 
     /// INSERT statements currently being lowered, outermost first. A
     /// `belongs_to` returning-load subquery depends on these so it executes
@@ -585,7 +590,8 @@ impl LowerStatement<'_, '_> {
             dependencies.insert(stmt_id);
         }
 
-        self.curr_stmt_info().deps.insert(stmt_id);
+        self.curr_stmt_info()
+            .add_dep(stmt_id, hir::DepKind::Statement);
 
         stmt_id
     }
@@ -593,19 +599,20 @@ impl LowerStatement<'_, '_> {
     fn collect_dependencies(
         &mut self,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
-    ) -> HashSet<hir::StmtId> {
-        let old = self.collect_dependencies.replace(HashSet::new());
+    ) -> IndexSet<hir::StmtId> {
+        let old = self.collect_dependencies.replace(IndexSet::new());
         f(self);
         std::mem::replace(self.collect_dependencies, old).unwrap()
     }
 
     fn track_dependency(&mut self, dependency: hir::StmtId) {
-        self.curr_stmt_info().deps.insert(dependency);
+        self.curr_stmt_info()
+            .add_dep(dependency, hir::DepKind::Statement);
     }
 
     fn with_dependencies(
         &mut self,
-        mut dependencies: HashSet<hir::StmtId>,
+        mut dependencies: IndexSet<hir::StmtId>,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
     ) {
         // Dependencies should stack
@@ -986,7 +993,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
                 if self.state.hir[target_id].independent {
-                    self.curr_stmt_info().deps.insert(target_id);
+                    self.curr_stmt_info()
+                        .add_dep(target_id, hir::DepKind::Statement);
                 }
             }
             stmt::Expr::Exists(_) if !self.capability().sql() => {
@@ -1011,7 +1019,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
                 if self.state.hir[target_id].independent {
-                    self.curr_stmt_info().deps.insert(target_id);
+                    self.curr_stmt_info()
+                        .add_dep(target_id, hir::DepKind::Statement);
                 }
 
                 // The sub-statement result is a list of rows. Wrap it in
@@ -1724,8 +1733,20 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn new_statement_info(&mut self) -> hir::StmtId {
-        let mut deps = self.state.dependencies.clone();
-        deps.extend(&self.curr_stmt_info().deps);
+        // Ambient dependencies and the ones inherited from the enclosing
+        // statement are completion edges; `Effect` edges are never inherited.
+        let mut deps: IndexMap<hir::StmtId, hir::DepKind> = self
+            .state
+            .dependencies
+            .iter()
+            .map(|&stmt_id| (stmt_id, hir::DepKind::Statement))
+            .collect();
+
+        for (&stmt_id, &kind) in &self.curr_stmt_info().deps {
+            if kind == hir::DepKind::Statement {
+                deps.insert(stmt_id, kind);
+            }
+        }
 
         self.state.hir.new_statement_info(deps)
     }
@@ -1803,7 +1824,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.cx = saved_cx;
 
         if self.state.hir[target_id].independent {
-            self.curr_stmt_info().deps.insert(target_id);
+            self.curr_stmt_info()
+                .add_dep(target_id, hir::DepKind::Statement);
         }
 
         arg
