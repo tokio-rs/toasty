@@ -10,8 +10,9 @@ use toasty_core::{
 
 #[derive(Debug, Clone)]
 pub(crate) struct UpdateByKey {
-    /// If specified, use the input to generate the list of keys to update
-    pub input: VarId,
+    /// Input variables. The first holds the list of keys to update; `Arg`
+    /// positions in `filter` and `condition` index into this list.
+    pub input: Vec<VarId>,
 
     /// Where to store the result of the update
     pub output: Output,
@@ -35,14 +36,9 @@ pub(crate) struct UpdateByKey {
 
 impl Exec<'_> {
     pub(super) async fn action_update_by_key(&mut self, action: &UpdateByKey) -> Result<()> {
-        let keys = self
-            .vars
-            .load(action.input)
-            .await?
-            .values
-            .collect_as_value()
-            .await?
-            .into_list_unwrap();
+        let (keys, filter, condition) = self
+            .load_key_op_inputs(&action.input, &action.filter, &action.condition)
+            .await?;
 
         // Shred a multi-key update into one single-key op per key so each key's
         // filter is adjudicated independently — matching SQL's per-row
@@ -52,7 +48,10 @@ impl Exec<'_> {
         let mut rows = vec![];
 
         for key in keys {
-            match self.exec_update_one(action, key).await? {
+            match self
+                .exec_update_one(action, &filter, &condition, key)
+                .await?
+            {
                 Rows::Count(n) => total_count += n,
                 other => rows.extend(other.into_value_stream().collect().await?),
             }
@@ -77,13 +76,19 @@ impl Exec<'_> {
     }
 
     /// Execute a single-key `UpdateByKey` op for one resolved key.
-    async fn exec_update_one(&mut self, action: &UpdateByKey, key: stmt::Value) -> Result<Rows> {
+    async fn exec_update_one(
+        &mut self,
+        action: &UpdateByKey,
+        filter: &Option<stmt::Expr>,
+        condition: &Option<stmt::Expr>,
+        key: stmt::Value,
+    ) -> Result<Rows> {
         let op = operation::UpdateByKey {
             table: action.table,
             keys: vec![key],
             assignments: action.assignments.clone(),
-            filter: action.filter.clone(),
-            condition: action.condition.clone(),
+            filter: filter.clone(),
+            condition: condition.clone(),
             returning: action.returning.clone(),
         };
 

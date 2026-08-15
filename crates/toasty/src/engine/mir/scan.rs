@@ -14,8 +14,9 @@ use crate::engine::{exec, mir};
 /// before returning results.
 #[derive(Debug)]
 pub(crate) struct Scan {
-    /// Optional node providing input arguments for the filter expression.
-    pub(crate) input: Option<mir::NodeId>,
+    /// Nodes providing input arguments for the filter expression. `Arg`
+    /// positions in `row_filter` index into this list.
+    pub(crate) inputs: IndexSet<mir::NodeId>,
 
     /// The table to scan.
     pub(crate) table: TableId,
@@ -41,8 +42,10 @@ impl Scan {
         var_table: &mut exec::VarDecls,
     ) -> exec::Scan {
         let input = self
-            .input
-            .map(|node_id| logical_plan[node_id].var.get().unwrap());
+            .inputs
+            .iter()
+            .map(|node_id| logical_plan[node_id].var.get().unwrap())
+            .collect();
         let output = var_table.register_var(node.ty().clone());
         node.var.set(Some(output));
 

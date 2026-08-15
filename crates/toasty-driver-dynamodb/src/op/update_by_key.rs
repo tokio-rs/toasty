@@ -1,64 +1,11 @@
 use super::{
     Connection, Delete, ExprAttrs, Put, Result, ReturnValuesOnConditionCheckFailure, SdkError,
     TransactWriteItem, TransactWriteItemsError, Update, UpdateItemError, Value, db, ddb_expression,
-    ddb_key, item_to_record, operation, stmt,
+    ddb_key, filter_failed, operation, stmt,
 };
 use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason, ReturnValue};
 use std::{collections::HashMap, fmt::Write};
 use toasty_core::{driver::ExecResponse, stmt::ExprContext};
-
-/// An [`stmt::Input`] that resolves column references into a record produced
-/// by `item_to_record`. After lowering, filter/condition expressions reference
-/// columns via `ExprReference::Column { column: i }` where `i` is the column's
-/// position in `table.columns`. `item_to_record` builds the record in that same
-/// order, so indexing by `col.column` gives the right field.
-struct RecordInput<'a>(&'a stmt::ValueRecord);
-
-impl stmt::Input for RecordInput<'_> {
-    fn resolve_ref(
-        &mut self,
-        expr_reference: &stmt::ExprReference,
-        projection: &stmt::Projection,
-    ) -> Option<stmt::Expr> {
-        match expr_reference {
-            stmt::ExprReference::Column(col) => {
-                Some(self.0.fields[col.column].entry(projection).to_expr())
-            }
-            _ => None,
-        }
-    }
-}
-
-/// Returns `true` when the DynamoDB `ConditionalCheckFailedException` was
-/// caused by the *filter* expression failing (→ return count 0), or `false`
-/// when it was caused by the *condition* expression failing (→ return an
-/// error).
-///
-/// Strategy: DynamoDB returns the item's pre-update state when
-/// `ReturnValuesOnConditionCheckFailure::AllOld` is set.  We evaluate the
-/// filter in-memory against that snapshot:
-///
-/// - No old item → the record didn't exist; the filter trivially didn't
-///   match → count 0.
-/// - Old item exists, filter evaluates to `false` → count 0.
-/// - Old item exists, filter evaluates to `true` (or there is no filter) →
-///   the condition must have been the failing part → error.
-fn filter_failed(
-    old_item: Option<&HashMap<String, AttributeValue>>,
-    table: &db::Table,
-    filter: Option<&stmt::Expr>,
-) -> bool {
-    let Some(filter) = filter else {
-        return false;
-    };
-
-    let Some(item) = old_item else {
-        return true;
-    };
-
-    let record = item_to_record(item, table.columns.iter()).unwrap();
-    !filter.eval_bool(RecordInput(&record)).unwrap_or(false)
-}
 
 /// Interprets a `ConditionalCheckFailedException` from `update_item`: if the
 /// filter was the failing predicate return an empty response; otherwise surface
@@ -89,6 +36,13 @@ fn on_update_item_condition_failed(
 /// if every `ConditionalCheckFailed` reason was caused by the filter return an
 /// empty response; if any was caused by the condition expression surface a
 /// condition error.
+///
+/// Cancellation reasons are positional, one per transact item, and the
+/// transaction is built with the base-table `Update` first followed by
+/// index-table `Delete`/`Put` items. Only the base-table item's condition
+/// embeds the filter, so only its reason is eligible for filter adjudication;
+/// a `ConditionalCheckFailed` on an index-table item is the uniqueness guard
+/// failing, which is always an error.
 fn on_transaction_cancelled(
     reasons: &[CancellationReason],
     message: Option<&str>,
@@ -98,8 +52,9 @@ fn on_transaction_cancelled(
 ) -> Result<ExecResponse> {
     let any_condition_failed = reasons
         .iter()
-        .filter(|r| r.code() == Some("ConditionalCheckFailed"))
-        .any(|r| !filter_failed(r.item(), table, filter));
+        .enumerate()
+        .filter(|(_, r)| r.code() == Some("ConditionalCheckFailed"))
+        .any(|(i, r)| i != 0 || !filter_failed(r.item(), table, filter));
 
     if any_condition_failed {
         Err(toasty_core::Error::condition_failed(
@@ -419,6 +374,21 @@ impl Connection {
                     .map_err(toasty_core::Error::driver_operation_failed)?;
 
                 let Some(mut curr_unique_values) = res.item else {
+                    // The row is gone (deleted between the engine's
+                    // key-collection read and this per-key update, or the key
+                    // never existed). A filter means the engine asked for
+                    // per-row adjudication, so a missing row is a filter miss
+                    // and the update is a no-op — the same way the plain
+                    // update arm interprets a conditional check failure with
+                    // no item. Without a filter the caller addressed this
+                    // exact record; surface the missing row.
+                    if op.filter.is_some() {
+                        return Ok(if op.returning.is_some() {
+                            ExecResponse::empty_value_stream()
+                        } else {
+                            ExecResponse::count(0)
+                        });
+                    }
                     return Err(toasty_core::Error::record_not_found(format!(
                         "table={} key={:?}",
                         table.name, key
@@ -565,6 +535,12 @@ impl Connection {
                                     .set_update_expression(Some(update_expression))
                                     .set_expression_attribute_names(Some(expr_attrs.attr_names))
                                     .set_expression_attribute_values(Some(expr_attrs.attr_values))
+                                    // Needed to tell a filter miss apart from a
+                                    // genuine condition failure when the
+                                    // transaction is cancelled.
+                                    .return_values_on_condition_check_failure(
+                                        ReturnValuesOnConditionCheckFailure::AllOld,
+                                    )
                                     .build()
                                     .unwrap(),
                             )
@@ -677,13 +653,14 @@ impl Connection {
 
 #[cfg(test)]
 mod tests {
-    use super::filter_failed;
+    use super::{filter_failed, on_transaction_cancelled};
     use crate::db;
-    use aws_sdk_dynamodb::types::AttributeValue;
+    use aws_sdk_dynamodb::types::{AttributeValue, CancellationReason};
     use std::collections::HashMap;
     use toasty_core::{
+        driver::Rows,
         schema::db::{Column, ColumnId, IndexId, PrimaryKey, TableId, Type},
-        stmt::{self, BinaryOp, Expr, ExprBinaryOp, ExprColumn, ExprReference},
+        stmt::{self, BinaryOp, Expr, ExprBinaryOp},
     };
 
     fn make_table() -> db::Table {
@@ -717,11 +694,8 @@ mod tests {
     /// Build `status = "active"` as a column-reference filter expression.
     fn status_eq_active() -> Expr {
         Expr::BinaryOp(ExprBinaryOp {
-            lhs: Box::new(Expr::Reference(ExprReference::Column(ExprColumn {
-                nesting: 0,
-                table: 0,
-                column: 0, // column 0 in the table → "status"
-            }))),
+            // column 0 in the table → "status"
+            lhs: Box::new(Expr::ref_column(0, 0)),
             op: BinaryOp::Eq,
             rhs: Box::new(Expr::Value(stmt::Value::String("active".to_string()))),
         })
@@ -765,5 +739,72 @@ mod tests {
         let filter = status_eq_active();
         let item = item_with_status("inactive");
         assert!(filter_failed(Some(&item), &table, Some(&filter)));
+    }
+
+    fn reason(code: &str, item: Option<HashMap<String, AttributeValue>>) -> CancellationReason {
+        CancellationReason::builder()
+            .code(code)
+            .set_item(item)
+            .build()
+    }
+
+    // A ConditionalCheckFailed on an index-table item (any position other than
+    // the base-table update at index 0) is the uniqueness guard failing. It has
+    // no item snapshot and must surface an error, never be classified as a
+    // filter miss.
+    #[test]
+    fn index_table_put_failure_is_an_error() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let reasons = [reason("None", None), reason("ConditionalCheckFailed", None)];
+        let res = on_transaction_cancelled(&reasons, None, &table, Some(&filter), false);
+        assert!(res.is_err());
+    }
+
+    // The base-table update failed and its old item no longer matches the
+    // filter: the row changed between the scan and the write → no-op.
+    #[test]
+    fn base_update_filter_miss_returns_count_zero() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let reasons = [
+            reason("ConditionalCheckFailed", Some(item_with_status("inactive"))),
+            reason("None", None),
+        ];
+        let res = on_transaction_cancelled(&reasons, None, &table, Some(&filter), false).unwrap();
+        assert!(matches!(res.values, Rows::Count(0)));
+    }
+
+    // The base-table update failed but its old item still matches the filter:
+    // the failing predicate must have been the condition (e.g. the unique
+    // prev-value guard) → error.
+    #[test]
+    fn base_update_condition_failure_is_an_error() {
+        let table = make_table();
+        let filter = status_eq_active();
+        let reasons = [
+            reason("ConditionalCheckFailed", Some(item_with_status("active"))),
+            reason("None", None),
+        ];
+        let res = on_transaction_cancelled(&reasons, None, &table, Some(&filter), false);
+        assert!(res.is_err());
+    }
+
+    // Native-operator filters (here `begins_with`) must be evaluable in-memory,
+    // not just plain comparisons.
+    #[test]
+    fn starts_with_filter_is_adjudicated() {
+        let table = make_table();
+        let filter = Expr::starts_with(Expr::ref_column(0, 0), "act");
+        assert!(!filter_failed(
+            Some(&item_with_status("active")),
+            &table,
+            Some(&filter)
+        ));
+        assert!(filter_failed(
+            Some(&item_with_status("inactive")),
+            &table,
+            Some(&filter)
+        ));
     }
 }

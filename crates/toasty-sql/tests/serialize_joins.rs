@@ -10,8 +10,8 @@ use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
-        self, Expr, ExprColumn, Filter, Join, JoinOp, Returning, Select, Source, SourceTable,
-        SourceTableId, TableFactor, TableRef, TableWithJoins,
+        self, Expr, Filter, Join, JoinOp, Returning, Select, Source, SourceTable, SourceTableId,
+        TableFactor, TableRef, TableWithJoins,
     },
 };
 use toasty_sql::{Serializer, Statement as SqlStatement};
@@ -68,11 +68,7 @@ fn make_table(id: usize, name: &str, cols: &[&str]) -> Table {
 
 /// Reference to column `column` of the `table`th entry in `SourceTable::tables`.
 fn col(table: usize, column: usize) -> Expr {
-    Expr::column(ExprColumn {
-        nesting: 0,
-        table,
-        column,
-    })
+    Expr::ref_column(table, column)
 }
 
 fn render_sqlite(schema: &Schema, stmt: stmt::Statement) -> String {

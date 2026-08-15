@@ -184,6 +184,32 @@ impl Exec<'_> {
         }
     }
 
+    /// Loads the inputs of a key-based mutation.
+    ///
+    /// The first input holds the list of keys to mutate. The filter and
+    /// condition are handed to the driver, which cannot resolve runtime
+    /// arguments, so their `Arg` nodes — positions into the input list — are
+    /// substituted here.
+    async fn load_key_op_inputs(
+        &mut self,
+        input: &[VarId],
+        filter: &Option<stmt::Expr>,
+        condition: &Option<stmt::Expr>,
+    ) -> Result<(Vec<stmt::Value>, Option<stmt::Expr>, Option<stmt::Expr>)> {
+        let inputs = self.collect_input(input).await?;
+
+        let mut filter = filter.clone();
+        let mut condition = condition.clone();
+
+        for expr in [&mut filter, &mut condition].into_iter().flatten() {
+            expr.substitute(&inputs);
+        }
+
+        let keys = inputs.into_iter().next().unwrap().into_list_unwrap();
+
+        Ok((keys, filter, condition))
+    }
+
     async fn collect_input(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {
         let mut ret = Vec::new();
 

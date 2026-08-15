@@ -11,8 +11,9 @@ use toasty_core::{
 
 #[derive(Debug)]
 pub(crate) struct Scan {
-    /// Optional input variable providing runtime args for the filter.
-    pub input: Option<VarId>,
+    /// Input variables providing runtime args for the filter. `Arg` positions
+    /// in `row_filter` index into this list.
+    pub input: Vec<VarId>,
 
     /// Where to store the result.
     pub output: Output,
@@ -34,8 +35,8 @@ impl Exec<'_> {
     pub(super) async fn action_scan(&mut self, action: &Scan) -> Result<()> {
         let mut row_filter = action.row_filter.clone();
 
-        if let Some(input) = &action.input {
-            let input = self.collect_input(&[*input]).await?;
+        if !action.input.is_empty() {
+            let input = self.collect_input(&action.input).await?;
             if let Some(ref mut f) = row_filter {
                 f.substitute(&input);
             }

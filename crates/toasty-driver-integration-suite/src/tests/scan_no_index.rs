@@ -1,5 +1,6 @@
 use crate::prelude::*;
 use toasty::stmt::Page;
+use toasty_core::{driver::Operation, stmt::Expr};
 
 /// Scan with no filter predicate returns all rows.
 #[driver_test]
@@ -29,6 +30,204 @@ pub async fn scan_no_filter(t: &mut Test) -> Result<()> {
     assert_eq!("Alice", results[0].name);
     assert_eq!("Bob", results[1].name);
     assert_eq!("Charlie", results[2].name);
+
+    Ok(())
+}
+
+/// DELETE filtered on a non-indexed field. On the scan path the engine has to
+/// collect the primary keys of the matching rows before it can delete them.
+#[driver_test(id(ID))]
+pub async fn scan_delete_by_filter(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        category: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { category: "keep" },
+        { category: "drop" },
+        { category: "drop" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    Item::filter(Item::fields().category().eq("drop"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let remaining: Vec<Item> = Item::all().exec(&mut db).await?;
+
+    assert_eq!(1, remaining.len());
+    assert_eq!("keep", remaining[0].category);
+
+    Ok(())
+}
+
+/// UPDATE filtered on a non-indexed field, the mutation counterpart to
+/// [`scan_delete_by_filter`].
+#[driver_test(id(ID))]
+pub async fn scan_update_by_filter(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        category: String,
+        label: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { category: "keep", label: "old" },
+        { category: "stale", label: "old" },
+        { category: "stale", label: "old" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    Item::filter(Item::fields().category().eq("stale"))
+        .update()
+        .label("new")
+        .exec(&mut db)
+        .await?;
+
+    let mut results: Vec<Item> = Item::all().exec(&mut db).await?;
+    results.sort_by(|a, b| a.category.cmp(&b.category));
+
+    assert_eq!(3, results.len());
+    assert_eq!("old", results[0].label);
+    assert_eq!("new", results[1].label);
+    assert_eq!("new", results[2].label);
+
+    Ok(())
+}
+
+/// Unfiltered bulk UPDATE — every row goes through the scan path. The scan
+/// and the per-key updates are separate round trips, so each update must
+/// carry an existence guard: an unconditioned key-value update of a key whose
+/// row was deleted after the scan would recreate the row as a partial item.
+#[driver_test]
+pub async fn scan_update_no_filter_carries_existence_guard(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        label: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { label: "old" },
+        { label: "old" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    t.log().clear();
+
+    Item::all().update().label("new").exec(&mut db).await?;
+
+    if !t.capability().sql() {
+        assert_struct!(t.log().pop_op(), Operation::Scan(_));
+        for _ in 0..2 {
+            assert_struct!(t.log().pop_op(), Operation::UpdateByKey(_ {
+                filter: Some(Expr::Not(_)),
+                ..
+            }));
+        }
+        assert!(t.log().is_empty());
+    }
+
+    let results: Vec<Item> = Item::all().exec(&mut db).await?;
+
+    assert_eq!(2, results.len());
+    assert!(results.iter().all(|r| r.label == "new"));
+
+    Ok(())
+}
+
+/// UPDATE on the scan path that moves a unique column onto a value already
+/// owned by another row must surface the constraint failure — not classify it
+/// as a filter miss and report zero rows updated.
+#[driver_test]
+pub async fn scan_update_unique_conflict_is_error(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[unique]
+        email: String,
+        category: String,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+
+    toasty::create!(Item::[
+        { email: "taken@example.com", category: "keep" },
+        { email: "free@example.com", category: "move" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    let res = Item::filter(Item::fields().category().eq("move"))
+        .update()
+        .email("taken@example.com")
+        .exec(&mut db)
+        .await;
+
+    assert!(
+        res.is_err(),
+        "expected unique-constraint failure, got {res:?}"
+    );
+
+    // The row targeted by the update keeps its original email.
+    let item = Item::get_by_email(&mut db, "free@example.com").await?;
+    assert_eq!("move", item.category);
+
+    Ok(())
+}
+
+/// DELETE on the scan path for a model with a composite primary key — every
+/// key column has to be read back from the scan.
+#[driver_test]
+pub async fn scan_delete_by_filter_composite_key(t: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = team, local = name)]
+    struct Player {
+        team: String,
+        name: String,
+        position: String,
+    }
+
+    let mut db = t.setup_db(models!(Player)).await;
+
+    toasty::create!(Player::[
+        { team: "red", name: "alice", position: "keeper" },
+        { team: "red", name: "bob", position: "striker" },
+        { team: "blue", name: "carol", position: "striker" },
+    ])
+    .exec(&mut db)
+    .await?;
+
+    Player::filter(Player::fields().position().eq("striker"))
+        .delete()
+        .exec(&mut db)
+        .await?;
+
+    let remaining: Vec<Player> = Player::all().exec(&mut db).await?;
+
+    assert_eq!(1, remaining.len());
+    assert_eq!("alice", remaining[0].name);
 
     Ok(())
 }

@@ -12,7 +12,7 @@ use expect_test::expect;
 use toasty_core::{
     schema::db::{Column, ColumnId, PrimaryKey, Schema, Table, TableId, Type as StorageType},
     stmt::{
-        self, Cte, Expr, ExprColumn, Filter, Returning, Select, Source, SourceTable, SourceTableId,
+        self, Cte, Expr, Filter, Returning, Select, Source, SourceTable, SourceTableId,
         TableFactor, TableRef, TableWithJoins, With,
     },
 };
@@ -73,11 +73,7 @@ fn make_table(id: usize, name: &str, cols: &[&str]) -> Table {
 
 /// Reference to column `column` of the `table`th entry in `SourceTable::tables`.
 fn col(table: usize, column: usize) -> Expr {
-    Expr::column(ExprColumn {
-        nesting: 0,
-        table,
-        column,
-    })
+    Expr::ref_column(table, column)
 }
 
 /// Render `expr` as the projection of a bare `VALUES` row. The result is
