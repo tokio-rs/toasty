@@ -1,6 +1,6 @@
 use std::ops;
 
-use crate::engine::mir::{Node, NodeId, Store};
+use crate::engine::mir::{Node, NodeId, Store, annotate_guards};
 
 /// The complete operation graph for a query.
 ///
@@ -24,6 +24,31 @@ impl LogicalPlan {
         let mut execution_order = vec![];
         compute_operation_execution_order(completion, &store, &mut execution_order);
 
+        // Nodes unreachable from the completion node are dropped from the
+        // execution order and never run. That is fine for pure nodes; a
+        // dropped mutation would silently lose its database effect.
+        debug_assert!(
+            store
+                .store
+                .iter()
+                .all(|node| node.visited.get() || !node.op.is_effectful()),
+            "effectful node unreachable from the completion node"
+        );
+
+        // `num_uses` counts the variable loads each node's output receives:
+        // one per entry in its consumers' `input_loads()`. Ordering-only
+        // `deps` edges schedule but do not count — no load ever drains them.
+        // The completion node's exit use is added by the caller before this
+        // point.
+        for node_id in &execution_order {
+            for load in store[node_id].op.input_loads() {
+                let dep = &store[load];
+                dep.num_uses.set(dep.num_uses.get() + 1);
+            }
+        }
+
+        annotate_guards(&store, &execution_order, completion);
+
         LogicalPlan {
             store,
             execution_order,
@@ -31,10 +56,9 @@ impl LogicalPlan {
         }
     }
 
-    pub(crate) fn operations(&self) -> impl Iterator<Item = &Node> {
-        self.execution_order
-            .iter()
-            .map(|node_id| &self.store[node_id])
+    /// Node IDs in topologically sorted execution order.
+    pub(crate) fn execution_order(&self) -> &[NodeId] {
+        &self.execution_order
     }
 
     pub(crate) fn completion(&self) -> &Node {
@@ -72,9 +96,6 @@ fn compute_operation_execution_order(
     node.visited.set(true);
 
     for &dep_id in &node.deps {
-        let dep = &mir[dep_id];
-        dep.num_uses.set(dep.num_uses.get() + 1);
-
         compute_operation_execution_order(dep_id, mir, execution_order);
     }
 

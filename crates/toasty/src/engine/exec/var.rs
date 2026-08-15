@@ -67,8 +67,60 @@ impl VarStore {
         })
     }
 
+    /// Decrements a slot's use count without observing its value, dropping
+    /// the entry at zero. Called on paths that decline a load the use
+    /// counting expects (an `If` else arm, a `Guard`'s false path).
+    #[track_caller]
+    pub(crate) fn release(&mut self, var: VarId) {
+        let Some(entry) = self.slots.get_mut(var.0).and_then(Option::as_mut) else {
+            panic!("release of unset slot {}; store={:#?}", var.0, self)
+        };
+
+        if entry.count == 1 {
+            self.slots[var.0] = None;
+        } else {
+            entry.count -= 1;
+        }
+    }
+
+    /// Returns whether the slot holds at least one row, without consuming a
+    /// use. A stream-backed slot is buffered in place so the peek does not
+    /// disturb later loads.
+    pub(crate) async fn peek_non_empty(&mut self, var: VarId) -> crate::Result<bool> {
+        let Some(entry) = self.slots.get_mut(var.0).and_then(Option::as_mut) else {
+            panic!("no stream at slot {}; store={:#?}", var.0, self)
+        };
+
+        entry.response.values.buffer().await?;
+
+        Ok(match &entry.response.values {
+            Rows::Count(count) => *count > 0,
+            Rows::Value(stmt::Value::List(items)) => !items.is_empty(),
+            Rows::Value(stmt::Value::Null) => false,
+            Rows::Value(_) => true,
+            Rows::Stream(_) => unreachable!("stream was buffered above"),
+        })
+    }
+
+    /// Debug-asserts every slot has been drained. With exact use counts this
+    /// holds after the final load of the plan's returning variable, on the
+    /// success path only — a mid-plan failure legitimately leaves loads
+    /// unperformed. Undercounting already panics loudly on a load of a freed
+    /// slot; this converts the silent overcounting direction into a loud one.
+    pub(crate) fn assert_empty(&self) {
+        debug_assert!(
+            self.slots.iter().all(Option::is_none),
+            "variable slots not drained at plan completion; store={self:#?}"
+        );
+    }
+
     #[track_caller]
     pub(crate) fn store(&mut self, var: VarId, count: usize, response: ExecResponse) {
+        // A zero-use output is never observed; don't occupy a slot.
+        if count == 0 {
+            return;
+        }
+
         while self.slots.len() <= var.0 {
             self.slots.push(None);
         }

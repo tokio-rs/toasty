@@ -1,6 +1,6 @@
 use crate::engine::exec::{
-    DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, NestedMerge, Project,
-    QueryPk, ReadModifyWrite, Scan, SetVar, UpdateByKey, Upsert,
+    DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, If, NestedMerge,
+    Project, QueryPk, ReadModifyWrite, Release, Scan, SetVar, UpdateByKey, Upsert,
 };
 
 use std::fmt;
@@ -26,6 +26,9 @@ pub(crate) enum Action {
     /// Conditionally pass through or suppress a data stream
     Guard(Guard),
 
+    /// Conditionally execute a block of pure actions
+    If(If),
+
     /// Combines parent and child data into nested structures.
     ///
     /// Loads all batch data upfront, then recursively processes each row by filtering
@@ -39,6 +42,9 @@ pub(crate) enum Action {
 
     /// Query records by primary key
     QueryPk(QueryPk),
+
+    /// Decrement a variable's use count without observing its value
+    Release(Release),
 
     /// Perform a full-table scan
     Scan(Scan),
@@ -67,10 +73,12 @@ impl Action {
             Action::FindPkByIndex(_) => "find_pk_by_index",
             Action::GetByKey(_) => "get_by_key",
             Action::Guard(_) => "guard",
+            Action::If(_) => "if",
             Action::NestedMerge(_) => "nested_merge",
             Action::Project(_) => "project",
             Action::QueryPk(_) => "query_pk",
             Action::ReadModifyWrite(_) => "read_modify_write",
+            Action::Release(_) => "release",
             Action::Scan(_) => "scan",
             Action::SetVar(_) => "set_var",
             Action::UpdateByKey(_) => "update_by_key",
@@ -78,11 +86,15 @@ impl Action {
         }
     }
 
-    /// Returns true if this action issues a database operation.
+    /// Returns the number of database operations this action issues, counting
+    /// into `If` arms.
     ///
     /// Used to determine whether a plan needs to be wrapped in a transaction.
-    /// In-memory actions (Filter, Project, NestedMerge, SetVar, Eval) return false.
-    pub(crate) fn is_db_op(&self) -> bool {
+    /// The count is static: a skipped `If` arm can leave a transaction
+    /// wrapping a single executed operation, which is harmless. In-memory
+    /// actions (Filter, Project, NestedMerge, SetVar, Eval, Release) count
+    /// zero.
+    pub(crate) fn db_op_count(&self) -> usize {
         match self {
             Action::DeleteByKey(_)
             | Action::ExecStatement(_)
@@ -92,14 +104,17 @@ impl Action {
             | Action::ReadModifyWrite(_)
             | Action::Scan(_)
             | Action::UpdateByKey(_)
-            | Action::Upsert(_) => true,
+            | Action::Upsert(_) => 1,
+
+            Action::If(action) => action.then.iter().map(Action::db_op_count).sum(),
 
             Action::Eval(_)
             | Action::Filter(_)
             | Action::Guard(_)
             | Action::NestedMerge(_)
             | Action::Project(_)
-            | Action::SetVar(_) => false,
+            | Action::Release(_)
+            | Action::SetVar(_) => 0,
         }
     }
 }
@@ -114,9 +129,11 @@ impl fmt::Debug for Action {
             Self::FindPkByIndex(a) => a.fmt(f),
             Self::GetByKey(a) => a.fmt(f),
             Self::Guard(a) => a.fmt(f),
+            Self::If(a) => a.fmt(f),
             Self::NestedMerge(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),
+            Self::Release(a) => a.fmt(f),
             Self::Scan(a) => a.fmt(f),
             Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),

@@ -30,6 +30,11 @@ impl<T: AsExpr> Func<T> {
         Self { args, ret, expr }
     }
 
+    /// The expression the function evaluates.
+    pub(crate) fn expr(&self) -> &stmt::Expr {
+        self.expr.as_expr()
+    }
+
     /// Returns true if the function has no inputs
     pub(crate) fn is_const(&self) -> bool {
         self.args.is_empty()

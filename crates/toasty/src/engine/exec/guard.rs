@@ -48,7 +48,9 @@ impl Exec<'_> {
             // Guard passed — forward the input unchanged.
             self.vars.load(action.input).await?
         } else {
-            // Guard failed — produce an empty stream.
+            // Guard failed — produce an empty stream. Release the declined
+            // input load so its use count stays exact.
+            self.vars.release(action.input);
             ExecResponse {
                 values: Rows::value_stream(ValueStream::default()),
                 prev_cursor: None,

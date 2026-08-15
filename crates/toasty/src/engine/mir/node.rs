@@ -28,10 +28,17 @@ pub(crate) struct Node {
     /// Set during execution planning when converting MIR to actions.
     pub(crate) var: Cell<Option<exec::VarId>>,
 
-    /// Number of downstream nodes that consume this node's output.
+    /// Number of variable loads this node's output receives during execution,
+    /// plus one exit use on the completion node.
     ///
     /// Used for reference counting; the output is freed after the last use.
     pub(crate) num_uses: Cell<usize>,
+
+    /// When set, this node only executes if the referenced node produced at
+    /// least one row. Assigned by the guard-annotation pass in
+    /// [`LogicalPlan::new`]; only pure (non-effectful) nodes may carry a
+    /// guard.
+    pub(crate) guard: Cell<Option<NodeId>>,
 
     /// Whether this node has been visited during topological sort.
     pub(crate) visited: Cell<bool>,

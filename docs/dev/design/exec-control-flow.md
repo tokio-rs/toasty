@@ -31,11 +31,17 @@ if non_empty($0):
     $1 = Project($0 -> [user_id])
     $2 = ExecStatement(SELECT .. FROM users WHERE id = $1[0][0])
 else:
-    $1 = SetVar([])
+    Release($0)      // the load Project would have performed
     $2 = SetVar([])
 $3 = Eval(map $0 rows -> Post record, user slot from $2)
 return $3
 ```
+
+The `Release` in the else arm is part of a second, self-standing fix the
+`If` machinery motivates: variable refcounts become exact (counted from
+value edges, with unconsumed outputs never stored), so slots free at
+last use instead of lingering until plan teardown — see "Exact variable
+lifetimes".
 
 SQLite and its Rust reimplementation Turso are the model. Turso's planner
 assigns every non-FROM-clause subquery an evaluation phase — a subquery in
@@ -105,23 +111,32 @@ the point. Guarded regions therefore never contain effectful actions.
 
 ## Design
 
-### Edge classification
+### Value edges and ordering edges
 
-Split `Node.deps` into:
+The two edge kinds already exist structurally; they only lack names:
 
-- `inputs` — value edges: this node reads that node's output. Already
-  implicit in each operation's input `NodeId`s; the split makes it
-  explicit on the node.
-- `after` — ordering-only edges: that node's effect must precede this
-  node's, no data flows. (Enclosing-insert edges, sibling-mutation edges.)
+- **Value edges** are the operations' own input fields (`Eval.inputs`,
+  `Project.input`, `ExecStatement.inputs`, …) — the `NodeId`s `to_exec`
+  wires into variable slots.
+- **`Node.deps`** is seeded from those inputs (`From<Operation> for
+  Node`, `mir/operation.rs`) and then extended by planner sites with
+  ordering-only edges (enclosing-insert edges, sibling-mutation edges).
+  It is the scheduling relation: `LogicalPlan::new`'s topological sort
+  and `num_uses` counting walk it, and it keeps that job unchanged.
 
-The guard analysis needs this split: it reasons about a node's
-*consumers*, which are value-edge dependents only. An ordering-only edge
-onto a node is not a consumer, and with the undifferentiated `deps` set
-the analysis could not tell the two apart and would have to refuse the
-guard.
+The guard analysis reasons about a node's *consumers* — nodes that read
+its output. Consumers are the reverse of the value edges, so the
+analysis reads operation inputs, not `deps`; an ordering-only dep never
+looks like a consumer. Factor the input enumeration out of the `From`
+impl into an `Operation::inputs()` accessor so the analysis and node
+construction share it. No per-site migration of `deps` is needed; if the
+ordering-only edges are ever wanted as a set (assertions, a future
+ordering audit), they are derivable as `deps − inputs()`.
 
-Add `Operation::is_effectful()`: `true` for operations that write —
+Add `mir::Operation::is_effectful()` (distinct from the existing
+`exec::Action::is_db_op()`, which answers "issues a driver operation" for
+transaction wrapping — queries are db ops but not effectful): `true` for
+operations that write —
 `Upsert`, `DeleteByKey`, `UpdateByKey`, `ReadModifyWrite`, and
 `ExecStatement` when its statement is a mutation **or** its `conditional`
 output is not `ConditionalOutput::None`. The second condition matters: the
@@ -138,15 +153,20 @@ assertion).
 
 ### Guard annotation on MIR nodes
 
-MIR stays a pure DAG; no conditional node type. Statement planning
-annotates a pure node with a guard condition when its output is only
-consumed under that condition. The first (and initially only) analysis
-has two rules:
+MIR stays a pure DAG; no conditional node type. A pure node is annotated
+with a guard condition when its output is only consumed under that
+condition. The annotation is a pass over the finished graph, run at
+`LogicalPlan::new` alongside the reachability assertion — not
+incrementally during statement planning, where a node's consumer set is
+still growing (the back-ref `Project` exists before the child statement
+that reads it) and a consumer created after an annotation could
+invalidate it. The first (and initially only) analysis has two rules:
 
 - a node referenced only inside the body of an `Eval` `map` over node
   `X`'s rows is guarded by `non_empty(X)` — mapping zero rows never
   evaluates the body, so the node's output is unobservable when `X` is
-  empty;
+  empty. Which input positions are map-body-only is read from the
+  `Eval`'s stored function;
 - a pure node whose consumers all carry guard `non_empty(X)` inherits
   that guard.
 
@@ -171,25 +191,42 @@ enum Cond {
 Action::If {
     cond: Cond,
     then: Vec<Action>,
-    /// Runs when `cond` is false. Assigns every variable the `then` arm
-    /// would have produced, so downstream loads never see an unset slot.
+    /// Runs when `cond` is false. Generated: placeholder assignments for
+    /// the `then` arm's escaping outputs and releases for its external
+    /// input loads (see below).
     r#else: Vec<Action>,
 }
 ```
 
-Execution planning groups consecutive nodes carrying the same guard into
-one `If`, emitted at their existing position in the topological order. The
-`else` arm is generated: one `SetVar` per output variable of the `then`
-arm, assigning the empty value of the variable's type (`Null` for a
-single-row slot, an empty list for a row-list slot). Both arms assign the
-same variables, so `VarStore` keeps its current total semantics — every
-declared variable is set exactly once per execution, and no consumer needs
-an "absent input" concept. (Turso does the same when an outer join misses:
-the right side's registers are NULL-filled rather than left unset.)
+Execution planning groups each maximal run of consecutive same-guard
+nodes in the topological order into one `If`, emitted at the run's
+existing position. Nothing guarantees all same-guard nodes are adjacent —
+an unguarded chain can be interleaved between two guarded ones — in which
+case one guard produces several `If` blocks with the same condition. That
+is sound: the guard rules guarantee an interleaved unguarded node never
+consumes a guarded output, and the variable classification below is per
+block. The `else` arm is generated from a static classification of the
+variables the `then` arm touches:
+
+- **Escaping outputs** (produced inside, consumed outside the block): one
+  `SetVar` each, assigning the empty value of the variable's type (`Null`
+  for a single-row slot, an empty list for a row-list slot), with the
+  variable's external use count. Consumers outside the block therefore
+  never see an unset slot. (Turso does the same when an outer join
+  misses: the right side's registers are NULL-filled rather than left
+  unset.)
+- **External inputs** (produced outside, loaded inside): one release per
+  load the `then` arm would have performed, so `num_uses` refcounts stay
+  exact on both paths. A release decrements the slot's count and drops
+  the entry at zero — unlike `load`, no stream duplication is needed.
+- **Internal variables** (produced and consumed inside): untouched. They
+  are never observed outside the block; on the else path their slots are
+  never created.
 
 The interpreter change is small: `exec_step` on an `If` evaluates the
 condition against the named variable, then runs one arm's actions
-recursively. Testing `NonEmpty` on a stream-backed slot requires a
+recursively (`exec_step` is async, so the recursion is boxed — or, since
+arms never nest today, a leaf dispatch). Testing `NonEmpty` on a stream-backed slot requires a
 non-consuming peek: buffer the stream in place (the `Rows::buffer`
 pattern pagination already uses) and inspect the first row, leaving the
 refcount untouched. A guarded plan therefore materializes its condition
@@ -206,18 +243,61 @@ correct skip from a wrong guard. A wrongly-guarded node either panics in
 expression evaluation (an expression indexing into an empty placeholder
 list) or yields a well-typed empty result where data belonged. The
 defense is the analysis's conservatism, not a runtime check, which is why
-phase 2 scopes it to exactly one pattern.
+phase 3 scopes it to exactly one pattern.
+
+### Exact variable lifetimes
+
+The `If` else-arm releases only keep counts exact if they were exact to
+begin with — and they are not. `num_uses` is incremented once per `deps`
+edge (`compute_operation_execution_order`), but only value-edge
+consumers ever call `vars.load`, so every ordering-only edge inflates a
+slot's count with no draining load: a const-returning insert's
+`ExecStatement` response stays pinned in the store until teardown, and
+the existing `Guard` action's false path never loads its suppressed
+`input` — potentially the largest value in the plan. Since the `If` work
+introduces the release machinery anyway, this design fixes variable
+lifetimes outright rather than layering exact arms on inexact counts:
+
+- **Count from value edges, per load.** `num_uses` becomes the number of
+  loads its consumers perform, plus one exit use for the final
+  `vars.load(returning)` (always present — every node registers a
+  variable, so `plan.returning` is never `None`). For most actions the
+  load count equals the deduplicated input set, but the counting rule is
+  loads, not edges: `Guard` loads `input` in addition to every
+  `guard_inputs` entry, so a variable appearing in both counts twice
+  even though the deps set holds it once. An `Operation::input_loads()`
+  iterator with multiplicity (rather than the deduplicated `inputs()`)
+  feeds the count. Ordering-only edges keep scheduling and stop
+  counting.
+- **Zero-use outputs are not stored.** A mutation whose response nobody
+  reads now has `num_uses == 0`; its action skips `vars.store` (the
+  output variable becomes optional). Driver responses for discarded
+  results no longer occupy slots at all.
+- **Conditional consumers release.** The invariant: every declared input
+  is either loaded or released exactly once per execution. `If` else
+  arms satisfy it by construction; `Guard`'s false path gains a release
+  of its `input`, fixing the existing leak.
+- **Teardown assertion.** With counts exact, "every slot is empty" holds
+  after the final `vars.load(returning)` and is debug-asserted there —
+  on the success path only. A mid-plan failure returns after rollback
+  with remaining loads legitimately unperformed; the assertion must not
+  run on that path. The failure directions are asymmetric: undercounting
+  panics loudly on a load of a freed slot; overcounting leaks silently —
+  the assertion converts the silent direction into a loud one.
+- **Per-action audit.** One pass over the exec actions confirming each
+  action's loads match its declared `input_loads()` or release on every
+  declining path. Most are trivially "loads each once upfront" (`Eval`,
+  `Project`, `Filter`, `NestedMerge`). Known exceptions: `Guard`
+  (conditional `input` load, two overlapping input fields) and
+  `ReadModifyWrite`, which declares `inputs` but asserts them empty at
+  exec — record it as declares-but-asserts-empty so a future non-empty
+  RMW input doesn't silently violate the counting.
 
 ### Bookkeeping
 
 - `needs_transaction` keeps its static count, including actions inside
   `If` arms. A skipped region can leave a transaction wrapping one
   executed operation; harmless.
-- `num_uses` refcounts are computed statically. A skipped `then` arm does
-  not consume its inputs, so those slots keep a positive count until plan
-  teardown instead of freeing at last use. Accepted: plans are
-  short-lived; do not try to keep counts exact under conditional
-  execution.
 - Debug assertion at exec-plan build: no effectful action inside either
   arm of an `If`.
 
@@ -225,20 +305,27 @@ phase 2 scopes it to exactly one pattern.
 
 Each phase lands independently and keeps the full test suite passing.
 
-1. **Classify.** Split `deps` into `inputs`/`after` at every planner
-   site; add `is_effectful()` and the reachability assertion. Purely
-   structural.
-2. **Guard and emit.** Add the guard annotation, the `map`-body consumer
-   analysis, `Action::If`, and the exec-planning grouping. The one
+1. **Classify.** Factor `Operation::inputs()` out of the `From` impl;
+   add `is_effectful()` and the reachability assertion. Purely
+   structural; `Node.deps` is untouched.
+2. **Exact refcounts.** Count `num_uses` from per-load value edges
+   (`Operation::input_loads()`) plus the exit use; add
+   `VarStore::release`; skip storing zero-use outputs; release `Guard`'s
+   suppressed input on its false path; run the per-action load audit;
+   add the success-path teardown assertion. Lands independently of
+   control flow and fixes existing leaks on its own.
+3. **Guard and emit.** Add the guard annotation, the `map`-body consumer
+   analysis, `Action::If`, the non-consuming peek accessor on
+   `VarStore`, and the exec-planning grouping. The one
    pattern annotated: the `belongs_to` load subquery attached to an
    insert's returning. The `DO NOTHING` conflict path now skips the
    relation-load `SELECT`; add a regression test asserting via `t.log()`
    that the conflict path issues no `SELECT`.
-3. **Delete the workaround.** Remove `back_ref_input` and the
+4. **Delete the workaround.** Remove `back_ref_input` and the
    `Ignore`-only const feed; back-refs read the insert's `RETURNING` rows
    again, which is safe because the reader now only runs when a row
    exists. Net deletion in `plan/statement.rs`.
-4. **Widen (separate decisions, as needs arise).** Additional guard
+5. **Widen (separate decisions, as needs arise).** Additional guard
    analyses (other consumption patterns), additional `Cond` variants.
    Nothing further is required for the motivating case.
 
@@ -248,14 +335,17 @@ Each phase lands independently and keeps the full test suite passing.
   observed when the condition fails substitutes a well-typed placeholder
   for real data — silently, or as a panic when an expression indexes into
   the empty placeholder. No runtime check distinguishes the two cases
-  from a correct skip; the only defense is the analysis's conservatism
-  (guard only when every value-edge consumer carries the guard). The
-  phase-2 scope of exactly one pattern keeps the audit surface small.
+  from a correct skip; the only defense is the analysis's conservatism —
+  guard only when every reference to the node's output is proven
+  unobservable under the failed condition (rule 1's map-body membership,
+  rule 2's guarded-consumer closure). The phase-3 scope of exactly one
+  pattern keeps the audit surface small.
 - **Implicit ordering not backed by edges.** Guarded nodes still execute
   at their existing position when the condition holds, so ordering only
   changes for skipped executions — and a skipped pure node has no
-  observable order. The broader audit of ordering-only edges (needed if
-  guards ever move nodes) is deferred with phase 4.
+  observable order. A broader audit of ordering-only edges becomes
+  necessary only if a future change moves guarded nodes from their
+  topological position; nothing in this design does.
 
 ## Alternatives considered
 

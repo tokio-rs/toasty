@@ -328,6 +328,73 @@ pub async fn eager_belongs_to_upsert_or_ignore_returning_loads_relation(
     Ok(())
 }
 
+#[driver_test(requires(upsert_targeted_ignore))]
+pub async fn eager_belongs_to_upsert_or_ignore_conflict_issues_no_load(t: &mut Test) -> Result<()> {
+    use toasty_core::driver::Operation;
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        id: uuid::Uuid,
+        title: String,
+
+        #[index]
+        user_id: uuid::Uuid,
+
+        #[belongs_to(key = user_id, references = id)]
+        user: User,
+    }
+
+    let mut db = t.setup_db(models!(User, Post)).await;
+
+    let user = toasty::create!(User { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+
+    let post_id = uuid::Uuid::from_u128(7);
+    Post::upsert_by_id(post_id)
+        .title("hello")
+        .user_id(user.id)
+        .or_ignore()
+        .exec(&mut db)
+        .await?
+        .expect("insert succeeded");
+
+    // On conflict the upsert's RETURNING is empty, so the relation-load read
+    // is skipped: its block is guarded on the upsert producing a row.
+    t.log().clear();
+    let ignored = Post::upsert_by_id(post_id)
+        .title("hello")
+        .user_id(user.id)
+        .or_ignore()
+        .exec(&mut db)
+        .await?;
+    assert_none!(ignored);
+
+    while !t.log().is_empty() {
+        let op = t.log().pop_op();
+        let is_read = match &op {
+            Operation::QuerySql(op) => op.stmt.is_query(),
+            Operation::GetByKey(_)
+            | Operation::QueryPk(_)
+            | Operation::FindPkByIndex(_)
+            | Operation::Scan(_) => true,
+            _ => false,
+        };
+        assert!(!is_read, "conflict path issued a read: {op:#?}");
+    }
+
+    Ok(())
+}
+
 #[driver_test]
 pub async fn eager_belongs_to_nested_create_returning_loads_relation(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]

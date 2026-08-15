@@ -1,6 +1,9 @@
 mod action;
 pub(crate) use action::Action;
 
+mod branch;
+pub(crate) use branch::{Cond, If};
+
 mod delete_by_key;
 pub(crate) use delete_by_key::DeleteByKey;
 
@@ -42,6 +45,9 @@ pub(crate) use project::Project;
 
 mod query_pk;
 pub(crate) use query_pk::QueryPk;
+
+mod release;
+pub(crate) use release::Release;
 
 mod rmw;
 pub(crate) use rmw::ReadModifyWrite;
@@ -142,6 +148,11 @@ impl Engine {
             let response = exec.vars.load(returning).await?;
             tracing::trace!("final result from var {:?}:\n{:#?}", returning, response);
 
+            // With exact use counts, the returning load was the last use of
+            // the last live slot (success path only — the loop above returned
+            // early on failure).
+            exec.vars.assert_empty();
+
             let value_stream = match response.values {
                 Rows::Count(_) => ValueStream::default(),
                 Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
@@ -166,6 +177,17 @@ impl Engine {
 impl Exec<'_> {
     async fn exec_step(&mut self, action: &Action) -> Result<()> {
         match action {
+            // Dispatched here rather than in `exec_leaf_step`: arms never
+            // nest, so running an arm is a loop over leaf actions instead of
+            // boxed async recursion.
+            Action::If(action) => self.action_if(action).await,
+            _ => self.exec_leaf_step(action).await,
+        }
+    }
+
+    async fn exec_leaf_step(&mut self, action: &Action) -> Result<()> {
+        match action {
+            Action::If(_) => unreachable!("`If` arms never nest"),
             Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
             Action::Eval(action) => self.action_eval(action).await,
             Action::ExecStatement(action) => self.action_exec_statement(action).await,
@@ -178,6 +200,7 @@ impl Exec<'_> {
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::Scan(action) => self.action_scan(action).await,
             Action::Project(action) => self.action_project(action).await,
+            Action::Release(action) => self.action_release(action),
             Action::SetVar(action) => self.action_set_var(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
             Action::Upsert(action) => self.action_upsert(action).await,
