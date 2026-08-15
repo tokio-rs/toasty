@@ -1,3 +1,6 @@
+mod cond;
+pub(crate) use cond::Cond;
+
 mod r#const;
 pub(crate) use r#const::Const;
 

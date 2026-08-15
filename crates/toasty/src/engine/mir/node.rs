@@ -34,11 +34,10 @@ pub(crate) struct Node {
     /// Used for reference counting; the output is freed after the last use.
     pub(crate) num_uses: Cell<usize>,
 
-    /// When set, this node only executes if the referenced node produced at
-    /// least one row. Assigned by the guard-annotation pass in
-    /// [`LogicalPlan::new`]; only pure (non-effectful) nodes may carry a
-    /// guard.
-    pub(crate) guard: Cell<Option<NodeId>>,
+    /// When set, this node only executes if the condition holds. Assigned by
+    /// the guard-annotation pass in [`LogicalPlan::new`]; only pure
+    /// (non-effectful) nodes may carry a guard.
+    pub(crate) guard: Option<super::Cond>,
 
     /// Whether this node has been visited during topological sort.
     pub(crate) visited: Cell<bool>,

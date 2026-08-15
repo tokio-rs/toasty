@@ -20,7 +20,7 @@ pub(crate) struct LogicalPlan {
 }
 
 impl LogicalPlan {
-    pub(crate) fn new(store: Store, completion: NodeId) -> LogicalPlan {
+    pub(crate) fn new(mut store: Store, completion: NodeId) -> LogicalPlan {
         let mut execution_order = vec![];
         compute_operation_execution_order(completion, &store, &mut execution_order);
 
@@ -47,7 +47,7 @@ impl LogicalPlan {
             }
         }
 
-        annotate_guards(&store, &execution_order, completion);
+        annotate_guards(&mut store, &execution_order, completion);
 
         LogicalPlan {
             store,

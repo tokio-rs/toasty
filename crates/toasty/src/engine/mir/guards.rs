@@ -23,9 +23,9 @@ use std::collections::HashMap;
 use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit};
 
-use super::{NodeId, Operation, Store};
+use super::{Cond, NodeId, Operation, Store};
 
-pub(super) fn annotate_guards(store: &Store, execution_order: &[NodeId], completion: NodeId) {
+pub(super) fn annotate_guards(store: &mut Store, execution_order: &[NodeId], completion: NodeId) {
     // Execution position; a guard's condition node must run before the nodes
     // it guards so the condition variable exists when the branch is taken.
     let position: HashMap<NodeId, usize> = execution_order
@@ -69,13 +69,11 @@ pub(super) fn annotate_guards(store: &Store, execution_order: &[NodeId], complet
     }
 
     // Consumers appear after producers in the topological order, so one pass
-    // in reverse order sees every consumer's guard before its producers
-    // (rule 2's closure).
+    // in reverse order decides every consumer's guard before its producers
+    // read it (rule 2's closure).
     for &id in execution_order.iter().rev() {
-        let node = &store[id];
-
         // Effects always run; the completion node is consumed by the engine.
-        if node.op.is_effectful() || id == completion {
+        if store[id].op.is_effectful() || id == completion {
             continue;
         }
 
@@ -87,11 +85,13 @@ pub(super) fn annotate_guards(store: &Store, execution_order: &[NodeId], complet
         for &consumer in consumer_list {
             // The consumption is unobservable under `non_empty(x)` failing
             // when it sits in a map body over `x`'s rows (rule 1) or the
-            // consumer itself is guarded on `x` (rule 2).
+            // consumer itself is guarded on `x` (rule 2). The analysis
+            // traffics in the condition's subject node; the `Cond` is built
+            // at the write below.
             let candidate = body_only
                 .get(&(consumer, id))
                 .copied()
-                .or_else(|| store[consumer].guard.get());
+                .or_else(|| store[consumer].guard.as_ref().map(|Cond::NonEmpty(x)| *x));
 
             match (guard, candidate) {
                 (None, Some(x)) => guard = Some(x),
@@ -106,7 +106,7 @@ pub(super) fn annotate_guards(store: &Store, execution_order: &[NodeId], complet
         if let Some(x) = guard
             && position[&x] < position[&id]
         {
-            node.guard.set(Some(x));
+            store[id].guard = Some(Cond::NonEmpty(x));
         }
     }
 }

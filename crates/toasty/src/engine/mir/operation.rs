@@ -159,7 +159,7 @@ impl From<Operation> for Node {
             deps,
             var: Cell::new(None),
             num_uses: Cell::new(0),
-            guard: Cell::new(None),
+            guard: None,
             visited: Cell::new(false),
         }
     }

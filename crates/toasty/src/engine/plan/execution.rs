@@ -15,13 +15,14 @@ impl ExecPlanner<'_> {
         // blocks with the same condition; the guard rules guarantee an
         // interleaved unguarded node never consumes a guarded output, and the
         // else-arm variable classification below is per block.
+        let logical_plan = self.logical_plan;
         let mut block: Vec<mir::NodeId> = vec![];
         let mut block_actions: Vec<Action> = vec![];
-        let mut block_guard: Option<mir::NodeId> = None;
+        let mut block_guard: Option<&mir::Cond> = None;
 
-        for &node_id in self.logical_plan.execution_order() {
-            let node = &self.logical_plan[node_id];
-            let guard = node.guard.get();
+        for &node_id in logical_plan.execution_order() {
+            let node = &logical_plan[node_id];
+            let guard = node.guard.as_ref();
 
             if block_guard.is_some() && guard != block_guard {
                 let action = self.emit_if_block(
@@ -32,7 +33,7 @@ impl ExecPlanner<'_> {
                 self.actions.push(action);
             }
 
-            let action = node.to_exec(self.logical_plan, &mut self.var_decls);
+            let action = node.to_exec(logical_plan, &mut self.var_decls);
 
             if guard.is_some() {
                 block_guard = guard;
@@ -75,7 +76,7 @@ impl ExecPlanner<'_> {
     ///   on the else path their slots are never created.
     fn emit_if_block(
         &self,
-        guard: mir::NodeId,
+        guard: &mir::Cond,
         block: Vec<mir::NodeId>,
         block_actions: Vec<Action>,
     ) -> Action {
@@ -133,8 +134,14 @@ impl ExecPlanner<'_> {
             }
         }
 
+        let cond = match guard {
+            mir::Cond::NonEmpty(node_id) => {
+                exec::Cond::NonEmpty(self.logical_plan[node_id].var.get().unwrap())
+            }
+        };
+
         exec::If {
-            cond: exec::Cond::NonEmpty(self.logical_plan[guard].var.get().unwrap()),
+            cond,
             then: block_actions,
             r#else,
         }
