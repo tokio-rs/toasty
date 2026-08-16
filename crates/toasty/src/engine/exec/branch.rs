@@ -29,15 +29,23 @@ pub(crate) struct If {
     pub(crate) empty_outputs: Vec<(mir::NodeId, usize)>,
 }
 
+impl If {
+    fn guard(&self, logical_plan: &LogicalPlan) -> mir::NodeId {
+        // Every node in the branch has the same guard, so the first node's
+        // guard is the branch's guard.
+        logical_plan[self.then[0]]
+            .guard
+            .expect("`If` block nodes carry the block's guard")
+    }
+}
+
 impl Exec<'_> {
     pub(super) async fn action_if(
         &mut self,
         logical_plan: &LogicalPlan,
         action: &If,
     ) -> Result<()> {
-        let cond = logical_plan[action.then[0]]
-            .guard
-            .expect("`If` block nodes carry the block's guard");
+        let cond = action.guard(logical_plan);
 
         // A non-consuming peek: buffers the condition variable's stream in
         // place, leaving its use count untouched.
