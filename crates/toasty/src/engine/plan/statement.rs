@@ -1847,11 +1847,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    /// If the index plan has a pre-filter, insert a `Guard` MIR node that
-    /// wraps the given input. When the guard expression evaluates to false,
-    /// the Guard produces an empty list, causing the downstream operation to
-    /// see no keys and become a no-op. Returns the (possibly wrapped) input
-    /// node ID.
+    /// If the index plan has a pre-filter, guard the key input on it: an
+    /// `Alias` of the key list carries the pre-filter as its execution
+    /// condition. When the condition is false the alias is skipped and its
+    /// else-arm placeholder — an empty key list — is what the downstream
+    /// operation observes, so it sees no keys and becomes a no-op. Returns
+    /// the (possibly guarded) input node ID.
     fn apply_guard(
         &mut self,
         input: mir::NodeId,
@@ -1862,15 +1863,23 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         };
 
         let (args, guard_inputs) = self.rewrite_expr_for_mir(&mut pre_filter_expr);
-        let guard = eval::Func::from_stmt(pre_filter_expr, args);
+        let func = eval::Func::from_stmt(pre_filter_expr, args);
         let ty = self.planner.mir[input].ty().clone();
 
-        self.planner.mir.insert(mir::Guard {
-            input,
-            guard_inputs,
-            guard,
-            ty,
-        })
+        // The alias's value edge covers `input`; the condition's inputs are
+        // added as ordering edges so they execute before the condition reads
+        // them.
+        let node_id = self
+            .planner
+            .mir
+            .insert_with_deps(mir::Alias { input, ty }, guard_inputs.iter().copied());
+
+        self.planner.mir[node_id].guard = Some(mir::Cond::Expr {
+            func,
+            inputs: guard_inputs,
+        });
+
+        node_id
     }
 
     /// Rewrite a statement-level expression for use in a MIR node.

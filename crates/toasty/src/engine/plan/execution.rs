@@ -24,7 +24,12 @@ impl ExecPlanner<'_> {
             let node = &logical_plan[node_id];
             let guard = node.guard.as_ref();
 
-            if block_guard.is_some() && guard != block_guard {
+            let extends_block = match (guard, block_guard) {
+                (Some(a), Some(b)) => a.groups_with(b),
+                _ => false,
+            };
+
+            if block_guard.is_some() && !extends_block {
                 let action = self.emit_if_block(
                     block_guard.take().unwrap(),
                     std::mem::take(&mut block),
@@ -138,6 +143,13 @@ impl ExecPlanner<'_> {
             mir::Cond::NonEmpty(node_id) => {
                 exec::Cond::NonEmpty(self.logical_plan[node_id].var.get().unwrap())
             }
+            mir::Cond::Expr { func, inputs } => exec::Cond::Expr {
+                func: func.clone(),
+                inputs: inputs
+                    .iter()
+                    .map(|node_id| self.logical_plan[node_id].var.get().unwrap())
+                    .collect(),
+            },
         };
 
         exec::If {

@@ -73,7 +73,8 @@ pub(super) fn annotate_guards(store: &mut Store, execution_order: &[NodeId], com
     // read it (rule 2's closure).
     for &id in execution_order.iter().rev() {
         // Effects always run; the completion node is consumed by the engine.
-        if store[id].op.is_effectful() || id == completion {
+        // A planner-assigned guard (`Cond::Expr`) is left untouched.
+        if store[id].op.is_effectful() || id == completion || store[id].guard.is_some() {
             continue;
         }
 
@@ -87,11 +88,18 @@ pub(super) fn annotate_guards(store: &mut Store, execution_order: &[NodeId], com
             // when it sits in a map body over `x`'s rows (rule 1) or the
             // consumer itself is guarded on `x` (rule 2). The analysis
             // traffics in the condition's subject node; the `Cond` is built
-            // at the write below.
-            let candidate = body_only
-                .get(&(consumer, id))
-                .copied()
-                .or_else(|| store[consumer].guard.as_ref().map(|Cond::NonEmpty(x)| *x));
+            // at the write below. Planner-assigned `Cond::Expr` guards do
+            // not propagate: their else-arm placeholder is an observed
+            // value, not proven unobservable, so producers feeding them
+            // must still execute.
+            let candidate =
+                body_only
+                    .get(&(consumer, id))
+                    .copied()
+                    .or_else(|| match &store[consumer].guard {
+                        Some(Cond::NonEmpty(x)) => Some(*x),
+                        Some(Cond::Expr { .. }) | None => None,
+                    });
 
             match (guard, candidate) {
                 (None, Some(x)) => guard = Some(x),

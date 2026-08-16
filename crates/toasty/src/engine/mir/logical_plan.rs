@@ -1,6 +1,6 @@
 use std::ops;
 
-use crate::engine::mir::{Node, NodeId, Store, annotate_guards};
+use crate::engine::mir::{Cond, Node, NodeId, Store, annotate_guards};
 
 /// The complete operation graph for a query.
 ///
@@ -42,14 +42,25 @@ impl LogicalPlan {
         );
 
         // `num_uses` counts the variable loads each node's output receives:
-        // one per entry in its consumers' `input_loads()`. Ordering-only
-        // `deps` edges schedule but do not count — no load ever drains them.
-        // The completion node's exit use is added by the caller before this
-        // point.
+        // one per entry in its consumers' `input_loads()`, plus one per
+        // guard-condition input — an `If`'s `Cond::Expr` loads its inputs
+        // once, on both arms. Ordering-only `deps` edges schedule but do not
+        // count — no load ever drains them. The completion node's exit use
+        // is added by the caller before this point. (`Cond::NonEmpty` guards
+        // are annotated after this loop and peek without loading.)
         for node_id in &execution_order {
-            for load in store[node_id].op.input_loads() {
+            let node = &store[node_id];
+
+            for load in node.op.input_loads() {
                 let dep = &store[load];
                 dep.num_uses.set(dep.num_uses.get() + 1);
+            }
+
+            if let Some(Cond::Expr { inputs, .. }) = &node.guard {
+                for load in inputs {
+                    let dep = &store[load];
+                    dep.num_uses.set(dep.num_uses.get() + 1);
+                }
             }
         }
 

@@ -1,6 +1,9 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, VarId},
+    engine::{
+        eval,
+        exec::{Action, Exec, VarId},
+    },
 };
 
 /// A conditionally executed block of actions — the exec program's first
@@ -30,14 +33,29 @@ pub(crate) struct If {
 pub(crate) enum Cond {
     /// The variable holds a non-empty row list.
     NonEmpty(VarId),
+
+    /// A boolean expression over the listed variables. Evaluation loads each
+    /// input exactly once, on both arms, so the loads are part of the
+    /// variables' use counts.
+    Expr {
+        /// Boolean expression evaluated against `inputs`.
+        func: eval::Func,
+
+        /// Input variables for the evaluation.
+        inputs: Vec<VarId>,
+    },
 }
 
 impl Exec<'_> {
     pub(super) async fn action_if(&mut self, action: &If) -> Result<()> {
-        let pass = match action.cond {
+        let pass = match &action.cond {
             // A non-consuming peek: buffers the condition variable's stream
             // in place, leaving its use count untouched.
-            Cond::NonEmpty(var) => self.vars.peek_non_empty(var).await?,
+            Cond::NonEmpty(var) => self.vars.peek_non_empty(*var).await?,
+            Cond::Expr { func, inputs } => {
+                let input = self.collect_input(inputs).await?;
+                func.eval_bool(&self.engine.schema, &input)?
+            }
         };
 
         let arm = if pass { &action.then } else { &action.r#else };

@@ -69,7 +69,7 @@ impl VarStore {
 
     /// Decrements a slot's use count without observing its value, dropping
     /// the entry at zero. Called on paths that decline a load the use
-    /// counting expects (an `If` else arm, a `Guard`'s false path).
+    /// counting expects (an `If` else arm).
     #[track_caller]
     pub(crate) fn release(&mut self, var: VarId) {
         let Some(entry) = self.slots.get_mut(var.0).and_then(Option::as_mut) else {

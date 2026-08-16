@@ -1,6 +1,6 @@
 use crate::engine::exec::{
-    Alias, DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, Guard, If,
-    NestedMerge, Project, QueryPk, ReadModifyWrite, Release, Scan, SetVar, UpdateByKey, Upsert,
+    Alias, DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, If, NestedMerge,
+    Project, QueryPk, ReadModifyWrite, Release, Scan, SetVar, UpdateByKey, Upsert,
 };
 
 use std::fmt;
@@ -25,9 +25,6 @@ pub(crate) enum Action {
 
     /// Execute `Operation::GetByKey` using key input
     GetByKey(GetByKey),
-
-    /// Conditionally pass through or suppress a data stream
-    Guard(Guard),
 
     /// Conditionally execute a block of pure actions
     If(If),
@@ -76,7 +73,6 @@ impl Action {
             Action::Filter(_) => "filter",
             Action::FindPkByIndex(_) => "find_pk_by_index",
             Action::GetByKey(_) => "get_by_key",
-            Action::Guard(_) => "guard",
             Action::If(_) => "if",
             Action::NestedMerge(_) => "nested_merge",
             Action::Project(_) => "project",
@@ -96,8 +92,8 @@ impl Action {
     /// Used to determine whether a plan needs to be wrapped in a transaction.
     /// The count is static: a skipped `If` arm can leave a transaction
     /// wrapping a single executed operation, which is harmless. In-memory
-    /// actions (Filter, Project, NestedMerge, SetVar, Eval, Release) count
-    /// zero.
+    /// actions (Alias, Filter, Project, NestedMerge, SetVar, Eval, Release)
+    /// count zero.
     pub(crate) fn db_op_count(&self) -> usize {
         match self {
             Action::DeleteByKey(_)
@@ -115,7 +111,6 @@ impl Action {
             Action::Alias(_)
             | Action::Eval(_)
             | Action::Filter(_)
-            | Action::Guard(_)
             | Action::NestedMerge(_)
             | Action::Project(_)
             | Action::Release(_)
@@ -134,7 +129,6 @@ impl fmt::Debug for Action {
             Self::Filter(a) => a.fmt(f),
             Self::FindPkByIndex(a) => a.fmt(f),
             Self::GetByKey(a) => a.fmt(f),
-            Self::Guard(a) => a.fmt(f),
             Self::If(a) => a.fmt(f),
             Self::NestedMerge(a) => a.fmt(f),
             Self::QueryPk(a) => a.fmt(f),
