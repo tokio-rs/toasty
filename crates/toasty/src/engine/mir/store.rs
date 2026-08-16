@@ -90,6 +90,12 @@ impl Store {
         self.slots.iter().all(|slot| matches!(slot, Slot::Node(_)))
     }
 
+    /// Number of slots, filled or reserved. [`NodeId`]s are dense in
+    /// `0..node_count()`, so this sizes per-node side tables.
+    pub(crate) fn node_count(&self) -> usize {
+        self.slots.len()
+    }
+
     pub(crate) fn ty(&self, node_id: NodeId) -> &stmt::Type {
         self[node_id].ty()
     }
