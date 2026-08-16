@@ -1,6 +1,6 @@
 use crate::engine::exec::{
     Alias, DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, If, NestedMerge,
-    Project, QueryPk, ReadModifyWrite, Release, Scan, SetVar, UpdateByKey, Upsert,
+    QueryPk, ReadModifyWrite, Release, Repeat, Scan, SetVar, UpdateByKey, Upsert,
 };
 
 use std::fmt;
@@ -36,15 +36,14 @@ pub(crate) enum Action {
     /// its nested children into the final result.
     NestedMerge(NestedMerge),
 
-    /// Take the contents of a variable and project it one or more times to a
-    /// specified variable.
-    Project(Project),
-
     /// Query records by primary key
     QueryPk(QueryPk),
 
     /// Decrement a variable's use count without observing its value
     Release(Release),
+
+    /// Produce a constant value once per input row
+    Repeat(Repeat),
 
     /// Perform a full-table scan
     Scan(Scan),
@@ -75,10 +74,10 @@ impl Action {
             Action::GetByKey(_) => "get_by_key",
             Action::If(_) => "if",
             Action::NestedMerge(_) => "nested_merge",
-            Action::Project(_) => "project",
             Action::QueryPk(_) => "query_pk",
             Action::ReadModifyWrite(_) => "read_modify_write",
             Action::Release(_) => "release",
+            Action::Repeat(_) => "repeat",
             Action::Scan(_) => "scan",
             Action::SetVar(_) => "set_var",
             Action::UpdateByKey(_) => "update_by_key",
@@ -92,7 +91,7 @@ impl Action {
     /// Used to determine whether a plan needs to be wrapped in a transaction.
     /// The count is static: a skipped `If` arm can leave a transaction
     /// wrapping a single executed operation, which is harmless. In-memory
-    /// actions (Alias, Filter, Project, NestedMerge, SetVar, Eval, Release)
+    /// actions (Alias, Filter, Repeat, NestedMerge, SetVar, Eval, Release)
     /// count zero.
     pub(crate) fn db_op_count(&self) -> usize {
         match self {
@@ -112,8 +111,8 @@ impl Action {
             | Action::Eval(_)
             | Action::Filter(_)
             | Action::NestedMerge(_)
-            | Action::Project(_)
             | Action::Release(_)
+            | Action::Repeat(_)
             | Action::SetVar(_) => 0,
         }
     }
@@ -134,8 +133,8 @@ impl fmt::Debug for Action {
             Self::QueryPk(a) => a.fmt(f),
             Self::ReadModifyWrite(a) => a.fmt(f),
             Self::Release(a) => a.fmt(f),
+            Self::Repeat(a) => a.fmt(f),
             Self::Scan(a) => a.fmt(f),
-            Self::Project(a) => a.fmt(f),
             Self::SetVar(a) => a.fmt(f),
             Self::UpdateByKey(a) => a.fmt(f),
             Self::Upsert(a) => a.fmt(f),

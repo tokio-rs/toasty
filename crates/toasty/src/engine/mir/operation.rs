@@ -6,7 +6,7 @@ use crate::engine::effect;
 
 use super::{
     Alias, Compute, Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, MapOver,
-    NestedMerge, Node, NodeId, Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey, Upsert,
+    NestedMerge, Node, NodeId, QueryPk, ReadModifyWrite, Repeat, Scan, UpdateByKey, Upsert,
 };
 
 /// A step in the query execution plan.
@@ -44,12 +44,12 @@ pub(crate) enum Operation {
     /// Execute a nested merge
     NestedMerge(NestedMerge),
 
-    /// Projection operation - transforms records
-    Project(Project),
-
     /// Read-modify-write. The write only succeeds if the values read are not
     /// modified.
     ReadModifyWrite(Box<ReadModifyWrite>),
+
+    /// Produce a constant value once per input row
+    Repeat(Repeat),
 
     QueryPk(QueryPk),
 
@@ -97,8 +97,10 @@ impl Operation {
                 .chain(m.attached.iter().map(|&a| (a, PerRowOf(m.base))))
                 .collect(),
             Operation::NestedMerge(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
-            Operation::Project(m) => vec![(m.input, Always)],
             Operation::ReadModifyWrite(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
+            // The input's cardinality is observed, so the read is
+            // unconditional even though no row data is used.
+            Operation::Repeat(m) => vec![(m.input, Always)],
             Operation::QueryPk(m) => m.input.into_iter().map(|i| (i, Always)).collect(),
             Operation::Scan(m) => m.input.into_iter().map(|i| (i, Always)).collect(),
             Operation::UpdateByKey(m) => vec![(m.input, Always)],
@@ -150,8 +152,8 @@ impl Operation {
             | Operation::GetByKey(_)
             | Operation::MapOver(_)
             | Operation::NestedMerge(_)
-            | Operation::Project(_)
             | Operation::QueryPk(_)
+            | Operation::Repeat(_)
             | Operation::Scan(_) => false,
         }
     }

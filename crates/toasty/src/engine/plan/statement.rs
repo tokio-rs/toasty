@@ -1561,11 +1561,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(mut key_expr) = index_plan.key_values.take() {
-            let (args, _input_nodes) = self.rewrite_expr_for_mir(&mut key_expr);
+            let (args, input_nodes) = self.rewrite_expr_for_mir(&mut key_expr);
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
-            let get_by_key_input = self.build_get_by_key_input(keys, self.index_key_ty(index_plan));
+            let get_by_key_input =
+                self.build_get_by_key_input(keys, input_nodes, self.index_key_ty(index_plan));
 
             self.build_key_operation(&stmt, index_plan, get_by_key_input, ty)
         } else {
@@ -1761,21 +1762,22 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     fn build_get_by_key_input(
         &mut self,
         keys: eval::Func,
+        input_nodes: IndexSet<mir::NodeId>,
         index_key_ty: stmt::Type,
     ) -> mir::NodeId {
         if keys.is_const() {
             let keys = keys.eval_const(&self.planner.engine.schema);
             self.insert_const(keys, index_key_ty)
         } else if keys.is_identity() {
-            debug_assert_eq!(1, self.load_data.inputs.len(), "TODO");
-            self.load_data.inputs[0]
+            debug_assert_eq!(1, input_nodes.len(), "TODO");
+            input_nodes[0]
         } else {
-            let ty = stmt::Type::list(keys.ret.clone());
-            // Gotta project
-            self.planner.mir.insert(mir::Project {
-                input: self.load_data.inputs[0],
-                projection: keys,
-                ty,
+            // The function maps the referenced inputs' whole values to the
+            // full key list, same as the `is_const`/`is_identity` cases
+            // above.
+            self.planner.mir.insert(mir::Compute {
+                inputs: input_nodes,
+                body: keys,
             })
         }
     }
@@ -1947,20 +1949,18 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 stmt::Expr::arg_project(0, [index])
             }));
 
-            let arg_ty = match self.planner.mir[exec_stmt_node_id].ty() {
+            let row_ty = match self.planner.mir[exec_stmt_node_id].ty() {
                 // Lists are flattened
                 stmt::Type::List(ty) => (**ty).clone(),
                 ty => ty.clone(),
             };
 
-            let projection = eval::Func::from_stmt(projection, vec![arg_ty]);
-            let ty = stmt::Type::list(projection.ret.clone());
-
-            let project_node_id = self.planner.mir.insert(mir::Project {
-                input: exec_stmt_node_id,
-                projection,
-                ty,
-            });
+            let body = eval::Func::from_stmt(projection, vec![row_ty]);
+            let project_node_id = self.planner.mir.insert(mir::MapOver::new(
+                exec_stmt_node_id,
+                IndexSet::new(),
+                body,
+            ));
             back_ref.node_id.set(Some(project_node_id));
         }
     }
@@ -2054,18 +2054,20 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             body,
                         ))
                     } else {
-                        // TODO: figure out how to handle repeating a number of times vs. projecting results
+                        // The projection is fully constant — the constantize
+                        // pipeline substituted every value, so nothing was
+                        // requested from the database and the data load may
+                        // yield only an affected-row count. Repeat the value
+                        // once per row.
                         let projection = eval::Func::from_stmt(projection, vec![]);
                         let ty = stmt::Type::list(projection.ret.clone());
+                        let value = projection.eval_const(&self.planner.engine.schema);
 
-                        let node = mir::Project {
+                        self.insert_mir_with_deps(mir::Repeat {
                             input: data_load_node_id,
-                            projection,
+                            value,
                             ty,
-                        };
-
-                        // Plan the final projection to handle the returning clause.
-                        self.insert_mir_with_deps(node)
+                        })
                     }
                 }
                 returning => panic!("unexpected `stmt::Returning` kind; returning={returning:#?}"),

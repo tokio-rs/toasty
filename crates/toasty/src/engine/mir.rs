@@ -43,14 +43,14 @@ pub(crate) use node::Node;
 mod operation;
 pub(crate) use operation::Operation;
 
-mod project;
-pub(crate) use project::Project;
-
 mod query_pk;
 pub(crate) use query_pk::QueryPk;
 
 mod read_modify_write;
 pub(crate) use read_modify_write::ReadModifyWrite;
+
+mod repeat;
+pub(crate) use repeat::Repeat;
 
 mod scan;
 pub(crate) use scan::Scan;

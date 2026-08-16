@@ -40,11 +40,11 @@ pub(crate) use output::Output;
 mod plan;
 pub(crate) use plan::ExecPlan;
 
-mod project;
-pub(crate) use project::Project;
-
 mod query_pk;
 pub(crate) use query_pk::QueryPk;
+
+mod repeat;
+pub(crate) use repeat::Repeat;
 
 mod release;
 pub(crate) use release::Release;
@@ -199,7 +199,7 @@ impl Exec<'_> {
             Action::QueryPk(action) => self.action_query_pk(action).await,
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::Scan(action) => self.action_scan(action).await,
-            Action::Project(action) => self.action_project(action).await,
+            Action::Repeat(action) => self.action_repeat(action).await,
             Action::Release(action) => self.action_release(action),
             Action::SetVar(action) => self.action_set_var(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
