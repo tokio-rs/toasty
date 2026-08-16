@@ -10,22 +10,27 @@ use crate::{
 /// control-flow construct.
 ///
 /// The `then` arm holds pure actions whose outputs are only consumed when the
-/// condition holds; mutations never appear in either arm. The `else` arm is
-/// generated bookkeeping that keeps variable slots consistent when the block
-/// is skipped.
+/// condition holds; mutations never appear in it. Skipping the arm is pure
+/// bookkeeping, declared as data: `skipped_inputs` and `empty_outputs` keep
+/// variable slots consistent so consumers outside the block never see an
+/// unset slot and use counts stay exact on both paths.
 #[derive(Debug)]
 pub(crate) struct If {
-    /// The condition deciding which arm runs.
+    /// The condition deciding whether the `then` arm runs.
     pub(crate) cond: Cond,
 
     /// Actions run when the condition holds.
     pub(crate) then: Vec<Action>,
 
-    /// Runs when the condition is false: placeholder assignments for the
-    /// `then` arm's escaping outputs and releases for its external input
-    /// loads, so consumers outside the block never see an unset slot and use
-    /// counts stay exact on both paths.
-    pub(crate) r#else: Vec<Action>,
+    /// Variables produced outside the block that the `then` arm would have
+    /// loaded — one entry per declined load. Released when the arm is
+    /// skipped.
+    pub(crate) skipped_inputs: Vec<VarId>,
+
+    /// The `then` arm's escaping outputs, each with its external use count.
+    /// When the arm is skipped, each is assigned the empty value of its
+    /// declared type.
+    pub(crate) empty_outputs: Vec<(VarId, usize)>,
 }
 
 /// A condition an [`If`] action evaluates against the variable store.
@@ -58,10 +63,17 @@ impl Exec<'_> {
             }
         };
 
-        let arm = if pass { &action.then } else { &action.r#else };
-
-        for step in arm {
-            self.exec_leaf_step(step).await?;
+        if pass {
+            for step in &action.then {
+                self.exec_leaf_step(step).await?;
+            }
+        } else {
+            for &var in &action.skipped_inputs {
+                self.vars.release(var);
+            }
+            for &(var, num_uses) in &action.empty_outputs {
+                self.vars.store_empty(var, num_uses);
+            }
         }
 
         Ok(())

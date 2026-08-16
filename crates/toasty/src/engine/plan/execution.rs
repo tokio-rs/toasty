@@ -1,5 +1,4 @@
 use indexmap::IndexSet;
-use toasty_core::stmt;
 
 use crate::engine::{
     exec::{self, Action, ExecPlan, VarStore},
@@ -67,18 +66,18 @@ impl ExecPlanner<'_> {
         }
     }
 
-    /// Wraps a run of same-guard actions in an `If`, generating the else arm
-    /// from a static classification of the variables the `then` arm touches:
+    /// Wraps a run of same-guard actions in an `If`, deriving the skip
+    /// bookkeeping from a static classification of the variables the `then`
+    /// arm touches:
     ///
-    /// - **Escaping outputs** (produced inside, consumed outside): a `SetVar`
-    ///   assigning the empty value of the variable's type, with the
-    ///   variable's external use count, so outside consumers never see an
-    ///   unset slot.
-    /// - **External inputs** (produced outside, loaded inside): one release
-    ///   per load the `then` arm would have performed, keeping use counts
-    ///   exact on both paths.
+    /// - **External inputs** (produced outside, loaded inside): released on
+    ///   skip, one entry per load the `then` arm would have performed,
+    ///   keeping use counts exact on both paths.
+    /// - **Escaping outputs** (produced inside, consumed outside): assigned
+    ///   the empty value of the variable's type on skip, with the variable's
+    ///   external use count, so outside consumers never see an unset slot.
     /// - **Internal variables** (produced and consumed inside): untouched —
-    ///   on the else path their slots are never created.
+    ///   on the skip path their slots are never created.
     fn emit_if_block(
         &self,
         guard: &mir::Cond,
@@ -93,7 +92,8 @@ impl ExecPlanner<'_> {
         );
 
         let in_block: IndexSet<mir::NodeId> = block.iter().copied().collect();
-        let mut r#else: Vec<Action> = vec![];
+        let mut skipped_inputs = vec![];
+        let mut empty_outputs = vec![];
 
         for &node_id in &block {
             let node = &self.logical_plan[node_id];
@@ -102,12 +102,7 @@ impl ExecPlanner<'_> {
             // block are released, with multiplicity.
             for load in node.op.input_loads() {
                 if !in_block.contains(&load) {
-                    r#else.push(
-                        exec::Release {
-                            var: self.logical_plan[load].var.get().unwrap(),
-                        }
-                        .into(),
-                    );
+                    skipped_inputs.push(self.logical_plan[load].var.get().unwrap());
                 }
             }
 
@@ -121,21 +116,7 @@ impl ExecPlanner<'_> {
             let external_uses = node.num_uses.get() - in_block_loads;
 
             if external_uses > 0 {
-                let value = match node.ty() {
-                    stmt::Type::List(_) => stmt::Value::List(vec![]),
-                    _ => stmt::Value::Null,
-                };
-
-                r#else.push(
-                    exec::SetVar {
-                        value,
-                        output: exec::Output {
-                            var: node.var.get().unwrap(),
-                            num_uses: external_uses,
-                        },
-                    }
-                    .into(),
-                );
+                empty_outputs.push((node.var.get().unwrap(), external_uses));
             }
         }
 
@@ -155,7 +136,8 @@ impl ExecPlanner<'_> {
         exec::If {
             cond,
             then: block_actions,
-            r#else,
+            skipped_inputs,
+            empty_outputs,
         }
         .into()
     }

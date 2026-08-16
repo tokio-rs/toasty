@@ -46,9 +46,6 @@ pub(crate) use query_pk::QueryPk;
 mod repeat;
 pub(crate) use repeat::Repeat;
 
-mod release;
-pub(crate) use release::Release;
-
 mod rmw;
 pub(crate) use rmw::ReadModifyWrite;
 
@@ -200,7 +197,6 @@ impl Exec<'_> {
             Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
             Action::Scan(action) => self.action_scan(action).await,
             Action::Repeat(action) => self.action_repeat(action).await,
-            Action::Release(action) => self.action_release(action),
             Action::SetVar(action) => self.action_set_var(action),
             Action::UpdateByKey(action) => self.action_update_by_key(action).await,
             Action::Upsert(action) => self.action_upsert(action).await,

@@ -114,6 +114,17 @@ impl VarStore {
         );
     }
 
+    /// Assigns a slot the empty value of its declared type: a `List` becomes
+    /// an empty list, anything else `Null`. Used for the escaping outputs of
+    /// a skipped `If` arm.
+    pub(crate) fn store_empty(&mut self, var: VarId, count: usize) {
+        let value = match &self.tys[var.0] {
+            stmt::Type::List(_) => stmt::Value::List(vec![]),
+            _ => stmt::Value::Null,
+        };
+        self.store(var, count, ExecResponse::from_rows(Rows::Value(value)));
+    }
+
     #[track_caller]
     pub(crate) fn store(&mut self, var: VarId, count: usize, response: ExecResponse) {
         // A zero-use output is never observed; don't occupy a slot.
