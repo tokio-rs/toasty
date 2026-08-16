@@ -46,15 +46,19 @@ impl ExecPlanner<'_> {
             self.steps.push(step);
         }
 
-        let needs_transaction = self.use_transactions
+        let needs_transaction = self.needs_transaction();
+
+        (self.steps, needs_transaction)
+    }
+
+    fn needs_transaction(&self) -> bool {
+        self.use_transactions
             && self
                 .steps
                 .iter()
-                .map(|step| step.db_op_count(logical_plan))
+                .map(|step| step.db_op_count(self.logical_plan))
                 .sum::<usize>()
-                > 1;
-
-        (self.steps, needs_transaction)
+                > 1
     }
 
     /// Wraps a run of same-guard nodes in an `If`, deriving the skip
