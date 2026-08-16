@@ -1,9 +1,6 @@
 use crate::{
     Result,
-    engine::{
-        exec::Exec,
-        mir::{self, LogicalPlan},
-    },
+    engine::{exec::Exec, mir, mir::LogicalPlan},
 };
 
 /// A conditionally executed block of nodes — the exec program's first
@@ -40,20 +37,11 @@ impl Exec<'_> {
     ) -> Result<()> {
         let cond = logical_plan[action.then[0]]
             .guard
-            .as_ref()
             .expect("`If` block nodes carry the block's guard");
 
-        let pass = match cond {
-            // A non-consuming peek: buffers the condition variable's stream
-            // in place, leaving its use count untouched.
-            mir::Cond::NonEmpty(node_id) => self.vars.peek_non_empty(*node_id).await?,
-            // Evaluation loads each input exactly once, on both arms, so the
-            // loads are part of the inputs' use counts.
-            mir::Cond::Expr { func, inputs } => {
-                let input = self.collect_input(inputs.iter().copied()).await?;
-                func.eval_bool(&self.engine.schema, &input)?
-            }
-        };
+        // A non-consuming peek: buffers the condition variable's stream in
+        // place, leaving its use count untouched.
+        let pass = self.vars.peek_non_empty(cond).await?;
 
         if pass {
             for &node_id in &action.then {

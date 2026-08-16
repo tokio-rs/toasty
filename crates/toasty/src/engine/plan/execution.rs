@@ -19,16 +19,13 @@ impl ExecPlanner<'_> {
         // skip-path variable classification below is per block.
         let logical_plan = self.logical_plan;
         let mut block: Vec<mir::NodeId> = vec![];
-        let mut block_guard: Option<&mir::Cond> = None;
+        let mut block_guard: Option<mir::NodeId> = None;
 
         for &node_id in logical_plan.execution_order() {
             let node = &logical_plan[node_id];
-            let guard = node.guard.as_ref();
+            let guard = node.guard;
 
-            let extends_block = match (guard, block_guard) {
-                (Some(a), Some(b)) => a.groups_with(b),
-                _ => false,
-            };
+            let extends_block = guard.is_some() && guard == block_guard;
 
             if block_guard.is_some() && !extends_block {
                 block_guard = None;

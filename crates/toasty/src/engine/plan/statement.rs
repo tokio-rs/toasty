@@ -1752,6 +1752,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let item_ty = ty.as_list_unwrap();
             node_id = self.planner.mir.insert(mir::Filter {
                 input: node_id,
+                args: IndexSet::new(),
                 predicate: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
                 ty,
             });
@@ -1827,10 +1828,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 })
             }
             stmt::Statement::Update(update_stmt) => {
-                // If there is a pre-filter, wrap the key input in a Guard
-                // node that produces an empty list when the guard is false,
-                // causing UpdateByKey to naturally no-op.
-                let guarded_input = self.apply_guard(get_by_key_input, index_plan);
+                // If there is a pre-filter, filter the key input on it: a
+                // false pre-filter drops every key, causing UpdateByKey to
+                // naturally no-op.
+                let filtered_input = self.apply_pre_filter(get_by_key_input, index_plan);
 
                 let mut filter = index_plan.result_filter.take();
                 self.legalize_kv_expr(&mut filter);
@@ -1838,7 +1839,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 self.legalize_kv_expr(&mut condition);
 
                 self.insert_mir_with_deps(mir::UpdateByKey {
-                    input: guarded_input,
+                    input: filtered_input,
                     table: index_plan.table_id(),
                     // Document values in the assignments are already named:
                     // the mapping's lowering casts converted them during
@@ -1854,13 +1855,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
     }
 
-    /// If the index plan has a pre-filter, guard the key input on it: an
-    /// `Alias` of the key list carries the pre-filter as its execution
-    /// condition. When the condition is false the alias is skipped and its
-    /// else-arm placeholder — an empty key list — is what the downstream
-    /// operation observes, so it sees no keys and becomes a no-op. Returns
-    /// the (possibly guarded) input node ID.
-    fn apply_guard(
+    /// If the index plan has a pre-filter, filter the key input on it: a
+    /// `Filter` over the key list whose predicate reads only its attached
+    /// args (the pre-filter's referenced statement outputs). When the
+    /// pre-filter is false every key is dropped, so the downstream operation
+    /// sees no keys and becomes a no-op. Returns the (possibly filtered)
+    /// input node ID.
+    fn apply_pre_filter(
         &mut self,
         input: mir::NodeId,
         index_plan: &mut index::IndexPlan,
@@ -1869,24 +1870,29 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return input;
         };
 
-        let (args, guard_inputs) = self.rewrite_expr_for_mir(&mut pre_filter_expr);
-        let func = eval::Func::from_stmt(pre_filter_expr, args);
-        let ty = self.planner.mir[input].ty().clone();
+        let (arg_tys, args) = self.rewrite_expr_for_mir(&mut pre_filter_expr);
 
-        // The alias's value edge covers `input`; the condition's inputs are
-        // added as ordering edges so they execute before the condition reads
-        // them.
-        let node_id = self
-            .planner
-            .mir
-            .insert_with_deps(mir::Alias { input, ty }, guard_inputs.iter().copied());
-
-        self.planner.mir[node_id].guard = Some(mir::Cond::Expr {
-            func,
-            inputs: guard_inputs,
+        // The predicate's `arg(0)` is the current row; shift the pre-filter's
+        // attached args to `arg(1 + i)`.
+        visit_mut::walk_expr_scoped_mut(&mut pre_filter_expr, 0, |expr, scope_depth| {
+            if let stmt::Expr::Arg(arg) = expr
+                && arg.nesting == scope_depth
+            {
+                arg.position += 1;
+            }
+            true
         });
 
-        node_id
+        let ty = self.planner.mir[input].ty().clone();
+        let mut func_args = vec![ty.as_list_unwrap().clone()];
+        func_args.extend(arg_tys);
+
+        self.planner.mir.insert(mir::Filter {
+            input,
+            args,
+            predicate: eval::Func::from_stmt(pre_filter_expr, func_args),
+            ty,
+        })
     }
 
     /// Rewrite a statement-level expression for use in a MIR node.

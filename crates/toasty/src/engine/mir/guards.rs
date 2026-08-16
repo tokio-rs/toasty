@@ -16,8 +16,8 @@
 //! When n0 returns no rows, the map in n3 iterates zero times, so nothing
 //! ever reads n2 — the user query is a wasted database round-trip. This pass
 //! guards n1 and n2 with the condition "n0 returned at least one row"
-//! ([`Cond::NonEmpty`]`(n0)`). At execution time, when n0 comes back empty,
-//! n1 and n2 are skipped.
+//! (`non_empty(n0)`). At execution time, when n0 comes back empty, n1 and n2
+//! are skipped.
 //!
 //! # The two rules
 //!
@@ -46,9 +46,6 @@
 //!   unconditionally.
 //! - Consumers guarded on different nodes disagree, so their shared input
 //!   gets no guard.
-//! - A guard the planner assigned directly ([`Cond::Expr`]) is kept as-is
-//!   and does not propagate: when it fails, the node produces a placeholder
-//!   value instead of being unread, so its inputs must still execute.
 //!
 //! In the example, n0 stays unguarded: n3 reads it as the map base
 //! ([`InputRead::Always`]), and n3 itself has no guard.
@@ -92,7 +89,7 @@
 
 use index_vec::IndexVec;
 
-use super::{Cond, NodeId, Store, operation::InputRead};
+use super::{NodeId, Store, operation::InputRead};
 
 /// The merge, over a node's already-visited consumers, of how each one
 /// consumes the node's output.
@@ -126,26 +123,19 @@ pub(super) fn annotate_guards(store: &mut Store, execution_order: &[NodeId], com
 
     for &id in execution_order.iter().rev() {
         // Effects always run; the completion node is consumed by the engine.
-        // A planner-assigned guard (`Cond::Expr`) is left untouched.
-        let eligible =
-            !store[id].op.is_effectful() && id != completion && store[id].guard.is_none();
+        let eligible = !store[id].op.is_effectful() && id != completion;
         if eligible
             && let Consumption::OnlyUnder(x) = consumption[id]
             && position[x] < position[id]
         {
-            store[id].guard = Some(Cond::NonEmpty(x));
+            store[id].guard = Some(x);
         }
 
         // What this node's `Always` reads contribute to its producers:
         // `Some(x)` when the read is unobservable under `non_empty(x)`
         // failing because the node itself is guarded on `x` (rule 2), `None`
-        // otherwise. Planner-assigned `Cond::Expr` guards do not propagate:
-        // their else-arm placeholder is an observed value, not proven
-        // unobservable, so producers feeding them must still execute.
-        let own = match &store[id].guard {
-            Some(Cond::NonEmpty(x)) => Some(*x),
-            Some(Cond::Expr { .. }) | None => None,
-        };
+        // otherwise.
+        let own = store[id].guard;
 
         // Push onto the value edges — read from operation inputs, never from
         // `deps`, so an ordering-only edge never looks like a consumer.

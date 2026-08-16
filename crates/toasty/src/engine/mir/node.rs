@@ -19,12 +19,14 @@ pub(crate) struct Node {
     /// ordering dependencies (e.g., an `UPDATE` depending on a prior `INSERT`).
     pub(crate) deps: IndexSet<NodeId>,
 
-    /// When set, this node only executes if the condition holds. Assigned by
-    /// the guard-annotation pass in [`LogicalPlan::new`]; only pure
-    /// (non-effectful) nodes may carry a guard.
+    /// When set, this node only executes if the referenced node produced at
+    /// least one row, evaluated with a non-consuming peek. Assigned by the
+    /// guard-annotation pass in [`LogicalPlan::new`], which proves the
+    /// guarded node's output unobservable when the condition fails; only
+    /// pure (non-effectful) nodes may carry a guard.
     ///
     /// [`LogicalPlan::new`]: super::LogicalPlan::new
-    pub(crate) guard: Option<super::Cond>,
+    pub(crate) guard: Option<NodeId>,
 }
 
 impl Node {

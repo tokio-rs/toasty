@@ -138,7 +138,10 @@ impl Operation {
                 None => m.attached.iter().map(|&i| (i, Always)).collect(),
             },
             Operation::ExecStatement(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
-            Operation::Filter(m) => vec![(m.input, Always)],
+            Operation::Filter(m) => [(m.input, Always)]
+                .into_iter()
+                .chain(m.args.iter().map(|&a| (a, Always)))
+                .collect(),
             Operation::FindPkByIndex(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             Operation::GetByKey(m) => vec![(m.input, Always)],
             Operation::NestedMerge(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
@@ -158,12 +161,11 @@ impl Operation {
         self.input_reads().into_iter().map(|(id, _)| id).collect()
     }
 
-    /// The variable loads the operation's exec action performs, with
+    /// The variable loads the operation's execution performs, with
     /// multiplicity — currently one per declared input. `num_uses` refcounts
-    /// are the sum of these loads across consumers, so each action must load
-    /// every listed input exactly once — or release it on any path that
-    /// declines the load. (A node's `guard` condition may load additional
-    /// variables; those are counted separately at `LogicalPlan::new`.)
+    /// are the sum of these loads across consumers, so each operation must
+    /// load every listed input exactly once — or release it on any path that
+    /// declines the load. (Guards peek without loading.)
     pub(crate) fn input_loads(&self) -> impl Iterator<Item = NodeId> + use<> {
         // ReadModifyWrite declares `inputs` but its exec action asserts them
         // empty; count them anyway so a future non-empty RMW input must load
