@@ -68,9 +68,9 @@ impl ExecPlanner<'_> {
     /// - **External inputs** (produced outside, loaded inside): released on
     ///   skip, one entry per load the `then` arm would have performed,
     ///   keeping use counts exact on both paths.
-    /// - **Escaping outputs** (produced inside, consumed outside): assigned
-    ///   the empty value of the node's type on skip, with the node's
-    ///   external use count, so outside consumers never see an unset slot.
+    /// - **Escaping outputs** (produced inside, consumed outside): assigned a
+    ///   non-loadable slot on skip with the node's external use count, so
+    ///   outside consumers can release the skipped output.
     /// - **Internal variables** (produced and consumed inside): untouched —
     ///   on the skip path their slots are never created.
     fn emit_if_block(&self, block: Vec<mir::NodeId>) -> Step {
@@ -83,7 +83,7 @@ impl ExecPlanner<'_> {
 
         let in_block: IndexSet<mir::NodeId> = block.iter().copied().collect();
         let mut skipped_inputs = vec![];
-        let mut empty_outputs = vec![];
+        let mut skipped_outputs = vec![];
 
         for &node_id in &block {
             let node = &self.logical_plan[node_id];
@@ -106,14 +106,14 @@ impl ExecPlanner<'_> {
             let external_uses = self.logical_plan.num_uses(node_id) - in_block_loads;
 
             if external_uses > 0 {
-                empty_outputs.push((node_id, external_uses));
+                skipped_outputs.push((node_id, external_uses));
             }
         }
 
         Step::If(exec::If {
             then: block,
             skipped_inputs,
-            empty_outputs,
+            skipped_outputs,
         })
     }
 }

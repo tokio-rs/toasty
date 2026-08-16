@@ -20,9 +20,9 @@ pub struct ExecResponse {
     /// The result values (rows, count, or stream).
     pub values: Rows,
     /// Cursor to the next page (if paginated and more data exists).
-    pub next_cursor: Option<stmt::Value>,
+    pub next_cursor: Option<Box<stmt::Value>>,
     /// Cursor to the previous page (if backward pagination is supported).
-    pub prev_cursor: Option<stmt::Value>,
+    pub prev_cursor: Option<Box<stmt::Value>>,
 }
 
 /// The payload of an [`ExecResponse`].

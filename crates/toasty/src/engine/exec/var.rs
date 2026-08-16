@@ -20,8 +20,14 @@ pub(crate) struct VarStore {
 
 #[derive(Debug)]
 struct Entry {
-    response: ExecResponse,
+    value: EntryValue,
     count: usize,
+}
+
+#[derive(Debug)]
+enum EntryValue {
+    Response(ExecResponse),
+    Skipped,
 }
 
 impl VarStore {
@@ -37,15 +43,26 @@ impl VarStore {
             panic!("no stream at slot {node:?}; store={self:#?}")
         };
 
+        if matches!(&entry.value, EntryValue::Skipped) {
+            panic!("load of skipped slot {node:?}")
+        }
+
         if entry.count == 1 {
-            return Ok(self.slots[node].take().unwrap().response);
+            let entry = self.slots[node].take().unwrap();
+            let EntryValue::Response(response) = entry.value else {
+                unreachable!()
+            };
+            return Ok(response);
         }
 
         entry.count -= 1;
+        let EntryValue::Response(response) = &mut entry.value else {
+            unreachable!()
+        };
         Ok(ExecResponse {
-            values: entry.response.values.dup().await?,
-            next_cursor: entry.response.next_cursor.clone(),
-            prev_cursor: entry.response.prev_cursor.clone(),
+            values: response.values.dup().await?,
+            next_cursor: response.next_cursor.clone(),
+            prev_cursor: response.prev_cursor.clone(),
         })
     }
 
@@ -73,9 +90,13 @@ impl VarStore {
             panic!("no stream at slot {node:?}; store={self:#?}")
         };
 
-        entry.response.values.buffer().await?;
+        let EntryValue::Response(response) = &mut entry.value else {
+            panic!("peek of skipped slot {node:?}")
+        };
 
-        Ok(match &entry.response.values {
+        response.values.buffer().await?;
+
+        Ok(match &response.values {
             Rows::Count(count) => *count > 0,
             Rows::Value(stmt::Value::List(items)) => !items.is_empty(),
             Rows::Value(stmt::Value::Null) => false,
@@ -96,15 +117,17 @@ impl VarStore {
         );
     }
 
-    /// Assigns a slot the empty value of its type: a `List` becomes an empty
-    /// list, anything else `Null`. Used for the escaping outputs of a
-    /// skipped `If` arm.
-    pub(crate) fn store_empty(&mut self, node: NodeId, ty: &stmt::Type, count: usize) {
-        let value = match ty {
-            stmt::Type::List(_) => stmt::Value::List(vec![]),
-            _ => stmt::Value::Null,
-        };
-        self.store(node, ty, count, ExecResponse::from_rows(Rows::Value(value)));
+    /// Marks an escaping output from a skipped `If` arm. The slot participates
+    /// in use counting but has no value and cannot be loaded.
+    pub(crate) fn store_skipped(&mut self, node: NodeId, count: usize) {
+        if count == 0 {
+            return;
+        }
+
+        self.slots[node] = Some(Entry {
+            value: EntryValue::Skipped,
+            count,
+        });
     }
 
     #[track_caller]
@@ -147,6 +170,38 @@ impl VarStore {
             prev_cursor: response.prev_cursor,
         };
 
-        self.slots[node] = Some(Entry { response, count });
+        self.slots[node] = Some(Entry {
+            value: EntryValue::Response(response),
+            count,
+        });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::engine::test_util::test_schema;
+
+    #[tokio::test]
+    #[should_panic(expected = "load of skipped slot")]
+    async fn load_skipped_panics() {
+        let node = NodeId::new(0);
+        let mut store = VarStore::new(1, Arc::new(test_schema()));
+        store.store_skipped(node, 1);
+
+        store.load(node).await.unwrap();
+    }
+
+    #[test]
+    fn release_drains_skipped_slot() {
+        let node = NodeId::new(0);
+        let mut store = VarStore::new(1, Arc::new(test_schema()));
+        store.store_skipped(node, 2);
+
+        store.release(node);
+        assert!(store.slots[node].is_some());
+
+        store.release(node);
+        assert!(store.slots[node].is_none());
     }
 }

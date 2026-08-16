@@ -254,7 +254,10 @@ impl Exec<'_> {
         // Extract cursors for potential next/prev pages
         res.next_cursor = if row_vec.len() == page_size {
             let cursor_row = &row_vec[page_size - 1];
-            Some(extract_cursor.eval(&self.engine.schema, std::slice::from_ref(cursor_row))?)
+            Some(Box::new(extract_cursor.eval(
+                &self.engine.schema,
+                std::slice::from_ref(cursor_row),
+            )?))
         } else {
             // Got fewer than page_size rows, no more data
             None
@@ -266,7 +269,10 @@ impl Exec<'_> {
             && self.engine.capability().backward_pagination
         {
             let cursor_row = &row_vec[0];
-            Some(extract_cursor.eval(&self.engine.schema, std::slice::from_ref(cursor_row))?)
+            Some(Box::new(extract_cursor.eval(
+                &self.engine.schema,
+                std::slice::from_ref(cursor_row),
+            )?))
         } else {
             None
         };

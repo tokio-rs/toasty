@@ -10,7 +10,7 @@ use crate::{
 /// condition holds; mutations never appear in it. Every node in the arm
 /// carries the same guard, which is the block's condition. Skipping the arm
 /// is pure bookkeeping, declared as data: `skipped_inputs` and
-/// `empty_outputs` keep variable slots consistent so consumers outside the
+/// `skipped_outputs` keep variable slots consistent so consumers outside the
 /// block never see an unset slot and use counts stay exact on both paths.
 #[derive(Debug)]
 pub(crate) struct If {
@@ -24,9 +24,9 @@ pub(crate) struct If {
     pub(crate) skipped_inputs: Vec<mir::NodeId>,
 
     /// The `then` arm's escaping outputs, each with its external use count.
-    /// When the arm is skipped, each is assigned the empty value of its
-    /// declared type.
-    pub(crate) empty_outputs: Vec<(mir::NodeId, usize)>,
+    /// When the arm is skipped, each receives a non-loadable slot used only
+    /// for use counting.
+    pub(crate) skipped_outputs: Vec<(mir::NodeId, usize)>,
 }
 
 impl If {
@@ -59,9 +59,8 @@ impl Exec<'_> {
             for &node_id in &action.skipped_inputs {
                 self.vars.release(node_id);
             }
-            for &(node_id, num_uses) in &action.empty_outputs {
-                self.vars
-                    .store_empty(node_id, logical_plan[node_id].ty(), num_uses);
+            for &(node_id, num_uses) in &action.skipped_outputs {
+                self.vars.store_skipped(node_id, num_uses);
             }
         }
 

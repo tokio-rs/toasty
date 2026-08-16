@@ -5,7 +5,10 @@ use crate::{
         mir::{self, LogicalPlan},
     },
 };
-use toasty_core::driver::{ExecResponse, Rows};
+use toasty_core::{
+    driver::{ExecResponse, Rows},
+    stmt,
+};
 
 impl Exec<'_> {
     pub(super) async fn exec_eval(
@@ -30,7 +33,10 @@ impl Exec<'_> {
             }
         };
 
-        // Load all input data upfront, preserving pagination metadata
+        // Load the base before the attached inputs. An empty base evaluates
+        // the map zero times, so release the attached inputs without loading
+        // them. This matches their `PerRowOf(base)` consumption in the guard
+        // analysis.
         let mut input = Vec::with_capacity(inputs.len());
         let mut next_cursor = None;
         let mut prev_cursor = None;
@@ -38,7 +44,6 @@ impl Exec<'_> {
         for (i, node_id) in inputs.iter().enumerate() {
             let response = self.vars.load(*node_id).await?;
             let data = response.values.collect_as_value().await?;
-            input.push(data);
 
             if Some(i) == metadata {
                 next_cursor = response.next_cursor;
@@ -46,6 +51,23 @@ impl Exec<'_> {
             } else {
                 debug_assert!(response.next_cursor.is_none() && response.prev_cursor.is_none());
             }
+
+            if i == 0
+                && action.base.is_some()
+                && matches!(&data, stmt::Value::List(items) if items.is_empty())
+            {
+                for &node_id in &inputs[1..] {
+                    self.vars.release(node_id);
+                }
+
+                return Ok(ExecResponse {
+                    values: Rows::Value(data),
+                    next_cursor,
+                    prev_cursor,
+                });
+            }
+
+            input.push(data);
         }
 
         // Evaluate the function with the collected inputs
