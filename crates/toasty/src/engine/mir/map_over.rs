@@ -2,7 +2,7 @@ use indexmap::IndexSet;
 use toasty_core::stmt::{self, visit_mut};
 
 use crate::engine::{
-    eval, exec,
+    eval,
     mir::{self, LogicalPlan},
 };
 
@@ -50,20 +50,13 @@ impl MapOver {
         }
     }
 
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Eval {
-        // The executor evaluates one function over whole input values, so the
-        // per-row structure is erased here — at the last moment — into a
-        // single `map` expression over input 0, with inputs ordered
-        // `[base, attached...]`.
-        let mut input_vars = vec![logical_plan[self.base].var.get().unwrap()];
+    /// Builds the executable function. The executor evaluates one function
+    /// over whole input values, so the per-row structure is erased here — at
+    /// the last moment — into a single `map` expression over input 0, with
+    /// inputs ordered `[base, attached...]`.
+    pub(crate) fn eval_func(&self, logical_plan: &LogicalPlan) -> eval::Func {
         let mut arg_tys = vec![logical_plan[self.base].ty().clone()];
         for input in &self.attached {
-            input_vars.push(logical_plan[input].var.get().unwrap());
             arg_tys.push(logical_plan[input].ty().clone());
         }
 
@@ -83,21 +76,7 @@ impl MapOver {
             true
         });
         let expr = stmt::Expr::map(stmt::Expr::arg(0), body);
-        let eval = eval::Func::from_stmt_typed(expr, arg_tys, self.ty.clone());
-
-        let output = var_table.register_var(self.ty.clone());
-        node.var.set(Some(output));
-
-        exec::Eval {
-            inputs: input_vars,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            eval,
-            // Metadata forwards from `base`, always input 0.
-            metadata: Some(0),
-        }
+        eval::Func::from_stmt_typed(expr, arg_tys, self.ty.clone())
     }
 }
 

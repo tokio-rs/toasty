@@ -1,22 +1,24 @@
 use indexmap::IndexSet;
 
 use crate::engine::{
-    exec::{self, Action, ExecPlan, VarStore},
+    exec::{self, Step},
     mir,
     plan::ExecPlanner,
 };
 
 impl ExecPlanner<'_> {
-    pub(super) fn plan_execution(mut self) -> ExecPlan {
+    /// Converts the logical plan's execution order into the exec program's
+    /// step sequence, returning the steps and whether the plan needs to be
+    /// wrapped in a transaction.
+    pub(super) fn plan_execution(mut self) -> (Vec<Step>, bool) {
         // Group each maximal run of consecutive same-guard nodes into one
         // `If` block, emitted at the run's existing position. An unguarded
         // chain interleaved between two same-guard runs yields several `If`
         // blocks with the same condition; the guard rules guarantee an
         // interleaved unguarded node never consumes a guarded output, and the
-        // else-arm variable classification below is per block.
+        // skip-path variable classification below is per block.
         let logical_plan = self.logical_plan;
         let mut block: Vec<mir::NodeId> = vec![];
-        let mut block_actions: Vec<Action> = vec![];
         let mut block_guard: Option<&mir::Cond> = None;
 
         for &node_id in logical_plan.execution_order() {
@@ -29,44 +31,36 @@ impl ExecPlanner<'_> {
             };
 
             if block_guard.is_some() && !extends_block {
-                let action = self.emit_if_block(
-                    block_guard.take().unwrap(),
-                    std::mem::take(&mut block),
-                    std::mem::take(&mut block_actions),
-                );
-                self.actions.push(action);
+                block_guard = None;
+                let step = self.emit_if_block(std::mem::take(&mut block));
+                self.steps.push(step);
             }
-
-            let action = node.to_exec(logical_plan, &mut self.var_decls);
 
             if guard.is_some() {
                 block_guard = guard;
                 block.push(node_id);
-                block_actions.push(action);
             } else {
-                self.actions.push(action);
+                self.steps.push(Step::Run(node_id));
             }
         }
 
-        if let Some(guard) = block_guard {
-            let action = self.emit_if_block(guard, block, block_actions);
-            self.actions.push(action);
+        if !block.is_empty() {
+            let step = self.emit_if_block(block);
+            self.steps.push(step);
         }
-
-        let returning = self.logical_plan.completion().var.get();
 
         let needs_transaction = self.use_transactions
-            && self.actions.iter().map(Action::db_op_count).sum::<usize>() > 1;
+            && self
+                .steps
+                .iter()
+                .map(|step| step.db_op_count(logical_plan))
+                .sum::<usize>()
+                > 1;
 
-        ExecPlan {
-            vars: VarStore::new(self.var_decls, self.schema),
-            actions: self.actions,
-            returning,
-            needs_transaction,
-        }
+        (self.steps, needs_transaction)
     }
 
-    /// Wraps a run of same-guard actions in an `If`, deriving the skip
+    /// Wraps a run of same-guard nodes in an `If`, deriving the skip
     /// bookkeeping from a static classification of the variables the `then`
     /// arm touches:
     ///
@@ -74,16 +68,11 @@ impl ExecPlanner<'_> {
     ///   skip, one entry per load the `then` arm would have performed,
     ///   keeping use counts exact on both paths.
     /// - **Escaping outputs** (produced inside, consumed outside): assigned
-    ///   the empty value of the variable's type on skip, with the variable's
+    ///   the empty value of the node's type on skip, with the node's
     ///   external use count, so outside consumers never see an unset slot.
     /// - **Internal variables** (produced and consumed inside): untouched —
     ///   on the skip path their slots are never created.
-    fn emit_if_block(
-        &self,
-        guard: &mir::Cond,
-        block: Vec<mir::NodeId>,
-        block_actions: Vec<Action>,
-    ) -> Action {
+    fn emit_if_block(&self, block: Vec<mir::NodeId>) -> Step {
         debug_assert!(
             block
                 .iter()
@@ -102,7 +91,7 @@ impl ExecPlanner<'_> {
             // block are released, with multiplicity.
             for load in node.op.input_loads() {
                 if !in_block.contains(&load) {
-                    skipped_inputs.push(self.logical_plan[load].var.get().unwrap());
+                    skipped_inputs.push(load);
                 }
             }
 
@@ -113,32 +102,17 @@ impl ExecPlanner<'_> {
                 .flat_map(|id| self.logical_plan[id].op.input_loads())
                 .filter(|&load| load == node_id)
                 .count();
-            let external_uses = node.num_uses.get() - in_block_loads;
+            let external_uses = self.logical_plan.num_uses(node_id) - in_block_loads;
 
             if external_uses > 0 {
-                empty_outputs.push((node.var.get().unwrap(), external_uses));
+                empty_outputs.push((node_id, external_uses));
             }
         }
 
-        let cond = match guard {
-            mir::Cond::NonEmpty(node_id) => {
-                exec::Cond::NonEmpty(self.logical_plan[node_id].var.get().unwrap())
-            }
-            mir::Cond::Expr { func, inputs } => exec::Cond::Expr {
-                func: func.clone(),
-                inputs: inputs
-                    .iter()
-                    .map(|node_id| self.logical_plan[node_id].var.get().unwrap())
-                    .collect(),
-            },
-        };
-
-        exec::If {
-            cond,
-            then: block_actions,
+        Step::If(exec::If {
+            then: block,
             skipped_inputs,
             empty_outputs,
-        }
-        .into()
+        })
     }
 }

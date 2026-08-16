@@ -1,17 +1,13 @@
-use std::cell::Cell;
-
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::exec;
-
-use super::{LogicalPlan, NodeId, Operation};
+use super::{NodeId, Operation};
 
 /// A single node in the MIR operation graph.
 ///
-/// Each [`Node`] represents one operation to execute. It contains the operation
-/// itself, its dependencies on other nodes, and metadata used during execution
-/// planning (variable assignment, reference counting, traversal state).
+/// Each [`Node`] represents one operation to execute. It contains the
+/// operation itself, its dependencies on other nodes, and its execution
+/// guard.
 #[derive(Debug)]
 pub(crate) struct Node {
     /// The operation this node performs.
@@ -23,24 +19,12 @@ pub(crate) struct Node {
     /// ordering dependencies (e.g., an `UPDATE` depending on a prior `INSERT`).
     pub(crate) deps: IndexSet<NodeId>,
 
-    /// Variable slot where this node's output is stored during execution.
-    ///
-    /// Set during execution planning when converting MIR to actions.
-    pub(crate) var: Cell<Option<exec::VarId>>,
-
-    /// Number of variable loads this node's output receives during execution,
-    /// plus one exit use on the completion node.
-    ///
-    /// Used for reference counting; the output is freed after the last use.
-    pub(crate) num_uses: Cell<usize>,
-
     /// When set, this node only executes if the condition holds. Assigned by
     /// the guard-annotation pass in [`LogicalPlan::new`]; only pure
     /// (non-effectful) nodes may carry a guard.
+    ///
+    /// [`LogicalPlan::new`]: super::LogicalPlan::new
     pub(crate) guard: Option<super::Cond>,
-
-    /// Whether this node has been visited during topological sort.
-    pub(crate) visited: Cell<bool>,
 }
 
 impl Node {
@@ -60,33 +44,8 @@ impl Node {
             Operation::Scan(m) => &m.ty,
             Operation::UpdateByKey(m) => &m.ty,
             Operation::Upsert(m) => &m.ty,
-            Operation::NestedMerge(_m) => todo!(),
+            Operation::NestedMerge(m) => &m.ty,
             Operation::ReadModifyWrite(m) => &m.ty,
-        }
-    }
-
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Action {
-        match &self.op {
-            Operation::Alias(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Compute(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Const(op) => op.to_exec(self, var_table).into(),
-            Operation::DeleteByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::ExecStatement(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Filter(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::FindPkByIndex(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::GetByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::MapOver(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::NestedMerge(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::ReadModifyWrite(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Repeat(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::QueryPk(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Scan(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::UpdateByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Upsert(op) => op.to_exec(logical_plan, self, var_table).into(),
         }
     }
 }

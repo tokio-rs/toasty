@@ -1,39 +1,22 @@
 use std::sync::Arc;
+
+use index_vec::IndexVec;
 use toasty_core::{
     driver::{ExecResponse, Rows},
     schema::Schema,
     stmt,
 };
 
-/// Tracks variable declarations during planning. Each variable has a type and
-/// is assigned a unique VarId. This is converted into a VarStore for execution.
-#[derive(Debug, Default)]
-pub(crate) struct VarDecls {
-    /// Variable types
-    vars: Vec<stmt::Type>,
-}
+use crate::engine::mir::NodeId;
 
-impl VarDecls {
-    #[track_caller]
-    pub(crate) fn register_var(&mut self, ty: stmt::Type) -> VarId {
-        // Register a new slot
-        let ret = self.vars.len();
-        self.vars.push(ty);
-        VarId(ret)
-    }
-}
-
+/// Runtime storage for node outputs: one slot per MIR node, keyed by the
+/// node's [`NodeId`].
 #[derive(Debug)]
 pub(crate) struct VarStore {
-    slots: Vec<Option<Entry>>,
-    tys: Vec<stmt::Type>,
+    slots: IndexVec<NodeId, Option<Entry>>,
     /// Resolves `Type::Model` (`#[document]`) layouts for the value type-checks.
     schema: Arc<Schema>,
 }
-
-/// Identifies a pipeline variable slot
-#[derive(Debug, Clone, Copy, Eq, PartialEq, Hash)]
-pub(crate) struct VarId(pub(crate) usize);
 
 #[derive(Debug)]
 struct Entry {
@@ -42,21 +25,20 @@ struct Entry {
 }
 
 impl VarStore {
-    pub(crate) fn new(decls: VarDecls, schema: Arc<Schema>) -> Self {
+    pub(crate) fn new(node_count: usize, schema: Arc<Schema>) -> Self {
         Self {
-            slots: vec![],
-            tys: decls.vars,
+            slots: IndexVec::from_vec((0..node_count).map(|_| None).collect()),
             schema,
         }
     }
 
-    pub(crate) async fn load(&mut self, var: VarId) -> crate::Result<ExecResponse> {
-        let Some(entry) = &mut self.slots[var.0] else {
-            panic!("no stream at slot {}; store={:#?}", var.0, self)
+    pub(crate) async fn load(&mut self, node: NodeId) -> crate::Result<ExecResponse> {
+        let Some(entry) = &mut self.slots[node] else {
+            panic!("no stream at slot {node:?}; store={self:#?}")
         };
 
         if entry.count == 1 {
-            return Ok(self.slots[var.0].take().unwrap().response);
+            return Ok(self.slots[node].take().unwrap().response);
         }
 
         entry.count -= 1;
@@ -69,15 +51,15 @@ impl VarStore {
 
     /// Decrements a slot's use count without observing its value, dropping
     /// the entry at zero. Called on paths that decline a load the use
-    /// counting expects (an `If` else arm).
+    /// counting expects (a skipped `If` arm).
     #[track_caller]
-    pub(crate) fn release(&mut self, var: VarId) {
-        let Some(entry) = self.slots.get_mut(var.0).and_then(Option::as_mut) else {
-            panic!("release of unset slot {}; store={:#?}", var.0, self)
+    pub(crate) fn release(&mut self, node: NodeId) {
+        let Some(entry) = self.slots[node].as_mut() else {
+            panic!("release of unset slot {node:?}; store={self:#?}")
         };
 
         if entry.count == 1 {
-            self.slots[var.0] = None;
+            self.slots[node] = None;
         } else {
             entry.count -= 1;
         }
@@ -86,9 +68,9 @@ impl VarStore {
     /// Returns whether the slot holds at least one row, without consuming a
     /// use. A stream-backed slot is buffered in place so the peek does not
     /// disturb later loads.
-    pub(crate) async fn peek_non_empty(&mut self, var: VarId) -> crate::Result<bool> {
-        let Some(entry) = self.slots.get_mut(var.0).and_then(Option::as_mut) else {
-            panic!("no stream at slot {}; store={:#?}", var.0, self)
+    pub(crate) async fn peek_non_empty(&mut self, node: NodeId) -> crate::Result<bool> {
+        let Some(entry) = self.slots[node].as_mut() else {
+            panic!("no stream at slot {node:?}; store={self:#?}")
         };
 
         entry.response.values.buffer().await?;
@@ -114,35 +96,36 @@ impl VarStore {
         );
     }
 
-    /// Assigns a slot the empty value of its declared type: a `List` becomes
-    /// an empty list, anything else `Null`. Used for the escaping outputs of
-    /// a skipped `If` arm.
-    pub(crate) fn store_empty(&mut self, var: VarId, count: usize) {
-        let value = match &self.tys[var.0] {
+    /// Assigns a slot the empty value of its type: a `List` becomes an empty
+    /// list, anything else `Null`. Used for the escaping outputs of a
+    /// skipped `If` arm.
+    pub(crate) fn store_empty(&mut self, node: NodeId, ty: &stmt::Type, count: usize) {
+        let value = match ty {
             stmt::Type::List(_) => stmt::Value::List(vec![]),
             _ => stmt::Value::Null,
         };
-        self.store(var, count, ExecResponse::from_rows(Rows::Value(value)));
+        self.store(node, ty, count, ExecResponse::from_rows(Rows::Value(value)));
     }
 
     #[track_caller]
-    pub(crate) fn store(&mut self, var: VarId, count: usize, response: ExecResponse) {
+    pub(crate) fn store(
+        &mut self,
+        node: NodeId,
+        ty: &stmt::Type,
+        count: usize,
+        response: ExecResponse,
+    ) {
         // A zero-use output is never observed; don't occupy a slot.
         if count == 0 {
             return;
         }
 
-        while self.slots.len() <= var.0 {
-            self.slots.push(None);
-        }
-
         let values = match response.values {
             Rows::Count(_) => {
-                assert!(self.tys[var.0].is_unit());
+                assert!(ty.is_unit());
                 response.values
             }
             Rows::Value(value) => {
-                let ty = &self.tys[var.0];
                 assert!(
                     value.is_a(&self.schema.app, ty),
                     "type mismatch: {value:?} is not a {ty:?}",
@@ -150,8 +133,8 @@ impl VarStore {
                 Rows::Value(value)
             }
             Rows::Stream(value_stream) => {
-                let stmt::Type::List(item_tys) = &self.tys[var.0] else {
-                    todo!("ty={:#?}", self.tys[var.0])
+                let stmt::Type::List(item_tys) = ty else {
+                    todo!("ty={ty:#?}")
                 };
                 let item_ty = (**item_tys).clone();
 
@@ -164,6 +147,6 @@ impl VarStore {
             prev_cursor: response.prev_cursor,
         };
 
-        self.slots[var.0] = Some(Entry { response, count });
+        self.slots[node] = Some(Entry { response, count });
     }
 }

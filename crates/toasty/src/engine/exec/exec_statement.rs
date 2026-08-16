@@ -5,10 +5,7 @@ use toasty_core::{
 
 use crate::{
     Result,
-    engine::{
-        eval,
-        exec::{Action, Exec, Output, VarId},
-    },
+    engine::{eval, exec::Exec, mir},
 };
 
 /// How to interpret a statement's output rows.
@@ -75,44 +72,20 @@ pub(super) struct MySQLUpdateReturning {
     select_stmt: stmt::Statement,
 }
 
-#[derive(Debug)]
-pub(crate) struct ExecStatement {
-    /// Where to get arguments for this action.
-    pub input: Vec<VarId>,
-
-    /// How to handle output
-    pub output: ExecStatementOutput,
-
-    /// The query to execute. This may require input to generate the query.
-    pub stmt: stmt::Statement,
-
-    /// How to interpret this statement's output. See [`ConditionalOutput`].
-    pub conditional: ConditionalOutput,
-
-    /// Pagination configuration (None if not paginated)
-    pub pagination: Option<PaginationConfig>,
-}
-
-#[derive(Debug)]
-pub(crate) struct ExecStatementOutput {
-    /// Databases always return rows as a vec of values. This specifies the type
-    /// of each value.
-    pub ty: Option<Vec<stmt::Type>>,
-    pub output: Output,
-}
-
 impl Exec<'_> {
-    pub(super) async fn action_exec_statement(&mut self, action: &ExecStatement) -> Result<()> {
+    pub(super) async fn exec_statement(
+        &mut self,
+        action: &mir::ExecStatement,
+    ) -> Result<ExecResponse> {
+        // Databases always return rows as a vec of values; this specifies the
+        // type of each value. `None` means the statement returns only a count.
+        let output_ty = mir::row_field_types(&action.ty);
+
         let mut stmt = action.stmt.clone();
 
         // Collect input values and substitute into the statement
-        if !action.input.is_empty() {
-            let mut input_values = Vec::new();
-            for var_id in &action.input {
-                let response = self.vars.load(*var_id).await?;
-                let values = response.values.collect_as_value().await?;
-                input_values.push(values);
-            }
+        if !action.inputs.is_empty() {
+            let input_values = self.collect_input(action.inputs.iter().copied()).await?;
             stmt.substitute(&input_values);
 
             self.engine.simplify_stmt(&mut stmt);
@@ -142,19 +115,13 @@ impl Exec<'_> {
         {
             assert_eq!(action.conditional, ConditionalOutput::None);
 
-            let rows = if action.output.ty.is_some() {
+            let rows = if output_ty.is_some() {
                 Rows::Stream(stmt::ValueStream::default())
             } else {
                 Rows::Count(0)
             };
 
-            self.vars.store(
-                action.output.output.var,
-                action.output.output.num_uses,
-                ExecResponse::from_rows(rows),
-            );
-
-            return Ok(());
+            return Ok(ExecResponse::from_rows(rows));
         }
 
         // Legalize the statement for the target backend and extract bind
@@ -170,9 +137,7 @@ impl Exec<'_> {
             ConditionalOutput::Returning => {
                 let mut tys = vec![stmt::Type::I64, stmt::Type::I64];
                 tys.extend(
-                    action
-                        .output
-                        .ty
+                    output_ty
                         .clone()
                         .expect("conditional write with RETURNING has output columns"),
                 );
@@ -189,7 +154,7 @@ impl Exec<'_> {
                 // below produces the returning values.
                 None
             }
-            ConditionalOutput::None => action.output.ty.clone(),
+            ConditionalOutput::None => output_ty.clone(),
         };
 
         let op = operation::QuerySql {
@@ -207,7 +172,7 @@ impl Exec<'_> {
                     res.values = mysql_info.reconstruct_returning(res.values).await?;
                 } else if let Some(mysql_update) = mysql_update_returning {
                     res = self
-                        .run_mysql_update_returning_select(mysql_update, action.output.ty.clone())
+                        .run_mysql_update_returning_select(mysql_update, output_ty.clone())
                         .await?;
                 }
             }
@@ -263,10 +228,7 @@ impl Exec<'_> {
             self.apply_sql_pagination(&mut res, pagination)?;
         }
 
-        self.vars
-            .store(action.output.output.var, action.output.output.num_uses, res);
-
-        Ok(())
+        Ok(res)
     }
 
     /// Apply SQL pagination by extracting cursor from last row.
@@ -505,12 +467,6 @@ fn conditional_probe_counts(row: &stmt::Value) -> Result<(i64, i64)> {
         _ => Err(toasty_core::Error::invalid_result(format!(
             "conditional write probe columns are not I64; row={row:?}"
         ))),
-    }
-}
-
-impl From<ExecStatement> for Action {
-    fn from(value: ExecStatement) -> Self {
-        Self::ExecStatement(value.into())
     }
 }
 

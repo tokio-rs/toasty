@@ -1,5 +1,3 @@
-use std::cell::Cell;
-
 use indexmap::IndexSet;
 
 use crate::engine::effect;
@@ -74,6 +72,55 @@ pub(crate) enum InputRead {
 }
 
 impl Operation {
+    /// Returns the operation's variant name for logging.
+    pub(crate) fn name(&self) -> &'static str {
+        match self {
+            Operation::Alias(_) => "alias",
+            Operation::Compute(_) => "compute",
+            Operation::Const(_) => "const",
+            Operation::DeleteByKey(_) => "delete_by_key",
+            Operation::ExecStatement(_) => "exec_statement",
+            Operation::Filter(_) => "filter",
+            Operation::FindPkByIndex(_) => "find_pk_by_index",
+            Operation::GetByKey(_) => "get_by_key",
+            Operation::MapOver(_) => "map_over",
+            Operation::NestedMerge(_) => "nested_merge",
+            Operation::ReadModifyWrite(_) => "read_modify_write",
+            Operation::Repeat(_) => "repeat",
+            Operation::QueryPk(_) => "query_pk",
+            Operation::Scan(_) => "scan",
+            Operation::UpdateByKey(_) => "update_by_key",
+            Operation::Upsert(_) => "upsert",
+        }
+    }
+
+    /// True for operations that issue a driver operation.
+    ///
+    /// Used to determine whether a plan needs to be wrapped in a transaction.
+    /// Distinct from [`Operation::is_effectful`]: queries are db ops but not
+    /// effectful. In-memory operations count zero.
+    pub(crate) fn is_db_op(&self) -> bool {
+        match self {
+            Operation::DeleteByKey(_)
+            | Operation::ExecStatement(_)
+            | Operation::FindPkByIndex(_)
+            | Operation::GetByKey(_)
+            | Operation::QueryPk(_)
+            | Operation::ReadModifyWrite(_)
+            | Operation::Scan(_)
+            | Operation::UpdateByKey(_)
+            | Operation::Upsert(_) => true,
+
+            Operation::Alias(_)
+            | Operation::Compute(_)
+            | Operation::Const(_)
+            | Operation::Filter(_)
+            | Operation::MapOver(_)
+            | Operation::NestedMerge(_)
+            | Operation::Repeat(_) => false,
+        }
+    }
+
     /// The operation's value edges — nodes whose outputs it reads — each
     /// paired with how the output is read.
     ///
@@ -166,10 +213,7 @@ impl From<Operation> for Node {
         Node {
             op: value,
             deps,
-            var: Cell::new(None),
-            num_uses: Cell::new(0),
             guard: None,
-            visited: Cell::new(false),
         }
     }
 }

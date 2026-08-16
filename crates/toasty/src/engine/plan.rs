@@ -6,13 +6,11 @@ use crate::{
     Result,
     engine::{
         Engine, HirStatement,
-        exec::{self, ExecPlan, VarDecls},
+        exec::{ExecPlan, Step, VarStore},
         hir,
         mir::{self, LogicalPlan},
     },
 };
-use std::sync::Arc;
-use toasty_core::Schema;
 
 #[derive(Debug)]
 struct HirPlanner<'a> {
@@ -28,10 +26,8 @@ struct HirPlanner<'a> {
 #[derive(Debug)]
 struct ExecPlanner<'a> {
     logical_plan: &'a LogicalPlan,
-    var_decls: VarDecls,
-    actions: Vec<exec::Action>,
+    steps: Vec<Step>,
     use_transactions: bool,
-    schema: Arc<Schema>,
 }
 
 impl Engine {
@@ -49,14 +45,20 @@ impl Engine {
     }
 
     fn plan_execution(&self, logical_plan: mir::LogicalPlan) -> ExecPlan {
-        ExecPlanner {
+        let (steps, needs_transaction) = ExecPlanner {
             logical_plan: &logical_plan,
-            var_decls: VarDecls::default(),
-            actions: vec![],
+            steps: vec![],
             use_transactions: self.capability().sql(),
-            schema: self.schema.clone(),
         }
-        .plan_execution()
+        .plan_execution();
+
+        ExecPlan {
+            vars: VarStore::new(logical_plan.node_count(), self.schema.clone()),
+            returning: logical_plan.completion(),
+            plan: logical_plan,
+            steps,
+            needs_transaction,
+        }
     }
 }
 
@@ -86,11 +88,6 @@ impl HirPlanner<'_> {
         self.plan_statement(root_id)?;
 
         let exit = self.hir.root().output.get().unwrap();
-        let exit_node = &self.mir[exit];
-
-        // Increment num uses for the exit node. This counts as the "engines"
-        // use of the variable to return to the use.
-        exit_node.num_uses.set(exit_node.num_uses.get() + 1);
 
         Ok(mir::LogicalPlan::new(self.mir, exit))
     }

@@ -2,41 +2,52 @@ use crate::{
     Result,
     engine::{
         eval,
-        exec::{Action, Exec, Output, VarId},
+        exec::Exec,
+        mir::{self, LogicalPlan},
     },
 };
 use toasty_core::driver::{ExecResponse, Rows};
 
-#[derive(Debug)]
-pub(crate) struct Eval {
-    /// Input sources.
-    pub(crate) inputs: Vec<VarId>,
-
-    /// Output variable, where to store the result of the evaluation
-    pub(crate) output: Output,
-
-    /// How to evaluate
-    pub(crate) eval: eval::Func,
-
-    /// The input from which meta-data should be forwarded. This includes the
-    /// pagination cursors. When `None`, do not forward any metadata. Note, all
-    /// other inputs must not have any metadata to forward.
-    pub(crate) metadata: Option<usize>,
-}
-
 impl Exec<'_> {
-    pub(super) async fn action_eval(&mut self, action: &Eval) -> Result<()> {
+    pub(super) async fn exec_compute(&mut self, action: &mir::Compute) -> Result<ExecResponse> {
+        let inputs: Vec<_> = action.inputs.iter().copied().collect();
+        self.eval_func(&inputs, &action.body, None).await
+    }
+
+    pub(super) async fn exec_map_over(
+        &mut self,
+        logical_plan: &LogicalPlan,
+        action: &mir::MapOver,
+    ) -> Result<ExecResponse> {
+        let mut inputs = vec![action.base];
+        inputs.extend(action.attached.iter().copied());
+
+        let func = action.eval_func(logical_plan);
+
+        // Metadata forwards from `base`, always input 0.
+        self.eval_func(&inputs, &func, Some(0)).await
+    }
+
+    /// Evaluates `func` over the collected whole values of `inputs`,
+    /// forwarding pagination metadata from the input at position `metadata`
+    /// (all other inputs must have none to forward).
+    async fn eval_func(
+        &mut self,
+        inputs: &[mir::NodeId],
+        func: &eval::Func,
+        metadata: Option<usize>,
+    ) -> Result<ExecResponse> {
         // Load all input data upfront, preserving pagination metadata
-        let mut input = Vec::with_capacity(action.inputs.len());
+        let mut input = Vec::with_capacity(inputs.len());
         let mut next_cursor = None;
         let mut prev_cursor = None;
 
-        for (i, var_id) in action.inputs.iter().enumerate() {
-            let response = self.vars.load(*var_id).await?;
+        for (i, node_id) in inputs.iter().enumerate() {
+            let response = self.vars.load(*node_id).await?;
             let data = response.values.collect_as_value().await?;
             input.push(data);
 
-            if Some(i) == action.metadata {
+            if Some(i) == metadata {
                 next_cursor = response.next_cursor;
                 prev_cursor = response.prev_cursor;
             } else {
@@ -45,25 +56,12 @@ impl Exec<'_> {
         }
 
         // Evaluate the function with the collected inputs
-        let result = action.eval.eval(&self.engine.schema, &input)?;
+        let result = func.eval(&self.engine.schema, &input)?;
 
-        // Store the result in the output variable with preserved pagination metadata
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse {
-                values: Rows::Value(result),
-                next_cursor,
-                prev_cursor,
-            },
-        );
-
-        Ok(())
-    }
-}
-
-impl From<Eval> for Action {
-    fn from(value: Eval) -> Self {
-        Action::Eval(value)
+        Ok(ExecResponse {
+            values: Rows::Value(result),
+            next_cursor,
+            prev_cursor,
+        })
     }
 }

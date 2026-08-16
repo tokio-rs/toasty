@@ -1,9 +1,6 @@
 use toasty_core::stmt;
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::mir;
 
 /// Produces `value` once per row of `input`.
 ///
@@ -23,29 +20,6 @@ pub(crate) struct Repeat {
 
     /// Output type: `List<value's type>`.
     pub(crate) ty: stmt::Type,
-}
-
-impl Repeat {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Repeat {
-        let input_var = logical_plan[self.input].var.get().unwrap();
-
-        let var = var_table.register_var(self.ty.clone());
-        node.var.set(Some(var));
-
-        exec::Repeat {
-            input: input_var,
-            output: exec::Output {
-                var,
-                num_uses: node.num_uses.get(),
-            },
-            value: self.value.clone(),
-        }
-    }
 }
 
 impl From<Repeat> for mir::Node {

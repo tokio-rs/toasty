@@ -1,5 +1,7 @@
 use std::ops;
 
+use index_vec::IndexVec;
+
 use crate::engine::mir::{Cond, Node, NodeId, Store, annotate_guards};
 
 /// The complete operation graph for a query.
@@ -17,12 +19,20 @@ pub(crate) struct LogicalPlan {
 
     /// The final node whose output is the query result.
     completion: NodeId,
+
+    /// Number of variable loads each node's output receives during execution,
+    /// plus one exit use on the completion node.
+    ///
+    /// Used for reference counting; the output is freed after the last use.
+    num_uses: IndexVec<NodeId, usize>,
 }
 
 impl LogicalPlan {
     pub(crate) fn new(mut store: Store, completion: NodeId) -> LogicalPlan {
         let mut execution_order = vec![];
-        compute_operation_execution_order(completion, &store, &mut execution_order);
+        let mut visited: IndexVec<NodeId, bool> =
+            IndexVec::from_vec(vec![false; store.node_count()]);
+        compute_operation_execution_order(completion, &store, &mut visited, &mut execution_order);
 
         // Every reserved slot must be filled by the time planning completes —
         // an unfilled slot means a statement was referenced but never planned.
@@ -35,9 +45,9 @@ impl LogicalPlan {
         // execution order and never run. That is fine for pure nodes; a
         // dropped mutation would silently lose its database effect.
         debug_assert!(
-            store
-                .nodes()
-                .all(|node| node.visited.get() || !node.op.is_effectful()),
+            visited
+                .iter_enumerated()
+                .all(|(id, visited)| *visited || !store[id].op.is_effectful()),
             "effectful node unreachable from the completion node"
         );
 
@@ -46,20 +56,21 @@ impl LogicalPlan {
         // guard-condition input — an `If`'s `Cond::Expr` loads its inputs
         // once, on both arms. Ordering-only `deps` edges schedule but do not
         // count — no load ever drains them. The completion node's exit use
-        // is added by the caller before this point. (`Cond::NonEmpty` guards
+        // is the engine's load of the query result. (`Cond::NonEmpty` guards
         // are annotated after this loop and peek without loading.)
+        let mut num_uses: IndexVec<NodeId, usize> = IndexVec::from_vec(vec![0; store.node_count()]);
+        num_uses[completion] += 1;
+
         for node_id in &execution_order {
             let node = &store[node_id];
 
             for load in node.op.input_loads() {
-                let dep = &store[load];
-                dep.num_uses.set(dep.num_uses.get() + 1);
+                num_uses[load] += 1;
             }
 
             if let Some(Cond::Expr { inputs, .. }) = &node.guard {
-                for load in inputs {
-                    let dep = &store[load];
-                    dep.num_uses.set(dep.num_uses.get() + 1);
+                for &load in inputs {
+                    num_uses[load] += 1;
                 }
             }
         }
@@ -70,6 +81,7 @@ impl LogicalPlan {
             store,
             execution_order,
             completion,
+            num_uses,
         }
     }
 
@@ -78,8 +90,19 @@ impl LogicalPlan {
         &self.execution_order
     }
 
-    pub(crate) fn completion(&self) -> &Node {
-        &self.store[self.completion]
+    /// The final node whose output is the query result.
+    pub(crate) fn completion(&self) -> NodeId {
+        self.completion
+    }
+
+    /// Number of node slots; [`NodeId`]s are dense in `0..node_count()`.
+    pub(crate) fn node_count(&self) -> usize {
+        self.store.node_count()
+    }
+
+    /// Number of variable loads the node's output receives during execution.
+    pub(crate) fn num_uses(&self, node_id: NodeId) -> usize {
+        self.num_uses[node_id]
     }
 }
 
@@ -102,18 +125,17 @@ impl ops::Index<&NodeId> for LogicalPlan {
 fn compute_operation_execution_order(
     node_id: NodeId,
     mir: &Store,
+    visited: &mut IndexVec<NodeId, bool>,
     execution_order: &mut Vec<NodeId>,
 ) {
-    let node = &mir[node_id];
-
-    if node.visited.get() {
+    if visited[node_id] {
         return;
     }
 
-    node.visited.set(true);
+    visited[node_id] = true;
 
-    for &dep_id in &node.deps {
-        compute_operation_execution_order(dep_id, mir, execution_order);
+    for &dep_id in &mir[node_id].deps {
+        compute_operation_execution_order(dep_id, mir, visited, execution_order);
     }
 
     execution_order.push(node_id);

@@ -1,26 +1,14 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::{exec::Exec, mir},
 };
 use toasty_core::{
     driver::{ExecResponse, Rows},
     stmt,
 };
 
-#[derive(Debug)]
-pub(crate) struct Repeat {
-    /// The variable whose cardinality drives the repetition.
-    pub(crate) input: VarId,
-
-    /// Where to store the output
-    pub(crate) output: Output,
-
-    /// The value produced once per input row.
-    pub(crate) value: stmt::Value,
-}
-
 impl Exec<'_> {
-    pub(super) async fn action_repeat(&mut self, action: &Repeat) -> Result<()> {
+    pub(super) async fn exec_repeat(&mut self, action: &mir::Repeat) -> Result<ExecResponse> {
         let input_response = self.vars.load(action.input).await?;
 
         // Only the input's cardinality is observed; a count-only driver
@@ -41,18 +29,6 @@ impl Exec<'_> {
 
         let rows = vec![action.value.clone(); count];
 
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse::from_rows(Rows::value_stream(rows)),
-        );
-
-        Ok(())
-    }
-}
-
-impl From<Repeat> for Action {
-    fn from(value: Repeat) -> Self {
-        Action::Repeat(value)
+        Ok(ExecResponse::from_rows(Rows::value_stream(rows)))
     }
 }

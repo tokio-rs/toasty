@@ -3,52 +3,8 @@ use toasty_core::stmt;
 
 use crate::Result;
 use crate::engine::eval;
-use crate::engine::exec::{Action, Exec, Output, VarId};
-
-/// Combines parent and child data into nested structures.
-///
-/// The nested merge algorithm processes hierarchical data by:
-///
-/// 1. Loading all batch data upfront - fetches all input data for all levels
-///    before processing
-/// 2. Building all hash indexes from the pre-computed `indexes` list
-/// 3. Processing each root row:
-///    - For each nested child relationship at this level:
-///      - Filters batch-loaded child data using the qualification (hash lookup
-///        or scan predicate)
-///      - Recursively merges each matching child row with its own children
-///      - Collects results into a list, or a single value if `single` is `true`
-///    - Projects the final row by applying the projection function with the
-///      current row and all nested children
-///    - Adds the projected row to output
-/// 4. Returning all merged rows with their nested data
-///
-/// # Note
-///
-/// Rows loaded from batch queries are not the final projection. They may include
-/// extra fields needed for filtering or projecting nested children.
-#[derive(Debug, Clone)]
-pub(crate) struct NestedMerge {
-    /// Input sources. NestedLevel will reference their inputs by index in this vec.
-    pub(crate) inputs: Vec<VarId>,
-
-    /// Output variable, where to store the merged values
-    pub(crate) output: Output,
-
-    /// The root level
-    pub(crate) root: NestedLevel,
-
-    /// Flat list of hash indexes to build before the merge, computed at plan time.
-    ///
-    /// Each entry describes which input to index and which fields form the key.
-    /// `MergeQualification::HashLookup` references entries by position in this vec.
-    pub(crate) hash_indexes: Vec<MergeIndex>,
-
-    /// Flat list of sorted indexes to build before the merge, computed at plan time.
-    ///
-    /// `MergeQualification::SortLookup` references entries by position in this vec.
-    pub(crate) sort_indexes: Vec<MergeIndex>,
-}
+use crate::engine::exec::Exec;
+use crate::engine::mir;
 
 /// Describes one hash index to build over an input before the merge begins.
 ///
@@ -170,14 +126,39 @@ struct Indices<'a> {
 }
 
 impl Exec<'_> {
-    pub(super) async fn action_nested_merge(&mut self, action: &NestedMerge) -> Result<()> {
+    /// Combines parent and child data into nested structures.
+    ///
+    /// The nested merge algorithm processes hierarchical data by:
+    ///
+    /// 1. Loading all batch data upfront - fetches all input data for all levels
+    ///    before processing
+    /// 2. Building all hash indexes from the pre-computed `indexes` list
+    /// 3. Processing each root row:
+    ///    - For each nested child relationship at this level:
+    ///      - Filters batch-loaded child data using the qualification (hash lookup
+    ///        or scan predicate)
+    ///      - Recursively merges each matching child row with its own children
+    ///      - Collects results into a list, or a single value if `single` is `true`
+    ///    - Projects the final row by applying the projection function with the
+    ///      current row and all nested children
+    ///    - Adds the projected row to output
+    /// 4. Returning all merged rows with their nested data
+    ///
+    /// # Note
+    ///
+    /// Rows loaded from batch queries are not the final projection. They may include
+    /// extra fields needed for filtering or projecting nested children.
+    pub(super) async fn exec_nested_merge(
+        &mut self,
+        action: &mir::NestedMerge,
+    ) -> Result<ExecResponse> {
         // Load all input data upfront
         let mut inputs = Vec::with_capacity(action.inputs.len());
         let mut next_cursor = None;
         let mut prev_cursor = None;
 
-        for (source, var_id) in action.inputs.iter().enumerate() {
-            let response = self.vars.load(*var_id).await?;
+        for (source, node_id) in action.inputs.iter().enumerate() {
+            let response = self.vars.load(*node_id).await?;
 
             if source == action.root.source {
                 next_cursor = response.next_cursor;
@@ -257,18 +238,11 @@ impl Exec<'_> {
             }
         }
 
-        // Store the output
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse {
-                values: Rows::value_stream(merged_rows),
-                next_cursor,
-                prev_cursor,
-            },
-        );
-
-        Ok(())
+        Ok(ExecResponse {
+            values: Rows::value_stream(merged_rows),
+            next_cursor,
+            prev_cursor,
+        })
     }
 
     /// Recursively merges a single row with its nested child data.
@@ -440,11 +414,5 @@ impl stmt::Input for &RowAndNested<'_> {
         };
 
         Some(base.entry(projection).to_expr())
-    }
-}
-
-impl From<NestedMerge> for Action {
-    fn from(src: NestedMerge) -> Self {
-        Self::NestedMerge(src)
     }
 }

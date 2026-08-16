@@ -1,9 +1,6 @@
 use toasty_core::stmt;
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::mir;
 
 /// Passes another node's output through unchanged.
 ///
@@ -20,28 +17,6 @@ pub(crate) struct Alias {
 
     /// The output type (same as input).
     pub(crate) ty: stmt::Type,
-}
-
-impl Alias {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Alias {
-        let input = logical_plan[self.input].var.get().unwrap();
-
-        let var = var_table.register_var(self.ty.clone());
-        node.var.set(Some(var));
-
-        exec::Alias {
-            input,
-            output: exec::Output {
-                var,
-                num_uses: node.num_uses.get(),
-            },
-        }
-    }
 }
 
 impl From<Alias> for mir::Node {

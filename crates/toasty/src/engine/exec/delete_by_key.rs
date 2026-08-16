@@ -1,34 +1,14 @@
-use toasty_core::{
-    driver::{ExecResponse, Rows, operation},
-    schema::db::TableId,
-    stmt,
-};
+use toasty_core::driver::{ExecResponse, Rows, operation};
 
-use crate::engine::exec::{Action, Output, VarId};
+use crate::engine::{exec::Exec, mir};
 
-use super::{Exec, Result};
-
-/// Input is the key to delete
-#[derive(Debug)]
-pub(crate) struct DeleteByKey {
-    /// How to access input from the variable table.
-    pub input: VarId,
-
-    /// Where to store the output (impacted row count)
-    pub output: Output,
-
-    /// Which model to get
-    pub table: TableId,
-
-    /// Only delete keys that match the filter
-    pub filter: Option<stmt::Expr>,
-
-    /// Condition for optimistic locking (e.g., version check).
-    pub condition: Option<stmt::Expr>,
-}
+use super::Result;
 
 impl Exec<'_> {
-    pub(super) async fn action_delete_by_key(&mut self, action: &DeleteByKey) -> Result<()> {
+    pub(super) async fn exec_delete_by_key(
+        &mut self,
+        action: &mir::DeleteByKey,
+    ) -> Result<ExecResponse> {
         let keys = self
             .vars
             .load(action.input)
@@ -62,18 +42,6 @@ impl Exec<'_> {
             Rows::Count(total_count)
         };
 
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse::from_rows(res),
-        );
-
-        Ok(())
-    }
-}
-
-impl From<DeleteByKey> for Action {
-    fn from(src: DeleteByKey) -> Self {
-        Self::DeleteByKey(src)
+        Ok(ExecResponse::from_rows(res))
     }
 }

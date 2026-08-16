@@ -1,10 +1,7 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::mir;
 
 /// Performs an optimistic read-modify-write operation.
 ///
@@ -23,42 +20,10 @@ pub(crate) struct ReadModifyWrite {
     /// The write statement to execute if the condition holds.
     pub(crate) write: stmt::Statement,
 
-    /// The return type.
+    /// The return type. When the write carries a `RETURNING`, this is
+    /// `List<Record>`; without one the type is `Unit` and the write reports
+    /// only a row count.
     pub(crate) ty: stmt::Type,
-}
-
-impl ReadModifyWrite {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::ReadModifyWrite {
-        let input = self
-            .inputs
-            .iter()
-            .map(|input| logical_plan[input].var.get().unwrap())
-            .collect();
-
-        let var = var_table.register_var(self.ty.clone());
-        node.var.set(Some(var));
-
-        // When the write carries a `RETURNING`, the node's type is
-        // `List<Record>`; without one the type is `Unit` and the write reports
-        // only a row count.
-        let output_ty = mir::row_field_types(&self.ty);
-
-        exec::ReadModifyWrite {
-            input,
-            output: exec::Output {
-                var,
-                num_uses: node.num_uses.get(),
-            },
-            output_ty,
-            read: self.read.clone(),
-            write: self.write.clone(),
-        }
-    }
 }
 
 impl From<ReadModifyWrite> for mir::Node {

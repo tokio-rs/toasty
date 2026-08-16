@@ -77,14 +77,6 @@ impl Store {
         *slot = Slot::Node(node.into());
     }
 
-    /// Iterates all filled nodes.
-    pub(crate) fn nodes(&self) -> impl Iterator<Item = &Node> {
-        self.slots.iter().filter_map(|slot| match slot {
-            Slot::Node(node) => Some(node),
-            Slot::Reserved => None,
-        })
-    }
-
     /// True when no reserved slot is left unfilled.
     pub(crate) fn all_filled(&self) -> bool {
         self.slots.iter().all(|slot| matches!(slot, Slot::Node(_)))

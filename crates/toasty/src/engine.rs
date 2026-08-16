@@ -94,7 +94,7 @@ impl Engine {
         let plan = self.plan_hir_statement(hir)?;
 
         tracing::trace!(
-            actions = plan.actions.len(),
+            steps = plan.steps.len(),
             needs_transaction = plan.needs_transaction,
             "execution plan ready"
         );

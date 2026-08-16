@@ -1,26 +1,11 @@
 use crate::{
     Result,
-    engine::{
-        eval,
-        exec::{Action, Exec, Output, VarId},
-    },
+    engine::{exec::Exec, mir},
 };
 use toasty_core::driver::{ExecResponse, Rows};
 
-#[derive(Debug)]
-pub(crate) struct Filter {
-    /// Source of the input
-    pub(crate) input: VarId,
-
-    /// Where to store the output
-    pub(crate) output: Output,
-
-    /// The predicate: `arg(0)` = current row; keep the row when true.
-    pub(crate) predicate: eval::Func,
-}
-
 impl Exec<'_> {
-    pub(super) async fn action_filter(&mut self, action: &Filter) -> Result<()> {
+    pub(super) async fn exec_filter(&mut self, action: &mir::Filter) -> Result<ExecResponse> {
         // Load the input variable with metadata
         let input_response = self.vars.load(action.input).await?;
         let mut input_stream = input_response.values.into_value_stream();
@@ -39,23 +24,11 @@ impl Exec<'_> {
             }
         }
 
-        // Store the filtered stream with preserved pagination metadata
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse {
-                values: Rows::value_stream(filtered_rows),
-                next_cursor: input_response.next_cursor,
-                prev_cursor: input_response.prev_cursor,
-            },
-        );
-
-        Ok(())
-    }
-}
-
-impl From<Filter> for Action {
-    fn from(value: Filter) -> Self {
-        Action::Filter(value)
+        // Return the filtered stream with preserved pagination metadata
+        Ok(ExecResponse {
+            values: Rows::value_stream(filtered_rows),
+            next_cursor: input_response.next_cursor,
+            prev_cursor: input_response.prev_cursor,
+        })
     }
 }

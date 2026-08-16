@@ -64,7 +64,30 @@ pub(crate) use update_by_key::UpdateByKey;
 mod upsert;
 pub(crate) use upsert::Upsert;
 
-use toasty_core::stmt;
+use indexmap::IndexSet;
+use toasty_core::{
+    schema::db::{ColumnId, TableId},
+    stmt,
+};
+
+/// Resolves the columns a driver operation selects to [`ColumnId`]s.
+pub(crate) fn column_ids(table: TableId, columns: &IndexSet<stmt::ExprReference>) -> Vec<ColumnId> {
+    columns
+        .iter()
+        .map(|expr_reference| {
+            let stmt::ExprReference::Column(expr_column) = expr_reference else {
+                todo!()
+            };
+            debug_assert_eq!(expr_column.nesting, 0);
+            debug_assert_eq!(expr_column.table, 0);
+
+            ColumnId {
+                table,
+                index: expr_column.column,
+            }
+        })
+        .collect()
+}
 
 /// Extracts the per-row column types from a node's return type. A node
 /// returning rows has type `List<Record<...>>` — the record field types tell

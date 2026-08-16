@@ -1,9 +1,6 @@
 use toasty_core::stmt;
 
-use crate::engine::{
-    eval, exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::{eval, mir};
 
 /// Keeps the input rows for which `predicate` holds.
 ///
@@ -24,30 +21,6 @@ pub(crate) struct Filter {
 
     /// The output type (same as input, but potentially fewer rows).
     pub(crate) ty: stmt::Type,
-}
-
-impl Filter {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Filter {
-        let input = logical_plan[self.input].var.get().unwrap();
-        let ty = node.ty().clone();
-
-        let var = var_table.register_var(ty);
-        node.var.set(Some(var));
-
-        exec::Filter {
-            input,
-            output: exec::Output {
-                var,
-                num_uses: node.num_uses.get(),
-            },
-            predicate: self.predicate.clone(),
-        }
-    }
 }
 
 impl From<Filter> for mir::Node {
