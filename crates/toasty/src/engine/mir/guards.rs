@@ -181,10 +181,40 @@ pub(super) fn annotate_guards(store: &mut Store, execution_order: &[NodeId], com
     }
 }
 
-/// Matches an `Eval` function of the form `map(arg(b), body)` and returns
-/// `(b, positions)` where `positions` are the statement-level input positions
-/// referenced inside the map body (excluding `b`). The base is exactly one
-/// arg, so any other referenced input is body-only.
+/// Detects the `Eval` function form that rule 1 applies to, and reports
+/// which inputs are read only from the map body.
+///
+/// An `Eval`'s function is an expression evaluated against the node's
+/// inputs. The expression refers to an input by position: `arg(0)` is the
+/// first input, `arg(1)` the second, and so on. Rule 1 looks for a function
+/// that is exactly one map over an input's rows:
+///
+/// ```text
+/// map(arg(b), body)
+/// ```
+///
+/// The map evaluates `body` once per row of input `b`; zero rows means zero
+/// evaluations. And because the map is the whole function, the base
+/// `arg(b)` and the body are the only places an input can be read from. So
+/// every input the body reads, other than `b` itself, is read only when `b`
+/// returns rows.
+///
+/// One wrinkle: inside the body, `arg` is relative to the map's row scope.
+/// `arg(0)` with `nesting == 0` is the current row, and each level of
+/// `nesting` steps out one scope. A body arg refers to an `Eval` input when
+/// its nesting matches the number of scopes around it — that is what the
+/// walk below checks, starting at depth 1 for the body itself.
+///
+/// For n3 in the module example, with inputs `[n0, n2]`:
+///
+/// ```text
+/// map(arg(0), <build a todo from the current row, taking its user from arg(1)>)
+/// ```
+///
+/// The base is input 0 (n0, the todos); the body reads input 1 (n2, the
+/// users). The function returns `(0, {1})`: input 1 is read only from the
+/// body. Returns `None` when the function does not have the map form, or
+/// when the base is not a plain input reference.
 fn map_body_only_positions(expr: &stmt::Expr) -> Option<(usize, IndexSet<usize>)> {
     let stmt::Expr::Map(map) = expr else {
         return None;
