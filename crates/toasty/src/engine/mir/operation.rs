@@ -93,11 +93,11 @@ impl Operation {
     /// every listed input exactly once — or release it on any path that
     /// declines the load. (A node's `guard` condition may load additional
     /// variables; those are counted separately at `LogicalPlan::new`.)
-    pub(crate) fn input_loads(&self) -> Vec<NodeId> {
+    pub(crate) fn input_loads(&self) -> impl Iterator<Item = NodeId> + use<> {
         // ReadModifyWrite declares `inputs` but its exec action asserts them
         // empty; count them anyway so a future non-empty RMW input must load
         // them rather than silently violating the counting.
-        self.inputs().into_iter().collect()
+        self.inputs().into_iter()
     }
 
     /// True for operations that write to the database.
