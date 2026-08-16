@@ -43,6 +43,11 @@ pub enum Rows {
 }
 
 impl ExecResponse {
+    /// Returns `true` if this response has no pagination cursors.
+    pub fn is_unpaginated(&self) -> bool {
+        self.next_cursor.is_none() && self.prev_cursor.is_none()
+    }
+
     /// Creates a response indicating that `count` rows were affected.
     pub fn count(count: u64) -> Self {
         Self {

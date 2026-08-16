@@ -7,7 +7,7 @@ use crate::{
 };
 use toasty_core::{
     driver::{ExecResponse, Rows},
-    stmt,
+    stmt::Value,
 };
 
 impl Exec<'_> {
@@ -16,67 +16,95 @@ impl Exec<'_> {
         logical_plan: &LogicalPlan,
         action: &mir::Eval,
     ) -> Result<ExecResponse> {
-        // With a base, the per-row body is erased into a single `map`
-        // function over inputs `[base, attached...]`, with pagination
-        // metadata forwarding from `base` at input 0.
-        let map_func;
-        let (inputs, func, metadata) = match action.base {
-            Some(base) => {
-                let mut inputs = vec![base];
-                inputs.extend(action.attached.iter().copied());
-                map_func = action.map_func(logical_plan);
-                (inputs, &map_func, Some(0))
-            }
-            None => {
-                let inputs: Vec<_> = action.attached.iter().copied().collect();
-                (inputs, &action.body, None)
-            }
-        };
+        match action.base {
+            Some(base) => self.exec_eval_map_over(logical_plan, action, base).await,
+            None => self.exec_eval_compute(action).await,
+        }
+    }
 
-        // Load the base before the attached inputs. An empty base evaluates
-        // the map zero times, so release the attached inputs without loading
-        // them. This matches their `PerRowOf(base)` consumption in the guard
-        // analysis.
-        let mut input = Vec::with_capacity(inputs.len());
-        let mut next_cursor = None;
-        let mut prev_cursor = None;
+    async fn exec_eval_compute(&mut self, action: &mir::Eval) -> Result<ExecResponse> {
+        // This form evaluates the body once with each complete input.
+        // For example, two attached nodes produce this call:
+        //
+        //     body.eval([attached_0, attached_1])
+        let mut input = Vec::with_capacity(action.attached.len());
 
-        for (i, node_id) in inputs.iter().enumerate() {
-            let response = self.vars.load(*node_id).await?;
-            let data = response.values.collect_as_value().await?;
-
-            if Some(i) == metadata {
-                next_cursor = response.next_cursor;
-                prev_cursor = response.prev_cursor;
-            } else {
-                debug_assert!(response.next_cursor.is_none() && response.prev_cursor.is_none());
-            }
-
-            if i == 0
-                && action.base.is_some()
-                && matches!(&data, stmt::Value::List(items) if items.is_empty())
-            {
-                for &node_id in &inputs[1..] {
-                    self.vars.release(node_id);
-                }
-
-                return Ok(ExecResponse {
-                    values: Rows::Value(data),
-                    next_cursor,
-                    prev_cursor,
-                });
-            }
-
-            input.push(data);
+        for &node_id in &action.attached {
+            let response = self.vars.load(node_id).await?;
+            // Only a base can pass page cursors to an `Eval` result.
+            debug_assert!(response.is_unpaginated());
+            input.push(response.values.collect_as_value().await?);
         }
 
-        // Evaluate the function with the collected inputs
-        let result = func.eval(&self.engine.schema, &input)?;
+        let result = action.body.eval(&self.engine.schema, &input)?;
 
+        Ok(ExecResponse::from_rows(Rows::Value(result)))
+    }
+
+    async fn exec_eval_map_over(
+        &mut self,
+        logical_plan: &LogicalPlan,
+        action: &mir::Eval,
+        base: mir::NodeId,
+    ) -> Result<ExecResponse> {
+        // This form evaluates the body once for each row from `base`.
+        // For example, two base rows produce this result:
+        //
+        //     [body.eval(base[0], attached...),
+        //      body.eval(base[1], attached...)]
+        //
+        // Load `base` first because it decides whether the attached inputs
+        // are needed.
+        let ExecResponse {
+            values,
+            next_cursor,
+            prev_cursor,
+        } = self.vars.load(base).await?;
+        let base_rows = values.collect_as_value().await?;
+
+        if base_rows.is_list_empty() {
+            return Ok(self.exec_eval_map_over_empty_base(action, next_cursor, prev_cursor));
+        }
+
+        let mut input = Vec::with_capacity(1 + action.attached.len());
+        input.push(base_rows);
+
+        for &node_id in &action.attached {
+            let attached_response = self.vars.load(node_id).await?;
+            // Only a base can pass page cursors to an `Eval` result.
+            debug_assert!(attached_response.is_unpaginated());
+            input.push(attached_response.values.collect_as_value().await?);
+        }
+
+        let map_func = action.map_func(logical_plan);
+        let result = map_func.eval(&self.engine.schema, &input)?;
+
+        // The output has one item for each base row. Its cursors must match
+        // the base cursors so the caller can fetch the next or previous page.
         Ok(ExecResponse {
             values: Rows::Value(result),
             next_cursor,
             prev_cursor,
         })
+    }
+
+    fn exec_eval_map_over_empty_base(
+        &mut self,
+        action: &mir::Eval,
+        next_cursor: Option<Box<Value>>,
+        prev_cursor: Option<Box<Value>>,
+    ) -> ExecResponse {
+        // There are no rows to evaluate. Do not load the attached inputs.
+        // Loading a value consumes one recorded use. Since this path skips
+        // those loads, release the uses instead.
+        for &node_id in &action.attached {
+            self.vars.release(node_id);
+        }
+
+        ExecResponse {
+            values: Rows::Value(Value::List(vec![])),
+            next_cursor,
+            prev_cursor,
+        }
     }
 }

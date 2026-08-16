@@ -223,7 +223,7 @@ impl Exec<'_> {
 
         // Apply pagination if configured
         if let Some(pagination) = &action.pagination {
-            assert!(res.next_cursor.is_none() && res.prev_cursor.is_none());
+            assert!(res.is_unpaginated());
             res.values.buffer().await?;
             self.apply_sql_pagination(&mut res, pagination)?;
         }
