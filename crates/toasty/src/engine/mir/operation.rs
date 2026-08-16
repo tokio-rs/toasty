@@ -1,13 +1,12 @@
 use std::cell::Cell;
 
-use indexmap::{IndexSet, indexset};
+use indexmap::IndexSet;
 
 use crate::engine::effect;
-use crate::engine::mir::Eval;
 
 use super::{
-    Alias, Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge, Node,
-    NodeId, Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey, Upsert,
+    Alias, Compute, Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, MapOver,
+    NestedMerge, Node, NodeId, Project, QueryPk, ReadModifyWrite, Scan, UpdateByKey, Upsert,
 };
 
 /// A step in the query execution plan.
@@ -19,12 +18,13 @@ pub(crate) enum Operation {
     /// Pass another node's output through unchanged (fills a reserved slot)
     Alias(Alias),
 
+    /// Evaluate a function once over whole input values
+    Compute(Compute),
+
     /// A constant value
     Const(Const),
 
     DeleteByKey(DeleteByKey),
-
-    Eval(Eval),
 
     /// Execute a database query
     ExecStatement(Box<ExecStatement>),
@@ -37,6 +37,9 @@ pub(crate) enum Operation {
 
     /// Get records by primary key
     GetByKey(GetByKey),
+
+    /// Evaluate a function once per row of one input, splicing in others
+    MapOver(MapOver),
 
     /// Execute a nested merge
     NestedMerge(NestedMerge),
@@ -59,32 +62,53 @@ pub(crate) enum Operation {
     Upsert(Box<Upsert>),
 }
 
+/// How an operation reads one of its inputs.
+#[derive(Debug, Clone, Copy)]
+pub(crate) enum InputRead {
+    /// Read whenever the operation runs.
+    Always,
+
+    /// Read only while iterating the referenced node's rows; when that node
+    /// returns no rows, the input is never read.
+    PerRowOf(NodeId),
+}
+
 impl Operation {
-    /// The operation's value edges: nodes whose outputs it reads.
+    /// The operation's value edges — nodes whose outputs it reads — each
+    /// paired with how the output is read.
     ///
-    /// `Node.deps` is seeded from this set and may then be extended with
+    /// `Node.deps` is seeded from these nodes and may then be extended with
     /// ordering-only edges (e.g. "child INSERT before parent INSERT"). The
     /// ordering-only edges are derivable as `deps − inputs()`.
-    pub(crate) fn inputs(&self) -> IndexSet<NodeId> {
+    pub(crate) fn input_reads(&self) -> Vec<(NodeId, InputRead)> {
+        use InputRead::{Always, PerRowOf};
+
         match self {
-            Operation::Alias(m) => indexset![m.input],
-            Operation::Const(_m) => IndexSet::new(),
-            Operation::DeleteByKey(m) => indexset![m.input],
-            Operation::Eval(m) => m.inputs.clone(),
-            Operation::ExecStatement(m) => m.inputs.clone(),
-            Operation::Filter(m) => indexset![m.input],
-            Operation::FindPkByIndex(m) => m.inputs.clone(),
-            Operation::GetByKey(m) => {
-                indexset![m.input]
-            }
-            Operation::NestedMerge(m) => m.inputs.clone(),
-            Operation::Project(m) => indexset![m.input],
-            Operation::ReadModifyWrite(m) => m.inputs.clone(),
-            Operation::QueryPk(m) => m.input.into_iter().collect(),
-            Operation::Scan(m) => m.input.into_iter().collect(),
-            Operation::UpdateByKey(m) => indexset![m.input],
-            Operation::Upsert(m) => m.inputs.clone(),
+            Operation::Alias(m) => vec![(m.input, Always)],
+            Operation::Compute(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
+            Operation::Const(_m) => vec![],
+            Operation::DeleteByKey(m) => vec![(m.input, Always)],
+            Operation::ExecStatement(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
+            Operation::Filter(m) => vec![(m.input, Always)],
+            Operation::FindPkByIndex(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
+            Operation::GetByKey(m) => vec![(m.input, Always)],
+            Operation::MapOver(m) => [(m.base, Always)]
+                .into_iter()
+                .chain(m.attached.iter().map(|&a| (a, PerRowOf(m.base))))
+                .collect(),
+            Operation::NestedMerge(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
+            Operation::Project(m) => vec![(m.input, Always)],
+            Operation::ReadModifyWrite(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
+            Operation::QueryPk(m) => m.input.into_iter().map(|i| (i, Always)).collect(),
+            Operation::Scan(m) => m.input.into_iter().map(|i| (i, Always)).collect(),
+            Operation::UpdateByKey(m) => vec![(m.input, Always)],
+            Operation::Upsert(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
         }
+    }
+
+    /// The operation's value edges: nodes whose outputs it reads.
+    pub(crate) fn inputs(&self) -> IndexSet<NodeId> {
+        self.input_reads().into_iter().map(|(id, _)| id).collect()
     }
 
     /// The variable loads the operation's exec action performs, with
@@ -119,11 +143,12 @@ impl Operation {
             Operation::ExecStatement(m) => effect::classify(&m.stmt) == effect::Effect::Mutating,
 
             Operation::Alias(_)
+            | Operation::Compute(_)
             | Operation::Const(_)
-            | Operation::Eval(_)
             | Operation::Filter(_)
             | Operation::FindPkByIndex(_)
             | Operation::GetByKey(_)
+            | Operation::MapOver(_)
             | Operation::NestedMerge(_)
             | Operation::Project(_)
             | Operation::QueryPk(_)

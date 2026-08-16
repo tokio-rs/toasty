@@ -4,6 +4,9 @@ pub(crate) use alias::Alias;
 mod cond;
 pub(crate) use cond::Cond;
 
+mod compute;
+pub(crate) use compute::Compute;
+
 mod r#const;
 pub(crate) use r#const::Const;
 
@@ -12,9 +15,6 @@ pub(crate) use delete_by_key::DeleteByKey;
 
 mod exec_statement;
 pub(crate) use exec_statement::ExecStatement;
-
-mod eval;
-pub(crate) use eval::Eval;
 
 mod filter;
 pub(crate) use filter::Filter;
@@ -30,6 +30,9 @@ use guards::annotate_guards;
 
 mod logical_plan;
 pub(crate) use logical_plan::LogicalPlan;
+
+mod map_over;
+pub(crate) use map_over::MapOver;
 
 mod nested_merge;
 pub(crate) use nested_merge::NestedMerge;

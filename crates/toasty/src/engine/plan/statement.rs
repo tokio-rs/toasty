@@ -126,7 +126,16 @@ type Returning = Option<stmt::Returning>;
 #[derive(Debug)]
 struct ReturningInfo {
     clause: Option<stmt::Returning>,
+
+    /// Nodes the returning expression reads, in reference order. For a
+    /// `Project` clause these are the attached inputs of the `MapOver` that
+    /// evaluates it — the loaded row is not among them; the body references
+    /// it as `arg(0)` and these as `arg(1 + i)`.
     inputs: IndexSet<mir::NodeId>,
+
+    /// `Project` only: the projection references the loaded row (a column or
+    /// `count(*)`), so it must be evaluated per row of the data load.
+    reads_row: bool,
 }
 
 struct PaginationInfo {
@@ -305,9 +314,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         // Track sub-statements referenced in the returning clause as inputs, so their
         // results are available when building the return value.
+        let (inputs, reads_row) =
+            self.extract_inputs_from_returning(&mut returning, load_data_node_id);
         let returning_info = ReturningInfo {
-            inputs: self.extract_inputs_from_returning(&mut returning, load_data_node_id),
             clause: returning,
+            inputs,
+            reads_row,
         };
 
         // Plans a NestedMerge if one is needed
@@ -333,8 +345,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         &mut self,
         returning: &mut Returning,
         load_data_node_id: mir::NodeId,
-    ) -> IndexSet<mir::NodeId> {
+    ) -> (IndexSet<mir::NodeId>, bool) {
         let mut inputs = IndexSet::new();
+        let mut reads_row = false;
 
         let is_returning_projection = matches!(returning, Some(stmt::Returning::Project(..)));
         debug_assert!(
@@ -343,7 +356,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
         match returning {
             Some(stmt::Returning::Project(expr)) | Some(stmt::Returning::Expr(expr)) => {
-                self.rewrite_returning_inputs(
+                reads_row = self.rewrite_returning_inputs(
                     expr,
                     &mut inputs,
                     load_data_node_id,
@@ -353,12 +366,21 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             _ => {}
         }
 
-        inputs
+        (inputs, reads_row)
     }
 
     /// Rewrite the returning clause expression so statement-level
     /// `Arg`/`Reference`/`Count`/`Project` nodes reference the MIR inputs that
     /// supply their data, collecting those inputs into `inputs`.
+    ///
+    /// A `Project` clause becomes the body of a `MapOver`, so its references
+    /// follow that operation's convention: the loaded row is `arg(0)` and the
+    /// collected inputs are `arg(1 + index)`. An `Expr` clause becomes a
+    /// `Compute` body, where the collected inputs are `arg(index)` directly.
+    ///
+    /// Returns whether the expression references the loaded row (a column or
+    /// `count(*)`) — for a `Project` clause, whether it must be evaluated per
+    /// row.
     ///
     /// Walk scope-aware so that `Arg`/`Reference` nodes nested inside a
     /// `Map`/`Let` body (e.g. the via-include projection that strips the
@@ -372,7 +394,12 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         inputs: &mut IndexSet<mir::NodeId>,
         load_data_node_id: mir::NodeId,
         is_returning_projection: bool,
-    ) {
+    ) -> bool {
+        // In a `MapOver` body, `arg(0)` is the row, so attached inputs start
+        // at position 1.
+        let input_base = if is_returning_projection { 1 } else { 0 };
+        let mut reads_row = false;
+
         visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
             if scope_depth != 0 {
                 return true;
@@ -403,19 +430,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                             let index = returning_input.get().unwrap();
                             let row = batch_load_index.get().unwrap();
-                            let nesting = if self.stmt().is_insert() && is_returning_projection {
-                                1
-                            } else {
-                                0
-                            };
 
-                            *expr = stmt::Expr::project(
-                                stmt::ExprArg {
-                                    position: index,
-                                    nesting,
-                                },
-                                [row, column],
-                            );
+                            *expr = stmt::Expr::arg_project(input_base + index, [row, column]);
                         }
                         hir::Arg::Sub {
                             stmt_id: target_id, ..
@@ -425,20 +441,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                             let (index, _) = inputs.insert_full(target_node_id);
 
-                            // An insert's projection returning is evaluated
-                            // per database row inside a `map`, so the Eval's
-                            // inputs sit one scope out (same as `Arg::Ref`
-                            // above).
-                            let nesting = if self.stmt().is_insert() && is_returning_projection {
-                                1
-                            } else {
-                                0
-                            };
-
-                            *expr = stmt::Expr::Arg(stmt::ExprArg {
-                                position: index,
-                                nesting,
-                            });
+                            *expr = stmt::Expr::arg(input_base + index);
                         }
                     }
                     false
@@ -461,8 +464,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                 }
                 stmt::Expr::Reference(expr_reference) if is_returning_projection => {
                     let column = self.load_data_expr_reference_position(expr_reference);
-                    let (position, _) = inputs.insert_full(load_data_node_id);
-                    *expr = stmt::Expr::arg_project(position, [column]);
+                    reads_row = true;
+                    *expr = stmt::Expr::arg_project(0, [column]);
                     false
                 }
                 stmt::Expr::Func(stmt::ExprFunc::Count(stmt::FuncCount { arg: None, .. }))
@@ -474,13 +477,15 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         .get()
                         .unwrap()
                         .get_index_of_count_star();
-                    let (position, _) = inputs.insert_full(load_data_node_id);
-                    *expr = stmt::Expr::arg_project(position, [index]);
+                    reads_row = true;
+                    *expr = stmt::Expr::arg_project(0, [index]);
                     false
                 }
                 _ => true,
             }
         });
+
+        reads_row
     }
 
     fn load_data_expr_reference_position(&self, expr_reference: &stmt::ExprReference) -> usize {
@@ -1997,11 +2002,16 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return node_id;
         }
 
-        let returning_arg_tys = returning
-            .inputs
-            .iter()
-            .map(|input| self.planner.mir[input].ty().clone())
-            .collect();
+        let returning_arg_tys = |base: Option<stmt::Type>| -> Vec<stmt::Type> {
+            base.into_iter()
+                .chain(
+                    returning
+                        .inputs
+                        .iter()
+                        .map(|input| self.planner.mir[input].ty().clone()),
+                )
+                .collect()
+        };
 
         // Then handle returning clause
         if let Some(clause) = returning.clause {
@@ -2015,12 +2025,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             .mir
                             .insert_with_deps(mir::Const { value, ty }, [data_load_node_id])
                     } else {
-                        let eval = eval::Func::from_stmt(expr, returning_arg_tys);
+                        let body = eval::Func::from_stmt(expr, returning_arg_tys(None));
 
-                        let node_id = self.insert_mir_with_deps(mir::Eval {
+                        let node_id = self.insert_mir_with_deps(mir::Compute {
                             inputs: returning.inputs,
-                            eval,
-                            metadata: None,
+                            body,
                         });
 
                         if !self.stmt().is_query() {
@@ -2031,15 +2040,19 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     }
                 }
                 stmt::Returning::Project(projection) => {
-                    if let Some(position) = returning.inputs.get_index_of(&data_load_node_id) {
-                        self.insert_mir_with_deps(mir::Eval {
-                            inputs: returning.inputs,
-                            eval: eval::Func::from_stmt(
-                                stmt::Expr::map(stmt::Expr::arg(position), projection),
-                                returning_arg_tys,
-                            ),
-                            metadata: Some(position),
-                        })
+                    if returning.reads_row {
+                        let row_ty = match self.planner.mir[data_load_node_id].ty() {
+                            stmt::Type::List(ty) => (**ty).clone(),
+                            ty => panic!("per-row returning over a rowless data load; ty={ty:#?}"),
+                        };
+                        let body =
+                            eval::Func::from_stmt(projection, returning_arg_tys(Some(row_ty)));
+
+                        self.insert_mir_with_deps(mir::MapOver::new(
+                            data_load_node_id,
+                            returning.inputs,
+                            body,
+                        ))
                     } else {
                         // TODO: figure out how to handle repeating a number of times vs. projecting results
                         let projection = eval::Func::from_stmt(projection, vec![]);

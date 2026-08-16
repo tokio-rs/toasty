@@ -47,13 +47,14 @@ impl Node {
     pub(crate) fn ty(&self) -> &stmt::Type {
         match &self.op {
             Operation::Alias(m) => &m.ty,
+            Operation::Compute(m) => &m.body.ret,
             Operation::Const(m) => &m.ty,
             Operation::DeleteByKey(m) => &m.ty,
-            Operation::Eval(m) => &m.eval.ret,
             Operation::ExecStatement(m) => &m.ty,
             Operation::Filter(m) => &m.ty,
             Operation::FindPkByIndex(m) => &m.ty,
             Operation::GetByKey(m) => &m.ty,
+            Operation::MapOver(m) => &m.ty,
             Operation::QueryPk(m) => &m.ty,
             Operation::Scan(m) => &m.ty,
             Operation::Project(m) => &m.ty,
@@ -71,13 +72,14 @@ impl Node {
     ) -> exec::Action {
         match &self.op {
             Operation::Alias(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::Compute(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Const(op) => op.to_exec(self, var_table).into(),
             Operation::DeleteByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Eval(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::ExecStatement(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Filter(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::FindPkByIndex(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::GetByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
+            Operation::MapOver(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::NestedMerge(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::Project(op) => op.to_exec(logical_plan, self, var_table).into(),
             Operation::ReadModifyWrite(op) => op.to_exec(logical_plan, self, var_table).into(),
