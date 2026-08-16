@@ -15,8 +15,8 @@ pub(crate) struct Filter {
     /// Where to store the output
     pub(crate) output: Output,
 
-    /// How to project it before storing
-    pub(crate) filter: eval::Func,
+    /// The predicate: `arg(0)` = current row; keep the row when true.
+    pub(crate) predicate: eval::Func,
 }
 
 impl Exec<'_> {
@@ -32,7 +32,7 @@ impl Exec<'_> {
             let value = res?;
 
             if action
-                .filter
+                .predicate
                 .eval_bool(&self.engine.schema, std::slice::from_ref(&value))?
             {
                 filtered_rows.push(value);

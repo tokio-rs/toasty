@@ -1751,7 +1751,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             let item_ty = ty.as_list_unwrap();
             node_id = self.planner.mir.insert(mir::Filter {
                 input: node_id,
-                filter: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
+                predicate: eval::Func::from_stmt(post_filter, vec![item_ty.clone()]),
                 ty,
             });
         }
