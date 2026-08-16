@@ -3,8 +3,8 @@ use indexmap::IndexSet;
 use crate::engine::effect;
 
 use super::{
-    Alias, Compute, Const, DeleteByKey, ExecStatement, Filter, FindPkByIndex, GetByKey, MapOver,
-    NestedMerge, Node, NodeId, QueryPk, ReadModifyWrite, Repeat, Scan, UpdateByKey, Upsert,
+    Alias, Const, DeleteByKey, Eval, ExecStatement, Filter, FindPkByIndex, GetByKey, NestedMerge,
+    Node, NodeId, QueryPk, ReadModifyWrite, Repeat, Scan, UpdateByKey, Upsert,
 };
 
 /// A step in the query execution plan.
@@ -16,13 +16,14 @@ pub(crate) enum Operation {
     /// Pass another node's output through unchanged (fills a reserved slot)
     Alias(Alias),
 
-    /// Evaluate a function once over whole input values
-    Compute(Compute),
-
     /// A constant value
     Const(Const),
 
     DeleteByKey(DeleteByKey),
+
+    /// Evaluate a function, once over whole input values or once per row of
+    /// a base input
+    Eval(Eval),
 
     /// Execute a database query
     ExecStatement(Box<ExecStatement>),
@@ -35,9 +36,6 @@ pub(crate) enum Operation {
 
     /// Get records by primary key
     GetByKey(GetByKey),
-
-    /// Evaluate a function once per row of one input, splicing in others
-    MapOver(MapOver),
 
     /// Execute a nested merge
     NestedMerge(NestedMerge),
@@ -76,14 +74,13 @@ impl Operation {
     pub(crate) fn name(&self) -> &'static str {
         match self {
             Operation::Alias(_) => "alias",
-            Operation::Compute(_) => "compute",
             Operation::Const(_) => "const",
             Operation::DeleteByKey(_) => "delete_by_key",
+            Operation::Eval(_) => "eval",
             Operation::ExecStatement(_) => "exec_statement",
             Operation::Filter(_) => "filter",
             Operation::FindPkByIndex(_) => "find_pk_by_index",
             Operation::GetByKey(_) => "get_by_key",
-            Operation::MapOver(_) => "map_over",
             Operation::NestedMerge(_) => "nested_merge",
             Operation::ReadModifyWrite(_) => "read_modify_write",
             Operation::Repeat(_) => "repeat",
@@ -112,10 +109,9 @@ impl Operation {
             | Operation::Upsert(_) => true,
 
             Operation::Alias(_)
-            | Operation::Compute(_)
             | Operation::Const(_)
+            | Operation::Eval(_)
             | Operation::Filter(_)
-            | Operation::MapOver(_)
             | Operation::NestedMerge(_)
             | Operation::Repeat(_) => false,
         }
@@ -132,17 +128,19 @@ impl Operation {
 
         match self {
             Operation::Alias(m) => vec![(m.input, Always)],
-            Operation::Compute(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             Operation::Const(_m) => vec![],
             Operation::DeleteByKey(m) => vec![(m.input, Always)],
+            Operation::Eval(m) => match m.base {
+                Some(base) => [(base, Always)]
+                    .into_iter()
+                    .chain(m.attached.iter().map(|&a| (a, PerRowOf(base))))
+                    .collect(),
+                None => m.attached.iter().map(|&i| (i, Always)).collect(),
+            },
             Operation::ExecStatement(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             Operation::Filter(m) => vec![(m.input, Always)],
             Operation::FindPkByIndex(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             Operation::GetByKey(m) => vec![(m.input, Always)],
-            Operation::MapOver(m) => [(m.base, Always)]
-                .into_iter()
-                .chain(m.attached.iter().map(|&a| (a, PerRowOf(m.base))))
-                .collect(),
             Operation::NestedMerge(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             Operation::ReadModifyWrite(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             // The input's cardinality is observed, so the read is
@@ -192,12 +190,11 @@ impl Operation {
             Operation::ExecStatement(m) => effect::classify(&m.stmt) == effect::Effect::Mutating,
 
             Operation::Alias(_)
-            | Operation::Compute(_)
             | Operation::Const(_)
+            | Operation::Eval(_)
             | Operation::Filter(_)
             | Operation::FindPkByIndex(_)
             | Operation::GetByKey(_)
-            | Operation::MapOver(_)
             | Operation::NestedMerge(_)
             | Operation::QueryPk(_)
             | Operation::Repeat(_)

@@ -31,14 +31,13 @@ impl Node {
     pub(crate) fn ty(&self) -> &stmt::Type {
         match &self.op {
             Operation::Alias(m) => &m.ty,
-            Operation::Compute(m) => &m.body.ret,
             Operation::Const(m) => &m.ty,
             Operation::DeleteByKey(m) => &m.ty,
+            Operation::Eval(m) => &m.ty,
             Operation::ExecStatement(m) => &m.ty,
             Operation::Filter(m) => &m.ty,
             Operation::FindPkByIndex(m) => &m.ty,
             Operation::GetByKey(m) => &m.ty,
-            Operation::MapOver(m) => &m.ty,
             Operation::QueryPk(m) => &m.ty,
             Operation::Repeat(m) => &m.ty,
             Operation::Scan(m) => &m.ty,

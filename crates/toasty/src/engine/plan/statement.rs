@@ -83,9 +83,9 @@
 //!
 //! ## At execution time
 //!
-//! Each MIR node's `to_exec()` maps its input `NodeId`s to `VarId`s. The
-//! executor loads variables by `VarId` and passes them to `eval::Func`,
-//! which resolves `Arg(n)` against the provided input slice.
+//! The executor loads each node's inputs from their `NodeId` variable slots
+//! and passes them to `eval::Func`, which resolves `Arg(n)` against the
+//! provided input slice.
 
 use std::mem;
 
@@ -128,9 +128,9 @@ struct ReturningInfo {
     clause: Option<stmt::Returning>,
 
     /// Nodes the returning expression reads, in reference order. For a
-    /// `Project` clause these are the attached inputs of the `MapOver` that
-    /// evaluates it — the loaded row is not among them; the body references
-    /// it as `arg(0)` and these as `arg(1 + i)`.
+    /// `Project` clause these are the attached inputs of the per-row `Eval`
+    /// that evaluates it — the loaded row is not among them; the body
+    /// references it as `arg(0)` and these as `arg(1 + i)`.
     inputs: IndexSet<mir::NodeId>,
 
     /// `Project` only: the projection references the loaded row (a column or
@@ -373,10 +373,11 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     /// `Arg`/`Reference`/`Count`/`Project` nodes reference the MIR inputs that
     /// supply their data, collecting those inputs into `inputs`.
     ///
-    /// A `Project` clause becomes the body of a `MapOver`, so its references
-    /// follow that operation's convention: the loaded row is `arg(0)` and the
-    /// collected inputs are `arg(1 + index)`. An `Expr` clause becomes a
-    /// `Compute` body, where the collected inputs are `arg(index)` directly.
+    /// A `Project` clause becomes the body of a per-row `Eval`, so its
+    /// references follow that operation's convention: the loaded row is
+    /// `arg(0)` and the collected inputs are `arg(1 + index)`. An `Expr`
+    /// clause becomes a whole-value `Eval` body, where the collected inputs
+    /// are `arg(index)` directly.
     ///
     /// Returns whether the expression references the loaded row (a column or
     /// `count(*)`) — for a `Project` clause, whether it must be evaluated per
@@ -395,8 +396,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         load_data_node_id: mir::NodeId,
         is_returning_projection: bool,
     ) -> bool {
-        // In a `MapOver` body, `arg(0)` is the row, so attached inputs start
-        // at position 1.
+        // In a per-row `Eval` body, `arg(0)` is the row, so attached inputs
+        // start at position 1.
         let input_base = if is_returning_projection { 1 } else { 0 };
         let mut reads_row = false;
 
@@ -1775,10 +1776,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             // The function maps the referenced inputs' whole values to the
             // full key list, same as the `is_const`/`is_identity` cases
             // above.
-            self.planner.mir.insert(mir::Compute {
-                inputs: input_nodes,
-                body: keys,
-            })
+            self.planner
+                .mir
+                .insert(mir::Eval::compute(input_nodes, keys))
         }
     }
 
@@ -1956,7 +1956,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             };
 
             let body = eval::Func::from_stmt(projection, vec![row_ty]);
-            let project_node_id = self.planner.mir.insert(mir::MapOver::new(
+            let project_node_id = self.planner.mir.insert(mir::Eval::map_over(
                 exec_stmt_node_id,
                 IndexSet::new(),
                 body,
@@ -2027,10 +2027,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                     } else {
                         let body = eval::Func::from_stmt(expr, returning_arg_tys(None));
 
-                        let node_id = self.insert_mir_with_deps(mir::Compute {
-                            inputs: returning.inputs,
-                            body,
-                        });
+                        let node_id =
+                            self.insert_mir_with_deps(mir::Eval::compute(returning.inputs, body));
 
                         if !self.stmt().is_query() {
                             self.planner.mir[node_id].deps.insert(data_load_node_id);
@@ -2048,7 +2046,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let body =
                             eval::Func::from_stmt(projection, returning_arg_tys(Some(row_ty)));
 
-                        self.insert_mir_with_deps(mir::MapOver::new(
+                        self.insert_mir_with_deps(mir::Eval::map_over(
                             data_load_node_id,
                             returning.inputs,
                             body,

@@ -172,14 +172,13 @@ impl Exec<'_> {
             // A pass-through: the response (stream included) relocates
             // between slots without buffering.
             Operation::Alias(op) => self.vars.load(op.input).await?,
-            Operation::Compute(op) => self.exec_compute(op).await?,
             Operation::Const(op) => ExecResponse::from_rows(Rows::Value(op.value.clone())),
             Operation::DeleteByKey(op) => self.exec_delete_by_key(op).await?,
+            Operation::Eval(op) => self.exec_eval(logical_plan, op).await?,
             Operation::ExecStatement(op) => self.exec_statement(op).await?,
             Operation::Filter(op) => self.exec_filter(op).await?,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(op).await?,
             Operation::GetByKey(op) => self.exec_get_by_key(op).await?,
-            Operation::MapOver(op) => self.exec_map_over(logical_plan, op).await?,
             Operation::NestedMerge(op) => self.exec_nested_merge(op).await?,
             Operation::ReadModifyWrite(op) => self.exec_read_modify_write(op).await?,
             Operation::Repeat(op) => self.exec_repeat(op).await?,

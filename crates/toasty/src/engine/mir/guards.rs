@@ -27,8 +27,8 @@
 //! 1. A node read [`InputRead::PerRowOf`]`(X)` — only while iterating node
 //!    X's rows — gets guard `non_empty(X)`. Iterating zero rows never reads
 //!    the input, so the node's output goes unread whenever X is empty. This
-//!    is how n2 gets its guard above: n3 is a `MapOver` over n0, and n2 is
-//!    one of its attached inputs.
+//!    is how n2 gets its guard above: n3 is a per-row `Eval` over n0, and n2
+//!    is one of its attached inputs.
 //!
 //! 2. A node whose consumers all carry guard `non_empty(X)` inherits that
 //!    guard. Whenever X is empty, every consumer is skipped, so the node's

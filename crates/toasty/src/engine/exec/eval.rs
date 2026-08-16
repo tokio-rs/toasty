@@ -1,7 +1,6 @@
 use crate::{
     Result,
     engine::{
-        eval,
         exec::Exec,
         mir::{self, LogicalPlan},
     },
@@ -9,34 +8,28 @@ use crate::{
 use toasty_core::driver::{ExecResponse, Rows};
 
 impl Exec<'_> {
-    pub(super) async fn exec_compute(&mut self, action: &mir::Compute) -> Result<ExecResponse> {
-        let inputs: Vec<_> = action.inputs.iter().copied().collect();
-        self.eval_func(&inputs, &action.body, None).await
-    }
-
-    pub(super) async fn exec_map_over(
+    pub(super) async fn exec_eval(
         &mut self,
         logical_plan: &LogicalPlan,
-        action: &mir::MapOver,
+        action: &mir::Eval,
     ) -> Result<ExecResponse> {
-        let mut inputs = vec![action.base];
-        inputs.extend(action.attached.iter().copied());
+        // With a base, the per-row body is erased into a single `map`
+        // function over inputs `[base, attached...]`, with pagination
+        // metadata forwarding from `base` at input 0.
+        let map_func;
+        let (inputs, func, metadata) = match action.base {
+            Some(base) => {
+                let mut inputs = vec![base];
+                inputs.extend(action.attached.iter().copied());
+                map_func = action.map_func(logical_plan);
+                (inputs, &map_func, Some(0))
+            }
+            None => {
+                let inputs: Vec<_> = action.attached.iter().copied().collect();
+                (inputs, &action.body, None)
+            }
+        };
 
-        let func = action.eval_func(logical_plan);
-
-        // Metadata forwards from `base`, always input 0.
-        self.eval_func(&inputs, &func, Some(0)).await
-    }
-
-    /// Evaluates `func` over the collected whole values of `inputs`,
-    /// forwarding pagination metadata from the input at position `metadata`
-    /// (all other inputs must have none to forward).
-    async fn eval_func(
-        &mut self,
-        inputs: &[mir::NodeId],
-        func: &eval::Func,
-        metadata: Option<usize>,
-    ) -> Result<ExecResponse> {
         // Load all input data upfront, preserving pagination metadata
         let mut input = Vec::with_capacity(inputs.len());
         let mut next_cursor = None;
