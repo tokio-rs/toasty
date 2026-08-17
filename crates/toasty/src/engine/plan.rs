@@ -64,6 +64,17 @@ impl Engine {
 
 impl HirPlanner<'_> {
     fn build_logical_plan(mut self) -> Result<mir::LogicalPlan> {
+        self.reserve_effect_dep_data_load_slots();
+
+        let root_id = self.hir.root_id();
+        self.plan_statement(root_id)?;
+
+        let exit = self.hir.root().output.get().unwrap();
+
+        Ok(mir::LogicalPlan::new(self.mir, exit))
+    }
+
+    fn reserve_effect_dep_data_load_slots(&mut self) {
         // Reserve a data-load slot for every statement targeted by an effect
         // dep. An effect dep's target may be an ancestor planned after the
         // dependent (a statement-level cycle that is acyclic at the operation
@@ -83,12 +94,5 @@ impl HirPlanner<'_> {
                 }
             }
         }
-
-        let root_id = self.hir.root_id();
-        self.plan_statement(root_id)?;
-
-        let exit = self.hir.root().output.get().unwrap();
-
-        Ok(mir::LogicalPlan::new(self.mir, exit))
     }
 }
