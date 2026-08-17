@@ -25,7 +25,6 @@ impl Exec<'_> {
                 operation::Scan {
                     table: action.table,
                     columns: mir::column_ids(action.table, &action.columns)
-                        .iter()
                         .map(|col_id| col_id.index)
                         .collect(),
                     filter: row_filter,

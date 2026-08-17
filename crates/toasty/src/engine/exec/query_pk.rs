@@ -43,7 +43,7 @@ impl Exec<'_> {
                     operation::QueryPk {
                         table: action.table,
                         index: action.index,
-                        select: mir::column_ids(action.table, &action.columns),
+                        select: mir::column_ids(action.table, &action.columns).collect(),
                         pk_filter: f,
                         filter: action.row_filter.clone(),
                         limit: action.limit.clone(),

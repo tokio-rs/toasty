@@ -28,7 +28,7 @@ impl Exec<'_> {
         } else {
             let op = operation::GetByKey {
                 table: action.table,
-                select: mir::column_ids(action.table, &action.columns),
+                select: mir::column_ids(action.table, &action.columns).collect(),
                 keys,
             };
 

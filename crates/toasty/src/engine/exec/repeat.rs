@@ -9,11 +9,15 @@ use toasty_core::{
 
 impl Exec<'_> {
     pub(super) async fn exec_repeat(&mut self, action: &mir::Repeat) -> Result<ExecResponse> {
-        let input_response = self.vars.load(action.input).await?;
+        let ExecResponse {
+            values,
+            next_cursor,
+            prev_cursor,
+        } = self.vars.load(action.input).await?;
 
         // Only the input's cardinality is observed; a count-only driver
         // response works the same as one that returned rows.
-        let count = match input_response.values {
+        let count = match values {
             Rows::Count(count) => count as usize,
             Rows::Value(stmt::Value::List(items)) => items.len(),
             Rows::Value(value) => todo!("value={value:#?}"),
@@ -29,6 +33,12 @@ impl Exec<'_> {
 
         let rows = vec![action.value.clone(); count];
 
-        Ok(ExecResponse::from_rows(Rows::value_stream(rows)))
+        // The output has one item for each input row. Its cursors must match
+        // the input cursors so the caller can fetch the next or previous page.
+        Ok(ExecResponse {
+            values: Rows::value_stream(rows),
+            next_cursor,
+            prev_cursor,
+        })
     }
 }

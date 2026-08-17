@@ -18,7 +18,7 @@ impl Exec<'_> {
         let returning = if action.ty.is_unit() {
             None
         } else {
-            Some(mir::column_ids(action.table, &action.columns))
+            Some(mir::column_ids(action.table, &action.columns).collect())
         };
 
         let keys = self
