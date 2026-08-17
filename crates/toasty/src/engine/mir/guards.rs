@@ -89,7 +89,7 @@
 
 use index_vec::IndexVec;
 
-use super::{NodeId, Store, operation::InputRead};
+use super::{InputRead, NodeId, Store};
 
 /// The merge, over a node's already-visited consumers, of how each one
 /// consumes the node's output.

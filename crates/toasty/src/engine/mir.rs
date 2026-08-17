@@ -25,6 +25,9 @@ pub(crate) use get_by_key::GetByKey;
 mod guards;
 use guards::annotate_guards;
 
+mod input;
+pub(crate) use input::InputRead;
+
 mod logical_plan;
 pub(crate) use logical_plan::LogicalPlan;
 
