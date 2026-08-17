@@ -83,15 +83,16 @@ impl VarStore {
     }
 
     /// Returns whether the slot holds at least one row, without consuming a
-    /// use. A stream-backed slot is buffered in place so the peek does not
-    /// disturb later loads.
+    /// use. A skipped slot is empty, allowing a guard to depend on a node that
+    /// an earlier guard skipped. A stream-backed slot is buffered in place so
+    /// the peek does not disturb later loads.
     pub(crate) async fn peek_non_empty(&mut self, node: NodeId) -> crate::Result<bool> {
         let Some(entry) = self.slots[node].as_mut() else {
             panic!("no stream at slot {node:?}; store={self:#?}")
         };
 
         let EntryValue::Response(response) = &mut entry.value else {
-            panic!("peek of skipped slot {node:?}")
+            return Ok(false);
         };
 
         response.values.buffer().await?;
@@ -190,6 +191,18 @@ mod tests {
         store.store_skipped(node, 1);
 
         store.load(node).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn peek_skipped_returns_false_without_consuming_use() {
+        let node = NodeId::new(0);
+        let mut store = VarStore::new(1, Arc::new(test_schema()));
+        store.store_skipped(node, 1);
+
+        assert!(!store.peek_non_empty(node).await.unwrap());
+
+        store.release(node);
+        assert!(store.slots[node].is_none());
     }
 
     #[test]
