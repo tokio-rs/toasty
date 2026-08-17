@@ -23,26 +23,13 @@ pub(crate) struct LogicalPlan {
 
 impl LogicalPlan {
     pub(crate) fn new(mut store: Store, completion: NodeId) -> LogicalPlan {
-        let mut execution_order = vec![];
-        let mut visited: IndexVec<NodeId, bool> =
-            IndexVec::from_vec(vec![false; store.node_count()]);
-        compute_operation_execution_order(completion, &store, &mut visited, &mut execution_order);
+        let execution_order = compute_operation_execution_order(completion, &store);
 
         // Every reserved slot must be filled by the time planning completes —
         // an unfilled slot means a statement was referenced but never planned.
         debug_assert!(
             store.all_filled(),
             "reserved MIR slot left unfilled at plan completion"
-        );
-
-        // Nodes unreachable from the completion node are dropped from the
-        // execution order and never run. That is fine for pure nodes; a
-        // dropped mutation would silently lose its database effect.
-        debug_assert!(
-            visited
-                .iter_enumerated()
-                .all(|(id, visited)| *visited || !store[id].op.is_effectful()),
-            "effectful node unreachable from the completion node"
         );
 
         // `num_uses` counts the variable loads each node's output receives:
@@ -100,21 +87,40 @@ impl ops::Index<&NodeId> for LogicalPlan {
     }
 }
 
-fn compute_operation_execution_order(
-    node_id: NodeId,
-    mir: &Store,
-    visited: &mut IndexVec<NodeId, bool>,
-    execution_order: &mut Vec<NodeId>,
-) {
-    if visited[node_id] {
-        return;
+fn compute_operation_execution_order(node_id: NodeId, mir: &Store) -> Vec<NodeId> {
+    fn visit_operation(
+        node_id: NodeId,
+        mir: &Store,
+        visited: &mut IndexVec<NodeId, bool>,
+        execution_order: &mut Vec<NodeId>,
+    ) {
+        if visited[node_id] {
+            return;
+        }
+
+        visited[node_id] = true;
+
+        for &dep_id in &mir[node_id].deps {
+            visit_operation(dep_id, mir, visited, execution_order);
+        }
+
+        execution_order.push(node_id);
     }
 
-    visited[node_id] = true;
+    let mut visited = IndexVec::from_vec(vec![false; mir.node_count()]);
+    let mut execution_order = vec![];
 
-    for &dep_id in &mir[node_id].deps {
-        compute_operation_execution_order(dep_id, mir, visited, execution_order);
-    }
+    visit_operation(node_id, mir, &mut visited, &mut execution_order);
 
-    execution_order.push(node_id);
+    // Nodes unreachable from the completion node are dropped from the
+    // execution order and never run. That is fine for pure nodes; a
+    // dropped mutation would silently lose its database effect.
+    debug_assert!(
+        visited
+            .iter_enumerated()
+            .all(|(id, visited)| *visited || !mir[id].op.is_effectful()),
+        "effectful node unreachable from the completion node"
+    );
+
+    execution_order
 }
