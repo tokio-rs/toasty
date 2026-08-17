@@ -3,26 +3,27 @@ use toasty_core::stmt::{self, visit_mut};
 
 use crate::engine::{eval, mir};
 
-/// Evaluates `body` once over whole input values: with no `base`, `arg(i)` is
-/// `attached[i]`'s complete output; with a `base`, `arg(0)` is `base`'s
-/// complete output and `arg(1 + i)` is `attached[i]`'s.
+/// Evaluates `body` once over whole input values: with no `row_input`,
+/// `arg(i)` is `inputs[i]`'s complete output; with a `row_input`, `arg(0)` is
+/// `row_input`'s complete output and `arg(1 + i)` is `inputs[i]`'s.
 ///
-/// A `base` marks the operation as per-row: the body is a `map` over `arg(0)`
-/// (built by [`Eval::map_over`]), so the output has one element per `base`
-/// row and pagination metadata forwards from `base`. Zero `base` rows means
-/// the map body never runs, so the attached outputs are read only when `base`
-/// returned rows — the guard pass reads this from
+/// A `row_input` marks the operation as per-row: the body is a `map` over
+/// `arg(0)` (built by [`Eval::map_over`]), so the output has one element per
+/// input row and pagination metadata forwards from `row_input`. Zero input
+/// rows means the map body never runs, so the other inputs are read only when
+/// `row_input` returned rows — the guard pass reads this from
 /// [`Operation::input_reads`](mir::Operation::input_reads).
 #[derive(Debug)]
 pub(crate) struct Eval {
-    /// When set, the node whose rows the body maps over.
-    pub(crate) base: Option<mir::NodeId>,
+    /// When set, this operation returns one result for each row from this input.
+    pub(crate) row_input: Option<mir::NodeId>,
 
     /// Nodes whose whole outputs the body reads.
-    pub(crate) attached: IndexSet<mir::NodeId>,
+    pub(crate) inputs: IndexSet<mir::NodeId>,
 
     /// The function to evaluate, over whole input values ordered
-    /// `[base?, attached...]`. Its return type is the operation's output type.
+    /// `[row_input?, inputs...]`. Its return type is the operation's output
+    /// type.
     pub(crate) body: eval::Func,
 }
 
@@ -31,34 +32,34 @@ impl Eval {
     /// `arg(i)` = `inputs[i]`.
     pub(crate) fn compute(inputs: IndexSet<mir::NodeId>, body: eval::Func) -> Self {
         Eval {
-            base: None,
-            attached: inputs,
+            row_input: None,
+            inputs,
             body,
         }
     }
 
-    /// Evaluates the per-row `body` once per row of `base`: `arg(0)` =
-    /// current row, `arg(1 + i)` = `attached[i]`.
+    /// Evaluates the per-row `body` once per row of `row_input`: `arg(0)` =
+    /// current row, `arg(1 + i)` = `inputs[i]`.
     ///
     /// The executor evaluates one function over whole input values, so the
     /// per-row structure is erased here into a single `map` expression over
-    /// input 0, with inputs ordered `[base, attached...]`.
+    /// input 0, with inputs ordered `[row_input, inputs...]`.
     pub(crate) fn map_over(
         store: &mir::Store,
-        base: mir::NodeId,
-        attached: IndexSet<mir::NodeId>,
+        row_input: mir::NodeId,
+        inputs: IndexSet<mir::NodeId>,
         body: eval::Func,
     ) -> Self {
-        debug_assert_eq!(body.args.len(), 1 + attached.len());
-        debug_assert!(!attached.contains(&base));
+        debug_assert_eq!(body.args.len(), 1 + inputs.len());
+        debug_assert!(!inputs.contains(&row_input));
 
-        let mut arg_tys = vec![store[base].ty().clone()];
-        for input in &attached {
+        let mut arg_tys = vec![store[row_input].ty().clone()];
+        for input in &inputs {
             arg_tys.push(store[input].ty().clone());
         }
 
         // Inside the map, the body's `arg(0)` (the row) resolves to the map's
-        // element scope unchanged, while references to attached values must
+        // element scope unchanged, while references to other inputs must
         // climb one extra scope — past the map — to reach the function
         // inputs. A body arg references a body parameter when its nesting
         // equals the number of scopes around it.
@@ -76,8 +77,8 @@ impl Eval {
         let expr = stmt::Expr::map(stmt::Expr::arg(0), map_body);
 
         Eval {
-            base: Some(base),
-            attached,
+            row_input: Some(row_input),
+            inputs,
             body: eval::Func::from_stmt_typed(expr, arg_tys, ty),
         }
     }

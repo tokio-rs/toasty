@@ -28,7 +28,7 @@
 //!    X's rows — gets guard `non_empty(X)`. Iterating zero rows never reads
 //!    the input, so the node's output goes unread whenever X is empty. This
 //!    is how n2 gets its guard above: n3 is a per-row `Eval` over n0, and n2
-//!    is one of its attached inputs.
+//!    is one of its other inputs.
 //!
 //! 2. A node whose consumers all carry guard `non_empty(X)` inherits that
 //!    guard. Whenever X is empty, every consumer is skipped, so the node's
@@ -47,7 +47,7 @@
 //! - Consumers guarded on different nodes disagree, so their shared input
 //!   gets no guard.
 //!
-//! In the example, n0 stays unguarded: n3 reads it as the map base
+//! In the example, n0 stays unguarded: n3 reads it as the row input
 //! ([`InputRead::Always`]), and n3 itself has no guard.
 //!
 //! # How the pass runs
@@ -141,10 +141,10 @@ pub(super) fn annotate_guards(store: &mut Store, execution_order: &[NodeId], com
         // `deps`, so an ordering-only edge never looks like a consumer.
         for (input, read) in store[id].op.input_reads() {
             let contribution = match read {
-                // Rule 1: read only while iterating `base`'s rows, so
-                // unobservable whenever `base` is empty — regardless of the
-                // node's own guard.
-                InputRead::PerRowOf(base) => Some(base),
+                // Rule 1: read only while iterating `row_input`'s rows, so
+                // unobservable whenever `row_input` is empty — regardless
+                // of the node's own guard.
+                InputRead::PerRowOf(row_input) => Some(row_input),
                 InputRead::Always => own,
             };
             consumption[input] = match (consumption[input], contribution) {

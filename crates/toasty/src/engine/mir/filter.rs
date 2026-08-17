@@ -7,9 +7,9 @@ use crate::engine::{eval, mir};
 ///
 /// The predicate's `arg(0)` is the current row; `arg(1 + i)` is the whole
 /// output of `args[i]`. Every input row is read (the whole input must be
-/// scanned), so the input — and each attached arg — is an
+/// scanned), so the input — and each predicate arg — is an
 /// [`Always`](mir::operation::InputRead::Always) read even though evaluation
-/// is per-row. A predicate that reads only attached args (a key-value
+/// is per-row. A predicate that reads only its args (a key-value
 /// pre-filter) ignores `arg(0)`: when it is false every row is dropped, so
 /// downstream operations see an empty list.
 ///

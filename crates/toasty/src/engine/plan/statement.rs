@@ -128,8 +128,8 @@ struct ReturningInfo {
     clause: Option<stmt::Returning>,
 
     /// Nodes the returning expression reads, in reference order. For a
-    /// `Project` clause these are the attached inputs of the per-row `Eval`
-    /// that evaluates it — the loaded row is not among them; the body
+    /// `Project` clause these are the other inputs of the per-row `Eval` that
+    /// evaluates it — the loaded row is not among them; the body
     /// references it as `arg(0)` and these as `arg(1 + i)`.
     inputs: IndexSet<mir::NodeId>,
 
@@ -396,9 +396,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         load_data_node_id: mir::NodeId,
         is_returning_projection: bool,
     ) -> bool {
-        // In a per-row `Eval` body, `arg(0)` is the row, so attached inputs
+        // In a per-row `Eval` body, `arg(0)` is the row, so the other inputs
         // start at position 1.
-        let input_base = if is_returning_projection { 1 } else { 0 };
+        let input_offset = if is_returning_projection { 1 } else { 0 };
         let mut reads_row = false;
 
         visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
@@ -432,7 +432,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                             let index = returning_input.get().unwrap();
                             let row = batch_load_index.get().unwrap();
 
-                            *expr = stmt::Expr::arg_project(input_base + index, [row, column]);
+                            *expr = stmt::Expr::arg_project(input_offset + index, [row, column]);
                         }
                         hir::Arg::Sub {
                             stmt_id: target_id, ..
@@ -442,7 +442,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
 
                             let (index, _) = inputs.insert_full(target_node_id);
 
-                            *expr = stmt::Expr::arg(input_base + index);
+                            *expr = stmt::Expr::arg(input_offset + index);
                         }
                     }
                     false
@@ -1856,8 +1856,8 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     }
 
     /// If the index plan has a pre-filter, filter the key input on it: a
-    /// `Filter` over the key list whose predicate reads only its attached
-    /// args (the pre-filter's referenced statement outputs). When the
+    /// `Filter` over the key list whose predicate reads only its args (the
+    /// pre-filter's referenced statement outputs). When the
     /// pre-filter is false every key is dropped, so the downstream operation
     /// sees no keys and becomes a no-op. Returns the (possibly filtered)
     /// input node ID.
@@ -1873,7 +1873,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         let (arg_tys, args) = self.rewrite_expr_for_mir(&mut pre_filter_expr);
 
         // The predicate's `arg(0)` is the current row; shift the pre-filter's
-        // attached args to `arg(1 + i)`.
+        // args to `arg(1 + i)`.
         visit_mut::walk_expr_scoped_mut(&mut pre_filter_expr, 0, |expr, scope_depth| {
             if let stmt::Expr::Arg(arg) = expr
                 && arg.nesting == scope_depth
@@ -2006,8 +2006,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return node_id;
         }
 
-        let returning_arg_tys = |base: Option<stmt::Type>| -> Vec<stmt::Type> {
-            base.into_iter()
+        let returning_arg_tys = |row_ty: Option<stmt::Type>| -> Vec<stmt::Type> {
+            row_ty
+                .into_iter()
                 .chain(
                     returning
                         .inputs

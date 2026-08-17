@@ -22,7 +22,7 @@ pub(crate) enum Operation {
     DeleteByKey(DeleteByKey),
 
     /// Evaluate a function, once over whole input values or once per row of
-    /// a base input
+    /// a row input
     Eval(Eval),
 
     /// Execute a database query
@@ -130,12 +130,12 @@ impl Operation {
             Operation::Alias(m) => vec![(m.input, Always)],
             Operation::Const(_m) => vec![],
             Operation::DeleteByKey(m) => vec![(m.input, Always)],
-            Operation::Eval(m) => match m.base {
-                Some(base) => [(base, Always)]
+            Operation::Eval(m) => match m.row_input {
+                Some(row_input) => [(row_input, Always)]
                     .into_iter()
-                    .chain(m.attached.iter().map(|&a| (a, PerRowOf(base))))
+                    .chain(m.inputs.iter().map(|&input| (input, PerRowOf(row_input))))
                     .collect(),
-                None => m.attached.iter().map(|&i| (i, Always)).collect(),
+                None => m.inputs.iter().map(|&input| (input, Always)).collect(),
             },
             Operation::ExecStatement(m) => m.inputs.iter().map(|&i| (i, Always)).collect(),
             Operation::Filter(m) => [(m.input, Always)]
