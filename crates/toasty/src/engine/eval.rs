@@ -30,11 +30,6 @@ impl<T: AsExpr> Func<T> {
         Self { args, ret, expr }
     }
 
-    /// The expression the function evaluates.
-    pub(crate) fn expr(&self) -> &stmt::Expr {
-        self.expr.as_expr()
-    }
-
     /// Returns true if the function has no inputs
     pub(crate) fn is_const(&self) -> bool {
         self.args.is_empty()
@@ -64,6 +59,13 @@ impl<T: AsExpr> Func<T> {
 
         let input = TypedInput::new(stmt::ExprContext::new(schema), &self.args, input);
         self.expr.as_expr().eval_bool(input)
+    }
+}
+
+impl Func<stmt::Expr> {
+    /// Consumes the function, returning its expression.
+    pub(crate) fn into_expr(self) -> stmt::Expr {
+        self.expr
     }
 }
 

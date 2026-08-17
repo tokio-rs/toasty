@@ -174,7 +174,7 @@ impl Exec<'_> {
             Operation::Alias(op) => self.vars.load(op.input).await?,
             Operation::Const(op) => ExecResponse::from_rows(Rows::Value(op.value.clone())),
             Operation::DeleteByKey(op) => self.exec_delete_by_key(op).await?,
-            Operation::Eval(op) => self.exec_eval(logical_plan, op).await?,
+            Operation::Eval(op) => self.exec_eval(op).await?,
             Operation::ExecStatement(op) => self.exec_statement(op).await?,
             Operation::Filter(op) => self.exec_filter(op).await?,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(op).await?,

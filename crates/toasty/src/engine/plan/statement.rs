@@ -1962,11 +1962,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             };
 
             let body = eval::Func::from_stmt(projection, vec![row_ty]);
-            let project_node_id = self.planner.mir.insert(mir::Eval::map_over(
-                exec_stmt_node_id,
-                IndexSet::new(),
-                body,
-            ));
+            let eval =
+                mir::Eval::map_over(&self.planner.mir, exec_stmt_node_id, IndexSet::new(), body);
+            let project_node_id = self.planner.mir.insert(eval);
             back_ref.node_id.set(Some(project_node_id));
         }
     }
@@ -2052,11 +2050,13 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         let body =
                             eval::Func::from_stmt(projection, returning_arg_tys(Some(row_ty)));
 
-                        self.insert_mir_with_deps(mir::Eval::map_over(
+                        let eval = mir::Eval::map_over(
+                            &self.planner.mir,
                             data_load_node_id,
                             returning.inputs,
                             body,
-                        ))
+                        );
+                        self.insert_mir_with_deps(eval)
                     } else {
                         // The projection is fully constant — the constantize
                         // pipeline substituted every value, so nothing was

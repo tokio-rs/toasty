@@ -35,7 +35,7 @@ impl Node {
             Operation::Alias(m) => &m.ty,
             Operation::Const(m) => &m.ty,
             Operation::DeleteByKey(m) => &m.ty,
-            Operation::Eval(m) => &m.ty,
+            Operation::Eval(m) => &m.body.ret,
             Operation::ExecStatement(m) => &m.ty,
             Operation::Filter(m) => &m.ty,
             Operation::FindPkByIndex(m) => &m.ty,
