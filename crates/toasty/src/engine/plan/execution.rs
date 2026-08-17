@@ -103,7 +103,7 @@ impl ExecPlanner<'_> {
                 .flat_map(|id| self.logical_plan[id].op.input_loads())
                 .filter(|&load| load == node_id)
                 .count();
-            let external_uses = self.logical_plan.num_uses(node_id) - in_block_loads;
+            let external_uses = node.num_uses - in_block_loads;
 
             if external_uses > 0 {
                 skipped_outputs.push((node_id, external_uses));

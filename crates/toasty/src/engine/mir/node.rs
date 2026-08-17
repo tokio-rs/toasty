@@ -27,6 +27,14 @@ pub(crate) struct Node {
     ///
     /// [`LogicalPlan::new`]: super::LogicalPlan::new
     pub(crate) guard: Option<NodeId>,
+
+    /// Number of variable loads this node's output receives during execution,
+    /// plus one exit use when this is the completion node.
+    ///
+    /// [`LogicalPlan::new`](super::LogicalPlan::new) sets this after planning
+    /// finishes. The executor uses it for reference counting and frees the
+    /// output after the last use.
+    pub(crate) num_uses: usize,
 }
 
 impl Node {

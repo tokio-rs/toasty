@@ -19,12 +19,6 @@ pub(crate) struct LogicalPlan {
 
     /// The final node whose output is the query result.
     completion: NodeId,
-
-    /// Number of variable loads each node's output receives during execution,
-    /// plus one exit use on the completion node.
-    ///
-    /// Used for reference counting; the output is freed after the last use.
-    num_uses: IndexVec<NodeId, usize>,
 }
 
 impl LogicalPlan {
@@ -57,12 +51,11 @@ impl LogicalPlan {
         // The completion node's exit use is the engine's load of the query
         // result. (Guards are annotated after this loop and peek without
         // loading.)
-        let mut num_uses: IndexVec<NodeId, usize> = IndexVec::from_vec(vec![0; store.node_count()]);
-        num_uses[completion] += 1;
+        store[completion].num_uses += 1;
 
         for node_id in &execution_order {
             for load in store[node_id].op.input_loads() {
-                num_uses[load] += 1;
+                store[load].num_uses += 1;
             }
         }
 
@@ -72,7 +65,6 @@ impl LogicalPlan {
             store,
             execution_order,
             completion,
-            num_uses,
         }
     }
 
@@ -89,11 +81,6 @@ impl LogicalPlan {
     /// Number of node slots; [`NodeId`]s are dense in `0..node_count()`.
     pub(crate) fn node_count(&self) -> usize {
         self.store.node_count()
-    }
-
-    /// Number of variable loads the node's output receives during execution.
-    pub(crate) fn num_uses(&self, node_id: NodeId) -> usize {
-        self.num_uses[node_id]
     }
 }
 

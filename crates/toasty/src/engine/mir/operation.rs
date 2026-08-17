@@ -213,6 +213,7 @@ impl From<Operation> for Node {
             op: value,
             deps,
             guard: None,
+            num_uses: 0,
         }
     }
 }

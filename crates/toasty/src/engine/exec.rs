@@ -188,8 +188,7 @@ impl Exec<'_> {
             Operation::Upsert(op) => self.exec_upsert(op).await?,
         };
 
-        self.vars
-            .store(node_id, node.ty(), logical_plan.num_uses(node_id), response);
+        self.vars.store(node_id, node.ty(), node.num_uses, response);
 
         Ok(())
     }
