@@ -91,7 +91,12 @@ impl LowerStatement<'_, '_> {
         for (index, row) in values.rows.iter_mut().enumerate() {
             self.lower_insert_with_row(index, |lower| {
                 lower.plan_stmt_insert_relations(row, returning, index);
-                lower.plan_insert_returning_belongs_to(row, returning, index);
+                lower.plan_insert_returning_belongs_to(
+                    row,
+                    returning,
+                    index,
+                    preserve_returning_projection,
+                );
                 lower.verify_field_constraints(model, row);
             });
         }
@@ -110,25 +115,14 @@ impl LowerStatement<'_, '_> {
         row: &stmt::Expr,
         returning: &mut Option<stmt::Returning>,
         index: usize,
+        preserve_returning_projection: bool,
     ) {
-        // Only the shapes `convert_returning_for_insert` produces and the
-        // model projection preserved for `DO NOTHING` upserts load relations.
-        let preserved_projection = matches!(
-            returning,
-            Some(stmt::Returning::Project(stmt::Expr::Record(_)))
-        );
-        if !preserved_projection
-            && !matches!(
-                returning,
-                Some(stmt::Returning::Expr(
-                    stmt::Expr::List(_) | stmt::Expr::Record(_)
-                ))
-            )
-        {
-            return;
-        }
-
         let Some(model) = self.expr_cx.target_as_model() else {
+            return;
+        };
+        let Some(record) =
+            Self::insert_returning_record_mut(returning, index, preserve_returning_projection)
+        else {
             return;
         };
 
@@ -139,71 +133,102 @@ impl LowerStatement<'_, '_> {
             if field.deferred {
                 continue;
             }
-
-            // An unset FK (optional relation left unassociated) loads as
-            // `None`; keep the slot's `Null`.
-            let fk_unset = rel.foreign_key.fields.iter().any(|fk_field| {
-                row.entry(fk_field.source.index).is_none_or(|entry| {
-                    let expr = entry.to_expr();
-                    expr.is_value_null() || expr.is_default()
-                })
-            });
-            if fk_unset {
+            if Self::belongs_to_fk_is_unset(row, rel) {
                 continue;
             }
 
-            // A preserved projection is shared across rows and evaluated per
-            // returned row, so it cannot hold per-row subqueries. Only the
-            // single-row `DO NOTHING` upsert shape preserves its projection.
-            assert!(
-                !preserved_projection || index == 0,
-                "eager belongs_to in a multi-row insert with a preserved returning projection"
+            record[field.id.index] = self.plan_insert_belongs_to_load(
+                field.id.index,
+                index,
+                preserve_returning_projection,
             );
-
-            let arg = self.build_relation_subquery(field.id.index);
-
-            // The related row may itself be inserted by an enclosing insert
-            // of this same plan (a nested create inserts children before the
-            // parent). Depend on every enclosing insert so the load runs
-            // after them.
-            {
-                let stmt::Expr::Arg(expr_arg) = &arg else {
-                    unreachable!("belongs_to subquery lowers to a sub-statement arg");
-                };
-                let crate::engine::hir::Arg::Sub {
-                    stmt_id: sub_id, ..
-                } = self.curr_stmt_info().args[expr_arg.position]
-                else {
-                    unreachable!("subquery arg refers to a sub-statement");
-                };
-                let enclosing = self.state.insert_stmts.clone();
-                for target in enclosing {
-                    self.state.hir[sub_id].add_dep(target, crate::engine::hir::DepKind::Effect);
-                }
-            }
-
-            // The subquery's result is a row list; the slot wants the single
-            // related record. An empty list (dangling FK) becomes `Null`, the
-            // value a single relation with no match loads as everywhere else.
-            let expr = stmt::Expr::match_expr(
-                arg.clone(),
-                vec![stmt::MatchArm {
-                    pattern: stmt::Value::List(vec![]),
-                    expr: stmt::Expr::null(),
-                }],
-                stmt::Expr::project(arg, [0usize]),
-            );
-
-            let record = match returning {
-                Some(stmt::Returning::Expr(stmt::Expr::List(rows))) => {
-                    rows.items[index].as_record_mut_unwrap()
-                }
-                Some(stmt::Returning::Expr(stmt::Expr::Record(record)))
-                | Some(stmt::Returning::Project(stmt::Expr::Record(record))) => record,
-                _ => unreachable!("shape checked above"),
-            };
-            record[field.id.index] = expr;
         }
+    }
+
+    /// Return the model record for one row of an INSERT's returning value.
+    fn insert_returning_record_mut(
+        returning: &mut Option<stmt::Returning>,
+        index: usize,
+        preserve_returning_projection: bool,
+    ) -> Option<&mut stmt::ExprRecord> {
+        match returning {
+            Some(stmt::Returning::Expr(stmt::Expr::List(rows)))
+                if !preserve_returning_projection =>
+            {
+                Some(rows.items[index].as_record_mut_unwrap())
+            }
+            Some(stmt::Returning::Expr(stmt::Expr::Record(record)))
+                if !preserve_returning_projection =>
+            {
+                Some(record)
+            }
+            Some(stmt::Returning::Project(stmt::Expr::Record(record)))
+                if preserve_returning_projection =>
+            {
+                Some(record)
+            }
+            _ => None,
+        }
+    }
+
+    /// Return whether the row has no usable foreign key for this relation.
+    fn belongs_to_fk_is_unset(row: &stmt::Expr, rel: &app::BelongsTo) -> bool {
+        rel.foreign_key.fields.iter().any(|fk_field| {
+            row.entry(fk_field.source.index).is_none_or(|entry| {
+                let expr = entry.to_expr();
+                expr.is_value_null() || expr.is_default()
+            })
+        })
+    }
+
+    /// Build the expression that loads one eager `belongs_to` relation.
+    fn plan_insert_belongs_to_load(
+        &mut self,
+        field_index: usize,
+        row_index: usize,
+        preserve_returning_projection: bool,
+    ) -> stmt::Expr {
+        // A preserved projection is shared across rows and cannot hold
+        // different subqueries for different VALUES rows.
+        assert!(
+            !preserve_returning_projection || row_index == 0,
+            "eager belongs_to in a multi-row insert with a preserved returning projection"
+        );
+
+        let load = self.build_relation_subquery(field_index);
+        self.order_relation_load_after_enclosing_inserts(&load);
+        Self::single_relation_from_load(load)
+    }
+
+    /// Make a relation load wait for the database writes that can create its row.
+    fn order_relation_load_after_enclosing_inserts(&mut self, load: &stmt::Expr) {
+        let stmt::Expr::Arg(expr_arg) = load else {
+            unreachable!("belongs_to subquery lowers to a sub-statement arg");
+        };
+        let crate::engine::hir::Arg::Sub {
+            stmt_id: sub_id, ..
+        } = self.curr_stmt_info().args[expr_arg.position]
+        else {
+            unreachable!("subquery arg refers to a sub-statement");
+        };
+
+        let state = &mut *self.state;
+        let (insert_stmts, hir) = (&state.insert_stmts, &mut state.hir);
+        for &target in insert_stmts {
+            hir[sub_id].add_dep(target, crate::engine::hir::DepKind::Effect);
+        }
+    }
+
+    /// Convert a relation query's row list into one nullable record.
+    fn single_relation_from_load(load: stmt::Expr) -> stmt::Expr {
+        stmt::Expr::match_expr(
+            load.clone(),
+            vec![stmt::MatchArm {
+                pattern: stmt::Value::List(vec![]),
+                expr: stmt::Expr::null(),
+            }],
+            stmt::Expr::project(load, [0usize]),
+        )
     }
 
     // Checks all fields of a record and handles nulls
