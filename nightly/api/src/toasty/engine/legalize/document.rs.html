@@ -15,7 +15,7 @@
 <a href=#15 id=15 data-nosnippet>15</a>//! builder plants a lowering cast (`Model` → `Object`, carrying the source
 <a href=#16 id=16 data-nosnippet>16</a>//! type — see `stmt::ExprCast::from`) in `model_to_table` and the raising
 <a href=#17 id=17 data-nosnippet>17</a>//! cast in `table_to_model`, and the cast machinery (fold/simplify constant
-<a href=#18 id=18 data-nosnippet>18</a>//! folding, `mir::Project` evaluation) converts values wherever the casts
+<a href=#18 id=18 data-nosnippet>18</a>//! folding, `mir::Eval` evaluation) converts values wherever the casts
 <a href=#19 id=19 data-nosnippet>19</a>//! land. What cannot be expressed as a cast is the *path read*: turning a
 <a href=#20 id=20 data-nosnippet>20</a>//! positional projection into a JSON key path is a per-backend expression
 <a href=#21 id=21 data-nosnippet>21</a>//! rewrite (the leaf's comparison form depends on driver capabilities). That

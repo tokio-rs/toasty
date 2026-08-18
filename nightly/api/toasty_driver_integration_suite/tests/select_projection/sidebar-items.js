@@ -1,1 +1,1 @@
-window.SIDEBAR_ITEMS = {"fn":["select_first","select_first_no_match","select_single_field","select_tuple","select_with_filter"]};
+window.SIDEBAR_ITEMS = {"fn":["select_const_preserves_pagination","select_first","select_first_no_match","select_single_field","select_tuple","select_with_filter"]};

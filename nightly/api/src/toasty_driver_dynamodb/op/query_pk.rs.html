@@ -101,7 +101,7 @@
 <a href=#101 id=101 data-nosnippet>101</a>
 <a href=#102 id=102 data-nosnippet>102</a>                <span class="prelude-val">Ok</span>(ExecResponse {
 <a href=#103 id=103 data-nosnippet>103</a>                    values: toasty_core::driver::Rows::Stream(stmt::ValueStream::from_vec(rows)),
-<a href=#104 id=104 data-nosnippet>104</a>                    next_cursor: cursor,
+<a href=#104 id=104 data-nosnippet>104</a>                    next_cursor: cursor.map(Box::new),
 <a href=#105 id=105 data-nosnippet>105</a>                    prev_cursor: <span class="prelude-val">None</span>,
 <a href=#106 id=106 data-nosnippet>106</a>                })
 <a href=#107 id=107 data-nosnippet>107</a>            }
