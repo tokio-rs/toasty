@@ -101,7 +101,7 @@ impl Connection {
 
                 Ok(ExecResponse {
                     values: toasty_core::driver::Rows::Stream(stmt::ValueStream::from_vec(rows)),
-                    next_cursor: cursor,
+                    next_cursor: cursor.map(Box::new),
                     prev_cursor: None,
                 })
             }

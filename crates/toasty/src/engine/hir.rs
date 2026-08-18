@@ -3,10 +3,10 @@ use std::{
     ops,
 };
 
-use hashbrown::{HashMap, HashSet};
+use hashbrown::HashMap;
 
 use index_vec::IndexVec;
-use indexmap::IndexSet;
+use indexmap::{IndexMap, IndexSet};
 use toasty_core::stmt;
 
 use crate::engine::{SelectItems, mir};
@@ -50,13 +50,16 @@ pub(super) struct StatementInfo {
     /// Whether cursor pagination resumed this query after an earlier page.
     pub(super) has_pagination_cursor: bool,
 
-    /// Statement IDs that must execute before this statement.
+    /// Ordering edges: statements that must execute, to the degree the
+    /// [`DepKind`] demands, before this one.
     ///
-    /// Dependencies ensure execution order for consistency, even when this
-    /// statement does not consume the dependency's result. For example, an
-    /// `UPDATE` may depend on a prior `INSERT` to maintain referential
-    /// integrity.
-    pub(super) deps: HashSet<StmtId>,
+    /// These are pure ordering constraints — value flow between statements is
+    /// carried by [`Self::args`] and [`Self::back_refs`], never by this map.
+    /// One entry per target: inserting via [`StatementInfo::add_dep`]
+    /// upgrades an [`Effect`](DepKind::Effect) entry to
+    /// [`Statement`](DepKind::Statement), which subsumes it. An `IndexMap`
+    /// keeps iteration — and therefore planning order — deterministic.
+    pub(super) deps: IndexMap<StmtId, DepKind>,
 
     /// Arguments that flow into this statement from other statements.
     ///
@@ -95,10 +98,35 @@ pub(super) struct StatementInfo {
     /// When true, the statement is independent. An independent statement does
     /// not depend on any anestors itself nor do any of its sub-dependencies.
     pub(super) independent: bool,
+
+    /// True once the statement's planning pass has started. Guards against
+    /// re-entrant planning when a statement is reached again through a
+    /// dependency cycle that is acyclic at the operation level.
+    pub(super) planning: Cell<bool>,
 }
 
 index_vec::define_index_type! {
     pub(crate) struct StmtId = u32;
+}
+
+/// The kind of ordering edge between two statements.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub(super) enum DepKind {
+    /// The target's full result must exist first. During planning the edge
+    /// anchors on the target's output node, keeping everything the target's
+    /// returning consumed ordered and reachable. Targets are never
+    /// ancestors.
+    Statement,
+
+    /// The target's database write must have happened first. The target may
+    /// be an ancestor still being planned — e.g. a `belongs_to`
+    /// returning-load subquery ordered after its enclosing INSERTs. Such an
+    /// edge is cyclic at statement granularity (the ancestor's output
+    /// transitively consumes this statement's result) but acyclic at the
+    /// operation level, so it anchors on the target's data-loading node —
+    /// reserved up front so the reference resolves regardless of planning
+    /// order.
+    Effect,
 }
 
 impl StatementInfo {
@@ -106,7 +134,7 @@ impl StatementInfo {
     ///
     /// All other fields are initialized to empty or `None` and populated
     /// later during lowering and planning.
-    pub(super) fn new(deps: HashSet<StmtId>) -> StatementInfo {
+    pub(super) fn new(deps: IndexMap<StmtId, DepKind>) -> StatementInfo {
         StatementInfo {
             stmt: None,
             has_pagination_cursor: false,
@@ -117,11 +145,23 @@ impl StatementInfo {
             load_data_select_items: OnceCell::new(),
             output: Cell::new(None),
             independent: true,
+            planning: Cell::new(false),
         }
     }
 
     pub(super) fn stmt(&self) -> &stmt::Statement {
         self.stmt.as_deref().unwrap()
+    }
+
+    /// Records an ordering edge on `target`. A [`DepKind::Statement`] edge
+    /// subsumes an [`DepKind::Effect`] edge to the same target, so inserting
+    /// the stronger kind upgrades an existing entry and inserting the weaker
+    /// kind over the stronger is a no-op.
+    pub(super) fn add_dep(&mut self, target: StmtId, kind: DepKind) {
+        let entry = self.deps.entry(target).or_insert(kind);
+        if kind == DepKind::Statement {
+            *entry = DepKind::Statement;
+        }
     }
 }
 
@@ -219,7 +259,7 @@ impl HirStatement {
     }
 
     /// Creates and inserts a new [`StatementInfo`] with the given dependencies.
-    pub(super) fn new_statement_info(&mut self, deps: HashSet<StmtId>) -> StmtId {
+    pub(super) fn new_statement_info(&mut self, deps: IndexMap<StmtId, DepKind>) -> StmtId {
         self.insert(StatementInfo::new(deps))
     }
 
@@ -235,6 +275,11 @@ impl HirStatement {
     pub(super) fn root(&self) -> &StatementInfo {
         let root_id = self.root_id();
         &self.store[root_id]
+    }
+
+    /// Iterates all statements.
+    pub(super) fn statements(&self) -> impl Iterator<Item = &StatementInfo> {
+        self.store.iter()
     }
 }
 

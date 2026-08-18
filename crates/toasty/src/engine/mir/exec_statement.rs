@@ -1,10 +1,7 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::{exec, mir};
 
 /// Executes a SQL statement against the database.
 ///
@@ -30,16 +27,11 @@ pub(crate) struct ExecStatement {
     pub(crate) pagination: Option<exec::PaginationConfig>,
 }
 
-impl ExecStatement {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::ExecStatement {
+impl From<ExecStatement> for mir::Node {
+    fn from(value: ExecStatement) -> Self {
         debug_assert!(
             {
-                match &self.stmt {
+                match &value.stmt {
                     stmt::Statement::Query(query) => !query.single,
                     _ => true,
                 }
@@ -47,35 +39,6 @@ impl ExecStatement {
             "as of now, no database can execute single queries"
         );
 
-        let input_vars = self
-            .inputs
-            .iter()
-            .map(|input| logical_plan[input].var.get().unwrap())
-            .collect();
-
-        let var = var_table.register_var(self.ty.clone());
-        node.var.set(Some(var));
-
-        let output_ty = mir::row_field_types(&self.ty);
-
-        exec::ExecStatement {
-            input: input_vars,
-            output: exec::ExecStatementOutput {
-                ty: output_ty,
-                output: exec::Output {
-                    var,
-                    num_uses: node.num_uses.get(),
-                },
-            },
-            stmt: self.stmt.clone(),
-            conditional: self.conditional,
-            pagination: self.pagination.clone(),
-        }
-    }
-}
-
-impl From<ExecStatement> for mir::Node {
-    fn from(value: ExecStatement) -> Self {
         mir::Operation::ExecStatement(Box::new(value)).into()
     }
 }

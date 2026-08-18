@@ -1,7 +1,7 @@
-// Statement effect classification.  The consumer (pool retry wrapper)
-// lands in a follow-up PR per `docs/dev/design/retry-safe-recovery.md`;
-// allow dead code until then.
-#[allow(dead_code)]
+// Statement effect classification. Used by the planner's mutation
+// classification (`mir::Operation::is_effectful`); the pool retry wrapper
+// consumer lands in a follow-up PR per
+// `docs/dev/design/retry-safe-recovery.md`.
 pub(crate) mod effect;
 pub(crate) mod eval;
 pub(crate) mod exec;
@@ -94,7 +94,7 @@ impl Engine {
         let plan = self.plan_hir_statement(hir)?;
 
         tracing::trace!(
-            actions = plan.actions.len(),
+            steps = plan.steps.len(),
             needs_transaction = plan.needs_transaction,
             "execution plan ready"
         );

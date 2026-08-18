@@ -1,6 +1,6 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::{exec::Exec, mir},
 };
 use toasty_core::{
     driver::{
@@ -10,31 +10,12 @@ use toasty_core::{
     stmt,
 };
 
-#[derive(Debug)]
-pub(crate) struct ReadModifyWrite {
-    /// Where to get arguments for this action.
-    pub input: Vec<VarId>,
-
-    /// How to handle output
-    pub output: Output,
-
-    /// Column types of the write's `RETURNING` rows, or `None` when the write
-    /// has no returning (it then reports only a row count).
-    pub output_ty: Option<Vec<stmt::Type>>,
-
-    /// Read statement
-    pub read: stmt::Query,
-
-    /// Write statement
-    pub write: stmt::Statement,
-}
-
 impl Exec<'_> {
-    pub(super) async fn action_read_modify_write(
+    pub(super) async fn exec_read_modify_write(
         &mut self,
-        action: &ReadModifyWrite,
-    ) -> Result<()> {
-        assert!(action.input.is_empty(), "TODO");
+        action: &mir::ReadModifyWrite,
+    ) -> Result<ExecResponse> {
+        assert!(action.inputs.is_empty(), "TODO");
 
         // When nested inside an outer transaction use savepoints so the outer
         // transaction can still commit or roll back as a whole. When standalone,
@@ -75,13 +56,7 @@ impl Exec<'_> {
             .exec(&self.engine.schema, commit.into())
             .await?;
 
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse::from_rows(rows),
-        );
-
-        Ok(())
+        Ok(ExecResponse::from_rows(rows))
     }
 
     /// Execute the core read-then-write logic, returning the write's output
@@ -92,7 +67,11 @@ impl Exec<'_> {
     /// would produce: a `Count` when the write has no `RETURNING`, or a
     /// buffered row stream when it does. Rows are buffered before the caller
     /// commits so nothing is tied to the open transaction.
-    async fn rmw_exec(&mut self, action: &ReadModifyWrite) -> Result<Rows> {
+    async fn rmw_exec(&mut self, action: &mir::ReadModifyWrite) -> Result<Rows> {
+        // Column types of the write's `RETURNING` rows, or `None` when the
+        // write has no returning (it then reports only a row count).
+        let output_ty = mir::row_field_types(&action.ty);
+
         // The probe projects the condition once per matched row.
         let ty = Some(vec![stmt::Type::Bool]);
 
@@ -176,7 +155,7 @@ impl Exec<'_> {
                     stmt: write_stmt,
                     params: write_params,
                     ret: if native_returning {
-                        action.output_ty.clone()
+                        output_ty.clone()
                     } else {
                         None
                     },
@@ -190,7 +169,7 @@ impl Exec<'_> {
             // The UPDATE ran without RETURNING; the captured SELECT produces the
             // post-update returning values.
             let mut res = self
-                .run_mysql_update_returning_select(mysql_update, action.output_ty.clone())
+                .run_mysql_update_returning_select(mysql_update, output_ty.clone())
                 .await?;
             res.values.buffer().await?;
             return Ok(res.values);
@@ -221,11 +200,5 @@ impl Exec<'_> {
         }
 
         Ok(Rows::Count(actual))
-    }
-}
-
-impl From<ReadModifyWrite> for Action {
-    fn from(value: ReadModifyWrite) -> Self {
-        Self::ReadModifyWrite(Box::new(value))
     }
 }
