@@ -67,14 +67,14 @@
 //!
 //! ## During MIR node construction (`rewrite_expr_for_mir`)
 //!
-//! When building MIR nodes that carry their own expressions (Guard, Project
-//! for key expressions), the expression may reference a subset of the
-//! statement's `load_data.inputs`. `rewrite_expr_for_mir` does two things:
+//! When building MIR nodes that carry their own expressions (a `Filter`
+//! predicate or key expression), the expression may reference a subset of
+//! the statement's `load_data.inputs`. `rewrite_expr_for_mir` does two things:
 //!
 //! 1. Resolves each `Arg(hir_pos)` through `stmt_info.args[hir_pos]` to
 //!    find the `load_data.inputs` index and MIR node ID
-//! 2. Assigns a new compact position (0, 1, 2, ...) and rewrites the
-//!    `Arg` node in place
+//! 2. Assigns a new compact position, starting at the caller-provided offset,
+//!    and rewrites the `Arg` node in place
 //!
 //! It returns the arg types and input node IDs for constructing the MIR
 //! node. This is the same resolution as `rewrite_arg_dependencies` but
@@ -1562,7 +1562,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         ty: &stmt::Type,
     ) -> mir::NodeId {
         if let Some(mut key_expr) = index_plan.key_values.take() {
-            let (args, input_nodes) = self.rewrite_expr_for_mir(&mut key_expr);
+            let (args, input_nodes) = self.rewrite_expr_for_mir(&mut key_expr, 0);
             let key_ty =
                 stmt::Type::list(self.planner.engine.index_key_record_ty(index_plan.index));
             let keys = eval::Func::from_stmt_typed(key_expr, args, key_ty);
@@ -1870,18 +1870,9 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             return input;
         };
 
-        let (arg_tys, args) = self.rewrite_expr_for_mir(&mut pre_filter_expr);
-
-        // The predicate's `arg(0)` is the current row; shift the pre-filter's
-        // args to `arg(1 + i)`.
-        visit_mut::walk_expr_scoped_mut(&mut pre_filter_expr, 0, |expr, scope_depth| {
-            if let stmt::Expr::Arg(arg) = expr
-                && arg.nesting == scope_depth
-            {
-                arg.position += 1;
-            }
-            true
-        });
+        // The predicate's `arg(0)` is the current row, so the pre-filter's
+        // inputs start at `arg(1)`.
+        let (arg_tys, args) = self.rewrite_expr_for_mir(&mut pre_filter_expr, 1);
 
         let ty = self.planner.mir[input].ty().clone();
         let mut func_args = vec![ty.as_list_unwrap().clone()];
@@ -1903,18 +1894,24 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
     ///
     /// MIR nodes have their own compact input lists. This method:
     /// 1. Resolves each HIR arg to its `load_data.inputs` node ID
-    /// 2. Assigns a new compact position (index into the returned inputs)
+    /// 2. Assigns a new compact position, starting at `arg_offset`
     /// 3. Rewrites the `Arg` position in the expression
+    ///
+    /// Only arguments that reference the statement-level scope are rewritten.
+    /// Arguments bound by nested `Map` or `Let` expressions remain unchanged.
     ///
     /// Returns `(arg_types, input_node_ids)` for constructing the MIR node.
     fn rewrite_expr_for_mir(
         &self,
         expr: &mut stmt::Expr,
+        arg_offset: usize,
     ) -> (Vec<stmt::Type>, IndexSet<mir::NodeId>) {
         let mut arg_map: IndexMap<usize, (stmt::Type, mir::NodeId)> = IndexMap::new();
 
-        visit_mut::for_each_expr_mut(expr, |expr| {
-            if let stmt::Expr::Arg(expr_arg) = expr {
+        visit_mut::walk_expr_scoped_mut(expr, 0, |expr, scope_depth| {
+            if let stmt::Expr::Arg(expr_arg) = expr
+                && expr_arg.nesting == scope_depth
+            {
                 let hir_pos = expr_arg.position;
                 let new_pos = match arg_map.get_index_of(&hir_pos) {
                     Some(idx) => idx,
@@ -1930,8 +1927,10 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
                         idx
                     }
                 };
-                expr_arg.position = new_pos;
+                expr_arg.position = arg_offset + new_pos;
             }
+
+            true
         });
 
         let mut types = Vec::with_capacity(arg_map.len());
