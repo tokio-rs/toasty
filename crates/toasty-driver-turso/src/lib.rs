@@ -852,13 +852,8 @@ impl toasty_core::driver::Connection for Connection {
         tracing::trace!(driver = "turso", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret_tys) = match op {
-            Operation::QuerySql(op) => {
-                assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for Turso"
-                );
-                (sql::Statement::from(op.stmt), op.params, op.ret)
-            }
+            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
+            Operation::QuerySql(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
             Operation::RawSql(op) => {
                 let ret = match op.ret {
                     RawSqlRet::None => SqlReturn::Count,

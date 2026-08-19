@@ -235,16 +235,11 @@ impl Connection {
             Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
             Operation::Upsert(op) => self.exec_upsert(&schema.db, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
-            Operation::QuerySql(op) => {
-                assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
-                );
-                match op.stmt {
-                    stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
-                    _ => todo!("op={:#?}", op.stmt),
-                }
+            Operation::Insert(op) => {
+                self.exec_insert(&schema.db, op.stmt.into_insert_unwrap())
+                    .await
             }
+            Operation::QuerySql(op) => todo!("op={:#?}", op.stmt),
             Operation::Scan(op) => self.exec_scan(schema, op).await,
             Operation::RawSql(_) => Err(Error::unsupported_feature(
                 "raw SQL is only supported by SQL drivers",
@@ -252,7 +247,6 @@ impl Connection {
             Operation::Transaction(_) => Err(Error::unsupported_feature(
                 "transactions are not supported by the DynamoDB driver",
             )),
-            _ => todo!("op={op:#?}"),
         }
     }
 }

@@ -45,7 +45,7 @@ macro_rules! num_ty_test_body {
             let (op, _resp) = test.log().pop();
             let sql = test.capability().sql();
             let val_pat = if sql { ArgOr::Arg(1) } else { ArgOr::Value(val) };
-            assert_struct!(op, Operation::QuerySql({
+            assert_struct!(op, Operation::Insert({
                 stmt: Statement::Insert({
                     target: InsertTarget::Table({
                         table: == table_id(&mut db, "items"),
@@ -57,7 +57,7 @@ macro_rules! num_ty_test_body {
                 }),
             }));
             if sql {
-                assert_struct!(op, Operation::QuerySql({
+                assert_struct!(op, Operation::Insert({
                     params[1].value: =~ val,
                 }));
             }
@@ -281,7 +281,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
         } else {
             ArgOr::Value(val.as_str())
         };
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
@@ -293,7 +293,7 @@ pub async fn ty_str(test: &mut Test) -> Result<()> {
             }),
         }));
         if sql {
-            assert_struct!(op, Operation::QuerySql({
+            assert_struct!(op, Operation::Insert({
                 params[1].value: == val.as_str(),
             }));
         }
@@ -383,7 +383,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
         } else {
             ArgOr::Value(expected.clone())
         };
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
@@ -395,7 +395,7 @@ pub async fn ty_bytes(test: &mut Test) -> Result<()> {
             }),
         }));
         if sql {
-            assert_struct!(op, Operation::QuerySql({
+            assert_struct!(op, Operation::Insert({
                 params[1].value: == expected,
             }));
         }
@@ -471,7 +471,7 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
         } else {
             ArgOr::Value(expected.clone())
         };
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
@@ -483,7 +483,7 @@ pub async fn ty_uuid(test: &mut Test) -> Result<()> {
             }),
         }));
         if sql {
-            assert_struct!(op, Operation::QuerySql({
+            assert_struct!(op, Operation::Insert({
                 params[1].value: == expected,
             }));
         }
@@ -522,7 +522,7 @@ pub async fn ty_smart_ptrs(test: &mut Test) -> Result<()> {
 
     // Verify the INSERT operation stored the unwrapped values
     let (op, _resp) = test.log().pop();
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
                 table: == table_id(&db, "items"),

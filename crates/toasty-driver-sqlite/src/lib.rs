@@ -269,13 +269,8 @@ impl toasty_core::driver::Connection for Connection {
         tracing::trace!(driver = "sqlite", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret_tys) = match op {
-            Operation::QuerySql(op) => {
-                assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
-                );
-                (sql::Statement::from(op.stmt), op.params, op.ret)
-            }
+            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
+            Operation::QuerySql(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
             Operation::RawSql(op) => {
                 let ret = match op.ret {
                     RawSqlRet::None => SqlReturn::Count,
@@ -284,7 +279,6 @@ impl toasty_core::driver::Connection for Connection {
                 };
                 return self.exec_sql(&op.sql, op.params, ret);
             }
-            // Operation::Insert(op) => op.stmt.into(),
             Operation::Transaction(mut op) => {
                 if let Transaction::Start { isolation, .. } = &mut op {
                     if !matches!(isolation, Some(IsolationLevel::Serializable) | None) {

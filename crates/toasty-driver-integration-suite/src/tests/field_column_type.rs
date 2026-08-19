@@ -113,7 +113,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
         } else {
             ArgOr::Value(val_str.as_str())
         };
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             stmt: Statement::Insert({
                 target: InsertTarget::Table({
                     table: == table_id(&db, "items"),
@@ -125,7 +125,7 @@ pub async fn specify_uuid_as_text(test: &mut Test) -> Result<()> {
             }),
         }));
         if sql {
-            assert_struct!(op, Operation::QuerySql({
+            assert_struct!(op, Operation::Insert({
                 params[val_pos].value: == val_str,
             }));
         }
