@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6d5e74e4.js";
+            window.path_to_searchindex_js = "searchindex-0aeb2b9c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -370,7 +370,11 @@ the create builder, which is useful for inline construction:</p>
     .exec(&amp;mut db)
     .await?;</code></pre>
 <p><code>create_many()</code> returns a <code>Vec</code> of the created records, including auto-generated
-fields like <code>id</code>.</p>
+fields when the backend can return them. MySQL can retrieve an auto-increment ID
+for a single-row insert, but it cannot return every generated ID from a bulk
+insert. On MySQL, <code>create_many()</code> therefore requires caller-generated IDs, such
+as Toasty’s client-generated UUIDs. Use separate <code>create()</code> calls when the model
+has a database-generated auto-increment ID. See <a href="./mysql.html">MySQL</a> for details.</p>
 <h2 id="create_many-vs-batch-for-inserts"><a class="header" href="#create_many-vs-batch-for-inserts"><code>create_many()</code> vs <code>batch()</code> for inserts</a></h2>
 <p>Both can insert multiple records, but they differ:</p>
 <div class="table-wrapper">

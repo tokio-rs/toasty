@@ -28,8 +28,8 @@
 <a href=#28 id=28 data-nosnippet>28</a>            ..
 <a href=#29 id=29 data-nosnippet>29</a>        })
 <a href=#30 id=30 data-nosnippet>30</a>    );
-<a href=#31 id=31 data-nosnippet>31</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT user
-<a href=#32 id=32 data-nosnippet>32</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT todo
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>)); <span class="comment">// INSERT user
+<a href=#32 id=32 data-nosnippet>32</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>)); <span class="comment">// INSERT todo
 <a href=#33 id=33 data-nosnippet>33</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#34 id=34 data-nosnippet>34</a>        t.log().pop_op(),
 <a href=#35 id=35 data-nosnippet>35</a>        Operation::Transaction(Transaction::Commit)
@@ -52,7 +52,7 @@
 <a href=#52 id=52 data-nosnippet>52</a>    User::create().name(<span class="string">"x"</span>).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#53 id=53 data-nosnippet>53</a>
 <a href=#54 id=54 data-nosnippet>54</a>    <span class="comment">// Only the INSERT — no Transaction::Start { isolation: None, read_only: false } bookending it
-<a href=#55 id=55 data-nosnippet>55</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#55 id=55 data-nosnippet>55</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>));
 <a href=#56 id=56 data-nosnippet>56</a>    <span class="macro">assert!</span>(t.log().is_empty());
 <a href=#57 id=57 data-nosnippet>57</a>
 <a href=#58 id=58 data-nosnippet>58</a>    <span class="prelude-val">Ok</span>(())
@@ -123,7 +123,7 @@
 <a href=#123 id=123 data-nosnippet>123</a>            ..
 <a href=#124 id=124 data-nosnippet>124</a>        })
 <a href=#125 id=125 data-nosnippet>125</a>    );
-<a href=#126 id=126 data-nosnippet>126</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT user
+<a href=#126 id=126 data-nosnippet>126</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>)); <span class="comment">// INSERT user
 <a href=#127 id=127 data-nosnippet>127</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#128 id=128 data-nosnippet>128</a>        t.log().pop_op(),
 <a href=#129 id=129 data-nosnippet>129</a>        Operation::Transaction(Transaction::Rollback)
@@ -196,7 +196,7 @@
 <a href=#196 id=196 data-nosnippet>196</a>            ..
 <a href=#197 id=197 data-nosnippet>197</a>        })
 <a href=#198 id=198 data-nosnippet>198</a>    );
-<a href=#199 id=199 data-nosnippet>199</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT user
+<a href=#199 id=199 data-nosnippet>199</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>)); <span class="comment">// INSERT user
 <a href=#200 id=200 data-nosnippet>200</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#201 id=201 data-nosnippet>201</a>        t.log().pop_op(),
 <a href=#202 id=202 data-nosnippet>202</a>        Operation::Transaction(Transaction::Rollback)
@@ -272,7 +272,7 @@
 <a href=#272 id=272 data-nosnippet>272</a>            ..
 <a href=#273 id=273 data-nosnippet>273</a>        })
 <a href=#274 id=274 data-nosnippet>274</a>    );
-<a href=#275 id=275 data-nosnippet>275</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT todo (rolled back)
+<a href=#275 id=275 data-nosnippet>275</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>)); <span class="comment">// INSERT todo (rolled back)
 <a href=#276 id=276 data-nosnippet>276</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#277 id=277 data-nosnippet>277</a>        t.log().pop_op(),
 <a href=#278 id=278 data-nosnippet>278</a>        Operation::Transaction(Transaction::Rollback)

@@ -2,8 +2,8 @@
 <a href=#2 id=2 data-nosnippet>2</a>//!
 <a href=#3 id=3 data-nosnippet>3</a>//! An [`Operation`] is the unit of work sent to [`Connection::exec`](super::Connection::exec).
 <a href=#4 id=4 data-nosnippet>4</a>//! The query engine compiles user queries into one or more `Operation` values.
-<a href=#5 id=5 data-nosnippet>5</a>//! SQL drivers handle [`QuerySql`], [`RawSql`], and [`Insert`]; key-value
-<a href=#6 id=6 data-nosnippet>6</a>//! drivers handle [`GetByKey`], [`QueryPk`], [`DeleteByKey`],
+<a href=#5 id=5 data-nosnippet>5</a>//! Drivers handle [`Insert`]. SQL drivers also handle [`QuerySql`] and
+<a href=#6 id=6 data-nosnippet>6</a>//! [`RawSql`]; key-value drivers handle [`GetByKey`], [`QueryPk`], [`DeleteByKey`],
 <a href=#7 id=7 data-nosnippet>7</a>//! [`FindPkByIndex`], [`UpdateByKey`], and (when
 <a href=#8 id=8 data-nosnippet>8</a>//! [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`]. Both
 <a href=#9 id=9 data-nosnippet>9</a>//! driver types handle [`Transaction`] operations.
@@ -49,11 +49,11 @@
 <a href=#49 id=49 data-nosnippet>49</a>
 <a href=#50 id=50 data-nosnippet>50</a><span class="doccomment">/// A single database operation to be executed by a driver.
 <a href=#51 id=51 data-nosnippet>51</a>///
-<a href=#52 id=52 data-nosnippet>52</a>/// Each variant maps to one logical database action. The query planner selects
-<a href=#53 id=53 data-nosnippet>53</a>/// variants based on the driver's [`Capability`](super::Capability): SQL
-<a href=#54 id=54 data-nosnippet>54</a>/// drivers receive [`QuerySql`](Self::QuerySql) and [`Insert`](Self::Insert),
-<a href=#55 id=55 data-nosnippet>55</a>/// while key-value drivers receive [`GetByKey`](Self::GetByKey),
-<a href=#56 id=56 data-nosnippet>56</a>/// [`QueryPk`](Self::QueryPk), etc.
+<a href=#52 id=52 data-nosnippet>52</a>/// Each variant maps to one logical database action. The query planner sends
+<a href=#53 id=53 data-nosnippet>53</a>/// [`Insert`](Self::Insert) to every driver. SQL drivers also receive
+<a href=#54 id=54 data-nosnippet>54</a>/// [`QuerySql`](Self::QuerySql), while key-value drivers receive
+<a href=#55 id=55 data-nosnippet>55</a>/// [`GetByKey`](Self::GetByKey), [`QueryPk`](Self::QueryPk), etc., according to
+<a href=#56 id=56 data-nosnippet>56</a>/// the driver's [`Capability`](super::Capability).
 <a href=#57 id=57 data-nosnippet>57</a>///
 <a href=#58 id=58 data-nosnippet>58</a>/// All operation types implement `From&lt;T&gt; for Operation`, so they can be
 <a href=#59 id=59 data-nosnippet>59</a>/// converted with `.into()`.

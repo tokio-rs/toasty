@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-6d5e74e4.js";
+            window.path_to_searchindex_js = "searchindex-0aeb2b9c.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -7937,7 +7937,11 @@ the create builder, which is useful for inline construction:</p>
     .exec(&amp;mut db)
     .await?;</code></pre>
 <p><code>create_many()</code> returns a <code>Vec</code> of the created records, including auto-generated
-fields like <code>id</code>.</p>
+fields when the backend can return them. MySQL can retrieve an auto-increment ID
+for a single-row insert, but it cannot return every generated ID from a bulk
+insert. On MySQL, <code>create_many()</code> therefore requires caller-generated IDs, such
+as Toasty’s client-generated UUIDs. Use separate <code>create()</code> calls when the model
+has a database-generated auto-increment ID. See <a href="#mysql">MySQL</a> for details.</p>
 <h2 id="create_many-vs-batch-for-inserts"><a class="header" href="#create_many-vs-batch-for-inserts"><code>create_many()</code> vs <code>batch()</code> for inserts</a></h2>
 <p>Both can insert multiple records, but they differ:</p>
 <div class="table-wrapper">
@@ -9332,16 +9336,19 @@ column’s collation: <code>utf8mb4_unicode_ci</code> and other <code>_ci</code>
 case-insensitively, while binary and <code>_bin</code> collations match case-sensitively.
 Pick the collation that matches the semantics you want when declaring the
 column, then use <a href="#like"><code>.like()</code></a>.</p>
-<p><strong>No <code>RETURNING</code> from INSERT or UPDATE.</strong> MySQL does not support
-<code>RETURNING</code> clauses on mutations. For inserts into a table with an
-auto-increment primary key, Toasty fetches the generated ID with
-<code>LAST_INSERT_ID()</code> on the same connection and synthesizes the same
-result a <code>RETURNING</code> clause would produce. This is transparent at the
-API level — <a href="#creating-records"><code>Model::create()</code></a> returns a
-populated model the same way it does on other backends. The constraint to know about: if you wire
-up a <code>RETURNING</code>-style read through a non-auto-increment column,
-Toasty will reject the query rather than silently issue a second
-round-trip.</p>
+<p><strong>No native <code>RETURNING</code> from INSERT or UPDATE.</strong> For a single-row insert with
+one auto-increment result, Toasty retrieves the exact generated ID with
+<code>LAST_INSERT_ID()</code> on the same connection. This lets
+<a href="#creating-records"><code>Model::create()</code></a> return a populated model.</p>
+<p>MySQL cannot return every generated ID from a multi-row insert. Toasty does not
+assume that later IDs are consecutive: a bulk insert that needs
+database-generated values is rejected with <code>unsupported_feature</code> before the
+statement is sent. Bulk inserts remain available when all returned values are
+known before execution, such as models with caller-generated or
+client-generated UUID keys. Otherwise, insert each record separately or use a
+backend with mutation <code>RETURNING</code> support.</p>
+<p>For updates that need returned columns, Toasty performs a follow-up <code>SELECT</code>.
+That read is not atomic with the update relative to concurrent writers.</p>
 <p><strong>No CTE-driven updates.</strong> MySQL does not allow <code>UPDATE</code> inside a
 common table expression. The query planner avoids generating those.
 Most update patterns do not need them; the engine routes complex

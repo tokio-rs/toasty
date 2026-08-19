@@ -265,7 +265,7 @@
 <a href=#265 id=265 data-nosnippet>265</a>            ..
 <a href=#266 id=266 data-nosnippet>266</a>        })
 <a href=#267 id=267 data-nosnippet>267</a>    );
-<a href=#268 id=268 data-nosnippet>268</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT
+<a href=#268 id=268 data-nosnippet>268</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>)); <span class="comment">// INSERT
 <a href=#269 id=269 data-nosnippet>269</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#270 id=270 data-nosnippet>270</a>        t.log().pop_op(),
 <a href=#271 id=271 data-nosnippet>271</a>        Operation::Transaction(Transaction::Commit)
@@ -294,7 +294,7 @@
 <a href=#294 id=294 data-nosnippet>294</a>            ..
 <a href=#295 id=295 data-nosnippet>295</a>        })
 <a href=#296 id=296 data-nosnippet>296</a>    );
-<a href=#297 id=297 data-nosnippet>297</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>)); <span class="comment">// INSERT
+<a href=#297 id=297 data-nosnippet>297</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>)); <span class="comment">// INSERT
 <a href=#298 id=298 data-nosnippet>298</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#299 id=299 data-nosnippet>299</a>        t.log().pop_op(),
 <a href=#300 id=300 data-nosnippet>300</a>        Operation::Transaction(Transaction::Rollback)
@@ -427,14 +427,14 @@
 <a href=#427 id=427 data-nosnippet>427</a>        })
 <a href=#428 id=428 data-nosnippet>428</a>    );
 <a href=#429 id=429 data-nosnippet>429</a>    <span class="comment">// INSERT Alice
-<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#430 id=430 data-nosnippet>430</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>));
 <a href=#431 id=431 data-nosnippet>431</a>    <span class="comment">// SAVEPOINT
 <a href=#432 id=432 data-nosnippet>432</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#433 id=433 data-nosnippet>433</a>        t.log().pop_op(),
 <a href=#434 id=434 data-nosnippet>434</a>        Operation::Transaction(Transaction::Savepoint(<span class="kw">_</span>))
 <a href=#435 id=435 data-nosnippet>435</a>    );
 <a href=#436 id=436 data-nosnippet>436</a>    <span class="comment">// INSERT Bob
-<a href=#437 id=437 data-nosnippet>437</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#437 id=437 data-nosnippet>437</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>));
 <a href=#438 id=438 data-nosnippet>438</a>    <span class="comment">// RELEASE SAVEPOINT
 <a href=#439 id=439 data-nosnippet>439</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#440 id=440 data-nosnippet>440</a>        t.log().pop_op(),
@@ -481,7 +481,7 @@
 <a href=#481 id=481 data-nosnippet>481</a>        Operation::Transaction(Transaction::Savepoint(<span class="kw">_</span>))
 <a href=#482 id=482 data-nosnippet>482</a>    );
 <a href=#483 id=483 data-nosnippet>483</a>    <span class="comment">// INSERT Ghost
-<a href=#484 id=484 data-nosnippet>484</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#484 id=484 data-nosnippet>484</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>));
 <a href=#485 id=485 data-nosnippet>485</a>    <span class="comment">// ROLLBACK TO SAVEPOINT
 <a href=#486 id=486 data-nosnippet>486</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#487 id=487 data-nosnippet>487</a>        t.log().pop_op(),
@@ -563,9 +563,9 @@
 <a href=#563 id=563 data-nosnippet>563</a>        Operation::Transaction(Transaction::Savepoint(<span class="kw">_</span>))
 <a href=#564 id=564 data-nosnippet>564</a>    );
 <a href=#565 id=565 data-nosnippet>565</a>    <span class="comment">// INSERT user
-<a href=#566 id=566 data-nosnippet>566</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#566 id=566 data-nosnippet>566</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>));
 <a href=#567 id=567 data-nosnippet>567</a>    <span class="comment">// INSERT todo
-<a href=#568 id=568 data-nosnippet>568</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql(<span class="kw">_</span>));
+<a href=#568 id=568 data-nosnippet>568</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert(<span class="kw">_</span>));
 <a href=#569 id=569 data-nosnippet>569</a>    <span class="comment">// RELEASE SAVEPOINT
 <a href=#570 id=570 data-nosnippet>570</a>    </span><span class="macro">assert_struct!</span>(
 <a href=#571 id=571 data-nosnippet>571</a>        t.log().pop_op(),

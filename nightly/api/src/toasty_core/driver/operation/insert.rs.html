@@ -15,29 +15,31 @@
 <a href=#15 id=15 data-nosnippet>15</a>///
 <a href=#16 id=16 data-nosnippet>16</a>/// let op = Insert {
 <a href=#17 id=17 data-nosnippet>17</a>///     stmt: insert_statement,
-<a href=#18 id=18 data-nosnippet>18</a>///     ret: Some(vec![stmt::Type::I64]),
-<a href=#19 id=19 data-nosnippet>19</a>/// };
-<a href=#20 id=20 data-nosnippet>20</a>/// let operation: Operation = op.into();
-<a href=#21 id=21 data-nosnippet>21</a>/// ```
-<a href=#22 id=22 data-nosnippet>22</a></span><span class="attr">#[derive(Debug, Clone)]
-<a href=#23 id=23 data-nosnippet>23</a></span><span class="kw">pub struct </span>Insert {
-<a href=#24 id=24 data-nosnippet>24</a>    <span class="doccomment">/// The insert statement to execute. Scalar values that should be sent as
-<a href=#25 id=25 data-nosnippet>25</a>    /// bind parameters have been replaced with `Expr::Arg(n)` where `n` is
-<a href=#26 id=26 data-nosnippet>26</a>    /// the index into [`params`](Self::params).
-<a href=#27 id=27 data-nosnippet>27</a>    </span><span class="kw">pub </span>stmt: stmt::Statement,
-<a href=#28 id=28 data-nosnippet>28</a>
-<a href=#29 id=29 data-nosnippet>29</a>    <span class="doccomment">/// Typed bind parameters extracted from the statement.
-<a href=#30 id=30 data-nosnippet>30</a>    </span><span class="kw">pub </span>params: Vec&lt;TypedValue&gt;,
-<a href=#31 id=31 data-nosnippet>31</a>
-<a href=#32 id=32 data-nosnippet>32</a>    <span class="doccomment">/// The types of columns to return from the insert. When `Some`, the driver
-<a href=#33 id=33 data-nosnippet>33</a>    /// should return the inserted row(s) projected to these types (e.g.,
-<a href=#34 id=34 data-nosnippet>34</a>    /// auto-increment IDs). When `None`, no rows are returned.
-<a href=#35 id=35 data-nosnippet>35</a>    </span><span class="kw">pub </span>ret: <span class="prelude-ty">Option</span>&lt;Vec&lt;stmt::Type&gt;&gt;,
-<a href=#36 id=36 data-nosnippet>36</a>}
-<a href=#37 id=37 data-nosnippet>37</a>
-<a href=#38 id=38 data-nosnippet>38</a><span class="kw">impl </span>From&lt;Insert&gt; <span class="kw">for </span>Operation {
-<a href=#39 id=39 data-nosnippet>39</a>    <span class="kw">fn </span>from(value: Insert) -&gt; <span class="self">Self </span>{
-<a href=#40 id=40 data-nosnippet>40</a>        <span class="self">Self</span>::Insert(value)
-<a href=#41 id=41 data-nosnippet>41</a>    }
-<a href=#42 id=42 data-nosnippet>42</a>}
+<a href=#18 id=18 data-nosnippet>18</a>///     params: vec![],
+<a href=#19 id=19 data-nosnippet>19</a>///     ret: Some(vec![stmt::Type::I64]),
+<a href=#20 id=20 data-nosnippet>20</a>/// };
+<a href=#21 id=21 data-nosnippet>21</a>/// let operation: Operation = op.into();
+<a href=#22 id=22 data-nosnippet>22</a>/// ```
+<a href=#23 id=23 data-nosnippet>23</a></span><span class="attr">#[derive(Debug, Clone)]
+<a href=#24 id=24 data-nosnippet>24</a></span><span class="kw">pub struct </span>Insert {
+<a href=#25 id=25 data-nosnippet>25</a>    <span class="doccomment">/// The insert statement to execute. Scalar values that should be sent as
+<a href=#26 id=26 data-nosnippet>26</a>    /// bind parameters have been replaced with `Expr::Arg(n)` where `n` is
+<a href=#27 id=27 data-nosnippet>27</a>    /// the index into [`params`](Self::params).
+<a href=#28 id=28 data-nosnippet>28</a>    </span><span class="kw">pub </span>stmt: stmt::Statement,
+<a href=#29 id=29 data-nosnippet>29</a>
+<a href=#30 id=30 data-nosnippet>30</a>    <span class="doccomment">/// Typed bind parameters extracted from the statement.
+<a href=#31 id=31 data-nosnippet>31</a>    </span><span class="kw">pub </span>params: Vec&lt;TypedValue&gt;,
+<a href=#32 id=32 data-nosnippet>32</a>
+<a href=#33 id=33 data-nosnippet>33</a>    <span class="doccomment">/// The types of values the insert must return. SQL backends with native
+<a href=#34 id=34 data-nosnippet>34</a>    /// mutation `RETURNING` decode its projected rows. A backend may also
+<a href=#35 id=35 data-nosnippet>35</a>    /// provide an exact operation-specific result, such as MySQL's generated
+<a href=#36 id=36 data-nosnippet>36</a>    /// ID for a single-row insert. When `None`, no rows are returned.
+<a href=#37 id=37 data-nosnippet>37</a>    </span><span class="kw">pub </span>ret: <span class="prelude-ty">Option</span>&lt;Vec&lt;stmt::Type&gt;&gt;,
+<a href=#38 id=38 data-nosnippet>38</a>}
+<a href=#39 id=39 data-nosnippet>39</a>
+<a href=#40 id=40 data-nosnippet>40</a><span class="kw">impl </span>From&lt;Insert&gt; <span class="kw">for </span>Operation {
+<a href=#41 id=41 data-nosnippet>41</a>    <span class="kw">fn </span>from(value: Insert) -&gt; <span class="self">Self </span>{
+<a href=#42 id=42 data-nosnippet>42</a>        <span class="self">Self</span>::Insert(value)
+<a href=#43 id=43 data-nosnippet>43</a>    }
+<a href=#44 id=44 data-nosnippet>44</a>}
 </code></pre></div></section></main></body></html>

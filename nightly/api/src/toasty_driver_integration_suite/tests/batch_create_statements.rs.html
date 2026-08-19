@@ -28,10 +28,10 @@
 <a href=#28 id=28 data-nosnippet>28</a>            ..
 <a href=#29 id=29 data-nosnippet>29</a>        })
 <a href=#30 id=30 data-nosnippet>30</a>    );
-<a href=#31 id=31 data-nosnippet>31</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#31 id=31 data-nosnippet>31</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#32 id=32 data-nosnippet>32</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#33 id=33 data-nosnippet>33</a>    })); <span class="comment">// INSERT alice
-<a href=#34 id=34 data-nosnippet>34</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#34 id=34 data-nosnippet>34</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#35 id=35 data-nosnippet>35</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#36 id=36 data-nosnippet>36</a>    })); <span class="comment">// INSERT bob
 <a href=#37 id=37 data-nosnippet>37</a>    </span><span class="macro">assert!</span>(t.log().pop_op().is_transaction_commit());
@@ -69,10 +69,10 @@
 <a href=#69 id=69 data-nosnippet>69</a>            ..
 <a href=#70 id=70 data-nosnippet>70</a>        })
 <a href=#71 id=71 data-nosnippet>71</a>    );
-<a href=#72 id=72 data-nosnippet>72</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#72 id=72 data-nosnippet>72</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#73 id=73 data-nosnippet>73</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#74 id=74 data-nosnippet>74</a>    })); <span class="comment">// INSERT user
-<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#75 id=75 data-nosnippet>75</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#76 id=76 data-nosnippet>76</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#77 id=77 data-nosnippet>77</a>    })); <span class="comment">// INSERT post
 <a href=#78 id=78 data-nosnippet>78</a>    </span><span class="macro">assert!</span>(t.log().pop_op().is_transaction_commit());
@@ -109,7 +109,7 @@
 <a href=#109 id=109 data-nosnippet>109</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
 <a href=#110 id=110 data-nosnippet>110</a>        stmt: Statement::Query(<span class="kw">_</span>),
 <a href=#111 id=111 data-nosnippet>111</a>    })); <span class="comment">// SELECT
-<a href=#112 id=112 data-nosnippet>112</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#112 id=112 data-nosnippet>112</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#113 id=113 data-nosnippet>113</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#114 id=114 data-nosnippet>114</a>    })); <span class="comment">// INSERT
 <a href=#115 id=115 data-nosnippet>115</a>    </span><span class="macro">assert!</span>(t.log().pop_op().is_transaction_commit());
@@ -142,7 +142,7 @@
 <a href=#142 id=142 data-nosnippet>142</a>            ..
 <a href=#143 id=143 data-nosnippet>143</a>        })
 <a href=#144 id=144 data-nosnippet>144</a>    );
-<a href=#145 id=145 data-nosnippet>145</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#145 id=145 data-nosnippet>145</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#146 id=146 data-nosnippet>146</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#147 id=147 data-nosnippet>147</a>    })); <span class="comment">// INSERT
 <a href=#148 id=148 data-nosnippet>148</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
@@ -182,13 +182,13 @@
 <a href=#182 id=182 data-nosnippet>182</a>            ..
 <a href=#183 id=183 data-nosnippet>183</a>        })
 <a href=#184 id=184 data-nosnippet>184</a>    );
-<a href=#185 id=185 data-nosnippet>185</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#186 id=186 data-nosnippet>186</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#187 id=187 data-nosnippet>187</a>    })); <span class="comment">// INSERT bob
 <a href=#188 id=188 data-nosnippet>188</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
 <a href=#189 id=189 data-nosnippet>189</a>        stmt: Statement::Query(<span class="kw">_</span>),
 <a href=#190 id=190 data-nosnippet>190</a>    })); <span class="comment">// SELECT alice
-<a href=#191 id=191 data-nosnippet>191</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#191 id=191 data-nosnippet>191</a>    </span><span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#192 id=192 data-nosnippet>192</a>        stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#193 id=193 data-nosnippet>193</a>    })); <span class="comment">// INSERT carol
 <a href=#194 id=194 data-nosnippet>194</a>    </span><span class="macro">assert!</span>(t.log().pop_op().is_transaction_commit());
@@ -223,7 +223,7 @@
 <a href=#223 id=223 data-nosnippet>223</a>        })
 <a href=#224 id=224 data-nosnippet>224</a>    );
 <a href=#225 id=225 data-nosnippet>225</a>    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">3 </span>{
-<a href=#226 id=226 data-nosnippet>226</a>        <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#226 id=226 data-nosnippet>226</a>        <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#227 id=227 data-nosnippet>227</a>            stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#228 id=228 data-nosnippet>228</a>        }));
 <a href=#229 id=229 data-nosnippet>229</a>    }
@@ -262,7 +262,7 @@
 <a href=#262 id=262 data-nosnippet>262</a>        })
 <a href=#263 id=263 data-nosnippet>263</a>    );
 <a href=#264 id=264 data-nosnippet>264</a>    <span class="kw">for _ in </span><span class="number">0</span>..<span class="number">3 </span>{
-<a href=#265 id=265 data-nosnippet>265</a>        <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::QuerySql({
+<a href=#265 id=265 data-nosnippet>265</a>        <span class="macro">assert_struct!</span>(t.log().pop_op(), Operation::Insert({
 <a href=#266 id=266 data-nosnippet>266</a>            stmt: Statement::Insert(<span class="kw">_</span>),
 <a href=#267 id=267 data-nosnippet>267</a>        }));
 <a href=#268 id=268 data-nosnippet>268</a>    }

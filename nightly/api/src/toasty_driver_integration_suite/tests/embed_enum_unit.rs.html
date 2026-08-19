@@ -61,7 +61,7 @@
 <a href=#61 id=61 data-nosnippet>61</a>        ArgOr::Value(<span class="number">1i64</span>)
 <a href=#62 id=62 data-nosnippet>62</a>    };
 <a href=#63 id=63 data-nosnippet>63</a>    <span class="kw">let </span>op = t.log().pop_op();
-<a href=#64 id=64 data-nosnippet>64</a>    <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
+<a href=#64 id=64 data-nosnippet>64</a>    <span class="macro">assert_struct!</span>(op, Operation::Insert({
 <a href=#65 id=65 data-nosnippet>65</a>        stmt: Statement::Insert({
 <a href=#66 id=66 data-nosnippet>66</a>            source.body: ExprSet::Values({
 <a href=#67 id=67 data-nosnippet>67</a>                rows: [=~ (Any, Any, status_pat)],
@@ -73,7 +73,7 @@
 <a href=#73 id=73 data-nosnippet>73</a>        }),
 <a href=#74 id=74 data-nosnippet>74</a>    }));
 <a href=#75 id=75 data-nosnippet>75</a>    <span class="kw">if </span>sql {
-<a href=#76 id=76 data-nosnippet>76</a>        <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
+<a href=#76 id=76 data-nosnippet>76</a>        <span class="macro">assert_struct!</span>(op, Operation::Insert({
 <a href=#77 id=77 data-nosnippet>77</a>            params[status_pos].value: == <span class="number">1i64</span>,
 <a href=#78 id=78 data-nosnippet>78</a>        }));
 <a href=#79 id=79 data-nosnippet>79</a>    }

@@ -19,7 +19,7 @@
 <a href=#19 id=19 data-nosnippet>19</a>    } <span class="kw">else </span>{
 <a href=#20 id=20 data-nosnippet>20</a>        ArgOr::Value(expected)
 <a href=#21 id=21 data-nosnippet>21</a>    };
-<a href=#22 id=22 data-nosnippet>22</a>    <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
+<a href=#22 id=22 data-nosnippet>22</a>    <span class="macro">assert_struct!</span>(op, Operation::Insert({
 <a href=#23 id=23 data-nosnippet>23</a>        stmt: Statement::Insert({
 <a href=#24 id=24 data-nosnippet>24</a>            source.body: ExprSet::Values({
 <a href=#25 id=25 data-nosnippet>25</a>                rows: [=~ (Any, val_pat)],
@@ -27,7 +27,7 @@
 <a href=#27 id=27 data-nosnippet>27</a>        }),
 <a href=#28 id=28 data-nosnippet>28</a>    }));
 <a href=#29 id=29 data-nosnippet>29</a>    <span class="kw">if </span>sql {
-<a href=#30 id=30 data-nosnippet>30</a>        <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
+<a href=#30 id=30 data-nosnippet>30</a>        <span class="macro">assert_struct!</span>(op, Operation::Insert({
 <a href=#31 id=31 data-nosnippet>31</a>            params[pos].value: == expected,
 <a href=#32 id=32 data-nosnippet>32</a>        }));
 <a href=#33 id=33 data-nosnippet>33</a>    }
@@ -39,7 +39,7 @@
 <a href=#39 id=39 data-nosnippet>39</a>    storage_ty: db::Type,
 <a href=#40 id=40 data-nosnippet>40</a>    expected: <span class="kw-2">&amp;</span>str,
 <a href=#41 id=41 data-nosnippet>41</a>) {
-<a href=#42 id=42 data-nosnippet>42</a>    <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
+<a href=#42 id=42 data-nosnippet>42</a>    <span class="macro">assert_struct!</span>(op, Operation::Insert({
 <a href=#43 id=43 data-nosnippet>43</a>        stmt: Statement::Insert({
 <a href=#44 id=44 data-nosnippet>44</a>            target: InsertTarget::Table({
 <a href=#45 id=45 data-nosnippet>45</a>                table: == table,
@@ -182,7 +182,7 @@
 <a href=#182 id=182 data-nosnippet>182</a>    <span class="kw">let </span>empty_record = Item::create().data(<span class="prelude-val">None</span>).exec(<span class="kw-2">&amp;mut </span>db).<span class="kw">await</span><span class="question-mark">?</span>;
 <a href=#183 id=183 data-nosnippet>183</a>
 <a href=#184 id=184 data-nosnippet>184</a>    <span class="kw">let </span>(op, <span class="kw">_</span>) = t.log().pop();
-<a href=#185 id=185 data-nosnippet>185</a>    <span class="macro">assert_struct!</span>(op, Operation::QuerySql({
+<a href=#185 id=185 data-nosnippet>185</a>    <span class="macro">assert_struct!</span>(op, Operation::Insert({
 <a href=#186 id=186 data-nosnippet>186</a>        stmt: Statement::Insert({
 <a href=#187 id=187 data-nosnippet>187</a>            source.body: ExprSet::Values({
 <a href=#188 id=188 data-nosnippet>188</a>                rows: [=~ (Any, Value::Null)],
