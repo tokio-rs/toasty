@@ -221,7 +221,14 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_profile_and_todos))]
+// The three todos are inserted with one multi-row statement, so a backend
+// without `RETURNING` on mutations can only report their generated IDs when
+// the application supplies them.
+#[driver_test(
+    id(ID),
+    requires(or(returning_from_mutation, id_uuid)),
+    scenario(crate::scenarios::user_profile_and_todos)
+)]
 pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

@@ -24,6 +24,7 @@ pub mod has_many_same_target;
 pub mod has_many_unique_title;
 pub mod has_one_optional_belongs_to;
 pub mod in_list_item;
+pub mod parent_children_auto_increment;
 pub mod person_contact_deferred_metadata;
 pub mod tagged_item;
 pub mod task_bug_priority;

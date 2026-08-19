@@ -1,5 +1,6 @@
 use toasty_core::{
     driver::{ExecResponse, Rows, operation},
+    schema::db,
     stmt,
 };
 
@@ -41,19 +42,25 @@ pub(crate) struct PaginationConfig {
     pub extract_cursor: Option<eval::Func>,
 }
 
-/// Information about a MySQL INSERT with RETURNING that needs special handling.
+/// An `INSERT` whose `RETURNING` the backend cannot serve, but whose one
+/// generated value the backend still names exactly.
 ///
-/// MySQL doesn't support RETURNING clauses, but we can work around this for
-/// auto-increment columns by using LAST_INSERT_ID().
+/// MySQL has no `RETURNING` on `INSERT`. It does report the auto-increment
+/// value a statement generated, through `LAST_INSERT_ID()` on the same
+/// connection, and for a one-row insert that value identifies the row. The
+/// returning clause is stripped from the statement and evaluated here against
+/// the reported value.
+///
+/// Every other shape is rejected by
+/// [`Exec::strip_insert_returning_without_capability`] rather than
+/// reconstructed.
 #[derive(Debug)]
-struct MySQLInsertReturning {
-    /// Number of rows being inserted
-    num_rows: u64,
-
-    /// The original returning expression that was removed from the statement
+struct LastInsertId {
+    /// The stripped returning expression, with the auto-increment column
+    /// reference replaced by `Expr::Arg(0)`.
     returning_expr: stmt::Expr,
 
-    /// The type of the auto-increment column
+    /// The type of the auto-increment column.
     auto_column_type: stmt::Type,
 }
 
@@ -99,10 +106,10 @@ impl Exec<'_> {
             "stmt={stmt:#?}"
         );
 
-        // MySQL does not support returning clauses with insert statements,
-        // which adds a wrinkle when we want to get the IDs for autoincrement
-        // IDs.
-        let mysql_insert_returning = self.process_stmt_insert_with_returning_on_mysql(&mut stmt);
+        // A backend without `RETURNING` on mutations cannot report a value the
+        // database computed. Strip the returning when the backend names that
+        // value exactly; reject the statement when it does not.
+        let last_insert_id = self.strip_insert_returning_without_capability(&mut stmt)?;
 
         // MySQL does not support `RETURNING` on `UPDATE`. Strip the returning
         // and capture an equivalent `SELECT` to run after the UPDATE.
@@ -143,9 +150,9 @@ impl Exec<'_> {
                 );
                 Some(tys)
             }
-            ConditionalOutput::None if mysql_insert_returning.is_some() => {
-                // For MySQL INSERT with RETURNING, we don't send RETURNING to the database
-                // (it doesn't support it). The driver will fetch auto-increment IDs using LAST_INSERT_ID().
+            ConditionalOutput::None if last_insert_id.is_some() => {
+                // The RETURNING was stripped; the driver reports the value the
+                // insert generated instead of a row count.
                 None
             }
             ConditionalOutput::None if mysql_update_returning.is_some() => {
@@ -161,15 +168,15 @@ impl Exec<'_> {
             stmt,
             params,
             ret,
-            last_insert_id_hack: mysql_insert_returning.as_ref().map(|info| info.num_rows),
+            last_insert_id: last_insert_id.is_some(),
         };
 
         let mut res = self.connection.exec(&self.engine.schema, op.into()).await?;
 
         match action.conditional {
             ConditionalOutput::None => {
-                if let Some(mysql_info) = mysql_insert_returning {
-                    res.values = mysql_info.reconstruct_returning(res.values).await?;
+                if let Some(last_insert_id) = last_insert_id {
+                    res.values = last_insert_id.eval_returning(res.values).await?;
                 } else if let Some(mysql_update) = mysql_update_returning {
                     res = self
                         .run_mysql_update_returning_select(mysql_update, output_ty.clone())
@@ -340,76 +347,143 @@ impl Exec<'_> {
             stmt: select_stmt,
             params: select_params,
             ret: ret_ty,
-            last_insert_id_hack: None,
+            last_insert_id: false,
         };
 
         self.connection.exec(&self.engine.schema, op.into()).await
     }
 
-    /// Processes INSERT statements with RETURNING on MySQL, which doesn't support RETURNING.
+    /// Strips the `RETURNING` from an `INSERT` on a backend that cannot serve
+    /// one, or rejects the statement.
     ///
-    /// Returns information needed to reconstruct the RETURNING results using LAST_INSERT_ID()
-    /// if this is a MySQL INSERT with RETURNING. Returns None otherwise.
+    /// [`Capability::returning_from_mutation`] records whether a backend can
+    /// return values from a mutation. Without it, Toasty can produce a result
+    /// only when it derives every value from the statement's own input —
+    /// lowering folds those into a constant returning clause before the
+    /// statement reaches here — or when the backend names the value exactly.
+    /// MySQL's `LAST_INSERT_ID()` is such a value: on the same connection it
+    /// reports the auto-increment value a one-row `INSERT` generated.
     ///
-    /// # Panics
+    /// Everything else is an error rather than a reconstruction. Deriving a
+    /// multi-row insert's ids as `first_id + offset` is wrong under a session
+    /// `auto_increment_increment` above one, under `innodb_autoinc_lock_mode=2`
+    /// with concurrent inserts, and for any insert whose affected-row count
+    /// differs from its input-row count.
     ///
-    /// Panics if the RETURNING clause includes non-auto-increment columns, as MySQL doesn't
-    /// support RETURNING and we can only work around it for auto-increment columns.
-    fn process_stmt_insert_with_returning_on_mysql(
+    /// [`Capability::returning_from_mutation`]: toasty_core::driver::Capability::returning_from_mutation
+    fn strip_insert_returning_without_capability(
         &self,
         stmt: &mut stmt::Statement,
-    ) -> Option<MySQLInsertReturning> {
-        if !self.engine.capability().sql() || self.engine.capability().returning_from_mutation {
-            return None;
+    ) -> Result<Option<LastInsertId>> {
+        let capability = self.engine.capability();
+
+        if !capability.sql() {
+            return Ok(None);
+        }
+
+        if capability.returning_from_mutation {
+            return Ok(None);
         }
 
         let stmt::Statement::Insert(insert) = stmt else {
-            return None;
+            return Ok(None);
         };
 
-        let returning = insert.returning.take()?;
+        if insert.returning.is_none() {
+            return Ok(None);
+        }
 
-        // Verify that all columns in the RETURNING clause are auto-increment columns.
-        // This is required because MySQL doesn't support RETURNING, but we can work around
-        // this limitation for auto-increment columns by using LAST_INSERT_ID().
-        let cx = self.engine.expr_cx_for(&*insert);
+        let driver = capability.driver_name;
 
-        let mut ref_count = 0;
-        let mut auto_column_type = None;
-        stmt::visit::for_each_expr(&returning, |expr| {
-            if let stmt::Expr::Reference(expr_ref) = expr {
-                let column = cx.resolve_expr_reference(expr_ref).as_column_unwrap();
+        // Every column the returning clause reads has to come back from the
+        // database, so each one is a candidate for rejection. Collect them
+        // before the statement is mutated; duplicates name the same value.
+        let mut columns: Vec<&db::Column> = vec![];
+        {
+            let cx = self.engine.expr_cx_for(&*insert);
+            stmt::visit::for_each_expr(insert.returning.as_ref().unwrap(), |expr| {
+                if let stmt::Expr::Reference(expr_reference) = expr {
+                    let column = cx.resolve_expr_reference(expr_reference).as_column_unwrap();
+                    if !columns.iter().any(|c| c.id == column.id) {
+                        columns.push(column);
+                    }
+                }
+            });
+        }
 
-                assert!(
-                    column.auto_increment,
-                    "MySQL does not support RETURNING clause for non-auto-increment columns. \
-                     Column '{}' in table '{}' is not auto-increment. \
-                     Only auto-increment columns can be returned from INSERT statements on MySQL.",
-                    column.name, self.engine.schema.db.tables[column.id.table.0].name
-                );
-
-                auto_column_type = Some(column.ty.clone());
-                ref_count += 1;
-            }
-        });
-
-        assert_eq!(
-            ref_count, 1,
-            "MySQL INSERT with RETURNING must have exactly one auto-increment column reference, found {ref_count}"
-        );
-
-        let auto_column_type = auto_column_type.expect("auto_column_type should be set");
-
-        // Extract the expression from the RETURNING clause and replace ExprReference with ExprArg
-        let mut returning_expr = match returning {
-            stmt::Returning::Project(expr) => expr,
-            _ => panic!(
-                "MySQL INSERT with RETURNING must have an Expr, got: {:#?}",
-                returning
-            ),
+        let describe = |column: &db::Column| {
+            format!(
+                "{}.{}",
+                self.engine.schema.db.table(column.id.table).name,
+                column.name
+            )
         };
 
-        // Replace the ExprReference with ExprArg(position: 0) so we can pass the ID as a positional argument
+        if let Some(column) = columns.iter().find(|column| !column.auto_increment) {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{driver} cannot return `{}` from an INSERT: the backend has no \
+                 RETURNING on mutations and Toasty cannot derive the value from \
+                 the statement's input. Set the field from the application, or \
+                 use a backend that supports RETURNING.",
+                describe(column)
+            )));
+        }
+
+        let [column] = columns[..] else {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{driver} has no RETURNING on mutations: this INSERT needs {} \
+                 values back from the database, and the backend reports only the \
+                 value an auto-increment column generated.",
+                columns.len()
+            )));
+        };
+
+        // `LAST_INSERT_ID()` names one row, so the insert has to be one row of
+        // literal values. An `INSERT ... SELECT` has no row count to check.
+        let stmt::ExprSet::Values(values) = &insert.source.body else {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{driver} cannot return `{}` from an INSERT reading its rows from \
+                 a query: the backend has no RETURNING on mutations.",
+                describe(column)
+            )));
+        };
+
+        if values.rows.len() != 1 {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{driver} cannot return `{}` from an INSERT of {} rows: the \
+                 backend has no RETURNING on mutations, and the generated value \
+                 it does report names one row only. Insert the rows one at a \
+                 time, set the key from the application, or use a backend that \
+                 supports RETURNING.",
+                describe(column),
+                values.rows.len()
+            )));
+        }
+
+        // The one row still has to be a row this statement wrote. An upsert
+        // that takes its conflict branch generates nothing, and
+        // `LAST_INSERT_ID()` then reports a value from an earlier statement.
+        // The verifier rejects every upsert on a backend without the
+        // capability, so this does not fire today; it states the invariant
+        // where the value is read.
+        if insert.upsert.is_some() {
+            return Err(toasty_core::Error::unsupported_feature(format!(
+                "{driver} cannot return `{}` from an upsert: the backend has no \
+                 RETURNING on mutations, and the value it does report names a \
+                 row only when the statement inserted one.",
+                describe(column)
+            )));
+        }
+
+        let auto_column_type = column.ty.clone();
+
+        let stmt::Returning::Project(mut returning_expr) = insert.returning.take().unwrap() else {
+            return Err(toasty_core::Error::invalid_statement(
+                "an INSERT reaching the driver returns a projection or nothing",
+            ));
+        };
+
+        // The driver reports the generated value as the sole argument.
         stmt::visit_mut::for_each_expr_mut(&mut returning_expr, |expr| {
             if matches!(expr, stmt::Expr::Reference(_)) {
                 *expr = stmt::Expr::Arg(stmt::ExprArg {
@@ -419,22 +493,10 @@ impl Exec<'_> {
             }
         });
 
-        // Count the number of rows being inserted
-        let num_rows = match &insert.source.body {
-            stmt::ExprSet::Values(values) => values.rows.len() as u64,
-            _ => {
-                panic!(
-                    "MySQL INSERT with RETURNING only supports VALUES, got: {:#?}",
-                    insert.source.body
-                );
-            }
-        };
-
-        Some(MySQLInsertReturning {
-            num_rows,
+        Ok(Some(LastInsertId {
             returning_expr,
             auto_column_type,
-        })
+        }))
     }
 }
 
@@ -476,63 +538,36 @@ fn conditional_probe_counts(row: &stmt::Value) -> Result<(i64, i64)> {
     }
 }
 
-impl MySQLInsertReturning {
-    /// Reconstructs RETURNING results from the ID rows returned by the driver.
+impl LastInsertId {
+    /// Rebuilds the stripped `RETURNING` from the value the driver reported.
     ///
-    /// MySQL doesn't support RETURNING, but we fetch auto-increment IDs using LAST_INSERT_ID().
-    /// This method takes the ID rows returned by the driver and evaluates the original RETURNING
-    /// expression for each ID to produce the expected results.
-    async fn reconstruct_returning(self, rows: Rows) -> Result<Rows> {
-        // The driver executed SELECT LAST_INSERT_ID() and returned rows with IDs.
-        let Rows::Stream(id_rows) = rows else {
+    /// The insert was checked to write exactly one row, so the driver returns
+    /// exactly one row holding exactly one value.
+    async fn eval_returning(self, rows: Rows) -> Result<Rows> {
+        let Rows::Stream(rows) = rows else {
             return Err(toasty_core::Error::invalid_result(format!(
-                "MySQL INSERT RETURNING expected Stream, got {:?}",
-                rows
+                "INSERT reporting a generated value expected Stream, got {rows:?}"
             )));
         };
 
-        let id_values = id_rows.collect().await?;
-        assert_eq!(
-            id_values.len(),
-            self.num_rows as usize,
-            "Expected {} ID rows from driver, got {}",
-            self.num_rows,
-            id_values.len()
-        );
+        let rows = rows.collect().await?;
 
-        // Reconstruct the RETURNING results by evaluating the original returning expression
-        // for each ID row returned by the driver
-        let mut returning_rows = Vec::with_capacity(self.num_rows as usize);
+        let [stmt::Value::Record(record)] = &rows[..] else {
+            return Err(toasty_core::Error::invalid_result(format!(
+                "INSERT reporting a generated value expected one Record, got {rows:?}"
+            )));
+        };
 
-        for id_value_raw in id_values {
-            // The driver returns a record with one field containing the ID.
-            // Extract the ID value from the record wrapper.
-            let stmt::Value::Record(record) = id_value_raw else {
-                return Err(toasty_core::Error::invalid_result(format!(
-                    "MySQL INSERT RETURNING expected Record from driver, got {:?}",
-                    id_value_raw
-                )));
-            };
+        let [id] = &record.fields[..] else {
+            return Err(toasty_core::Error::invalid_result(format!(
+                "INSERT reporting a generated value expected one field, got {record:?}"
+            )));
+        };
 
-            assert_eq!(
-                record.fields.len(),
-                1,
-                "Expected record with one field from driver"
-            );
+        // An auto-increment value is a scalar, so the cast is schema-free.
+        let id = self.auto_column_type.cast(&(), id.clone())?;
+        let row = self.returning_expr.eval(&[id])?;
 
-            // Cast the ID to the correct type for the auto-increment column.
-            // An auto-increment ID is a scalar, so the cast is schema-free.
-            let id_value = self.auto_column_type.cast(&(), record.fields[0].clone())?;
-            let input = vec![id_value];
-
-            // Evaluate the returning expression with the auto-increment ID
-            let row_value = self.returning_expr.eval(&input)?;
-
-            returning_rows.push(row_value);
-        }
-
-        Ok(Rows::Stream(stmt::ValueStream::from_iter(
-            returning_rows.into_iter().map(Ok),
-        )))
+        Ok(Rows::value_stream(vec![row]))
     }
 }

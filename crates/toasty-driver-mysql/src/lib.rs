@@ -40,7 +40,7 @@ use toasty_sql::{self as sql};
 
 enum SqlReturn {
     Count {
-        last_insert_id_hack: Option<u64>,
+        last_insert_id: bool,
         sql_is_insert: bool,
     },
     Infer,
@@ -228,7 +228,7 @@ impl Connection {
         log: &mut QueryLog<'_>,
     ) -> Result<ExecResponse> {
         if let SqlReturn::Count {
-            last_insert_id_hack,
+            last_insert_id,
             sql_is_insert,
         } = ret
         {
@@ -238,21 +238,19 @@ impl Connection {
                 .map_err(|e| record_mysql_err(&self.valid, e))?;
             let count = result.rows_affected();
 
-            if let Some(num_rows) = last_insert_id_hack {
+            if last_insert_id {
                 assert!(
                     sql_is_insert,
-                    "last_insert_id_hack should only be used with INSERT statements"
+                    "last_insert_id is only reported for INSERT statements"
                 );
 
-                let first_id = result.last_insert_id();
-                let results = (0..num_rows).map(move |offset| {
-                    let id = first_id + offset;
-                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
-                });
+                // The engine only sets this for a single-row INSERT, which is
+                // the shape `LAST_INSERT_ID()` names exactly.
+                let id = result.last_insert_id();
 
-                log.rows(num_rows);
-                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-                    results,
+                log.rows(1);
+                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_value(
+                    ValueRecord::from_vec(vec![stmt::Value::U64(id)]),
                 )));
             }
 
@@ -346,17 +344,17 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
-        let (sql, typed_params, ret, last_insert_id_hack) = match op {
+        let (sql, typed_params, ret, last_insert_id) = match op {
             Operation::QuerySql(op) => (
                 sql::Statement::from(op.stmt),
                 op.params,
                 op.ret,
-                op.last_insert_id_hack,
+                op.last_insert_id,
             ),
             Operation::RawSql(op) => {
                 let ret = match op.ret {
                     RawSqlRet::None => SqlReturn::Count {
-                        last_insert_id_hack: None,
+                        last_insert_id: false,
                         sql_is_insert: false,
                     },
                     RawSqlRet::Infer => SqlReturn::Infer,
@@ -437,7 +435,7 @@ impl toasty_core::driver::Connection for Connection {
         let ret = match ret {
             Some(types) => SqlReturn::Types(types),
             None => SqlReturn::Count {
-                last_insert_id_hack,
+                last_insert_id,
                 sql_is_insert: matches!(sql, sql::Statement::Insert(_)),
             },
         };

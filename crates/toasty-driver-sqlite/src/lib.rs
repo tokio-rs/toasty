@@ -271,8 +271,8 @@ impl toasty_core::driver::Connection for Connection {
         let (sql, typed_params, ret_tys) = match op {
             Operation::QuerySql(op) => {
                 assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for SQLite"
+                    !op.last_insert_id,
+                    "SQLite returns values from a mutation; it never reports a generated id instead"
                 );
                 (sql::Statement::from(op.stmt), op.params, op.ret)
             }

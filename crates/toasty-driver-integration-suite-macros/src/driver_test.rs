@@ -184,20 +184,24 @@ fn process_attrs(attrs: &mut Vec<syn::Attribute>, expansion: &Expansion) {
     *attrs = new_attrs;
 }
 
-/// Add runtime capability checks for database capabilities in the requires expression
+/// Add a runtime check that the driver satisfies the test's `requires(...)`.
+///
+/// The expansion already knows its own matrix dimensions and ID variant, and
+/// the per-driver list in `generate_driver_tests!` already filtered expansions
+/// the driver cannot run. What is left is the capability reads, which the
+/// generated test asserts against the driver's live [`Capability`].
+///
+/// The whole expression is asserted as one condition, not each capability on
+/// its own: under `or(...)` a single capability is not individually required,
+/// and asserting it would fail a driver that satisfies the other branch.
+///
+/// [`Capability`]: toasty_core::driver::Capability
 fn add_capability_checks_from_expr(
     func: &mut ItemFn,
     requires_expr: &BoolExpr,
     expansion: &Expansion,
 ) {
-    use syn::{Ident, Stmt, parse_quote};
-
-    // Extract database capability identifiers from the expression
-    let db_capabilities = extract_db_capabilities(requires_expr, expansion);
-
-    if db_capabilities.is_empty() {
-        return;
-    }
+    use syn::parse_quote;
 
     // Get the test parameter name (first parameter of the function)
     let test_param = func
@@ -217,91 +221,143 @@ fn add_capability_checks_from_expr(
         })
         .expect("Test function must have at least one parameter");
 
-    // Generate capability check statements
-    let capability_checks: Vec<Stmt> = db_capabilities
-        .iter()
-        .map(|(cap_name, is_negated)| {
-            let cap_ident = Ident::new(cap_name, proc_macro2::Span::call_site());
-            let read = crate::parse::read_capability(
-                quote::quote! { #test_param.capability() },
-                &cap_ident,
-            );
+    let capability = quote! { #test_param.capability() };
 
-            if *is_negated {
-                // For negated capabilities, check that the capability is NOT present
-                parse_quote! {
-                    assert!(
-                        !#read,
-                        "Driver should not support capability: {}",
-                        stringify!(#cap_ident)
-                    );
-                }
-            } else {
-                // For regular capabilities, check that it IS present
-                parse_quote! {
-                    assert!(
-                        #read,
-                        "Driver does not support required capability: {}",
-                        stringify!(#cap_ident)
-                    );
-                }
-            }
-        })
-        .collect();
+    let Some(condition) = capability_condition(requires_expr, expansion, &capability) else {
+        // The expansion's own idents settle the expression; no capability to
+        // read at runtime.
+        return;
+    };
 
-    // Prepend the checks to the function body
+    let rendered = render_bool_expr(requires_expr);
+    let check: syn::Stmt = parse_quote! {
+        assert!(
+            #condition,
+            "driver does not satisfy requires({})",
+            #rendered
+        );
+    };
+
+    // Prepend the check to the function body
     let original_block = &func.block;
     func.block = parse_quote! {
         {
-            #(#capability_checks)*
+            #check
             #original_block
         }
     };
 }
 
-/// Extract database capability requirements from a boolean expression
-fn extract_db_capabilities(expr: &BoolExpr, expansion: &Expansion) -> Vec<(String, bool)> {
-    fn extract_recursive(
-        expr: &BoolExpr,
-        expansion: &Expansion,
-        negated: bool,
-        result: &mut Vec<(String, bool)>,
-    ) {
-        match expr {
-            BoolExpr::Ident(name) => {
-                // Check if this is a matrix identifier
-                if expansion.matrix_values.contains_key(name) {
-                    return; // Skip matrix identifiers
-                }
+/// A `requires(...)` sub-expression after folding the expansion's own idents.
+enum Folded {
+    /// Settled by the expansion alone — no capability read involved.
+    Known(bool),
 
-                // Check if this is an ID variant identifier
-                if name == "id_u64" || name == "id_uuid" {
-                    return; // Skip ID variant identifiers
-                }
+    /// A condition to evaluate against the driver's live capabilities.
+    Dynamic(proc_macro2::TokenStream),
+}
 
-                // Test flags have no `Capability` field to assert against; the
-                // per-driver list gates them at expansion time instead.
-                if crate::parse::is_test_flag(name) {
-                    return;
-                }
-
-                // This must be a database capability
-                result.push((name.clone(), negated));
-            }
-            BoolExpr::Or(exprs) | BoolExpr::And(exprs) => {
-                for e in exprs {
-                    extract_recursive(e, expansion, negated, result);
-                }
-            }
-            BoolExpr::Not(inner) => {
-                extract_recursive(inner, expansion, !negated, result);
-            }
-        }
+/// Build the runtime condition for a `requires(...)` expression, folding away
+/// everything the expansion already settles.
+///
+/// Returns `None` when folding leaves no capability read — the expression is
+/// then either satisfied by construction or excluded at expansion time.
+fn capability_condition(
+    expr: &BoolExpr,
+    expansion: &Expansion,
+    capability: &proc_macro2::TokenStream,
+) -> Option<proc_macro2::TokenStream> {
+    match fold(expr, expansion, capability) {
+        Folded::Dynamic(condition) => Some(condition),
+        Folded::Known(_) => None,
     }
+}
 
-    let mut result = Vec::new();
-    extract_recursive(expr, expansion, false, &mut result);
-    result
+fn fold(expr: &BoolExpr, expansion: &Expansion, capability: &proc_macro2::TokenStream) -> Folded {
+    match expr {
+        BoolExpr::Ident(name) => {
+            // Matrix dimensions and ID variants are fixed for this expansion,
+            // and test flags describe the suite rather than the database, so
+            // none of them has a `Capability` field to read.
+            if expansion.is_ident_true(name) || crate::parse::is_test_flag(name) {
+                return Folded::Known(true);
+            }
+
+            if expansion.is_ident_explicitly_false(name) {
+                return Folded::Known(false);
+            }
+
+            let cap = syn::Ident::new(name, proc_macro2::Span::call_site());
+            Folded::Dynamic(crate::parse::read_capability(capability.clone(), &cap))
+        }
+        BoolExpr::Or(exprs) => {
+            let mut operands = Vec::new();
+
+            for expr in exprs {
+                match fold(expr, expansion, capability) {
+                    // One settled branch carries the whole expression.
+                    Folded::Known(true) => return Folded::Known(true),
+                    Folded::Known(false) => {}
+                    Folded::Dynamic(operand) => operands.push(operand),
+                }
+            }
+
+            join(operands, quote! { || }, false)
+        }
+        BoolExpr::And(exprs) => {
+            let mut operands = Vec::new();
+
+            for expr in exprs {
+                match fold(expr, expansion, capability) {
+                    Folded::Known(false) => return Folded::Known(false),
+                    Folded::Known(true) => {}
+                    Folded::Dynamic(operand) => operands.push(operand),
+                }
+            }
+
+            join(operands, quote! { && }, true)
+        }
+        BoolExpr::Not(inner) => match fold(inner, expansion, capability) {
+            Folded::Known(value) => Folded::Known(!value),
+            Folded::Dynamic(inner) => Folded::Dynamic(quote! { !(#inner) }),
+        },
+    }
+}
+
+/// Join operands with `op`, parenthesizing so nesting keeps its meaning. With
+/// every operand folded away, the expression settles to `identity`.
+fn join(
+    operands: Vec<proc_macro2::TokenStream>,
+    op: proc_macro2::TokenStream,
+    identity: bool,
+) -> Folded {
+    let mut operands = operands.into_iter();
+
+    let Some(first) = operands.next() else {
+        return Folded::Known(identity);
+    };
+
+    Folded::Dynamic(operands.fold(quote! { (#first) }, |acc, operand| {
+        quote! { #acc #op (#operand) }
+    }))
+}
+
+/// Render a `requires(...)` expression back to source form for error messages.
+fn render_bool_expr(expr: &BoolExpr) -> String {
+    match expr {
+        BoolExpr::Ident(name) => name.clone(),
+        BoolExpr::Or(exprs) => format!("or({})", render_list(exprs)),
+        BoolExpr::And(exprs) => format!("and({})", render_list(exprs)),
+        BoolExpr::Not(inner) => format!("not({})", render_bool_expr(inner)),
+    }
+}
+
+fn render_list(exprs: &[BoolExpr]) -> String {
+    exprs
+        .iter()
+        .map(render_bool_expr)
+        .collect::<Vec<_>>()
+        .join(", ")
 }
 
 /// Rewrite driver_test_cfg! macro calls to boolean literals based on the expansion

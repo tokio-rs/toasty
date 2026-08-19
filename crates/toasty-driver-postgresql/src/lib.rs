@@ -517,8 +517,8 @@ impl toasty_core::driver::Connection for Connection {
             Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, None),
             Operation::QuerySql(query) => {
                 assert!(
-                    query.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
+                    !query.last_insert_id,
+                    "PostgreSQL returns values from a mutation; it never reports a generated id instead"
                 );
                 (sql::Statement::from(query.stmt), query.params, query.ret)
             }

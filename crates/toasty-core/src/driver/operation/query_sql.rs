@@ -16,7 +16,7 @@ use crate::stmt;
 /// let op = QuerySql {
 ///     stmt: sql_statement,
 ///     ret: Some(vec![stmt::Type::String, stmt::Type::I64]),
-///     last_insert_id_hack: None,
+///     last_insert_id: false,
 /// };
 /// let operation: Operation = op.into();
 /// assert!(operation.is_query_sql());
@@ -37,12 +37,15 @@ pub struct QuerySql {
     /// not return rows (e.g., `DELETE` without `RETURNING`).
     pub ret: Option<Vec<stmt::Type>>,
 
-    /// **Temporary MySQL workaround** for `RETURNING` from `INSERT`.
+    /// Report the value the `INSERT` generated instead of a row count.
     ///
-    /// When set, the driver should fetch `LAST_INSERT_ID()` to simulate
-    /// `RETURNING` behavior for the specified number of inserted rows.
-    /// Non-MySQL drivers should assert this is `None`.
-    pub last_insert_id_hack: Option<u64>,
+    /// Set only for a single-row `INSERT` on a SQL backend without
+    /// [`Capability::returning_from_mutation`](super::super::Capability::returning_from_mutation).
+    /// The driver answers with one row holding one value: the auto-increment
+    /// value the statement generated, which MySQL reports through
+    /// `LAST_INSERT_ID()` on the same connection. A driver that has the
+    /// capability never sees this set, and asserts as much.
+    pub last_insert_id: bool,
 }
 
 impl Operation {

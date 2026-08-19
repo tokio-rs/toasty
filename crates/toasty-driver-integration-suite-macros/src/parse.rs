@@ -226,7 +226,7 @@ impl Expansion {
     }
 
     /// Check if an identifier is explicitly false for this expansion
-    fn is_ident_explicitly_false(&self, ident: &str) -> bool {
+    pub(crate) fn is_ident_explicitly_false(&self, ident: &str) -> bool {
         // Check matrix values for explicit false
         if let Some(&value) = self.matrix_values.get(ident) {
             return !value;

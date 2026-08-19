@@ -222,7 +222,10 @@ let todos = Todo::create_many()
 ```
 
 `create_many()` returns a `Vec` of the created records, including auto-generated
-fields like `id`.
+fields like `id`. That last part needs the database to report the values it
+generated, which MySQL cannot do for a multi-row insert — see
+[MySQL](./mysql.md#behavior-specific-to-mysql) for what it rejects and how to
+write the same insert there.
 
 ## `create_many()` vs `batch()` for inserts
 

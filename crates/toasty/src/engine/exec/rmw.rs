@@ -86,7 +86,7 @@ impl Exec<'_> {
                     stmt: read_stmt,
                     params: read_params,
                     ret: ty,
-                    last_insert_id_hack: None,
+                    last_insert_id: false,
                 }
                 .into(),
             )
@@ -159,7 +159,7 @@ impl Exec<'_> {
                     } else {
                         None
                     },
-                    last_insert_id_hack: None,
+                    last_insert_id: false,
                 }
                 .into(),
             )

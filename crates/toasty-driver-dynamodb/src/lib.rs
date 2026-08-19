@@ -237,8 +237,8 @@ impl Connection {
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
             Operation::QuerySql(op) => {
                 assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
+                    !op.last_insert_id,
+                    "DynamoDB returns values from a mutation; it never reports a generated id instead"
                 );
                 match op.stmt {
                     stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
