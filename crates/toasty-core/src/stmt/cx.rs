@@ -363,6 +363,8 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                                     index: *index,
                                 }
                             }
+                            TableRef::Func(_) => todo!(),
+                            TableRef::RowsFrom(_) => todo!(),
                             TableRef::Arg(_) => todo!(),
                         }
                     }
@@ -430,6 +432,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 if single { ty } else { Type::list(ty) }
             }
             Returning::Changed => todo!(),
+            Returning::Star => todo!(),
             Returning::Project(expr) => {
                 let ty = self.infer_expr_ty2(&arg_ty_stack, expr, false);
 
