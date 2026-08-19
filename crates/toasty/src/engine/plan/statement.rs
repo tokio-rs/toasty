@@ -93,7 +93,7 @@ use indexmap::{IndexMap, IndexSet};
 use toasty_core::schema::db;
 use toasty_core::stmt::{self, visit_mut};
 
-use toasty_core::driver::operation::Pagination;
+use toasty_core::driver::{Dialect, operation::Pagination};
 
 use crate::{
     Result,
@@ -957,16 +957,31 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             self.extract_insert_returning_as_const(&stmt)
         };
 
+        let mut ty = None;
+
         // When the values the returning clause needs were extracted as
-        // constants above, the Const node feeds them; skip the RETURNING
-        // clause, which MySQL rejects for non-auto-increment columns.
+        // constants above, the Const node feeds them. Otherwise, ask the
+        // database to return the remaining columns when it supports that.
+        // MySQL's exact single-row auto-increment result is represented by an
+        // Insert operation without a SQL RETURNING clause.
         if const_returning.is_none() && !self.load_data.select_items.is_empty() {
-            stmt.set_returning_project(stmt::Expr::record(
-                self.load_data
-                    .select_items
-                    .iter()
-                    .map(|item| item.to_expr()),
-            ));
+            if self.planner.engine.capability().sql.is_some()
+                && !self.planner.engine.capability().returning_from_mutation
+            {
+                self.verify_insert_returning_without_capability(&stmt)?;
+                ty = Some(
+                    self.load_data
+                        .select_items
+                        .infer_record_list_ty(&self.planner.engine.expr_cx_for(&stmt)),
+                );
+            } else {
+                stmt.set_returning_project(stmt::Expr::record(
+                    self.load_data
+                        .select_items
+                        .iter()
+                        .map(|item| item.to_expr()),
+                ));
+            }
         }
 
         let input_args: Vec<_> = self
@@ -975,7 +990,7 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
             .iter()
             .map(|input| self.planner.mir.ty(*input).clone())
             .collect();
-        let ty = self.planner.engine.infer_ty(&stmt, &input_args[..]);
+        let ty = ty.unwrap_or_else(|| self.planner.engine.infer_ty(&stmt, &input_args[..]));
         let inputs = mem::take(&mut self.load_data.inputs);
 
         let node = if !self.planner.engine.capability().sql() && stmt.is_upsert() {
@@ -1007,6 +1022,82 @@ impl<'a, 'b> PlanStatement<'a, 'b> {
         }
 
         Ok(load_data_node)
+    }
+
+    /// Accepts the one exact mutation result available without SQL
+    /// `RETURNING`: MySQL's generated ID for a single-row insert.
+    fn verify_insert_returning_without_capability(&self, stmt: &stmt::Statement) -> Result<()> {
+        let insert = stmt.as_insert().expect("plan_insert requires an insert");
+        let target = insert.target.as_table_unwrap();
+
+        let exact_mysql_insert_id = self.planner.engine.capability().sql == Some(Dialect::Mysql)
+            && insert.upsert.is_none()
+            && insert
+                .source
+                .body
+                .as_values()
+                .is_some_and(|values| values.rows.len() == 1)
+            && self.load_data.select_items.len() == 1
+            && self
+                .load_data
+                .select_items
+                .iter()
+                .next()
+                .is_some_and(|item| {
+                    let SelectItem::ExprReference(expr_ref) = item else {
+                        return false;
+                    };
+                    let Some(expr_column) = expr_ref.as_expr_column() else {
+                        return false;
+                    };
+                    if expr_column.nesting != 0 || expr_column.table != 0 {
+                        return false;
+                    }
+
+                    let column_id = db::ColumnId {
+                        table: target.table,
+                        index: expr_column.column,
+                    };
+                    let column = self.planner.engine.schema.db.column(column_id);
+                    let Some(value_index) = target.columns.iter().position(|id| *id == column_id)
+                    else {
+                        return false;
+                    };
+                    let row = &insert.source.body.as_values().unwrap().rows[0];
+
+                    column.auto_increment
+                        && row
+                            .entry(value_index)
+                            .is_some_and(|entry| entry.is_expr_default())
+                });
+
+        if exact_mysql_insert_id {
+            return Ok(());
+        }
+
+        let table = self.planner.engine.schema.db.table(target.table);
+        let columns = self
+            .load_data
+            .select_items
+            .iter()
+            .map(|item| {
+                let SelectItem::ExprReference(expr_ref) = item else {
+                    return "the computed value `COUNT(*)`".to_owned();
+                };
+                let Some(column) = expr_ref.as_expr_column() else {
+                    return "a non-column value".to_owned();
+                };
+                format!("`{}.{}`", table.name, table.columns[column.column].name)
+            })
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        Err(toasty_core::Error::unsupported_feature(format!(
+            "{} cannot return database-generated values from INSERT for {columns}; use \
+             caller-generated values, insert each row separately, or use a database with \
+             mutation RETURNING support",
+            self.planner.engine.capability().driver_name
+        )))
     }
 
     // ===== SQL execution =====

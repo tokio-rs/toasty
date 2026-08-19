@@ -19,7 +19,7 @@ fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str
     } else {
         ArgOr::Value(expected)
     };
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
                 rows: [=~ (Any, val_pat)],
@@ -27,7 +27,7 @@ fn assert_insert_serialized(t: &Test, op: &Operation, pos: usize, expected: &str
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[pos].value: == expected,
         }));
     }
@@ -39,7 +39,7 @@ fn assert_native_json_insert(
     storage_ty: db::Type,
     expected: &str,
 ) {
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
                 table: == table,
@@ -182,7 +182,7 @@ pub async fn json_option_outside_sql_null(t: &mut Test) -> Result<(), BoxError> 
     let empty_record = Item::create().data(None).exec(&mut db).await?;
 
     let (op, _) = t.log().pop();
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
                 rows: [=~ (Any, Value::Null)],

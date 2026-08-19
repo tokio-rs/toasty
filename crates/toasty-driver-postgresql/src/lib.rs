@@ -514,12 +514,8 @@ impl toasty_core::driver::Connection for Connection {
         }
 
         let (sql, typed_params, ret_tys) = match op {
-            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, None),
+            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
             Operation::QuerySql(query) => {
-                assert!(
-                    query.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
-                );
                 (sql::Statement::from(query.stmt), query.params, query.ret)
             }
             Operation::RawSql(op) => {

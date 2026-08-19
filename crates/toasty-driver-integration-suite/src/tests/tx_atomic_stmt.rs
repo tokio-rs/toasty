@@ -28,8 +28,8 @@ pub async fn multi_op_create_wraps_in_transaction(t: &mut Test) -> Result<()> {
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT todo
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT user
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT todo
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Commit)
@@ -52,7 +52,7 @@ pub async fn single_op_skips_transaction(t: &mut Test) -> Result<()> {
     User::create().name("x").exec(&mut db).await?;
 
     // Only the INSERT — no Transaction::Start { isolation: None, read_only: false } bookending it
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     assert!(t.log().is_empty());
 
     Ok(())
@@ -123,7 +123,7 @@ pub async fn create_with_has_many_rolls_back_on_failure(t: &mut Test) -> Result<
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT user
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)
@@ -196,7 +196,7 @@ pub async fn create_with_has_one_rolls_back_on_failure(t: &mut Test) -> Result<(
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT user
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)
@@ -272,7 +272,7 @@ pub async fn update_with_new_association_rolls_back_on_failure(t: &mut Test) -> 
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT todo (rolled back)
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT todo (rolled back)
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)

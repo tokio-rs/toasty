@@ -39,10 +39,8 @@ use toasty_core::{
 use toasty_sql::{self as sql};
 
 enum SqlReturn {
-    Count {
-        last_insert_id_hack: Option<u64>,
-        sql_is_insert: bool,
-    },
+    Count,
+    LastInsertId(stmt::Type),
     Infer,
     Types(Vec<stmt::Type>),
 }
@@ -227,36 +225,21 @@ impl Connection {
         ret: SqlReturn,
         log: &mut QueryLog<'_>,
     ) -> Result<ExecResponse> {
-        if let SqlReturn::Count {
-            last_insert_id_hack,
-            sql_is_insert,
-        } = ret
-        {
+        if matches!(ret, SqlReturn::Count | SqlReturn::LastInsertId(_)) {
             let result = sqlx_core::query::query_with(AssertSqlSafe(sql_as_str), args)
                 .execute(&mut self.conn)
                 .await
                 .map_err(|e| record_mysql_err(&self.valid, e))?;
-            let count = result.rows_affected();
 
-            if let Some(num_rows) = last_insert_id_hack {
-                assert!(
-                    sql_is_insert,
-                    "last_insert_id_hack should only be used with INSERT statements"
-                );
-
-                let first_id = result.last_insert_id();
-                let results = (0..num_rows).map(move |offset| {
-                    let id = first_id + offset;
-                    Ok(ValueRecord::from_vec(vec![stmt::Value::U64(id)]))
-                });
-
-                log.rows(num_rows);
-                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_iter(
-                    results,
+            if let SqlReturn::LastInsertId(ty) = ret {
+                let id = ty.cast(&(), stmt::Value::U64(result.last_insert_id()))?;
+                log.rows(1);
+                return Ok(ExecResponse::value_stream(stmt::ValueStream::from_vec(
+                    vec![ValueRecord::from_vec(vec![id]).into()],
                 )));
             }
 
-            return Ok(ExecResponse::count(count));
+            return Ok(ExecResponse::count(result.rows_affected()));
         }
 
         let rows = sqlx_core::query::query_with(AssertSqlSafe(sql_as_str), args)
@@ -271,7 +254,7 @@ impl Connection {
             let mut values = Vec::with_capacity(row.len());
 
             match &ret {
-                SqlReturn::Count { .. } => unreachable!(),
+                SqlReturn::Count | SqlReturn::LastInsertId(_) => unreachable!(),
                 SqlReturn::Infer => {
                     for i in 0..row.len() {
                         let column = row.column(i);
@@ -346,19 +329,31 @@ impl toasty_core::driver::Connection for Connection {
     async fn exec(&mut self, schema: &Arc<Schema>, op: Operation) -> Result<ExecResponse> {
         tracing::trace!(driver = "mysql", op = %op.name(), "driver exec");
 
-        let (sql, typed_params, ret, last_insert_id_hack) = match op {
-            Operation::QuerySql(op) => (
-                sql::Statement::from(op.stmt),
-                op.params,
-                op.ret,
-                op.last_insert_id_hack,
-            ),
+        let (sql, typed_params, ret) = match op {
+            Operation::Insert(op) => {
+                let ret = match op.ret {
+                    Some(types) => {
+                        let [ty] = &types[..] else {
+                            return Err(toasty_core::Error::invalid_result(format!(
+                                "MySQL insert ID result requires one type, got {types:?}"
+                            )));
+                        };
+                        SqlReturn::LastInsertId(ty.clone())
+                    }
+                    None => SqlReturn::Count,
+                };
+                (sql::Statement::from(op.stmt), op.params, ret)
+            }
+            Operation::QuerySql(op) => {
+                let ret = match op.ret {
+                    Some(types) => SqlReturn::Types(types),
+                    None => SqlReturn::Count,
+                };
+                (sql::Statement::from(op.stmt), op.params, ret)
+            }
             Operation::RawSql(op) => {
                 let ret = match op.ret {
-                    RawSqlRet::None => SqlReturn::Count {
-                        last_insert_id_hack: None,
-                        sql_is_insert: false,
-                    },
+                    RawSqlRet::None => SqlReturn::Count,
                     RawSqlRet::Infer => SqlReturn::Infer,
                     RawSqlRet::Types(types) => SqlReturn::Types(types),
                 };
@@ -433,14 +428,6 @@ impl toasty_core::driver::Connection for Connection {
                 .add_to(&mut args)
                 .map_err(|e| record_mysql_err(&self.valid, e))?;
         }
-
-        let ret = match ret {
-            Some(types) => SqlReturn::Types(types),
-            None => SqlReturn::Count {
-                last_insert_id_hack,
-                sql_is_insert: matches!(sql, sql::Statement::Insert(_)),
-            },
-        };
 
         let result = self.exec_sql(&sql_as_str, args, ret, &mut log).await;
         log.finish(&result);

@@ -43,7 +43,7 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
     } else {
         ArgOr::Value("foo")
     };
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
                 table: == user_table_id,
@@ -55,7 +55,7 @@ pub async fn specify_custom_column_name(test: &mut Test) -> Result<()> {
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[val_pos].value: == "foo",
         }));
     }
@@ -90,7 +90,7 @@ pub async fn specify_custom_column_name_with_type(test: &mut Test) -> Result<()>
     // Verify the operation uses the correct table and column names, and that the
     // value "foo" is sent as a string bind parameter. This test is SQL-only
     // (requires native_varchar), so the value always becomes an Arg placeholder.
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
                 table: == user_table_id,

@@ -61,7 +61,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         ArgOr::Value(1i64)
     };
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
                 rows: [=~ (Any, Any, status_pat)],
@@ -73,7 +73,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[status_pos].value: == 1i64,
         }));
     }

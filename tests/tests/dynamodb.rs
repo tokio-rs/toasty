@@ -69,6 +69,7 @@ impl toasty_driver_integration_suite::Setup for DynamoDbSetup {
 // Generate all driver tests (DynamoDB doesn't support auto_increment, bigdecimal, or decimal)
 toasty_driver_integration_suite::generate_driver_tests!(DynamoDbSetup::new(),
     sql: false,
+    returning_from_mutation: false,
     auto_increment: false,
     bigdecimal_implemented: false,
     decimal_arbitrary_precision: false,
