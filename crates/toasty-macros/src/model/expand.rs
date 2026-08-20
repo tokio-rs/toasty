@@ -516,8 +516,8 @@ impl Expand<'_> {
 
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
-                <<<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin>>::from_path(
-                    self.path().chain(
+                <<#ty as #field_trait>::Target as #toasty::ModelCodegen>::new_one_field(
+                    self.path.clone().chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
@@ -536,6 +536,7 @@ impl Expand<'_> {
         field_ident: &syn::Ident,
         ty: &syn::Type,
         field_offset: &TokenStream,
+        parent_path: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -550,7 +551,7 @@ impl Expand<'_> {
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
-                    self.path().chain(
+                    #parent_path.chain(
                         <#model_ident as #schema_trait>::path_field::<<#ty as #toasty::Field>::ExprTarget>(#field_offset)
                     )
                 )

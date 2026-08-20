@@ -37,6 +37,12 @@ pub use toasty_core as core;
 /// signatures (and out of the compiler errors they produce).
 pub type FieldExprTarget<F> = <F as Field>::ExprTarget;
 
+/// Internal constructors used by generated model field accessors.
+pub trait ModelCodegen: Model {
+    /// Construct the field accessor for a singular relation to this model.
+    fn new_one_field<Origin>(path: Path<Origin, Self>) -> Self::OneField<Origin>;
+}
+
 /// Infer the [`Scope`] type from a scope expression and return its fields
 /// path.
 ///
