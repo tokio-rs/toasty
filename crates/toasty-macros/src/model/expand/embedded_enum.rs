@@ -241,6 +241,7 @@ impl Expand<'_> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
 
+                    #[allow(dead_code)]
                     impl<__Origin> #variant_handle_ident<__Origin> {
                         #vis fn matches(
                             self,
@@ -274,6 +275,7 @@ impl Expand<'_> {
                 path: #toasty::Path<__Origin, #model_ident>,
             }
 
+            #[allow(dead_code)]
             impl<__Origin> #field_struct_ident<__Origin> {
                 #( #is_variant_methods )*
 

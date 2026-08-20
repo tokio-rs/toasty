@@ -140,6 +140,7 @@ impl Expand<'_> {
         quote!(
             #struct_def
 
+            #[allow(dead_code)]
             impl<__Origin> #field_struct_ident<__Origin> {
                 #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
@@ -404,6 +405,7 @@ impl Expand<'_> {
         quote!(
             #struct_def
 
+            #[allow(dead_code)]
             impl<__Origin> #field_list_struct_ident<__Origin> {
                 #any_method
 
