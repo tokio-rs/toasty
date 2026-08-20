@@ -1,0 +1,80 @@
+#![cfg(feature = "sqlite")]
+
+#[derive(Debug, toasty::Embed)]
+struct Address {
+    street: String,
+
+    #[column("postal_city", comment = "Postal city")]
+    city: String,
+}
+
+#[derive(Debug, toasty::Embed)]
+struct Profile {
+    display_name: String,
+}
+
+#[derive(Debug, toasty::Embed)]
+enum Contact {
+    Email {
+        #[column(comment = "Email address")]
+        address: String,
+    },
+    Phone {
+        number: String,
+    },
+}
+
+#[derive(Debug, toasty::Model)]
+#[table(name = "app_users", comment = "User accounts")]
+struct CommentedUser {
+    #[key]
+    #[auto]
+    #[column(comment = "Stable identifier")]
+    id: i64,
+
+    address: Address,
+
+    #[document]
+    #[column(comment = "Serialized profile")]
+    profile: Profile,
+
+    contact: Contact,
+}
+
+#[tokio::test]
+async fn model_comments_reach_the_database_schema() {
+    let db = toasty::Db::builder()
+        .models(toasty::models!(CommentedUser))
+        .build(toasty_driver_sqlite::Sqlite::in_memory())
+        .await
+        .unwrap();
+
+    let table = &db.schema().db.tables[0];
+    assert_eq!(table.name, "app_users");
+    assert_eq!(table.comment.as_deref(), Some("User accounts"));
+    assert_eq!(
+        table.columns[0].comment.as_deref(),
+        Some("Stable identifier")
+    );
+
+    let city = table
+        .columns
+        .iter()
+        .find(|column| column.name == "address_postal_city")
+        .unwrap();
+    assert_eq!(city.comment.as_deref(), Some("Postal city"));
+
+    let profile = table
+        .columns
+        .iter()
+        .find(|column| column.name == "profile")
+        .unwrap();
+    assert_eq!(profile.comment.as_deref(), Some("Serialized profile"));
+
+    let email = table
+        .columns
+        .iter()
+        .find(|column| column.name == "contact_address")
+        .unwrap();
+    assert_eq!(email.comment.as_deref(), Some("Email address"));
+}

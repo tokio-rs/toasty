@@ -516,6 +516,12 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let index = util::int(field.id);
         let app_name = field.name.as_str();
+        let comment = field
+            .attrs
+            .comment
+            .as_ref()
+            .map(|comment| quote! { Some(#comment.to_string()) })
+            .unwrap_or_else(|| quote! { None });
         let variant_index = field.variant.expect("enum field must have variant");
         let variant_idx = util::int(variant_index);
         let SchemaFieldParts {
@@ -536,6 +542,7 @@ impl Expand<'_> {
                     app: Some(#app_name.to_string()),
                     storage: #storage_name,
                 },
+                comment: #comment,
                 ty: #ty,
                 nullable: #nullable,
                 primary_key: false,

@@ -690,12 +690,14 @@ mod tests {
         db::Table {
             id: TableId(0),
             name: "t".to_string(),
+            comment: None,
             columns: vec![Column {
                 id: ColumnId {
                     table: TableId(0),
                     index: 0,
                 },
                 name: "status".to_string(),
+                comment: None,
                 ty: stmt::Type::String,
                 storage_ty: Type::Text,
                 nullable: false,

@@ -13,6 +13,12 @@ impl Expand<'_> {
         let fields = self.expand_model_fields();
         let indices = self.expand_model_indices();
         let table_name = self.expand_table_name();
+        let comment = self
+            .model
+            .comment
+            .as_ref()
+            .map(|comment| quote! { Some(#comment.to_string()) })
+            .unwrap_or_else(|| quote! { None });
 
         let model = match &self.model.kind {
             ModelKind::Root(root) => {
@@ -34,6 +40,7 @@ impl Expand<'_> {
                         #toasty::core::schema::app::ModelRoot {
                             id,
                             name: #name,
+                            comment: #comment,
                             fields: #fields,
                             primary_key: #primary_key,
                             table_name: #table_name,
@@ -258,6 +265,12 @@ impl Expand<'_> {
             };
 
             let versionable = field.attrs.versionable;
+            let comment = field
+                .attrs
+                .comment
+                .as_ref()
+                .map(|comment| quote! { Some(#comment.to_string()) })
+                .unwrap_or_else(|| quote! { None });
 
             quote! {
                 #toasty::core::schema::app::Field {
@@ -266,6 +279,7 @@ impl Expand<'_> {
                         index: #index_tokenized,
                     },
                     name: #name,
+                    comment: #comment,
                     ty: #field_ty,
                     nullable: #nullable,
                     primary_key: #primary_key,

@@ -157,7 +157,9 @@ impl BuildSchema<'_> {
 
         if !self.table_lookup.contains_key(&table_name) {
             let id = self.register_table(&table_name);
-            self.tables.push(Table::new(id, table_name.clone()));
+            let mut table = Table::new(id, table_name.clone());
+            table.comment = model.comment.clone();
+            self.tables.push(table);
         }
 
         *self.table_lookup.get(&table_name).unwrap()
@@ -925,8 +927,10 @@ impl<'a, 'b> MapField<'a, 'b> {
             )));
         }
 
-        match &field.ty {
-            app::FieldTy::Primitive(primitive) => self.map_field_primitive(index, field, primitive),
+        let mapping = match &field.ty {
+            app::FieldTy::Primitive(primitive) => {
+                self.map_field_primitive(index, field, primitive)?
+            }
             app::FieldTy::Embedded(embedded) => {
                 let target = lookup_embedded_model(self.build.app, embedded.target, field)?;
 
@@ -936,7 +940,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                         field,
                         embedded_enum,
                         embedded.storage_ty.as_ref(),
-                    ),
+                    )?,
                     app::Model::EmbeddedStruct(embedded_struct) => {
                         if embedded.storage_ty.is_some() {
                             return Err(Error::invalid_schema(format!(
@@ -945,7 +949,7 @@ impl<'a, 'b> MapField<'a, 'b> {
                                 field.name,
                             )));
                         }
-                        self.map_field_struct(index, field, embedded.target, embedded_struct)
+                        self.map_field_struct(index, field, embedded.target, embedded_struct)?
                     }
                     _ => unreachable!(),
                 }
@@ -955,11 +959,45 @@ impl<'a, 'b> MapField<'a, 'b> {
                 // context (`force_nullable`, set inside enum variants and
                 // nullable struct embeds) has nothing to apply to.
                 let bit = self.build.next_bit();
-                Ok(mapping::Field::Relation(mapping::FieldRelation {
+                mapping::Field::Relation(mapping::FieldRelation {
                     field_mask: stmt::PathFieldSet::from_iter([bit]),
-                }))
+                })
             }
+        };
+
+        self.apply_field_comment(field, &mapping)?;
+        Ok(mapping)
+    }
+
+    fn apply_field_comment(&mut self, field: &app::Field, mapping: &mapping::Field) -> Result<()> {
+        let Some(comment) = &field.comment else {
+            return Ok(());
+        };
+
+        let columns = mapping
+            .columns()
+            .map(|(column, _)| column)
+            .collect::<std::collections::HashSet<_>>();
+        if columns.len() != 1 {
+            return Err(Error::invalid_schema(format!(
+                "field `{}` has a comment but maps to {} columns; comments require exactly one column",
+                field.name,
+                columns.len(),
+            )));
         }
+        let column = *columns.iter().next().unwrap();
+
+        let column = self.build.table.columns.get_mut(column.index).unwrap();
+        if let Some(existing) = &column.comment
+            && existing != comment
+        {
+            return Err(Error::invalid_schema(format!(
+                "fields mapping to column `{}` declare conflicting comments",
+                column.name,
+            )));
+        }
+        column.comment = Some(comment.clone());
+        Ok(())
     }
 
     /// Creates the column and builds the mapping for a primitive field in one step.
@@ -1484,6 +1522,7 @@ impl<'a, 'b> MapField<'a, 'b> {
         self.build.table.columns.push(db::Column {
             id,
             name: self.column_name(field),
+            comment: None,
             ty: storage_ty.bridge_type(&primitive.ty),
             storage_ty,
             nullable,

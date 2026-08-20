@@ -25,12 +25,14 @@ fn db_schema() -> DbSchema {
         tables: vec![Table {
             id: table_id,
             name: "t".into(),
+            comment: None,
             columns: vec![Column {
                 id: ColumnId {
                     table: table_id,
                     index: 0,
                 },
                 name: "id".into(),
+                comment: None,
                 ty: Type::I64,
                 storage_ty: DbType::Integer(8),
                 nullable: false,
