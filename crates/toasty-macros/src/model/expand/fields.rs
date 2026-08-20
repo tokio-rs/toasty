@@ -198,11 +198,9 @@ impl Expand<'_> {
     /// root model they compare a model reference (lowering to its primary
     /// key), on an embedded struct the engine decomposes the record
     /// across columns (AND for eq, OR for ne). The ordering methods —
-    /// `gt`/`ge`/`lt`/`le` and `asc`/`desc` — are newtype-only: a single
-    /// column keeps the backend's own ordering, while record ordering has
-    /// no shared cross-backend definition. The syntactic newtype check
-    /// suffices because a newtype over a non-single-column inner fails to
-    /// derive — see `expand_embedded_indexable_impl`.
+    /// `gt`/`ge`/`lt`/`le` and `asc`/`desc` — are tuple-newtype-only.
+    /// Multi-field structs do not expose record ordering because backends do
+    /// not share the same semantics.
     fn expand_field_struct_comparison_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;

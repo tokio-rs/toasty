@@ -932,8 +932,9 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// let _ = Pin::all().order_by(Pin::fields().location().asc());
 /// ```
 ///
-/// A tuple-newtype must wrap a single-column type. Wrapping a multi-field embed
-/// (or a data-carrying enum) fails to derive.
+/// A tuple-newtype can wrap a non-indexable type, but the wrapper can only
+/// participate in an index when its inner type can. Toasty checks that
+/// requirement when a model uses the wrapper in an index or unique constraint.
 ///
 /// ```compile_fail
 /// # #[derive(toasty::Embed)]
@@ -941,9 +942,15 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// #     x: i64,
 /// #     y: i64,
 /// # }
-/// // Error: `Point` spans multiple columns, so `Outer` cannot forward to it
 /// #[derive(toasty::Embed)]
 /// struct Outer(Point);
+/// # #[derive(toasty::Model)]
+/// # struct Pin {
+/// #     #[key]
+/// #     id: i64,
+/// #     #[index]
+/// #     location: Outer,
+/// # }
 /// ```
 ///
 /// ## Nesting

@@ -475,26 +475,23 @@ impl Expand<'_> {
     /// would conflict with the `Box<T>` forwarding impl in
     /// `codegen_support::index`, because `Box` is `#[fundamental]`.
     ///
-    /// The where clause names a concrete type, so Rust's trivial-bounds
-    /// rule evaluates it at the impl rather than at use sites: deriving a
-    /// newtype over a non-indexable inner (a multi-field embed, a
-    /// data-carrying enum) is a compile error, not an unindexable-but-valid
-    /// type. Other newtype codegen relies on that rejection — see
-    /// `expand_field_struct_comparison_methods`, whose ordering methods
-    /// assume
-    /// every derivable newtype has a single-column inner.
+    /// Route the inner type through a generic parameter constrained by
+    /// `NewtypeOf::Inner`. This defers the `IndexableField` obligation until an
+    /// index uses the newtype instead of rejecting every non-indexable wrapper
+    /// at its derive site.
     fn expand_embedded_indexable_impl(&self) -> TokenStream {
-        let Some(inner_ty) = self.canonical_newtype_inner() else {
+        if self.canonical_newtype_inner().is_none() {
             return quote! {};
-        };
+        }
 
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
 
         quote! {
-            impl #toasty::index::IndexableField for #model_ident
+            impl<__Inner> #toasty::index::IndexableField for #model_ident
             where
-                #inner_ty: #toasty::index::IndexableField,
+                #model_ident: #toasty::newtype::NewtypeOf<Inner = __Inner>,
+                __Inner: #toasty::index::IndexableField,
             {}
         }
     }
