@@ -486,24 +486,24 @@ impl Expand<'_> {
 
             let value = if fields_named {
                 let field_ident = &field.name.ident;
-                if by_ref {
-                    quote!((&self.#field_ident))
-                } else {
-                    quote!(self.#field_ident)
-                }
+                quote!(self.#field_ident)
             } else {
                 let idx = syn::Index::from(index);
-                if by_ref {
-                    quote!((&self.#idx))
-                } else {
-                    quote!(self.#idx)
-                }
+                quote!(self.#idx)
             };
 
             // Bind through `Field::ExprTarget` so wrappers such as
             // `Deferred<T>` encode the underlying expression type.
             let target_ty = quote!(FieldExprTarget<#ty>);
-            quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
+            if by_ref {
+                quote!({
+                    let expr: #toasty::core::stmt::Expr =
+                        <#ty as #toasty::IntoExpr<#target_ty>>::by_ref(&#value).into();
+                    expr
+                })
+            } else {
+                quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
+            }
         });
 
         quote! {
