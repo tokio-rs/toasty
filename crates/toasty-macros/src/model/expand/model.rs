@@ -143,13 +143,13 @@ impl Expand<'_> {
                 }
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
-                    #field_struct_ident::from_path(path)
+                    #field_struct_ident { path }
                 }
 
                 fn new_many_field<__Origin>(
                     path: #toasty::Path<__Origin, #toasty::List<Self>>,
                 ) -> #field_list_struct_ident<__Origin> {
-                    #field_list_struct_ident::from_path(path)
+                    #field_list_struct_ident { path }
                 }
 
                 fn find_by_primary_key(
@@ -177,6 +177,14 @@ impl Expand<'_> {
                 }
 
                 #field_name_to_id
+            }
+
+            impl #toasty::ModelCodegen for #model_ident {
+                fn new_one_field<__Origin>(
+                    path: #toasty::Path<__Origin, Self>,
+                ) -> Self::OneField<__Origin> {
+                    #field_struct_ident { path }
+                }
             }
 
             // A relation-terminal `#[has_many(via = …)]` reaching this model
