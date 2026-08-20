@@ -521,11 +521,11 @@
 <a href=#521 id=521 data-nosnippet>521</a>    /// `#[index(...)]` / `#[unique(...)]`) that the field's Rust type implements
 <a href=#522 id=522 data-nosnippet>522</a>    /// `codegen_support::index::IndexableField`.
 <a href=#523 id=523 data-nosnippet>523</a>    ///
-<a href=#524 id=524 data-nosnippet>524</a>    /// Scalars satisfy the bound directly; newtype embeds via the `NewtypeOf`
-<a href=#525 id=525 data-nosnippet>525</a>    /// blanket; unit (data-less) enums via the impl emitted by
-<a href=#526 id=526 data-nosnippet>526</a>    /// `#[derive(Embed)]`. Data-carrying enums and multi-field embedded structs
-<a href=#527 id=527 data-nosnippet>527</a>    /// span multiple columns and do not implement it, so naming one in an index
-<a href=#528 id=528 data-nosnippet>528</a>    /// is a compile error instead of a runtime panic.
+<a href=#524 id=524 data-nosnippet>524</a>    /// Scalars satisfy the bound directly; newtype embeds and unit (data-less)
+<a href=#525 id=525 data-nosnippet>525</a>    /// enums use impls emitted by `#[derive(Embed)]`. Data-carrying enums and
+<a href=#526 id=526 data-nosnippet>526</a>    /// multi-field embedded structs span multiple columns and do not implement
+<a href=#527 id=527 data-nosnippet>527</a>    /// it, so naming one in an index is a compile error instead of a runtime
+<a href=#528 id=528 data-nosnippet>528</a>    /// panic.
 <a href=#529 id=529 data-nosnippet>529</a>    ///
 <a href=#530 id=530 data-nosnippet>530</a>    /// The primary key is excluded: keys are validated through their own paths.
 <a href=#531 id=531 data-nosnippet>531</a>    </span><span class="kw">pub</span>(<span class="kw">super</span>) <span class="kw">fn </span>expand_indexable_checks(<span class="kw-2">&amp;</span><span class="self">self</span>) -&gt; TokenStream {
