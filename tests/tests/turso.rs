@@ -42,6 +42,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_jsonb: false,
     native_enum: false,
     vec_scalar: true,
+    unique_list_index: false,
     vec_remove: false,
     vec_pop: false,
     vec_remove_at: false,
