@@ -46,7 +46,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
     } else {
         ArgOr::Value(expected_val.clone())
     };
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
                 table: == table_id(&db, "items"),
@@ -58,7 +58,7 @@ pub async fn ty_timestamp(test: &mut Test) -> Result<(), BoxError> {
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[val_pos].value: == expected_val,
         }));
     }
@@ -347,7 +347,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
     } else {
         ArgOr::Value(ts_text.as_str())
     };
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: InsertTarget::Table({
                 table: == table_id(&db, "items"),
@@ -359,7 +359,7 @@ pub async fn ty_timestamp_as_text(test: &mut Test) -> Result<(), BoxError> {
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[val_pos].value: == ts_text,
         }));
     }

@@ -144,6 +144,14 @@ pub(super) fn value_eq(a: &Value, b: &Value) -> bool {
         (Time(a), Time(b)) => a == b,
         #[cfg(feature = "jiff")]
         (DateTime(a), DateTime(b)) => a == b,
+        #[cfg(feature = "net")]
+        (Cidr(a), Cidr(b)) => a == b,
+        #[cfg(feature = "net")]
+        (Inet(a), Inet(b)) => a == b,
+        #[cfg(feature = "net")]
+        (MacAddr(a), MacAddr(b)) => a == b,
+        #[cfg(feature = "net")]
+        (MacAddr8(a), MacAddr8(b)) => a == b,
         _ => false,
     }
 }
@@ -221,6 +229,14 @@ pub(super) fn hash_value<H: Hasher>(v: &Value, state: &mut H) {
         Value::Time(x) => x.hash(state),
         #[cfg(feature = "jiff")]
         Value::DateTime(x) => x.hash(state),
+        #[cfg(feature = "net")]
+        Value::Cidr(x) => x.hash(state),
+        #[cfg(feature = "net")]
+        Value::Inet(x) => x.hash(state),
+        #[cfg(feature = "net")]
+        Value::MacAddr(x) => x.hash(state),
+        #[cfg(feature = "net")]
+        Value::MacAddr8(x) => x.hash(state),
     }
 }
 

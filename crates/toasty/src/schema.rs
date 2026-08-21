@@ -13,6 +13,9 @@ pub use field::{Document, Field, Scalar};
 #[cfg(feature = "jiff")]
 mod jiff;
 
+#[cfg(feature = "net")]
+mod net;
+
 mod has_many;
 
 pub(crate) mod lazy_slot;

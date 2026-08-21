@@ -104,7 +104,7 @@ impl Expand<'_> {
         quote! {
             {
                 let path_stmt: #toasty::core::stmt::Expr = {
-                    let p: #toasty::core::stmt::Path = self.path().into();
+                    let p: #toasty::core::stmt::Path = self.path.clone().into();
                     p.into_stmt()
                 };
                 let variant_id = #toasty::core::schema::app::VariantId {
@@ -119,7 +119,7 @@ impl Expand<'_> {
     }
 
     /// Generates delegated comparison methods (`eq`, `ne`, `in_list`) that
-    /// forward to `self.path()`. Ordered comparisons (`gt`, `ge`, `lt`, `le`)
+    /// forward to the stored path. Ordered comparisons (`gt`, `ge`, `lt`, `le`)
     /// are intentionally excluded because enums have no meaningful ordering.
     fn expand_comparison_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -130,7 +130,7 @@ impl Expand<'_> {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             quote! {
                 #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().#method_ident(rhs)
+                    self.path.clone().#method_ident(rhs)
                 }
             }
         });
@@ -139,7 +139,7 @@ impl Expand<'_> {
             #( #methods )*
 
             #vis fn in_list(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
-                self.path().in_list(rhs)
+                self.path.clone().in_list(rhs)
             }
         }
     }
@@ -184,7 +184,7 @@ impl Expand<'_> {
                 quote! {
                     #vis fn #method_name(&self) -> #variant_handle_ident<__Origin> {
                         #variant_handle_ident {
-                            path: self.path()
+                            path: self.path.clone()
                         }
                     }
                 }
@@ -194,14 +194,9 @@ impl Expand<'_> {
         // Generate one struct per data-carrying variant. The same struct is
         // both the entry point returned by `email()` (used for `.matches(...)`
         // filters and direct `.eq()`/include path access) and the namespace
-        // for variant-field accessors. The struct stores the parent path
-        // (the path to the embed enum field) and exposes:
-        //
-        // - `parent_path()` — model-rooted path to the enum field. Used by
-        //   `matches()` to build the `is_variant` gate and by every filter
-        //   method on a variant-rooted Path to inject the implicit gate.
-        // - `path()` — variant-rooted path. Field accessors chain off this
-        //   so that the produced Path knows its variant context.
+        // for variant-field accessors. The struct stores the model-rooted path
+        // to the enum field. `matches()` uses it to build the `is_variant` gate,
+        // while field accessors add the variant step before chaining the field.
         let variant_field_structs: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -210,6 +205,13 @@ impl Expand<'_> {
             .map(|(variant_index, variant)| {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
+                let variant_path = quote! {{
+                    let variant_id = #toasty::core::schema::app::VariantId {
+                        model: <#model_ident as #toasty::Embed>::id(),
+                        index: #variant_idx,
+                    };
+                    self.path.clone().into_variant(variant_id)
+                }};
 
                 let field_methods: Vec<_> = self
                     .variant_fields(variant_index)
@@ -224,6 +226,7 @@ impl Expand<'_> {
                                     field_ident,
                                     field_ty,
                                     &field_offset,
+                                    &variant_path,
                                 ))
                             }
                             // A relation accessor chains the target model's
@@ -237,6 +240,7 @@ impl Expand<'_> {
                                     quote!(#toasty::RelationOneField),
                                     &rel.ty,
                                     &field_offset,
+                                    &variant_path,
                                 ))
                             }
                             _ => None,
@@ -249,25 +253,14 @@ impl Expand<'_> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
 
+                    #[allow(dead_code)]
                     impl<__Origin> #variant_handle_ident<__Origin> {
-                        fn parent_path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                            self.path.clone()
-                        }
-
-                        fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                            let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Embed>::id(),
-                                index: #variant_idx,
-                            };
-                            self.parent_path().into_variant(variant_id)
-                        }
-
                         #vis fn matches(
                             self,
                             f: impl FnOnce(Self) -> #toasty::stmt::Expr<bool>,
                         ) -> #toasty::stmt::Expr<bool> {
                             let parent_stmt: #toasty::core::stmt::Expr = {
-                                let p: #toasty::core::stmt::Path = self.parent_path().into();
+                                let p: #toasty::core::stmt::Path = self.path.clone().into();
                                 p.into_stmt()
                             };
                             let variant_id = #toasty::core::schema::app::VariantId {
@@ -294,11 +287,8 @@ impl Expand<'_> {
                 path: #toasty::Path<__Origin, #model_ident>,
             }
 
+            #[allow(dead_code)]
             impl<__Origin> #field_struct_ident<__Origin> {
-                fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                    self.path.clone()
-                }
-
                 #( #is_variant_methods )*
 
                 #( #variant_accessor_methods )*

@@ -1,6 +1,8 @@
 use std::ops;
 
-use crate::engine::mir::{Node, NodeId, Store};
+use index_vec::IndexVec;
+
+use crate::engine::mir::{Node, NodeId, Store, annotate_guards};
 
 /// The complete operation graph for a query.
 ///
@@ -20,9 +22,31 @@ pub(crate) struct LogicalPlan {
 }
 
 impl LogicalPlan {
-    pub(crate) fn new(store: Store, completion: NodeId) -> LogicalPlan {
-        let mut execution_order = vec![];
-        compute_operation_execution_order(completion, &store, &mut execution_order);
+    pub(crate) fn new(mut store: Store, completion: NodeId) -> LogicalPlan {
+        let execution_order = compute_operation_execution_order(completion, &store);
+
+        // Every reserved slot must be filled by the time planning completes —
+        // an unfilled slot means a statement was referenced but never planned.
+        debug_assert!(
+            store.all_filled(),
+            "reserved MIR slot left unfilled at plan completion"
+        );
+
+        // `num_uses` counts the variable loads each node's output receives:
+        // one per entry in its consumers' `input_loads()`. Ordering-only
+        // `deps` edges schedule but do not count — no load ever drains them.
+        // The completion node's exit use is the engine's load of the query
+        // result. (Guards are annotated after this loop and peek without
+        // loading.)
+        store[completion].num_uses += 1;
+
+        for node_id in &execution_order {
+            for load in store[node_id].op.input_loads() {
+                store[load].num_uses += 1;
+            }
+        }
+
+        annotate_guards(&mut store, &execution_order, completion);
 
         LogicalPlan {
             store,
@@ -31,14 +55,19 @@ impl LogicalPlan {
         }
     }
 
-    pub(crate) fn operations(&self) -> impl Iterator<Item = &Node> {
-        self.execution_order
-            .iter()
-            .map(|node_id| &self.store[node_id])
+    /// Node IDs in topologically sorted execution order.
+    pub(crate) fn execution_order(&self) -> &[NodeId] {
+        &self.execution_order
     }
 
-    pub(crate) fn completion(&self) -> &Node {
-        &self.store[self.completion]
+    /// The final node whose output is the query result.
+    pub(crate) fn completion(&self) -> NodeId {
+        self.completion
+    }
+
+    /// Number of node slots; [`NodeId`]s are dense in `0..node_count()`.
+    pub(crate) fn node_count(&self) -> usize {
+        self.store.node_count()
     }
 }
 
@@ -58,25 +87,40 @@ impl ops::Index<&NodeId> for LogicalPlan {
     }
 }
 
-fn compute_operation_execution_order(
-    node_id: NodeId,
-    mir: &Store,
-    execution_order: &mut Vec<NodeId>,
-) {
-    let node = &mir[node_id];
+fn compute_operation_execution_order(node_id: NodeId, mir: &Store) -> Vec<NodeId> {
+    fn visit_operation(
+        node_id: NodeId,
+        mir: &Store,
+        visited: &mut IndexVec<NodeId, bool>,
+        execution_order: &mut Vec<NodeId>,
+    ) {
+        if visited[node_id] {
+            return;
+        }
 
-    if node.visited.get() {
-        return;
+        visited[node_id] = true;
+
+        for &dep_id in &mir[node_id].deps {
+            visit_operation(dep_id, mir, visited, execution_order);
+        }
+
+        execution_order.push(node_id);
     }
 
-    node.visited.set(true);
+    let mut visited = IndexVec::from_vec(vec![false; mir.node_count()]);
+    let mut execution_order = vec![];
 
-    for &dep_id in &node.deps {
-        let dep = &mir[dep_id];
-        dep.num_uses.set(dep.num_uses.get() + 1);
+    visit_operation(node_id, mir, &mut visited, &mut execution_order);
 
-        compute_operation_execution_order(dep_id, mir, execution_order);
-    }
+    // Nodes unreachable from the completion node are dropped from the
+    // execution order and never run. That is fine for pure nodes; a
+    // dropped mutation would silently lose its database effect.
+    debug_assert!(
+        visited
+            .iter_enumerated()
+            .all(|(id, visited)| *visited || !mir[id].op.is_effectful()),
+        "effectful node unreachable from the completion node"
+    );
 
-    execution_order.push(node_id);
+    execution_order
 }

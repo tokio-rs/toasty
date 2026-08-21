@@ -1,6 +1,6 @@
 [package]
 name = "toasty"
-version = "0.9.0"
+version = "0.10.0"
 description = "An async ORM for Rust supporting SQL and NoSQL databases"
 authors.workspace = true
 edition.workspace = true
@@ -46,6 +46,13 @@ jiff = [
 	"toasty-driver-mysql?/jiff",
 	"toasty-driver-sqlite?/jiff",
 	"toasty-driver-turso?/jiff",
+]
+net = [
+	"toasty-core/net",
+	"toasty-driver-postgresql?/net",
+	"toasty-driver-mysql?/net",
+	"toasty-driver-sqlite?/net",
+	"toasty-driver-turso?/net",
 ]
 serde = ["dep:serde_core", "dep:serde_json"]
 

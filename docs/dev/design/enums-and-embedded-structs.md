@@ -24,8 +24,8 @@ if f.unnamed.len() > 1 {
 
 Downstream codegen is already tuple-aware: `Primitive::load` / `IntoExpr` in
 `model/expand/embedded_enum.rs` emit tuple construction and destructuring, and
-`schema/field.rs` synthesizes `_0` / `_1` names. The gap is column naming and
-lifting the rejection.
+`schema/field.rs` names the one unnamed field `inner`. The gaps are per-position
+names for multi-field tuples, column naming, and lifting the rejection.
 
 ### Design
 

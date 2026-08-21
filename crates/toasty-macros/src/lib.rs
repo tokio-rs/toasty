@@ -88,7 +88,7 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// #[key(partition = user_id, local = id)]
 /// struct Todo {
 ///     #[auto]
-///     id: uuid::Uuid,
+///     id: toasty::stmt::Uuid,
 ///     user_id: String,
 ///     title: String,
 /// }
@@ -158,16 +158,16 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 ///
 /// | Syntax | Behavior |
 /// |--------|----------|
-/// | `#[auto]` on `uuid::Uuid` | UUID v7 (timestamp-sortable) |
+/// | `#[auto]` on `toasty::stmt::Uuid` | UUID v7 (timestamp-sortable) |
 /// | `#[auto(uuid(v4))]` | UUID v4 (random) |
 /// | `#[auto(uuid(v7))]` | UUID v7 (explicit) |
 /// | `#[auto]` on integer types (`i8`–`i64`, `u8`–`u64`) | Auto-increment |
 /// | `#[auto(increment)]` | Auto-increment (explicit) |
-/// | `#[auto]` on a field named `created_at` | Expands to `#[default(jiff::Timestamp::now())]` |
-/// | `#[auto]` on a field named `updated_at` | Expands to `#[update(jiff::Timestamp::now())]` |
+/// | `#[auto]` on a field named `created_at` | Expands to `#[default(toasty::stmt::Timestamp::now())]` |
+/// | `#[auto]` on a field named `updated_at` | Expands to `#[update(toasty::stmt::Timestamp::now())]` |
 ///
 /// The `created_at`/`updated_at` expansion requires the `jiff` feature and
-/// a field type compatible with `jiff::Timestamp`.
+/// a field type compatible with `toasty::stmt::Timestamp`.
 ///
 /// Cannot be combined with `#[default]` or `#[update]` on the same field.
 ///
@@ -212,8 +212,8 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// #     #[key]
 /// #     #[auto]
 /// #     id: i64,
-/// #[update(jiff::Timestamp::now())]
-/// updated_at: jiff::Timestamp,
+/// #[update(toasty::stmt::Timestamp::now())]
+/// updated_at: toasty::stmt::Timestamp,
 /// # }
 /// ```
 ///
@@ -320,6 +320,10 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 /// | `date` | Date without time |
 /// | `time(P)` | Time with P fractional-second digits |
 /// | `datetime(P)` | Date and time with P fractional-second digits |
+/// | `cidr` | IPv4 or IPv6 network prefix |
+/// | `inet` | IPv4 or IPv6 host address with a network prefix |
+/// | `macaddr` | Six-byte IEEE EUI-48 address |
+/// | `macaddr8` | Eight-byte IEEE EUI-64 address |
 /// | `"custom"` | Arbitrary type string passed through to the driver |
 ///
 /// Cannot be used on relation fields.
@@ -789,11 +793,11 @@ pub fn embed_migrations(input: TokenStream) -> TokenStream {
 ///
 ///     name: String,
 ///
-///     #[default(jiff::Timestamp::now())]
-///     created_at: jiff::Timestamp,
+///     #[default(toasty::stmt::Timestamp::now())]
+///     created_at: toasty::stmt::Timestamp,
 ///
-///     #[update(jiff::Timestamp::now())]
-///     updated_at: jiff::Timestamp,
+///     #[update(toasty::stmt::Timestamp::now())]
+///     updated_at: toasty::stmt::Timestamp,
 ///
 ///     #[has_many]
 ///     posts: toasty::Deferred<Vec<Post>>,
@@ -870,6 +874,85 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///   filter expressions on individual fields.
 /// - An `Update` struct used by the parent model's update builder for
 ///   partial field updates.
+///
+/// A field accessor is named after the field it reads. A newtype's field is
+/// unnamed, so its accessor is `inner()`. It returns a path to the single
+/// column the newtype maps to, which compares against the wrapped type:
+///
+/// ```
+/// #[derive(toasty::Embed)]
+/// struct Email(String);
+///
+/// #[derive(toasty::Model)]
+/// struct User {
+///     #[key]
+///     #[auto]
+///     id: i64,
+///     email: Email,
+/// }
+///
+/// let query = User::filter(User::fields().email().inner().eq("alice@example.com"));
+/// ```
+///
+/// Multi-field structs do not get the ordering methods — multi-column
+/// values have no ordering shared across backends:
+///
+/// ```compile_fail
+/// # #[derive(toasty::Embed)]
+/// # struct Point {
+/// #     x: i64,
+/// #     y: i64,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Pin {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     location: Point,
+/// # }
+/// // Error: no method `ge` on the fields struct of a multi-field embed
+/// let _ = Pin::filter(Pin::fields().location().ge(Point { x: 0, y: 0 }));
+/// ```
+///
+/// The same applies to sorting — `asc`/`desc` exist only on newtype fields:
+///
+/// ```compile_fail
+/// # #[derive(toasty::Embed)]
+/// # struct Point {
+/// #     x: i64,
+/// #     y: i64,
+/// # }
+/// # #[derive(toasty::Model)]
+/// # struct Pin {
+/// #     #[key]
+/// #     #[auto]
+/// #     id: i64,
+/// #     location: Point,
+/// # }
+/// // Error: no method `asc` on the fields struct of a multi-field embed
+/// let _ = Pin::all().order_by(Pin::fields().location().asc());
+/// ```
+///
+/// A tuple-newtype can wrap a non-indexable type, but the wrapper can only
+/// participate in an index when its inner type can. Toasty checks that
+/// requirement when a model uses the wrapper in an index or unique constraint.
+///
+/// ```compile_fail
+/// # #[derive(toasty::Embed)]
+/// # struct Point {
+/// #     x: i64,
+/// #     y: i64,
+/// # }
+/// #[derive(toasty::Embed)]
+/// struct Outer(Point);
+/// # #[derive(toasty::Model)]
+/// # struct Pin {
+/// #     #[key]
+/// #     id: i64,
+/// #     #[index]
+/// #     location: Outer,
+/// # }
+/// ```
 ///
 /// ## Nesting
 ///
@@ -960,7 +1043,7 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///
 /// ```
 /// #[derive(toasty::Embed)]
-/// struct UserId(uuid::Uuid);
+/// struct UserId(toasty::stmt::Uuid);
 ///
 /// #[derive(toasty::Model)]
 /// struct User {
@@ -1188,13 +1271,13 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 /// # struct Human {
 /// #     #[key]
 /// #     #[auto]
-/// #     id: uuid::Uuid,
+/// #     id: toasty::stmt::Uuid,
 /// # }
 /// #[derive(Debug, toasty::Embed)]
 /// enum Owner {
 ///     Human {
 ///         #[index]
-///         id: uuid::Uuid,
+///         id: toasty::stmt::Uuid,
 ///         #[belongs_to(key = id)]
 ///         human: toasty::Deferred<Human>,
 ///     },

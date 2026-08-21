@@ -61,7 +61,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         ArgOr::Value(1i64)
     };
     let op = t.log().pop_op();
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             source.body: ExprSet::Values({
                 rows: [=~ (Any, Any, status_pat)],
@@ -73,7 +73,7 @@ pub async fn create_and_query_enum(t: &mut Test) -> Result<()> {
         }),
     }));
     if sql {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             params[status_pos].value: == 1i64,
         }));
     }
@@ -263,9 +263,9 @@ pub async fn basic_embedded_enum(test: &mut Test) {
     assert_struct!(status, toasty::schema::app::Model::EmbeddedEnum({
         name.upper_camel_case(): "Status",
         variants: [
-            _ { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1), .. },
-            _ { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2), .. },
-            _ { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3), .. },
+            { name.upper_camel_case(): "Pending", discriminant: toasty_core::stmt::Value::I64(1) },
+            { name.upper_camel_case(): "Active", discriminant: toasty_core::stmt::Value::I64(2) },
+            { name.upper_camel_case(): "Done", discriminant: toasty_core::stmt::Value::I64(3) },
         ],
     }));
 }

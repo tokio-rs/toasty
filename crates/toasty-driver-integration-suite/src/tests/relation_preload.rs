@@ -225,15 +225,31 @@ pub async fn multiple_includes_with_has_one(test: &mut Test) -> Result<()> {
 pub async fn combined_has_many_and_has_one_preload(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
-    // Create a user with a profile and multiple todos
-    let user = User::create()
-        .name("Bob Smith")
-        .profile(Profile::create().bio("Developer"))
-        .todos([Todo::create().title("Task 1")])
-        .todos([Todo::create().title("Task 2")])
-        .todos([Todo::create().title("Task 3")])
-        .exec(&mut db)
-        .await?;
+    // A backend without mutation RETURNING cannot provide generated IDs for a
+    // batch of auto-increment todos. Seed those todos individually so the
+    // preload behavior remains covered on that backend.
+    let user = if driver_test_cfg!(id_u64) && !test.capability().returning_from_mutation {
+        let user = User::create()
+            .name("Bob Smith")
+            .profile(Profile::create().bio("Developer"))
+            .exec(&mut db)
+            .await?;
+
+        for title in ["Task 1", "Task 2", "Task 3"] {
+            user.todos().create().title(title).exec(&mut db).await?;
+        }
+
+        user
+    } else {
+        User::create()
+            .name("Bob Smith")
+            .profile(Profile::create().bio("Developer"))
+            .todos([Todo::create().title("Task 1")])
+            .todos([Todo::create().title("Task 2")])
+            .todos([Todo::create().title("Task 3")])
+            .exec(&mut db)
+            .await?
+    };
 
     // Test combined has_one and has_many preload in a single query
     let loaded_user = User::filter_by_id(user.id)

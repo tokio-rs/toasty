@@ -33,7 +33,7 @@ pub async fn mode_immediate_reaches_driver_and_commits(t: &mut Test) -> Result<(
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Commit)
@@ -73,7 +73,7 @@ pub async fn mode_exclusive_reaches_driver_and_commits(t: &mut Test) -> Result<(
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Commit)

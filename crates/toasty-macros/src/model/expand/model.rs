@@ -143,13 +143,13 @@ impl Expand<'_> {
                 }
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
-                    #field_struct_ident::from_path(path)
+                    #field_struct_ident { path }
                 }
 
                 fn new_many_field<__Origin>(
                     path: #toasty::Path<__Origin, #toasty::List<Self>>,
                 ) -> #field_list_struct_ident<__Origin> {
-                    #field_list_struct_ident::from_path(path)
+                    #field_list_struct_ident { path }
                 }
 
                 fn find_by_primary_key(
@@ -177,6 +177,14 @@ impl Expand<'_> {
                 }
 
                 #field_name_to_id
+            }
+
+            impl #toasty::ModelCodegen for #model_ident {
+                fn new_one_field<__Origin>(
+                    path: #toasty::Path<__Origin, Self>,
+                ) -> Self::OneField<__Origin> {
+                    #field_struct_ident { path }
+                }
             }
 
             // A relation-terminal `#[has_many(via = …)]` reaching this model
@@ -480,16 +488,18 @@ impl Expand<'_> {
                 _ => panic!("only primitive and belongs_to fields are supported in embedded types"),
             };
 
-            let value = if by_ref {
-                quote!((&#field_access))
-            } else {
-                quote!(#field_access)
-            };
-
             // Bind through `Field::ExprTarget` so wrappers such as
             // `Deferred<T>` encode the underlying expression type.
             let target_ty = quote!(FieldExprTarget<#ty>);
-            let explicit = quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value));
+            let explicit = if by_ref {
+                quote!({
+                    let expr: #toasty::core::stmt::Expr =
+                        <#ty as #toasty::IntoExpr<#target_ty>>::by_ref(&#field_access).into();
+                    expr
+                })
+            } else {
+                quote!(#toasty::into_untyped_expr::<#target_ty, _>(#field_access))
+            };
 
             // A key field backing a sibling relation takes its value from
             // the loaded parent model when one is present; the explicit key

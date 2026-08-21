@@ -252,8 +252,7 @@ pub async fn preload_has_many_repeated_ordering_last_wins(test: &mut Test) -> Re
 
     let _ = test.log().pop_last_op(); // transaction commit
     assert_struct!(test.log().pop_last_op(), Operation::QuerySql({
-        stmt: Statement::Query({ order_by: None, .. }),
-        ..
+        stmt: Statement::Query({ order_by: None }),
     }));
 
     Ok(())

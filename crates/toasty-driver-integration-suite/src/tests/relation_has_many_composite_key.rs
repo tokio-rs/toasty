@@ -751,7 +751,7 @@ pub async fn composite_fk_belongs_to_preload(test: &mut Test) -> Result<()> {
             .get(&mut db)
             .await?;
 
-        assert_struct!(todo.user.get(), _ { id: == user.id, name: == user.name, .. });
+        assert_struct!(todo.user.get(), { id: == user.id, name: == user.name });
     }
     Ok(())
 }

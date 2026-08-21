@@ -30,6 +30,7 @@ members = [
     # Tests
     "tests",
     "tests/tests/fixtures/post",
+    "tests/tests/fixtures/stmt-reexports",
     "tests/tests/fixtures/user",
 ]
 # Driver crates are excluded so `cargo test` (no `-p`/`--workspace`) and CI's
@@ -53,6 +54,7 @@ default-members = [
     "examples/store-operations",
     "tests",
     "tests/tests/fixtures/post",
+    "tests/tests/fixtures/stmt-reexports",
     "tests/tests/fixtures/user",
 ]
 
@@ -72,21 +74,21 @@ unsafe_code = "deny"
 
 [workspace.dependencies]
 # Toasty crates
-toasty = { version = "0.9.0", path = "crates/toasty" }
-toasty-cli = { version = "0.9.0", path = "crates/toasty-cli" }
-toasty-core = { version = "0.9.0", path = "crates/toasty-core" }
-toasty-macros = { version = "0.9.0", path = "crates/toasty-macros" }
-toasty-sql = { version = "0.9.0", path = "crates/toasty-sql" }
+toasty = { version = "0.10.0", path = "crates/toasty" }
+toasty-cli = { version = "0.10.0", path = "crates/toasty-cli" }
+toasty-core = { version = "0.10.0", path = "crates/toasty-core" }
+toasty-macros = { version = "0.10.0", path = "crates/toasty-macros" }
+toasty-sql = { version = "0.10.0", path = "crates/toasty-sql" }
 # Driver implementations
-toasty-driver-dynamodb = { version = "0.9.0", path = "crates/toasty-driver-dynamodb" }
-toasty-driver-mysql = { version = "0.9.0", path = "crates/toasty-driver-mysql", default-features = false }
-toasty-driver-postgresql = { version = "0.9.0", path = "crates/toasty-driver-postgresql" }
-toasty-driver-sqlite = { version = "0.9.0", path = "crates/toasty-driver-sqlite" }
-toasty-driver-turso = { version = "0.9.0", path = "crates/toasty-driver-turso" }
+toasty-driver-dynamodb = { version = "0.10.0", path = "crates/toasty-driver-dynamodb" }
+toasty-driver-mysql = { version = "0.10.0", path = "crates/toasty-driver-mysql", default-features = false }
+toasty-driver-postgresql = { version = "0.10.0", path = "crates/toasty-driver-postgresql" }
+toasty-driver-sqlite = { version = "0.10.0", path = "crates/toasty-driver-sqlite" }
+toasty-driver-turso = { version = "0.10.0", path = "crates/toasty-driver-turso" }
 
 # Driver integration test suite dependencies
-toasty-driver-integration-suite = { version = "0.9.0", path = "crates/toasty-driver-integration-suite" }
-toasty-driver-integration-suite-macros = { version = "0.9.0", path = "crates/toasty-driver-integration-suite-macros" }
+toasty-driver-integration-suite = { version = "0.10.0", path = "crates/toasty-driver-integration-suite" }
+toasty-driver-integration-suite-macros = { version = "0.10.0", path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
 assert-struct = "0.4.2"
@@ -114,6 +116,8 @@ fallible-iterator = "0.2"
 fluent-uri = "0.4.1"
 form_urlencoded = "1.2.2"
 jiff = "0.2.23"
+cidr = "0.3.2"
+macaddr = "1.0.1"
 lru = "0.18.0"
 pulldown-cmark = { version = "0.13", default-features = false }
 pluralizer = "0.5.0"
@@ -137,7 +141,7 @@ toml = "1.1.0"
 toml_edit = "0.25.8"
 tempfile = "3.27"
 proptest = "1"
-tokio = { version = "1.50", features = ["full"] }
+tokio = { version = "1.50", default-features = false, features = ["macros", "rt", "sync", "time"] }
 tokio-postgres = "0.7.17"
 tokio-postgres-rustls = { version = "0.14.0", default-features = false }
 rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
@@ -150,7 +154,7 @@ turso = "0.7"
 tracing-subscriber = { version = "0.3", features = ["env-filter"] }
 trybuild = { version = "1.0.116", features = ["diff"] }
 url = "2.5.8"
-uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng"] }
+uuid = { version = "1.23.0", features = ["v4", "v7", "fast-rng", "js"] }
 
 [profile.dev]
 debug = "line-tables-only"

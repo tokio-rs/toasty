@@ -273,11 +273,29 @@ pub use table_with_joins::TableWithJoins;
 mod ty;
 pub use ty::Type;
 
+#[cfg(feature = "bigdecimal")]
+pub use bigdecimal::BigDecimal;
+#[cfg(feature = "net")]
+pub use cidr::{IpCidr, IpInet};
+#[cfg(feature = "jiff")]
+pub use jiff::{
+    Timestamp, Zoned,
+    civil::{Date, DateTime, Time},
+};
+#[cfg(feature = "net")]
+pub use macaddr::{MacAddr6, MacAddr8};
+#[cfg(feature = "rust_decimal")]
+pub use rust_decimal::Decimal;
+pub use uuid::Uuid;
+
 mod ty_union;
 pub use ty_union::TypeUnion;
 
 #[cfg(feature = "jiff")]
 mod ty_jiff;
+
+#[cfg(feature = "net")]
+mod ty_net;
 
 mod update;
 pub use update::{Update, UpdateTarget};
@@ -292,6 +310,9 @@ pub use values::Values;
 
 #[cfg(feature = "jiff")]
 mod value_jiff;
+
+#[cfg(feature = "net")]
+mod value_net;
 
 mod value_object;
 pub use value_object::ValueObject;

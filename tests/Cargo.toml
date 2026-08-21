@@ -31,11 +31,13 @@ rust_decimal.workspace = true
 bigdecimal.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
-toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "migration"] }
+toasty = { workspace = true, features = ["rust_decimal", "bigdecimal", "jiff", "net", "migration"] }
 toasty-cli.workspace = true
 toasty-core.workspace = true
 toasty-macros.workspace = true
-tokio.workspace = true
+# `tokio::runtime::Runtime::new` builds a multi-thread runtime, which the lean
+# workspace tokio feature set (kept wasm-compatible for `toasty`) omits.
+tokio = { workspace = true, features = ["rt-multi-thread"] }
 
 # Integration test suite
 toasty-driver-integration-suite.workspace = true

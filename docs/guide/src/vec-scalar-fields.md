@@ -6,9 +6,10 @@ Vec<i64>`, `weights: Vec<f64>`. Toasty stores the collection directly;
 you do not wrap it in JSON by hand or manage a separate join table.
 
 The element type must be a scalar: any primitive other than `u8`, plus
-`String`, `Uuid`, the decimal types, the `jiff` date/time types, and a unit
-enum derived with `toasty::Embed`. `Vec<u8>` keeps its existing meaning — a
-single binary blob, not a collection of one-byte integers.
+`String`, `Uuid`, the decimal types, the `jiff` date/time types, the `cidr` and
+`macaddr` network address types, and a unit enum derived with `toasty::Embed`.
+`Vec<u8>` keeps its existing meaning — a single binary blob, not a collection
+of one-byte integers.
 
 Storage depends on the driver:
 
@@ -369,6 +370,12 @@ array query predicates work on every built-in driver. Whole-value
 replacement and the appending builders — `set`, `push`, `extend`,
 `clear` — also work everywhere.
 
+PostgreSQL additionally supports `#[unique]` on a collection field. It
+compares the complete ordered array, including repeated elements. MySQL,
+SQLite, Turso, and DynamoDB reject unique collection constraints during
+schema construction. Non-unique `#[index]` collection fields are not currently
+supported on any backend.
+
 The element-removal builders are narrower:
 
 | Operation | PostgreSQL | MySQL | SQLite | DynamoDB |
@@ -377,6 +384,7 @@ The element-removal builders are narrower:
 | `contains`, `len`, `is_empty` | ✓ | ✓ | ✓ | ✓ |
 | `is_superset`, `intersects` | ✓ | ✓ | ✓ | literal right-hand side only |
 | Replace, `set`, `push`, `extend`, `clear` | ✓ | ✓ | ✓ | ✓ |
+| `#[unique]` on the complete value | ✓ | — | — | — |
 | `pop`, `remove`, `remove_at` | ✓ | — | — | — |
 
 `pop`, `remove`, and `remove_at` currently require PostgreSQL, where
