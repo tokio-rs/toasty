@@ -7,6 +7,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.10.0...toasty-sql-v0.11.0) - 2026-08-21
+
+### Fixed
+
+- Fix PostgreSQL enum type name quoting ([#1186])
+
+[#1186]: https://github.com/tokio-rs/toasty/pull/1186
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-sql-v0.9.0...toasty-sql-v0.10.0) - 2026-08-11
 
 ### Added
