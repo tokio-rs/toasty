@@ -109,20 +109,12 @@ impl Simplify<'_> {
             {
                 self.strip_decode_cast_comparison(op, cast, value)
             }
-            // Decode-cast stripping on column-versus-column comparisons —
-            // e.g. one embedded relation compared to another, where both
-            // sides substitute to key columns. A value has one canonical
-            // stored encoding, so when both columns store the same type and
-            // decode to the same type, comparing the stored forms is
-            // equivalent to comparing the decoded forms; drop both casts so
-            // the driver compares the bare columns.
+            // Decode-cast stripping on column-versus-column comparisons, such
+            // as one embedded relation compared to another after both sides
+            // substitute to key columns. The eligibility check proves that
+            // comparing the stored forms preserves decoded equality.
             (Expr::Cast(lhs_cast), Expr::Cast(rhs_cast))
-                if (op.is_eq() || op.is_ne())
-                    && lhs_cast.from.is_none()
-                    && rhs_cast.from.is_none()
-                    && lhs_cast.expr.is_column()
-                    && rhs_cast.expr.is_column()
-                    && lhs_cast.ty == rhs_cast.ty =>
+                if self.can_strip_decode_cast_column_comparison(op, lhs_cast, rhs_cast) =>
             {
                 self.strip_decode_cast_column_comparison(op, lhs_cast, rhs_cast)
             }
@@ -193,32 +185,51 @@ impl Simplify<'_> {
         Some(Expr::binary_op(cast.expr.take(), op, value))
     }
 
+    /// Returns whether `cast(col_a, T) <eq/ne> cast(col_b, T)` can compare the
+    /// stored columns directly without changing the result.
+    fn can_strip_decode_cast_column_comparison(
+        &self,
+        op: stmt::BinaryOp,
+        lhs: &stmt::ExprCast,
+        rhs: &stmt::ExprCast,
+    ) -> bool {
+        if !(op.is_eq() || op.is_ne())
+            || lhs.from.is_some()
+            || rhs.from.is_some()
+            || !lhs.expr.is_column()
+            || !rhs.expr.is_column()
+            || lhs.ty != rhs.ty
+        {
+            return false;
+        }
+
+        let Some(lhs_reference) = lhs.expr.as_expr_reference() else {
+            return false;
+        };
+        let Some(rhs_reference) = rhs.expr.as_expr_reference() else {
+            return false;
+        };
+
+        let ResolvedRef::Column(lhs_column) = self.cx.resolve_expr_reference(lhs_reference) else {
+            return false;
+        };
+        let ResolvedRef::Column(rhs_column) = self.cx.resolve_expr_reference(rhs_reference) else {
+            return false;
+        };
+
+        lhs_column.ty == rhs_column.ty && lhs_column.ty.cast_preserves_equality(&lhs.ty)
+    }
+
     /// Rewrites `cast(col_a, T) <eq/ne> cast(col_b, T)` to
-    /// `col_a <eq/ne> col_b` when both columns store the same type. Bails —
-    /// leaving the casts in place — when either side does not resolve to a
-    /// physical column or the stored types differ (a `#[column(type = ...)]`
-    /// override on one side), where stored-form comparison would be
-    /// meaningless.
+    /// `col_a <eq/ne> col_b` after
+    /// [`Self::can_strip_decode_cast_column_comparison`] proves the rewrite is
+    /// valid.
     fn strip_decode_cast_column_comparison(
         &mut self,
         op: stmt::BinaryOp,
         lhs: &mut stmt::ExprCast,
         rhs: &mut stmt::ExprCast,
     ) -> Option<Expr> {
-        let lhs_reference = lhs.expr.as_expr_reference()?;
-        let rhs_reference = rhs.expr.as_expr_reference()?;
-
-        let ResolvedRef::Column(lhs_column) = self.cx.resolve_expr_reference(lhs_reference) else {
-            return None;
-        };
-        let ResolvedRef::Column(rhs_column) = self.cx.resolve_expr_reference(rhs_reference) else {
-            return None;
-        };
-
-        if lhs_column.ty != rhs_column.ty {
-            return None;
-        }
-
         Some(Expr::binary_op(lhs.expr.take(), op, rhs.expr.take()))
     }
 
