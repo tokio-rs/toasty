@@ -233,7 +233,7 @@
 <a href=#233 id=233 data-nosnippet>233</a>        <span class="comment">// Column reference — authoritative from schema
 <a href=#234 id=234 data-nosnippet>234</a>        </span>stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Column(<span class="kw">_</span>)) =&gt; {
 <a href=#235 id=235 data-nosnippet>235</a>            <span class="kw">match </span>cx.resolve_expr_reference(expr_ref) {
-<a href=#236 id=236 data-nosnippet>236</a>                stmt::ResolvedRef::Column(col) =&gt; Ty::Column(col.storage_ty.clone()),
+<a href=#236 id=236 data-nosnippet>236</a>                stmt::ResolvedRef::Column(col) =&gt; ty_from_column(col.storage_ty.clone()),
 <a href=#237 id=237 data-nosnippet>237</a>                <span class="kw">_ </span>=&gt; Ty::Unknown,
 <a href=#238 id=238 data-nosnippet>238</a>            }
 <a href=#239 id=239 data-nosnippet>239</a>        }

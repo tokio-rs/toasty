@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0aeb2b9c.js";
+            window.path_to_searchindex_js = "searchindex-42faae4f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -299,6 +299,47 @@ User::delete_by_email(&amp;mut db, "alice@example.com").await?;
 <span class="boring">Ok(())
 </span><span class="boring">}
 </span><span class="boring">}</span></code></pre>
+<h3 id="unique-collection-values"><a class="header" href="#unique-collection-values">Unique collection values</a></h3>
+<p>PostgreSQL also supports <code>#[unique]</code> on a <code>Vec&lt;scalar&gt;</code> field. The constraint
+applies to the complete ordered array value, so order and repeated elements are
+significant:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span>#[derive(Debug, toasty::Model)]
+struct Article {
+    #[key]
+    #[auto]
+    id: uuid::Uuid,
+
+    #[unique]
+    tags: Vec&lt;String&gt;,
+}
+<span class="boring">}</span></code></pre>
+<p>Two rows cannot both contain <code>["rust", "toasty"]</code>. A row containing
+<code>["toasty", "rust"]</code> or <code>["rust", "rust"]</code> is a different value. Generated
+methods accept arrays, slices, and vectors, just like other collection-field
+builders:</p>
+<pre class="playground"><code class="language-rust"><span class="boring">#![allow(unused)]
+</span><span class="boring">fn main() {
+</span><span class="boring">use toasty::Model;
+</span><span class="boring">#[derive(Debug, toasty::Model)]
+</span><span class="boring">struct Article {
+</span><span class="boring">    #[key]
+</span><span class="boring">    #[auto]
+</span><span class="boring">    id: uuid::Uuid,
+</span><span class="boring">    #[unique]
+</span><span class="boring">    tags: Vec&lt;String&gt;,
+</span><span class="boring">}
+</span><span class="boring">async fn __example(mut db: toasty::Db) -&gt; toasty::Result&lt;()&gt; {
+</span>let article = Article::get_by_tags(&amp;mut db, ["rust", "toasty"]).await?;
+<span class="boring">Ok(())
+</span><span class="boring">}
+</span><span class="boring">}</span></code></pre>
+<p>Other built-in backends reject this model during schema construction because
+they do not provide the same native whole-collection uniqueness semantics.
+Keep unique arrays small: PostgreSQL B-tree index entries have practical size
+limits, so a large collection is a poor identifying value.</p>
 <h2 id="indexed-fields"><a class="header" href="#indexed-fields">Indexed fields</a></h2>
 <p>Add <code>#[index]</code> to a field to tell Toasty that this field is a query target. On
 SQL databases, Toasty creates a database index on the column, which lets the

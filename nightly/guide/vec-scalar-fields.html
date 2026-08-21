@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-0aeb2b9c.js";
+            window.path_to_searchindex_js = "searchindex-42faae4f.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -528,6 +528,11 @@ contains is valid on the target backend.</p>
 array query predicates work on every built-in driver. Whole-value
 replacement and the appending builders — <code>set</code>, <code>push</code>, <code>extend</code>,
 <code>clear</code> — also work everywhere.</p>
+<p>PostgreSQL additionally supports <code>#[unique]</code> on a collection field. It
+compares the complete ordered array, including repeated elements. MySQL,
+SQLite, Turso, and DynamoDB reject unique collection constraints during
+schema construction. Non-unique <code>#[index]</code> collection fields are not currently
+supported on any backend.</p>
 <p>The element-removal builders are narrower:</p>
 <div class="table-wrapper">
 <table>
@@ -539,6 +544,7 @@ replacement and the appending builders — <code>set</code>, <code>push</code>, 
 <tr><td><code>contains</code>, <code>len</code>, <code>is_empty</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
 <tr><td><code>is_superset</code>, <code>intersects</code></td><td>✓</td><td>✓</td><td>✓</td><td>literal right-hand side only</td></tr>
 <tr><td>Replace, <code>set</code>, <code>push</code>, <code>extend</code>, <code>clear</code></td><td>✓</td><td>✓</td><td>✓</td><td>✓</td></tr>
+<tr><td><code>#[unique]</code> on the complete value</td><td>✓</td><td>—</td><td>—</td><td>—</td></tr>
 <tr><td><code>pop</code>, <code>remove</code>, <code>remove_at</code></td><td>✓</td><td>—</td><td>—</td><td>—</td></tr>
 </tbody>
 </table>
