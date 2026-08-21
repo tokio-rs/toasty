@@ -294,11 +294,7 @@ impl BuildTableFromModels<'_> {
 
                 if matches!(&self.table.column(column).ty, stmt::Type::List(_)) {
                     let model_name = self.app.model(app_index.id.model).name();
-                    let field_name = fields[index_field.field.index]
-                        .name
-                        .app
-                        .as_deref()
-                        .unwrap_or("<unnamed>");
+                    let field_name = fields[index_field.field.index].name.app_unwrap();
 
                     if !app_index.unique {
                         return Err(Error::unsupported_feature(format!(
