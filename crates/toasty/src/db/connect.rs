@@ -133,6 +133,10 @@ impl Driver for Connect {
         self.driver.connect(cx).await
     }
 
+    fn max_connections(&self) -> Option<usize> {
+        self.driver.max_connections()
+    }
+
     fn generate_migration(&self, schema_diff: &diff::Schema<'_>) -> Migration {
         self.driver.generate_migration(schema_diff)
     }
