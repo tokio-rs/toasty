@@ -370,6 +370,12 @@ array query predicates work on every built-in driver. Whole-value
 replacement and the appending builders — `set`, `push`, `extend`,
 `clear` — also work everywhere.
 
+PostgreSQL additionally supports `#[unique]` on a collection field. It
+compares the complete ordered array, including repeated elements. MySQL,
+SQLite, Turso, and DynamoDB reject unique collection constraints during
+schema construction. Non-unique `#[index]` collection fields are not currently
+supported on any backend.
+
 The element-removal builders are narrower:
 
 | Operation | PostgreSQL | MySQL | SQLite | DynamoDB |
@@ -378,6 +384,7 @@ The element-removal builders are narrower:
 | `contains`, `len`, `is_empty` | ✓ | ✓ | ✓ | ✓ |
 | `is_superset`, `intersects` | ✓ | ✓ | ✓ | literal right-hand side only |
 | Replace, `set`, `push`, `extend`, `clear` | ✓ | ✓ | ✓ | ✓ |
+| `#[unique]` on the complete value | ✓ | — | — | — |
 | `pop`, `remove`, `remove_at` | ✓ | — | — | — |
 
 `pop`, `remove`, and `remove_at` currently require PostgreSQL, where

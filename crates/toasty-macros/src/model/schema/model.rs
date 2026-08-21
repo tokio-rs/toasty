@@ -181,6 +181,28 @@ impl Model {
         }
 
         for (index, node) in ast_fields.iter().enumerate() {
+            if is_embedded && node.ident.is_none() {
+                for attr in &node.attrs {
+                    let attr_name = if attr.path().is_ident("index") {
+                        Some("index")
+                    } else if attr.path().is_ident("unique") {
+                        Some("unique")
+                    } else {
+                        None
+                    };
+
+                    if let Some(attr_name) = attr_name {
+                        errs.push(syn::Error::new_spanned(
+                            attr,
+                            format!(
+                                "#[{attr_name}] cannot be placed on a newtype's inner field; \
+                                 place it on the named field that uses the newtype"
+                            ),
+                        ));
+                    }
+                }
+            }
+
             match Field::from_ast(node, &ast.ident, index, &names) {
                 Ok(field) => {
                     if model_attr.key.is_some()

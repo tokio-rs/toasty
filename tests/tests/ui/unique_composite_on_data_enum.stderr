@@ -9,7 +9,7 @@ help: the trait `toasty::codegen_support::index::IndexableField` is not implemen
    |
  7 | enum Contact {
    | ^^^^^^^^^^^^
-   = note: only scalar fields, newtype embeds, and unit (data-less) enums can be indexed; data-carrying enums and multi-field embedded structs span multiple columns and have no single index column
+   = note: only scalar fields, storable Vec<T> fields, newtype embeds, and unit (data-less) enums can be index targets; data-carrying enums and multi-field embedded structs span multiple columns and have no single index column
    = help: the following other types implement trait `toasty::codegen_support::index::IndexableField`:
              Arc<T>
              Box<T>

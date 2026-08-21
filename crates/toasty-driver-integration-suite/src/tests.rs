@@ -57,6 +57,7 @@ pub mod filter_like;
 pub mod float_fields;
 pub mod index_composite;
 pub mod index_custom_name;
+pub mod index_unique_collection;
 pub mod infra_connection_per_clone;
 pub mod infra_missing_registrations;
 pub mod infra_pool_config;

@@ -332,6 +332,14 @@ pub struct Capability {
     /// accepting `stmt::Type::List(_)` fields.
     pub vec_scalar: bool,
 
+    /// Whether the database can enforce a unique constraint on the complete
+    /// ordered value of a native list column.
+    ///
+    /// This is narrower than [`Self::native_array`]: storing a list as an
+    /// array does not by itself guarantee that the backend has an index type
+    /// whose equality semantics preserve element order and multiplicity.
+    pub unique_list_index: bool,
+
     /// Whether the driver can store a `#[document]` collection field — a
     /// `Vec<T>` of an embedded struct — as a single document column
     /// (`jsonb` / `JSON` on the SQL backends). Used by the schema builder as
@@ -585,6 +593,12 @@ impl Capability {
             ));
         }
 
+        if self.unique_list_index && !self.native_array {
+            return Err(crate::Error::invalid_driver_configuration(
+                "unique_list_index is true but native_array is false",
+            ));
+        }
+
         Ok(())
     }
 
@@ -717,6 +731,7 @@ impl Capability {
         // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
         vec_scalar: true,
+        unique_list_index: false,
         document_collections: true,
 
         // SQLite renders `IsSuperset` / `Intersects` as `json_each`
@@ -790,6 +805,7 @@ impl Capability {
         // representation for `Vec<scalar>` model fields.
         native_array: true,
         vec_scalar: true,
+        unique_list_index: true,
         document_collections: true,
 
         // PostgreSQL: all three collection removals are atomic via native
@@ -952,6 +968,7 @@ impl Capability {
         // `AttributeValue` encoding.
         native_array: false,
         vec_scalar: true,
+        unique_list_index: false,
         // `#[document]` embeds store as a native Map `M` attribute (a
         // `Vec<embed>` collection as a List `L` of Maps). DynamoDB caps
         // attribute nesting at 32 levels; documents deeper than that are not
@@ -1216,6 +1233,23 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("sql is None but sql_placeholder is Some")
+        );
+    }
+
+    #[test]
+    fn test_validate_fails_when_unique_list_index_has_no_native_array() {
+        let invalid = Capability {
+            unique_list_index: true,
+            ..Capability::SQLITE
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unique_list_index is true but native_array is false")
         );
     }
 
