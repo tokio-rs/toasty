@@ -109,6 +109,15 @@ impl Simplify<'_> {
             {
                 self.strip_decode_cast_comparison(op, cast, value)
             }
+            // Decode-cast stripping on column-versus-column comparisons, such
+            // as one embedded relation compared to another after both sides
+            // substitute to key columns. The eligibility check proves that
+            // comparing the stored forms preserves decoded equality.
+            (Expr::Cast(lhs_cast), Expr::Cast(rhs_cast))
+                if self.can_strip_decode_cast_column_comparison(op, lhs_cast, rhs_cast) =>
+            {
+                self.strip_decode_cast_column_comparison(op, lhs_cast, rhs_cast)
+            }
             // Self-comparison with projections, e.g.,
             //
             //  - `address.city = address.city` → `true`
@@ -174,6 +183,54 @@ impl Simplify<'_> {
             .cast(self.cx.schema(), value.take())
             .expect("failed to cast value");
         Some(Expr::binary_op(cast.expr.take(), op, value))
+    }
+
+    /// Returns whether `cast(col_a, T) <eq/ne> cast(col_b, T)` can compare the
+    /// stored columns directly without changing the result.
+    fn can_strip_decode_cast_column_comparison(
+        &self,
+        op: stmt::BinaryOp,
+        lhs: &stmt::ExprCast,
+        rhs: &stmt::ExprCast,
+    ) -> bool {
+        if !(op.is_eq() || op.is_ne())
+            || lhs.from.is_some()
+            || rhs.from.is_some()
+            || !lhs.expr.is_column()
+            || !rhs.expr.is_column()
+            || lhs.ty != rhs.ty
+        {
+            return false;
+        }
+
+        let Some(lhs_reference) = lhs.expr.as_expr_reference() else {
+            return false;
+        };
+        let Some(rhs_reference) = rhs.expr.as_expr_reference() else {
+            return false;
+        };
+
+        let ResolvedRef::Column(lhs_column) = self.cx.resolve_expr_reference(lhs_reference) else {
+            return false;
+        };
+        let ResolvedRef::Column(rhs_column) = self.cx.resolve_expr_reference(rhs_reference) else {
+            return false;
+        };
+
+        lhs_column.ty == rhs_column.ty && lhs_column.ty.cast_preserves_equality(&lhs.ty)
+    }
+
+    /// Rewrites `cast(col_a, T) <eq/ne> cast(col_b, T)` to
+    /// `col_a <eq/ne> col_b` after
+    /// [`Self::can_strip_decode_cast_column_comparison`] proves the rewrite is
+    /// valid.
+    fn strip_decode_cast_column_comparison(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs: &mut stmt::ExprCast,
+        rhs: &mut stmt::ExprCast,
+    ) -> Option<Expr> {
+        Some(Expr::binary_op(lhs.expr.take(), op, rhs.expr.take()))
     }
 
     /// Returns `true` if `expr` is a column reference that resolves to a

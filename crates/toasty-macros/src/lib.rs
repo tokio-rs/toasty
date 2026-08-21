@@ -13,6 +13,7 @@ mod embed_migrations;
 mod model;
 mod query;
 mod update;
+mod variant_literal;
 
 use proc_macro::TokenStream;
 
@@ -1263,9 +1264,6 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///   form is not supported.
 /// - There is no `.include()`: load the referenced model with an
 ///   ordinary `get_by_*` / `find_by_*` on the stored key.
-/// - Writes set the key field explicitly and leave the relation unloaded
-///   (`Deferred::default()`); setting it from a model value is not
-///   supported.
 /// - A `has_many` on the target cannot pair with it.
 ///
 /// ```no_run
@@ -1286,6 +1284,24 @@ pub fn derive_model(input: TokenStream) -> TokenStream {
 ///     // ... other owner kinds
 /// }
 /// ```
+///
+/// In `create!` and `update!`, a variant literal may pass the parent model
+/// in the relation field and omit the key — the key field(s) fill from the
+/// parent's referenced field:
+///
+/// ```ignore
+/// toasty::create!(Object { owner: Owner::Human { human: &alice } })
+/// ```
+///
+/// A complete literal with explicit keys and an unloaded relation
+/// (`Deferred::default()`) works unchanged; a loaded relation value fills
+/// the keys the same way and wins over an explicitly written key.
+///
+/// In filters, the relation is reachable through the variant's field
+/// accessors: compare it to a model value or traverse into the target's
+/// fields, both gated on the variant —
+/// `owner().human().matches(|v| v.human().eq(&alice))`,
+/// `owner().human().matches(|v| v.human().name().eq("Alice"))`.
 ///
 /// # Using embedded types in a model
 ///

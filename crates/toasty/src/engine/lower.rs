@@ -1,4 +1,5 @@
 mod association;
+mod embedded_relation;
 mod expr_or;
 mod include;
 mod insert;
@@ -760,6 +761,21 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::InSubquery(e) => {
+                // Lower the LHS first: a key projected out of an embedded
+                // enum lowers to a decode `Match`, which must be eliminated
+                // around the membership test before the subquery is
+                // processed — on the non-SQL path the subquery detaches into
+                // its own statement, out of reach of later simplification.
+                // The remaining lowering below re-visits the LHS, which is a
+                // no-op on the already-lowered expression.
+                self.visit_expr_mut(&mut e.expr);
+
+                if let Some(eliminated) = self.eliminate_enum_decode_membership(e) {
+                    *expr = eliminated;
+                    self.visit_expr_mut(expr);
+                    return;
+                }
+
                 if self.capability().sql() {
                     self.visit_expr_in_subquery_mut(e);
 
@@ -1498,7 +1514,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     .collect();
                 Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
             }
-            (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
+            (stmt::Expr::Cast(expr_cast), other) | (other, stmt::Expr::Cast(expr_cast)) => {
+                // An embedded-enum decode (`Match`, possibly under a
+                // projection) on the other side cannot be cast mid-lower;
+                // post-lower simplify eliminates the match into
+                // variant-gated terms and strips the decode casts
+                // (`eliminate_match_in_binary_op`,
+                // `simplify_expr_in_subquery`).
+                if expr_is_enum_decode(other) {
+                    return None;
+                }
+
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
                 self.cast_expr(rhs, &target_ty);
@@ -2019,6 +2045,79 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
+    /// Eliminate an embedded-enum decode (`Match`, possibly under a record
+    /// projection) from the LHS of a membership test.
+    ///
+    /// `Match IN (q)` distributes into a disjunction of variant-gated
+    /// memberships — `(disc == p1 AND slot1 IN q) OR …` — mirroring what
+    /// `eliminate_match_in_binary_op` does for comparisons. Arms whose
+    /// projected slot decodes `Null` (another variant's slot, or a relation
+    /// slot) or `Error` (unreachable) can never satisfy a membership test
+    /// and drop out, as does the decode's else branch.
+    ///
+    /// Returns the replacement expression, or `None` when the LHS is not an
+    /// enum decode.
+    fn eliminate_enum_decode_membership(
+        &mut self,
+        e: &mut stmt::ExprInSubquery,
+    ) -> Option<stmt::Expr> {
+        // Normalize `Project(Match)` to a `Match` whose arms are the
+        // projected record slots.
+        let match_expr = match &mut *e.expr {
+            stmt::Expr::Match(_) => {
+                let stmt::Expr::Match(match_expr) = e.expr.take() else {
+                    unreachable!()
+                };
+                match_expr
+            }
+            stmt::Expr::Project(project) => {
+                let stmt::Expr::Match(match_base) = &*project.base else {
+                    return None;
+                };
+
+                // Project each arm non-destructively before committing, so
+                // a non-collapsible arm leaves the expression untouched.
+                let mut projected = Vec::with_capacity(match_base.arms.len());
+                for arm in &match_base.arms {
+                    projected.push(arm.expr.entry(&project.projection)?.to_expr());
+                }
+
+                let stmt::Expr::Match(mut match_expr) = project.base.take() else {
+                    unreachable!()
+                };
+                for (arm, slot) in match_expr.arms.iter_mut().zip(projected) {
+                    arm.expr = slot;
+                }
+                match_expr
+            }
+            _ => return None,
+        };
+
+        let mut operands = Vec::with_capacity(match_expr.arms.len());
+
+        for arm in match_expr.arms {
+            if matches!(
+                arm.expr,
+                stmt::Expr::Value(stmt::Value::Null) | stmt::Expr::Error(_)
+            ) {
+                continue;
+            }
+
+            let guard =
+                stmt::Expr::eq((*match_expr.subject).clone(), stmt::Expr::from(arm.pattern));
+            operands.push(stmt::Expr::and(
+                guard,
+                stmt::Expr::in_subquery(arm.expr, (*e.query).clone()),
+            ));
+        }
+
+        Some(match operands.len() {
+            0 => false.into(),
+            1 => operands.into_iter().next().unwrap(),
+            _ => stmt::Expr::or_from_vec(operands),
+        })
+    }
+
     fn cast_expr(&mut self, expr: &mut stmt::Expr, target_ty: &stmt::Type) {
         assert!(!target_ty.is_list(), "TODO");
         match expr {
@@ -2034,10 +2133,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     .expect("failed to cast value");
                 *value = casted;
             }
-            stmt::Expr::Project(_) => {
-                todo!()
-                // let base = expr.take();
-                // *expr = stmt::Expr::cast(base, target_ty.clone());
+            stmt::Expr::Project(expr_project) => {
+                // A projection into an embedded field's lowered record —
+                // e.g. the key of a relation stored in an embedded type, as
+                // the LHS of a lifted FK IN-subquery. Collapse the
+                // projection and recurse; the collapsed entry is typically
+                // the column's decode cast, which the Cast arm strips.
+                let Some(entry) = expr_project.base.entry(&expr_project.projection) else {
+                    todo!("cast_expr: cannot collapse projection: {expr_project:#?}")
+                };
+                *expr = entry.to_expr();
+                self.cast_expr(expr, target_ty);
             }
             stmt::Expr::Arg(_) => {
                 // Create a cast expression for the arg
@@ -2070,6 +2176,16 @@ impl LoweringContext<'_> {
 /// `lower_expr_binary_op`'s `Record == Record` handler) and for composite
 /// FK IN-subquery comparisons (where the tuple LHS pairs with a tuple
 /// projection on the RHS).
+/// Whether an expression is an embedded-enum decode — a `Match` over the
+/// discriminant, possibly under a projection selecting a record slot.
+fn expr_is_enum_decode(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Match(_) => true,
+        stmt::Expr::Project(project) => expr_is_enum_decode(&project.base),
+        _ => false,
+    }
+}
+
 pub(super) fn key_field_refs(
     nesting: usize,
     mut fields: impl ExactSizeIterator<Item = app::FieldId>,

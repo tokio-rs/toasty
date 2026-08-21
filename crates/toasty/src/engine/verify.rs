@@ -462,6 +462,57 @@ impl VerifyExpr<'_, '_> {
         )
     }
 
+    /// Whether a record-slot projection resolves from `field`. See
+    /// `visit_expr_project` for the slot-space conventions; relation steps
+    /// continue into the target model's fields.
+    fn expr_projection_resolves(&self, field: &app::Field, steps: &[usize]) -> bool {
+        use app::FieldTy;
+
+        let [step, rest @ ..] = steps else {
+            return true;
+        };
+
+        match &field.ty {
+            FieldTy::Embedded(embedded) => match self.schema.app.model(embedded.target) {
+                app::Model::EmbeddedStruct(embedded) => embedded
+                    .fields
+                    .get(*step)
+                    .is_some_and(|field| self.expr_projection_resolves(field, rest)),
+                app::Model::EmbeddedEnum(embedded) => {
+                    // Slot 0 is the discriminant — a leaf.
+                    if *step == 0 {
+                        return rest.is_empty();
+                    }
+                    (0..embedded.variants.len()).any(|variant| {
+                        embedded
+                            .variant_fields(variant)
+                            .nth(*step - 1)
+                            .is_some_and(|field| self.expr_projection_resolves(field, rest))
+                    })
+                }
+                app::Model::Root(_) => false,
+            },
+            FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
+                let target = field.relation_target_id().expect("relation has a target");
+                self.schema
+                    .app
+                    .model(target)
+                    .as_root_unwrap()
+                    .fields
+                    .get(*step)
+                    .is_some_and(|field| self.expr_projection_resolves(field, rest))
+            }
+            // A `#[document]` embed stores sub-fields in the document type
+            // rather than as `app::Field`s; the path was type-checked by
+            // the generated accessors.
+            FieldTy::Primitive(app::FieldPrimitive {
+                ty: stmt::Type::Model(_),
+                ..
+            }) => true,
+            FieldTy::Primitive(_) => false,
+        }
+    }
+
     fn assert_bool_expr(&self, expr: &stmt::Expr) {
         use stmt::Expr::*;
 
@@ -519,17 +570,25 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
 
     fn visit_expr_project(&mut self, i: &stmt::ExprProject) {
         // For project expressions where the base is a field reference in the
-        // current scope, combine the field index with the project's projection
-        // to form the full path, then resolve from the root model.
+        // current scope, validate the projection steps from that field.
+        //
+        // Expression projections are in *record-slot* space, which differs
+        // from schema-path space for embedded enums: the expression indexes
+        // the enum's record — `[discriminant, variant fields...]`, with
+        // variant-local field positions — and does not name the variant (a
+        // comparison carries an `is_variant` gate instead). A slot is
+        // therefore checked against every variant, and the projection is
+        // valid when at least one admits it.
         if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = &*i.base {
-            let mut full = stmt::Projection::single(*index);
-            for step in &i.projection[..] {
-                full.push(*step);
-            }
-            let root = self.schema.app.model(self.model);
+            let root = self.schema.app.model(self.model).as_root_unwrap();
+            let valid = root
+                .fields
+                .get(*index)
+                .is_some_and(|field| self.expr_projection_resolves(field, i.projection.as_slice()));
             assert!(
-                self.schema.app.resolve(root, &full).is_some(),
-                "failed to resolve projection: {full:?}"
+                valid,
+                "failed to resolve projection: field {index} . {:?}",
+                i.projection
             );
         } else {
             // For other base expressions (nested projects, etc.), visit the
