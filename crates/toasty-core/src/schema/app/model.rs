@@ -78,6 +78,11 @@ impl ModelSet {
         self.models.contains_key(&id)
     }
 
+    /// Returns a reference to the model with the given ID, if present.
+    pub fn get(&self, id: ModelId) -> Option<&Model> {
+        self.models.get(&id)
+    }
+
     /// Inserts a model into the set, keyed by its [`ModelId`].
     ///
     /// If a model with the same ID already exists, it is replaced.
