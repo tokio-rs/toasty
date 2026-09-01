@@ -1,8 +1,8 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::Field;
+use crate::schema::{Field, Model};
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
-    schema::app::{ModelId, VariantId},
+    schema::app::{self, ModelId, VariantId},
     stmt::{self, Direction, OrderByExpr},
 };
 
@@ -761,6 +761,167 @@ impl<T, U> IntoExpr<U> for Path<T, U> {
 impl<T, U> From<Path<T, U>> for stmt::Path {
     fn from(value: Path<T, U>) -> Self {
         value.untyped
+    }
+}
+
+impl<T, U> Path<T, U>
+where
+    T: Model,
+{
+    /// App-level (Rust) name of the field this path ends at.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path does not end at a field, or if the projection
+    /// crosses a relation: only embedded struct and enum steps are supported.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     name: String,
+    /// # }
+    /// let name = User::fields().name().field_name();
+    /// assert_eq!(name, "name");
+    /// ```
+    pub fn field_name(&self) -> String {
+        let models = Self::registered_models();
+        Self::field_in(&models, &self.untyped)
+            .name
+            .app_unwrap()
+            .to_string()
+    }
+
+    /// Whether the field accepts `NULL`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path does not end at a field, or if the projection
+    /// crosses a relation: only embedded struct and enum steps are supported.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     bio: Option<String>,
+    /// # }
+    /// assert!(User::fields().bio().is_nullable());
+    /// assert!(!User::fields().id().is_nullable());
+    /// ```
+    pub fn is_nullable(&self) -> bool {
+        let models = Self::registered_models();
+        Self::field_in(&models, &self.untyped).nullable
+    }
+
+    /// Whether this field is the target of a single-field unique index.
+    ///
+    /// True for `#[unique]` fields, enum-level `#[unique(variant::field)]`
+    /// references, and primary-key fields of models with
+    /// a single-field primary key. Components of composite unique indices or
+    /// composite primary keys are not unique on their own. Walks
+    /// [`app::Index`] entries; there is no `Field.unique` flag.
+    ///
+    /// # Panics
+    ///
+    /// Panics if the path does not end at a field, or if the projection
+    /// crosses a relation: only embedded struct and enum steps are supported.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     #[unique]
+    /// #     email: String,
+    /// # }
+    /// assert!(User::fields().email().is_unique());
+    /// assert!(User::fields().id().is_unique());
+    /// ```
+    pub fn is_unique(&self) -> bool {
+        let models = Self::registered_models();
+        let field = Self::field_in(&models, &self.untyped);
+        let indices = match Self::model_by_id(&models, field.id.model) {
+            app::Model::Root(root) => &root.indices,
+            app::Model::EmbeddedStruct(embedded) => &embedded.indices,
+            app::Model::EmbeddedEnum(embedded) => &embedded.indices,
+        };
+        indices
+            .iter()
+            .any(|idx| idx.unique && idx.fields.len() == 1 && idx.fields[0].field == field.id)
+    }
+
+    /// Collects the model set rooted at `T` so field lookups can walk into
+    /// embedded models. Built per call: there is no global registry, and
+    /// `T::register` rebuilds the schema of every reachable model, so the
+    /// metadata accessors built on this are for one-off use, not per-row
+    /// loops.
+    fn registered_models() -> app::ModelSet {
+        let mut models = app::ModelSet::new();
+        T::register(&mut models);
+        models
+    }
+
+    fn model_by_id(models: &app::ModelSet, id: ModelId) -> &app::Model {
+        models
+            .get(id)
+            .unwrap_or_else(|| panic!("model {id:?} is not registered"))
+    }
+
+    fn field_in<'a>(models: &'a app::ModelSet, path: &stmt::Path) -> &'a app::Field {
+        match &path.root {
+            stmt::PathRoot::Model(id) => Self::walk_fields(models, *id, path.projection.as_slice()),
+            stmt::PathRoot::Variant { parent, variant_id } => {
+                let enum_field = Self::field_in(models, parent);
+                let embed_id = match &enum_field.ty {
+                    app::FieldTy::Embedded(embedded) => embedded.target,
+                    _ => panic!("variant path parent is not an embedded enum"),
+                };
+                let [first, rest @ ..] = path.projection.as_slice() else {
+                    panic!("path does not end at a field");
+                };
+                let variant_field = Self::model_by_id(models, embed_id)
+                    .as_embedded_enum_unwrap()
+                    .variant_fields(variant_id.index)
+                    .nth(*first)
+                    .expect("variant field index out of bounds");
+                if rest.is_empty() {
+                    variant_field
+                } else {
+                    let embedded_target = match &variant_field.ty {
+                        app::FieldTy::Embedded(embedded) => embedded.target,
+                        _ => panic!("cannot project through non-embedded field"),
+                    };
+                    Self::walk_fields(models, embedded_target, rest)
+                }
+            }
+        }
+    }
+
+    fn walk_fields<'a>(
+        models: &'a app::ModelSet,
+        model_id: ModelId,
+        steps: &[usize],
+    ) -> &'a app::Field {
+        let [first, rest @ ..] = steps else {
+            panic!("path does not end at a field");
+        };
+        let mut field = &Self::model_by_id(models, model_id).fields()[*first];
+        for &step in rest {
+            let embed_id = match &field.ty {
+                app::FieldTy::Embedded(embedded) => embedded.target,
+                _ => panic!("cannot project through non-embedded field"),
+            };
+            field = &Self::model_by_id(models, embed_id).fields()[step];
+        }
+        field
     }
 }
 
