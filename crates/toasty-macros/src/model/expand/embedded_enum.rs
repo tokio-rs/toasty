@@ -6,7 +6,45 @@ use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::spanned::Spanned;
 
+/// Method names the enum fields struct delegates to the underlying path (see
+/// `expand_comparison_methods`). Shared accessors must not take any of these
+/// names.
+const DELEGATED_COMPARISON_METHODS: &[&str] = &["eq", "ne", "in_list"];
+
+/// One group of variant fields declared with the same `#[shared]` column
+/// identity, in declaration order.
+struct SharedFieldGroup<'a> {
+    /// Normalized column identity (snake_case, `r#`-stripped). Matches the
+    /// runtime column coalescing, so `r#type` and `type` merge here as they
+    /// do in storage.
+    key: String,
+
+    /// `(flattened field index, `#[shared]` ident, field)` per member.
+    fields: Vec<(usize, &'a syn::Ident, &'a crate::model::schema::Field)>,
+}
+
 impl Expand<'_> {
+    /// Groups the enum's variant fields by their `#[shared]` column identity,
+    /// preserving the first occurrence order of each identity.
+    fn group_shared_fields(&self) -> Vec<SharedFieldGroup<'_>> {
+        let mut groups: Vec<SharedFieldGroup<'_>> = Vec::new();
+        for (index, field) in self.model.fields.iter().enumerate() {
+            let Some(ident) = &field.attrs.shared else {
+                continue;
+            };
+            let key = Name::from_ident(ident).as_str().to_string();
+
+            match groups.iter_mut().find(|group| group.key == key) {
+                Some(group) => group.fields.push((index, ident, field)),
+                None => groups.push(SharedFieldGroup {
+                    key,
+                    fields: vec![(index, ident, field)],
+                }),
+            }
+        }
+        groups
+    }
+
     /// Returns fields belonging to a specific variant index.
     fn variant_fields(&self, variant_index: usize) -> Vec<&crate::model::schema::Field> {
         self.model
@@ -130,10 +168,17 @@ impl Expand<'_> {
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
 
-        let methods = ["eq", "ne"].iter().map(|name| {
+        // `in_list` compares against a list of the model's values; the rest
+        // compare against a single value.
+        let methods = DELEGATED_COMPARISON_METHODS.iter().map(|&name| {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
+            let rhs_ty = if name == "in_list" {
+                quote!(#toasty::List<#model_ident>)
+            } else {
+                quote!(#model_ident)
+            };
             quote! {
-                #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#rhs_ty>) -> #toasty::stmt::Expr<bool> {
                     self.path.clone().#method_ident(rhs)
                 }
             }
@@ -141,10 +186,6 @@ impl Expand<'_> {
 
         quote! {
             #( #methods )*
-
-            #vis fn in_list(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
-                self.path.clone().in_list(rhs)
-            }
         }
     }
 
@@ -277,6 +318,7 @@ impl Expand<'_> {
             .collect();
 
         let comparison_methods = self.expand_comparison_methods();
+        let shared_accessor_methods = self.expand_enum_shared_accessors();
 
         quote! {
             #vis struct #field_struct_ident<__Origin> {
@@ -288,6 +330,8 @@ impl Expand<'_> {
                 #( #is_variant_methods )*
 
                 #( #variant_accessor_methods )*
+
+                #( #shared_accessor_methods )*
 
                 #comparison_methods
             }
@@ -516,6 +560,84 @@ impl Expand<'_> {
         }
     }
 
+    /// One accessor per `#[shared]` ident on the enum's fields struct, named
+    /// after the ident. It reads the shared column across all variants with
+    /// no discriminant gate, for filters and `order_by` only.
+    ///
+    /// The return is `Option<Inner>` so `NULL` rows support `is_none()` /
+    /// `is_some()`, while `eq` still accepts the inner value via the blanket
+    /// `IntoExpr<Option<T>> for T` impl.
+    fn expand_enum_shared_accessors(&self) -> Vec<TokenStream> {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+        let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
+
+        let groups = self.group_shared_fields();
+        if groups.is_empty() {
+            return Vec::new();
+        }
+
+        // Names already occupying the enum fields struct: variant accessors,
+        // `is_*` guards, and the delegated comparisons.
+        let mut taken: Vec<String> = Vec::new();
+        for variant in &embedded_enum.variants {
+            taken.push(util::bare_ident_name(&variant.name.ident));
+            taken.push(util::bare_ident_name(&variant.is_method_ident));
+        }
+        taken.extend(DELEGATED_COMPARISON_METHODS.iter().map(|s| s.to_string()));
+
+        groups
+            .into_iter()
+            .filter_map(|group| {
+                // Only single-column primitives can share; relations are
+                // rejected during schema collection, so skip a group with no
+                // primitive member rather than emitting a second error. The
+                // representative is the first primitive occurrence — the same
+                // field the runtime coalescing stores the shared column under.
+                group.fields.into_iter().find_map(|(global_idx, ident, f)| {
+                    match &f.ty {
+                        FieldTy::Primitive(ty) => Some((global_idx, ident, ty)),
+                        _ => None,
+                    }
+                })
+            })
+            .map(|(global_idx, ident, ty)| {
+                let name = Name::from_ident(ident);
+                let method = name.as_str();
+                if taken.iter().any(|t| t == method) {
+                    return syn::Error::new_spanned(
+                        ident,
+                        format!(
+                            "shared field `{method}` collides with an existing method on this enum's fields struct; \
+                             rename the shared field"
+                        ),
+                    )
+                    .to_compile_error();
+                }
+
+                // Encode the step via `EmbeddedEnum::shared_step_base`, past
+                // every reachable per-variant record position, so it can
+                // never collide with a variant-gated read's record position.
+                // Decoded by `EmbeddedEnum::shared_read_at_step`.
+                let offset = util::int(
+                    toasty_core::schema::app::EmbeddedEnum::shared_step_base(
+                        self.model.fields.len(),
+                    ) + global_idx,
+                );
+                let span = ident.span();
+                let method_ident = &name.ident;
+                quote_spanned! { span=>
+                    #vis fn #method_ident(&self) -> #toasty::Path<__Origin, Option<<#ty as #toasty::Field>::Inner>> {
+                        self.path.clone().chain(
+                            <#model_ident as #toasty::Embed>::path_field::<Option<<#ty as #toasty::Field>::Inner>>(#offset)
+                        )
+                    }
+                }
+            })
+            .collect()
+    }
+
     /// Generates the `EnumVariant` schema structs (without fields — fields are
     /// stored at the `EmbeddedEnum` level).
     pub(super) fn expand_enum_variants(&self) -> Vec<TokenStream> {
@@ -608,7 +730,9 @@ impl Expand<'_> {
             let Some(lit) = field.attrs.column.as_ref().and_then(|c| c.name.as_ref()) else {
                 continue;
             };
-            overrides.entry(ident.to_string()).or_insert(lit);
+            overrides
+                .entry(Name::from_ident(ident).as_str().to_string())
+                .or_insert(lit);
         }
         overrides
     }
@@ -712,8 +836,9 @@ impl Expand<'_> {
     ) -> TokenStream {
         let own_override = field.attrs.column.as_ref().and_then(|c| c.name.as_ref());
         let group_override = || {
-            let ident = field.attrs.shared.as_ref()?.to_string();
-            shared_overrides.get(&ident).copied()
+            let ident = field.attrs.shared.as_ref()?;
+            let key = Name::from_ident(ident).as_str().to_string();
+            shared_overrides.get(&key).copied()
         };
 
         match own_override.or_else(group_override) {
@@ -795,27 +920,16 @@ impl Expand<'_> {
     pub(super) fn expand_shared_column_checks(&self) -> TokenStream {
         let toasty = &self.toasty;
 
-        // Group variant fields by their `#[shared]` identifier, preserving
-        // declaration order within each group.
-        let mut groups: Vec<(String, Vec<&crate::model::schema::Field>)> = Vec::new();
-        for field in &self.model.fields {
-            let Some(ident) = &field.attrs.shared else {
-                continue;
-            };
-            let name = ident.to_string();
-
-            match groups.iter_mut().find(|(existing, _)| *existing == name) {
-                Some((_, fields)) => fields.push(field),
-                None => groups.push((name, vec![field])),
-            }
-        }
-
         let mut checks = Vec::new();
-        for (name, fields) in &groups {
+        for group in &self.group_shared_fields() {
+            let name = &group.key;
+            let fields: Vec<&crate::model::schema::Field> =
+                group.fields.iter().map(|(_, _, f)| *f).collect();
+
             // Reject a second field in the same variant declaring this ident.
             let mut seen_variants = Vec::new();
             let mut same_variant = false;
-            for field in fields {
+            for field in &fields {
                 let variant = field
                     .variant
                     .expect("enum variant field must have a variant");
@@ -846,7 +960,7 @@ impl Expand<'_> {
             // A `#[column("...")]` override on any member applies to the whole
             // group; disagreeing overrides are a contradiction.
             let mut column_override: Option<&syn::LitStr> = None;
-            for field in fields {
+            for field in &fields {
                 let Some(lit) = field.attrs.column.as_ref().and_then(|c| c.name.as_ref()) else {
                     continue;
                 };

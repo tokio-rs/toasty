@@ -204,17 +204,36 @@ impl Schema {
                             current_field = s.fields.get(*step)?;
                         }
                         Model::EmbeddedEnum(e) => {
+                            // Gateless shared read; see `shared_read_at_step`.
+                            // Its step is offset past every record position.
+                            if steps.as_slice().is_empty()
+                                && let Some((_, field)) = e.shared_read_at_step(*step)
+                            {
+                                current_field = field;
+                                continue;
+                            }
+
                             let variant_index = *step;
-                            let variant = e.variants.get(variant_index)?;
+                            let variant = e.variants.get(variant_index);
 
                             // Check if there's a field index step after the variant
                             if let Some(field_step) = steps.next() {
-                                // Local index within the variant, not into
+                                // Two steps: variant disc + field index → field.
+                                // The disc must name a real variant, and the
+                                // field step is local to that variant, not into
                                 // `EmbeddedEnum::fields`.
+                                variant?;
                                 current_field = e.variant_fields(variant_index).get(*field_step)?;
-                            } else {
-                                // Single step: variant discriminant only → variant
+                            } else if let Some(variant) = variant {
+                                // Single step naming a variant: variant
+                                // discriminant access
                                 return Some(Resolved::Variant(variant));
+                            } else {
+                                // Single step naming a record position (a
+                                // variant-gated read's trailing step). Valid
+                                // when some variant stores a field there.
+                                let field_index = e.field_at_record_position(*step)?;
+                                current_field = e.fields.get(field_index)?;
                             }
                         }
                         _ => return None,
