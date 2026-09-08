@@ -5,6 +5,8 @@ use super::tx::ConnRef;
 
 use async_trait::async_trait;
 use std::sync::Arc;
+#[cfg(feature = "migration")]
+use toasty_core::schema::db::{AppliedMigration, Migration};
 use toasty_core::{
     Schema,
     driver::{
@@ -121,6 +123,40 @@ impl Connection {
         self.handle()
             .in_tx
             .send(ConnectionOperation::PushSchema {
+                span: tracing::Span::current(),
+                tx,
+            })
+            .unwrap();
+        rx.await.unwrap()
+    }
+
+    #[cfg(feature = "migration")]
+    pub(crate) async fn applied_migrations(&self) -> crate::Result<Vec<AppliedMigration>> {
+        let (tx, rx) = oneshot::channel();
+        self.handle()
+            .in_tx
+            .send(ConnectionOperation::AppliedMigrations {
+                span: tracing::Span::current(),
+                tx,
+            })
+            .unwrap();
+        rx.await.unwrap()
+    }
+
+    #[cfg(feature = "migration")]
+    pub(crate) async fn apply_migration(
+        &self,
+        id: u64,
+        name: &str,
+        migration: Migration,
+    ) -> crate::Result<()> {
+        let (tx, rx) = oneshot::channel();
+        self.handle()
+            .in_tx
+            .send(ConnectionOperation::ApplyMigration {
+                id,
+                name: name.to_owned(),
+                migration: Box::new(migration),
                 span: tracing::Span::current(),
                 tx,
             })

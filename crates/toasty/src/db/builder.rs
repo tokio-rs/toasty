@@ -248,7 +248,7 @@ impl Builder {
     /// # #[cfg(feature = "sqlite")]
     /// let db = toasty::Db::builder()
     ///     .models(toasty::models!(User))
-    ///     .connect("sqlite://memory")
+    ///     .connect("sqlite::memory:")
     ///     .await
     ///     .unwrap();
     /// # });

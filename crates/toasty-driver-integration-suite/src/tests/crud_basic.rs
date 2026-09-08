@@ -5,7 +5,7 @@ use toasty_core::{
     stmt::{Assignment, Expr, Source, Statement, UpdateTarget},
 };
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     const MORE: i32 = 10;
 
@@ -13,7 +13,7 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
     }
 
     let mut db = t.setup_db(models!(Item)).await;
@@ -73,13 +73,13 @@ pub async fn crud_no_fields(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         val: String,
     }
@@ -87,7 +87,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     let mut db = test.setup_db(models!(Item)).await;
 
     let item_table_id = table_id(&db, "items");
-    let is_sql = test.capability().sql;
+    let is_sql = test.capability().sql();
 
     let mut created = Item::create().val("hello world").exec(&mut db).await?;
 
@@ -197,7 +197,7 @@ pub async fn crud_one_string(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn required_field_create_without_setting(test: &mut Test) {
     let mut db = setup(test).await;
 
@@ -205,7 +205,7 @@ pub async fn required_field_create_without_setting(test: &mut Test) {
     assert_err!(User::create().exec(&mut db).await);
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email))]
+#[driver_test(scenario(crate::scenarios::user_unique_email))]
 pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -310,13 +310,13 @@ pub async fn unique_index_required_field_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[unique]
         email: Option<String>,
@@ -392,7 +392,7 @@ pub async fn unique_index_nullable_field_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email_with_name))]
+#[driver_test(scenario(crate::scenarios::user_unique_email_with_name))]
 pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -419,7 +419,7 @@ pub async fn unique_index_no_update(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_unique_email_with_name))]
+#[driver_test(scenario(crate::scenarios::user_unique_email_with_name))]
 pub async fn unique_index_set_same_value(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -453,7 +453,7 @@ pub async fn unique_index_set_same_value(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_name_email))]
+#[driver_test(scenario(crate::scenarios::user_name_email))]
 pub async fn update_multiple_fields(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -491,7 +491,7 @@ pub async fn update_multiple_fields(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn update_and_delete_snippets(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

@@ -21,7 +21,7 @@ pub use crate::{
         ViaPath, ViaTarget, generate_unique_id,
     },
     stmt::CreateMany,
-    stmt::{self, Assign, IntoExpr, IntoInsert, IntoStatement, List, Path},
+    stmt::{self, Assign, Expr, IntoExpr, IntoInsert, IntoStatement, List, Path},
     update_target::UpdateTarget,
 };
 #[cfg(feature = "serde")]
@@ -36,6 +36,12 @@ pub use toasty_core as core;
 /// long `<F as Field>::ExprTarget` projection out of generated setter
 /// signatures (and out of the compiler errors they produce).
 pub type FieldExprTarget<F> = <F as Field>::ExprTarget;
+
+/// Internal constructors used by generated model field accessors.
+pub trait ModelCodegen: Model {
+    /// Construct the field accessor for a singular relation to this model.
+    fn new_one_field<Origin>(path: Path<Origin, Self>) -> Self::OneField<Origin>;
+}
 
 /// Infer the [`Scope`] type from a scope expression and return its fields
 /// path.
@@ -65,59 +71,20 @@ pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
     expr.into()
 }
 
-/// Insert `item` into the relation that produced this list query.
+/// Encode a relation field stored in an embedded type.
 ///
-/// Generated code emits `Query<List<M>>::insert` as a one-line forward to
-/// this helper. The query must be scoped to a single-step relation
-/// traversal; multi-step traversals and unscoped queries return an
-/// `unsupported_feature` error.
-pub async fn relation_insert<M, E>(
-    mut query: stmt::Query<List<M>>,
-    executor: &mut dyn Executor,
-    item: E,
-) -> Result<()>
-where
-    M: Model,
-    E: IntoExpr<M>,
-{
-    match query.take_via_assoc() {
-        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
-            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
-            executor.exec(assoc.insert(item)).await
-        }
-        Some(_) => Err(Error::unsupported_feature(
-            "insert is not supported on multi-step relation traversals",
-        )),
-        None => Err(Error::unsupported_feature(
-            "insert requires a relation-scoped query",
-        )),
-    }
-}
-
-/// Remove `item` from the relation that produced this list query.
-///
-/// Counterpart to [`relation_insert`]; the same scoping rules apply.
-pub async fn relation_remove<M, E>(
-    mut query: stmt::Query<List<M>>,
-    executor: &mut dyn Executor,
-    item: E,
-) -> Result<()>
-where
-    M: Model,
-    E: IntoExpr<M>,
-{
-    match query.take_via_assoc() {
-        Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
-            let assoc = stmt::Association::<List<M>>::from_untyped(untyped);
-            executor.exec(assoc.remove(item)).await
-        }
-        Some(_) => Err(Error::unsupported_feature(
-            "remove is not supported on multi-step relation traversals",
-        )),
-        None => Err(Error::unsupported_feature(
-            "remove requires a relation-scoped query",
-        )),
-    }
+/// The relation itself has no storage — the sibling foreign key field(s) own
+/// the columns — so its record slot encodes as `Null`. Setting the relation
+/// from a model value is not supported; the key fields must be set
+/// explicitly and the relation left unloaded.
+pub fn embedded_relation_expr<T>(value: &Deferred<T>) -> core::stmt::Expr {
+    assert!(
+        value.is_unloaded(),
+        "a relation stored in an embedded type cannot be set from a model \
+         value; set the foreign key field(s) explicitly and leave the \
+         relation unloaded (`Deferred::default()`)"
+    );
+    core::stmt::Expr::null()
 }
 
 /// Continue a `has_many` traversal from `query` along `path`.

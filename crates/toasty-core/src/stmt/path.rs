@@ -55,7 +55,7 @@ impl PathRoot {
 ///
 /// // Path pointing to the root of model 0
 /// let p = Path::model(ModelId::from_index(0));
-/// assert!(p.is_empty()); // no field steps
+/// assert!(p.projection.is_empty()); // no field steps
 /// ```
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
@@ -104,16 +104,6 @@ impl Path {
             },
             projection: Projection::identity(),
         }
-    }
-
-    /// Returns `true` if the path has no field steps (identity projection).
-    pub fn is_empty(&self) -> bool {
-        self.projection.is_empty()
-    }
-
-    /// Returns the number of field steps in the path.
-    pub fn len(&self) -> usize {
-        self.projection.len()
     }
 
     /// Appends all field steps from `other` onto this path's projection.

@@ -1,67 +1,46 @@
-mod action;
-pub(crate) use action::Action;
+mod branch;
+pub(crate) use branch::If;
 
 mod delete_by_key;
-pub(crate) use delete_by_key::DeleteByKey;
 
 mod eval;
-pub(crate) use eval::Eval;
 
 mod exec_statement;
-pub(crate) use exec_statement::{
-    ConditionalOutput, ExecStatement, ExecStatementOutput, PaginationConfig,
-};
+pub(crate) use exec_statement::{ConditionalOutput, PaginationConfig};
 
 mod filter;
-pub(crate) use filter::Filter;
 
 mod find_pk_by_index;
-pub(crate) use find_pk_by_index::FindPkByIndex;
 
 mod get_by_key;
-pub(crate) use get_by_key::GetByKey;
-
-mod guard;
-pub(crate) use guard::Guard;
 
 mod kv;
 
 mod nested_merge;
-pub(crate) use nested_merge::{
-    MergeIndex, MergeQualification, NestedChild, NestedLevel, NestedMerge,
-};
-
-mod output;
-pub(crate) use output::Output;
+pub(crate) use nested_merge::{MergeIndex, MergeQualification, NestedChild, NestedLevel};
 
 mod plan;
-pub(crate) use plan::ExecPlan;
-
-mod project;
-pub(crate) use project::Project;
+pub(crate) use plan::{ExecPlan, Step};
 
 mod query_pk;
-pub(crate) use query_pk::QueryPk;
+
+mod repeat;
 
 mod rmw;
-pub(crate) use rmw::ReadModifyWrite;
 
 mod scan;
-pub(crate) use scan::Scan;
-
-mod set_var;
-pub(crate) use set_var::SetVar;
 
 mod update_by_key;
-pub(crate) use update_by_key::UpdateByKey;
 
 mod upsert;
-pub(crate) use upsert::Upsert;
 
 mod var;
-pub(crate) use var::{VarDecls, VarId, VarStore};
+pub(crate) use var::VarStore;
 
-use crate::{Result, engine::Engine};
+use crate::{
+    Result,
+    engine::{Engine, mir},
+};
 use toasty_core::{
     Connection,
     driver::{ExecResponse, Rows, operation::Transaction},
@@ -85,10 +64,18 @@ impl Engine {
         plan: ExecPlan,
         in_transaction: bool,
     ) -> Result<ExecResponse> {
+        let ExecPlan {
+            plan: logical_plan,
+            vars,
+            steps,
+            returning,
+            needs_transaction,
+        } = plan;
+
         let mut exec = Exec {
             engine: self,
             connection,
-            vars: plan.vars,
+            vars,
             in_transaction,
         };
 
@@ -111,20 +98,20 @@ impl Engine {
             )
         };
 
-        if plan.needs_transaction {
+        if needs_transaction {
             tracing::trace!("beginning plan transaction");
             exec.connection.exec(&self.schema, begin.into()).await?;
             exec.in_transaction = true;
         }
 
-        for (i, step) in plan.actions.iter().enumerate() {
-            tracing::trace!(step = i, action = %step.name(), "executing action");
+        for (i, step) in steps.iter().enumerate() {
+            tracing::trace!(step = i, action = %step.name(&logical_plan), "executing action");
             // Debug, not error: the failure propagates to the caller, who
             // decides whether it is an application error. A handled unique
             // violation should not error-spam production logs.
-            if let Err(e) = exec.exec_step(step).await {
-                tracing::debug!(step = i, action = %step.name(), error = %e, "action failed");
-                if plan.needs_transaction {
+            if let Err(e) = exec.exec_step(&logical_plan, step).await {
+                tracing::debug!(step = i, action = %step.name(&logical_plan), error = %e, "action failed");
+                if needs_transaction {
                     tracing::trace!("rolling back plan transaction due to error");
                     // Best effort: ignore rollback errors so the original error is returned
                     let _ = exec.connection.exec(&self.schema, rollback.into()).await;
@@ -133,62 +120,87 @@ impl Engine {
             }
         }
 
-        if plan.needs_transaction {
+        if needs_transaction {
             tracing::trace!("committing plan transaction");
             exec.connection.exec(&self.schema, commit.into()).await?;
         }
 
-        let result = if let Some(returning) = plan.returning {
-            let response = exec.vars.load(returning).await?;
-            tracing::trace!("final result from var {:?}:\n{:#?}", returning, response);
+        let response = exec.vars.load(returning).await?;
+        tracing::trace!("final result from var {:?}:\n{:#?}", returning, response);
 
-            let value_stream = match response.values {
-                Rows::Count(_) => ValueStream::default(),
-                Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
-                // TODO have the public API be able to handle single rows
-                Rows::Value(value) => ValueStream::from_vec(vec![value]),
-                Rows::Stream(value_stream) => value_stream,
-            };
+        // With exact use counts, the returning load was the last use of
+        // the last live slot (success path only — the loop above returned
+        // early on failure).
+        exec.vars.assert_empty();
 
-            ExecResponse {
-                values: Rows::Stream(value_stream),
-                next_cursor: response.next_cursor,
-                prev_cursor: response.prev_cursor,
-            }
-        } else {
-            ExecResponse::from_rows(Rows::Stream(ValueStream::default()))
+        let value_stream = match response.values {
+            Rows::Count(_) => ValueStream::default(),
+            Rows::Value(stmt::Value::List(items)) => ValueStream::from_vec(items),
+            // TODO have the public API be able to handle single rows
+            Rows::Value(value) => ValueStream::from_vec(vec![value]),
+            Rows::Stream(value_stream) => value_stream,
         };
 
-        Ok(result)
+        Ok(ExecResponse {
+            values: Rows::Stream(value_stream),
+            next_cursor: response.next_cursor,
+            prev_cursor: response.prev_cursor,
+        })
     }
 }
 
 impl Exec<'_> {
-    async fn exec_step(&mut self, action: &Action) -> Result<()> {
-        match action {
-            Action::DeleteByKey(action) => self.action_delete_by_key(action).await,
-            Action::Eval(action) => self.action_eval(action).await,
-            Action::ExecStatement(action) => self.action_exec_statement(action).await,
-            Action::Filter(action) => self.action_filter(action).await,
-            Action::FindPkByIndex(action) => self.action_find_pk_by_index(action).await,
-            Action::GetByKey(action) => self.action_get_by_key(action).await,
-            Action::Guard(action) => self.action_guard(action).await,
-            Action::NestedMerge(action) => self.action_nested_merge(action).await,
-            Action::QueryPk(action) => self.action_query_pk(action).await,
-            Action::ReadModifyWrite(action) => self.action_read_modify_write(action).await,
-            Action::Scan(action) => self.action_scan(action).await,
-            Action::Project(action) => self.action_project(action).await,
-            Action::SetVar(action) => self.action_set_var(action),
-            Action::UpdateByKey(action) => self.action_update_by_key(action).await,
-            Action::Upsert(action) => self.action_upsert(action).await,
+    async fn exec_step(&mut self, logical_plan: &mir::LogicalPlan, step: &Step) -> Result<()> {
+        match step {
+            Step::Run(node_id) => self.exec_node(logical_plan, *node_id).await,
+            Step::If(action) => self.action_if(logical_plan, action).await,
         }
     }
 
-    async fn collect_input(&mut self, input: &[VarId]) -> Result<Vec<stmt::Value>> {
+    /// Executes one node's operation and stores its output in the node's
+    /// variable slot.
+    async fn exec_node(
+        &mut self,
+        logical_plan: &mir::LogicalPlan,
+        node_id: mir::NodeId,
+    ) -> Result<()> {
+        use mir::Operation;
+
+        let node = &logical_plan[node_id];
+
+        let response = match &node.op {
+            // A pass-through: the response (stream included) relocates
+            // between slots without buffering.
+            Operation::Alias(op) => self.vars.load(op.input).await?,
+            Operation::Const(op) => ExecResponse::from_rows(Rows::Value(op.value.clone())),
+            Operation::DeleteByKey(op) => self.exec_delete_by_key(op).await?,
+            Operation::Eval(op) => self.exec_eval(op).await?,
+            Operation::ExecStatement(op) => self.exec_statement(op).await?,
+            Operation::Filter(op) => self.exec_filter(op).await?,
+            Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(op).await?,
+            Operation::GetByKey(op) => self.exec_get_by_key(op).await?,
+            Operation::NestedMerge(op) => self.exec_nested_merge(op).await?,
+            Operation::ReadModifyWrite(op) => self.exec_read_modify_write(op).await?,
+            Operation::Repeat(op) => self.exec_repeat(op).await?,
+            Operation::QueryPk(op) => self.exec_query_pk(op).await?,
+            Operation::Scan(op) => self.exec_scan(op).await?,
+            Operation::UpdateByKey(op) => self.exec_update_by_key(op).await?,
+            Operation::Upsert(op) => self.exec_upsert(op).await?,
+        };
+
+        self.vars.store(node_id, node.ty(), node.num_uses, response);
+
+        Ok(())
+    }
+
+    async fn collect_input(
+        &mut self,
+        input: impl IntoIterator<Item = mir::NodeId>,
+    ) -> Result<Vec<stmt::Value>> {
         let mut ret = Vec::new();
 
-        for var_id in input {
-            let response = self.vars.load(*var_id).await?;
+        for node_id in input {
+            let response = self.vars.load(node_id).await?;
             let value = response.values.collect_as_value().await?;
             ret.push(value);
         }

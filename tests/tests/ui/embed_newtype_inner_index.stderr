@@ -1,0 +1,11 @@
+error: #[index] cannot be placed on a newtype's inner field; place it on the named field that uses the newtype
+ --> tests/ui/embed_newtype_inner_index.rs:5:16
+  |
+5 | struct Indexed(#[index] String);
+  |                ^^^^^^^^
+
+error: #[unique] cannot be placed on a newtype's inner field; place it on the named field that uses the newtype
+ --> tests/ui/embed_newtype_inner_index.rs:8:15
+  |
+8 | struct Unique(#[unique] String);
+  |               ^^^^^^^^^

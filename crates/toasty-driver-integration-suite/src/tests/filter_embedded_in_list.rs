@@ -1,6 +1,6 @@
 //! `IN`-list lowering where the list's left side projects into an embedded
 //! field. The simplifier folds `x == a OR x == b` into `x IN (a, b)`, so an OR
-//! over `name._0` lowers to `name._0 IN (...)` — an `IN` list whose LHS is a
+//! over `name.inner` lowers to `name.inner IN (...)` — an `IN` list whose LHS is a
 //! projection, not a plain column reference.
 
 use crate::prelude::*;
@@ -9,7 +9,7 @@ use crate::prelude::*;
 struct Name(String);
 
 /// An embedded newtype field referenced twice under an OR — folds to
-/// `name._0 IN (...)`, exercising the `Expr::Project` LHS in `lower_expr_in_list`.
+/// `name.inner IN (...)`, exercising the `Expr::Project` LHS in `lower_expr_in_list`.
 #[driver_test(requires(sql))]
 pub async fn or_over_embedded_field_folds_to_in_list(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -34,9 +34,9 @@ pub async fn or_over_embedded_field_folds_to_in_list(t: &mut Test) -> Result<()>
     let topics: Vec<Topic> = Topic::filter(
         Topic::fields()
             .name()
-            ._0()
+            .inner()
             .eq("one")
-            .or(Topic::fields().name()._0().eq("two")),
+            .or(Topic::fields().name().inner().eq("two")),
     )
     .exec(&mut db)
     .await?;
@@ -47,7 +47,7 @@ pub async fn or_over_embedded_field_folds_to_in_list(t: &mut Test) -> Result<()>
 }
 
 /// The same fold reached through a `.any()` over a `BelongsTo → HasMany` chain:
-/// the `name._0 IN (...)` lands inside the lifted subquery.
+/// the `name.inner IN (...)` lands inside the lifted subquery.
 #[driver_test(requires(sql))]
 pub async fn any_with_or_over_embedded_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
@@ -114,9 +114,9 @@ pub async fn any_with_or_over_embedded_field(t: &mut Test) -> Result<()> {
         Release::fields().project().topics().any(
             Topic::fields()
                 .name()
-                ._0()
+                .inner()
                 .eq("one")
-                .or(Topic::fields().name()._0().eq("two")),
+                .or(Topic::fields().name().inner().eq("two")),
         ),
     )
     .exec(&mut db)

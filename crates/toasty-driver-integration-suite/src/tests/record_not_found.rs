@@ -1,6 +1,6 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn not_found(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

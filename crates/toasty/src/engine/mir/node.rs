@@ -1,17 +1,13 @@
-use std::cell::Cell;
-
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::exec;
-
-use super::{LogicalPlan, NodeId, Operation};
+use super::{NodeId, Operation};
 
 /// A single node in the MIR operation graph.
 ///
-/// Each [`Node`] represents one operation to execute. It contains the operation
-/// itself, its dependencies on other nodes, and metadata used during execution
-/// planning (variable assignment, reference counting, traversal state).
+/// Each [`Node`] represents one operation to execute. It contains the
+/// operation itself, its dependencies on other nodes, and its execution
+/// guard.
 #[derive(Debug)]
 pub(crate) struct Node {
     /// The operation this node performs.
@@ -23,62 +19,42 @@ pub(crate) struct Node {
     /// ordering dependencies (e.g., an `UPDATE` depending on a prior `INSERT`).
     pub(crate) deps: IndexSet<NodeId>,
 
-    /// Variable slot where this node's output is stored during execution.
+    /// When set, this node only executes if the referenced node produced at
+    /// least one row, evaluated with a non-consuming peek. Assigned by the
+    /// guard-annotation pass in [`LogicalPlan::new`], which proves the
+    /// guarded node's output unobservable when the condition fails; only
+    /// pure (non-effectful) nodes may carry a guard.
     ///
-    /// Set during execution planning when converting MIR to actions.
-    pub(crate) var: Cell<Option<exec::VarId>>,
+    /// [`LogicalPlan::new`]: super::LogicalPlan::new
+    pub(crate) guard: Option<NodeId>,
 
-    /// Number of downstream nodes that consume this node's output.
+    /// Number of variable loads this node's output receives during execution,
+    /// plus one exit use when this is the completion node.
     ///
-    /// Used for reference counting; the output is freed after the last use.
-    pub(crate) num_uses: Cell<usize>,
-
-    /// Whether this node has been visited during topological sort.
-    pub(crate) visited: Cell<bool>,
+    /// [`LogicalPlan::new`](super::LogicalPlan::new) sets this after planning
+    /// finishes. The executor uses it for reference counting and frees the
+    /// output after the last use.
+    pub(crate) num_uses: usize,
 }
 
 impl Node {
     pub(crate) fn ty(&self) -> &stmt::Type {
         match &self.op {
+            Operation::Alias(m) => &m.ty,
             Operation::Const(m) => &m.ty,
             Operation::DeleteByKey(m) => &m.ty,
-            Operation::Eval(m) => &m.eval.ret,
+            Operation::Eval(m) => &m.body.ret,
             Operation::ExecStatement(m) => &m.ty,
             Operation::Filter(m) => &m.ty,
             Operation::FindPkByIndex(m) => &m.ty,
             Operation::GetByKey(m) => &m.ty,
-            Operation::Guard(m) => &m.ty,
             Operation::QueryPk(m) => &m.ty,
+            Operation::Repeat(m) => &m.ty,
             Operation::Scan(m) => &m.ty,
-            Operation::Project(m) => &m.ty,
             Operation::UpdateByKey(m) => &m.ty,
             Operation::Upsert(m) => &m.ty,
-            Operation::NestedMerge(_m) => todo!(),
+            Operation::NestedMerge(m) => &m.ty,
             Operation::ReadModifyWrite(m) => &m.ty,
-        }
-    }
-
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Action {
-        match &self.op {
-            Operation::Const(op) => op.to_exec(self, var_table).into(),
-            Operation::DeleteByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Eval(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::ExecStatement(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Filter(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::FindPkByIndex(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::GetByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Guard(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::NestedMerge(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Project(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::ReadModifyWrite(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::QueryPk(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Scan(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::UpdateByKey(op) => op.to_exec(logical_plan, self, var_table).into(),
-            Operation::Upsert(op) => op.to_exec(logical_plan, self, var_table).into(),
         }
     }
 }

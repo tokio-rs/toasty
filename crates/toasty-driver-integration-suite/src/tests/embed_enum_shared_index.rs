@@ -518,7 +518,7 @@ pub async fn shared_field_column_override(test: &mut Test) -> Result<()> {
 
     assert_struct!(
         Character::get_by_id(&mut db, &"1".to_string()).await?,
-        _ { creature: Creature::Human { name: "Bob", .. }, .. }
+        { creature: Creature::Human { name: "Bob", .. } }
     );
 
     Ok(())

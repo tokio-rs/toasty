@@ -1,14 +1,11 @@
 use indexmap::IndexSet;
 use toasty_core::{
     driver::operation::Pagination,
-    schema::db::{ColumnId, IndexId, TableId},
+    schema::db::{IndexId, TableId},
     stmt,
 };
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::mir;
 
 /// Queries records using a primary key filter.
 ///
@@ -42,53 +39,6 @@ pub(crate) struct QueryPk {
 
     /// Sort key ordering direction.
     pub(crate) order: Option<stmt::Direction>,
-}
-
-impl QueryPk {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::QueryPk {
-        let input = self
-            .input
-            .map(|node_id| logical_plan[node_id].var.get().unwrap());
-        let output = var_table.register_var(node.ty().clone());
-        node.var.set(Some(output));
-
-        let columns = self
-            .columns
-            .iter()
-            .map(|expr_reference| {
-                let stmt::ExprReference::Column(expr_column) = expr_reference else {
-                    todo!()
-                };
-                debug_assert_eq!(expr_column.nesting, 0);
-                debug_assert_eq!(expr_column.table, 0);
-
-                ColumnId {
-                    table: self.table,
-                    index: expr_column.column,
-                }
-            })
-            .collect();
-
-        exec::QueryPk {
-            input,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            table: self.table,
-            index: self.index,
-            columns,
-            pk_filter: self.pk_filter.clone(),
-            row_filter: self.row_filter.clone(),
-            limit: self.limit.clone(),
-            order: self.order,
-        }
-    }
 }
 
 impl From<QueryPk> for mir::Node {

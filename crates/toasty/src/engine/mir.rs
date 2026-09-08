@@ -1,14 +1,17 @@
+mod alias;
+pub(crate) use alias::Alias;
+
 mod r#const;
 pub(crate) use r#const::Const;
 
 mod delete_by_key;
 pub(crate) use delete_by_key::DeleteByKey;
 
-mod exec_statement;
-pub(crate) use exec_statement::ExecStatement;
-
 mod eval;
 pub(crate) use eval::Eval;
+
+mod exec_statement;
+pub(crate) use exec_statement::ExecStatement;
 
 mod filter;
 pub(crate) use filter::Filter;
@@ -19,8 +22,11 @@ pub(crate) use find_pk_by_index::FindPkByIndex;
 mod get_by_key;
 pub(crate) use get_by_key::GetByKey;
 
-mod guard;
-pub(crate) use guard::Guard;
+mod guards;
+use guards::annotate_guards;
+
+mod input;
+pub(crate) use input::InputRead;
 
 mod logical_plan;
 pub(crate) use logical_plan::LogicalPlan;
@@ -34,14 +40,14 @@ pub(crate) use node::Node;
 mod operation;
 pub(crate) use operation::Operation;
 
-mod project;
-pub(crate) use project::Project;
-
 mod query_pk;
 pub(crate) use query_pk::QueryPk;
 
 mod read_modify_write;
 pub(crate) use read_modify_write::ReadModifyWrite;
+
+mod repeat;
+pub(crate) use repeat::Repeat;
 
 mod scan;
 pub(crate) use scan::Scan;
@@ -55,7 +61,30 @@ pub(crate) use update_by_key::UpdateByKey;
 mod upsert;
 pub(crate) use upsert::Upsert;
 
-use toasty_core::stmt;
+use indexmap::IndexSet;
+use toasty_core::{
+    schema::db::{ColumnId, TableId},
+    stmt,
+};
+
+/// Resolves the columns a driver operation selects to [`ColumnId`]s.
+pub(crate) fn column_ids(
+    table: TableId,
+    columns: &IndexSet<stmt::ExprReference>,
+) -> impl Iterator<Item = ColumnId> + '_ {
+    columns.iter().map(move |expr_reference| {
+        let stmt::ExprReference::Column(expr_column) = expr_reference else {
+            todo!()
+        };
+        debug_assert_eq!(expr_column.nesting, 0);
+        debug_assert_eq!(expr_column.table, 0);
+
+        ColumnId {
+            table,
+            index: expr_column.column,
+        }
+    })
+}
 
 /// Extracts the per-row column types from a node's return type. A node
 /// returning rows has type `List<Record<...>>` — the record field types tell

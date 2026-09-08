@@ -73,7 +73,7 @@ pub async fn composite_index_struct_level(t: &mut Test) -> Result<()> {
 
     // Verify that an indexed operation was issued (not a full scan)
     let op = t.log().pop_op();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -120,7 +120,7 @@ pub async fn composite_index_prefix_queries(t: &mut Test) -> Result<()> {
     assert_eq!(scores.len(), 3);
 
     let op = t.log().pop_op();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -136,7 +136,7 @@ pub async fn composite_index_prefix_queries(t: &mut Test) -> Result<()> {
     assert_eq!(scores[0].user_id, "u1");
 
     let op = t.log().pop_op();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -447,7 +447,7 @@ pub async fn composite_index_multiple_indexes(t: &mut Test) -> Result<()> {
     assert_eq!(products[1].name, "Widget B");
 
     let op = t.log().pop_op();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));
@@ -464,7 +464,7 @@ pub async fn composite_index_multiple_indexes(t: &mut Test) -> Result<()> {
     assert_eq!(products[1].name, "Shirt C");
 
     let op = t.log().pop_op();
-    if t.capability().sql {
+    if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql(_));
     } else {
         assert_struct!(op, Operation::QueryPk(_));

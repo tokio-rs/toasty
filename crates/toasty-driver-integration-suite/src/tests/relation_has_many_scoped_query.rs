@@ -3,13 +3,13 @@
 use crate::prelude::*;
 use hashbrown::HashSet;
 
-#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
+#[driver_test(matrix(single, composite))]
 pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
         todos: toasty::Deferred<Vec<Todo>>,
@@ -20,10 +20,10 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     struct Todo {
         #[auto]
         #[driver_test_cfg(single, key)]
-        id: ID,
+        id: uuid::Uuid,
 
         #[driver_test_cfg(single, index)]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,
@@ -129,13 +129,13 @@ pub async fn scoped_query_eq(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), matrix(single, composite), requires(or(single, not(id_u64))))]
+#[driver_test(matrix(single, composite))]
 pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many]
         todos: toasty::Deferred<Vec<Todo>>,
@@ -146,10 +146,10 @@ pub async fn scoped_query_gt(test: &mut Test) -> Result<()> {
     struct Todo {
         #[auto]
         #[driver_test_cfg(single, key)]
-        id: ID,
+        id: uuid::Uuid,
 
         #[driver_test_cfg(single, index)]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,

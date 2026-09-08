@@ -3,13 +3,13 @@
 use crate::prelude::*;
 
 /// Filter a parent by a HasOne field, with eq and a non-commutative op.
-#[driver_test(id(ID), requires(sql))]
+#[driver_test(requires(sql))]
 pub async fn filter_by_has_one_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
@@ -21,12 +21,12 @@ pub async fn filter_by_has_one_field(t: &mut Test) -> Result<()> {
     struct Profile {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         score: i64,
 
         #[unique]
-        user_id: Option<ID>,
+        user_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<Option<User>>,
@@ -62,9 +62,8 @@ pub async fn filter_by_has_one_field(t: &mut Test) -> Result<()> {
 
 /// Filter a child by a BelongsTo field.
 #[driver_test(
-    id(ID),
     requires(sql),
-    scenario(crate::scenarios::has_one_optional_belongs_to)
+    scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid)
 )]
 pub async fn filter_by_belongs_to_field(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -96,9 +95,8 @@ pub async fn filter_by_belongs_to_field(test: &mut Test) -> Result<()> {
 /// Covers both relation directions: `BelongsTo` (child filtered by parent)
 /// and `Has` (parent filtered by child).
 #[driver_test(
-    id(ID),
     requires(sql),
-    scenario(crate::scenarios::has_one_optional_belongs_to)
+    scenario(crate::scenarios::has_one_optional_belongs_to::id_uuid)
 )]
 pub async fn filter_by_relation_field_like(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -206,11 +204,7 @@ pub async fn filter_by_nested_has_one_chain(t: &mut Test) -> Result<()> {
 /// `relation_has_many_filter::filter_parent_by_child_field`); previously the
 /// `BelongsTo`-then-`HasMany` chain hit a `todo!()` in
 /// `LiftInSubquery::lift_in_subquery`.
-#[driver_test(
-    id(ID),
-    requires(sql),
-    scenario(crate::scenarios::has_many_multi_relation)
-)]
+#[driver_test(requires(sql), scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn filter_by_belongs_to_has_many_any(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

@@ -3,7 +3,7 @@
 use crate::prelude::*;
 
 /// Clone a filtered query and apply different modifiers to each copy.
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn clone_query_with_different_modifiers(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -23,7 +23,7 @@ pub async fn clone_query_with_different_modifiers(t: &mut Test) -> Result<()> {
 }
 
 /// Clone a create builder, then override a field on the second copy.
-#[driver_test(id(ID), scenario(crate::scenarios::two_models))]
+#[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn clone_create_builder(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -38,7 +38,7 @@ pub async fn clone_create_builder(t: &mut Test) -> Result<()> {
 }
 
 /// Clone a query-based update builder, then change the value on the second copy.
-#[driver_test(id(ID), scenario(crate::scenarios::two_models), requires(scan))]
+#[driver_test(scenario(crate::scenarios::two_models), requires(scan))]
 pub async fn clone_update_builder(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 

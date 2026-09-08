@@ -41,7 +41,7 @@ impl Engine {
     pub(crate) fn prepare_for_driver(&self, stmt: &mut stmt::Statement) -> Vec<TypedValue> {
         self.legalize_statement(stmt);
 
-        if self.capability().sql {
+        if self.capability().sql() {
             super::bind::run(stmt, &self.schema.db, self.capability())
         } else {
             vec![]

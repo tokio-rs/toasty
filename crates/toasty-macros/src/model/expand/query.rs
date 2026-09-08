@@ -174,28 +174,22 @@ impl Expand<'_> {
                     }
                 }
 
-                /// Add an item to the relation this query was scoped from.
-                ///
-                /// Returns an error at exec time if the query is not scoped to
-                /// a single-step relation traversal.
-                #vis async fn insert(
+                /// Returns a builder that will add an item to the relation this query was scoped
+                /// from only on execution.
+                #vis fn insert(
                     self,
-                    executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
-                ) -> #toasty::Result<()> {
-                    #toasty::relation_insert(self.stmt, executor, item).await
+                ) -> #toasty::stmt::RelationInsert<#model_ident> {
+                    self.stmt.insert(item)
                 }
 
-                /// Remove an item from the relation this query was scoped from.
-                ///
-                /// Returns an error at exec time if the query is not scoped to
-                /// a single-step relation traversal.
-                #vis async fn remove(
+                /// Returns a builder that will remove an item from the relation this query was scoped
+                /// from only on execution.
+                #vis fn remove(
                     self,
-                    executor: &mut dyn #toasty::Executor,
                     item: impl #toasty::IntoExpr<#model_ident>,
-                ) -> #toasty::Result<()> {
-                    #toasty::relation_remove(self.stmt, executor, item).await
+                ) -> #toasty::stmt::RelationRemove<#model_ident> {
+                    self.stmt.remove(item)
                 }
 
                 #relation_methods
@@ -264,7 +258,7 @@ impl Expand<'_> {
                 type Create = #create_builder_ident;
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
-                    #field_list_struct_ident::from_path(path)
+                    <#model_ident as #toasty::Model>::new_many_field(path)
                 }
 
                 fn new_create() -> Self::Create {
@@ -272,7 +266,9 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_list_struct_ident::from_path(<#model_ident as #toasty::Model>::path_model_list())
+                    <#model_ident as #toasty::Model>::new_many_field(
+                        <#model_ident as #toasty::Model>::path_model_list()
+                    )
                 }
 
                 fn create_in_scope(self) -> Self::Create {
@@ -287,7 +283,7 @@ impl Expand<'_> {
                 type Create = #create_builder_ident;
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
-                    #field_struct_ident::from_path(path)
+                    <#model_ident as #toasty::Model>::new_path(path)
                 }
 
                 fn new_create() -> Self::Create {
@@ -295,7 +291,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(<#model_ident as #toasty::Model>::path_root())
+                    <#model_ident as #toasty::Model>::new_root_path()
                 }
 
                 fn create_in_scope(self) -> Self::Create {
@@ -310,7 +306,7 @@ impl Expand<'_> {
                 type Create = #create_builder_ident;
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self::Item>) -> Self::Path<__Origin> {
-                    #field_struct_ident::from_path(path)
+                    <#model_ident as #toasty::Model>::new_path(path)
                 }
 
                 fn new_create() -> Self::Create {
@@ -318,7 +314,7 @@ impl Expand<'_> {
                 }
 
                 fn new_path_root() -> Self::Path<Self::Item> {
-                    #field_struct_ident::from_path(<#model_ident as #toasty::Model>::path_root())
+                    <#model_ident as #toasty::Model>::new_root_path()
                 }
 
                 fn create_in_scope(self) -> Self::Create {

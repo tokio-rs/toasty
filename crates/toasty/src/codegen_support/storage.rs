@@ -44,6 +44,11 @@ pub mod tag {
     pub struct Date;
     pub struct Time;
     pub struct DateTime;
+
+    pub struct Cidr;
+    pub struct Inet;
+    pub struct MacAddr;
+    pub struct MacAddr8;
 }
 
 /// Asserts that a Rust field type can be stored as the given storage tag.
@@ -160,7 +165,7 @@ impl CompatibleWith<tag::F64> for f32 {}
 impl CompatibleWith<tag::Text> for String {}
 impl CompatibleWith<tag::VarChar> for String {}
 
-// `Json<T>` serializes through Toasty's string expression type. It supports
+// JSON fields serialize through Toasty's string expression type. They support
 // text storage and the native JSON types recognized by the SQL drivers.
 #[cfg(feature = "serde")]
 impl<T> CompatibleWith<tag::Text> for crate::Json<T> {}
@@ -170,6 +175,14 @@ impl<T> CompatibleWith<tag::VarChar> for crate::Json<T> {}
 impl<T> CompatibleWith<tag::Json> for crate::Json<T> {}
 #[cfg(feature = "serde")]
 impl<T> CompatibleWith<tag::Jsonb> for crate::Json<T> {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::Text> for serde_json::Value {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::VarChar> for serde_json::Value {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::Json> for serde_json::Value {}
+#[cfg(feature = "serde")]
+impl CompatibleWith<tag::Jsonb> for serde_json::Value {}
 
 impl CompatibleWith<tag::Binary> for Vec<u8> {}
 impl CompatibleWith<tag::Blob> for Vec<u8> {}
@@ -209,4 +222,25 @@ mod jiff_impls {
     impl CompatibleWith<tag::VarChar> for jiff::civil::Time {}
     impl CompatibleWith<tag::Text> for jiff::civil::DateTime {}
     impl CompatibleWith<tag::VarChar> for jiff::civil::DateTime {}
+}
+
+#[cfg(feature = "net")]
+mod net_impls {
+    use super::{CompatibleWith, tag};
+    use crate::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
+
+    impl CompatibleWith<tag::Cidr> for IpCidr {}
+    impl CompatibleWith<tag::Inet> for IpInet {}
+    impl CompatibleWith<tag::MacAddr> for MacAddr6 {}
+    impl CompatibleWith<tag::MacAddr8> for MacAddr8 {}
+
+    // Backends without native network types store their canonical text forms.
+    impl CompatibleWith<tag::Text> for IpCidr {}
+    impl CompatibleWith<tag::VarChar> for IpCidr {}
+    impl CompatibleWith<tag::Text> for IpInet {}
+    impl CompatibleWith<tag::VarChar> for IpInet {}
+    impl CompatibleWith<tag::Text> for MacAddr6 {}
+    impl CompatibleWith<tag::VarChar> for MacAddr6 {}
+    impl CompatibleWith<tag::Text> for MacAddr8 {}
+    impl CompatibleWith<tag::VarChar> for MacAddr8 {}
 }

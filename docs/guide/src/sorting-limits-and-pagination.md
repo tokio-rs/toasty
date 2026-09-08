@@ -343,6 +343,17 @@ let page: Page<_> = Item::all()
 
 The value passed to `.after()` corresponds to the field used in `.order_by()`.
 
+Toasty adds primary-key ordering fields when the requested ordering does not
+uniquely identify each row. Cursors returned by `Page` include those fields, so
+`.next()` and `.prev()` preserve a deterministic order when multiple rows have
+the same requested ordering values.
+
+A cursor supplied directly to `.after()` or `.before()` may omit the internal
+primary-key fields. Toasty accepts the cursor as a prefix of the complete
+ordering. A prefix cursor cannot identify a position within rows that have the
+same prefix values. After the initial query, use the cursor returned by `Page`
+to continue without skipping tied rows.
+
 ## Method summary
 
 Methods available on query builders:

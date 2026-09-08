@@ -21,12 +21,11 @@ mod value;
 pub(crate) use value::Value;
 
 use async_trait::async_trait;
-use percent_encoding::percent_decode_str;
 use std::{borrow::Cow, sync::Arc};
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Driver, ExecResponse, Operation, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, Operation, QueryLogConfig,
         log::QueryLog,
         operation::{RawSqlRet, Transaction, TransactionMode, TypedValue},
     },
@@ -39,7 +38,6 @@ use toasty_core::{
 };
 use toasty_sql::{self as sql};
 use tokio_postgres::{Client, Config, Socket, tls::MakeTlsConnect, types::ToSql};
-use url::Url;
 
 enum SqlReturn {
     Count,
@@ -105,52 +103,55 @@ impl std::fmt::Debug for PostgreSQL {
 }
 
 impl PostgreSQL {
-    /// Create a new PostgreSQL driver from a connection URL
+    /// Create a new PostgreSQL driver from a connection URL.
+    ///
+    /// The URL takes the `postgresql://user:password@host:port/dbname`
+    /// form (`postgres://` also works). Query parameters supplement or
+    /// override the URL components, following libpq: `host`, `port`,
+    /// `user`, `password`, `dbname`, `application_name`, and `options`
+    /// (server startup options such as `-c search_path=my_schema`,
+    /// applied to every connection the pool creates), plus the TLS
+    /// parameters `sslmode`, `sslrootcert`, `sslcert`, `sslkey`,
+    /// `channel_binding`, and `sslnegotiation`. Unrecognized parameters
+    /// are ignored.
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        if !matches!(url.scheme(), "postgresql" | "postgres") {
+        if !(url.has_scheme("postgresql") || url.has_scheme("postgres")) {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `postgresql` scheme; url={}",
-                url
+                url.as_str()
             )));
         }
 
         if url.path().is_empty() {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "no database specified - missing path in connection URL; url={}",
-                url
+                url.as_str()
             )));
         }
 
         let mut config = Config::new();
 
-        let dbname = percent_decode_str(url.path().trim_start_matches('/'))
-            .decode_utf8()
-            .map_err(|_| {
-                toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
-            })?;
-        config.dbname(&*dbname);
+        let dbname = url.decoded_path().map_err(|_| {
+            toasty_core::Error::invalid_connection_url("database name is not valid UTF-8")
+        })?;
+        config.dbname(dbname.trim_start_matches('/'));
 
-        if !url.username().is_empty() {
-            let user = percent_decode_str(url.username())
-                .decode_utf8()
-                .map_err(|_| {
-                    toasty_core::Error::invalid_connection_url("username is not valid UTF-8")
-                })?;
+        if let Some(user) = url.username()?.filter(|user| !user.is_empty()) {
             config.user(&*user);
         }
 
         if let Some(password) = url.password() {
-            config.password(percent_decode_str(password).collect::<Vec<u8>>());
+            config.password(&*password);
         }
 
         // libpq lets standard connection parameters appear in the query
         // string; honor the ones a Toasty user can reasonably set so that
         // `postgresql:///mydb?host=/tmp&user=alice` reaches the server.
-        // Single-valued setters (user, password, dbname, application_name)
-        // replace earlier calls, so we can apply them inline; host and
+        // Single-valued setters (user, password, dbname, application_name,
+        // options) replace earlier calls, so we can apply them inline; host and
         // port are list-valued — staged into Options below so a query
         // parameter cleanly overrides the URL component instead of being
         // appended as a fallback tokio-postgres would try first.
@@ -179,21 +180,22 @@ impl PostgreSQL {
                 "application_name" => {
                     config.application_name(&*value);
                 }
+                "options" => {
+                    config.options(&*value);
+                }
                 _ => {}
             }
         }
 
-        let host = host
-            .or_else(|| url.host_str().filter(|h| !h.is_empty()).map(String::from))
-            .ok_or_else(|| {
-                toasty_core::Error::invalid_connection_url(format!(
-                    "missing host in connection URL; url={}",
-                    url
-                ))
-            })?;
+        let host = host.or(url.host()?.map(String::from)).ok_or_else(|| {
+            toasty_core::Error::invalid_connection_url(format!(
+                "missing host in connection URL; url={}",
+                url.as_str()
+            ))
+        })?;
         config.host(&host);
 
-        if let Some(port) = port.or_else(|| url.port()) {
+        if let Some(port) = port.or(url.port()?) {
             config.port(port);
         }
 
@@ -512,12 +514,8 @@ impl toasty_core::driver::Connection for Connection {
         }
 
         let (sql, typed_params, ret_tys) = match op {
-            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, None),
+            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
             Operation::QuerySql(query) => {
-                assert!(
-                    query.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for PostgreSQL"
-                );
                 (sql::Statement::from(query.stmt), query.params, query.ret)
             }
             Operation::RawSql(op) => {
@@ -751,6 +749,15 @@ mod tests {
     fn application_name_query_param() {
         let c = cfg("postgresql://localhost/mydb?application_name=my_app");
         assert_eq!(c.get_application_name(), Some("my_app"));
+    }
+
+    #[test]
+    fn options_query_param() {
+        // libpq's `options` startup parameter passes through, e.g. to set
+        // a per-connection `search_path`. Form-decoding maps `%20` (and
+        // `+`) to a space and `%3D` to `=`.
+        let c = cfg("postgresql://localhost/mydb?options=-c%20search_path%3Dtenant_a%2Cpublic");
+        assert_eq!(c.get_options(), Some("-c search_path=tenant_a,public"));
     }
 
     #[test]

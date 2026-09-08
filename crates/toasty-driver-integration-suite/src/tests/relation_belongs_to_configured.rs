@@ -1,12 +1,12 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn different_field_name(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_many(pair = owner)]
         todos: toasty::Deferred<Vec<Todo>>,
@@ -16,13 +16,13 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
     struct Todo {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[belongs_to(key = owner_id, references = id)]
         owner: toasty::Deferred<User>,
 
         #[index]
-        owner_id: ID,
+        owner_id: uuid::Uuid,
 
         title: String,
     }
@@ -53,13 +53,13 @@ pub async fn different_field_name(test: &mut Test) -> Result<()> {
 // `#[has_one(pair = <field>)]` was accepted but ignored, so the generated
 // back-reference check still looked for a `BelongsTo` field named after the
 // parent model instead of the configured pair.
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn has_one_different_field_name(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Parent {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[has_one(pair = owner)]
         other: toasty::Deferred<Child>,
@@ -69,13 +69,13 @@ pub async fn has_one_different_field_name(test: &mut Test) -> Result<()> {
     struct Child {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[belongs_to(key = owner_id, references = id)]
         owner: toasty::Deferred<Parent>,
 
         #[unique]
-        owner_id: ID,
+        owner_id: uuid::Uuid,
     }
 
     let mut db = test.setup_db(models!(Parent, Child)).await;

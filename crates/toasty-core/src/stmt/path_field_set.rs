@@ -17,7 +17,7 @@ use std::ops::{BitAnd, BitOr, BitOrAssign};
 /// set.insert(2);
 /// assert!(set.contains(0_usize));
 /// assert!(!set.contains(1_usize));
-/// assert_eq!(set.len(), 2);
+/// assert_eq!(set.iter().len(), 2);
 /// ```
 #[derive(Debug, Clone, Default, PartialEq, Eq, Hash)]
 #[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
@@ -59,16 +59,6 @@ impl PathFieldSet {
         Self::default()
     }
 
-    /// Creates a field set from a slice of values convertible to `usize`.
-    pub fn from_slice<T>(fields: &[T]) -> Self
-    where
-        for<'a> &'a T: Into<usize>,
-    {
-        Self {
-            container: fields.iter().map(Into::into).collect(),
-        }
-    }
-
     /// Returns `true` if the set contains the given field index.
     pub fn contains(&self, val: impl Into<usize>) -> bool {
         self.container.contains(val.into())
@@ -85,11 +75,6 @@ impl PathFieldSet {
     /// Returns `true` if the set contains no field indices.
     pub fn is_empty(&self) -> bool {
         self.container.is_empty()
-    }
-
-    /// Returns the number of field indices in the set.
-    pub fn len(&self) -> usize {
-        self.container.count()
     }
 
     /// Inserts a field index into the set.

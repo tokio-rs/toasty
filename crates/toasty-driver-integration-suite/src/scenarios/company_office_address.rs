@@ -1,13 +1,11 @@
 use crate::prelude::*;
 
 scenario! {
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct Company {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 

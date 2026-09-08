@@ -88,6 +88,21 @@ impl InstrumentedHandle {
         self.pop().0
     }
 
+    /// Remove and return the last operation from the log
+    #[track_caller]
+    pub fn pop_last(&self) -> (Operation, ExecResponse) {
+        let mut ops = self.inner.ops_log.lock().unwrap();
+        let Some(driver_op) = ops.pop() else {
+            panic!("no operations in log");
+        };
+        (driver_op.operation, driver_op.response)
+    }
+
+    #[track_caller]
+    pub fn pop_last_op(&self) -> Operation {
+        self.pop_last().0
+    }
+
     /// Queue a fault to fire on the next driver `exec` call. Faults fire
     /// in FIFO order across all connections produced by the driver.
     pub fn inject_fault(&self, fault: Fault) {

@@ -1,0 +1,5 @@
+error: #[shared] cannot be used on a relation field; declare it on the foreign key field instead
+  --> tests/ui/embed_relation_shared.rs:16:18
+   |
+16 |         #[shared(rel)]
+   |                  ^^^

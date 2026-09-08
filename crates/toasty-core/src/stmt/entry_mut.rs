@@ -13,7 +13,7 @@ use super::{Expr, Value};
 ///
 /// let mut expr = Expr::from(Value::from(42_i64));
 /// let mut entry = EntryMut::from(&mut expr);
-/// assert!(entry.is_expr());
+/// assert!(matches!(entry, EntryMut::Expr(_)));
 /// ```
 #[derive(Debug)]
 pub enum EntryMut<'a> {
@@ -24,56 +24,6 @@ pub enum EntryMut<'a> {
 }
 
 impl EntryMut<'_> {
-    /// Returns a reference to the contained expression, or `None`.
-    pub fn as_expr(&self) -> Option<&Expr> {
-        match self {
-            EntryMut::Expr(e) => Some(e),
-            _ => None,
-        }
-    }
-
-    /// Returns a reference to the contained expression, panicking if not an expression.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this entry is not `EntryMut::Expr`.
-    #[track_caller]
-    pub fn as_expr_unwrap(&self) -> &Expr {
-        self.as_expr()
-            .unwrap_or_else(|| panic!("expected EntryMut::Expr; actual={self:#?}"))
-    }
-
-    /// Returns a mutable reference to the contained expression, or `None`.
-    pub fn as_expr_mut(&mut self) -> Option<&mut Expr> {
-        match self {
-            EntryMut::Expr(e) => Some(e),
-            _ => None,
-        }
-    }
-
-    /// Returns a mutable reference to the contained expression, panicking if not an expression.
-    ///
-    /// # Panics
-    ///
-    /// Panics if this entry is not `EntryMut::Expr`.
-    #[track_caller]
-    pub fn as_expr_mut_unwrap(&mut self) -> &mut Expr {
-        match self {
-            EntryMut::Expr(e) => e,
-            _ => panic!("expected EntryMut::Expr"),
-        }
-    }
-
-    /// Returns `true` if this entry holds an expression.
-    pub fn is_expr(&self) -> bool {
-        matches!(self, EntryMut::Expr(_))
-    }
-
-    /// Returns `true` if this entry holds a statement expression.
-    pub fn is_statement(&self) -> bool {
-        matches!(self, EntryMut::Expr(e) if e.is_stmt())
-    }
-
     /// Returns `true` if this entry holds a concrete value.
     pub fn is_value(&self) -> bool {
         matches!(self, EntryMut::Value(_) | EntryMut::Expr(Expr::Value(_)))

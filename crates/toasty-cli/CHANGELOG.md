@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.9.0...toasty-cli-v0.10.0) - 2026-08-11
+
+- Internal improvements only.
+
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.8.0...toasty-cli-v0.9.0) - 2026-07-23
+
+### Fixed
+
+- Serialize unconstrained numeric migration snapshots ([#1115])
+
+[#1115]: https://github.com/tokio-rs/toasty/pull/1115
+
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-cli-v0.7.0...toasty-cli-v0.8.0) - 2026-07-06
 
 ### Added

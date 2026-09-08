@@ -73,11 +73,31 @@ fn serialize_migration(stmts: &[MigrationStatement<'_>], flavor: &str) -> Vec<St
         .collect()
 }
 
+fn serialize_postgresql_enum_type_change(previous: Type, next: Type) -> Vec<String> {
+    let schema = |storage_ty| Schema {
+        tables: vec![make_table(
+            0,
+            "jobs",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "job_type", storage_ty),
+            ],
+        )],
+    };
+    let from = schema(previous);
+    let to = schema(next);
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+
+    serialize_migration(&stmts, "postgresql")
+}
+
 // --- PostgreSQL: CREATE TYPE before CREATE TABLE ---
 
 #[test]
 fn create_table_with_enum_postgresql() {
-    let status_enum = make_enum_type("status", &["pending", "active", "done"]);
+    let status_enum = make_enum_type("TaskStatus", &["pending", "active", "done"]);
 
     let from = Schema::default();
     let to = Schema {
@@ -100,10 +120,80 @@ fn create_table_with_enum_postgresql() {
     assert_eq!(sql.len(), 2);
     assert_eq!(
         sql[0],
-        "CREATE TYPE \"status\" AS ENUM ('pending', 'active', 'done');"
+        "CREATE TYPE \"TaskStatus\" AS ENUM ('pending', 'active', 'done');"
     );
     assert!(sql[1].starts_with("CREATE TABLE \"tasks\""));
-    assert!(sql[1].contains("\"status\" status NOT NULL"));
+    assert!(sql[1].contains("\"status\" \"TaskStatus\" NOT NULL"));
+}
+
+#[test]
+fn rename_enum_type_postgresql() {
+    assert_eq!(
+        serialize_postgresql_enum_type_change(
+            Type::Enum(make_enum_type("jobtype", &["process"])),
+            Type::Enum(make_enum_type("JobType", &["process"])),
+        ),
+        ["ALTER TYPE \"jobtype\" RENAME TO \"JobType\";"]
+    );
+}
+
+#[test]
+fn rename_enum_array_type_postgresql() {
+    assert_eq!(
+        serialize_postgresql_enum_type_change(
+            Type::list(Type::Enum(make_enum_type("jobtype", &["process"]))),
+            Type::list(Type::Enum(make_enum_type("JobType", &["process"]))),
+        ),
+        ["ALTER TYPE \"jobtype\" RENAME TO \"JobType\";"]
+    );
+}
+
+#[test]
+fn rename_enum_type_and_add_variant_postgresql() {
+    assert_eq!(
+        serialize_postgresql_enum_type_change(
+            Type::Enum(make_enum_type("jobtype", &["process"])),
+            Type::Enum(make_enum_type("JobType", &["process", "archive"])),
+        ),
+        [
+            "ALTER TYPE \"jobtype\" RENAME TO \"JobType\";",
+            "ALTER TYPE \"JobType\" ADD VALUE 'archive';",
+        ]
+    );
+}
+
+#[test]
+fn split_shared_enum_type_postgresql() {
+    let schema = |job_type, retry_type| Schema {
+        tables: vec![make_table(
+            0,
+            "jobs",
+            vec![
+                make_column(0, 0, "id", Type::Integer(8)),
+                make_column(0, 1, "job_type", job_type),
+                make_column(0, 2, "retry_type", retry_type),
+            ],
+        )],
+    };
+    let from = schema(
+        Type::Enum(make_enum_type("jobtype", &["process"])),
+        Type::Enum(make_enum_type("jobtype", &["process"])),
+    );
+    let to = schema(
+        Type::Enum(make_enum_type("JobType", &["process"])),
+        Type::Enum(make_enum_type("jobtype", &["process"])),
+    );
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::POSTGRESQL);
+
+    assert_eq!(
+        serialize_migration(&stmts, "postgresql"),
+        [
+            "CREATE TYPE \"JobType\" AS ENUM ('process');",
+            "ALTER TABLE \"jobs\" ALTER COLUMN \"job_type\" TYPE \"JobType\" USING \"job_type\"::TEXT::\"JobType\";",
+        ]
+    );
 }
 
 // --- PostgreSQL: ALTER TYPE ADD VALUE ---
@@ -415,7 +505,7 @@ fn create_table_with_enum_array_postgresql() {
         "CREATE TYPE \"status\" AS ENUM ('pending', 'active', 'done');"
     );
     assert!(
-        sql[1].contains("\"statuses\" status[] NOT NULL"),
+        sql[1].contains("\"statuses\" \"status\"[] NOT NULL"),
         "got: {}",
         sql[1]
     );

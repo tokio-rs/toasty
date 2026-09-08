@@ -35,9 +35,9 @@ pub async fn shared_column_schema_fields(t: &mut Test) {
     let creature = &schema.app.models[&Creature::id()];
     assert_struct!(creature, toasty::schema::app::Model::EmbeddedEnum({
         fields: [
-            { name.app: Some("name"), shared: Some(_ { parts: ["name"] }) },
+            { name.app: Some("name"), shared: Some({ parts: ["name"] }) },
             { name.app: Some("profession"), shared: None },
-            { name.app: Some("name"), shared: Some(_ { parts: ["name"] }) },
+            { name.app: Some("name"), shared: Some({ parts: ["name"] }) },
             { name.app: Some("species"), shared: None },
         ],
     }));
@@ -69,8 +69,8 @@ pub async fn raw_shared_identifier_uses_bare_name(t: &mut Test) {
 
     assert_struct!(schema.app.models[&Value::id()], toasty::schema::app::Model::EmbeddedEnum({
         fields: [
-            { shared: Some(_ { parts: ["type"] }), .. },
-            { shared: Some(_ { parts: ["type"] }), .. },
+            { shared: Some({ parts: ["type"] }) },
+            { shared: Some({ parts: ["type"] }) },
         ],
     }));
     assert_struct!(schema.db.tables, [{
@@ -79,7 +79,6 @@ pub async fn raw_shared_identifier_uses_bare_name(t: &mut Test) {
             { name: "value" },
             { name: "value_type" },
         ],
-        ..
     }]);
 }
 

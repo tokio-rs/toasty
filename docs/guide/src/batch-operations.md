@@ -222,7 +222,11 @@ let todos = Todo::create_many()
 ```
 
 `create_many()` returns a `Vec` of the created records, including auto-generated
-fields like `id`.
+fields when the backend can return them. MySQL can retrieve an auto-increment ID
+for a single-row insert, but it cannot return every generated ID from a bulk
+insert. On MySQL, `create_many()` therefore requires caller-generated IDs, such
+as Toasty's client-generated UUIDs. Use separate `create()` calls when the model
+has a database-generated auto-increment ID. See [MySQL](./mysql.md) for details.
 
 ## `create_many()` vs `batch()` for inserts
 

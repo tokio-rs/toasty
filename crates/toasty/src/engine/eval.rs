@@ -62,6 +62,13 @@ impl<T: AsExpr> Func<T> {
     }
 }
 
+impl Func<stmt::Expr> {
+    /// Consumes the function, returning its expression.
+    pub(crate) fn into_expr(self) -> stmt::Expr {
+        self.expr
+    }
+}
+
 impl Func<&stmt::Expr> {
     pub(crate) fn try_from_stmt(
         expr: &stmt::Expr,

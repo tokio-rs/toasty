@@ -70,6 +70,18 @@ impl DynamoDb {
     pub async fn from_env(url: String) -> Result<Self> {
         use aws_config::BehaviorVersion;
 
+        // The URL does not name the endpoint — that comes from the ambient AWS
+        // config — but validate it anyway, so a typo fails here instead of
+        // silently connecting to whatever the environment points at.
+        let parsed = toasty_core::driver::ConnectionUrl::parse(&url)?;
+        parsed.validate_authority()?;
+
+        if !parsed.has_scheme("dynamodb") {
+            return Err(toasty_core::Error::invalid_connection_url(format!(
+                "connection URL does not have a `dynamodb` scheme; url={url}"
+            )));
+        }
+
         let sdk_config = aws_config::defaults(BehaviorVersion::latest()).load().await;
         let client = Client::new(&sdk_config);
         Ok(Self::new(url, client))
@@ -223,16 +235,11 @@ impl Connection {
             Operation::UpdateByKey(op) => self.exec_update_by_key(&schema.db, op).await,
             Operation::Upsert(op) => self.exec_upsert(&schema.db, op).await,
             Operation::FindPkByIndex(op) => self.exec_find_pk_by_index(schema, op).await,
-            Operation::QuerySql(op) => {
-                assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for DynamoDB"
-                );
-                match op.stmt {
-                    stmt::Statement::Insert(insert) => self.exec_insert(&schema.db, insert).await,
-                    _ => todo!("op={:#?}", op.stmt),
-                }
+            Operation::Insert(op) => {
+                self.exec_insert(&schema.db, op.stmt.into_insert_unwrap())
+                    .await
             }
+            Operation::QuerySql(op) => todo!("op={:#?}", op.stmt),
             Operation::Scan(op) => self.exec_scan(schema, op).await,
             Operation::RawSql(_) => Err(Error::unsupported_feature(
                 "raw SQL is only supported by SQL drivers",
@@ -240,7 +247,6 @@ impl Connection {
             Operation::Transaction(_) => Err(Error::unsupported_feature(
                 "transactions are not supported by the DynamoDB driver",
             )),
-            _ => todo!("op={op:#?}"),
         }
     }
 }

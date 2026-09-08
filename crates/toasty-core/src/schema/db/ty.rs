@@ -106,6 +106,18 @@ pub enum Type {
     /// A representation of a civil datetime in the Gregorian calendar with fractional seconds precision (0-9 digits).
     DateTime(u8),
 
+    /// A native IP network prefix.
+    Cidr,
+
+    /// A native IP host address with an optional network prefix.
+    Inet,
+
+    /// A native six-byte IEEE EUI-48 address.
+    MacAddr,
+
+    /// A native eight-byte IEEE EUI-64 address.
+    MacAddr8,
+
     /// A database enum type. See [`TypeEnum`].
     Enum(TypeEnum),
 
@@ -254,6 +266,14 @@ impl Type {
                 stmt::Type::Time => Ok(db.default_time_type.clone()),
                 #[cfg(feature = "jiff")]
                 stmt::Type::DateTime => Ok(db.default_datetime_type.clone()),
+                #[cfg(feature = "net")]
+                stmt::Type::Cidr => Ok(db.default_cidr_type.clone()),
+                #[cfg(feature = "net")]
+                stmt::Type::Inet => Ok(db.default_inet_type.clone()),
+                #[cfg(feature = "net")]
+                stmt::Type::MacAddr => Ok(db.default_macaddr_type.clone()),
+                #[cfg(feature = "net")]
+                stmt::Type::MacAddr8 => Ok(db.default_macaddr8_type.clone()),
                 // An embedded model column is stored as a single document
                 // (`jsonb` on PG, `JSON` elsewhere) — never a native array.
                 // `Type::list` collapses a list-of-documents back to one
@@ -358,6 +378,24 @@ impl Type {
                 )),
                 _ => Ok(()),
             },
+            Type::Cidr if !db.native_cidr => Err(crate::Error::unsupported_feature(format!(
+                "CIDR column type is not supported by {}",
+                db.driver_name
+            ))),
+            Type::Inet if !db.native_inet => Err(crate::Error::unsupported_feature(format!(
+                "INET column type is not supported by {}",
+                db.driver_name
+            ))),
+            Type::MacAddr if !db.native_macaddr => Err(crate::Error::unsupported_feature(format!(
+                "MACADDR column type is not supported by {}",
+                db.driver_name
+            ))),
+            Type::MacAddr8 if !db.native_macaddr8 => {
+                Err(crate::Error::unsupported_feature(format!(
+                    "MACADDR8 column type is not supported by {}",
+                    db.driver_name
+                )))
+            }
             _ => Ok(()),
         }
     }

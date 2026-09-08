@@ -154,10 +154,13 @@ pub enum Expr {
     /// `Expr::Arg(n)`.
     Value(Value),
 
-    /// Constant value rendered inline as a SQL literal. The query builder uses
-    /// this for the fixed `LIMIT 1` emitted by `.first()`.
-    /// Survives `extract_params` and reaches the SQL serializer
-    /// unchanged.  See `docs/dev/design/static-sql-values.md`.
+    /// Constant value rendered inline as a SQL literal instead of a bind
+    /// parameter. Parameter extraction skips it, so the value is part of the
+    /// SQL text: a cached statement carries it for every execution rather
+    /// than taking it per call.
+    ///
+    /// Use it for values the statement itself fixes. `.first()` emits its
+    /// `LIMIT 1` this way. Caller-supplied values use [`Expr::Value`].
     Static(Value),
 }
 

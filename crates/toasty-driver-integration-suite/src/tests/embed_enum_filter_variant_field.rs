@@ -1,76 +1,5 @@
 use crate::prelude::*;
 
-/// Filtering by a field within a specific enum variant using the closure-based
-/// `.matches()` API: `contact().email().matches(|e| e.address().eq("x"))`.
-#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
-pub async fn filter_by_variant_field(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
-
-    User::create()
-        .name("Alice")
-        .contact(ContactInfo::Email {
-            address: "alice@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    User::create()
-        .name("Bob")
-        .contact(ContactInfo::Phone {
-            number: "555-1234".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    User::create()
-        .name("Carol")
-        .contact(ContactInfo::Email {
-            address: "carol@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
-
-    // Filter by email address field
-    let results = User::filter(
-        User::fields()
-            .contact()
-            .email()
-            .matches(|e| e.address().eq("alice@example.com")),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].name, "Alice");
-
-    // Filter by phone number field
-    let results = User::filter(
-        User::fields()
-            .contact()
-            .phone()
-            .matches(|e| e.number().eq("555-1234")),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].name, "Bob");
-
-    // Filter by email address that doesn't match any record
-    let results = User::filter(
-        User::fields()
-            .contact()
-            .email()
-            .matches(|e| e.address().eq("nobody@example.com")),
-    )
-    .exec(&mut db)
-    .await?;
-
-    assert_eq!(results.len(), 0);
-
-    Ok(())
-}
-
 /// Variant+field filter combined with a partition key so DynamoDB can execute it.
 #[driver_test]
 pub async fn filter_variant_field_with_partition_key(t: &mut Test) -> Result<()> {
@@ -192,45 +121,110 @@ pub async fn cross_variant_or(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-/// Filtering directly via a variant-rooted path comparison (no `matches`
-/// closure). The implicit gate on filter methods means
-/// `email().address().eq("x")` is equivalent to
-/// `email().matches(|e| e.address().eq("x"))` — the variant predicate is
-/// added automatically, so Phone-variant rows are excluded.
-#[driver_test(requires(scan), scenario(crate::scenarios::user_contact_info))]
-pub async fn filter_variant_field_implicit_gate(t: &mut Test) -> Result<()> {
-    let mut db = setup(t).await;
+/// A variant field whose model type differs from its stored column type
+/// (`uuid::Uuid`, stored as a string) is filterable. The decode cast the
+/// enum's `Match` arm wraps around the column used to reach the SQL
+/// serializer unchanged and panic; simplify now moves the conversion onto
+/// the constant side.
+#[driver_test]
+pub async fn filter_variant_field_with_cast_storage(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Owner {
+        #[column(variant = 1)]
+        Human { id: uuid::Uuid },
+        #[column(variant = 2)]
+        Animal { tag: uuid::Uuid },
+    }
 
-    User::create()
-        .name("Alice")
-        .contact(ContactInfo::Email {
-            address: "alice@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
 
-    // Bob shares the same string but in the Phone column — the gate must
-    // reject him because his variant is Phone, not Email.
-    User::create()
-        .name("Bob")
-        .contact(ContactInfo::Phone {
-            number: "alice@example.com".to_string(),
-        })
-        .exec(&mut db)
-        .await?;
+    let mut db = t.setup_db(models!(Object)).await;
 
-    let results = User::filter(
-        User::fields()
-            .contact()
-            .email()
-            .address()
-            .eq("alice@example.com"),
-    )
+    let target = uuid::Uuid::new_v4();
+    let expected = toasty::create!(Object {
+        owner: Owner::Human { id: target }
+    })
+    .exec(&mut db)
+    .await?;
+    // Same UUID in the other variant's column: must not match.
+    toasty::create!(Object {
+        owner: Owner::Animal { tag: target }
+    })
     .exec(&mut db)
     .await?;
 
-    assert_eq!(results.len(), 1);
-    assert_eq!(results[0].name, "Alice");
+    let found = Object::filter(
+        Object::fields()
+            .owner()
+            .human()
+            .matches(|h| h.id().eq(target)),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, expected.id);
+
+    Ok(())
+}
+
+/// Same as above, but the variant field overrides its storage type away from
+/// the backend default (`#[column(type = text)]` UUID; SQLite's default UUID
+/// storage is a blob). The comparison constant must be converted to the
+/// referenced column's stored type, not the backend default for the model
+/// type — the latter silently matches zero rows.
+#[driver_test(requires(sql))]
+pub async fn filter_variant_field_with_storage_override(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Owner {
+        #[column(variant = 1)]
+        Human {
+            #[column(type = text)]
+            id: uuid::Uuid,
+        },
+        #[column(variant = 2)]
+        Animal { tag: uuid::Uuid },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+
+    let mut db = t.setup_db(models!(Object)).await;
+
+    let target = uuid::Uuid::new_v4();
+    let expected = toasty::create!(Object {
+        owner: Owner::Human { id: target }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        owner: Owner::Human {
+            id: uuid::Uuid::new_v4()
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found = Object::filter(
+        Object::fields()
+            .owner()
+            .human()
+            .matches(|h| h.id().eq(target)),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, expected.id);
 
     Ok(())
 }

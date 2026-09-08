@@ -107,12 +107,7 @@ impl NestedMergePlanner<'_> {
         self.stack.pop();
 
         self.mir.insert_with_deps(
-            mir::NestedMerge {
-                inputs: self.inputs,
-                root,
-                hash_indexes: self.hash_indexes,
-                sort_indexes: self.sort_indexes,
-            },
+            mir::NestedMerge::new(self.inputs, root, self.hash_indexes, self.sort_indexes),
             self.deps,
         )
     }

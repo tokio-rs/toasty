@@ -77,19 +77,6 @@ pub struct Schema {
 }
 
 impl Schema {
-    /// Returns a new [`Builder`] for constructing a `Schema`.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use toasty_core::Schema;
-    ///
-    /// let builder = Schema::builder();
-    /// ```
-    pub fn builder() -> Builder {
-        Builder::default()
-    }
-
     /// Returns the mapping for the given model.
     ///
     /// # Panics

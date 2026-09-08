@@ -34,6 +34,10 @@ mod error;
 /// The error type returned by Toasty operations.
 pub use error::Error;
 
+/// Schema migration metadata shared by Toasty runtime and macros.
+#[cfg(feature = "migration")]
+pub mod migration;
+
 /// Schema definitions spanning the app layer, database layer, and the mapping
 /// between them.
 pub mod schema;

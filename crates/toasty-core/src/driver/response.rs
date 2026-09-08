@@ -20,9 +20,9 @@ pub struct ExecResponse {
     /// The result values (rows, count, or stream).
     pub values: Rows,
     /// Cursor to the next page (if paginated and more data exists).
-    pub next_cursor: Option<stmt::Value>,
+    pub next_cursor: Option<Box<stmt::Value>>,
     /// Cursor to the previous page (if backward pagination is supported).
-    pub prev_cursor: Option<stmt::Value>,
+    pub prev_cursor: Option<Box<stmt::Value>>,
 }
 
 /// The payload of an [`ExecResponse`].
@@ -43,6 +43,11 @@ pub enum Rows {
 }
 
 impl ExecResponse {
+    /// Returns `true` if this response has no pagination cursors.
+    pub fn is_unpaginated(&self) -> bool {
+        self.next_cursor.is_none() && self.prev_cursor.is_none()
+    }
+
     /// Creates a response indicating that `count` rows were affected.
     pub fn count(count: u64) -> Self {
         Self {

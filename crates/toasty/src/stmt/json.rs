@@ -1,9 +1,33 @@
-use super::{Expr, IntoExpr, List, Path, Value};
+use super::{Expr, IntoExpr, List, Path, Value as StmtValue};
 use crate::schema::{Field, Load};
+use serde_json::Value as JsonValue;
 use toasty_core::schema::app::{FieldPrimitive, FieldTy, SerializeFormat};
 use toasty_core::{schema::db, stmt};
 
 use std::fmt;
+
+fn load_json<T>(value: stmt::Value) -> crate::Result<T>
+where
+    T: for<'de> serde_core::Deserialize<'de>,
+{
+    let json = <String as Load>::load(value)?;
+    serde_json::from_str(&json).map_err(|e| {
+        toasty_core::Error::from_args(format_args!("failed to deserialize JSON field: {e}"))
+    })
+}
+
+fn json_field_ty(storage_ty: Option<db::Type>, missing_type_message: &'static str) -> FieldTy {
+    FieldTy::Primitive(FieldPrimitive {
+        ty: stmt::Type::String,
+        storage_ty: Some(storage_ty.expect(missing_type_message)),
+        serialize: Some(SerializeFormat::Json),
+    })
+}
+
+fn json_expr<T>(value: &(impl serde_core::Serialize + ?Sized)) -> Expr<T> {
+    let json = serde_json::to_string(value).expect("failed to serialize JSON field");
+    Expr::<String>::from_value(StmtValue::from(json)).cast()
+}
 
 /// A field wrapper that serializes `T` as JSON in a database column.
 ///
@@ -17,6 +41,8 @@ use std::fmt;
 /// Every `Json<T>` field must select its database column type with
 /// `#[column(type = ...)]`. Use `text` or `varchar(...)` for text-backed JSON,
 /// `json` for PostgreSQL or MySQL native JSON, and `jsonb` for PostgreSQL JSONB.
+/// A field whose Rust type is already [`serde_json::Value`] does not need the
+/// `Json<T>` wrapper and supports the same column types.
 ///
 /// # Two nullable variants
 ///
@@ -127,10 +153,7 @@ where
         // JSON literal `"null"` as a non-null string, so its `None` case
         // comes through as `Value::String("null")` and `serde_json` decodes
         // it. A bare `Value::Null` at this point is a driver bug.
-        let json = <String as Load>::load(value)?;
-        serde_json::from_str(&json).map(Json).map_err(|e| {
-            toasty_core::Error::from_args(format_args!("failed to deserialize JSON field: {e}"))
-        })
+        load_json(value).map(Json)
     }
 
     fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
@@ -173,16 +196,11 @@ where
     /// see that the column is JSON-typed even though the encoding itself is
     /// invisible to the macro.
     fn field_ty(storage_ty: Option<db::Type>) -> FieldTy {
-        let storage_ty = storage_ty.expect(
+        json_field_ty(
+            storage_ty,
             "`toasty::Json<T>` fields require `#[column(type = ...)]`; use \
              `#[column(type = text)]` for text-backed JSON storage",
-        );
-
-        FieldTy::Primitive(FieldPrimitive {
-            ty: stmt::Type::String,
-            storage_ty: Some(storage_ty),
-            serialize: Some(SerializeFormat::Json),
-        })
+        )
     }
 
     fn key_constraint<Origin>(&self, _target: Path<Origin, Self::Inner>) -> Expr<bool> {
@@ -199,13 +217,11 @@ where
     T: serde_core::Serialize,
 {
     fn into_expr(self) -> Expr<Json<T>> {
-        let json = serde_json::to_string(&self.0).expect("failed to serialize");
-        Expr::<String>::from_value(Value::from(json)).cast()
+        json_expr(&self.0)
     }
 
     fn by_ref(&self) -> Expr<Json<T>> {
-        let json = serde_json::to_string(&self.0).expect("failed to serialize");
-        Expr::<String>::from_value(Value::from(json)).cast()
+        json_expr(&self.0)
     }
 }
 
@@ -229,13 +245,11 @@ where
     T: serde_core::Serialize,
 {
     fn into_expr(self) -> Expr<Json<T>> {
-        let json = serde_json::to_string(&self).expect("failed to serialize");
-        Expr::<String>::from_value(Value::from(json)).cast()
+        json_expr(&self)
     }
 
     fn by_ref(&self) -> Expr<Json<T>> {
-        let json = serde_json::to_string(self).expect("failed to serialize");
-        Expr::<String>::from_value(Value::from(json)).cast()
+        json_expr(self)
     }
 }
 
@@ -260,6 +274,75 @@ where
 {
     fn into_assignment(self) -> super::assignment::Assignment<Json<T>> {
         super::set(<Self as IntoExpr<Json<T>>>::into_expr(self))
+    }
+}
+
+impl Load for JsonValue {
+    type Output = Self;
+
+    fn ty() -> stmt::Type {
+        stmt::Type::String
+    }
+
+    fn load(value: stmt::Value) -> crate::Result<Self> {
+        load_json(value)
+    }
+
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
+        *target = Self::load(value)?;
+        Ok(())
+    }
+}
+
+impl Field for JsonValue {
+    const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = true;
+
+    type ExprTarget = Self;
+    type Path<Origin> = Path<Origin, Self>;
+    type ListPath<Origin> = Path<Origin, List<Self::ExprTarget>>;
+    type Update<'a> = ();
+    type Inner = Self;
+
+    fn new_path<Origin>(path: Path<Origin, Self>) -> Self::Path<Origin> {
+        path
+    }
+
+    fn new_list_path<Origin>(path: Path<Origin, List<Self::ExprTarget>>) -> Self::ListPath<Origin> {
+        path
+    }
+
+    fn new_update<'a>(
+        _assignments: &'a mut toasty_core::stmt::Assignments,
+        _projection: toasty_core::stmt::Projection,
+    ) -> Self::Update<'a> {
+    }
+
+    fn field_ty(storage_ty: Option<db::Type>) -> FieldTy {
+        json_field_ty(
+            storage_ty,
+            "`serde_json::Value` fields require `#[column(type = ...)]`; use \
+             `#[column(type = text)]` for text-backed JSON storage",
+        )
+    }
+
+    fn key_constraint<Origin>(&self, _target: Path<Origin, Self::Inner>) -> Expr<bool> {
+        unreachable!("serde_json::Value fields cannot be used as foreign-key targets")
+    }
+}
+
+impl IntoExpr<JsonValue> for JsonValue {
+    fn into_expr(self) -> Expr<JsonValue> {
+        json_expr(&self)
+    }
+
+    fn by_ref(&self) -> Expr<JsonValue> {
+        json_expr(self)
+    }
+}
+
+impl super::assignment::Assign<JsonValue> for JsonValue {
+    fn into_assignment(self) -> super::assignment::Assignment<JsonValue> {
+        super::set(<Self as IntoExpr<JsonValue>>::into_expr(self))
     }
 }
 

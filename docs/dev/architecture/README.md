@@ -44,7 +44,7 @@ User-facing crate with query engine and runtime.
 
 **Query Execution Pipeline** (high-level):
 ```
-Statement AST → Simplify → Lower → Plan → Execute → Results
+Statement AST → Normalize → Verify → Simplify → Lower → Plan → Execute → Results
 ```
 
 The engine compiles queries into a mini-program of actions executed by an interpreter. For details on HIR, MIR, and the full compilation pipeline, see [Query Engine Architecture](./query-engine.md).

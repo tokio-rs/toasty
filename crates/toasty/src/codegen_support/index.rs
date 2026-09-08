@@ -6,11 +6,12 @@
 //! `#[index(...)]` / `#[unique(...)]`), the generated code emits a one-shot
 //! obligation that the field's Rust type implements [`IndexableField`].
 //!
-//! Scalars implement it directly; tuple-newtype embeds and unit (data-less)
-//! enums via impls emitted by `#[derive(Embed)]`. Data-carrying enums and
-//! multi-field embedded structs map to more than one column, so they do not
-//! implement it and naming one in an index is a compile error rather than a
-//! runtime panic.
+//! Scalars and storable `Vec<T>` fields implement it directly; tuple-newtype
+//! embeds and unit (data-less) enums use impls emitted by `#[derive(Embed)]`.
+//! Data-carrying enums and multi-field embedded structs map to more than one
+//! column, so they do not implement it and naming one in an index is a compile
+//! error rather than a runtime panic. Backend support for indexing a collection
+//! is checked separately while building the database schema.
 //!
 //! Mirrors the pattern in [`crate::codegen_support::storage`] and
 //! [`crate::codegen_support::auto`]: a trait carrying a
@@ -27,9 +28,9 @@
 #[diagnostic::on_unimplemented(
     message = "field type `{Self}` cannot be used in an index",
     label = "not indexable",
-    note = "only scalar fields, newtype embeds, and unit (data-less) enums can be indexed; \
-            data-carrying enums and multi-field embedded structs span multiple columns and \
-            have no single index column"
+    note = "only scalar fields, storable Vec<T> fields, newtype embeds, and unit (data-less) \
+            enums can be index targets; data-carrying enums and multi-field embedded structs \
+            span multiple columns and have no single index column"
 )]
 pub trait IndexableField {}
 
@@ -65,7 +66,12 @@ impl IndexableField for f32 {}
 impl IndexableField for f64 {}
 
 impl IndexableField for String {}
-impl IndexableField for Vec<u8> {}
+
+// A collection is a single logical index value wherever it is a valid field.
+// Whether a specific backend can create the requested index is a separate
+// schema-build capability check. This bound includes `Vec<u8>` without
+// overlapping its special bytes `Field` implementation.
+impl<T> IndexableField for Vec<T> where Vec<T>: crate::schema::Field {}
 
 impl IndexableField for uuid::Uuid {}
 
@@ -83,6 +89,17 @@ mod jiff_impls {
     impl IndexableField for jiff::civil::Date {}
     impl IndexableField for jiff::civil::Time {}
     impl IndexableField for jiff::civil::DateTime {}
+}
+
+#[cfg(feature = "net")]
+mod net_impls {
+    use super::IndexableField;
+    use crate::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
+
+    impl IndexableField for IpCidr {}
+    impl IndexableField for IpInet {}
+    impl IndexableField for MacAddr6 {}
+    impl IndexableField for MacAddr8 {}
 }
 
 // Tuple-newtype embeds get a per-type `IndexableField` impl from

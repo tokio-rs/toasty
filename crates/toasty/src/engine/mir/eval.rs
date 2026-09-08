@@ -1,53 +1,85 @@
 use indexmap::IndexSet;
+use toasty_core::stmt::{self, visit_mut};
 
-use crate::engine::{
-    eval, exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::{eval, mir};
 
-/// Transforms records by applying a projection function.
+/// Evaluates `body` once over whole input values: with no `row_input`,
+/// `arg(i)` is `inputs[i]`'s complete output; with a `row_input`, `arg(0)` is
+/// `row_input`'s complete output and `arg(1 + i)` is `inputs[i]`'s.
 ///
-/// Used to reshape records, extract specific fields, or compute derived values
-/// from input records.
+/// A `row_input` marks the operation as per-row: the body is a `map` over
+/// `arg(0)` (built by [`Eval::map_over`]), so the output has one element per
+/// input row and pagination metadata forwards from `row_input`. Zero input
+/// rows means the map body never runs, so the other inputs are read only when
+/// `row_input` returned rows — the guard pass reads this from
+/// [`Operation::input_reads`](mir::Operation::input_reads).
 #[derive(Debug)]
 pub(crate) struct Eval {
-    /// The nodes providing parent and child data to merge.
+    /// When set, this operation returns one result for each row from this input.
+    pub(crate) row_input: Option<mir::NodeId>,
+
+    /// Nodes whose whole outputs the body reads.
     pub(crate) inputs: IndexSet<mir::NodeId>,
 
-    /// The function to evaluate
-    pub(crate) eval: eval::Func,
-
-    /// The input from which meta-data should be forwarded. This includes the
-    /// pagination cursors. When `None`, do not forward any metadata. Note, all
-    /// other inputs must not have any metadata to forward.
-    pub(crate) metadata: Option<usize>,
+    /// The function to evaluate, over whole input values ordered
+    /// `[row_input?, inputs...]`. Its return type is the operation's output
+    /// type.
+    pub(crate) body: eval::Func,
 }
 
 impl Eval {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Eval {
-        let mut input_vars = vec![];
+    /// Evaluates `body` once over the whole outputs of `inputs`:
+    /// `arg(i)` = `inputs[i]`.
+    pub(crate) fn compute(inputs: IndexSet<mir::NodeId>, body: eval::Func) -> Self {
+        Eval {
+            row_input: None,
+            inputs,
+            body,
+        }
+    }
 
-        for input in &self.inputs {
-            let var = logical_plan[input].var.get().unwrap();
-            input_vars.push(var);
+    /// Evaluates the per-row `body` once per row of `row_input`: `arg(0)` =
+    /// current row, `arg(1 + i)` = `inputs[i]`.
+    ///
+    /// The executor evaluates one function over whole input values, so the
+    /// per-row structure is erased here into a single `map` expression over
+    /// input 0, with inputs ordered `[row_input, inputs...]`.
+    pub(crate) fn map_over(
+        store: &mir::Store,
+        row_input: mir::NodeId,
+        inputs: IndexSet<mir::NodeId>,
+        body: eval::Func,
+    ) -> Self {
+        debug_assert_eq!(body.args.len(), 1 + inputs.len());
+        debug_assert!(!inputs.contains(&row_input));
+
+        let mut arg_tys = vec![store[row_input].ty().clone()];
+        for input in &inputs {
+            arg_tys.push(store[input].ty().clone());
         }
 
-        let output = var_table.register_var(self.eval.ret.clone());
-        node.var.set(Some(output));
+        // Inside the map, the body's `arg(0)` (the row) resolves to the map's
+        // element scope unchanged, while references to other inputs must
+        // climb one extra scope — past the map — to reach the function
+        // inputs. A body arg references a body parameter when its nesting
+        // equals the number of scopes around it.
+        let ty = stmt::Type::list(body.ret.clone());
+        let mut map_body = body.into_expr();
+        visit_mut::walk_expr_scoped_mut(&mut map_body, 0, |expr, scope_depth| {
+            if let stmt::Expr::Arg(arg) = expr
+                && arg.nesting == scope_depth
+                && arg.position >= 1
+            {
+                arg.nesting += 1;
+            }
+            true
+        });
+        let expr = stmt::Expr::map(stmt::Expr::arg(0), map_body);
 
-        exec::Eval {
-            inputs: input_vars,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            eval: self.eval.clone(),
-            metadata: self.metadata,
+        Eval {
+            row_input: Some(row_input),
+            inputs,
+            body: eval::Func::from_stmt_typed(expr, arg_tys, ty),
         }
     }
 }

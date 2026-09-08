@@ -44,7 +44,7 @@ impl PartialEq<Any> for Value {
 /// Use this when a single assertion needs to cover both representations:
 ///
 /// ```ignore
-/// let val = if test.capability().sql {
+/// let val = if test.capability().sql() {
 ///     ArgOr::Arg(0)
 /// } else {
 ///     ArgOr::Value(1i64)

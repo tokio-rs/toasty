@@ -1,13 +1,11 @@
 use crate::prelude::*;
 
 scenario! {
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
         name: String,
@@ -20,10 +18,10 @@ scenario! {
     struct Todo {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
-        user_id: ID,
+        user_id: uuid::Uuid,
 
         #[belongs_to(key = user_id, references = id)]
         user: toasty::Deferred<User>,

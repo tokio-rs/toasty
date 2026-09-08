@@ -6,7 +6,7 @@ use toasty_core::{
 };
 
 /// Batch two creates of the same model.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -28,10 +28,10 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT alice
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT bob
     assert!(t.log().pop_op().is_transaction_commit());
@@ -47,7 +47,7 @@ pub async fn batch_two_creates_same_model(t: &mut Test) -> Result<()> {
 }
 
 /// Batch creates of two different models.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -69,10 +69,10 @@ pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT user
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT post
     assert!(t.log().pop_op().is_transaction_commit());
@@ -82,7 +82,7 @@ pub async fn batch_two_creates_different_models(t: &mut Test) -> Result<()> {
 }
 
 /// Batch mixing a query first and a create second.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_query_and_create(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -109,7 +109,7 @@ pub async fn batch_query_and_create(t: &mut Test) -> Result<()> {
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Query(_),
     })); // SELECT
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT
     assert!(t.log().pop_op().is_transaction_commit());
@@ -119,7 +119,7 @@ pub async fn batch_query_and_create(t: &mut Test) -> Result<()> {
 }
 
 /// Batch mixing a create first and a query second.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     User::create().name("Alice").exec(&mut db).await?;
@@ -142,7 +142,7 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
@@ -155,7 +155,7 @@ pub async fn batch_create_then_query(t: &mut Test) -> Result<()> {
 }
 
 /// Three-element batch: create, query, create.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
     User::create().name("Alice").exec(&mut db).await?;
@@ -182,13 +182,13 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT bob
     assert_struct!(t.log().pop_op(), Operation::QuerySql({
         stmt: Statement::Query(_),
     })); // SELECT alice
-    assert_struct!(t.log().pop_op(), Operation::QuerySql({
+    assert_struct!(t.log().pop_op(), Operation::Insert({
         stmt: Statement::Insert(_),
     })); // INSERT carol
     assert!(t.log().pop_op().is_transaction_commit());
@@ -198,7 +198,7 @@ pub async fn batch_create_query_create(t: &mut Test) -> Result<()> {
 }
 
 /// Batch creates via an array of create builders.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -223,7 +223,7 @@ pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
         })
     );
     for _ in 0..3 {
-        assert_struct!(t.log().pop_op(), Operation::QuerySql({
+        assert_struct!(t.log().pop_op(), Operation::Insert({
             stmt: Statement::Insert(_),
         }));
     }
@@ -240,7 +240,7 @@ pub async fn batch_creates_from_array(t: &mut Test) -> Result<()> {
 }
 
 /// Batch creates via a Vec of create builders.
-#[driver_test(id(ID), requires(sql), scenario(crate::scenarios::two_models))]
+#[driver_test(requires(sql), scenario(crate::scenarios::two_models))]
 pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
     let mut db = setup(t).await;
 
@@ -262,7 +262,7 @@ pub async fn batch_creates_from_vec(t: &mut Test) -> Result<()> {
         })
     );
     for _ in 0..3 {
-        assert_struct!(t.log().pop_op(), Operation::QuerySql({
+        assert_struct!(t.log().pop_op(), Operation::Insert({
             stmt: Statement::Insert(_),
         }));
     }

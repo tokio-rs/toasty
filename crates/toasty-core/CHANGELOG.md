@@ -7,6 +7,63 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.9.0...toasty-core-v0.10.0) - 2026-08-11
+
+### Added
+
+- Re-export external statement value types ([#1181])
+- Network address types ([#1178])
+- Support for `#[belongs_to]` fields in embedded types ([#1170])
+- Embed migrations in application binaries ([#1095])
+
+### Fixed
+
+- *(mysql)* [**breaking**] Make TLS features additive with SQLx ([#1147])
+- *(engine)* Cursor pagination is now deterministic ([#1142])
+
+### Changed
+
+- *(core)* [**breaking**] `Capability::sql` now names the SQL dialect ([#1155])
+- [**breaking**] Remove unused schema and statement APIs ([#1149])
+
+[#1095]: https://github.com/tokio-rs/toasty/pull/1095
+[#1142]: https://github.com/tokio-rs/toasty/pull/1142
+[#1147]: https://github.com/tokio-rs/toasty/pull/1147
+[#1149]: https://github.com/tokio-rs/toasty/pull/1149
+[#1155]: https://github.com/tokio-rs/toasty/pull/1155
+[#1170]: https://github.com/tokio-rs/toasty/pull/1170
+[#1178]: https://github.com/tokio-rs/toasty/pull/1178
+[#1181]: https://github.com/tokio-rs/toasty/pull/1181
+
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.8.0...toasty-core-v0.9.0) - 2026-07-23
+
+### Added
+
+- Native JSON and JSONB column storage ([#1114])
+- Filter associations when including related data ([#1089])
+- Inline SQL literals with LIMIT/OFFSET support ([#1001])
+- Integer storage for enum discriminants ([#1101])
+- Upsert support ([#1091])
+- Shared variant fields and enum-level #[index]/#[unique] attributes ([#1078])
+- Document storage for embedded types with nested-path filtering ([#1028])
+
+### Fixed
+
+- Serialization of unconstrained numeric migration snapshots ([#1115])
+- Support for any() on many-to-many relations ([#1097])
+- *(postgres)* Storage of Vec<native-enum> as native enum arrays ([#1092])
+
+[#1001]: https://github.com/tokio-rs/toasty/pull/1001
+[#1028]: https://github.com/tokio-rs/toasty/pull/1028
+[#1078]: https://github.com/tokio-rs/toasty/pull/1078
+[#1089]: https://github.com/tokio-rs/toasty/pull/1089
+[#1091]: https://github.com/tokio-rs/toasty/pull/1091
+[#1092]: https://github.com/tokio-rs/toasty/pull/1092
+[#1097]: https://github.com/tokio-rs/toasty/pull/1097
+[#1101]: https://github.com/tokio-rs/toasty/pull/1101
+[#1114]: https://github.com/tokio-rs/toasty/pull/1114
+[#1115]: https://github.com/tokio-rs/toasty/pull/1115
+
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-core-v0.7.0...toasty-core-v0.8.0) - 2026-07-06
 
 ### Added

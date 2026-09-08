@@ -4,10 +4,17 @@ use crate::model::schema::ModelKind;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 
-const FIELD_STRUCT_RESERVED_METHODS: &[&str] =
-    &["from_path", "path", "eq", "in_query", "into_root", "create"];
+const FIELD_STRUCT_RESERVED_METHODS: &[&str] = &[
+    "eq",
+    "ne",
+    "in_query",
+    "into_root",
+    "filter",
+    "order_by",
+    "create",
+];
 
-const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["from_path", "path", "any", "all", "create"];
+const FIELD_LIST_STRUCT_RESERVED_METHODS: &[&str] = &["any", "all", "filter", "order_by", "create"];
 
 impl Expand<'_> {
     pub(super) fn expand_field_struct(&self) -> TokenStream {
@@ -44,6 +51,16 @@ impl Expand<'_> {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
 
+                // Relation fields in embedded types have no filter path yet;
+                // only their key fields are queryable. The offset comes from
+                // the enumeration above, so skipping does not shift later
+                // fields.
+                if !matches!(self.model.kind, ModelKind::Root(_))
+                    && !matches!(&field.ty, Primitive(_))
+                {
+                    return TokenStream::new();
+                }
+
                 match &field.ty {
                     Primitive(ty) => {
                         // The accessor resolves its path through the field
@@ -52,7 +69,12 @@ impl Expand<'_> {
                         // `#[document]`) yields a chainable Fields handle
                         // (`profile().name()`), a `Vec<_>` collection yields a
                         // list leaf.
-                        self.expand_primitive_field_method(field_ident, ty, &field_offset)
+                        self.expand_primitive_field_method(
+                            field_ident,
+                            ty,
+                            &field_offset,
+                            &quote!(self.path.clone()),
+                        )
                     }
                     BelongsTo(rel) => {
                         self.expand_one_relation_field_method(
@@ -74,7 +96,7 @@ impl Expand<'_> {
                         let ty = &rel.ty;
                         let span = field_ident.span();
                         let path = quote! {
-                            self.path().chain(<#model_ident as #field_schema_trait>::path_field(#field_offset))
+                            self.path.clone().chain(<#model_ident as #field_schema_trait>::path_field(#field_offset))
                         };
 
                         if rel.via.is_some() {
@@ -95,7 +117,7 @@ impl Expand<'_> {
                         } else {
                             quote_spanned! { span=>
                                 #vis fn #field_ident(&self) -> <<#ty as #toasty::RelationManyField>::Target as #toasty::Model>::ManyField<__Origin> {
-                                    <<<#ty as #toasty::RelationManyField>::Target as #toasty::Model>::ManyField<__Origin>>::from_path(#path)
+                                    <<#ty as #toasty::RelationManyField>::Target as #toasty::Model>::new_many_field(#path)
                                 }
                             }
                         }
@@ -112,28 +134,19 @@ impl Expand<'_> {
             }
         };
 
-        let filter_method = self.expand_filter_method(quote!(#model_ident));
+        let include_modifier_methods = self.expand_include_modifier_methods(quote!(#model_ident));
+        let comparison_methods = self.expand_field_struct_comparison_methods();
 
         quote!(
             #struct_def
 
+            #[allow(dead_code)]
             impl<__Origin> #field_struct_ident<__Origin> {
-                #vis const fn from_path(path: #toasty::Path<__Origin, #model_ident>) -> #field_struct_ident<__Origin> {
-                    #field_struct_ident { path }
-                }
-
-                fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                    self.path.clone()
-                }
-
-                #vis fn eq(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    use #toasty::IntoExpr;
-                    self.path.eq(rhs.into_expr())
-                }
-
                 #vis fn in_query(self, rhs: impl #toasty::IntoStatement<Returning = #toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
                     self.path.in_query(rhs)
                 }
+
+                #comparison_methods
 
                 /// Discard `self`'s origin parameter and return a fresh
                 /// fields struct typed against this model. Used by
@@ -142,10 +155,12 @@ impl Expand<'_> {
                 #[doc(hidden)]
                 pub fn into_root(self) -> #field_struct_ident<#model_ident> {
                     let _ = self;
-                    #field_struct_ident::from_path(<#model_ident as #schema_trait>::path_root())
+                    #field_struct_ident {
+                        path: <#model_ident as #schema_trait>::path_root(),
+                    }
                 }
 
-                #filter_method
+                #include_modifier_methods
 
                 #create_method
 
@@ -176,30 +191,75 @@ impl Expand<'_> {
         )
     }
 
-    fn expand_filter_method(&self, target_ty: TokenStream) -> TokenStream {
+    /// Comparison and ordering methods on the fields struct, forwarding
+    /// to the underlying path.
+    ///
+    /// `eq` and `ne` are duals and every fields struct gets both: on a
+    /// root model they compare a model reference (lowering to its primary
+    /// key), on an embedded struct the engine decomposes the record
+    /// across columns (AND for eq, OR for ne). The ordering methods —
+    /// `gt`/`ge`/`lt`/`le` and `asc`/`desc` — are tuple-newtype-only.
+    /// Multi-field structs do not expose record ordering because backends do
+    /// not share the same semantics.
+    fn expand_field_struct_comparison_methods(&self) -> TokenStream {
+        let toasty = &self.toasty;
+        let vis = &self.model.vis;
+        let model_ident = &self.model.ident;
+
+        let names: &[&str] = if self.canonical_newtype_inner().is_some() {
+            &["eq", "ne", "gt", "ge", "lt", "le"]
+        } else {
+            &["eq", "ne"]
+        };
+
+        let methods = names.iter().map(|name| {
+            let method_ident = quote::format_ident!("{name}");
+            quote! {
+                #vis fn #method_ident(self, rhs: impl #toasty::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
+                    use #toasty::IntoExpr;
+                    self.path.#method_ident(rhs.into_expr())
+                }
+            }
+        });
+
+        let ordering_methods = self.canonical_newtype_inner().map(|_| {
+            quote! {
+                #vis fn asc(self) -> #toasty::stmt::OrderByExpr {
+                    self.path.asc()
+                }
+
+                #vis fn desc(self) -> #toasty::stmt::OrderByExpr {
+                    self.path.desc()
+                }
+            }
+        });
+
+        quote!( #( #methods )* #ordering_methods )
+    }
+
+    fn expand_include_modifier_methods(&self, target_ty: TokenStream) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         if !matches!(self.model.kind, ModelKind::Root(_)) {
             return TokenStream::new();
         }
-        // A field named `filter` keeps its accessor; the include-filter
-        // combinator is skipped for this model rather than colliding.
-        if self
-            .model
-            .fields
-            .iter()
-            .any(|field| util::bare_ident_name(&field.name.ident) == "filter")
-        {
-            return TokenStream::new();
-        }
+
         quote! {
             /// Restricts the related rows loaded by `.include(...)`.
             #vis fn filter(self, predicate: #toasty::stmt::Expr<bool>) -> #toasty::stmt::Include<__Origin, #target_ty> {
                 #toasty::stmt::Include::from_path_and_query(
                     self.path,
-                    #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all().filter(predicate),
-                )
+                    #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
+                ).filter(predicate)
+            }
+
+            /// Orders the related rows loaded by `.include(...)`.
+            #vis fn order_by(self, order_by: impl Into<#toasty::core::stmt::OrderBy>) -> #toasty::stmt::Include<__Origin, #target_ty> {
+                #toasty::stmt::Include::from_path_and_query(
+                    self.path,
+                    #toasty::stmt::Query::<#toasty::stmt::List<#model_ident>>::all(),
+                ).order_by(order_by)
             }
         }
     }
@@ -234,6 +294,12 @@ impl Expand<'_> {
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
+
+                // Relation fields in embedded types have no filter path yet;
+                // see `expand_field_struct`.
+                if !is_root && !matches!(&field.ty, Primitive(_)) {
+                    return TokenStream::new();
+                }
 
                 match &field.ty {
                     Primitive(_) if field.attrs.document.is_some() => TokenStream::new(),
@@ -271,7 +337,7 @@ impl Expand<'_> {
                         quote_spanned! { span=>
                             #vis fn #field_ident(&self) -> #toasty::ViaPath<#ty, __Origin> {
                                 <<#ty as #toasty::ViaManyField>::Target as #toasty::ViaTarget>::new_path(
-                                    self.path().chain(
+                                    self.path.clone().chain(
                                         <#model_ident as #schema_trait>::path_field(#field_offset)
                                     )
                                 )
@@ -331,23 +397,17 @@ impl Expand<'_> {
             }
         };
 
-        let filter_method = self.expand_filter_method(quote!(#toasty::List<#model_ident>));
+        let include_modifier_methods =
+            self.expand_include_modifier_methods(quote!(#toasty::List<#model_ident>));
 
         quote!(
             #struct_def
 
+            #[allow(dead_code)]
             impl<__Origin> #field_list_struct_ident<__Origin> {
-                #vis const fn from_path(path: #toasty::Path<__Origin, #toasty::List<#model_ident>>) -> #field_list_struct_ident<__Origin> {
-                    #field_list_struct_ident { path }
-                }
-
-                fn path(&self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {
-                    self.path.clone()
-                }
-
                 #any_method
 
-                #filter_method
+                #include_modifier_methods
 
                 #create_method
 
@@ -476,7 +536,7 @@ impl Expand<'_> {
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::ListPath<__Origin> {
                 <#ty as #toasty::Field>::new_list_path(
-                    self.path().chain(
+                    self.path.clone().chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
@@ -501,8 +561,8 @@ impl Expand<'_> {
 
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::ManyField<__Origin> {
-                <<<#ty as #field_trait>::Target as #toasty::Model>::ManyField<__Origin>>::from_path(
-                    self.path().chain(
+                <<#ty as #field_trait>::Target as #toasty::Model>::new_many_field(
+                    self.path.clone().chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )

@@ -36,7 +36,16 @@ use error::classify_turso_error;
 /// `turso` crate so callers don't need a direct dependency on it.
 pub use turso::EncryptionOpts;
 
+#[cfg(feature = "sync")]
+pub use turso::sync::{
+    DatabaseSyncStats, PartialBootstrapStrategy, PartialSyncOpts, RemoteEncryptionCipher,
+};
+
 use async_trait::async_trait;
+#[cfg(feature = "sync")]
+use std::future::Future;
+#[cfg(feature = "sync")]
+use std::time::Duration;
 use std::{
     borrow::Cow,
     fmt,
@@ -46,7 +55,7 @@ use std::{
 use toasty_core::{
     Result, Schema,
     driver::{
-        Capability, ConnectContext, Driver, ExecResponse, QueryLogConfig,
+        Capability, ConnectContext, ConnectionUrl, Driver, ExecResponse, QueryLogConfig,
         log::QueryLog,
         operation::{IsolationLevel, Operation, RawSqlRet, Transaction, TypedValue},
     },
@@ -58,8 +67,11 @@ use toasty_core::{
 };
 use toasty_sql::{self as sql};
 use tokio::sync::Mutex;
-use turso::{Builder, Connection as TursoConn, Database, Statement, Value as TursoValue};
-use url::Url;
+#[cfg(feature = "sync")]
+use turso::sync::{AuthTokenFn, Builder, Database};
+#[cfg(not(feature = "sync"))]
+use turso::{Builder, Database};
+use turso::{Connection as TursoConn, Statement, Value as TursoValue};
 
 enum SqlReturn {
     Count,
@@ -96,24 +108,48 @@ enum TursoPath {
     InMemory,
 }
 
-/// Opt-in flags for Turso's experimental features. Each field mirrors a
-/// `turso::Builder::experimental_*` method and is applied in
-/// [`BuilderOptions::apply`] when the driver constructs a fresh
-/// [`turso::Builder`] at connection time.
+/// Driver builder options applied when opening a [`turso::Database`].
 #[derive(Debug, Default, Clone)]
 struct BuilderOptions {
+    index_method: bool,
+
+    #[cfg(not(feature = "sync"))]
+    local_options: LocalBuilderOptions,
+
+    #[cfg(feature = "sync")]
+    sync_options: SyncBuilderOptions,
+}
+
+#[cfg(not(feature = "sync"))]
+impl BuilderOptions {
+    fn apply(&self, mut b: Builder) -> Builder {
+        b = self.local_options.apply(b);
+        if self.index_method {
+            b = b.experimental_index_method(true);
+        }
+        b
+    }
+}
+
+/// Opt-in flags for Turso's experimental features. Each field mirrors a
+/// `turso::Builder::experimental_*` method and is applied in
+/// [`LocalBuilderOptions::apply`] when the driver constructs a fresh
+/// [`turso::Builder`] at connection time.
+#[cfg(not(feature = "sync"))]
+#[derive(Debug, Default, Clone)]
+struct LocalBuilderOptions {
     encryption: Option<EncryptionOpts>,
     attach: bool,
     custom_types: bool,
     generated_columns: bool,
-    index_method: bool,
     materialized_views: bool,
     vacuum: bool,
     multiprocess_wal: bool,
     without_rowid: bool,
 }
 
-impl BuilderOptions {
+#[cfg(not(feature = "sync"))]
+impl LocalBuilderOptions {
     fn apply(&self, mut b: Builder) -> Builder {
         if let Some(opts) = &self.encryption {
             // Upstream requires *both* the feature flag and the
@@ -132,9 +168,6 @@ impl BuilderOptions {
         if self.generated_columns {
             b = b.experimental_generated_columns(true);
         }
-        if self.index_method {
-            b = b.experimental_index_method(true);
-        }
         if self.materialized_views {
             b = b.experimental_materialized_views(true);
         }
@@ -151,6 +184,106 @@ impl BuilderOptions {
     }
 }
 
+#[cfg(feature = "sync")]
+/// Sync configuration for a remote Turso database. Each field mirrors a
+/// `turso::sync::Builder` method and is applied in [`BuilderOptions::apply`]
+/// when the driver opens a [`turso::sync::Database`].
+#[derive(Clone)]
+struct SyncBuilderOptions {
+    remote_url: Option<String>,
+    auth_token: Option<AuthTokenFn>,
+    client_name: Option<String>,
+    long_poll_timeout: Option<Duration>,
+    /// Matches `turso::sync::Builder::new_remote`, which defaults this to
+    /// `true`.
+    bootstrap_if_empty: bool,
+    partial_sync_config_experimental: Option<PartialSyncOpts>,
+    remote_encryption: bool,
+    remote_encryption_key: Option<String>,
+    remote_encryption_cipher: Option<RemoteEncryptionCipher>,
+}
+
+#[cfg(feature = "sync")]
+impl Default for SyncBuilderOptions {
+    fn default() -> Self {
+        Self {
+            remote_url: None,
+            auth_token: None,
+            client_name: None,
+            long_poll_timeout: None,
+            bootstrap_if_empty: true,
+            partial_sync_config_experimental: None,
+            remote_encryption: false,
+            remote_encryption_key: None,
+            remote_encryption_cipher: None,
+        }
+    }
+}
+
+#[cfg(feature = "sync")]
+impl fmt::Debug for SyncBuilderOptions {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("SyncBuilderOptions")
+            .field("remote_url", &self.remote_url)
+            .field(
+                "auth_token",
+                &self.auth_token.as_ref().map(|_| "<callback>"),
+            )
+            .field("client_name", &self.client_name)
+            .field("long_poll_timeout", &self.long_poll_timeout)
+            .field("bootstrap_if_empty", &self.bootstrap_if_empty)
+            .field(
+                "partial_sync_config_experimental",
+                &self.partial_sync_config_experimental,
+            )
+            .field("remote_encryption", &self.remote_encryption)
+            .field(
+                "remote_encryption_key",
+                &self.remote_encryption_key.as_ref().map(|_| "<redacted>"),
+            )
+            .field("remote_encryption_cipher", &self.remote_encryption_cipher)
+            .finish()
+    }
+}
+
+#[cfg(feature = "sync")]
+impl BuilderOptions {
+    fn apply(&self, mut b: Builder) -> Builder {
+        if let Some(remote_url) = &self.sync_options.remote_url {
+            b = b.with_remote_url(remote_url)
+        }
+        if let Some(provider) = self.sync_options.auth_token.clone() {
+            b = b.with_auth_token_fn(move || provider());
+        }
+        if let Some(client_name) = &self.sync_options.client_name {
+            b = b.with_client_name(client_name)
+        }
+        if let Some(timeout) = self.sync_options.long_poll_timeout {
+            b = b.with_long_poll_timeout(timeout)
+        }
+        if let Some(opts) = &self.sync_options.partial_sync_config_experimental {
+            b = b.with_partial_sync_opts_experimental(opts.clone())
+        }
+        if self.sync_options.remote_encryption
+            && let (Some(base64_key), Some(cipher)) = (
+                &self.sync_options.remote_encryption_key,
+                &self.sync_options.remote_encryption_cipher,
+            )
+        {
+            b = b.with_remote_encryption(base64_key, *cipher)
+        } else if let Some(key) = &self.sync_options.remote_encryption_key {
+            b = b.with_remote_encryption_key(key);
+        }
+        if self.index_method {
+            b = b.experimental_index_method(true);
+        }
+        let bootstrap =
+            self.sync_options.remote_url.is_some() && self.sync_options.bootstrap_if_empty;
+        b = b.bootstrap_if_empty(bootstrap);
+        b
+    }
+}
+
 /// A Turso [`Driver`] that opens connections to a file or in-memory database.
 ///
 /// Experimental Turso features are exposed as `experimental_*` builder
@@ -158,24 +291,33 @@ impl BuilderOptions {
 ///
 /// # Examples
 ///
-/// ```
+/// ```rust,ignore
 /// use toasty_driver_turso::Turso;
-///
-/// // In-memory database
-/// let driver = Turso::in_memory();
 ///
 /// // File-backed database
 /// let driver = Turso::file("path/to/db");
 ///
 /// // With experimental features
 /// use toasty_driver_turso::EncryptionOpts;
+///
 /// let driver = Turso::file("path/to/db")
 ///     .experimental_encryption(EncryptionOpts {
 ///         cipher: "aes256gcm".into(),
 ///         hexkey: "<64-hex-character-key>".into(),
 ///     })
 ///     .experimental_attach(true);
+///
+/// // Concurrent writes
+/// let driver = Turso::file("path/to/db").concurrent_writes();
+///
+/// // Syncing with remote server
+/// let driver = Turso::file("path/to/db")
+///     .with_remote_url("<remote-url>")
+///     .with_auth_token("<auth-token>");
+///
+/// driver.push().await?;
 /// ```
+#[derive(Clone)]
 pub struct Turso {
     path: TursoPath,
     options: BuilderOptions,
@@ -185,7 +327,7 @@ pub struct Turso {
     /// connection to `:memory:` would open a fresh empty database; even
     /// file-backed handles open faster after the first builder run.
     /// Cleared by [`Driver::reset_db`] so the next `connect()` starts fresh.
-    database: Mutex<Option<Database>>,
+    database: Arc<Mutex<Option<Database>>>,
 }
 
 impl Turso {
@@ -195,25 +337,20 @@ impl Turso {
     /// `turso:/path/to/db`).
     pub fn new(url: impl Into<String>) -> Result<Self> {
         let url_str = url.into();
-        let url = Url::parse(&url_str).map_err(toasty_core::Error::driver_operation_failed)?;
+        let url = ConnectionUrl::parse(&url_str)?;
 
-        if url.scheme() != "turso" {
+        if !url.has_scheme("turso") {
             return Err(toasty_core::Error::invalid_connection_url(format!(
                 "connection URL does not have a `turso` scheme; url={url_str}"
             )));
         }
 
-        let path = if url.path() == ":memory:" {
-            TursoPath::InMemory
-        } else {
-            TursoPath::File(PathBuf::from(
-                percent_encoding::percent_decode(url.path().as_bytes())
-                    .decode_utf8_lossy()
-                    .to_string()
-                    .as_str(),
-            ))
-        };
-        Ok(Self::with_path(path))
+        let path = url.file_path()?;
+        if path == Path::new(":memory:") {
+            return Ok(Self::with_path(TursoPath::InMemory));
+        }
+
+        Ok(Self::with_path(TursoPath::File(path)))
     }
 
     /// Create an in-memory Turso database.
@@ -231,7 +368,7 @@ impl Turso {
             path,
             options: BuilderOptions::default(),
             concurrent_writes: false,
-            database: Mutex::new(None),
+            database: Arc::new(Mutex::new(None)),
         }
     }
 
@@ -255,69 +392,243 @@ impl Turso {
         self
     }
 
-    /// Enable Turso's experimental encryption with the given cipher and
-    /// key. Bundles `turso::Builder::experimental_encryption(true)` with
-    /// `turso::Builder::with_encryption(opts)` so callers cannot enable
-    /// encryption without supplying a key.
-    pub fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
-        self.options.encryption = Some(opts);
-        self
-    }
-
-    /// Enable Turso's experimental `ATTACH DATABASE` support. Mirrors
-    /// `turso::Builder::experimental_attach`.
-    pub fn experimental_attach(mut self, on: bool) -> Self {
-        self.options.attach = on;
-        self
-    }
-
-    /// Enable Turso's experimental custom types. Mirrors
-    /// `turso::Builder::experimental_custom_types`.
-    pub fn experimental_custom_types(mut self, on: bool) -> Self {
-        self.options.custom_types = on;
-        self
-    }
-
-    /// Enable Turso's experimental generated columns. Mirrors
-    /// `turso::Builder::experimental_generated_columns`.
-    pub fn experimental_generated_columns(mut self, on: bool) -> Self {
-        self.options.generated_columns = on;
-        self
-    }
-
-    /// Enable Turso's experimental index methods. Mirrors
-    /// `turso::Builder::experimental_index_method`.
+    /// Enable Turso's experimental index methods. With the `sync` feature,
+    /// mirrors `turso::sync::Builder::experimental_index_method`; otherwise
+    /// mirrors `turso::Builder::experimental_index_method`.
     pub fn experimental_index_method(mut self, on: bool) -> Self {
         self.options.index_method = on;
         self
     }
 
+    /// Enable Turso's experimental encryption with the given cipher and
+    /// key. Bundles `turso::Builder::experimental_encryption(true)` with
+    /// `turso::Builder::with_encryption(opts)` so callers cannot enable
+    /// encryption without supplying a key.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_encryption(mut self, opts: EncryptionOpts) -> Self {
+        self.options.local_options.encryption = Some(opts);
+        self
+    }
+
+    /// Enable Turso's experimental `ATTACH DATABASE` support. Mirrors
+    /// `turso::Builder::experimental_attach`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_attach(mut self, on: bool) -> Self {
+        self.options.local_options.attach = on;
+        self
+    }
+
+    /// Enable Turso's experimental custom types. Mirrors
+    /// `turso::Builder::experimental_custom_types`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_custom_types(mut self, on: bool) -> Self {
+        self.options.local_options.custom_types = on;
+        self
+    }
+
+    /// Enable Turso's experimental generated columns. Mirrors
+    /// `turso::Builder::experimental_generated_columns`.
+    #[cfg(not(feature = "sync"))]
+    pub fn experimental_generated_columns(mut self, on: bool) -> Self {
+        self.options.local_options.generated_columns = on;
+        self
+    }
+
     /// Enable Turso's experimental materialized views. Mirrors
     /// `turso::Builder::experimental_materialized_views`.
+    #[cfg(not(feature = "sync"))]
     pub fn experimental_materialized_views(mut self, on: bool) -> Self {
-        self.options.materialized_views = on;
+        self.options.local_options.materialized_views = on;
         self
     }
 
     /// Enable Turso's experimental `VACUUM`. Mirrors
     /// `turso::Builder::experimental_vacuum`.
+    #[cfg(not(feature = "sync"))]
     pub fn experimental_vacuum(mut self, on: bool) -> Self {
-        self.options.vacuum = on;
+        self.options.local_options.vacuum = on;
         self
     }
 
     /// Enable Turso's experimental multi-process WAL. Mirrors
     /// `turso::Builder::experimental_multiprocess_wal`.
+    #[cfg(not(feature = "sync"))]
     pub fn experimental_multiprocess_wal(mut self, on: bool) -> Self {
-        self.options.multiprocess_wal = on;
+        self.options.local_options.multiprocess_wal = on;
         self
     }
 
     /// Enable Turso's experimental `WITHOUT ROWID` support. Mirrors
     /// `turso::Builder::experimental_without_rowid`.
+    #[cfg(not(feature = "sync"))]
     pub fn experimental_without_rowid(mut self, on: bool) -> Self {
-        self.options.without_rowid = on;
+        self.options.local_options.without_rowid = on;
         self
+    }
+
+    /// Set the remote base URL for sync HTTP requests. Mirrors
+    /// `turso::sync::Builder::with_remote_url`.
+    ///
+    /// Accepts `https://`, `http://` and `libsql://` URLs (`libsql://` is
+    /// translated to `https://`). If omitted on a file-backed database that
+    /// was previously synced, Turso loads the URL from on-disk metadata.
+    #[cfg(feature = "sync")]
+    pub fn with_remote_url(mut self, remote_url: impl Into<String>) -> Self {
+        self.options.sync_options.remote_url = Some(remote_url.into());
+        self
+    }
+
+    /// Set a static authorization token for sync HTTP requests. Mirrors
+    /// `turso::sync::Builder::with_auth_token`.
+    ///
+    /// The token is sent as a `Bearer` header (without the prefix in this
+    /// argument). Overridden by [`Self::with_auth_token_fn`] if called later.
+    #[cfg(feature = "sync")]
+    pub fn with_auth_token(mut self, token: impl Into<String>) -> Self {
+        let token = token.into();
+        self.options.sync_options.auth_token = Some(Arc::new(move || {
+            let token = token.clone();
+            Box::pin(async move { Ok(token) })
+        }));
+        self
+    }
+
+    /// Set an async callback that produces an auth token on demand. Mirrors
+    /// `turso::sync::Builder::with_auth_token_fn`.
+    ///
+    /// The callback runs before every HTTP request, so it can return a freshly
+    /// rotated token (for example from a secrets manager or OAuth refresh). If
+    /// the callback returns an error, the in-flight sync operation fails with
+    /// that error.
+    ///
+    /// Overrides any previously configured static token from
+    /// [`Self::with_auth_token`].
+    #[cfg(feature = "sync")]
+    pub fn with_auth_token_fn<F, Fut>(mut self, f: F) -> Self
+    where
+        F: Fn() -> Fut + Send + Sync + 'static,
+        Fut: Future<Output = turso::Result<String>> + Send + 'static,
+    {
+        self.options.sync_options.auth_token = Some(Arc::new(move || Box::pin(f())));
+        self
+    }
+
+    /// Set the client name reported to the sync engine. Mirrors
+    /// `turso::sync::Builder::with_client_name`.
+    ///
+    /// Defaults to `turso-sync-rust` when unset.
+    #[cfg(feature = "sync")]
+    pub fn with_client_name(mut self, name: impl Into<String>) -> Self {
+        self.options.sync_options.client_name = Some(name.into());
+        self
+    }
+
+    /// Set how long to wait on the remote when polling for changes. Mirrors
+    /// `turso::sync::Builder::with_long_poll_timeout`.
+    #[cfg(feature = "sync")]
+    pub fn with_long_poll_timeout(mut self, timeout: Duration) -> Self {
+        self.options.sync_options.long_poll_timeout = Some(timeout);
+        self
+    }
+
+    /// Set a base64-encoded encryption key and cipher for the remote Turso
+    /// Cloud database. Mirrors `turso::sync::Builder::with_remote_encryption`.
+    ///
+    /// The cipher determines `reserved_bytes` for page layout during bootstrap.
+    #[cfg(feature = "sync")]
+    pub fn with_remote_encryption(
+        mut self,
+        base64_key: impl Into<String>,
+        cipher: RemoteEncryptionCipher,
+    ) -> Self {
+        self.options.sync_options.remote_encryption = true;
+        self.options.sync_options.remote_encryption_key = Some(base64_key.into());
+        self.options.sync_options.remote_encryption_cipher = Some(cipher);
+        self
+    }
+
+    /// Set a base64-encoded encryption key for the remote Turso Cloud database.
+    /// Mirrors `turso::sync::Builder::with_remote_encryption_key`.
+    ///
+    /// The key is sent as the `x-turso-encryption-key` header on sync HTTP
+    /// requests. For deferred sync without an initial bootstrap, prefer
+    /// [`Self::with_remote_encryption`] so the cipher is set for correct
+    /// `reserved_bytes` calculation.
+    #[cfg(feature = "sync")]
+    pub fn with_remote_encryption_key(mut self, base64_key: impl Into<String>) -> Self {
+        self.options.sync_options.remote_encryption_key = Some(base64_key.into());
+        self
+    }
+
+    /// Enable or disable bootstrapping an empty local database from the remote.
+    /// Mirrors `turso::sync::Builder::bootstrap_if_empty`.
+    ///
+    /// When enabled and the local database is empty, the driver downloads
+    /// schema and initial data from the remote on first open. Upstream defaults
+    /// to enabled; call with `false` to skip bootstrap (for example when
+    /// attaching to an existing local file).
+    #[cfg(feature = "sync")]
+    pub fn bootstrap_if_empty(mut self, enable: bool) -> Self {
+        self.options.sync_options.bootstrap_if_empty = enable;
+        self
+    }
+
+    /// Set experimental partial-sync options. Mirrors
+    /// `turso::sync::Builder::with_partial_sync_opts_experimental`.
+    #[cfg(feature = "sync")]
+    pub fn experimental_with_partial_sync_opts(mut self, opts: PartialSyncOpts) -> Self {
+        self.options.sync_options.partial_sync_config_experimental = Some(opts);
+        self
+    }
+
+    /// Push local changes to the remote. Mirrors
+    /// [`turso::sync::Database::push`].
+    ///
+    /// Operates on the shared [`turso::sync::Database`] cached by this driver,
+    /// so all connections in the pool see the same pending changes.
+    #[cfg(feature = "sync")]
+    pub async fn push(&self) -> Result<()> {
+        self.database()
+            .await?
+            .push()
+            .await
+            .map_err(classify_turso_error)
+    }
+
+    /// Pull remote changes and apply them locally. Mirrors
+    /// [`turso::sync::Database::pull`].
+    ///
+    /// Waits for remote changes, then applies them if any exist. Returns `true`
+    /// when changes were applied, `false` when the remote had nothing new.
+    #[cfg(feature = "sync")]
+    pub async fn pull(&self) -> Result<bool> {
+        self.database()
+            .await?
+            .pull()
+            .await
+            .map_err(classify_turso_error)
+    }
+
+    /// Force a WAL checkpoint on the main database. Mirrors
+    /// [`turso::sync::Database::checkpoint`].
+    #[cfg(feature = "sync")]
+    pub async fn checkpoint(&self) -> Result<()> {
+        self.database()
+            .await?
+            .checkpoint()
+            .await
+            .map_err(classify_turso_error)
+    }
+
+    /// Return sync statistics for this database. Mirrors
+    /// [`turso::sync::Database::stats`].
+    #[cfg(feature = "sync")]
+    pub async fn stats(&self) -> Result<DatabaseSyncStats> {
+        self.database()
+            .await?
+            .stats()
+            .await
+            .map_err(classify_turso_error)
     }
 
     fn path_str(&self) -> &str {
@@ -338,7 +649,12 @@ impl Turso {
         if let Some(db) = slot.as_ref() {
             return Ok(db.clone());
         }
+
+        #[cfg(not(feature = "sync"))]
         let builder = self.options.apply(Builder::new_local(self.path_str()));
+        #[cfg(feature = "sync")]
+        let builder = self.options.apply(Builder::new_remote(self.path_str()));
+
         let db = builder.build().await.map_err(classify_turso_error)?;
         *slot = Some(db.clone());
         Ok(db)
@@ -370,7 +686,11 @@ impl Driver for Turso {
 
     async fn connect(&self, cx: &ConnectContext) -> Result<Box<dyn toasty_core::Connection>> {
         let db = self.database().await?;
+
+        #[cfg(not(feature = "sync"))]
         let conn = db.connect().map_err(classify_turso_error)?;
+        #[cfg(feature = "sync")]
+        let conn = db.connect().await.map_err(classify_turso_error)?;
 
         if self.concurrent_writes {
             // `PRAGMA journal_mode = ...` returns the new mode as a row; the
@@ -532,13 +852,8 @@ impl toasty_core::driver::Connection for Connection {
         tracing::trace!(driver = "turso", op = %op.name(), "driver exec");
 
         let (sql, typed_params, ret_tys) = match op {
-            Operation::QuerySql(op) => {
-                assert!(
-                    op.last_insert_id_hack.is_none(),
-                    "last_insert_id_hack is MySQL-specific and should not be set for Turso"
-                );
-                (sql::Statement::from(op.stmt), op.params, op.ret)
-            }
+            Operation::Insert(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
+            Operation::QuerySql(op) => (sql::Statement::from(op.stmt), op.params, op.ret),
             Operation::RawSql(op) => {
                 let ret = match op.ret {
                     RawSqlRet::None => SqlReturn::Count,
@@ -681,46 +996,115 @@ impl toasty_core::driver::Connection for Connection {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::{Turso, TursoPath};
-    use std::path::PathBuf;
+#[cfg(all(test, feature = "sync"))]
+mod sync_tests {
+    use super::{Turso, TursoValue};
+    use reqwest::Client;
+    use serde_json::{Value, json};
+    use std::time::Duration;
+    use tokio::time::{Instant, sleep};
 
-    /// The file path `Turso::new` resolves out of a `turso:` URL.
-    fn file_path(url: &str) -> PathBuf {
-        match Turso::new(url).unwrap().path {
-            TursoPath::File(path) => path,
-            TursoPath::InMemory => panic!("expected a file-backed database for {url}"),
+    struct TursoTestServer {
+        client: Client,
+        db_url: String,
+    }
+
+    impl TursoTestServer {
+        pub async fn new() -> Self {
+            let client = Client::new();
+            let db_url = std::env::var("TOASTY_TEST_TURSO_SYNC_URL")
+                .unwrap_or("http://127.0.0.1:8080".to_string());
+
+            let deadline = Instant::now() + Duration::from_secs(5);
+            loop {
+                if client.get(&db_url).send().await.is_ok() {
+                    break;
+                }
+                if Instant::now() >= deadline {
+                    panic!("Turso sync server did not become ready within 30s; url={db_url}");
+                }
+                sleep(Duration::from_millis(100)).await;
+            }
+
+            Self { client, db_url }
+        }
+
+        async fn run_sql(&self, sql: &str) -> Vec<Value> {
+            let resp: Value = self
+                .client
+                .post(format!("{}/v2/pipeline", self.db_url))
+                .json(&json!({
+                    "requests": [{
+                        "type": "execute",
+                        "stmt": { "sql": sql }
+                    }]
+                }))
+                .send()
+                .await
+                .unwrap()
+                .error_for_status()
+                .unwrap()
+                .json()
+                .await
+                .unwrap();
+
+            let result = &resp["results"][0];
+            if result["type"] != "ok" {
+                panic!("pipeline failed: {resp}");
+            }
+            result["response"]["result"]["rows"]
+                .as_array()
+                .unwrap()
+                .clone()
         }
     }
 
-    #[test]
-    fn new_decodes_percent_encoded_path() {
-        // `url::Url` stores the path percent-encoded: a space becomes `%20` and
-        // non-ASCII bytes become `%XX` sequences. The driver must decode it back
-        // before opening the file, otherwise it opens one whose name literally
-        // contains `%20`.
+    #[tokio::test]
+    async fn test_sync_push_and_pull() {
+        let server = TursoTestServer::new().await;
+        server.run_sql("DROP TABLE IF EXISTS t").await;
+
+        let driver = Turso::in_memory().with_remote_url(&server.db_url);
+        let conn = driver.database().await.unwrap().connect().await.unwrap();
+
+        conn.execute("DROP TABLE IF EXISTS t", ()).await.unwrap();
+        conn.execute("CREATE TABLE t (x TEXT)", ()).await.unwrap();
+        conn.execute("INSERT INTO t VALUES ('test'), ('test-2')", ())
+            .await
+            .unwrap();
+
+        driver.push().await.unwrap();
+
+        let rows = server.run_sql("SELECT x FROM t ORDER BY x").await;
         assert_eq!(
-            file_path("turso:/tmp/my db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
+            rows,
+            vec![
+                json!([{"type": "text", "value": "test"}]),
+                json!([{"type": "text", "value": "test-2"}]),
+            ]
         );
-        assert_eq!(
-            file_path("turso:///tmp/my%20db.sqlite"),
-            PathBuf::from("/tmp/my db.sqlite")
-        );
-        assert_eq!(
-            file_path("turso:/tmp/d%C3%A9j%C3%A0.db"),
-            PathBuf::from("/tmp/déjà.db")
-        );
-        // Percent-decoding, not form-decoding: a literal `+` must stay a `+`.
-        assert_eq!(file_path("turso:/tmp/a+b.db"), PathBuf::from("/tmp/a+b.db"));
+
+        server.run_sql("INSERT INTO t VALUES ('test-3')").await;
+
+        driver.pull().await.unwrap();
+
+        let mut local_rows = conn.query("SELECT x FROM t ORDER BY x", ()).await.unwrap();
+
+        let mut values = vec![];
+        while let Some(row) = local_rows.next().await.unwrap() {
+            if let TursoValue::Text(s) = row.get_value(0).unwrap() {
+                values.push(s);
+            }
+        }
+        assert_eq!(values, vec!["test", "test-2", "test-3"]);
     }
 
-    #[test]
-    fn new_memory_url_stays_in_memory() {
-        assert!(matches!(
-            Turso::new("turso::memory:").unwrap().path,
-            TursoPath::InMemory
-        ));
+    #[tokio::test]
+    async fn test_local_db_without_remote_url() {
+        let server = TursoTestServer::new().await;
+        server.run_sql("DROP TABLE IF EXISTS t").await;
+
+        let driver = Turso::in_memory();
+        let _ = driver.database().await.unwrap().connect().await.unwrap();
     }
 }

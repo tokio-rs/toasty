@@ -9,7 +9,7 @@ use crate::prelude::*;
 
 // Update only the last declared field, leaving earlier fields untouched.
 // With offset-based IndexMap this could assign the value to field 0 instead.
-#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
+#[driver_test(scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_last_field_only(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -33,7 +33,7 @@ pub async fn update_last_field_only(test: &mut Test) -> Result<()> {
 
 // Update fields in reverse declaration order. If offset mapping is wrong, the
 // String value ends up in the i64 column (or vice versa), causing a parse error.
-#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
+#[driver_test(scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_fields_reverse_order(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -65,7 +65,7 @@ pub async fn update_fields_reverse_order(test: &mut Test) -> Result<()> {
 // Update a single middle field among many typed fields. This is the simplest
 // trigger for the original bug: a single assignment at a high offset gets
 // misrouted to offset 0.
-#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
+#[driver_test(scenario(crate::scenarios::widget_mixed_types))]
 pub async fn update_middle_field_mixed_types(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -91,7 +91,7 @@ pub async fn update_middle_field_mixed_types(test: &mut Test) -> Result<()> {
 
 // Query-based update with fields in non-declaration order. Exercises the
 // filter_by path rather than the instance-update path.
-#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
+#[driver_test(scenario(crate::scenarios::widget_mixed_types))]
 pub async fn query_update_non_declaration_order(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -124,7 +124,7 @@ pub async fn query_update_non_declaration_order(test: &mut Test) -> Result<()> {
 
 // Successive single-field updates targeting different offsets each time.
 // Ensures that each individual update routes to the correct column.
-#[driver_test(id(ID), scenario(crate::scenarios::widget_mixed_types))]
+#[driver_test(scenario(crate::scenarios::widget_mixed_types))]
 pub async fn successive_single_field_updates(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 

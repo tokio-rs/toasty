@@ -1,10 +1,7 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::{exec, mir};
 
 /// Merges child records into parent records.
 ///
@@ -14,6 +11,7 @@ use crate::engine::{
 #[derive(Debug)]
 pub(crate) struct NestedMerge {
     /// The nodes providing parent and child data to merge.
+    /// [`NestedLevel`](exec::NestedLevel) references them by position.
     pub(crate) inputs: IndexSet<mir::NodeId>,
 
     /// Configuration for how to perform the merge at each nesting level.
@@ -24,34 +22,25 @@ pub(crate) struct NestedMerge {
 
     /// Flat list of sorted indexes to build before the merge, computed at plan time.
     pub(crate) sort_indexes: Vec<exec::MergeIndex>,
+
+    /// Output type: `List<root.projection.ret>`.
+    pub(crate) ty: stmt::Type,
 }
 
 impl NestedMerge {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::NestedMerge {
-        let mut input_vars = vec![];
-
-        for input in &self.inputs {
-            let var = logical_plan[input].var.get().unwrap();
-            input_vars.push(var);
-        }
-
-        let output = var_table.register_var(stmt::Type::list(self.root.projection.ret.clone()));
-        node.var.set(Some(output));
-
-        exec::NestedMerge {
-            inputs: input_vars,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            root: self.root.clone(),
-            hash_indexes: self.hash_indexes.clone(),
-            sort_indexes: self.sort_indexes.clone(),
+    pub(crate) fn new(
+        inputs: IndexSet<mir::NodeId>,
+        root: exec::NestedLevel,
+        hash_indexes: Vec<exec::MergeIndex>,
+        sort_indexes: Vec<exec::MergeIndex>,
+    ) -> Self {
+        let ty = stmt::Type::list(root.projection.ret.clone());
+        NestedMerge {
+            inputs,
+            root,
+            hash_indexes,
+            sort_indexes,
+            ty,
         }
     }
 }

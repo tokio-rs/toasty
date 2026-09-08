@@ -1,0 +1,5 @@
+error: a relation field cannot be indexed; index its foreign key field(s) instead
+  --> tests/ui/embed_relation_indexed.rs:16:5
+   |
+16 |     author: toasty::Deferred<Human>,
+   |     ^^^^^^

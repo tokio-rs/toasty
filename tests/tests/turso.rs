@@ -32,6 +32,10 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_date: false,
     native_time: false,
     native_datetime: false,
+    native_cidr: false,
+    native_inet: false,
+    native_macaddr: false,
+    native_macaddr8: false,
     native_array: false,
     native_ilike: false,
     native_json: false,
@@ -39,6 +43,7 @@ toasty_driver_integration_suite::generate_driver_tests!(
     native_enum: false,
     insert_values_unnest: false,
     vec_scalar: true,
+    unique_list_index: false,
     vec_remove: false,
     vec_pop: false,
     vec_remove_at: false,
@@ -309,14 +314,14 @@ async fn experimental_encryption_smoke() {
     let _ = std::fs::remove_file(&tmp);
 }
 
-/// `Turso::new` must accept both `turso::memory:` and `turso:/path/...`
-/// and reject anything else. Mirrors the PostgreSQL driver's `url_encoding`
-/// test in spirit: exercises the URL-parsing path that doesn't run through
-/// the shared integration suite.
+/// `Turso::new` accepts in-memory and file targets after the shared connection
+/// URL parser validates the scheme.
 #[test]
 fn url_scheme_parsing() {
-    let mem = Turso::new("turso::memory:").expect("in-memory URL must parse");
-    assert_eq!(mem.url(), "turso::memory:");
+    for url in ["turso::memory:", "turso://:memory:"] {
+        let mem = Turso::new(url).expect("in-memory URL must parse");
+        assert_eq!(mem.url(), "turso::memory:");
+    }
 
     let file = Turso::new("turso:/var/tmp/toasty.db").expect("file URL must parse");
     assert_eq!(file.url(), "turso:/var/tmp/toasty.db");

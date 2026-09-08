@@ -3,7 +3,7 @@
 use crate::prelude::*;
 use hashbrown::HashMap;
 
-#[driver_test(id(ID), scenario(crate::scenarios::has_many_multi_relation))]
+#[driver_test(scenario(crate::scenarios::has_many_multi_relation))]
 pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
 
@@ -89,7 +89,7 @@ pub async fn crud_user_todos_categories(test: &mut Test) -> Result<()> {
 
     async fn check_todo_list(
         db: &mut toasty::Db,
-        expect: &HashMap<ID, Todo>,
+        expect: &HashMap<uuid::Uuid, Todo>,
         list: Vec<Todo>,
     ) -> Result<()> {
         assert_eq!(3, list.len(), "list={list:#?}");

@@ -1,14 +1,12 @@
 use crate::prelude::*;
 
 scenario! {
-    #![id(ID)]
-
     #[derive(Debug, toasty::Model)]
     #[unique(tenant, slug)]
     struct Entry {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         tenant: String,
         slug: String,
@@ -19,7 +17,7 @@ scenario! {
     struct DefaultedItem {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         value: String,
 
@@ -34,7 +32,7 @@ scenario! {
     struct AssignedItem {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[default(0)]
         count: i64,

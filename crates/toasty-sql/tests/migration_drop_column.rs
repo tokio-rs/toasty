@@ -1,7 +1,10 @@
 use toasty_core::{
     driver::Capability,
     schema::{
-        db::{Column, ColumnId, IndexId, PrimaryKey, Schema, Table, TableId, Type},
+        db::{
+            Column, ColumnId, Index, IndexColumn, IndexId, IndexOp, IndexScope, PrimaryKey, Schema,
+            Table, TableId, Type,
+        },
         diff,
     },
     stmt as core_stmt,
@@ -88,6 +91,60 @@ fn drop_column_sqlite() {
 
     assert_eq!(sql.len(), 1);
     assert_eq!(sql[0], "ALTER TABLE \"users\" DROP COLUMN \"name\";");
+}
+
+#[test]
+fn drop_index_before_indexed_column() {
+    let mut from_table = make_table(
+        0,
+        "users",
+        vec![
+            make_column(0, 0, "id", Type::Integer(8)),
+            make_column(0, 1, "email", Type::Text),
+        ],
+    );
+    from_table.indices.push(Index {
+        id: IndexId {
+            table: TableId(0),
+            index: 0,
+        },
+        name: "idx_users_email".to_string(),
+        on: TableId(0),
+        columns: vec![IndexColumn {
+            column: ColumnId {
+                table: TableId(0),
+                index: 1,
+            },
+            op: IndexOp::Eq,
+            scope: IndexScope::Local,
+        }],
+        unique: false,
+        primary_key: false,
+    });
+
+    let from = Schema {
+        tables: vec![from_table],
+    };
+    let to = Schema {
+        tables: vec![make_table(
+            0,
+            "users",
+            vec![make_column(0, 0, "id", Type::Integer(8))],
+        )],
+    };
+
+    let hints = diff::RenameHints::new();
+    let diff = diff::Schema::from(&from, &to, &hints);
+    let stmts = MigrationStatement::from_diff(&diff, &Capability::SQLITE);
+    let sql = serialize_migration(&stmts, "sqlite");
+
+    assert_eq!(
+        sql,
+        [
+            "DROP INDEX \"idx_users_email\";",
+            "ALTER TABLE \"users\" DROP COLUMN \"email\";",
+        ]
+    );
 }
 
 #[test]

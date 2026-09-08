@@ -3,7 +3,6 @@ use std::time::Duration;
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID),
     requires(test_connection_pool),
     scenario(crate::scenarios::user_with_age)
 )]
@@ -19,7 +18,7 @@ pub async fn max_pool_size_is_applied(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
-#[driver_test(id(ID), scenario(crate::scenarios::user_with_age))]
+#[driver_test(scenario(crate::scenarios::user_with_age))]
 pub async fn pool_timeouts_are_accepted(t: &mut Test) -> Result<()> {
     // The values are not directly observable through the public API; this
     // test confirms the builder accepts them and a connection can still be

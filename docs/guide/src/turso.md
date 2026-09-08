@@ -3,10 +3,11 @@
 [Turso] is a SQLite-compatible database engine with native async I/O.
 Toasty's Turso driver speaks the same SQL dialect as the
 [SQLite driver](./sqlite.md) and supports the same Rust types and
-queries. The differences from SQLite cover three areas: connection
+queries. The differences from SQLite cover four areas: connection
 pooling against an in-memory database, an opt-in concurrent-writes
-mode that uses Turso's MVCC journal, and a set of toggles for Turso's
-experimental engine features.
+mode that uses Turso's MVCC journal, toggles for Turso's experimental
+engine features, and optional remote sync (Turso Cloud or
+`tursodb --sync-server`).
 
 [Turso]: https://turso.tech/
 
@@ -57,8 +58,8 @@ let db = toasty::Db::builder()
 | `turso:<path>` | A file-backed database at `<path>`. Relative paths resolve against the process's working directory. |
 
 The driver does not parse query parameters from the URL. To set
-options like `concurrent_writes()` or any of the `experimental_*`
-flags, construct the driver directly.
+options like `concurrent_writes()`, remote sync, or any of the
+`experimental_*` flags, construct the driver directly.
 
 ## Type mapping and SQL behavior
 
@@ -82,6 +83,112 @@ are immediately visible to readers on another.
 This means the connection-pool tests in Toasty's integration suite
 run against in-memory Turso, and you can use `turso::memory:` for
 multi-connection tests where in-memory SQLite would not work.
+
+## Remote sync
+
+Remote sync keeps a local Turso database in sync with Turso Cloud or a
+local `tursodb --sync-server`.
+
+Sync lives on `toasty-driver-turso`, not on `Db`: enable the feature,
+build the driver with a remote URL, pass it to `build()`, and call
+`push()` / `pull()` when you want to sync.
+
+Add the driver's `sync` feature in `Cargo.toml`. Keep Toasty's `turso`
+feature as well if you connect through `toasty::Db`:
+
+```toml
+[dependencies]
+toasty = { version = "{{toasty_version}}", features = ["turso"] }
+toasty-driver-turso = { version = "{{toasty_version}}", features = ["sync"] }
+```
+
+Construct the driver directly — sync options do not fit in a `turso:`
+URL — then pass it to `build()`:
+
+```rust,ignore
+use toasty_driver_turso::Turso;
+
+let driver = Turso::file("./app.db")
+    .with_remote_url("https://your-db.turso.io")
+    .with_auth_token(std::env::var("TURSO_AUTH_TOKEN")?);
+
+let db = toasty::Db::builder()
+    .models(toasty::models!(crate::*))
+    .build(driver.clone())
+    .await?;
+
+// Pull remote changes into the local file, then push local writes back.
+driver.pull().await?;
+// … use `db` as usual …
+driver.push().await?;
+```
+
+Local development against `tursodb --sync-server` omits the token:
+
+```rust,ignore
+// Started with: tursodb :memory: --sync-server 127.0.0.1:8080
+let driver = Turso::file("./app.db")
+    .with_remote_url("http://127.0.0.1:8080");
+```
+
+`with_remote_url` accepts `https://`, `http://` and `libsql://`
+(`libsql://` becomes `https://`). On a file-backed database that was
+synced before, omitting the URL loads it from on-disk metadata
+(`./app.db-info` and related files).
+
+### Authentication
+
+`with_auth_token` sets a static auth token. Pass the token **without**
+a `Bearer ` prefix — the driver adds that for you.
+
+| Environment | Token |
+|---|---|
+| Local `tursodb --sync-server` (no auth) | Omit `with_auth_token` |
+| Turso Cloud | Database token from the Turso dashboard or `turso db tokens create` |
+
+For rotating tokens (secrets manager, OAuth refresh), use
+`with_auth_token_fn`. The callback runs before every HTTP request; if
+it fails, that sync call fails.
+
+### Bootstrap
+
+When the local database is empty, Turso downloads schema and data from
+the remote on first open. That is Turso's default. Call
+`bootstrap_if_empty(false)` to skip it — for example when opening an
+existing local file that should not be overwritten.
+
+### Sync operations
+
+`push`, `pull`, `checkpoint`, and `stats` are methods on the `Turso`
+driver, not on `Db`. They use the driver's shared database handle, so
+every connection in the pool sees the same pending changes.
+
+| Method | Behavior |
+|---|---|
+| `push()` | Send local changes to the remote |
+| `pull()` | Fetch remote changes and apply them locally; returns `true` if anything changed |
+| `checkpoint()` | Checkpoint the local WAL |
+| `stats()` | Return sync stats (`DatabaseSyncStats`) |
+
+Call `push()` and `pull()` yourself — sync is not automatic.
+
+### Sync builder options
+
+| Builder method | Purpose |
+|---|---|
+| `with_remote_url(url)` | Remote URL |
+| `with_auth_token(token)` | Static auth token (no `Bearer ` prefix) |
+| `with_auth_token_fn(f)` | Callback that returns a token for each request |
+| `with_client_name(name)` | Client name (default `turso-sync-rust`) |
+| `with_long_poll_timeout(duration)` | How long to wait when polling for remote changes |
+| `bootstrap_if_empty(bool)` | Download schema and data when the local database is empty (default `true`) |
+| `with_remote_encryption(key, cipher)` | Base64 key and cipher for an encrypted remote |
+| `with_remote_encryption_key(key)` | Base64 key only (prefer `with_remote_encryption` when bootstrapping) |
+| `experimental_with_partial_sync_opts(opts)` | Experimental partial sync (`PartialSyncOpts`) |
+| `experimental_index_method(true)` | Experimental index methods (works with or without sync) |
+
+`PartialSyncOpts`, `RemoteEncryptionCipher`, and `DatabaseSyncStats`
+come from `turso::sync` and are re-exported by `toasty_driver_turso`.
 
 ## Concurrent writes
 

@@ -91,6 +91,8 @@ underlying SQLite storage class.
 | `jiff::civil::Date` *(feature)* | `TEXT` (ISO 8601) |
 | `jiff::civil::Time` *(feature)* | `TEXT` (ISO 8601) |
 | `jiff::civil::DateTime` *(feature)* | `TEXT` (ISO 8601) |
+| `toasty::stmt::IpCidr`, `toasty::stmt::IpInet` *(feature)* | `TEXT` |
+| `toasty::stmt::MacAddr6`, `toasty::stmt::MacAddr8` *(feature)* | `TEXT` |
 | `Vec<T>` *(T scalar)* | `TEXT` holding a JSON array |
 | Embedded `enum` | `TEXT` with a `CHECK` constraint over the variant names |
 
@@ -112,6 +114,9 @@ ISO 8601 matches chronological order.
 type. Both `rust_decimal::Decimal` and `bigdecimal::BigDecimal`
 round-trip through text. Arithmetic in SQL coerces to `REAL`, which
 loses precision — keep decimal math in Rust.
+
+**Network addresses are stored as `TEXT`.** The `net` feature stores
+CIDR, INET, EUI-48, and EUI-64 values in their canonical text forms.
 
 **`VARCHAR(N)` does not enforce `N`.** SQLite ignores the length
 specifier on `VARCHAR`, `CHAR`, and `TEXT`-affinity types. A field
@@ -167,7 +172,7 @@ lowers to `col GLOB 'abc*'`, a case-sensitive prefix match. The optimizer can
 use a regular index for the common-prefix lookup.
 
 **Scalar arrays use JSON1.** A
-[`Vec<T>` field](./field-options.md#scalar-arrays) lives in a `TEXT`
+[`Vec<T>` field](./vec-scalar-fields.md) lives in a `TEXT`
 column holding a JSON array. The array predicates lower to JSON1
 expressions:
 
@@ -180,7 +185,7 @@ expressions:
 
 These subqueries scan the JSON document, so array predicates against
 a large table do not use an index. See
-[Field Options](./field-options.md#scalar-arrays) for the model-level
+[`Vec<scalar>` Fields](./vec-scalar-fields.md) for the model-level
 view.
 
 **No row-level locking.** SQLite has no `SELECT ... FOR UPDATE`.

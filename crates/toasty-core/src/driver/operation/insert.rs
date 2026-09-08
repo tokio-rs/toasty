@@ -15,6 +15,7 @@ use crate::stmt;
 ///
 /// let op = Insert {
 ///     stmt: insert_statement,
+///     params: vec![],
 ///     ret: Some(vec![stmt::Type::I64]),
 /// };
 /// let operation: Operation = op.into();
@@ -29,9 +30,10 @@ pub struct Insert {
     /// Typed bind parameters extracted from the statement.
     pub params: Vec<TypedValue>,
 
-    /// The types of columns to return from the insert. When `Some`, the driver
-    /// should return the inserted row(s) projected to these types (e.g.,
-    /// auto-increment IDs). When `None`, no rows are returned.
+    /// The types of values the insert must return. SQL backends with native
+    /// mutation `RETURNING` decode its projected rows. A backend may also
+    /// provide an exact operation-specific result, such as MySQL's generated
+    /// ID for a single-row insert. When `None`, no rows are returned.
     pub ret: Option<Vec<stmt::Type>>,
 }
 

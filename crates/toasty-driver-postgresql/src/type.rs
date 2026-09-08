@@ -23,6 +23,10 @@ pub(crate) fn to_postgres_type(ty: &db::Type) -> &'static Type {
         db::Type::Date => &Type::DATE,
         db::Type::Time(_) => &Type::TIME,
         db::Type::DateTime(_) => &Type::TIMESTAMP,
+        db::Type::Cidr => &Type::CIDR,
+        db::Type::Inet => &Type::INET,
+        db::Type::MacAddr => &Type::MACADDR,
+        db::Type::MacAddr8 => &Type::MACADDR8,
         // Enum types are handled separately via the cached OID map;
         // fall back to TEXT if we reach here (shouldn't happen in practice).
         db::Type::Enum(_) => &Type::TEXT,
@@ -55,6 +59,10 @@ pub(crate) fn array_type_of(elem: &Type) -> &'static Type {
         Type::TIMESTAMPTZ => &Type::TIMESTAMPTZ_ARRAY,
         Type::DATE => &Type::DATE_ARRAY,
         Type::TIME => &Type::TIME_ARRAY,
+        Type::CIDR => &Type::CIDR_ARRAY,
+        Type::INET => &Type::INET_ARRAY,
+        Type::MACADDR => &Type::MACADDR_ARRAY,
+        Type::MACADDR8 => &Type::MACADDR8_ARRAY,
         _ => todo!("no PostgreSQL array type for element type {elem:?}"),
     }
 }

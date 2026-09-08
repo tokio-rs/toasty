@@ -1,18 +1,18 @@
 use crate::prelude::*;
 use hashbrown::HashMap;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn crud_person_self_referential(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Person {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         name: String,
 
         #[index]
-        parent_id: Option<ID>,
+        parent_id: Option<uuid::Uuid>,
 
         #[belongs_to(key = parent_id, references = id)]
         parent: toasty::Deferred<Option<Person>>,

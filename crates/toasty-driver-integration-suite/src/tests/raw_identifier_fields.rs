@@ -1,12 +1,12 @@
 use crate::prelude::*;
 
-#[driver_test(id(ID))]
+#[driver_test]
 pub async fn create_filter_update_by_raw_identifier_field(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct User {
         #[key]
         #[auto]
-        id: ID,
+        id: uuid::Uuid,
 
         #[index]
         r#type: String,

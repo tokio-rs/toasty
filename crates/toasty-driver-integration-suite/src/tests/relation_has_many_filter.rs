@@ -3,7 +3,6 @@
 use crate::prelude::*;
 
 #[driver_test(
-    id(ID),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to_with_flags)
 )]
@@ -78,7 +77,6 @@ pub async fn filter_parent_by_child_field(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
     requires(scan),
     scenario(crate::scenarios::has_many_belongs_to_with_flags)
 )]
@@ -105,9 +103,8 @@ pub async fn filter_parent_no_matching_children(test: &mut Test) -> Result<()> {
 }
 
 #[driver_test(
-    id(ID),
     requires(scan),
-    scenario(crate::scenarios::has_many_belongs_to)
+    scenario(crate::scenarios::has_many_belongs_to::id_uuid)
 )]
 pub async fn filter_parent_all_children_match(test: &mut Test) -> Result<()> {
     let mut db = setup(test).await;
@@ -143,6 +140,28 @@ pub async fn filter_parent_all_children_match(test: &mut Test) -> Result<()> {
     .await?;
 
     assert_eq_unordered!(users.iter().map(|u| &u.name[..]), ["Bob", "Dan"]);
+
+    Ok(())
+}
+
+#[driver_test(requires(scan), scenario(crate::scenarios::has_many_nullable_fk))]
+pub async fn filter_parent_all_ignores_unlinked_children(test: &mut Test) -> Result<()> {
+    let mut db = setup(test).await;
+
+    toasty::create!(User {}).exec(&mut db).await?;
+    toasty::create!(Todo { title: "later" })
+        .exec(&mut db)
+        .await?;
+
+    let users: Vec<User> = User::filter(
+        User::fields()
+            .todos()
+            .all(Todo::fields().title().eq("urgent")),
+    )
+    .exec(&mut db)
+    .await?;
+
+    assert_eq!(users.len(), 1);
 
     Ok(())
 }

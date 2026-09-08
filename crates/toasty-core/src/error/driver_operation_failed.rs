@@ -36,7 +36,7 @@ impl Error {
     /// Creates an error from a driver operation failure.
     ///
     /// This is the preferred way to convert driver-specific errors (rusqlite, tokio-postgres,
-    /// mysql_async, AWS SDK errors, etc.) into toasty errors.
+    /// SQLx, AWS SDK errors, etc.) into Toasty errors.
     ///
     /// # Examples
     ///

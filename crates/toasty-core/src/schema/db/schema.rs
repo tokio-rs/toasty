@@ -33,19 +33,6 @@ impl Schema {
             .expect("invalid column ID")
     }
 
-    /// Returns a mutable reference to the column identified by `id`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the table or column index is out of bounds.
-    pub fn column_mut(&mut self, id: impl Into<ColumnId>) -> &mut Column {
-        let id = id.into();
-        self.table_mut(id.table)
-            .columns
-            .get_mut(id.index)
-            .expect("invalid column ID")
-    }
-
     /// Returns the index identified by `id`.
     ///
     /// # Panics
@@ -57,20 +44,6 @@ impl Schema {
         self.table(id.table)
             .indices
             .get(id.index)
-            .expect("invalid index ID")
-    }
-
-    /// Returns a mutable reference to the index identified by `id`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if the table or index offset is out of bounds.
-    // NOTE: this is unlikely to confuse users given the context.
-    #[allow(clippy::should_implement_trait)]
-    pub fn index_mut(&mut self, id: IndexId) -> &mut Index {
-        self.table_mut(id.table)
-            .indices
-            .get_mut(id.index)
             .expect("invalid index ID")
     }
 

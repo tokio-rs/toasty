@@ -134,6 +134,51 @@ User::delete_by_email(&mut db, "alice@example.com").await?;
 # }
 ```
 
+### Unique collection values
+
+PostgreSQL also supports `#[unique]` on a `Vec<scalar>` field. The constraint
+applies to the complete ordered array value, so order and repeated elements are
+significant:
+
+```rust
+# use toasty::Model;
+#[derive(Debug, toasty::Model)]
+struct Article {
+    #[key]
+    #[auto]
+    id: uuid::Uuid,
+
+    #[unique]
+    tags: Vec<String>,
+}
+```
+
+Two rows cannot both contain `["rust", "toasty"]`. A row containing
+`["toasty", "rust"]` or `["rust", "rust"]` is a different value. Generated
+methods accept arrays, slices, and vectors, just like other collection-field
+builders:
+
+```rust
+# use toasty::Model;
+# #[derive(Debug, toasty::Model)]
+# struct Article {
+#     #[key]
+#     #[auto]
+#     id: uuid::Uuid,
+#     #[unique]
+#     tags: Vec<String>,
+# }
+# async fn __example(mut db: toasty::Db) -> toasty::Result<()> {
+let article = Article::get_by_tags(&mut db, ["rust", "toasty"]).await?;
+# Ok(())
+# }
+```
+
+Other built-in backends reject this model during schema construction because
+they do not provide the same native whole-collection uniqueness semantics.
+Keep unique arrays small: PostgreSQL B-tree index entries have practical size
+limits, so a large collection is a poor identifying value.
+
 ## Indexed fields
 
 Add `#[index]` to a field to tell Toasty that this field is a query target. On

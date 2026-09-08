@@ -1,4 +1,6 @@
-use super::{Delete, Expr, IntoExpr, IntoStatement, List, Statement, Value};
+use super::{
+    Delete, Expr, IntoExpr, IntoStatement, List, RelationInsert, RelationRemove, Statement, Value,
+};
 use crate::{
     Executor, Result,
     schema::{Load, Model},
@@ -441,12 +443,36 @@ impl<T> Query<List<T>> {
     }
 }
 
+impl<T: Model> Query<List<T>> {
+    /// Convert this query into a [`RelationInsert`] statement that inserts `item` into the
+    /// relation that produced this list query.
+    pub fn insert(self, item: impl IntoExpr<T>) -> RelationInsert<T> {
+        RelationInsert {
+            query: self,
+            item: item.into_expr(),
+        }
+    }
+
+    /// Convert this query into a [`RelationRemove`] statement that removes `item` from the
+    /// relation that produced this list query.
+    pub fn remove(self, item: impl IntoExpr<T>) -> RelationRemove<T> {
+        RelationRemove {
+            query: self,
+            item: item.into_expr(),
+        }
+    }
+}
+
 fn set_first(query: &mut stmt::Query) {
     assert!(!query.single, "query is single");
     query.single = true;
+    let offset = match &query.limit {
+        Some(stmt::Limit::Offset(limit_offset)) => limit_offset.offset.clone(),
+        _ => None,
+    };
     query.limit = Some(stmt::Limit::Offset(stmt::LimitOffset {
         limit: stmt::Expr::Static(stmt::Value::I64(1)),
-        offset: None,
+        offset,
     }));
 }
 

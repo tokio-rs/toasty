@@ -1,11 +1,7 @@
 use indexmap::IndexSet;
-use toasty_core::{
-    driver::operation::Pagination,
-    schema::db::{ColumnId, TableId},
-    stmt,
-};
+use toasty_core::{driver::operation::Pagination, schema::db::TableId, stmt};
 
-use crate::engine::{exec, mir};
+use crate::engine::mir;
 
 /// Performs a full-table scan with optional filter, limit, and pagination.
 ///
@@ -31,50 +27,6 @@ pub(crate) struct Scan {
 
     /// The return type.
     pub(crate) ty: stmt::Type,
-}
-
-impl Scan {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &mir::LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Scan {
-        let input = self
-            .input
-            .map(|node_id| logical_plan[node_id].var.get().unwrap());
-        let output = var_table.register_var(node.ty().clone());
-        node.var.set(Some(output));
-
-        let columns = self
-            .columns
-            .iter()
-            .map(|expr_reference| {
-                let stmt::ExprReference::Column(expr_column) = expr_reference else {
-                    todo!()
-                };
-                debug_assert_eq!(expr_column.nesting, 0);
-                debug_assert_eq!(expr_column.table, 0);
-
-                ColumnId {
-                    table: self.table,
-                    index: expr_column.column,
-                }
-            })
-            .collect();
-
-        exec::Scan {
-            input,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            table: self.table,
-            columns,
-            row_filter: self.row_filter.clone(),
-            limit: self.limit.clone(),
-        }
-    }
 }
 
 impl From<Scan> for mir::Node {

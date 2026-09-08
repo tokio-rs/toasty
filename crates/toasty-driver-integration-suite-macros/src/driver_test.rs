@@ -222,11 +222,16 @@ fn add_capability_checks_from_expr(
         .iter()
         .map(|(cap_name, is_negated)| {
             let cap_ident = Ident::new(cap_name, proc_macro2::Span::call_site());
+            let read = crate::parse::read_capability(
+                quote::quote! { #test_param.capability() },
+                &cap_ident,
+            );
+
             if *is_negated {
                 // For negated capabilities, check that the capability is NOT present
                 parse_quote! {
                     assert!(
-                        !#test_param.capability().#cap_ident,
+                        !#read,
                         "Driver should not support capability: {}",
                         stringify!(#cap_ident)
                     );
@@ -235,7 +240,7 @@ fn add_capability_checks_from_expr(
                 // For regular capabilities, check that it IS present
                 parse_quote! {
                     assert!(
-                        #test_param.capability().#cap_ident,
+                        #read,
                         "Driver does not support required capability: {}",
                         stringify!(#cap_ident)
                     );
@@ -272,6 +277,12 @@ fn extract_db_capabilities(expr: &BoolExpr, expansion: &Expansion) -> Vec<(Strin
                 // Check if this is an ID variant identifier
                 if name == "id_u64" || name == "id_uuid" {
                     return; // Skip ID variant identifiers
+                }
+
+                // Test flags have no `Capability` field to assert against; the
+                // per-driver list gates them at expansion time instead.
+                if crate::parse::is_test_flag(name) {
+                    return;
                 }
 
                 // This must be a database capability

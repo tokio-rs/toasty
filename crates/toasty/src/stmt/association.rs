@@ -14,8 +14,8 @@ use toasty_core::stmt;
 /// - `Association<List<M>>` — a has-many relation, returns `Vec<M>`.
 /// - `Association<M>` — a has-one or belongs-to relation, returns `M`.
 ///
-/// Associations are constructed by generated code (see [`many`](Association::many),
-/// [`many_via_one`](Association::many_via_one), and [`one`](Association::one)).
+/// Associations are constructed by generated code (see [`many`](Association::many)
+/// and [`one`](Association::one)).
 /// They implement [`IntoStatement`] so they can be passed directly to
 /// [`Db::exec`](crate::Db::exec).
 pub struct Association<T> {
@@ -24,11 +24,6 @@ pub struct Association<T> {
 }
 
 impl<T> Association<T> {
-    /// Borrow the underlying untyped association.
-    pub fn untyped(&self) -> &stmt::Association {
-        &self.untyped
-    }
-
     /// Construct a typed association from a raw untyped one. Used by
     /// generated code that re-types an association after carrying it through
     /// an untyped storage slot.
@@ -116,30 +111,7 @@ impl<M: Model> Association<List<M>> {
     ///
     /// Panics if the root of `path` does not match the model id of `T`.
     ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     name: String,
-    /// # }
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct Todo {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     user_id: i64,
-    /// #     title: String,
-    /// # }
-    /// use toasty::stmt::{Association, List, Query};
-    /// use toasty::schema::Model;
-    ///
-    /// let source = Query::<List<Todo>>::all();
-    /// let path = Todo::path_field::<User>(1);
-    /// let _assoc: Association<List<User>> = Association::many_via_one(source, path);
-    /// ```
-    pub fn many_via_one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {
+    pub(crate) fn many_via_one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {
         assert_eq!(path.untyped.root.as_model_unwrap(), T::id());
 
         Self {

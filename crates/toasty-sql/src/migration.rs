@@ -1,19 +1,22 @@
-use std::borrow::Cow;
+use std::{borrow::Cow, collections::HashSet};
 
 use toasty_core::{
     driver::Capability,
     schema::{
-        db::{Column, Schema, Table, Type, TypeEnum},
+        db::{Column, Schema, Table, TableId, Type, TypeEnum},
         diff,
     },
 };
 
 use crate::stmt::{AlterColumnChanges, AlterTable, AlterTableAction, DropTable, Name, Statement};
 
-/// Returns `true` if the only difference between two columns is the variant
-/// list of a named enum type. These changes are handled by `diff::Type`
-/// (`ALTER TYPE ... ADD VALUE`) and should not produce column-level DDL.
-fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
+/// Returns `true` if a named enum change is handled at the type level and
+/// should not produce column-level DDL.
+fn is_named_enum_type_only_change(
+    previous: &Column,
+    next: &Column,
+    renamed_types: &HashSet<(&str, &str)>,
+) -> bool {
     if previous.name != next.name
         || previous.nullable != next.nullable
         || previous.primary_key != next.primary_key
@@ -29,17 +32,20 @@ fn is_named_enum_variant_only_change(previous: &Column, next: &Column) -> bool {
         (Type::Enum(_), Type::Enum(_)) | (Type::List(_), Type::List(_))
     );
 
-    same_shape
-        && matches!(
-            (
-                previous.storage_ty.named_enum(),
-                next.storage_ty.named_enum(),
-            ),
-            (
-                Some(TypeEnum { name: Some(a), .. }),
-                Some(TypeEnum { name: Some(b), .. }),
-            ) if a == b
-        )
+    if !same_shape {
+        return false;
+    }
+
+    matches!(
+        (
+            previous.storage_ty.named_enum(),
+            next.storage_ty.named_enum(),
+        ),
+        (
+            Some(TypeEnum { name: Some(a), .. }),
+            Some(TypeEnum { name: Some(b), .. }),
+        ) if a == b || renamed_types.contains(&(a.as_str(), b.as_str()))
+    )
 }
 
 /// A migration step pairing a DDL [`Statement`] with the [`Schema`] it applies against.
@@ -66,17 +72,36 @@ impl<'a> MigrationStatement<'a> {
     /// full table recreation sequence.
     pub fn from_diff(schema_diff: &'a diff::Schema<'a>, capability: &Capability) -> Vec<Self> {
         let mut result = Vec::new();
+        let types_diff = schema_diff.types();
+        let renamed_types: HashSet<(&str, &str)> = types_diff
+            .iter()
+            .filter_map(|item| match item {
+                diff::Type::Rename { previous, next } => Some((
+                    previous.name.as_deref().expect("named enum type"),
+                    next.name.as_deref().expect("named enum type"),
+                )),
+                _ => None,
+            })
+            .collect();
 
         // Emit enum type changes before table changes (tables may reference
         // newly created types).
         if capability.named_enum_types {
-            let types_diff = schema_diff.types();
             for item in types_diff.iter() {
                 match item {
                     diff::Type::Create(ty) => {
                         result.push(Self::new(
                             Statement::create_enum_type(ty),
                             Cow::Borrowed(schema_diff.next()),
+                        ));
+                    }
+                    diff::Type::Rename { previous, next } => {
+                        result.push(Self::new(
+                            Statement::rename_type(
+                                previous.name.as_deref().expect("named enum type"),
+                                next.name.as_deref().expect("named enum type"),
+                            ),
+                            Cow::Borrowed(schema_diff.previous()),
                         ));
                     }
                     diff::Type::AddVariants { ty, added } => {
@@ -140,9 +165,33 @@ impl<'a> MigrationStatement<'a> {
                                     next: next_col
                                 } if AlterColumnChanges::from_diff(prev_col, next_col).has_type_change()
                                     && !(capability.named_enum_types
-                                        && is_named_enum_variant_only_change(prev_col, next_col))
+                                        && is_named_enum_type_only_change(
+                                            prev_col,
+                                            next_col,
+                                            &renamed_types,
+                                        ))
                             )
                         });
+
+                    // Drop existing indices before changing columns because they may
+                    // reference a column that is being removed or altered.
+                    for item in indices.iter() {
+                        match item {
+                            diff::Index::Drop(index) => {
+                                result.push(Self::new(
+                                    Statement::drop_index(index),
+                                    Cow::Borrowed(schema_diff.previous()),
+                                ));
+                            }
+                            diff::Index::Alter { previous, .. } => {
+                                result.push(Self::new(
+                                    Statement::drop_index(previous),
+                                    Cow::Borrowed(schema_diff.previous()),
+                                ));
+                            }
+                            diff::Index::Create(_) => {}
+                        }
+                    }
 
                     if needs_recreation {
                         Self::emit_table_recreation(
@@ -154,10 +203,18 @@ impl<'a> MigrationStatement<'a> {
                             capability,
                         );
                     } else {
-                        Self::emit_column_changes(&mut result, schema, columns, capability);
+                        Self::emit_column_changes(
+                            &mut result,
+                            schema,
+                            previous.id,
+                            columns,
+                            capability,
+                            &renamed_types,
+                        );
                     }
 
-                    // Indices diff
+                    // Create new indices after the column changes so they reference
+                    // the next schema's column definitions.
                     for item in indices.iter() {
                         match item {
                             diff::Index::Create(index) => {
@@ -166,22 +223,13 @@ impl<'a> MigrationStatement<'a> {
                                     Cow::Borrowed(schema_diff.next()),
                                 ));
                             }
-                            diff::Index::Drop(index) => {
-                                result.push(Self::new(
-                                    Statement::drop_index(index),
-                                    Cow::Borrowed(schema_diff.previous()),
-                                ));
-                            }
-                            diff::Index::Alter { previous, next } => {
-                                result.push(Self::new(
-                                    Statement::drop_index(previous),
-                                    Cow::Borrowed(schema_diff.previous()),
-                                ));
+                            diff::Index::Alter { next, .. } => {
                                 result.push(Self::new(
                                     Statement::create_index(next),
                                     Cow::Borrowed(schema_diff.next()),
                                 ));
                             }
+                            diff::Index::Drop(_) => {}
                         }
                     }
                 }
@@ -289,14 +337,16 @@ impl<'a> MigrationStatement<'a> {
     fn emit_column_changes(
         result: &mut Vec<Self>,
         schema: Cow<'a, Schema>,
+        table: TableId,
         columns: &[diff::Column<'_>],
         capability: &Capability,
+        renamed_types: &HashSet<(&str, &str)>,
     ) {
         for item in columns.iter() {
             match item {
                 diff::Column::Add(column) => {
                     result.push(Self::new(
-                        Statement::add_column(column, capability),
+                        Statement::add_column(table, column, capability),
                         schema.clone(),
                     ));
                 }
@@ -307,10 +357,10 @@ impl<'a> MigrationStatement<'a> {
                     previous,
                     next: col_next,
                 } => {
-                    // Skip column-level DDL for named enum variant changes — those
-                    // are handled by diff::Type (ALTER TYPE ... ADD VALUE).
+                    // Skip column-level DDL for named enum changes handled by
+                    // ALTER TYPE.
                     if capability.named_enum_types
-                        && is_named_enum_variant_only_change(previous, col_next)
+                        && is_named_enum_type_only_change(previous, col_next, renamed_types)
                     {
                         continue;
                     }

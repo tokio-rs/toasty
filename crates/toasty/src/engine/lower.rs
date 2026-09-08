@@ -15,7 +15,7 @@ mod tests;
 
 use std::cell::Cell;
 
-use hashbrown::HashSet;
+use indexmap::{IndexMap, IndexSet};
 
 use index_vec::IndexVec;
 use toasty_core::{
@@ -70,7 +70,8 @@ impl Engine {
             engine: self,
             relations: vec![],
             errors: vec![],
-            dependencies: HashSet::new(),
+            dependencies: IndexSet::new(),
+            insert_stmts: vec![],
         };
 
         state.lower_stmt(stmt::ExprContext::new(schema), None, stmt);
@@ -101,12 +102,18 @@ impl LoweringState<'_> {
         // BelongsTo→FK) fires inside the lowering walk itself via
         // `LowerStatement::visit_expr_binary_op_mut`.
         association::RewriteVia::new(expr_cx).rewrite(&mut stmt);
-        lift_in_subquery::LiftInSubquery::new(expr_cx).rewrite(&mut stmt);
+        lift_in_subquery::LiftInSubquery::new(expr_cx, self.engine.capability.sql())
+            .rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
         Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
 
-        let stmt_id = self.hir.new_statement_info(self.dependencies.clone());
+        let stmt_id = self.hir.new_statement_info(
+            self.dependencies
+                .iter()
+                .map(|&dep| (dep, hir::DepKind::Statement))
+                .collect(),
+        );
         let scope_id = self.scopes.push(Scope { stmt_id, row_index });
         let mut collect_dependencies = None;
 
@@ -148,7 +155,7 @@ struct LowerStatement<'a, 'b> {
     cx: LoweringContext<'a>,
 
     /// Track dependencies here.
-    collect_dependencies: &'a mut Option<HashSet<hir::StmtId>>,
+    collect_dependencies: &'a mut Option<IndexSet<hir::StmtId>>,
 }
 
 #[derive(Debug)]
@@ -169,7 +176,13 @@ struct LoweringState<'a> {
     relations: Vec<app::FieldId>,
 
     /// All new statements should include these as part of its dependencies
-    dependencies: HashSet<hir::StmtId>,
+    dependencies: IndexSet<hir::StmtId>,
+
+    /// INSERT statements currently being lowered, outermost first. A
+    /// `belongs_to` returning-load subquery depends on these so it executes
+    /// after enclosing inserts (a nested create inserts children before the
+    /// parent, and the loaded row may be the parent's).
+    insert_stmts: Vec<hir::StmtId>,
 
     /// Tracks errors that occurred while lowering the statement
     errors: Vec<crate::Error>,
@@ -577,7 +590,8 @@ impl LowerStatement<'_, '_> {
             dependencies.insert(stmt_id);
         }
 
-        self.curr_stmt_info().deps.insert(stmt_id);
+        self.curr_stmt_info()
+            .add_dep(stmt_id, hir::DepKind::Statement);
 
         stmt_id
     }
@@ -585,19 +599,20 @@ impl LowerStatement<'_, '_> {
     fn collect_dependencies(
         &mut self,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
-    ) -> HashSet<hir::StmtId> {
-        let old = self.collect_dependencies.replace(HashSet::new());
+    ) -> IndexSet<hir::StmtId> {
+        let old = self.collect_dependencies.replace(IndexSet::new());
         f(self);
         std::mem::replace(self.collect_dependencies, old).unwrap()
     }
 
     fn track_dependency(&mut self, dependency: hir::StmtId) {
-        self.curr_stmt_info().deps.insert(dependency);
+        self.curr_stmt_info()
+            .add_dep(dependency, hir::DepKind::Statement);
     }
 
     fn with_dependencies(
         &mut self,
-        mut dependencies: HashSet<hir::StmtId>,
+        mut dependencies: IndexSet<hir::StmtId>,
         f: impl FnOnce(&mut LowerStatement<'_, '_>),
     ) {
         // Dependencies should stack
@@ -610,9 +625,34 @@ impl LowerStatement<'_, '_> {
 }
 
 impl visit_mut::VisitMut for LowerStatement<'_, '_> {
+    fn visit_stmt_mut(&mut self, stmt: &mut stmt::Statement) {
+        if let stmt::Statement::Query(query) = stmt
+            && matches!(
+                &query.limit,
+                Some(stmt::Limit::Cursor(cursor)) if cursor.after.is_some()
+            )
+        {
+            self.curr_stmt_info().has_pagination_cursor = true;
+        }
+
+        visit_mut::visit_stmt_mut(self, stmt);
+    }
+
     fn visit_order_by_expr_mut(&mut self, node: &mut stmt::OrderByExpr) {
         // First, run the default visitor to lower sub-expressions
         self.visit_expr_mut(&mut node.expr);
+
+        // An embedded newtype field lowers to a single-element record,
+        // one layer per newtype in the chain. Unwrap them so the ordering
+        // applies to the underlying column — otherwise the eq synthesis
+        // below would hit the record-vs-record arm of
+        // `lower_expr_binary_op`, which drains the operand records and
+        // would leave an empty record behind.
+        while let stmt::Expr::Record(rec) = &mut node.expr
+            && rec.len() == 1
+        {
+            node.expr = rec.fields.pop().unwrap();
+        }
 
         // Reuse binary-op lowering: synthesize `expr == expr` so that
         // cast conversions are applied, then keep the LHS result.
@@ -720,7 +760,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::InSubquery(e) => {
-                if self.capability().sql {
+                if self.capability().sql() {
                     self.visit_expr_in_subquery_mut(e);
 
                     self.lower_in_subquery_operands(
@@ -768,8 +808,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         panic!()
                     };
 
-                    let arg =
-                        self.new_sub_statement(source_id, target_id, Box::new((*e.query).into()));
+                    let mut stmt: stmt::Statement = (*e.query).into();
+
+                    // Post-lower simplify. The sub-statement detaches into its
+                    // own HIR entry (`new_sub_statement`), so the parent's
+                    // post-lower simplify never sees it — without this, raw
+                    // lowered shapes (e.g. an embedded-field path, lowered to
+                    // `Project(Record([column]), [i])`) reach the driver.
+                    self.state.engine.simplify_stmt(&mut stmt);
+
+                    let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
                     *expr = stmt::ExprInList {
                         expr: e.expr,
@@ -957,10 +1005,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 *expr = self.new_sub_statement(source_id, target_id, expr_stmt.stmt);
 
                 if self.state.hir[target_id].independent {
-                    self.curr_stmt_info().deps.insert(target_id);
+                    self.curr_stmt_info()
+                        .add_dep(target_id, hir::DepKind::Statement);
                 }
             }
-            stmt::Expr::Exists(_) if !self.capability().sql => {
+            stmt::Expr::Exists(_) if !self.capability().sql() => {
                 let stmt::Expr::Exists(mut expr_exists) = expr.take() else {
                     panic!()
                 };
@@ -982,7 +1031,8 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
                 if self.state.hir[target_id].independent {
-                    self.curr_stmt_info().deps.insert(target_id);
+                    self.curr_stmt_info()
+                        .add_dep(target_id, hir::DepKind::Statement);
                 }
 
                 // The sub-statement result is a list of rows. Wrap it in
@@ -1092,11 +1142,13 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         // First, if an insertion scope is specified, lower the scope to be just "model"
         self.apply_insert_scope(&mut stmt.target, &mut stmt.source);
 
-        let sql = self.state.engine.capability.sql;
+        let sql = self.state.engine.capability.sql();
         if let Err(err) = upsert::normalize(stmt, !sql) {
             self.state.errors.push(err);
             return;
         }
+
+        self.state.insert_stmts.push(self.scope_stmt_id());
 
         // Create a new expr scope for the statement, and lower all parts
         // *except* the target field (since it is borrowed).
@@ -1165,6 +1217,9 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
 
         self.visit_insert_target_mut(&mut stmt.target);
+
+        let popped = self.state.insert_stmts.pop();
+        debug_assert_eq!(popped, Some(self.scope_stmt_id()));
     }
 
     fn visit_stmt_query_mut(&mut self, stmt: &mut stmt::Query) {
@@ -1690,8 +1745,20 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     }
 
     fn new_statement_info(&mut self) -> hir::StmtId {
-        let mut deps = self.state.dependencies.clone();
-        deps.extend(&self.curr_stmt_info().deps);
+        // Ambient dependencies and the ones inherited from the enclosing
+        // statement are completion edges; `Effect` edges are never inherited.
+        let mut deps: IndexMap<hir::StmtId, hir::DepKind> = self
+            .state
+            .dependencies
+            .iter()
+            .map(|&stmt_id| (stmt_id, hir::DepKind::Statement))
+            .collect();
+
+        for (&stmt_id, &kind) in &self.curr_stmt_info().deps {
+            if kind == hir::DepKind::Statement {
+                deps.insert(stmt_id, kind);
+            }
+        }
 
         self.state.hir.new_statement_info(deps)
     }
@@ -1743,7 +1810,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             // (model→PK, BelongsTo→FK) fires inside the lowering walk via
             // `LowerStatement::visit_expr_binary_op_mut`.
             association::RewriteVia::new(child.expr_cx).rewrite(&mut stmt);
-            lift_in_subquery::LiftInSubquery::new(child.expr_cx).rewrite(&mut stmt);
+            lift_in_subquery::LiftInSubquery::new(
+                child.expr_cx,
+                child.state.engine.capability.sql(),
+            )
+            .rewrite(&mut stmt);
             // Pre-lower simplify: remaining heavyweight rules the lowering
             // visitor expects to have already fired.
             Simplify::with_context(child.expr_cx, child.state.engine.capability)
@@ -1765,7 +1836,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         self.cx = saved_cx;
 
         if self.state.hir[target_id].independent {
-            self.curr_stmt_info().deps.insert(target_id);
+            self.curr_stmt_info()
+                .add_dep(target_id, hir::DepKind::Statement);
         }
 
         arg

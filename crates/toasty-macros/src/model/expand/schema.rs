@@ -521,11 +521,11 @@ impl Expand<'_> {
     /// `#[index(...)]` / `#[unique(...)]`) that the field's Rust type implements
     /// `codegen_support::index::IndexableField`.
     ///
-    /// Scalars satisfy the bound directly; newtype embeds via the `NewtypeOf`
-    /// blanket; unit (data-less) enums via the impl emitted by
-    /// `#[derive(Embed)]`. Data-carrying enums and multi-field embedded structs
-    /// span multiple columns and do not implement it, so naming one in an index
-    /// is a compile error instead of a runtime panic.
+    /// Scalars satisfy the bound directly; newtype embeds and unit (data-less)
+    /// enums use impls emitted by `#[derive(Embed)]`. Data-carrying enums and
+    /// multi-field embedded structs span multiple columns and do not implement
+    /// it, so naming one in an index is a compile error instead of a runtime
+    /// panic.
     ///
     /// The primary key is excluded: keys are validated through their own paths.
     pub(super) fn expand_indexable_checks(&self) -> TokenStream {

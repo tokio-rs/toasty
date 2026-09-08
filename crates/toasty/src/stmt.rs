@@ -60,6 +60,12 @@ use crate::{Executor, schema::Load};
 mod query;
 pub use query::Query;
 
+mod relation_insert;
+pub use relation_insert::RelationInsert;
+
+mod relation_remove;
+pub use relation_remove::RelationRemove;
+
 mod scope;
 pub use scope::IntoScope;
 
@@ -69,7 +75,15 @@ pub use update::Update;
 mod upsert;
 pub use upsert::Upsert;
 
-pub use toasty_core::stmt::{OrderBy, Projection, Type, Value};
+#[cfg(feature = "bigdecimal")]
+pub use toasty_core::stmt::BigDecimal;
+#[cfg(feature = "rust_decimal")]
+pub use toasty_core::stmt::Decimal;
+#[cfg(feature = "jiff")]
+pub use toasty_core::stmt::{Date, DateTime, Time, Timestamp, Zoned};
+#[cfg(feature = "net")]
+pub use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
+pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Uuid, Value};
 
 use toasty_core::stmt;
 

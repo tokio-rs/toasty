@@ -164,7 +164,7 @@ impl stmt::Visit for Verify<'_, '_> {
             }
         }
 
-        if !self.capability.sql && upsert.action == stmt::UpsertAction::Update {
+        if !self.capability.sql() && upsert.action == stmt::UpsertAction::Update {
             for secondary in model
                 .indices
                 .iter()
@@ -218,7 +218,7 @@ impl stmt::Visit for Verify<'_, '_> {
     fn visit_stmt_select(&mut self, i: &stmt::Select) {
         stmt::visit::visit_stmt_select(self, i);
 
-        self.verify_include_filters(i);
+        self.verify_include_modifiers(i);
 
         VerifyExpr {
             schema: self.schema,
@@ -268,7 +268,7 @@ impl Verify<'_, '_> {
         }
     }
 
-    fn verify_offset_key_matches_order_by(&self, i: &stmt::Query) {
+    fn verify_offset_key_matches_order_by(&mut self, i: &stmt::Query) {
         let Some(stmt::Limit::Cursor(cursor)) = i.limit.as_ref() else {
             return;
         };
@@ -280,49 +280,54 @@ impl Verify<'_, '_> {
         // SQL requires ORDER BY for cursor-based pagination.
         // NoSQL drivers (DynamoDB) use a driver-level cursor (ExclusiveStartKey)
         // and do not require ORDER BY.
-        if !self.capability.sql {
+        if !self.capability.sql() {
             return;
         }
 
         let Some(order_by) = i.order_by.as_ref() else {
-            todo!("specified offset but no order; stmt={i:#?}");
+            self.record(Error::invalid_statement(
+                "cursor-based pagination requires an ORDER BY clause",
+            ));
+            return;
         };
 
         match after {
             stmt::Expr::Value(stmt::Value::Record(record)) => {
-                if self.capability.sql {
-                    assert!(
-                        order_by.exprs.len() == record.fields.len(),
-                        "order_by = {order_by:#?}"
-                    );
-                }
-                // DDB requires a Record, but the columns counts do not match.
-                // The value is a full key, but the order by clause is just the sort key.
-            }
-            stmt::Expr::Value(_) => {
-                if self.capability.sql {
-                    assert!(order_by.exprs.len() == 1, "order_by = {order_by:#?}");
-                } else {
-                    panic!("NoSQL requires a Record as offset");
+                if record.fields.is_empty() {
+                    self.record(Error::invalid_statement(
+                        "cursor must contain at least one ORDER BY value",
+                    ));
+                } else if record.fields.len() > order_by.exprs.len() {
+                    self.record(Error::invalid_statement(format!(
+                        "cursor contains {} values but the query has {} ORDER BY fields",
+                        record.fields.len(),
+                        order_by.exprs.len(),
+                    )));
                 }
             }
-            _ => todo!("unsupported offset expression; stmt={i:#?}"),
+            // A scalar cursor specifies the first ORDER BY value. This remains
+            // valid when normalization appends hidden tie-breaker fields.
+            stmt::Expr::Value(_) => {}
+            _ => self.record(Error::invalid_statement(
+                "cursor must be a literal value or record",
+            )),
         }
     }
 
-    /// Reject include filters on required (non-nullable) 1-1 relations: the
-    /// loaded value has no way to represent a non-matching row, so the whole
-    /// query would fail with `RecordNotFound` depending on the data.
-    ///
-    /// Variant-rooted paths (relations inside embedded enums) are not
-    /// resolvable here and pass through unchecked.
-    fn verify_include_filters(&mut self, i: &stmt::Select) {
+    /// Reject include ordering on singular relations and preserve the existing
+    /// rule that filters are rejected only on required singular relations.
+    /// Variant-rooted paths are not resolvable here and pass through unchecked.
+    fn verify_include_modifiers(&mut self, i: &stmt::Select) {
         for include in i.returning.model_includes() {
-            let has_filter = match include.query.as_ref().map(|query| &query.body) {
-                Some(stmt::ExprSet::Select(select)) => select.filter.expr.is_some(),
-                Some(_) | None => false,
+            let Some(query) = &include.query else {
+                continue;
             };
-            if !has_filter {
+            let has_filter = match &query.body {
+                stmt::ExprSet::Select(select) => select.filter.expr.is_some(),
+                _ => false,
+            };
+            let has_order_by = query.order_by.is_some();
+            if !has_filter && !has_order_by {
                 continue;
             }
             let Some(model_id) = include.path.root.as_model() else {
@@ -336,17 +341,28 @@ impl Verify<'_, '_> {
             else {
                 continue;
             };
-            let required_one = match &field.ty {
-                app::FieldTy::Has(rel) => rel.is_one() && !field.nullable,
-                app::FieldTy::BelongsTo(_) => !field.nullable,
-                _ => false,
+            let singular = match &field.ty {
+                app::FieldTy::Has(rel) => rel.is_one(),
+                app::FieldTy::BelongsTo(_) => true,
+                app::FieldTy::Via(via) => via.is_one(),
+                _ => continue,
             };
-            if required_one {
+            if has_order_by && singular {
+                self.record(Error::invalid_statement(format!(
+                    "cannot order the include of singular relation `{}`; \
+                     include ordering requires a many-valued relation",
+                    field.name,
+                )));
+                continue;
+            }
+            let required_one = singular && !field.nullable;
+            if has_filter && required_one {
                 self.record(Error::invalid_statement(format!(
                     "cannot filter the include of required relation `{}`; \
                      filter the parent query instead",
                     field.name,
                 )));
+                continue;
             }
         }
     }

@@ -2,8 +2,8 @@
 //!
 //! An [`Operation`] is the unit of work sent to [`Connection::exec`](super::Connection::exec).
 //! The query engine compiles user queries into one or more `Operation` values.
-//! SQL drivers handle [`QuerySql`], [`RawSql`], and [`Insert`]; key-value
-//! drivers handle [`GetByKey`], [`QueryPk`], [`DeleteByKey`],
+//! Drivers handle [`Insert`]. SQL drivers also handle [`QuerySql`] and
+//! [`RawSql`]; key-value drivers handle [`GetByKey`], [`QueryPk`], [`DeleteByKey`],
 //! [`FindPkByIndex`], [`UpdateByKey`], and (when
 //! [`Capability::scan`](super::Capability::scan) is `true`) [`Scan`]. Both
 //! driver types handle [`Transaction`] operations.
@@ -49,11 +49,11 @@ pub use upsert::Upsert;
 
 /// A single database operation to be executed by a driver.
 ///
-/// Each variant maps to one logical database action. The query planner selects
-/// variants based on the driver's [`Capability`](super::Capability): SQL
-/// drivers receive [`QuerySql`](Self::QuerySql) and [`Insert`](Self::Insert),
-/// while key-value drivers receive [`GetByKey`](Self::GetByKey),
-/// [`QueryPk`](Self::QueryPk), etc.
+/// Each variant maps to one logical database action. The query planner sends
+/// [`Insert`](Self::Insert) to every driver. SQL drivers also receive
+/// [`QuerySql`](Self::QuerySql), while key-value drivers receive
+/// [`GetByKey`](Self::GetByKey), [`QueryPk`](Self::QueryPk), etc., according to
+/// the driver's [`Capability`](super::Capability).
 ///
 /// All operation types implement `From<T> for Operation`, so they can be
 /// converted with `.into()`.

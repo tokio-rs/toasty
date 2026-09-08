@@ -7,6 +7,34 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-turso-v0.9.0...toasty-driver-turso-v0.10.0) - 2026-08-11
+
+### Added
+
+- Add network address types ([#1178])
+
+### Fixed
+
+- Fix resolution of authority-form SQLite and Turso URLs to file paths ([#1127])
+
+### Changed
+
+- [**breaking**] SQL dialect is now named on `Capability::sql` ([#1155])
+
+[#1127]: https://github.com/tokio-rs/toasty/pull/1127
+[#1155]: https://github.com/tokio-rs/toasty/pull/1155
+[#1178]: https://github.com/tokio-rs/toasty/pull/1178
+
+## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-turso-v0.8.0...toasty-driver-turso-v0.9.0) - 2026-07-23
+
+### Added
+
+- Support for Turso Sync ([#1072])
+- #[document] Storage for embedded types with nested-path filtering ([#1028])
+
+[#1028]: https://github.com/tokio-rs/toasty/pull/1028
+[#1072]: https://github.com/tokio-rs/toasty/pull/1072
+
 ## [0.8.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-turso-v0.7.0...toasty-driver-turso-v0.8.0) - 2026-07-06
 
 ### Added
