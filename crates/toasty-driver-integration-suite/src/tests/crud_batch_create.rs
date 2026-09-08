@@ -2,6 +2,7 @@
 
 use crate::prelude::*;
 
+use toasty::Json;
 use toasty_core::{
     driver::{Operation, operation::Transaction},
     schema::db,
@@ -222,6 +223,51 @@ pub async fn batch_create_uses_unnest_array_params(test: &mut Test) -> Result<()
     );
     assert_eq!(op.params[1].ty, db::Type::list(db::Type::Text));
     assert!(test.log().is_empty());
+
+    Ok(())
+}
+
+/// Native `json`/`jsonb` columns hold a document per row, so they must not be
+/// transposed into a per-column array bind: PostgreSQL has no array type
+/// registered for either, and binding one panics the driver.
+#[driver_test(requires(and(native_json, native_jsonb)))]
+pub async fn batch_create_document_columns(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Doc {
+        #[key]
+        id: String,
+        #[column(type = "json")]
+        text_encoded: Json<String>,
+        #[column(type = "jsonb")]
+        binary_encoded: Json<String>,
+    }
+
+    let mut db = test.setup_db(models!(Doc)).await;
+
+    let res = Doc::create_many()
+        .item(
+            Doc::create()
+                .id("a")
+                .text_encoded(Json("one".to_string()))
+                .binary_encoded(Json("two".to_string())),
+        )
+        .item(
+            Doc::create()
+                .id("b")
+                .text_encoded(Json("three".to_string()))
+                .binary_encoded(Json("four".to_string())),
+        )
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(2, res.len());
+
+    let reloaded = Doc::get_by_id(&mut db, "b").await?;
+    assert_struct!(reloaded, _ {
+        text_encoded: Json(== "three"),
+        binary_encoded: Json(== "four"),
+        ..
+    });
 
     Ok(())
 }

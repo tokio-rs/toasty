@@ -109,7 +109,9 @@ fn transpose_insert_unnest(
     }
 
     // A list/document column's per-row value is itself a collection, not a
-    // single array element.
+    // single array element. `Json`/`Jsonb` are the native spellings of the
+    // same shape and are excluded for the same reason: PostgreSQL has no
+    // array OID registered for them, so transposing panics the driver.
     let db_table = &db_schema.tables[table.table.0];
     let all_scalar = table
         .columns
@@ -201,7 +203,10 @@ fn row_is_transposable(row: &stmt::Expr, num_cols: usize) -> bool {
 }
 
 fn column_supports_unnest(ty: &db::Type) -> bool {
-    !matches!(ty, db::Type::List(_) | db::Type::Document { .. })
+    !matches!(
+        ty,
+        db::Type::List(_) | db::Type::Document { .. } | db::Type::Json | db::Type::Jsonb
+    )
 }
 
 /// A bind parameter being inferred. Once inference completes, the `Ty` is
