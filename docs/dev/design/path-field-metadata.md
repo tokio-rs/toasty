@@ -15,7 +15,8 @@ whether it is nullable, whether it is unique. That data lives in the app
 schema, reachable today only through a built `Db` or a direct `toasty-core`
 dependency. Generic code over models needs the answers from the path
 itself: a table renderer labeling columns and flagging optional ones, a
-keyset-pagination helper refusing a non-unique cursor column.
+keyset-pagination helper flagging a unique-index candidate (cursor safety
+needs additional storage-nullability checks; see Behavior).
 
 ## User-facing API
 
@@ -74,6 +75,8 @@ model with the given `ModelId`, if present.
   Variant columns are storage-nullable by construction, including `#[shared]`
   columns, so a variant path can permit duplicate `NULL`s even when
   `is_nullable()` is `false`.
+- `is_unique()` reports `false` inside a `#[document]` embed: the app-level
+  index has no database backing.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
   does not end at a field, when the projection crosses a relation, or when
   `field_name()` targets the unnamed `inner` field of a tuple-newtype
