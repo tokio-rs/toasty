@@ -144,12 +144,15 @@ pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test
     Ok(())
 }
 
-/// A NULL cell in an optional column survives a create with a generated key,
-/// under both ID strategies.
+/// A NULL cell in an optional column survives a multi-row create with a
+/// generated key, under both ID strategies. On PostgreSQL this exercises the
+/// INSERT → `unnest` transpose with a NULL cell inside a column array bind.
 ///
-/// TODO: batch these. A multi-row insert with a generated key needs mutation
-/// `RETURNING`, which MySQL lacks.
-#[driver_test(id(ID))]
+/// Gated on `returning_from_mutation`: the `id(ID)` expansion gates its
+/// `id_u64` variant on `auto_increment` alone, so without this the test also
+/// runs on MySQL, where a multi-row insert with a generated key needs the
+/// mutation `RETURNING` MySQL lacks.
+#[driver_test(id(ID), requires(returning_from_mutation))]
 pub async fn batch_create_with_null_field(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -161,12 +164,14 @@ pub async fn batch_create_with_null_field(test: &mut Test) -> Result<()> {
 
     let mut db = test.setup_db(models!(Item)).await;
 
-    let res = [
-        Item::create().name("n1").exec(&mut db).await?,
-        Item::create().exec(&mut db).await?,
-        Item::create().name("n3").exec(&mut db).await?,
-    ];
+    let res = Item::create_many()
+        .item(Item::create().name("n1"))
+        .item(Item::create())
+        .item(Item::create().name("n3"))
+        .exec(&mut db)
+        .await?;
 
+    assert_eq!(3, res.len());
     assert_eq!(res[0].name.as_deref(), Some("n1"));
     assert_eq!(res[1].name, None);
     assert_eq!(res[2].name.as_deref(), Some("n3"));
@@ -225,6 +230,14 @@ pub async fn batch_create_uses_unnest_array_params(test: &mut Test) -> Result<()
     assert_eq!(op.params[1].ty, db::Type::list(db::Type::Text));
     assert!(test.log().is_empty());
 
+    // The plan assertions above can't catch a swapped or misaligned column
+    // array — read the rows back to confirm each cell landed on its own row.
+    let first = Item::get_by_id(&mut db, "item-1").await?;
+    assert_eq!(first.name.as_deref(), Some("n1"));
+
+    let second = Item::get_by_id(&mut db, "item-2").await?;
+    assert_eq!(second.name, None);
+
     Ok(())
 }
 
@@ -249,14 +262,14 @@ pub async fn batch_create_document_columns(test: &mut Test) -> Result<()> {
         .item(
             Doc::create()
                 .id("a")
-                .text_encoded(Json("one".to_string()))
-                .binary_encoded(Json("two".to_string())),
+                .text_encoded("one".to_string())
+                .binary_encoded("two".to_string()),
         )
         .item(
             Doc::create()
                 .id("b")
-                .text_encoded(Json("three".to_string()))
-                .binary_encoded(Json("four".to_string())),
+                .text_encoded("three".to_string())
+                .binary_encoded("four".to_string()),
         )
         .exec(&mut db)
         .await?;
