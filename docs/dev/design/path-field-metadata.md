@@ -41,8 +41,9 @@ assert!(User::fields().bio().is_nullable());
 assert!(User::fields().contact().email().address().is_unique());
 ```
 
-All three resolve through embedded structs and embedded-enum variants to
-any depth — a struct inside a variant, an enum inside a variant.
+All three resolve through embedded structs, embedded-enum variants, and
+`#[document]` embeds to any depth — a struct inside a variant, an enum
+inside a variant, a document inside a document.
 
 The re-exports:
 
@@ -74,6 +75,8 @@ model with the given `ModelId`, if present.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
   does not end at a field, or when the projection crosses a relation. A
   path may end at a relation field; projecting through one panics.
+  Projecting through embedded (including `#[document]`) and enum steps is
+  supported.
 
 ## Edge cases
 
