@@ -61,6 +61,28 @@ enum Handle {
     Signal { id: String },
 }
 
+#[derive(Debug, toasty::Embed)]
+#[allow(dead_code)]
+#[unique(name)]
+enum Creature {
+    Human {
+        #[shared(name)]
+        full_name: String,
+    },
+    Animal {
+        #[shared(name)]
+        nickname: String,
+    },
+}
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct Character {
+    #[key]
+    id: i64,
+    creature: Creature,
+}
+
 #[derive(Debug, toasty::Model)]
 #[allow(dead_code)]
 struct Membership {
@@ -170,6 +192,19 @@ fn field_metadata_nested_variant_path() {
 fn field_metadata_composite_pk_fields_not_unique() {
     assert!(!Membership::fields().org_id().is_unique());
     assert!(!Membership::fields().user_id().is_unique());
+}
+
+#[test]
+fn field_metadata_shared_unique() {
+    // `#[unique(name)]` stores the first `#[shared(name)]` member only, but
+    // constrains the shared column for every member.
+    let human = Character::fields().creature().human().full_name();
+    assert_eq!(human.field_name(), "full_name");
+    assert!(human.is_unique());
+
+    let animal = Character::fields().creature().animal().nickname();
+    assert_eq!(animal.field_name(), "nickname");
+    assert!(animal.is_unique());
 }
 
 #[test]
