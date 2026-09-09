@@ -22,6 +22,8 @@ keyset-pagination helper refusing a non-unique cursor column.
 Three methods on `Path<M, T>` where `M: Model`:
 
 - `field_name() -> String` the app-level (Rust) name of the field.
+  Panics on the unnamed `inner` field of a tuple-newtype embed, which has
+  no app-level name.
 - `is_nullable() -> bool` whether the leaf field is `Option`-marked (not
   whether storage accepts `NULL`; see Behavior).
 - `is_unique() -> bool` whether the field is the target of a single-field
@@ -73,7 +75,9 @@ model with the given `ModelId`, if present.
   columns, so a variant path can permit duplicate `NULL`s even when
   `is_nullable()` is `false`.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
-  does not end at a field, or when the projection crosses a relation. A
+  does not end at a field, when the projection crosses a relation, or when
+  `field_name()` targets the unnamed `inner` field of a tuple-newtype
+  embed. A
   path may end at a relation field; projecting through one panics.
   Projecting through embedded (including `#[document]`) and enum steps is
   supported.
@@ -84,6 +88,9 @@ model with the given `ModelId`, if present.
   offset the engine applies in `Path::into_stmt` does not apply here.
 - `field_name()` is the Rust field name, not the database column.
   Flattened embed columns and storage overrides live in the mapping layer.
+  The `inner` field of a tuple-newtype embed is transparent (it takes the
+  parent field's column) and has no app-level name, so `field_name()`
+  panics there; `is_nullable()` and `is_unique()` still work.
 
 ## Driver integration
 

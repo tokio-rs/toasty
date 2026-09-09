@@ -155,6 +155,18 @@ struct DocAccount {
     profile: DocProfile,
 }
 
+#[derive(Debug, toasty::Embed)]
+#[allow(dead_code)]
+struct Wrapper(String);
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct NewtypeHolder {
+    #[key]
+    id: i64,
+    wrapper: Wrapper,
+}
+
 #[test]
 fn field_metadata_single_path() {
     let email = User::fields().email();
@@ -304,6 +316,19 @@ fn path_converts_to_core_path() {
     let core: CorePath = User::fields().email().into();
     let expected = User::field_name_to_id("email").index;
     assert_eq!(core.projection.as_slice(), &[expected]);
+}
+
+#[test]
+fn field_metadata_newtype_inner_nullable_unique() {
+    let inner = NewtypeHolder::fields().wrapper().inner();
+    assert!(!inner.is_nullable());
+    assert!(!inner.is_unique());
+}
+
+#[test]
+#[should_panic(expected = "no app-level name")]
+fn field_metadata_newtype_inner_name_panics() {
+    let _ = NewtypeHolder::fields().wrapper().inner().field_name();
 }
 
 #[test]
