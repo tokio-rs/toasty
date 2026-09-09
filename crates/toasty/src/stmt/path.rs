@@ -795,7 +795,11 @@ where
             .to_string()
     }
 
-    /// Whether the field accepts `NULL`.
+    /// Whether the leaf field is `Option`-marked.
+    ///
+    /// Reports the leaf field's own nullability only; a `false` result does
+    /// not rule out storage `NULL`s from a nullable parent embed or an
+    /// inactive enum variant (see [`is_unique`](Self::is_unique)).
     ///
     /// # Panics
     ///
@@ -821,13 +825,14 @@ where
 
     /// Whether this field is the target of a single-field unique index.
     ///
-    /// True for `#[unique]` fields, enum-level `#[unique(variant::field)]`
-    /// references, enum-level `#[unique(shared)]` references (true for every
-    /// `#[shared(shared)]` member, which share one column), and primary-key
-    /// fields of models with
-    /// a single-field primary key. Components of composite unique indices or
-    /// composite primary keys are not unique on their own. Walks
-    /// [`app::Index`] entries; there is no `Field.unique` flag.
+    /// Index membership only, not a global-uniqueness guarantee: `NULL`s do
+    /// not conflict (SQL treats them as distinct; DynamoDB skips the index
+    /// entry), so `true` implies globally unique values only for a
+    /// non-nullable column (non-optional leaf, no nullable parent embed or
+    /// enum variant crossed). True for `#[unique]` fields, enum-level
+    /// `#[unique(variant::field)]` and `#[unique(shared)]` references (every
+    /// `#[shared(shared)]` member), and single-field primary keys.
+    /// Components of composite indices are not unique on their own.
     ///
     /// # Panics
     ///

@@ -22,9 +22,11 @@ keyset-pagination helper refusing a non-unique cursor column.
 Three methods on `Path<M, T>` where `M: Model`:
 
 - `field_name() -> String` the app-level (Rust) name of the field.
-- `is_nullable() -> bool` whether the field accepts `NULL`.
+- `is_nullable() -> bool` whether the leaf field is `Option`-marked (not
+  whether storage accepts `NULL`; see Behavior).
 - `is_unique() -> bool` whether the field is the target of a single-field
-  unique index: `#[unique]` fields, enum-level `#[unique(variant::field)]`
+  unique index (index membership only, not a global-uniqueness guarantee):
+  `#[unique]` fields, enum-level `#[unique(variant::field)]`
   references, enum-level `#[unique(shared)]` references (true for every
   `#[shared(shared)]` member, which share one column), and primary-key
   fields of single-field primary keys.
@@ -56,10 +58,19 @@ model with the given `ModelId`, if present.
 - No `Db` required. Each call builds the app schema for `M`'s reachable
   models and resolves the path against it. These are one-off probes, not
   per-row helpers.
+- `is_nullable()` reports the leaf field's `Option` marker only, not storage
+  `NULL`s from a nullable parent embed or an inactive enum variant.
 - `is_unique()` scans the owning model's `app::Index` entries (there is no
   per-field unique flag) and matches only single-field unique indices.
   Enum-level `#[unique(shared)]` stores the first `#[shared(shared)]` member
-  only, so members compare by shared identifier, not `FieldId`.
+  only, so members compare by shared identifier, not `FieldId`. Reports index
+  membership only: `NULL`s do not conflict in unique indices (SQL treats
+  them as distinct; DynamoDB skips the index entry). `true` implies globally
+  unique values only when the column cannot be `NULL` (non-optional leaf, no
+  nullable parent embed or enum variant crossed).
+  Variant columns are storage-nullable by construction, including `#[shared]`
+  columns, so a variant path can permit duplicate `NULL`s even when
+  `is_nullable()` is `false`.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
   does not end at a field, or when the projection crosses a relation. A
   path may end at a relation field; projecting through one panics.
