@@ -672,7 +672,6 @@ impl ToSql for &stmt::TableRef {
                 fmt!(f, table_name);
             }
             stmt::TableRef::Derived(table_derived) => fmt!(f, table_derived),
-            stmt::TableRef::Func(func) => func.to_sql(f),
             stmt::TableRef::RowsFrom(funcs) => {
                 fmt!(f, "ROWS FROM (" Comma(funcs.iter()) ")")
             }

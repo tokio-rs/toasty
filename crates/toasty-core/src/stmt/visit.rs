@@ -1632,7 +1632,6 @@ where
         TableRef::Cte { .. } => {}
         TableRef::Derived(table_derived) => v.visit_table_derived(table_derived),
         TableRef::Table(_) => {}
-        TableRef::Func(func) => v.visit_expr_func(func),
         TableRef::RowsFrom(funcs) => {
             for func in funcs {
                 v.visit_expr_func(func);

@@ -215,16 +215,10 @@ fn refine_source(source: &stmt::Source, cx: &Cx<'_>, params: &mut [Param]) {
     };
 
     for table in &source.tables {
-        match table {
-            stmt::TableRef::Func(func) => {
+        if let stmt::TableRef::RowsFrom(funcs) = table {
+            for func in funcs {
                 synthesize_func(func, cx, params);
             }
-            stmt::TableRef::RowsFrom(funcs) => {
-                for func in funcs {
-                    synthesize_func(func, cx, params);
-                }
-            }
-            _ => {}
         }
     }
 }

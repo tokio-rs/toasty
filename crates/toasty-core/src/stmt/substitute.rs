@@ -118,7 +118,7 @@ where
             *i = TableRef::Derived(TableDerived {
                 subquery: Box::new(Query {
                     with: None,
-                    body: ExprSet::Values(Values::new(rows)),
+                    body: ExprSet::Values(Values { rows }),
                     single: false,
                     order_by: None,
                     limit: None,
