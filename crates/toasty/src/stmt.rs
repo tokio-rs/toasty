@@ -84,11 +84,13 @@ pub use toasty_core::stmt::Decimal;
 /// The untyped path underlying the typed [`Path`], produced by its `From`
 /// conversion.
 pub use toasty_core::stmt::Path as CorePath;
+/// An ordered sequence of values representing a record (row).
+pub use toasty_core::stmt::ValueRecord;
 #[cfg(feature = "jiff")]
 pub use toasty_core::stmt::{Date, DateTime, Time, Timestamp, Zoned};
 #[cfg(feature = "net")]
 pub use toasty_core::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
-pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Uuid, Value, ValueRecord};
+pub use toasty_core::stmt::{OrderBy, OrderByExpr, Projection, Type, Uuid, Value};
 
 use toasty_core::stmt;
 
