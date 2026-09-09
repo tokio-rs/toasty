@@ -166,7 +166,7 @@ fn transpose_insert_unnest(
         .zip(&table.columns)
         .map(|(cells, col_id)| {
             let value = stmt::Value::List(cells);
-            let ty = Ty::List(Box::new(Ty::Column(
+            let ty = Ty::List(Box::new(infer::ty_from_column(
                 db_table.columns[col_id.index].storage_ty.clone(),
             )));
             let position = params.len();

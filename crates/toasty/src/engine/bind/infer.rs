@@ -65,7 +65,7 @@ fn refine_stmt(stmt: &stmt::Statement, cx: &Cx<'_>, db_schema: &db::Schema, para
 /// `Ty::List(Ty::Column(_))` keeps the data structure uniform — every list
 /// is `Ty::List`, every scalar is `Ty::Column`/`Ty::Inferred` — and lets
 /// `merge` handle the cases with no extra branches.
-fn ty_from_column(storage_ty: db::Type) -> Ty {
+pub(super) fn ty_from_column(storage_ty: db::Type) -> Ty {
     match storage_ty {
         db::Type::List(elem) => Ty::List(Box::new(ty_from_column(*elem))),
         scalar => Ty::Column(scalar),
