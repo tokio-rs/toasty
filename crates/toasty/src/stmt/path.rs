@@ -822,7 +822,9 @@ where
     /// Whether this field is the target of a single-field unique index.
     ///
     /// True for `#[unique]` fields, enum-level `#[unique(variant::field)]`
-    /// references, and primary-key fields of models with
+    /// references, enum-level `#[unique(shared)]` references (true for every
+    /// `#[shared(shared)]` member, which share one column), and primary-key
+    /// fields of models with
     /// a single-field primary key. Components of composite unique indices or
     /// composite primary keys are not unique on their own. Walks
     /// [`app::Index`] entries; there is no `Field.unique` flag.
@@ -848,14 +850,31 @@ where
     pub fn is_unique(&self) -> bool {
         let models = Self::registered_models();
         let field = Self::field_in(&models, &self.untyped);
-        let indices = match Self::model_by_id(&models, field.id.model) {
+        let owner = Self::model_by_id(&models, field.id.model);
+        let indices = match owner {
             app::Model::Root(root) => &root.indices,
             app::Model::EmbeddedStruct(embedded) => &embedded.indices,
             app::Model::EmbeddedEnum(embedded) => &embedded.indices,
         };
-        indices
-            .iter()
-            .any(|idx| idx.unique && idx.fields.len() == 1 && idx.fields[0].field == field.id)
+        indices.iter().any(|idx| {
+            if !idx.unique || idx.fields.len() != 1 {
+                return false;
+            }
+            let indexed = idx.fields[0].field;
+            if indexed == field.id {
+                return true;
+            }
+            // Enum-level `#[unique(name)]` stores the first `#[shared(name)]`
+            // member only, but constrains the shared column for every member.
+            let Some(shared) = &field.shared else {
+                return false;
+            };
+            Self::model_by_id(&models, indexed.model)
+                .fields()
+                .get(indexed.index)
+                .and_then(|f| f.shared.as_ref())
+                == Some(shared)
+        })
     }
 
     /// Collects the model set rooted at `T` so field lookups can walk into

@@ -25,7 +25,9 @@ Three methods on `Path<M, T>` where `M: Model`:
 - `is_nullable() -> bool` whether the field accepts `NULL`.
 - `is_unique() -> bool` whether the field is the target of a single-field
   unique index: `#[unique]` fields, enum-level `#[unique(variant::field)]`
-  references, and primary-key fields of single-field primary keys.
+  references, enum-level `#[unique(shared)]` references (true for every
+  `#[shared(shared)]` member, which share one column), and primary-key
+  fields of single-field primary keys.
   Components of composite unique indices or composite primary keys are not
   unique on their own.
 
@@ -56,6 +58,8 @@ model with the given `ModelId`, if present.
   per-row helpers.
 - `is_unique()` scans the owning model's `app::Index` entries (there is no
   per-field unique flag) and matches only single-field unique indices.
+  Enum-level `#[unique(shared)]` stores the first `#[shared(shared)]` member
+  only, so members compare by shared identifier, not `FieldId`.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
   does not end at a field, or when the projection crosses a relation. A
   path may end at a relation field; projecting through one panics.
