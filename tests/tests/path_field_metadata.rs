@@ -2,7 +2,7 @@
 //! uniqueness — including nested embedded and enum-variant projections — plus
 //! the `CorePath` re-export.
 
-use toasty::schema::Model;
+use toasty::schema::{Embed, Model};
 use toasty::stmt::CorePath;
 
 #[derive(Debug, toasty::Model)]
@@ -94,6 +94,23 @@ struct Membership {
 
 #[derive(Debug, toasty::Model)]
 #[allow(dead_code)]
+struct ApiKey {
+    #[key]
+    id: i64,
+    #[unique]
+    token: Option<String>,
+}
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct Customer {
+    #[key]
+    id: i64,
+    address: Option<MailAddress>,
+}
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
 struct Author {
     #[key]
     id: i64,
@@ -152,6 +169,8 @@ fn field_metadata_variant_path() {
     let address = User::fields().contact().email().address();
     assert_eq!(address.field_name(), "address");
     assert!(!address.is_nullable());
+    // Index membership only: rows of every other variant store `NULL` here,
+    // which unique indices leave non-conflicting, so this is not cursor-safe.
     assert!(address.is_unique());
 
     let country_code = User::fields().contact().phone().country_code();
@@ -169,6 +188,7 @@ fn field_metadata_variant_nested_embed_path() {
     let street = User::fields().contact().post().mail().street();
     assert_eq!(street.field_name(), "street");
     assert!(!street.is_nullable());
+    // Index membership only: same inactive-variant `NULL` caveat as above.
     assert!(street.is_unique());
 
     let po_box = User::fields().contact().post().mail().po_box();
@@ -195,15 +215,41 @@ fn field_metadata_composite_pk_fields_not_unique() {
 }
 
 #[test]
+fn field_metadata_nullable_unique_reports_membership() {
+    let token = ApiKey::fields().token();
+    assert!(token.is_nullable());
+    // Index membership only: `NULL`s do not conflict, so `NULL`
+    // tokens can repeat despite `is_unique()`.
+    assert!(token.is_unique());
+}
+
+#[test]
+fn field_metadata_nullable_parent_embed_reports_membership() {
+    // Typed `fields()` chaining stops at `Option<MailAddress>` (plain `Path`,
+    // no sub-field methods), so build the projection with `chain`.
+    let address =
+        Customer::path_field::<Option<MailAddress>>(Customer::field_name_to_id("address").index);
+    // `street` is field 0 of `MailAddress`.
+    let street = address.chain(MailAddress::path_field::<String>(0));
+    assert_eq!(street.field_name(), "street");
+    assert!(!street.is_nullable());
+    // Index membership only: `None` parents store `NULL` here, which unique
+    // indices leave non-conflicting, so this is not cursor-safe.
+    assert!(street.is_unique());
+}
+
+#[test]
 fn field_metadata_shared_unique() {
     // `#[unique(name)]` stores the first `#[shared(name)]` member only, but
     // constrains the shared column for every member.
     let human = Character::fields().creature().human().full_name();
     assert_eq!(human.field_name(), "full_name");
+    assert!(!human.is_nullable());
     assert!(human.is_unique());
 
     let animal = Character::fields().creature().animal().nickname();
     assert_eq!(animal.field_name(), "nickname");
+    assert!(!animal.is_nullable());
     assert!(animal.is_unique());
 }
 
