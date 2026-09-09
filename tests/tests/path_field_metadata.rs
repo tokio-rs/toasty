@@ -130,6 +130,31 @@ struct Post {
     title: String,
 }
 
+#[derive(Debug, toasty::Embed)]
+#[allow(dead_code)]
+struct DocAddress {
+    city: String,
+    zip: Option<String>,
+}
+
+#[derive(Debug, toasty::Embed)]
+#[allow(dead_code)]
+struct DocProfile {
+    name: String,
+    nickname: Option<String>,
+    #[document]
+    address: DocAddress,
+}
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct DocAccount {
+    #[key]
+    id: i64,
+    #[document]
+    profile: DocProfile,
+}
+
 #[test]
 fn field_metadata_single_path() {
     let email = User::fields().email();
@@ -206,6 +231,27 @@ fn field_metadata_nested_variant_path() {
         .username();
     assert_eq!(username.field_name(), "username");
     assert!(!username.is_nullable());
+}
+
+#[test]
+fn field_metadata_document_path() {
+    let name = DocAccount::fields().profile().name();
+    assert_eq!(name.field_name(), "name");
+    assert!(!name.is_nullable());
+    assert!(!name.is_unique());
+
+    let nickname = DocAccount::fields().profile().nickname();
+    assert_eq!(nickname.field_name(), "nickname");
+    assert!(nickname.is_nullable());
+
+    // Nested `#[document]` inside a `#[document]`.
+    let city = DocAccount::fields().profile().address().city();
+    assert_eq!(city.field_name(), "city");
+    assert!(!city.is_nullable());
+
+    let zip = DocAccount::fields().profile().address().zip();
+    assert_eq!(zip.field_name(), "zip");
+    assert!(zip.is_nullable());
 }
 
 #[test]

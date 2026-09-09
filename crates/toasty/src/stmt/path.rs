@@ -773,7 +773,8 @@ where
     /// # Panics
     ///
     /// Panics if the path does not end at a field, or if the projection
-    /// crosses a relation: only embedded struct and enum steps are supported.
+    /// crosses a relation: only embedded struct, embedded enum, and document
+    /// steps are supported.
     ///
     /// # Examples
     ///
@@ -804,7 +805,8 @@ where
     /// # Panics
     ///
     /// Panics if the path does not end at a field, or if the projection
-    /// crosses a relation: only embedded struct and enum steps are supported.
+    /// crosses a relation: only embedded struct, embedded enum, and document
+    /// steps are supported.
     ///
     /// # Examples
     ///
@@ -837,7 +839,8 @@ where
     /// # Panics
     ///
     /// Panics if the path does not end at a field, or if the projection
-    /// crosses a relation: only embedded struct and enum steps are supported.
+    /// crosses a relation: only embedded struct, embedded enum, and document
+    /// steps are supported.
     ///
     /// # Examples
     ///
@@ -919,13 +922,21 @@ where
                 if rest.is_empty() {
                     variant_field
                 } else {
-                    let embedded_target = match &variant_field.ty {
-                        app::FieldTy::Embedded(embedded) => embedded.target,
-                        _ => panic!("cannot project through non-embedded field"),
-                    };
+                    let embedded_target = Self::embedded_target(variant_field);
                     Self::walk_fields(models, embedded_target, rest)
                 }
             }
+        }
+    }
+
+    /// The embedded model a projection step traverses into: a column-expanded
+    /// embed (`Embedded`) or a `#[document]` field (`Primitive(Model)`), whose
+    /// accessor is chainable like a column-expanded embed.
+    fn embedded_target(field: &app::Field) -> ModelId {
+        match &field.ty {
+            app::FieldTy::Embedded(embedded) => embedded.target,
+            app::FieldTy::Primitive(primitive) if let stmt::Type::Model(id) = &primitive.ty => *id,
+            _ => panic!("cannot project through non-embedded field"),
         }
     }
 
@@ -939,10 +950,7 @@ where
         };
         let mut field = &Self::model_by_id(models, model_id).fields()[*first];
         for &step in rest {
-            let embed_id = match &field.ty {
-                app::FieldTy::Embedded(embedded) => embedded.target,
-                _ => panic!("cannot project through non-embedded field"),
-            };
+            let embed_id = Self::embedded_target(field);
             field = &Self::model_by_id(models, embed_id).fields()[step];
         }
         field
