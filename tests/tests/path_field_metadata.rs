@@ -140,6 +140,10 @@ struct DocAddress {
 #[derive(Debug, toasty::Embed)]
 #[allow(dead_code)]
 struct DocProfile {
+    // App-level unique index with no database backing: `collect_indices`
+    // only recurses into column-expanded embeds, so `is_unique()` must
+    // report `false` through a `#[document]` traversal.
+    #[unique]
     name: String,
     nickname: Option<String>,
     #[document]
@@ -250,6 +254,8 @@ fn field_metadata_document_path() {
     let name = DocAccount::fields().profile().name();
     assert_eq!(name.field_name(), "name");
     assert!(!name.is_nullable());
+    // `DocProfile::name` carries `#[unique]` at the app level, but the
+    // traversal crosses `#[document]` storage (no DB index), so `false`.
     assert!(!name.is_unique());
 
     let nickname = DocAccount::fields().profile().nickname();
