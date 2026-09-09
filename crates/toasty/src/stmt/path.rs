@@ -772,8 +772,10 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if the path does not end at a field, or if the projection
-    /// crosses a relation: only embedded struct, embedded enum, and document
+    /// Panics if the path does not end at a field, if the projection
+    /// crosses a relation, or if the leaf field is unnamed (the `inner`
+    /// field of a tuple-newtype embed, which has no app-level name):
+    /// only embedded struct, embedded enum, and document
     /// steps are supported.
     ///
     /// # Examples
@@ -792,7 +794,9 @@ where
         let models = Self::registered_models();
         Self::field_in(&models, &self.untyped)
             .name
-            .app_unwrap()
+            .app
+            .as_deref()
+            .expect("field_name(): leaf field has no app-level name (tuple-newtype `inner` field)")
             .to_string()
     }
 
