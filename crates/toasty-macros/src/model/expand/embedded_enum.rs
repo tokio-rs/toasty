@@ -578,11 +578,14 @@ impl Expand<'_> {
             return Vec::new();
         }
 
-        // Names already occupying the enum fields struct: variant accessors,
-        // `is_*` guards, and the delegated comparisons.
+        // Names already occupying the enum fields struct: variant accessors
+        // (only data-carrying variants have one), `is_*` guards (every
+        // variant has one), and the delegated comparisons.
         let mut taken: Vec<String> = Vec::new();
         for variant in &embedded_enum.variants {
-            taken.push(util::bare_ident_name(&variant.name.ident));
+            if variant.variant_handle_ident.is_some() {
+                taken.push(util::bare_ident_name(&variant.name.ident));
+            }
             taken.push(util::bare_ident_name(&variant.is_method_ident));
         }
         taken.extend(DELEGATED_COMPARISON_METHODS.iter().map(|s| s.to_string()));
@@ -617,20 +620,22 @@ impl Expand<'_> {
                 }
 
                 // Encode the step via `EmbeddedEnum::shared_step_base`, past
-                // every reachable per-variant record position, so it can
-                // never collide with a variant-gated read's record position.
-                // Decoded by `EmbeddedEnum::shared_read_at_step`.
+                // every reachable per-variant record position and every
+                // variant index, so it can never collide with a
+                // variant-gated read's record position or a discriminant
+                // access. Decoded by `EmbeddedEnum::shared_read_at_step`.
                 let offset = util::int(
                     toasty_core::schema::app::EmbeddedEnum::shared_step_base(
                         self.model.fields.len(),
+                        embedded_enum.variants.len(),
                     ) + global_idx,
                 );
                 let span = ident.span();
                 let method_ident = &name.ident;
                 quote_spanned! { span=>
-                    #vis fn #method_ident(&self) -> #toasty::Path<__Origin, Option<<#ty as #toasty::Field>::Inner>> {
+                    #vis fn #method_ident(&self) -> #toasty::Path<__Origin, ::core::option::Option<<#ty as #toasty::Field>::Inner>> {
                         self.path.clone().chain(
-                            <#model_ident as #toasty::Embed>::path_field::<Option<<#ty as #toasty::Field>::Inner>>(#offset)
+                            <#model_ident as #toasty::Embed>::path_field::<::core::option::Option<<#ty as #toasty::Field>::Inner>>(#offset)
                         )
                     }
                 }

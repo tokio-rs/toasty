@@ -94,8 +94,9 @@ Projection equality and hashing are designed so single-step projections compare 
 
 One exception to "steps are field indices": embedded-enum gateless
 shared reads (`#[shared]`) reuse Model-rooted single-step projections
-with steps at or above `EmbeddedEnum::shared_step_base(fields.len())`,
-past every reachable per-variant record position:
+with steps at or above
+`EmbeddedEnum::shared_step_base(fields.len(), variants.len())`,
+past every reachable per-variant record position and every variant index:
 
 ```
 creature().name()                // projection [creature_idx, 5], 5 = base(4) + 0

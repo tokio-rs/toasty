@@ -205,7 +205,8 @@ impl Schema {
                         }
                         Model::EmbeddedEnum(e) => {
                             // Gateless shared read; see `shared_read_at_step`.
-                            // Its step is offset past every record position.
+                            // Its step is offset past every record position and
+                            // every variant index.
                             if steps.as_slice().is_empty()
                                 && let Some((_, field)) = e.shared_read_at_step(*step)
                             {

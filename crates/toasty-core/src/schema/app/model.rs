@@ -387,24 +387,34 @@ impl EmbeddedEnum {
     }
 
     /// First trailing-step value reserved for gateless shared reads in an
-    /// enum with `len` flattened fields. A variant-gated read encodes its
-    /// trailing step as a record position (at most `len`, since a variant's
-    /// fields are a subset of the flattened list), so steps at or above this
-    /// base can never collide with one. The generated accessor emits
-    /// `shared_step_base(len) + flattened index`; see `shared_read_at_step`.
-    pub const fn shared_step_base(len: usize) -> usize {
-        len + 1
+    /// enum with `len` flattened fields and `variant_count` variants. A
+    /// variant-gated read encodes its trailing step as a record position (at
+    /// most `len`, since a variant's fields are a subset of the flattened
+    /// list), and a discriminant access encodes its step as a variant index
+    /// (at most `variant_count - 1`), so steps at or above this base can
+    /// never collide with either. The generated accessor emits
+    /// `shared_step_base(len, variant_count) + flattened index`; see
+    /// `shared_read_at_step`.
+    pub const fn shared_step_base(len: usize, variant_count: usize) -> usize {
+        if len + 1 > variant_count {
+            len + 1
+        } else {
+            variant_count
+        }
     }
 
     /// Returns the flattened index and field of the gateless shared read
     /// encoded as trailing projection step `step`, or `None` when `step` does
     /// not encode a shared read.
     ///
-    /// Decodes steps emitted as `shared_step_base(fields.len()) + flattened
-    /// index`; see [`Self::shared_step_base`] for why the encodings cannot
-    /// collide.
+    /// Decodes steps emitted as `shared_step_base(fields.len(),
+    /// variants.len()) + flattened index`; see [`Self::shared_step_base`]
+    /// for why the encodings cannot collide.
     pub fn shared_read_at_step(&self, step: usize) -> Option<(usize, &Field)> {
-        let index = step.checked_sub(Self::shared_step_base(self.fields.len()))?;
+        let index = step.checked_sub(Self::shared_step_base(
+            self.fields.len(),
+            self.variants.len(),
+        ))?;
         let field = self.fields.get(index)?;
         field.shared.as_ref()?;
         Some((index, field))
