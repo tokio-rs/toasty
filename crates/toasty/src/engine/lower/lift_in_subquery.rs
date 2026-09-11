@@ -42,6 +42,10 @@ use toasty_core::{
     stmt::{self, Expr, ExprContext, IntoExprTarget, ResolvedRef, Visit, VisitMut},
 };
 
+use super::embedded_relation::{
+    EmbeddedRelationRef, VariantGate, collect_variant_gates, resolve_embedded_relation,
+};
+
 /// Pre-lowering pass that lifts relation references out of `IN`-subquery
 /// and projection comparisons into direct foreign-key forms.  Runs as a
 /// whole-statement visitor before the main lowering walk: code paths that
@@ -65,6 +69,29 @@ impl<'a> LiftInSubquery<'a> {
         LiftInSubquery {
             cx: self.cx.scope(target),
             exclude_nulls: self.exclude_nulls,
+        }
+    }
+
+    /// Try the embedded-relation rewrites on one expression, replacing it
+    /// when a rewrite fires. `gates` carries the `is_variant` context from
+    /// the enclosing conjunction; it is empty when the expression stands
+    /// alone, which suffices for relations inside embedded structs.
+    fn rewrite_embedded_relation(&self, expr: &mut stmt::Expr, gates: &[VariantGate]) {
+        let lifted = match expr {
+            stmt::Expr::BinaryOp(e) => {
+                if rewrite_embedded_relation_operand(&self.cx, e, gates) {
+                    return;
+                }
+                lift_embedded_relation_comparison(&self.cx, e, gates)
+            }
+            stmt::Expr::Like(e) => lift_embedded_relation_like(&self.cx, e, gates),
+            stmt::Expr::InSubquery(e) => lift_embedded_relation_in_subquery(&self.cx, e, gates),
+            _ => None,
+        };
+
+        if let Some(mut lifted) = lifted {
+            self.exclude_nulls(&mut lifted);
+            *expr = lifted;
         }
     }
 
@@ -104,6 +131,8 @@ impl VisitMut for LiftInSubquery<'_> {
                 if let Some(mut lifted) = lift_in_subquery(&self.cx, &e.expr, &e.query) {
                     self.exclude_nulls(&mut lifted);
                     *expr = lifted;
+                } else {
+                    self.rewrite_embedded_relation(expr, &[]);
                 }
             }
             stmt::Expr::BinaryOp(e) => {
@@ -118,12 +147,31 @@ impl VisitMut for LiftInSubquery<'_> {
                 {
                     self.exclude_nulls(&mut lifted);
                     *expr = lifted;
+                } else {
+                    self.rewrite_embedded_relation(expr, &[]);
                 }
             }
             stmt::Expr::Like(e) => {
                 if let Some(mut lifted) = try_lift_relation_path_like(&self.cx, e) {
                     self.exclude_nulls(&mut lifted);
                     *expr = lifted;
+                } else {
+                    self.rewrite_embedded_relation(expr, &[]);
+                }
+            }
+            // Relation references through an embedded *enum* only resolve
+            // with variant context, and the typed layer fuses the
+            // `is_variant` gate as a sibling operand of the comparison it
+            // scopes. Collect the gates of this conjunction and try the
+            // embedded rewrites on the other operands with that context.
+            // (The gate operands stay in place — the rewritten key
+            // comparison is only variant-correct alongside them.)
+            stmt::Expr::And(e) => {
+                let gates = collect_variant_gates(&e.operands);
+                if !gates.is_empty() {
+                    for operand in &mut e.operands {
+                        self.rewrite_embedded_relation(operand, &gates);
+                    }
                 }
             }
             _ => {}
@@ -572,6 +620,150 @@ fn lift_relation_path_predicate(
         stmt::Query::new_select(stmt::Source::from(target_model_id), make_filter(target_lhs));
 
     lift_in_subquery(cx, &project_expr.base, &subquery)
+}
+
+/// `<relation-projection> eq/ne <expr>`: substitute the projection of the
+/// relation's key field(s) for the relation reference, in place. The
+/// analogue of `rewrite_eq_operand`'s `BelongsTo` arm for relations inside
+/// embedded types; the variant scoping comes from the `is_variant` gates the
+/// typed layer fused next to the comparison (see `resolve_embedded_relation`).
+///
+/// Returns `true` when an operand was substituted; the binary op itself
+/// stays in place.
+fn rewrite_embedded_relation_operand(
+    cx: &ExprContext,
+    e: &mut stmt::ExprBinaryOp,
+    gates: &[VariantGate],
+) -> bool {
+    if !e.op.is_eq() && !e.op.is_ne() {
+        return false;
+    }
+
+    for side in [&mut e.lhs, &mut e.rhs] {
+        if let Some(resolved) = resolve_embedded_relation(cx, side, gates)
+            && resolved.tail.is_empty()
+        {
+            **side = resolved.key_expr;
+            return true;
+        }
+    }
+
+    false
+}
+
+/// A comparison whose one side projects *through* an embedded relation into
+/// the target model (`v.human().name().eq("Alice")`) lifts to a foreign-key
+/// `IN` subquery on the target — [`lift_relation_path_predicate`] for
+/// relations inside embedded types.
+fn lift_embedded_relation_comparison(
+    cx: &ExprContext,
+    e: &stmt::ExprBinaryOp,
+    gates: &[VariantGate],
+) -> Option<stmt::Expr> {
+    let sides = [
+        (&e.lhs, &e.rhs, Some(e.op)),
+        (&e.rhs, &e.lhs, e.op.commute()),
+    ];
+
+    for (project_side, other_side, op) in sides {
+        let Some(resolved) = resolve_embedded_relation(cx, project_side, gates) else {
+            continue;
+        };
+        // A comparison *at* the relation is the operand rewrite's case.
+        if resolved.tail.is_empty() {
+            continue;
+        }
+
+        let filter = Expr::binary_op(reroot_tail(&resolved), op?, (**other_side).clone());
+        let query = stmt::Query::new_select(stmt::Source::from(resolved.belongs_to.target), filter);
+        return embedded_fk_in_subquery(&resolved, query);
+    }
+
+    None
+}
+
+/// [`lift_embedded_relation_comparison`] for `LIKE` / `ILIKE` patterns —
+/// the counterpart of [`try_lift_relation_path_like`].
+fn lift_embedded_relation_like(
+    cx: &ExprContext,
+    like: &stmt::ExprLike,
+    gates: &[VariantGate],
+) -> Option<stmt::Expr> {
+    let resolved = resolve_embedded_relation(cx, &like.expr, gates)?;
+    if resolved.tail.is_empty() {
+        return None;
+    }
+
+    let filter: stmt::Expr = stmt::ExprLike {
+        expr: Box::new(reroot_tail(&resolved)),
+        pattern: like.pattern.clone(),
+        escape: like.escape,
+        case_insensitive: like.case_insensitive,
+    }
+    .into();
+    let query = stmt::Query::new_select(stmt::Source::from(resolved.belongs_to.target), filter);
+    embedded_fk_in_subquery(&resolved, query)
+}
+
+/// `<relation-projection> IN (subquery)` for an embedded relation:
+/// `v.human().in_query(..)` when the projection ends at the relation, and
+/// relation chains continuing past it (re-rooted and recursed, as in
+/// [`lift_projection_in_subquery`]).
+fn lift_embedded_relation_in_subquery(
+    cx: &ExprContext,
+    e: &stmt::ExprInSubquery,
+    gates: &[VariantGate],
+) -> Option<stmt::Expr> {
+    let resolved = resolve_embedded_relation(cx, &e.expr, gates)?;
+
+    if resolved.tail.is_empty() {
+        embedded_fk_in_subquery(&resolved, (*e.query).clone())
+    } else {
+        let inner = Expr::in_subquery(reroot_tail(&resolved), (*e.query).clone());
+        let query = stmt::Query::new_select(stmt::Source::from(resolved.belongs_to.target), inner);
+        embedded_fk_in_subquery(&resolved, query)
+    }
+}
+
+/// Re-root the projection steps continuing past an embedded relation at the
+/// relation's target model.
+fn reroot_tail(resolved: &EmbeddedRelationRef<'_>) -> Expr {
+    let (head, rest) = resolved.tail.split_first().expect("tail must be non-empty");
+    let field = Expr::ref_self_field(FieldId {
+        model: resolved.belongs_to.target,
+        index: *head,
+    });
+
+    if rest.is_empty() {
+        field
+    } else {
+        Expr::project(field, stmt::Projection::from(rest))
+    }
+}
+
+/// Build the foreign-key `IN` subquery for an embedded relation edge: the
+/// projected key field(s) on the host side, the FK target fields as the
+/// subquery's returning. Returns `None` when the subquery does not target
+/// the relation's target model.
+fn embedded_fk_in_subquery(
+    resolved: &EmbeddedRelationRef<'_>,
+    mut query: stmt::Query,
+) -> Option<stmt::Expr> {
+    if resolved.belongs_to.target != query.body.as_select_unwrap().source.model_id_unwrap() {
+        return None;
+    }
+
+    query.body.as_select_mut_unwrap().returning = stmt::Returning::Project(super::key_field_refs(
+        0,
+        resolved
+            .belongs_to
+            .foreign_key
+            .fields
+            .iter()
+            .map(|fk| fk.target),
+    ));
+
+    Some(stmt::Expr::in_subquery(resolved.key_expr.clone(), query))
 }
 
 /// Build a foreign-key `IN` subquery for one direct relation edge.

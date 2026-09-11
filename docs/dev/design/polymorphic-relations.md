@@ -546,12 +546,8 @@ The work ships in steps, each providing user value on its own.
    `match` gives direct access to the stored keys, and the owner loads
    with an ordinary `find_by_*` — the polymorphic shape is fully
    modelable, storable, and queryable by key through the existing
-   variant filter paths. Three limitations remain, each lifted by a
+   variant filter paths. Two limitations remain, each lifted by a
    later step:
-   - The relation cannot be set or filtered by model value. Writes set
-     the key fields explicitly and leave the relation unloaded
-     (`Owner::Bot { serial, bot: Deferred::default() }`); a loaded value
-     is rejected at runtime. Lifted in step 2.
    - The relation field must be declared `Deferred`, and no `.include()`
      exists to load it. Lifted in step 3.
    - No inverse: `has_many` / `has_one` cannot pair into the embedding.

@@ -89,7 +89,11 @@ fn expand_field(field: &FieldEntry, path: &TokenStream) -> TokenStream {
 
     match &field.value {
         FieldValue::Expr(expr) => {
-            quote_spanned! { span=> .#name(#expr) }
+            let value = match crate::variant_literal::rewrite_variant_literal(expr) {
+                Some(rewritten) => rewritten,
+                None => quote! { #expr },
+            };
+            quote_spanned! { span=> .#name(#value) }
         }
         FieldValue::Single(sub_fields) => {
             let nested_path = quote! { #path.#name() };
@@ -125,9 +129,10 @@ fn expand_nested_item(
             let sub_calls = expand_field_set(fields, nested_path);
             quote_spanned! { span=> #parent_path.#field_name().create() #(#sub_calls)* }
         }
-        FieldValue::Expr(e) => {
-            quote! { #e }
-        }
+        FieldValue::Expr(e) => match crate::variant_literal::rewrite_variant_literal(e) {
+            Some(rewritten) => rewritten,
+            None => quote! { #e },
+        },
         FieldValue::List(_) => {
             quote! { compile_error!("nested lists are not supported in create!") }
         }
