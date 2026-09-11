@@ -637,6 +637,7 @@ Compare a relation to a model value, or traverse it to filter on parent fields:
 
 ```rust,ignore
 Object::filter(Object::fields().owner().human().eq(&alice));
+
 Object::filter(
     Object::fields().owner().human()
         .matches(|v| v.human().name().eq("Alice")),
