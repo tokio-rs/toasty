@@ -207,6 +207,18 @@ pub(super) fn lift_in_subquery(
     expr: &stmt::Expr,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
+    if let Some(relation) = super::embedded_relation::resolve(cx, expr) {
+        if relation.tail.is_empty() {
+            let lifted =
+                lift_belongs_to_in_subquery(cx, relation.field.ty.as_belongs_to_unwrap(), query)?;
+            return Some(relation.rebase(&cx.schema().app, lifted));
+        }
+        let target = relation.field.relation_target_id()?;
+        let (head, tail) = relation.tail.split_first()?;
+        let inner = Expr::project(Expr::ref_self_field(target.field(*head)), tail);
+        let query = stmt::Query::new_select(target, Expr::in_subquery(inner, query.clone()));
+        return lift_in_subquery(cx, &relation.path, &query);
+    }
     // The expression is a path expression referencing a relation.
     let field = match expr {
         // `Project(Ref(rel), [head, ...tail])` — the path traverses through a
@@ -487,6 +499,25 @@ pub(super) fn try_lift_relation_path_comparison(
     project_side: &stmt::Expr,
     other_side: &stmt::Expr,
 ) -> Option<stmt::Expr> {
+    if let Some(relation) = super::embedded_relation::resolve(cx, project_side)
+        && relation.tail.is_empty()
+        && (op.is_eq() || op.is_ne())
+    {
+        let rel = relation.field.ty.as_belongs_to_unwrap();
+        let target = cx.schema().app.model(rel.target).as_root_unwrap();
+        if !rel.foreign_key.fields.iter().map(|fk| fk.target).eq(target
+            .primary_key
+            .fields
+            .iter()
+            .copied())
+        {
+            let key = super::key_field_refs(0, target.primary_key.fields.iter().copied());
+            let query =
+                stmt::Query::new_select(rel.target, Expr::binary_op(key, op, other_side.clone()));
+            return lift_in_subquery(cx, &relation.path, &query);
+        }
+        return Some(relation.compare(&cx.schema().app, op, other_side.clone()));
+    }
     lift_relation_path_predicate(cx, project_side, |target_lhs| {
         Expr::binary_op(target_lhs, op, other_side.clone())
     })
@@ -542,6 +573,13 @@ fn lift_relation_path_predicate(
     project_side: &stmt::Expr,
     make_filter: impl FnOnce(stmt::Expr) -> stmt::Expr,
 ) -> Option<stmt::Expr> {
+    if let Some(relation) = super::embedded_relation::resolve(cx, project_side) {
+        let target = relation.field.relation_target_id()?;
+        let (head, tail) = relation.tail.split_first()?;
+        let lhs = Expr::project(Expr::ref_self_field(target.field(*head)), tail);
+        let query = stmt::Query::new_select(target, make_filter(lhs));
+        return lift_in_subquery(cx, &relation.path, &query);
+    }
     let Expr::Project(project_expr) = project_side else {
         return None;
     };

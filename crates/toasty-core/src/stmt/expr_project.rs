@@ -17,6 +17,8 @@ use super::{Expr, Projection};
 /// [projection]: https://en.wikipedia.org/wiki/Projection_(relational_algebra)
 #[derive(Debug, Clone, PartialEq)]
 pub struct ExprProject {
+    /// Variant selected on the base before projecting its local record fields.
+    pub variant: Option<crate::schema::app::VariantId>,
     /// The expression to project from.
     pub base: Box<Expr>,
 
@@ -29,6 +31,7 @@ impl Expr {
     /// using the given projection path.
     pub fn project(base: impl Into<Self>, projection: impl Into<Projection>) -> Self {
         ExprProject {
+            variant: None,
             base: Box::new(base.into()),
             projection: projection.into(),
         }

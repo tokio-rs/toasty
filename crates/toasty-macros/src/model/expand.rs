@@ -1,5 +1,6 @@
 mod create;
 mod docs;
+mod embedded_create;
 mod embedded_enum;
 mod fields;
 mod filters;
@@ -102,6 +103,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let embedded_field_list_struct = expand.expand_field_list_struct();
     let embedded_model_impls = expand.expand_embedded_model_impls();
     let embedded_update_builder = expand.expand_embedded_update_builder();
+    let embedded_create = expand.expand_embedded_create();
     let storage_compat_checks = expand.expand_storage_compat_checks();
     let column_type_requirement_checks = expand.expand_column_type_requirement_checks();
     let indexable_checks = expand.expand_indexable_checks();
@@ -118,6 +120,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #embedded_field_list_struct
 
         #embedded_update_builder
+        #embedded_create
 
         #embedded_model_impls
 
@@ -244,6 +247,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let field_tokens = e.expand_enum_schema_fields();
     let indices = e.expand_model_indices();
     let into_expr_arms = e.expand_enum_into_expr_arms();
+    let embedded_create = e.expand_embedded_create();
     let load_impl = e.expand_enum_load_impl();
 
     let embedded_enum = model.kind.as_embedded_enum_unwrap();
@@ -318,6 +322,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         }
 
         #load_impl
+        #embedded_create
 
         impl #toasty::Field for #model_ident {
             type ExprTarget = Self;

@@ -49,6 +49,7 @@ fn subject_simplified_before_folding() {
 
     // subject = `project([0], record([I64(1)]))` which simplifies to `I64(1)`
     let subject = stmt::ExprProject {
+        variant: None,
         base: Box::new(Expr::record([Expr::from(1i64)])),
         projection: Projection::from(0),
     };
@@ -86,6 +87,7 @@ fn dead_arms_not_visited_with_constant_subject() {
     // because the record only has 1 element. Since subject is I64(1) → arm 1
     // is selected, arm 2 must be skipped entirely.
     let dead_arm_expr = stmt::ExprProject {
+        variant: None,
         base: Box::new(Expr::record([Expr::from(1i64)])),
         projection: Projection::from(1), // index 1 into a 1-element record → OOB
     };

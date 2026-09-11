@@ -57,6 +57,24 @@ pub trait IntoExpr<T> {
     /// assert_eq!(value, 42);
     /// ```
     fn by_ref(&self) -> Expr<T>;
+
+    /// Encode a referenced field of a model value. Generated model impls
+    /// read the field directly; other model expressions resolve it by key.
+    #[doc(hidden)]
+    fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> stmt::Expr {
+        let value: stmt::Expr = self.by_ref().into();
+        if value.is_value_null() {
+            return value;
+        }
+        let mut query = stmt::Query::new_select(
+            field.model,
+            stmt::Expr::eq(stmt::Expr::ref_ancestor_model(0), value),
+        );
+        query.body.as_select_mut_unwrap().returning =
+            stmt::Returning::Project(stmt::Expr::ref_self_field(field));
+        query.single = true;
+        stmt::Expr::project(stmt::Expr::stmt(query), [0])
+    }
 }
 
 macro_rules! impl_into_expr_for_copy {
@@ -151,6 +169,10 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &T {
     fn by_ref(&self) -> Expr<T> {
         (*self).by_ref()
     }
+
+    fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> stmt::Expr {
+        <T as IntoExpr<T>>::by_ref_field(*self, field)
+    }
 }
 impl_assign_via_expr!({T: IntoExpr<T>} &T => T);
 
@@ -168,6 +190,11 @@ impl<T: IntoExpr<T>> IntoExpr<Self> for Option<T> {
             None => Expr::from_value(Value::Null),
         }
     }
+
+    fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> stmt::Expr {
+        self.as_ref()
+            .map_or_else(stmt::Expr::null, |value| value.by_ref_field(field))
+    }
 }
 impl_assign_via_expr!({T: IntoExpr<T>} Option<T> => Option<T>);
 
@@ -179,6 +206,10 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for T {
     fn by_ref(&self) -> Expr<Option<T>> {
         self.by_ref().cast()
     }
+
+    fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> stmt::Expr {
+        <T as IntoExpr<T>>::by_ref_field(self, field)
+    }
 }
 impl_assign_via_expr!({T: IntoExpr<T>} T => Option<T>);
 
@@ -189,6 +220,10 @@ impl<T: IntoExpr<T>> IntoExpr<Option<T>> for &T {
 
     fn by_ref(&self) -> Expr<Option<T>> {
         (*self).by_ref().cast()
+    }
+
+    fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> stmt::Expr {
+        <T as IntoExpr<T>>::by_ref_field(*self, field)
     }
 }
 impl_assign_via_expr!({T: IntoExpr<T>} &T => Option<T>);
@@ -366,6 +401,20 @@ impl_assign_via_expr!({T: IntoExpr<T>} T => Rc<T>);
 macro_rules! ref_smart_ptr_impl {
     ( $( $ptr:ident ,)* ) => {
         $(
+            impl<T: IntoExpr<T>> IntoExpr<$ptr<T>> for $ptr<T> {
+                fn into_expr(self) -> Expr<$ptr<T>> {
+                    T::by_ref(&self).cast()
+                }
+
+                fn by_ref(&self) -> Expr<$ptr<T>> {
+                    T::by_ref(self).cast()
+                }
+
+                fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> stmt::Expr {
+                    T::by_ref_field(self, field)
+                }
+            }
+
             impl<T: IntoExpr<T>> IntoExpr<T> for &$ptr<T> {
                 fn into_expr(self) -> Expr<T> {
                     T::by_ref(self)

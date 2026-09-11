@@ -31,7 +31,7 @@ impl Hoist {
     fn hoist(&mut self, expr: &syn::Expr) -> TokenStream {
         let span = expr.span();
         let ident = format_ident!("__value_{}", self.idents.len(), span = span);
-        self.exprs.push(quote_spanned! { span=> #expr });
+        self.exprs.push(crate::create::expand::expand_value(expr));
         self.idents.push(ident.clone());
         quote!(#ident)
     }

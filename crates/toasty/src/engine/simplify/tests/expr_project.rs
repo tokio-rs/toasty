@@ -9,6 +9,7 @@ fn project_non_constant_not_simplified() {
 
     // `project(arg(0), [0])` is not simplified (non-constant base)
     let mut expr = stmt::ExprProject {
+        variant: None,
         base: Box::new(Expr::arg(0)),
         projection: Projection::from(0),
     };
@@ -25,6 +26,7 @@ fn project_identity_path() {
 
     // `project(42, [])` → `42` (identity projection)
     let mut expr = stmt::ExprProject {
+        variant: None,
         base: Box::new(Expr::from(42i64)),
         projection: Projection::identity(),
     };
@@ -45,6 +47,7 @@ fn project_into_match_distributes() {
     //                   2 => project(Record([arg(0), arg(2)]), [0])],
     //               else: project(Record([arg(0), Error]), [0]))
     let mut expr = stmt::ExprProject {
+        variant: None,
         base: Box::new(Expr::Match(ExprMatch {
             subject: Box::new(Expr::arg(0)),
             arms: vec![

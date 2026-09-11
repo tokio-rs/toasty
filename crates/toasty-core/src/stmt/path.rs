@@ -131,7 +131,7 @@ impl Path {
                     ret
                 }
             },
-            PathRoot::Variant { parent, .. } => {
+            PathRoot::Variant { parent, variant_id } => {
                 let parent_expr = parent.into_stmt();
                 match self.projection.as_slice() {
                     [] => parent_expr,
@@ -139,6 +139,9 @@ impl Path {
                         // Record position 0 is the discriminant; variant fields
                         // start at position 1, so add 1 to the local field index.
                         let mut ret = Expr::project(parent_expr, Projection::single(local_idx + 1));
+                        if let Expr::Project(project) = &mut ret {
+                            project.variant = Some(variant_id);
+                        }
 
                         if !rest.is_empty() {
                             ret = Expr::project(ret, rest);

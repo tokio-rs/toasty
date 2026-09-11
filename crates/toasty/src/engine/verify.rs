@@ -518,6 +518,41 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
     }
 
     fn visit_expr_project(&mut self, i: &stmt::ExprProject) {
+        if let Some(variant) = i.variant {
+            let model = self
+                .schema
+                .app
+                .model(variant.model)
+                .as_embedded_enum_unwrap();
+            let [index, rest @ ..] = i.projection.as_slice() else {
+                panic!("variant projection must select a field");
+            };
+            let field = model
+                .variant_fields(variant.index)
+                .nth(
+                    index
+                        .checked_sub(1)
+                        .expect("variant field follows the discriminant"),
+                )
+                .expect("invalid variant field");
+            if !rest.is_empty() {
+                let target = field
+                    .relation_target_id()
+                    .or(match &field.ty {
+                        app::FieldTy::Embedded(embed) => Some(embed.target),
+                        _ => None,
+                    })
+                    .expect("projection through scalar variant field");
+                assert!(
+                    self.schema
+                        .app
+                        .resolve(self.schema.app.model(target), &stmt::Projection::from(rest))
+                        .is_some()
+                );
+            }
+            self.visit_expr(&i.base);
+            return;
+        }
         // For project expressions where the base is a field reference in the
         // current scope, combine the field index with the project's projection
         // to form the full path, then resolve from the root model.

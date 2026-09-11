@@ -89,6 +89,7 @@ fn expand_field(field: &FieldEntry, path: &TokenStream) -> TokenStream {
 
     match &field.value {
         FieldValue::Expr(expr) => {
+            let expr = expand_value(expr);
             quote_spanned! { span=> .#name(#expr) }
         }
         FieldValue::Single(sub_fields) => {
@@ -105,6 +106,67 @@ fn expand_field(field: &FieldEntry, path: &TokenStream) -> TokenStream {
             quote_spanned! { span=> .#name([#(#item_builders),*]) }
         }
     }
+}
+
+pub(crate) fn expand_value(expr: &syn::Expr) -> TokenStream {
+    expand_embedded_value(expr).unwrap_or_else(|| quote!(#expr))
+}
+
+fn expand_embedded_value(expr: &syn::Expr) -> Option<TokenStream> {
+    if let syn::Expr::Paren(expr) = expr {
+        return expand_embedded_value(&expr.expr);
+    }
+    if let syn::Expr::Call(call) = expr
+        && let syn::Expr::Path(path) = &*call.func
+        && path
+            .path
+            .segments
+            .last()
+            .is_some_and(|segment| segment.ident == "Some")
+        && call.args.len() == 1
+    {
+        // Embedded builders implement IntoExpr<Option<Embed>> as well.
+        return expand_embedded_value(&call.args[0]);
+    }
+    // Borrowed fields allow an embedded literal to omit its foreign keys.
+    // Complete Rust values keep their normal IntoExpr encoding, including
+    // unloaded Deferred slots and struct-update syntax.
+    let syn::Expr::Struct(value) = expr else {
+        return None;
+    };
+    if value.rest.is_some()
+        || !value.fields.iter().any(|field| {
+            matches!(field.expr, syn::Expr::Reference(_))
+                || expand_embedded_value(&field.expr).is_some()
+        })
+    {
+        return None;
+    }
+    let mut path = value.path.clone();
+    let last = path.segments.last().unwrap().ident.clone();
+    let is_variant = path.segments.len() > 1
+        && path
+            .segments
+            .iter()
+            .rev()
+            .nth(1)
+            .unwrap()
+            .ident
+            .to_string()
+            .starts_with(char::is_uppercase);
+    let constructor = if is_variant {
+        path.segments.pop();
+        path.segments.pop_punct();
+        quote::format_ident!("__toasty_create_{}", last)
+    } else {
+        quote::format_ident!("__toasty_create")
+    };
+    let setters = value.fields.iter().map(|field| {
+        let name = &field.member;
+        let expr = expand_value(&field.expr);
+        quote!(.#name(#expr))
+    });
+    Some(quote!(#path::#constructor() #(#setters)*))
 }
 
 /// Expand a single item within a field-level list using path-based builders.

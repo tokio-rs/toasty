@@ -1,5 +1,388 @@
 use crate::prelude::*;
 
+#[driver_test]
+pub async fn nullable_embedded_relation_value(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Human {
+            #[index]
+            id: Option<uuid::Uuid>,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Option<Human>>,
+        },
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+    let mut db = test.setup_db(models!(Object, Human)).await;
+    let human = toasty::create!(Human {}).exec(&mut db).await?;
+    let mut object = toasty::create!(Object {
+        owner: Owner::Human { human: &human }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_eq!(
+        Object::filter(Object::fields().owner().human().eq(&human))
+            .exec(&mut db)
+            .await?
+            .len(),
+        1
+    );
+    object
+        .update()
+        .owner(Owner::Human {
+            id: Some(human.id),
+            human: None.into(),
+        })
+        .exec(&mut db)
+        .await?;
+    assert_struct!(Object::get_by_id(&mut db, object.id).await?.owner, Owner::Human { id: None, human.is_unloaded(): true });
+    Ok(())
+}
+
+#[driver_test]
+pub async fn embedded_relation_model_values(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        id: uuid::Uuid,
+        name: String,
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Animal {
+        #[key]
+        id: uuid::Uuid,
+    }
+    #[derive(Debug, toasty::Embed)]
+    #[index(id)]
+    enum Owner {
+        Human {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+        Animal {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            animal: toasty::Deferred<Animal>,
+        },
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+    let mut db = test.setup_db(models!(Object, Human, Animal)).await;
+    test.log().clear();
+    assert_err!(
+        Object::create()
+            .owner(Object::fields().owner().human().create())
+            .exec(&mut db)
+            .await
+    );
+    assert!(test.log().is_empty());
+    let id = uuid::Uuid::new_v4();
+    let alice = toasty::create!(Human { id, name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let bob = toasty::create!(Human {
+        id: uuid::Uuid::new_v4(),
+        name: "Bob"
+    })
+    .exec(&mut db)
+    .await?;
+    let rex = toasty::create!(Animal { id }).exec(&mut db).await?;
+    let mut object = toasty::create!(Object {
+        owner: Owner::Human { human: &alice }
+    })
+    .exec(&mut db)
+    .await?;
+    let animal = toasty::create!(Object {
+        owner: Owner::Animal { animal: &rex }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(object.owner, Owner::Human { id: == alice.id, human.is_unloaded(): true });
+    let found = Object::filter(Object::fields().owner().human().eq(&alice))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+    let path: toasty::stmt::Path<Object, Human> = Object::fields().owner().human().human().into();
+    let expr = toasty::stmt::IntoExpr::into_expr(path);
+    let found = Object::filter(expr.ne(&bob)).exec(&mut db).await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+    let found = Object::filter(Object::fields().owner().human().ne(&bob))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+    let found = Object::filter(
+        Object::fields()
+            .owner()
+            .human()
+            .matches(|v| v.human().name().eq("Alice")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+    toasty::update!(object {
+        owner: Owner::Animal { animal: &rex }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(Object::get_by_id(&mut db, object.id).await?.owner, Owner::Animal { id: == rex.id, .. });
+    let bob_id = bob.id;
+    object
+        .update()
+        .owner(Owner::Human {
+            id: uuid::Uuid::nil(),
+            human: bob.into(),
+        })
+        .exec(&mut db)
+        .await?;
+    assert_struct!(Object::get_by_id(&mut db, object.id).await?.owner, Owner::Human { id: == bob_id, .. });
+    assert_struct!(Object::get_by_id(&mut db, animal.id).await?.owner, Owner::Animal { id: == rex.id, .. });
+    Ok(())
+}
+
+#[driver_test]
+pub async fn embedded_struct_relation_model_values(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Author {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+    #[derive(Debug, toasty::Embed)]
+    struct Attribution {
+        #[index]
+        author_id: uuid::Uuid,
+        #[belongs_to(key = author_id)]
+        author: toasty::Deferred<Author>,
+        note: String,
+    }
+    #[derive(Debug, toasty::Embed)]
+    struct Metadata {
+        attribution: Attribution,
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        metadata: Option<Metadata>,
+    }
+    let mut db = test.setup_db(models!(Post, Author)).await;
+    let author = toasty::create!(Author { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let author_id = author.id;
+    let post = toasty::create!(Post {
+        metadata: Some(Metadata {
+            attribution: Attribution {
+                author_id: uuid::Uuid::nil(),
+                author: author.into(),
+                note: "draft".into()
+            },
+        }),
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Post { metadata: None })
+        .exec(&mut db)
+        .await?;
+    let author = Author::get_by_id(&mut db, author_id).await?;
+    let found = Post::filter(
+        Post::fields()
+            .metadata()
+            .chain(Metadata::fields().attribution().author())
+            .eq(&author),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, post.id);
+    let found = Post::filter(
+        Post::fields()
+            .metadata()
+            .chain(Metadata::fields().attribution().author().name())
+            .eq("Alice"),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(
+        found[0].metadata.as_ref().unwrap().attribution.author_id,
+        author.id
+    );
+    let mut borrowed = toasty::create!(Post {
+        metadata: Some(Metadata {
+            attribution: Attribution {
+                author: &author,
+                note: "published"
+            }
+        }),
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::update!(borrowed {
+        metadata: Some(Metadata {
+            attribution: Attribution {
+                author: &author,
+                note: "revised"
+            }
+        }),
+    })
+    .exec(&mut db)
+    .await?;
+    assert_eq!(
+        Post::get_by_id(&mut db, borrowed.id)
+            .await?
+            .metadata
+            .unwrap()
+            .attribution
+            .note,
+        "revised"
+    );
+    Ok(())
+}
+
+#[driver_test]
+pub async fn nested_variant_composite_relation(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = namespace, local = revision)]
+    struct Parent {
+        namespace: uuid::Uuid,
+        revision: i64,
+        name: String,
+    }
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Parent {
+            #[index]
+            namespace: uuid::Uuid,
+            revision: i64,
+            #[belongs_to(key = [namespace, revision], references = [namespace, revision])]
+            parent: toasty::Deferred<Parent>,
+        },
+        Empty,
+    }
+    #[derive(Debug, toasty::Embed)]
+    enum Envelope {
+        First { owner: Owner },
+        Second { other_owner: Owner },
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        envelope: Envelope,
+    }
+    let mut db = test.setup_db(models!(Object, Parent)).await;
+    let namespace = uuid::Uuid::new_v4();
+    let first = toasty::create!(Parent {
+        namespace,
+        revision: 1,
+        name: "first"
+    })
+    .exec(&mut db)
+    .await?;
+    let second = toasty::create!(Parent {
+        namespace,
+        revision: 2,
+        name: "second"
+    })
+    .exec(&mut db)
+    .await?;
+    let object = toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: Owner::Parent { parent: &first }
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        envelope: Envelope::Second {
+            other_owner: Owner::Parent { parent: &first }
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: Owner::Parent { parent: &second }
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: Owner::Empty
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    let path: toasty::stmt::Path<Object, Parent> = Object::fields()
+        .envelope()
+        .first()
+        .owner()
+        .parent()
+        .parent()
+        .into();
+    let expr = toasty::stmt::IntoExpr::into_expr(path);
+    let found = Object::filter(expr.eq(&first)).exec(&mut db).await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+    let found = Object::filter(
+        Object::fields()
+            .envelope()
+            .first()
+            .owner()
+            .parent()
+            .matches(|v| v.parent().name().eq("first")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+    let variant = Object::fields().envelope().first();
+    Object::filter_by_id(object.id)
+        .update()
+        .envelope(
+            variant
+                .create()
+                .owner(variant.owner().parent().create().parent(&second)),
+        )
+        .exec(&mut db)
+        .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, object.id).await?.envelope,
+        Envelope::First {
+            owner: Owner::Parent { revision: 2, .. }
+        }
+    );
+    Ok(())
+}
+
 /// The polymorphic-owner shape: `#[belongs_to]` fields inside embedded enum
 /// variants, exercised through the full CRUD cycle. The relation fields map
 /// to no columns — the discriminant and the key fields own the storage.
@@ -86,6 +469,27 @@ pub async fn belongs_to_in_enum_variants(test: &mut Test) -> Result<()> {
     })
     .exec(&mut db)
     .await?;
+
+    test.log().clear();
+    let referenced = toasty::create!(Object {
+        owner: Owner::Bot { bot: &bot }
+    })
+    .exec(&mut db)
+    .await?;
+    test.log().pop();
+    assert!(test.log().is_empty());
+    assert_struct!(
+        referenced.owner,
+        Owner::Bot {
+            serial: "B-1000",
+            ..
+        }
+    );
+    let found = Object::filter(Object::fields().owner().bot().eq(&bot))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 2);
+    referenced.delete().exec(&mut db).await?;
 
     // `match` gives direct access to the stored keys; the owner loads with an
     // ordinary lookup.

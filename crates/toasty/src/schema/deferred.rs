@@ -99,6 +99,14 @@ impl<T: IntoExpr<T>> IntoExpr<T> for Deferred<T> {
     fn by_ref(&self) -> Expr<T> {
         self.get().by_ref()
     }
+
+    fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> toasty_core::stmt::Expr {
+        if self.is_unloaded() {
+            toasty_core::stmt::Expr::DEFAULT
+        } else {
+            self.get().by_ref_field(field)
+        }
+    }
 }
 
 impl<T: IntoExpr<T>> IntoExpr<T> for &Deferred<T> {
@@ -108,6 +116,10 @@ impl<T: IntoExpr<T>> IntoExpr<T> for &Deferred<T> {
 
     fn by_ref(&self) -> Expr<T> {
         self.get().by_ref()
+    }
+
+    fn by_ref_field(&self, field: toasty_core::schema::app::FieldId) -> toasty_core::stmt::Expr {
+        <Deferred<T> as IntoExpr<T>>::by_ref_field(self, field)
     }
 }
 

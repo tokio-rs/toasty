@@ -567,6 +567,88 @@ let users = User::filter(
 The `.matches()` closure receives the variant's field accessors. It checks both
 the discriminant and the field condition.
 
+## Relations inside embedded types
+
+An embedded struct or enum variant can contain a `#[belongs_to]` field.
+The relation references sibling key fields, which store the foreign key.
+The relation field itself has no column and must use `Deferred`:
+
+```rust
+#[derive(Debug, toasty::Model)]
+struct Human {
+    #[key]
+    #[auto]
+    id: uuid::Uuid,
+    name: String,
+}
+
+#[derive(Debug, toasty::Embed)]
+enum Owner {
+    Human {
+        #[index]
+        id: uuid::Uuid,
+        #[belongs_to(key = id)]
+        human: toasty::Deferred<Human>,
+    },
+    Unowned,
+}
+
+#[derive(Debug, toasty::Model)]
+struct Object {
+    #[key]
+    #[auto]
+    id: uuid::Uuid,
+    owner: Owner,
+}
+```
+
+In `create!` and `update!`, a borrowed parent fills the relation's key fields:
+
+```rust,ignore
+let mut object = toasty::create!(Object {
+    owner: Owner::Human { human: &alice },
+})
+.exec(&mut db)
+.await?;
+
+toasty::update!(object {
+    owner: Owner::Human { human: &bob },
+})
+.exec(&mut db)
+.await?;
+```
+
+Builders accept the same assignment through the variant's `create()` method:
+
+```rust,ignore
+object.update()
+    .owner(Object::fields().owner().human().create().human(&alice))
+    .exec(&mut db)
+    .await?;
+```
+
+You can also supply a complete Rust value with explicit keys and an unloaded
+`Deferred::default()`. If the relation is loaded, its value supplies the keys.
+Reading the object leaves the relation unloaded; load its parent with the
+parent model's ordinary lookup method. Embedded relations do not yet support
+`.include()` or inverse `has_many` / `has_one` pairs.
+
+Compare a relation to a model value, or traverse it to filter on parent fields:
+
+```rust,ignore
+Object::filter(Object::fields().owner().human().eq(&alice));
+Object::filter(
+    Object::fields().owner().human()
+        .matches(|v| v.human().name().eq("Alice")),
+);
+```
+
+When a variant has one relation, `human().eq(&alice)` compares that relation.
+Use `human().human().eq(&alice)` to name the relation field explicitly.
+Relation comparisons include every enclosing variant's discriminant check.
+`ne` also requires those variants to match, so rows of another variant do not
+match even when the variants share a key column.
+
 ## Indexing embedded fields
 
 Add `#[index]` or `#[unique]` to fields inside an embedded type. The index

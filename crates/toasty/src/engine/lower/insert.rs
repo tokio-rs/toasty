@@ -76,6 +76,13 @@ impl LowerStatement<'_, '_> {
 
         // First, apply any defaults while also tracking all the fields that are set.
         for (index, row) in values.rows.iter_mut().enumerate() {
+            if let Err(error) = super::embedded_relation::rewrite_value(
+                &self.schema().app,
+                self.schema().app.model(model.id),
+                row,
+            ) {
+                self.state.errors.push(error);
+            }
             self.lower_insert_with_row(index, |lower| {
                 lower.apply_app_level_insertion_defaults(model, row, &mut set_fields);
             });

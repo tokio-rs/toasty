@@ -1,4 +1,4 @@
-mod expand;
+pub(crate) mod expand;
 mod parse;
 
 use proc_macro2::TokenStream;

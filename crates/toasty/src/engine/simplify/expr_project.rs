@@ -7,6 +7,9 @@ impl Simplify<'_> {
         &mut self,
         expr: &mut stmt::ExprProject,
     ) -> Option<stmt::Expr> {
+        if expr.projection.is_empty() {
+            return Some(expr.base.take());
+        }
         // Constant evaluation: if the base is an Expr::Value, we can evaluate
         // the projection at compile time.
         //

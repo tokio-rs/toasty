@@ -1,4 +1,5 @@
 mod association;
+mod embedded_relation;
 mod expr_or;
 mod include;
 mod insert;
@@ -442,6 +443,25 @@ impl LowerStatement<'_, '_> {
     ) {
         match assignment {
             stmt::Assignment::Set(mut expr) => {
+                let root = self
+                    .schema()
+                    .app
+                    .model(self.expr_cx.target().as_model_unwrap().id);
+                let model = projection.iter().try_fold(root, |model, index| {
+                    if matches!(model, app::Model::EmbeddedEnum(_)) {
+                        return None;
+                    }
+                    let app::FieldTy::Embedded(embed) = &model.fields().get(*index)?.ty else {
+                        return None;
+                    };
+                    Some(self.schema().app.model(embed.target))
+                });
+                if let Some(model) = model
+                    && let Err(error) =
+                        embedded_relation::rewrite_value(&self.schema().app, model, &mut expr)
+                {
+                    self.state.errors.push(error);
+                }
                 self.lower_set_assignment(out, mapping, projection, &mut expr);
             }
             stmt::Assignment::Append(mut expr) => {
@@ -702,6 +722,12 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        if self.cx.is_statement()
+            && matches!(expr, stmt::Expr::Project(_))
+            && let Some(column) = self.projected_column(expr, false)
+        {
+            *expr = column;
+        }
         match expr {
             stmt::Expr::BinaryOp(e) => {
                 self.visit_expr_binary_op_mut(e);
@@ -835,6 +861,14 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                     .as_embedded_enum_unwrap();
                 let has_data = enum_model.has_data_variants();
                 let disc_value = enum_model.variants[e.variant.index].discriminant.clone();
+
+                if self.cx.is_statement()
+                    && let Some(mut column) = self.projected_column(&e.expr, true)
+                {
+                    self.visit_expr_mut(&mut column);
+                    *expr = stmt::Expr::eq(column, stmt::Expr::Value(disc_value));
+                    return;
+                }
 
                 // Lower the inner expression
                 self.visit_expr_mut(&mut e.expr);
@@ -983,7 +1017,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 // Expr::Stmt subqueries are valid in returning expressions (e.g.,
                 // INCLUDE preloading) and in VALUES bodies of batch queries.
                 debug_assert!(
-                    self.cx.is_returning() || matches!(self.cx, LoweringContext::Statement),
+                    self.cx.is_returning()
+                        || matches!(
+                            self.cx,
+                            LoweringContext::Statement | LoweringContext::InsertRow(_)
+                        ),
                     "cx={:#?}",
                     self.cx,
                 );
@@ -1355,6 +1393,42 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 }
 
 impl<'a, 'b> LowerStatement<'a, 'b> {
+    fn projected_column(&self, expr: &stmt::Expr, discriminant: bool) -> Option<stmt::Expr> {
+        let mut steps = vec![];
+        let base = embedded_relation::flatten(expr, &mut steps);
+        let stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) = base else {
+            return None;
+        };
+        let mut field = self.mapping_at_unwrap(*nesting).fields.get(*index)?;
+        for (index, variant) in steps {
+            field = match field {
+                mapping::Field::Struct(model) => model.fields.get(index)?,
+                mapping::Field::Enum(model) => model
+                    .variants
+                    .get(variant?.index)?
+                    .fields
+                    .get(index.checked_sub(1)?)?,
+                _ => return None,
+            };
+        }
+        let field = match field {
+            mapping::Field::Primitive(field) if !discriminant => field,
+            mapping::Field::Enum(field) if discriminant => &field.discriminant,
+            _ => return None,
+        };
+        let mut expr = field.column_expr.clone();
+        struct Nesting(usize);
+        impl stmt::VisitMut for Nesting {
+            fn visit_expr_reference_mut(&mut self, reference: &mut stmt::ExprReference) {
+                if let stmt::ExprReference::Column(column) = reference {
+                    column.nesting = self.0;
+                }
+            }
+        }
+        Nesting(*nesting).visit_expr_mut(&mut expr);
+        Some(expr)
+    }
+
     /// App-level operand rewrite for `eq` and `ne` binary ops.
     ///
     /// `Reference::Model { nesting }` becomes a reference to the model's
@@ -1499,7 +1573,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
             }
             (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
-                let target_ty = self.capability().native_type_for(&expr_cast.ty);
+                let target_ty =
+                    if let stmt::Expr::Reference(reference @ stmt::ExprReference::Column(_)) =
+                        &*expr_cast.expr
+                    {
+                        match self.expr_cx.resolve_expr_reference(reference) {
+                            stmt::ResolvedRef::Column(column) => column.ty.clone(),
+                            _ => self.capability().native_type_for(&expr_cast.ty),
+                        }
+                    } else {
+                        self.capability().native_type_for(&expr_cast.ty)
+                    };
                 self.cast_expr(lhs, &target_ty);
                 self.cast_expr(rhs, &target_ty);
                 None

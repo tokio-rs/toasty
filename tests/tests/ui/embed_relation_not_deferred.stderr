@@ -18,7 +18,7 @@ error[E0308]: mismatched types
 note: function defined here
   --> $WORKSPACE/crates/toasty/src/codegen_support.rs
    |
-   | pub fn embedded_relation_expr<T>(value: &Deferred<T>) -> core::stmt::Expr {
+   | pub fn embedded_relation_expr<T: IntoExpr<T>>(
    |        ^^^^^^^^^^^^^^^^^^^^^^
    = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)
 
@@ -36,6 +36,6 @@ error[E0308]: mismatched types
 note: function defined here
   --> $WORKSPACE/crates/toasty/src/codegen_support.rs
    |
-   | pub fn embedded_relation_expr<T>(value: &Deferred<T>) -> core::stmt::Expr {
+   | pub fn embedded_relation_expr<T: IntoExpr<T>>(
    |        ^^^^^^^^^^^^^^^^^^^^^^
    = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)

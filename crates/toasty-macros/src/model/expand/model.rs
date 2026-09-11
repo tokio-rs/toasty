@@ -40,6 +40,21 @@ impl Expand<'_> {
         let into_delete_body = self.expand_model_into_delete_body();
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
+        let field_expr_arms = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let index = util::int(index);
+                let name = &field.name.ident;
+                Some(quote! {
+                #index => <#ty as #toasty::IntoExpr<FieldExprTarget<#ty>>>::by_ref(&self.#name).into(),
+                })
+            });
         let reload_trait_method = self.expand_reload_trait_method();
         let version_update_stmts = self.expand_version_update_stmts();
         let primary_key_ty = self.expand_primary_key_ty();
@@ -223,6 +238,14 @@ impl Expand<'_> {
 
                 fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
                     #into_expr_body_ref
+                }
+
+                fn by_ref_field(&self, field: #toasty::core::schema::app::FieldId) -> #toasty::core::stmt::Expr {
+                    assert_eq!(field.model, <Self as #toasty::Model>::id());
+                    match field.index {
+                        #(#field_expr_arms)*
+                        _ => panic!("a foreign key must reference a value field"),
+                    }
                 }
             }
 
@@ -469,9 +492,9 @@ impl Expand<'_> {
         let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
-                FieldTy::BelongsTo(_) => {
-                    // The relation slot encodes as `Null`; the sibling key
-                    // fields carry the storage.
+                FieldTy::BelongsTo(rel) => {
+                    // Lowering replaces a loaded relation with sibling key
+                    // assignments and leaves its slot unloaded.
                     let access = if fields_named {
                         let field_ident = &field.name.ident;
                         quote!(self.#field_ident)
@@ -479,7 +502,8 @@ impl Expand<'_> {
                         let idx = syn::Index::from(index);
                         quote!(self.#idx)
                     };
-                    return quote!(#toasty::embedded_relation_expr(&#access));
+                    let references = self.expand_foreign_key_references(rel);
+                    return quote!(#toasty::embedded_relation_expr(&#access, &#references));
                 }
                 _ => panic!("only primitive and belongs_to fields are supported in embedded types"),
             };

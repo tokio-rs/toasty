@@ -35,7 +35,12 @@ impl Expand<'_> {
                 }
             }
         } else {
-            TokenStream::new()
+            let builder = quote::format_ident!("{}Create", model_ident);
+            quote! {
+                #vis fn create(&self) -> #builder {
+                    #model_ident::__toasty_create()
+                }
+            }
         };
 
         // Generate methods that return field paths for the model
@@ -50,16 +55,6 @@ impl Expand<'_> {
             .map(move |(offset, field)| {
                 let field_ident = &field.name.ident;
                 let field_offset = util::int(offset);
-
-                // Relation fields in embedded types have no filter path yet;
-                // only their key fields are queryable. The offset comes from
-                // the enumeration above, so skipping does not shift later
-                // fields.
-                if !matches!(self.model.kind, ModelKind::Root(_))
-                    && !matches!(&field.ty, Primitive(_))
-                {
-                    return TokenStream::new();
-                }
 
                 match &field.ty {
                     Primitive(ty) => {

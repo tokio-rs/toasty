@@ -73,18 +73,21 @@ pub fn into_untyped_expr<T, V: IntoExpr<T>>(value: V) -> core::stmt::Expr {
 
 /// Encode a relation field stored in an embedded type.
 ///
-/// The relation itself has no storage — the sibling foreign key field(s) own
-/// the columns — so its record slot encodes as `Null`. Setting the relation
-/// from a model value is not supported; the key fields must be set
-/// explicitly and the relation left unloaded.
-pub fn embedded_relation_expr<T>(value: &Deferred<T>) -> core::stmt::Expr {
-    assert!(
-        value.is_unloaded(),
-        "a relation stored in an embedded type cannot be set from a model \
-         value; set the foreign key field(s) explicitly and leave the \
-         relation unloaded (`Deferred::default()`)"
-    );
-    core::stmt::Expr::null()
+/// A loaded value is wrapped so a loaded `None` remains distinguishable from
+/// an unloaded slot. Lowering assigns the referenced keys to sibling fields.
+pub fn embedded_relation_expr<T: IntoExpr<T>>(
+    value: &Deferred<T>,
+    references: &[core::schema::app::FieldId],
+) -> core::stmt::Expr {
+    if value.is_unloaded() {
+        core::stmt::Expr::null()
+    } else {
+        core::stmt::Expr::record(
+            references
+                .iter()
+                .map(|field| value.get().by_ref_field(*field)),
+        )
+    }
 }
 
 /// Continue a `has_many` traversal from `query` along `path`.

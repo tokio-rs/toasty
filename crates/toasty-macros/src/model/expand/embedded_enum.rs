@@ -205,6 +205,8 @@ impl Expand<'_> {
             .map(|(variant_index, variant)| {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
+                let builder = quote::format_ident!("{}{}Create", model_ident, variant.ident);
+                let constructor = quote::format_ident!("__toasty_create_{}", variant.ident);
                 let variant_path = quote! {{
                     let variant_id = #toasty::core::schema::app::VariantId {
                         model: <#model_ident as #toasty::Embed>::id(),
@@ -218,10 +220,18 @@ impl Expand<'_> {
                     .iter()
                     .enumerate()
                     .filter_map(|(field_index, field)| {
-                        // A relation field has no filter path yet; only its
-                        // key fields are queryable. The offset comes from the
-                        // enumeration before this filter, so skipping does not
-                        // shift later fields.
+                        if let FieldTy::BelongsTo(rel) = &field.ty {
+                            let name = &field.name.ident;
+                            let ty = &rel.ty;
+                            let offset = util::int(field_index);
+                            return Some(quote! {
+                                #vis fn #name(&self) -> <<#ty as #toasty::RelationOneField>::Target as #toasty::Model>::OneField<__Origin> {
+                                    <<#ty as #toasty::RelationOneField>::Target as #toasty::ModelCodegen>::new_one_field(
+                                        #variant_path.chain(<#model_ident as #toasty::Embed>::path_field(#offset))
+                                    )
+                                }
+                            });
+                        }
                         let FieldTy::Primitive(field_ty) = &field.ty else {
                             return None;
                         };
@@ -236,6 +246,22 @@ impl Expand<'_> {
                     })
                     .collect();
 
+                let relations: Vec<_> = self.variant_fields(variant_index).into_iter()
+                    .filter(|field| matches!(field.ty, FieldTy::BelongsTo(_))).collect();
+                let comparisons = if let [field] = relations.as_slice() {
+                    let FieldTy::BelongsTo(rel) = &field.ty else { unreachable!() };
+                    let ty = &rel.ty;
+                    let name = &field.name.ident;
+                    quote! {
+                        #vis fn eq(&self, rhs: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Target>) -> #toasty::Expr<bool> {
+                            self.#name().eq(rhs)
+                        }
+                        #vis fn ne(&self, rhs: impl #toasty::IntoExpr<<#ty as #toasty::RelationOneField>::Target>) -> #toasty::Expr<bool> {
+                            self.#name().ne(rhs)
+                        }
+                    }
+                } else { quote! {} };
+
                 quote! {
                     #vis struct #variant_handle_ident<__Origin> {
                         path: #toasty::Path<__Origin, #model_ident>,
@@ -243,6 +269,9 @@ impl Expand<'_> {
 
                     #[allow(dead_code)]
                     impl<__Origin> #variant_handle_ident<__Origin> {
+                        #vis fn create(&self) -> #builder {
+                            #model_ident::#constructor()
+                        }
                         #vis fn matches(
                             self,
                             f: impl FnOnce(Self) -> #toasty::stmt::Expr<bool>,
@@ -263,6 +292,7 @@ impl Expand<'_> {
                         }
 
                         #( #field_methods )*
+                        #comparisons
                     }
                 }
             })
@@ -349,7 +379,7 @@ impl Expand<'_> {
     }
 
     /// Expands a discriminant value to a `Value::I64(n)` or `Value::String(s.into())` expression.
-    fn expand_discriminant_value_expr(&self, value: &VariantValue) -> TokenStream {
+    pub(super) fn expand_discriminant_value_expr(&self, value: &VariantValue) -> TokenStream {
         let toasty = &self.toasty;
         match value {
             VariantValue::Integer(n) => {
@@ -845,10 +875,11 @@ impl Expand<'_> {
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
                         match &field.ty {
-                            // The relation slot encodes as `Null`; the sibling
-                            // key fields carry the storage.
-                            FieldTy::BelongsTo(_) => {
-                                quote!(#toasty::embedded_relation_expr(&#field_ident))
+                            // Loaded relations carry their referenced model
+                            // value until lowering fills the sibling keys.
+                            FieldTy::BelongsTo(rel) => {
+                                let references = self.expand_foreign_key_references(rel);
+                                quote!(#toasty::embedded_relation_expr(&#field_ident, &#references))
                             }
                             _ => {
                                 let ty = primitive_ty_unwrap(field);
