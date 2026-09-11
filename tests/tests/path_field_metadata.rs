@@ -159,6 +159,15 @@ struct DocAccount {
     profile: DocProfile,
 }
 
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct Tagged {
+    #[key]
+    id: i64,
+    tags: Vec<String>,
+    notes: Option<Vec<String>>,
+}
+
 #[derive(Debug, toasty::Embed)]
 #[allow(dead_code)]
 struct Wrapper(String);
@@ -322,6 +331,14 @@ fn path_converts_to_core_path() {
     let core: CorePath = User::fields().email().into();
     let expected = User::field_name_to_id("email").index;
     assert_eq!(core.projection.as_slice(), &[expected]);
+}
+
+#[test]
+fn field_metadata_list_path_nullability() {
+    // A collection field targets `List<T>`, which is never `Option`-wrapped.
+    assert!(!Tagged::fields().tags().is_nullable());
+    // `Option<Vec<T>>` keeps the `Option` wrapper as its path target.
+    assert!(Tagged::fields().notes().is_nullable());
 }
 
 #[test]
