@@ -70,6 +70,7 @@ impl Expand<'_> {
         );
         let methods = fields.iter().enumerate().map(|(index, field)| {
             let name = &field.name.ident;
+            let literal_name = format_ident!("__toasty_literal_{}", name);
             let index = util::int(index + offset);
             let (ty, expr) = match &field.ty {
                 FieldTy::Primitive(ty) => (
@@ -86,10 +87,19 @@ impl Expand<'_> {
                 }
                 _ => unreachable!(),
             };
+            let literal_ty = match &field.ty {
+                FieldTy::Primitive(ty) => quote!(#ty),
+                FieldTy::BelongsTo(_) => quote!(impl #toasty::IntoExpr<#ty>),
+                _ => unreachable!(),
+            };
             quote! {
                 #vis fn #name(mut self, value: impl #toasty::IntoExpr<#ty>) -> Self {
                     self.fields[#index] = #expr;
                     self
+                }
+                #[doc(hidden)]
+                #vis fn #literal_name(self, value: #literal_ty) -> Self {
+                    self.#name(value)
                 }
             }
         });

@@ -503,6 +503,12 @@ pub(super) fn try_lift_relation_path_comparison(
         && relation.tail.is_empty()
         && (op.is_eq() || op.is_ne())
     {
+        if let Some(other) = super::embedded_relation::resolve(cx, other_side)
+            && other.tail.is_empty()
+            && let Some(predicate) = relation.compare_relation(&cx.schema().app, op, &other)
+        {
+            return Some(predicate);
+        }
         let rel = relation.field.ty.as_belongs_to_unwrap();
         let target = cx.schema().app.model(rel.target).as_root_unwrap();
         if !rel.foreign_key.fields.iter().map(|fk| fk.target).eq(target

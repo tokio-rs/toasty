@@ -664,22 +664,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
         // An embedded newtype field lowers to a single-element record,
         // one layer per newtype in the chain. Unwrap them so the ordering
-        // applies to the underlying column — otherwise the eq synthesis
-        // below would hit the record-vs-record arm of
-        // `lower_expr_binary_op`, which drains the operand records and
-        // would leave an empty record behind.
+        // applies to the underlying column.
         while let stmt::Expr::Record(rec) = &mut node.expr
             && rec.len() == 1
         {
             node.expr = rec.fields.pop().unwrap();
         }
 
-        // Reuse binary-op lowering: synthesize `expr == expr` so that
-        // cast conversions are applied, then keep the LHS result.
-        let mut lhs = node.expr.clone();
-        let mut rhs = node.expr.take();
-        self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut lhs, &mut rhs);
-        node.expr = lhs;
+        // Ordering uses the stored representation. It is not a column
+        // equality comparison and does not use decode-cast equality checks.
+        if let stmt::Expr::Cast(cast) = &mut node.expr {
+            node.expr = cast.expr.take();
+        }
     }
 
     fn visit_assignments_mut(&mut self, i: &mut stmt::Assignments) {
@@ -789,10 +785,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 if self.capability().sql() {
                     self.visit_expr_in_subquery_mut(e);
 
-                    self.lower_in_subquery_operands(
-                        &mut e.expr,
-                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
-                    );
+                    self.lower_in_subquery_operands(&mut e.expr, &mut e.query);
 
                     let returning = e.query.returning_mut_unwrap().as_project_mut_unwrap();
 
@@ -825,10 +818,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                     self.track_dependency(target_id);
 
-                    self.lower_in_subquery_operands(
-                        &mut e.expr,
-                        e.query.returning_mut_unwrap().as_project_mut_unwrap(),
-                    );
+                    self.lower_in_subquery_operands(&mut e.expr, &mut e.query);
 
                     let stmt::Expr::InSubquery(e) = expr.take() else {
                         panic!()
@@ -1572,6 +1562,25 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     .collect();
                 Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
             }
+            // Apply the same equality check as post-lower simplification.
+            // This also normalizes the paired operands of IN-subqueries.
+            (stmt::Expr::Cast(lhs_cast), stmt::Expr::Cast(rhs_cast))
+                if lhs_cast.expr.is_column() && rhs_cast.expr.is_column() =>
+            {
+                if Simplify::can_strip_decode_cast_column_comparison(
+                    &self.expr_cx,
+                    &self.expr_cx,
+                    op,
+                    lhs_cast,
+                    rhs_cast,
+                ) {
+                    *lhs = lhs_cast.expr.take();
+                    *rhs = rhs_cast.expr.take();
+                }
+                None
+            }
+            (stmt::Expr::Cast(_), stmt::Expr::Reference(_))
+            | (stmt::Expr::Reference(_), stmt::Expr::Cast(_)) => None,
             (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
                 let target_ty =
                     if let stmt::Expr::Reference(reference @ stmt::ExprReference::Column(_)) =
@@ -1624,18 +1633,41 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// element-level transforms (NULLs, casts) still fire while the
     /// surrounding `IN` is preserved. Otherwise a single binary-op lowering
     /// is applied across both sides.
-    fn lower_in_subquery_operands(&mut self, lhs: &mut stmt::Expr, rhs: &mut stmt::Expr) {
-        if let (stmt::Expr::Record(lhs_rec), stmt::Expr::Record(rhs_rec)) = (&mut *lhs, &mut *rhs)
+    fn lower_in_subquery_operands(&mut self, lhs: &mut stmt::Expr, query: &mut stmt::Query) {
+        let mut rhs = query.returning_mut_unwrap().as_project_mut_unwrap().take();
+        let lhs_cx = self.expr_cx;
+        let rhs_cx = lhs_cx.scope(&*query);
+        let mut lower_pair = |lhs: &mut stmt::Expr, rhs: &mut stmt::Expr| {
+            if let (stmt::Expr::Cast(lhs_cast), stmt::Expr::Cast(rhs_cast)) = (&mut *lhs, &mut *rhs)
+                && lhs_cast.expr.is_column()
+                && rhs_cast.expr.is_column()
+            {
+                // Subquery columns belong to a different source from the LHS.
+                if Simplify::can_strip_decode_cast_column_comparison(
+                    &lhs_cx,
+                    &rhs_cx,
+                    stmt::BinaryOp::Eq,
+                    lhs_cast,
+                    rhs_cast,
+                ) {
+                    *lhs = lhs_cast.expr.take();
+                    *rhs = rhs_cast.expr.take();
+                }
+            } else {
+                let maybe_res = self.lower_expr_binary_op(stmt::BinaryOp::Eq, lhs, rhs);
+                assert!(maybe_res.is_none(), "TODO");
+            }
+        };
+        if let (stmt::Expr::Record(lhs_rec), stmt::Expr::Record(rhs_rec)) = (&mut *lhs, &mut rhs)
             && lhs_rec.len() == rhs_rec.len()
         {
             for (l, r) in lhs_rec.fields.iter_mut().zip(rhs_rec.fields.iter_mut()) {
-                let maybe_res = self.lower_expr_binary_op(stmt::BinaryOp::Eq, l, r);
-                assert!(maybe_res.is_none(), "TODO");
+                lower_pair(l, r);
             }
         } else {
-            let maybe_res = self.lower_expr_binary_op(stmt::BinaryOp::Eq, lhs, rhs);
-            assert!(maybe_res.is_none(), "TODO");
+            lower_pair(lhs, &mut rhs);
         }
+        *query.returning_mut_unwrap().as_project_mut_unwrap() = rhs;
     }
 
     fn lower_expr_in_list(

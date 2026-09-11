@@ -16,6 +16,25 @@ struct User {
     name: Option<String>,
 }
 
+#[derive(toasty::Model)]
+struct UuidColumns {
+    #[key]
+    id: String,
+
+    lhs: uuid::Uuid,
+    rhs: uuid::Uuid,
+}
+
+#[cfg(feature = "rust_decimal")]
+#[derive(toasty::Model)]
+struct DecimalColumns {
+    #[key]
+    id: String,
+
+    lhs: rust_decimal::Decimal,
+    rhs: rust_decimal::Decimal,
+}
+
 fn test_schema() -> toasty_core::Schema {
     let app_schema =
         app::Schema::from_macro([User::schema()]).expect("schema should build from macro");
@@ -42,6 +61,97 @@ fn non_id_cast_not_unwrapped() {
 
     assert!(result.is_none());
     assert!(matches!(lhs, Expr::Cast(_)));
+}
+
+#[test]
+fn equality_preserving_column_casts_are_stripped() {
+    let schema = crate::engine::test_util::test_schema_with(&[UuidColumns::schema()]);
+    let model = schema.app.model(UuidColumns::id());
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+    let mut simplify = simplify.scope(model.as_root_unwrap());
+    for op in [BinaryOp::Eq, BinaryOp::Ne] {
+        let mut lhs = Expr::cast(Expr::column(ExprReference::column(0, 1)), Type::Uuid);
+        let mut rhs = Expr::cast(Expr::column(ExprReference::column(0, 2)), Type::Uuid);
+
+        let result = simplify.simplify_expr_binary_op(op, &mut lhs, &mut rhs);
+
+        let Some(Expr::BinaryOp(result)) = result else {
+            panic!("expected binary op");
+        };
+        assert_eq!(result.op, op);
+        assert!(result.lhs.is_column());
+        assert!(result.rhs.is_column());
+    }
+}
+
+#[test]
+fn column_cast_stripping_requires_matching_decode_casts_and_equality() {
+    let mut schema = crate::engine::test_util::test_schema_with(&[UuidColumns::schema()]);
+    let lhs_column = Expr::column(ExprReference::column(0, 1));
+    let rhs_column = Expr::column(ExprReference::column(0, 2));
+    let lhs = Expr::cast(lhs_column.clone(), Type::Uuid);
+    let rhs = Expr::cast(rhs_column.clone(), Type::Uuid);
+    let model = schema.app.model(UuidColumns::id());
+    let simplify = Simplify::new(&schema, &Capability::SQLITE);
+    let mut simplify = simplify.scope(model.as_root_unwrap());
+    for (op, mut lhs, mut rhs) in [
+        (BinaryOp::Lt, lhs.clone(), rhs.clone()),
+        (
+            BinaryOp::Eq,
+            lhs.clone(),
+            Expr::cast(rhs_column.clone(), Type::String),
+        ),
+        (
+            BinaryOp::Eq,
+            lhs.clone(),
+            Expr::cast_from(rhs_column, Type::Bytes, Type::Uuid),
+        ),
+        (
+            BinaryOp::Eq,
+            Expr::cast(Expr::arg(0), Type::Uuid),
+            rhs.clone(),
+        ),
+    ] {
+        assert!(
+            simplify
+                .simplify_expr_binary_op(op, &mut lhs, &mut rhs)
+                .is_none()
+        );
+        assert!(lhs.is_cast());
+        assert!(rhs.is_cast());
+    }
+
+    // Each encoding preserves UUID equality, but comparing unlike encodings does not.
+    schema.db.tables[0].columns[1].ty = Type::Bytes;
+    schema.db.tables[0].columns[2].ty = Type::String;
+    let model = schema.app.model(UuidColumns::id());
+    let simplify = Simplify::new(&schema, &Capability::SQLITE);
+    let mut simplify = simplify.scope(model.as_root_unwrap());
+    let (mut lhs, mut rhs) = (lhs, rhs);
+    assert!(
+        simplify
+            .simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs)
+            .is_none()
+    );
+    assert!(lhs.is_cast());
+    assert!(rhs.is_cast());
+}
+
+#[cfg(feature = "rust_decimal")]
+#[test]
+fn non_equality_preserving_column_casts_are_not_stripped() {
+    let schema = crate::engine::test_util::test_schema_with(&[DecimalColumns::schema()]);
+    let model = schema.app.model(DecimalColumns::id());
+    let simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+    let mut simplify = simplify.scope(model.as_root_unwrap());
+    let mut lhs = Expr::cast(Expr::column(ExprReference::column(0, 1)), Type::Decimal);
+    let mut rhs = Expr::cast(Expr::column(ExprReference::column(0, 2)), Type::Decimal);
+
+    let result = simplify.simplify_expr_binary_op(BinaryOp::Eq, &mut lhs, &mut rhs);
+
+    assert!(result.is_none());
+    assert!(lhs.is_cast());
+    assert!(rhs.is_cast());
 }
 
 #[test]

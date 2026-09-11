@@ -363,6 +363,50 @@ impl Type {
         }
     }
 
+    /// Returns `true` when removing this decode cast preserves equality for
+    /// values encoded by Toasty.
+    ///
+    /// A decode cast from `self` to `target` preserves equality when the
+    /// reciprocal write cast gives equal target values the same stored
+    /// representation and distinct target values different representations.
+    /// Keep this allowlist narrow: a supported cast is not necessarily
+    /// equality-preserving. For example, equal decimal values can retain
+    /// different scales when encoded as strings (`1.0` and `1.00`).
+    pub fn cast_preserves_equality(&self, target: &Self) -> bool {
+        match (self, target) {
+            // Identity casts do not change the representation.
+            (source, target) if source == target => true,
+
+            // UUID write casts produce one canonical string or byte sequence.
+            (Self::String | Self::Bytes, Self::Uuid) => true,
+
+            // Integer casts preserve the represented mathematical integer.
+            (
+                Self::I8
+                | Self::I16
+                | Self::I32
+                | Self::I64
+                | Self::U8
+                | Self::U16
+                | Self::U32
+                | Self::U64,
+                Self::I8
+                | Self::I16
+                | Self::I32
+                | Self::I64
+                | Self::U8
+                | Self::U16
+                | Self::U32
+                | Self::U64,
+            ) => true,
+
+            // Collection casts apply the element cast independently.
+            (Self::List(source), Self::List(target)) => source.cast_preserves_equality(target),
+
+            _ => false,
+        }
+    }
+
     /// Casts `value` to this type, returning the converted value.
     ///
     /// Null values pass through unchanged. Supported conversions include

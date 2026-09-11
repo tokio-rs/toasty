@@ -44,6 +44,31 @@ impl Relation<'_> {
     }
 
     pub fn compare(&self, schema: &app::Schema, op: stmt::BinaryOp, rhs: Expr) -> Expr {
+        self.gate(Expr::binary_op(self.key(schema), op, rhs))
+    }
+
+    pub fn compare_relation(
+        &self,
+        schema: &app::Schema,
+        op: stmt::BinaryOp,
+        rhs: &Relation<'_>,
+    ) -> Option<Expr> {
+        let lhs_rel = self.field.ty.as_belongs_to_unwrap();
+        let rhs_rel = rhs.field.ty.as_belongs_to_unwrap();
+        if lhs_rel.target != rhs_rel.target
+            || !lhs_rel
+                .foreign_key
+                .fields
+                .iter()
+                .map(|fk| fk.target)
+                .eq(rhs_rel.foreign_key.fields.iter().map(|fk| fk.target))
+        {
+            return None;
+        }
+        Some(rhs.gate(self.compare(schema, op, rhs.key(schema))))
+    }
+
+    fn key(&self, schema: &app::Schema) -> Expr {
         let relation = self.field.ty.as_belongs_to_unwrap();
         let mut keys: Vec<_> = relation
             .foreign_key
@@ -51,12 +76,11 @@ impl Relation<'_> {
             .iter()
             .map(|fk| self.source(schema, fk.source))
             .collect();
-        let lhs = if keys.len() == 1 {
+        if keys.len() == 1 {
             keys.pop().unwrap()
         } else {
             Expr::record(keys)
-        };
-        self.gate(Expr::binary_op(lhs, op, rhs))
+        }
     }
 
     pub fn rebase(&self, schema: &app::Schema, mut expr: Expr) -> Expr {

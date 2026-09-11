@@ -1,6 +1,314 @@
 use crate::prelude::*;
 
 #[driver_test]
+pub async fn compare_embedded_relations_preserves_both_variant_guards(
+    test: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+    #[derive(Debug, toasty::Embed)]
+    #[index(id)]
+    enum Owner {
+        Primary {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+        Other {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            other: toasty::Deferred<Human>,
+        },
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        lhs: Owner,
+        rhs: Owner,
+    }
+    let mut db = test.setup_db(models!(Object, Human)).await;
+    let ann = toasty::create!(Human {}).exec(&mut db).await?;
+    let bea = toasty::create!(Human {}).exec(&mut db).await?;
+    let mut equal = None;
+    let mut unequal = None;
+    // All variant combinations use the same shared key columns. Only rows
+    // with Primary on both sides satisfy either relation comparison.
+    for left_primary in [true, false] {
+        for right_primary in [true, false] {
+            for same in [true, false] {
+                let right = if same { &ann } else { &bea };
+                let lhs = if left_primary {
+                    Owner::Primary {
+                        id: ann.id,
+                        human: toasty::Deferred::default(),
+                    }
+                } else {
+                    Owner::Other {
+                        id: ann.id,
+                        other: toasty::Deferred::default(),
+                    }
+                };
+                let rhs = if right_primary {
+                    Owner::Primary {
+                        id: right.id,
+                        human: toasty::Deferred::default(),
+                    }
+                } else {
+                    Owner::Other {
+                        id: right.id,
+                        other: toasty::Deferred::default(),
+                    }
+                };
+                let object = toasty::create!(Object { lhs, rhs }).exec(&mut db).await?;
+                if left_primary && right_primary {
+                    if same {
+                        equal = Some(object.id);
+                    } else {
+                        unequal = Some(object.id);
+                    }
+                }
+            }
+        }
+    }
+    let lhs = || Object::fields().lhs().primary().human();
+    let rhs = || Object::fields().rhs().primary().human();
+    for (predicate, expected) in [
+        (lhs().eq(rhs()), equal),
+        (rhs().eq(lhs()), equal),
+        (lhs().ne(rhs()), unequal),
+        (rhs().ne(lhs()), unequal),
+    ] {
+        let found = Object::filter(predicate).exec(&mut db).await?;
+        assert_eq!(found.len(), 1);
+        assert_eq!(Some(found[0].id), expected);
+    }
+    Ok(())
+}
+
+#[driver_test]
+pub async fn embedded_literal_required_fields(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Human {
+            #[index]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+            #[shared(label)]
+            label: String,
+            #[shared(note)]
+            note: Option<String>,
+        },
+        Anonymous {
+            #[shared(label)]
+            label: String,
+            #[shared(note)]
+            note: Option<String>,
+        },
+    }
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+    let mut db = test.setup_db(models!(Object, Human)).await;
+    let human = toasty::create!(Human {}).exec(&mut db).await?;
+    let unloaded = toasty::Deferred::<Human>::default();
+    test.log().clear();
+    let err = assert_err!(
+        toasty::create!(Object {
+            owner: Owner::Human {
+                human: &unloaded,
+                label: "note".into()
+            }
+        })
+        .exec(&mut db)
+        .await
+    );
+    assert!(err.is_validation());
+    assert!(err.to_string().contains("`id`"));
+    let err = assert_err!(
+        toasty::create!(Object {
+            owner: Owner::Human { human: &human }
+        })
+        .exec(&mut db)
+        .await
+    );
+    assert!(err.is_validation());
+    assert!(err.to_string().contains("`label`"));
+    let err = assert_err!(
+        Object::create()
+            .owner(Object::fields().owner().anonymous().create())
+            .exec(&mut db)
+            .await
+    );
+    assert!(err.is_validation());
+    assert!(err.to_string().contains("`label`"));
+    assert!(test.log().is_empty());
+
+    let mut object = toasty::create!(Object {
+        owner: Owner::Human {
+            human: &human,
+            label: "note".into()
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        object.owner,
+        Owner::Human {
+            label: "note",
+            note: None,
+            ..
+        }
+    );
+    test.log().clear();
+    let err = assert_err!(
+        toasty::update!(object {
+            owner: Owner::Human { human: &human }
+        })
+        .exec(&mut db)
+        .await
+    );
+    assert!(err.is_validation());
+    assert!(test.log().is_empty());
+    toasty::update!(object {
+        owner: Owner::Human {
+            human: &human,
+            label: "updated".into()
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, object.id).await?.owner,
+        Owner::Human {
+            label: "updated",
+            note: None,
+            ..
+        }
+    );
+    let anonymous = Object::create()
+        .owner(
+            Object::fields()
+                .owner()
+                .anonymous()
+                .create()
+                .label("anonymous"),
+        )
+        .exec(&mut db)
+        .await?;
+    assert_struct!(
+        anonymous.owner,
+        Owner::Anonymous {
+            label: "anonymous",
+            note: None
+        }
+    );
+    Ok(())
+}
+
+#[driver_test]
+pub async fn compare_embedded_relation_to_embedded_relation(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Author {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Attribution {
+        #[index]
+        author_id: uuid::Uuid,
+        #[belongs_to(key = author_id)]
+        author: toasty::Deferred<Author>,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Review {
+        #[index]
+        reviewer_id: uuid::Uuid,
+        #[belongs_to(key = reviewer_id)]
+        reviewer: toasty::Deferred<Author>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        attribution: Attribution,
+        review: Review,
+    }
+
+    let mut db = test.setup_db(models!(Post, Author)).await;
+
+    let ann = toasty::create!(Author { name: "Ann" })
+        .exec(&mut db)
+        .await?;
+    let bea = toasty::create!(Author { name: "Bea" })
+        .exec(&mut db)
+        .await?;
+
+    // Ann reviewed her own post; Ann also reviewed Bea's post.
+    let self_reviewed = toasty::create!(Post {
+        attribution: Attribution {
+            author_id: ann.id,
+            author: toasty::Deferred::default(),
+        },
+        review: Review {
+            reviewer_id: ann.id,
+            reviewer: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Post {
+        attribution: Attribution {
+            author_id: bea.id,
+            author: toasty::Deferred::default(),
+        },
+        review: Review {
+            reviewer_id: ann.id,
+            reviewer: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found: Vec<Post> = Post::filter(
+        Post::fields()
+            .attribution()
+            .author()
+            .eq(Post::fields().review().reviewer()),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, self_reviewed.id);
+
+    Ok(())
+}
+
+#[driver_test]
 pub async fn nullable_embedded_relation_value(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Human {
@@ -237,7 +545,7 @@ pub async fn embedded_struct_relation_model_values(test: &mut Test) -> Result<()
         metadata: Some(Metadata {
             attribution: Attribution {
                 author: &author,
-                note: "published"
+                note: "published".into()
             }
         }),
     })
@@ -247,7 +555,7 @@ pub async fn embedded_struct_relation_model_values(test: &mut Test) -> Result<()
         metadata: Some(Metadata {
             attribution: Attribution {
                 author: &author,
-                note: "revised"
+                note: "revised".into()
             }
         }),
     })

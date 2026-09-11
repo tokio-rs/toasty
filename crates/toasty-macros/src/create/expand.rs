@@ -163,8 +163,15 @@ fn expand_embedded_value(expr: &syn::Expr) -> Option<TokenStream> {
     };
     let setters = value.fields.iter().map(|field| {
         let name = &field.member;
-        let expr = expand_value(&field.expr);
-        quote!(.#name(#expr))
+        if let Some(expr) = expand_embedded_value(&field.expr) {
+            // Nested builders use the expression-taking setter.
+            quote!(.#name(#expr))
+        } else {
+            // Literal fields retain their declared Rust type for inference.
+            let name = quote::format_ident!("__toasty_literal_{}", name);
+            let expr = &field.expr;
+            quote!(.#name(#expr))
+        }
     });
     Some(quote!(#path::#constructor() #(#setters)*))
 }
