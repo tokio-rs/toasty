@@ -802,35 +802,6 @@ where
             .to_string()
     }
 
-    /// Whether the leaf field is `Option`-marked.
-    ///
-    /// Reports the leaf field's own nullability only; a `false` result does
-    /// not rule out storage `NULL`s from a nullable parent embed or an
-    /// inactive enum variant (see [`is_unique`](Self::is_unique)).
-    ///
-    /// # Panics
-    ///
-    /// Panics if the path does not end at a field, or if the projection
-    /// crosses a relation: only embedded struct, embedded enum, and document
-    /// steps are supported.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # #[derive(Debug, toasty::Model)]
-    /// # struct User {
-    /// #     #[key]
-    /// #     id: i64,
-    /// #     bio: Option<String>,
-    /// # }
-    /// assert!(User::fields().bio().is_nullable());
-    /// assert!(!User::fields().id().is_nullable());
-    /// ```
-    pub fn is_nullable(&self) -> bool {
-        let models = Self::registered_models();
-        Self::field_in(&models, &self.untyped).0.nullable
-    }
-
     /// Whether this field is the target of a single-field unique index.
     ///
     /// Index membership only, not a global-uniqueness guarantee: `NULL`s do
@@ -990,6 +961,60 @@ where
                 .expect("path does not end at a field: field index out of bounds");
         }
         (field, crossed_document)
+    }
+}
+
+/// Nullability of a path's leaf field, read off the leaf's Rust type.
+///
+/// The app schema's `nullable` flag is generated from the field type's
+/// [`Field::NULLABLE`], so the typed path already carries the answer and no
+/// schema walk is needed.
+///
+/// Only storable leaf types expose this: relation terminals and model roots
+/// have no method, and projecting through a relation is a compile error
+/// rather than the runtime panic `field_name`/`is_unique` still produce. An
+/// embed root reports `false` but has no leaf field.
+impl<T, U> Path<T, U>
+where
+    T: Model,
+    U: Field,
+{
+    /// Whether the leaf field is `Option`-marked.
+    ///
+    /// Reports the leaf field's own nullability only; a `false` result does
+    /// not rule out storage `NULL`s from a nullable parent embed or an
+    /// inactive enum variant (see [`is_unique`](Self::is_unique)).
+    ///
+    /// Only sound for generated accessors; hand-built `path_field::<U>` /
+    /// `chain` paths must supply the field's `ExprTarget` as `U`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # #[derive(Debug, toasty::Model)]
+    /// # struct User {
+    /// #     #[key]
+    /// #     id: i64,
+    /// #     bio: Option<String>,
+    /// # }
+    /// assert!(User::fields().bio().is_nullable());
+    /// assert!(!User::fields().id().is_nullable());
+    /// ```
+    pub fn is_nullable(&self) -> bool {
+        U::NULLABLE
+    }
+}
+
+/// List-targeted paths (`Vec<T>` fields) are never `Option`-wrapped;
+/// `Option<Vec<T>>` keeps its wrapper as the path target and is covered by
+/// the `U: Field` impl above.
+impl<T, U> Path<T, List<U>>
+where
+    T: Model,
+{
+    /// Always `false` for a list-targeted path.
+    pub fn is_nullable(&self) -> bool {
+        false
     }
 }
 
