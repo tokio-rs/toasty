@@ -55,7 +55,7 @@ impl VisitMut for Fold {
 /// Apply one round of fold rules to `i`. Returns `Some` if a rule fired and
 /// produced a replacement expression; returns `None` if no rule applied or
 /// the rule mutated `i` in place.
-fn fold_one(i: &mut Expr) -> Option<Expr> {
+pub(super) fn fold_one(i: &mut Expr) -> Option<Expr> {
     match i {
         Expr::And(expr) => expr_and::fold_expr_and(expr),
         Expr::BinaryOp(expr) => {

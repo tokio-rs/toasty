@@ -18,6 +18,16 @@ impl Exec<'_> {
             }
         }
 
+        if let Some(filter) = &mut row_filter {
+            self.normalize_scan_filter(filter, action.table);
+            if filter.is_unsatisfiable() {
+                return Ok(ExecResponse::from_rows(Rows::value_stream(vec![])));
+            }
+            if filter.is_true() {
+                row_filter = None;
+            }
+        }
+
         let res = self
             .connection
             .exec(

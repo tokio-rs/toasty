@@ -2,11 +2,44 @@ use toasty_core::{
     driver::Capability, schema::db::TableId, stmt, stmt::ExprContext, stmt::ValueSet,
 };
 
-use crate::engine::simplify;
+use crate::engine::{fold, simplify};
 
 use super::Exec;
 
 impl Exec<'_> {
+    /// Expand bound tuple membership without changing scalar IN semantics.
+    /// In particular, KV null membership differs from SQL's three-valued
+    /// logic, so a general simplification pass after binding is not valid.
+    pub(super) fn normalize_scan_filter(&self, filter: &mut stmt::Expr, table: TableId) {
+        let cx = self.engine.expr_cx_for(self.engine.schema.db.table(table));
+        stmt::visit_mut::for_each_expr_mut(filter, |expr| {
+            let replacement = match expr {
+                stmt::Expr::InList(in_list)
+                    if matches!(*in_list.expr, stmt::Expr::Record(_))
+                        && in_list.expr.is_stable()
+                        && matches!(*in_list.list, stmt::Expr::Value(stmt::Value::List(_))) =>
+                {
+                    let operands = Self::split_filter_in_list(
+                        in_list.expr.take(),
+                        in_list.list.take(),
+                        cx,
+                        self.engine.capability,
+                    );
+                    let mut expr = stmt::Expr::or_from_vec(operands);
+                    fold::fold_stmt(&mut expr);
+                    Some(expr)
+                }
+                // Only fold this boolean node, leaving scalar IN children
+                // untouched. This propagates empty tuple lists through gates.
+                stmt::Expr::And(_) | stmt::Expr::Or(_) | stmt::Expr::Not(_) => fold::fold_one(expr),
+                _ => None,
+            };
+            if let Some(replacement) = replacement {
+                *expr = replacement;
+            }
+        });
+    }
+
     /// Split a composite filter into individual key predicates.
     ///
     /// Recognizes these forms and decomposes them:

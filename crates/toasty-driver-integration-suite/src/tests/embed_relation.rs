@@ -365,6 +365,40 @@ pub async fn nested_variant_composite_relation(test: &mut Test) -> Result<()> {
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, object.id);
     let variant = Object::fields().envelope().first();
+    let third = toasty::create!(Parent {
+        namespace: uuid::Uuid::new_v4(),
+        revision: 2,
+        name: "third"
+    })
+    .exec(&mut db)
+    .await?;
+    let third_object = toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: Owner::Parent { parent: &third }
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    let found = Object::filter(
+        variant
+            .owner()
+            .parent()
+            .matches(|v| v.parent().name().ne("second")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 2);
+    assert!(found.iter().any(|row| row.id == object.id));
+    assert!(found.iter().any(|row| row.id == third_object.id));
+    let found = Object::filter(
+        variant
+            .owner()
+            .parent()
+            .matches(|v| v.parent().name().eq("missing")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert!(found.is_empty());
     Object::filter_by_id(object.id)
         .update()
         .envelope(
