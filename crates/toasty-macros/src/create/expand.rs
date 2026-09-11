@@ -128,17 +128,17 @@ fn expand_embedded_value(expr: &syn::Expr) -> Option<TokenStream> {
         // Embedded builders implement IntoExpr<Option<Embed>> as well.
         return expand_embedded_value(&call.args[0]);
     }
-    // Borrowed fields allow an embedded literal to omit its foreign keys.
-    // Complete Rust values keep their normal IntoExpr encoding, including
-    // unloaded Deferred slots and struct-update syntax.
+    // Struct-update syntax stays a Rust value because its base supplies fields
+    // not listed in the literal.
     let syn::Expr::Struct(value) = expr else {
         return None;
     };
     if value.rest.is_some()
-        || !value.fields.iter().any(|field| {
-            matches!(field.expr, syn::Expr::Reference(_))
-                || expand_embedded_value(&field.expr).is_some()
-        })
+        || value.qself.is_some()
+        || value
+            .fields
+            .iter()
+            .any(|field| !matches!(field.member, syn::Member::Named(_)))
     {
         return None;
     }
@@ -154,6 +154,18 @@ fn expand_embedded_value(expr: &syn::Expr) -> Option<TokenStream> {
             .ident
             .to_string()
             .starts_with(char::is_uppercase);
+    // Enum variants use their builders regardless of how the relation value
+    // is spelled: aliases and function calls can also return borrowed parents.
+    // Plain structs can instead be serialized values (e.g. JSON payloads), so
+    // retain the explicit-borrow/nested-embed signal for those literals.
+    if !is_variant
+        && !value.fields.iter().any(|field| {
+            matches!(field.expr, syn::Expr::Reference(_))
+                || expand_embedded_value(&field.expr).is_some()
+        })
+    {
+        return None;
+    }
     let constructor = if is_variant {
         path.segments.pop();
         path.segments.pop_punct();
@@ -168,7 +180,15 @@ fn expand_embedded_value(expr: &syn::Expr) -> Option<TokenStream> {
             quote!(.#name(#expr))
         } else {
             // Literal fields retain their declared Rust type for inference.
-            let name = quote::format_ident!("__toasty_literal_{}", name);
+            // Explicit conversions also need that type for relation fields,
+            // whose ordinary setter accepts borrowed models as expressions.
+            let name = if matches!(&field.expr, syn::Expr::MethodCall(call)
+                if call.method == "into" && call.args.is_empty() && call.turbofish.is_none())
+            {
+                quote::format_ident!("__toasty_typed_literal_{}", name)
+            } else {
+                quote::format_ident!("__toasty_literal_{}", name)
+            };
             let expr = &field.expr;
             quote!(.#name(#expr))
         }

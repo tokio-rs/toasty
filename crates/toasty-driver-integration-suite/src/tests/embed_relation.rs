@@ -153,10 +153,11 @@ pub async fn embedded_literal_required_fields(test: &mut Test) -> Result<()> {
     assert!(err.is_validation());
     assert!(err.to_string().contains("`label`"));
     let err = assert_err!(
-        Object::create()
-            .owner(Object::fields().owner().anonymous().create())
-            .exec(&mut db)
-            .await
+        toasty::create!(Object {
+            owner: Owner::Anonymous {}
+        })
+        .exec(&mut db)
+        .await
     );
     assert!(err.is_validation());
     assert!(err.to_string().contains("`label`"));
@@ -414,8 +415,16 @@ pub async fn embedded_relation_model_values(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
     let rex = toasty::create!(Animal { id }).exec(&mut db).await?;
+    let human = &alice;
     let mut object = toasty::create!(Object {
-        owner: Owner::Human { human: &alice }
+        owner: Owner::Human { human }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::update!(object {
+        owner: Owner::Human {
+            human: std::convert::identity(human)
+        }
     })
     .exec(&mut db)
     .await?;
@@ -450,21 +459,24 @@ pub async fn embedded_relation_model_values(test: &mut Test) -> Result<()> {
     .await?;
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, object.id);
-    toasty::update!(object {
-        owner: Owner::Animal { animal: &rex }
-    })
-    .exec(&mut db)
-    .await?;
-    assert_struct!(Object::get_by_id(&mut db, object.id).await?.owner, Owner::Animal { id: == rex.id, .. });
-    let bob_id = bob.id;
-    object
-        .update()
-        .owner(Owner::Human {
-            id: uuid::Uuid::nil(),
-            human: bob.into(),
+    {
+        let animal = &rex;
+        toasty::update!(object {
+            owner: Owner::Animal { animal }
         })
         .exec(&mut db)
         .await?;
+    }
+    assert_struct!(Object::get_by_id(&mut db, object.id).await?.owner, Owner::Animal { id: == rex.id, .. });
+    let bob_id = bob.id;
+    toasty::update!(object {
+        owner: Owner::Human {
+            id: uuid::Uuid::nil(),
+            human: bob.into(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
     assert_struct!(Object::get_by_id(&mut db, object.id).await?.owner, Owner::Human { id: == bob_id, .. });
     assert_struct!(Object::get_by_id(&mut db, animal.id).await?.owner, Owner::Animal { id: == rex.id, .. });
     Ok(())
