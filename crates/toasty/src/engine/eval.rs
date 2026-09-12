@@ -100,6 +100,7 @@ fn verify_expr(expr: &stmt::Expr) -> bool {
             verify_expr(&expr_match.subject)
                 && expr_match.arms.iter().all(|arm| verify_expr(&arm.expr))
         }
+        Not(expr) => verify_expr(&expr.expr),
         Project(expr) => verify_expr(&expr.base),
         Record(expr) => expr.fields.iter().all(verify_expr),
         Exists(expr_exists) => match &expr_exists.subquery.body {
