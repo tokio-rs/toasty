@@ -35,6 +35,15 @@ pub(crate) fn ident(name: &str) -> syn::Ident {
     quote::format_ident!("__toasty_{name}")
 }
 
+/// The hidden by-reference getter a model generates for one of its
+/// primitive fields (`__toasty_ref_<field>`). Embedded types with a
+/// `belongs_to` targeting the model read the referenced field through it,
+/// so the field does not need to be visible where the embedded type is
+/// declared.
+pub(crate) fn field_ref_ident(field: &syn::Ident) -> syn::Ident {
+    ident(&format!("ref_{}", bare_ident_name(field)))
+}
+
 /// Return the Rust method name an identifier occupies, without raw-ident syntax.
 pub(crate) fn bare_ident_name(ident: &syn::Ident) -> String {
     let name = ident.to_string();

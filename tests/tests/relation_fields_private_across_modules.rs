@@ -25,10 +25,46 @@ mod model_b {
     }
 }
 
+/// An embedded type outside `model_a` with a `belongs_to` targeting `A`,
+/// whose key field is private. Filling the key from a loaded `A` must not
+/// read the private field.
+mod model_c {
+    #[derive(Debug, toasty::Embed)]
+    pub struct Attribution {
+        #[index]
+        a_id: uuid::Uuid,
+
+        #[belongs_to(key = a_id)]
+        a: toasty::Deferred<super::model_a::A>,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    pub enum Owner {
+        A {
+            #[index]
+            a_id: uuid::Uuid,
+
+            #[belongs_to(key = a_id)]
+            a: toasty::Deferred<super::model_a::A>,
+        },
+        None,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    pub struct C {
+        #[key]
+        id: uuid::Uuid,
+
+        attribution: Attribution,
+        owner: Owner,
+    }
+}
+
 /// If this compiles, the issue is fixed: private relation fields across modules work.
 #[test]
 fn relation_fields_can_be_private_across_modules() {
     // Verify that the generated API methods are accessible from outside the modules.
     let _ = model_a::A::all();
     let _ = model_b::B::all();
+    let _ = model_c::C::all();
 }

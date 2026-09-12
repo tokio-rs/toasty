@@ -35,6 +35,7 @@ impl Expand<'_> {
         let load_body = self.expand_load_body(true);
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
+        let field_ref_methods = self.expand_field_ref_methods();
         let relation_methods = self.expand_model_relation_methods();
         let into_statement_body = self.expand_model_into_statement_body();
         let into_delete_body = self.expand_model_into_delete_body();
@@ -57,6 +58,7 @@ impl Expand<'_> {
                 #model_fields
                 #filter_methods
                 #relation_methods
+                #field_ref_methods
 
                 #[doc = #doc_create]
                 #vis fn create() -> #create_struct_ident {
@@ -503,15 +505,20 @@ impl Expand<'_> {
 
             // A key field backing a sibling relation takes its value from
             // the loaded parent model when one is present; the explicit key
-            // stands otherwise.
+            // stands otherwise. The parent's field is read through its
+            // hidden getter, as the field may be private to the parent's
+            // module.
             match key_fill.get(&field.id) {
-                Some((rel_ident, target_ident)) => quote!(
-                    match #toasty::embedded_relation_target(&self.#rel_ident) {
-                        #toasty::Option::Some(__rel) =>
-                            #toasty::into_untyped_expr::<#target_ty, _>(&__rel.#target_ident),
-                        #toasty::Option::None => #explicit,
-                    }
-                ),
+                Some((rel_ident, target_ident)) => {
+                    let target_ref = util::field_ref_ident(target_ident);
+                    quote!(
+                        match #toasty::embedded_relation_target(&self.#rel_ident) {
+                            #toasty::Option::Some(__rel) =>
+                                #toasty::into_untyped_expr::<#target_ty, _>(__rel.#target_ref()),
+                            #toasty::Option::None => #explicit,
+                        }
+                    )
+                }
                 None => explicit,
             }
         });

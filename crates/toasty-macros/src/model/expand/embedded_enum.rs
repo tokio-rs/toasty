@@ -408,11 +408,11 @@ impl Expand<'_> {
                                     _ => return None,
                                 };
                                 let key_slot = util::int(key_local + 1);
-                                let target_ident = &fk_field.target;
+                                let target_ref = util::field_ref_ident(&fk_field.target);
                                 Some(quote! {
                                     self.rel_keys[#key_slot] = #toasty::Option::Some(
                                         #toasty::into_untyped_expr::<FieldExprTarget<#key_ty>, _>(
-                                            &__rel.#target_ident,
+                                            __rel.#target_ref(),
                                         ),
                                     );
                                 })
@@ -1099,13 +1099,16 @@ impl Expand<'_> {
                                 // one is present; the explicit key stands
                                 // otherwise.
                                 match key_fill.get(&field.id) {
-                                    Some((rel_ident, target_ident)) => quote!(
-                                        match #toasty::embedded_relation_target(&#rel_ident) {
-                                            #toasty::Option::Some(__rel) =>
-                                                #toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(&__rel.#target_ident),
-                                            #toasty::Option::None => #explicit,
-                                        }
-                                    ),
+                                    Some((rel_ident, target_ident)) => {
+                                        let target_ref = util::field_ref_ident(target_ident);
+                                        quote!(
+                                            match #toasty::embedded_relation_target(&#rel_ident) {
+                                                #toasty::Option::Some(__rel) =>
+                                                    #toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(__rel.#target_ref()),
+                                                #toasty::Option::None => #explicit,
+                                            }
+                                        )
+                                    }
                                     None => explicit,
                                 }
                             }

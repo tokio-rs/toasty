@@ -523,6 +523,34 @@ impl Expand<'_> {
         }
     }
 
+    /// Generates a hidden by-reference getter for each primitive field
+    /// (`__toasty_ref_<field>`). An embedded type with a `belongs_to`
+    /// targeting this model fills its key field from a loaded target value
+    /// through these getters, so the referenced field does not need to be
+    /// visible where the embedded type is declared.
+    pub(super) fn expand_field_ref_methods(&self) -> TokenStream {
+        let vis = &self.model.vis;
+
+        self.model
+            .fields
+            .iter()
+            .filter_map(|field| {
+                let Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let field_ident = &field.name.ident;
+                let method_ident = util::field_ref_ident(field_ident);
+
+                Some(quote! {
+                    #[doc(hidden)]
+                    #vis fn #method_ident(&self) -> &#ty {
+                        &self.#field_ident
+                    }
+                })
+            })
+            .collect()
+    }
+
     /// Generates a field accessor method for a primitive field on the list
     /// fields struct, using `Field::new_list_path`.
     fn expand_list_primitive_field_method(
