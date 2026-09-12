@@ -91,7 +91,7 @@ toasty-driver-integration-suite = { version = "0.10.0", path = "crates/toasty-dr
 toasty-driver-integration-suite-macros = { version = "0.10.0", path = "crates/toasty-driver-integration-suite-macros" }
 
 # Other crates
-assert-struct = "0.4.2"
+assert-struct = "0.5.0"
 async-recursion = "1.1.1"
 async-stream = "0.3.6"
 async-trait = "0.1.89"
@@ -112,7 +112,7 @@ index_vec = "0.1.4"
 inventory = "0.3.24"
 # Must match the version used by `postgres-protocol` (the postgres driver
 # iterates over its `FallibleIterator` types); do not bump independently.
-fallible-iterator = "0.2"
+fallible-iterator = "0.3"
 fluent-uri = "0.4.1"
 form_urlencoded = "1.2.2"
 jiff = "0.2.23"
