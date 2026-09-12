@@ -256,6 +256,25 @@ impl Simplify<'_> {
         other: Expr,
         match_on_lhs: bool,
     ) -> Expr {
+        self.eliminate_match(match_expr, |arm| {
+            if match_on_lhs {
+                Expr::binary_op(arm, op, other.clone())
+            } else {
+                Expr::binary_op(other.clone(), op, arm)
+            }
+        })
+    }
+
+    /// Distributes a predicate over match arms, producing an OR of guarded
+    /// terms. `term` builds the predicate for one arm from that arm's
+    /// expression; each arm becomes `(subject == pattern) AND term(arm_expr)`,
+    /// and the else branch is guarded by the negation of every pattern. Dead
+    /// branches (false/null/error) are pruned after inline simplification.
+    pub(super) fn eliminate_match(
+        &mut self,
+        match_expr: Expr,
+        term: impl Fn(Expr) -> Expr,
+    ) -> Expr {
         let Expr::Match(match_expr) = match_expr else {
             unreachable!()
         };
@@ -272,13 +291,7 @@ impl Simplify<'_> {
                 Expr::from(arm.pattern),
             );
 
-            let comparison = if match_on_lhs {
-                Expr::binary_op(arm.expr, op, other.clone())
-            } else {
-                Expr::binary_op(other.clone(), op, arm.expr)
-            };
-
-            let mut term = Expr::and_from_vec(vec![guard, comparison]);
+            let mut term = Expr::and_from_vec(vec![guard, term(arm.expr)]);
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
@@ -302,14 +315,8 @@ impl Simplify<'_> {
                 })
                 .collect();
 
-            let comparison = if match_on_lhs {
-                Expr::binary_op(*match_expr.else_expr, op, other)
-            } else {
-                Expr::binary_op(other, op, *match_expr.else_expr)
-            };
-
             let mut else_operands = guards;
-            else_operands.push(comparison);
+            else_operands.push(term(*match_expr.else_expr));
             let mut term = Expr::and_from_vec(else_operands);
             self.visit_expr_mut(&mut term);
 

@@ -86,6 +86,10 @@ impl<'a> LiftInSubquery<'a> {
             }
             stmt::Expr::Like(e) => lift_embedded_relation_like(&self.cx, e, gates),
             stmt::Expr::InSubquery(e) => lift_embedded_relation_in_subquery(&self.cx, e, gates),
+            stmt::Expr::InList(e) => {
+                rewrite_embedded_relation_in_list(&self.cx, e, gates);
+                None
+            }
             _ => None,
         };
 
@@ -159,6 +163,7 @@ impl VisitMut for LiftInSubquery<'_> {
                     self.rewrite_embedded_relation(expr, &[]);
                 }
             }
+            stmt::Expr::InList(_) => self.rewrite_embedded_relation(expr, &[]),
             // Relation references through an embedded *enum* only resolve
             // with variant context, and the typed layer fuses the
             // `is_variant` gate as a sibling operand of the comparison it
@@ -654,6 +659,22 @@ fn rewrite_embedded_relation_operand(
     }
 
     rewrote
+}
+
+/// `<relation-projection> IN (list)`: substitute the projection of the
+/// relation's key field(s) for the relation reference, in place — the
+/// [`rewrite_embedded_relation_operand`] case for list membership. The list
+/// holds model values, which the typed layer already reduced to their keys.
+fn rewrite_embedded_relation_in_list(
+    cx: &ExprContext,
+    e: &mut stmt::ExprInList,
+    gates: &[VariantGate],
+) {
+    if let Some(resolved) = resolve_embedded_relation(cx, &e.expr, gates)
+        && resolved.tail.is_empty()
+    {
+        *e.expr = resolved.key_expr;
+    }
 }
 
 /// A comparison whose one side projects *through* an embedded relation into

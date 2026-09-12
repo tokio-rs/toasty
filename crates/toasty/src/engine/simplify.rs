@@ -3,6 +3,7 @@ mod expr_any;
 mod expr_binary_op;
 mod expr_cast;
 mod expr_exists;
+mod expr_in_list;
 mod expr_intersects;
 mod expr_is_null;
 mod expr_is_superset;
@@ -69,6 +70,7 @@ impl VisitMut for Simplify<'_> {
             }
             Expr::Cast(expr) => self.simplify_expr_cast(expr),
             Expr::Exists(expr) => self.simplify_expr_exists(expr),
+            Expr::InList(expr) => self.simplify_expr_in_list(expr),
             Expr::Intersects(expr) => self.simplify_expr_intersects(expr),
             Expr::IsSuperset(expr) => self.simplify_expr_is_superset(expr),
             Expr::List(expr) => self.simplify_expr_list(expr),

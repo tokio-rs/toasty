@@ -771,6 +771,183 @@ pub async fn filter_by_relation_model_value(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// List membership on a relation inside an embedded enum variant: the
+/// relation resolves to its variant-scoped key column, so an Animal row
+/// holding one of the listed humans' ids in the shared key column does not
+/// match.
+#[driver_test]
+pub async fn filter_enum_embed_relation_in_list(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Animal {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    #[index(id)]
+    enum Owner {
+        Human {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+        Animal {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            animal: toasty::Deferred<Animal>,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+
+    let mut db = test.setup_db(models!(Object, Human, Animal)).await;
+
+    let alice = toasty::create!(Human { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let bea = toasty::create!(Human { name: "Bea" }).exec(&mut db).await?;
+    let cid = toasty::create!(Human { name: "Cid" }).exec(&mut db).await?;
+
+    let alice_obj = toasty::create!(Object {
+        owner: Owner::Human { human: &alice }
+    })
+    .exec(&mut db)
+    .await?;
+    let bea_obj = toasty::create!(Object {
+        owner: Owner::Human { human: &bea }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        owner: Owner::Human { human: &cid }
+    })
+    .exec(&mut db)
+    .await?;
+    // An Animal row holding Alice's uuid in the shared key column.
+    toasty::create!(Object {
+        owner: Owner::Animal {
+            id: alice.id,
+            animal: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut found: Vec<Object> = Object::filter(
+        Object::fields()
+            .owner()
+            .human()
+            .matches(|v| toasty::stmt::Expr::in_list(v.human(), [&alice, &bea])),
+    )
+    .exec(&mut db)
+    .await?;
+    found.sort_by_key(|o| o.id);
+
+    let mut expected = [alice_obj.id, bea_obj.id];
+    expected.sort();
+    assert_struct!(found, [_ { id: == expected[0], .. }, _ { id: == expected[1], .. }]);
+
+    Ok(())
+}
+
+/// List membership on a relation inside an embedded struct resolves to the
+/// key column through the embed path.
+#[driver_test]
+pub async fn filter_struct_embed_relation_in_list(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Author {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Attribution {
+        #[index]
+        author_id: uuid::Uuid,
+        #[belongs_to(key = author_id)]
+        author: toasty::Deferred<Author>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        attribution: Attribution,
+    }
+
+    let mut db = test.setup_db(models!(Post, Author)).await;
+
+    let alice = toasty::create!(Author { name: "Alice" })
+        .exec(&mut db)
+        .await?;
+    let bea = toasty::create!(Author { name: "Bea" })
+        .exec(&mut db)
+        .await?;
+    let cid = toasty::create!(Author { name: "Cid" })
+        .exec(&mut db)
+        .await?;
+
+    let alice_post = toasty::create!(Post {
+        attribution: Attribution {
+            author_id: alice.id,
+            author: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    let bea_post = toasty::create!(Post {
+        attribution: Attribution {
+            author_id: bea.id,
+            author: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Post {
+        attribution: Attribution {
+            author_id: cid.id,
+            author: toasty::Deferred::default(),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let mut found: Vec<Post> = Post::filter(toasty::stmt::Expr::in_list(
+        Post::fields().attribution().author(),
+        [&alice, &bea],
+    ))
+    .exec(&mut db)
+    .await?;
+    found.sort_by_key(|p| p.id);
+
+    let mut expected = [alice_post.id, bea_post.id];
+    expected.sort();
+    assert_struct!(found, [_ { id: == expected[0], .. }, _ { id: == expected[1], .. }]);
+
+    Ok(())
+}
+
 /// Filtering a relation inside an embedded struct by model value: no
 /// discriminant exists, the comparison resolves to the key column through
 /// the embed path, and traversal lifts to a subquery.
