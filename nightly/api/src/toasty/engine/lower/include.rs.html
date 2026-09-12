@@ -518,8 +518,8 @@
 <a href=#518 id=518 data-nosnippet>518</a>/// `PathRoot::Variant` chain into a discriminant-index step.
 <a href=#519 id=519 data-nosnippet>519</a>///
 <a href=#520 id=520 data-nosnippet>520</a>/// The result uses LOCAL field indices for variant fields (matching the IR's
-<a href=#521 id=521 data-nosnippet>521</a>/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
-<a href=#522 id=522 data-nosnippet>522</a>/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
+<a href=#521 id=521 data-nosnippet>521</a>/// `Match` arm record convention and the local convention also used by
+<a href=#522 id=522 data-nosnippet>522</a>/// `Schema::resolve`). Include lowering walks the IR shape,
 <a href=#523 id=523 data-nosnippet>523</a>/// not the schema, so LOCAL is what `process_enum_arms` needs.
 <a href=#524 id=524 data-nosnippet>524</a></span><span class="kw">fn </span>flatten_path(path: <span class="kw-2">&amp;</span>stmt::Path) -&gt; stmt::Projection {
 <a href=#525 id=525 data-nosnippet>525</a>    <span class="kw">let </span><span class="kw-2">mut </span>acc = stmt::Projection::identity();
