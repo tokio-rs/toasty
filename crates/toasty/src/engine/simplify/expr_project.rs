@@ -7,6 +7,16 @@ impl Simplify<'_> {
         &mut self,
         expr: &mut stmt::ExprProject,
     ) -> Option<stmt::Expr> {
+        // A variant selection is opaque here: `Project(Variant(..), [i])`
+        // indexes the selected variant's payload, which only lowering can
+        // resolve (to the variant's column expressions). The predicate's
+        // `is_variant` guards were fixed when it was built, so nothing here
+        // may fold the selection away or rewrite it into a decode of the
+        // whole enum.
+        if let stmt::Expr::Variant(_) = &*expr.base {
+            return None;
+        }
+
         // Constant evaluation: if the base is an Expr::Value, we can evaluate
         // the projection at compile time.
         //

@@ -23,6 +23,20 @@ struct VerifyExpr<'a, 'v> {
     error: &'v mut Option<Error>,
 }
 
+/// What an expression path denotes in the application schema. See
+/// `VerifyExpr::resolve_expr_path`.
+enum PathTarget<'a> {
+    /// A field of a model, embed, or relation target.
+    Field(&'a app::Field),
+
+    /// The payload of an embedded enum's variant, by index.
+    Variant(&'a app::EmbeddedEnum, usize),
+
+    /// A position inside a `#[document]` value, which the schema does not
+    /// describe field by field.
+    Document,
+}
+
 impl Engine {
     pub(crate) fn verify(&self, stmt: &Statement) -> Result<()> {
         let mut error = None;
@@ -420,7 +434,7 @@ fn assert_i64_value(expr: &stmt::Expr, what: &str) {
     );
 }
 
-impl VerifyExpr<'_, '_> {
+impl<'a> VerifyExpr<'a, '_> {
     fn verify_filter(&mut self, filter: &stmt::Filter) {
         self.assert_bool_expr(filter.as_expr());
         self.visit_expr(filter.as_expr());
@@ -462,54 +476,98 @@ impl VerifyExpr<'_, '_> {
         )
     }
 
-    /// Whether a record-slot projection resolves from `field`. See
-    /// `visit_expr_project` for the slot-space conventions; relation steps
-    /// continue into the target model's fields.
-    fn expr_projection_resolves(&self, field: &app::Field, steps: &[usize]) -> bool {
+    /// Resolve an expression path — a field reference in the current scope
+    /// under `Project` and `Variant` layers — to what it denotes in the
+    /// application schema. `None` when the path does not resolve.
+    ///
+    /// A projection step continues into a struct embed's fields, a relation
+    /// target's fields, or the fields of a selected enum variant, by their
+    /// variant-local position. A step into an enum without a selection does
+    /// not resolve: the enum's record layout is a lowering concern, and a
+    /// path names the variant it enters.
+    fn resolve_expr_path(&self, expr: &stmt::Expr) -> Option<PathTarget<'a>> {
+        match expr {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) => self
+                .schema
+                .app
+                .model(self.model)
+                .as_root()?
+                .fields
+                .get(*index)
+                .map(PathTarget::Field),
+            stmt::Expr::Project(project) => {
+                let mut target = self.resolve_expr_path(&project.base)?;
+                for step in project.projection.as_slice() {
+                    target = self.resolve_expr_step(target, *step)?;
+                }
+                Some(target)
+            }
+            stmt::Expr::Variant(variant) => {
+                let PathTarget::Field(field) = self.resolve_expr_path(&variant.base)? else {
+                    return None;
+                };
+                let app::FieldTy::Embedded(embedded) = &field.ty else {
+                    return None;
+                };
+                if embedded.target != variant.variant.model {
+                    return None;
+                }
+                let app::Model::EmbeddedEnum(embedded) = self.schema.app.model(embedded.target)
+                else {
+                    return None;
+                };
+                (variant.variant.index < embedded.variants.len())
+                    .then_some(PathTarget::Variant(embedded, variant.variant.index))
+            }
+            _ => None,
+        }
+    }
+
+    /// The target one projection step reaches from `target`.
+    fn resolve_expr_step(&self, target: PathTarget<'a>, step: usize) -> Option<PathTarget<'a>> {
         use app::FieldTy;
 
-        let [step, rest @ ..] = steps else {
-            return true;
+        let field = match target {
+            PathTarget::Variant(embedded, index) => embedded.variant_fields(index).nth(step),
+            PathTarget::Document => return Some(PathTarget::Document),
+            PathTarget::Field(field) => match &field.ty {
+                FieldTy::Embedded(embedded) => match self.schema.app.model(embedded.target) {
+                    app::Model::EmbeddedStruct(embedded) => embedded.fields.get(step),
+                    // A variant must be selected before stepping into an
+                    // enum's fields.
+                    app::Model::EmbeddedEnum(_) | app::Model::Root(_) => None,
+                },
+                FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
+                    let target = field.relation_target_id().expect("relation has a target");
+                    self.schema
+                        .app
+                        .model(target)
+                        .as_root_unwrap()
+                        .fields
+                        .get(step)
+                }
+                // A `#[document]` embed stores sub-fields in the document
+                // type rather than as `app::Field`s; the path was
+                // type-checked by the generated accessors.
+                FieldTy::Primitive(app::FieldPrimitive {
+                    ty: stmt::Type::Model(_),
+                    ..
+                }) => return Some(PathTarget::Document),
+                FieldTy::Primitive(_) => None,
+            },
         };
 
-        match &field.ty {
-            FieldTy::Embedded(embedded) => match self.schema.app.model(embedded.target) {
-                app::Model::EmbeddedStruct(embedded) => embedded
-                    .fields
-                    .get(*step)
-                    .is_some_and(|field| self.expr_projection_resolves(field, rest)),
-                app::Model::EmbeddedEnum(embedded) => {
-                    // Slot 0 is the discriminant — a leaf.
-                    if *step == 0 {
-                        return rest.is_empty();
-                    }
-                    (0..embedded.variants.len()).any(|variant| {
-                        embedded
-                            .variant_fields(variant)
-                            .nth(*step - 1)
-                            .is_some_and(|field| self.expr_projection_resolves(field, rest))
-                    })
-                }
-                app::Model::Root(_) => false,
-            },
-            FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
-                let target = field.relation_target_id().expect("relation has a target");
-                self.schema
-                    .app
-                    .model(target)
-                    .as_root_unwrap()
-                    .fields
-                    .get(*step)
-                    .is_some_and(|field| self.expr_projection_resolves(field, rest))
-            }
-            // A `#[document]` embed stores sub-fields in the document type
-            // rather than as `app::Field`s; the path was type-checked by
-            // the generated accessors.
-            FieldTy::Primitive(app::FieldPrimitive {
-                ty: stmt::Type::Model(_),
-                ..
-            }) => true,
-            FieldTy::Primitive(_) => false,
+        field.map(PathTarget::Field)
+    }
+
+    /// Whether `expr` is an expression path rooted at a field reference in
+    /// the current scope — the shape `resolve_expr_path` validates.
+    fn is_scoped_expr_path(&self, expr: &stmt::Expr) -> bool {
+        match expr {
+            stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, .. }) => true,
+            stmt::Expr::Project(project) => self.is_scoped_expr_path(&project.base),
+            stmt::Expr::Variant(variant) => self.is_scoped_expr_path(&variant.base),
+            _ => false,
         }
     }
 
@@ -569,31 +627,34 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
     }
 
     fn visit_expr_project(&mut self, i: &stmt::ExprProject) {
-        // For project expressions where the base is a field reference in the
-        // current scope, validate the projection steps from that field.
-        //
-        // Expression projections are in *record-slot* space, which differs
-        // from schema-path space for embedded enums: the expression indexes
-        // the enum's record — `[discriminant, variant fields...]`, with
-        // variant-local field positions — and does not name the variant (a
-        // comparison carries an `is_variant` gate instead). A slot is
-        // therefore checked against every variant, and the projection is
-        // valid when at least one admits it.
-        if let stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = &*i.base {
-            let root = self.schema.app.model(self.model).as_root_unwrap();
-            let valid = root
-                .fields
-                .get(*index)
-                .is_some_and(|field| self.expr_projection_resolves(field, i.projection.as_slice()));
+        // For a path rooted at a field reference in the current scope,
+        // validate the whole path against the schema: each step must name a
+        // field of the embed, relation target, or selected enum variant it
+        // steps into.
+        if self.is_scoped_expr_path(&i.base) {
             assert!(
-                valid,
-                "failed to resolve projection: field {index} . {:?}",
-                i.projection
+                self.resolve_expr_path(&stmt::Expr::Project(i.clone()))
+                    .is_some(),
+                "failed to resolve projection: {i:#?}"
             );
         } else {
-            // For other base expressions (nested projects, etc.), visit the
-            // base but skip projection validation since the projection is
-            // relative to the base expression's type.
+            // For other base expressions, visit the base but skip projection
+            // validation since the projection is relative to the base
+            // expression's type.
+            self.visit_expr(&i.base);
+        }
+    }
+
+    fn visit_expr_variant(&mut self, i: &stmt::ExprVariant) {
+        // A selection applies to an enum field reached by a scoped path; it
+        // must name one of that enum's variants.
+        if self.is_scoped_expr_path(&i.base) {
+            assert!(
+                self.resolve_expr_path(&stmt::Expr::Variant(i.clone()))
+                    .is_some(),
+                "failed to resolve variant selection: {i:#?}"
+            );
+        } else {
             self.visit_expr(&i.base);
         }
     }

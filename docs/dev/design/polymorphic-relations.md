@@ -438,25 +438,27 @@ consumer funnels through that rewrite — the `has_many` association filter,
 includes, subquery lifting, and user-written comparisons on relation paths.
 
 A variant-scoped pair extends that invariant rather than adding machinery.
-At the same rewrite, a reference to a relation reached through `Pair` steps
-lowers into two things at once:
+A reference to a relation reached through `Pair` steps is a path expression
+whose variant steps are `ExprVariant` selections. The rewrite substitutes
+the foreign-key comparison, with source fields projected through the same
+selections (the shared or per-variant key columns), and the `is_variant`
+gate for each selected variant is already part of the predicate: the typed
+layer collects the gates from both operands and every enclosing variant
+when it builds the predicate (`Expr::with_variant_guards`), before the
+predicate is combined with others.
 
-- the foreign-key comparison, with source fields projected through the
-  embed (the shared or per-variant key columns), and
-- an `is_variant` gate for each step that selects a variant, ANDed into
-  the enclosing boolean expression.
+Keeping the gate with the key comparison is a correctness requirement, not
+a style choice: with a `#[shared]` key column, `owner_id = ?` without the
+gate matches an `Animal` row holding the same UUID. The gate is fixed at
+predicate construction and the rewrite keeps the selection in the key
+expression, so no consumer can obtain the key comparison without the gate
+and no expansion site can leak rows of the wrong variant.
 
-Fusing the gate with the key comparison at the single rewrite is a
-correctness requirement, not a style choice: with a `#[shared]` key column,
-`owner_id = ?` without the gate matches an `Animal` row holding the same
-UUID. No consumer can obtain the key comparison without the gate, so no
-expansion site can leak rows of the wrong variant.
-
-Negation follows the existing variant-field convention: the typed layer
-lowers `ne` on a variant field to `is_variant AND field != x`, and a `ne`
-through a variant-scoped relation lowers the same way — false for rows of
-other variants — so filter semantics do not depend on whether the gate
-comes from the typed layer or the engine rewrite.
+Negation follows the existing variant-field convention: `ne` on a variant
+field is `is_variant AND field != x`, and a `ne` through a variant-scoped
+relation is the same — false for rows of other variants. Comparing two
+relations in variants requires both variants. Negating a predicate negates
+the guarded comparison as a whole.
 
 On the write side, `Pair` carries the intent mutations need: associating
 through the pair (`human.objects().create(...)`) constructs the variant
@@ -530,8 +532,8 @@ Checked for redundancy and deliberately kept:
   steps vs. value steps) with opposite validation rules; merging them
   would turn structural rejections into runtime checks.
 - **`stmt::PathRoot::Variant`** — serves typed filter paths generally;
-  `Pair` is schema-layer and converts to a variant-rooted projection
-  during lowering.
+  `Pair` is schema-layer and converts to a variant selection
+  (`ExprVariant`) during lowering.
 - **`ForeignKey` / `ForeignKeyField`** — already host-independent
   (embed-local sources, owner-model targets); instancing never touches
   them.

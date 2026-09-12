@@ -266,7 +266,7 @@ impl<M> fmt::Debug for Statement<M> {
 /// let filter = toasty::stmt::in_list(User::fields().id(), [1_i64, 2, 3]);
 /// ```
 pub fn in_list<T>(lhs: impl IntoExpr<T>, rhs: impl IntoExpr<List<T>>) -> Expr<bool> {
-    Expr::from_untyped(stmt::Expr::in_list(
+    Expr::from_predicate(stmt::Expr::in_list(
         lhs.into_expr().untyped,
         rhs.into_expr().untyped,
     ))

@@ -125,35 +125,21 @@ impl<T, U> Path<T, U> {
         }
     }
 
-    /// Build a filter `Expr<bool>` from this path, automatically wrapping
-    /// the body with an `is_variant(parent, variant_id)` AND-gate when the
-    /// path is variant-rooted.
+    /// Build a filter `Expr<bool>` from this path, requiring every enum
+    /// variant the predicate's operands select.
     ///
     /// All boolean-producing methods on `Path` (`eq`, `ne`, `gt`, `is_none`,
     /// `starts_with`, `any`, …) funnel through this so that filter-context
     /// uses of a variant-rooted path implicitly require the variant to
-    /// match. Path-yielding contexts (`include`, `order_by`, `chain`)
-    /// bypass this helper and keep the bare path.
+    /// match — on this path, on the other operand, and for every enclosing
+    /// variant of a nested selection (see [`Expr::<bool>::from_predicate`]).
+    /// Path-yielding contexts (`include`, `order_by`, `chain`) bypass this
+    /// helper and keep the bare path.
     fn build_filter<F>(self, build_body: F) -> Expr<bool>
     where
         F: FnOnce(stmt::Expr) -> stmt::Expr,
     {
-        let gate = match &self.untyped.root {
-            stmt::PathRoot::Variant { parent, variant_id } => {
-                let parent_stmt = parent.as_ref().clone().into_stmt();
-                Some(stmt::Expr::is_variant(parent_stmt, *variant_id))
-            }
-            _ => None,
-        };
-        let body = build_body(self.untyped.into_stmt());
-        let untyped = match gate {
-            Some(g) => stmt::Expr::and(g, body),
-            None => body,
-        };
-        Expr {
-            untyped,
-            _p: PhantomData,
-        }
+        Expr::from_predicate(build_body(self.untyped.into_stmt()))
     }
 
     /// Test whether this field equals `rhs`.
@@ -285,14 +271,9 @@ impl<T, U> Path<T, U> {
     /// let filter = User::fields().id().between(18_i64, 65_i64);
     /// ```
     pub fn between(self, low: impl IntoExpr<U>, high: impl IntoExpr<U>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::between(
-                self.untyped.into_stmt(),
-                low.into_expr().untyped,
-                high.into_expr().untyped,
-            ),
-            _p: PhantomData,
-        }
+        let low = low.into_expr().untyped;
+        let high = high.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::between(path, low, high))
     }
 
     /// Test whether this field's value is in `rhs`.
@@ -526,11 +507,12 @@ where
     ///
     /// Equivalent to `.len().eq(0)`. Mirrors [`Vec::is_empty`].
     pub fn is_empty(self) -> Expr<bool> {
-        let untyped = stmt::Expr::eq(
-            stmt::Expr::array_length(self.untyped.into_stmt()),
-            stmt::Expr::Value(stmt::Value::I64(0)),
-        );
-        Expr::from_untyped(untyped)
+        self.build_filter(|path| {
+            stmt::Expr::eq(
+                stmt::Expr::array_length(path),
+                stmt::Expr::Value(stmt::Value::I64(0)),
+            )
+        })
     }
 }
 
@@ -656,10 +638,8 @@ where
     /// let filter = User::fields().name().ilike("al%".to_string());
     /// ```
     pub fn ilike(self, pattern: impl IntoExpr<String>) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::ilike(self.untyped.into_stmt(), pattern.into_expr().untyped),
-            _p: PhantomData,
-        }
+        let pattern = pattern.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::ilike(path, pattern))
     }
 
     /// Test whether this string field matches a SQL `LIKE` pattern using an
@@ -758,14 +738,8 @@ where
     /// let filter = User::fields().name().ilike_with_escape("alice\\%%".to_string(), '\\');
     /// ```
     pub fn ilike_with_escape(self, pattern: impl IntoExpr<String>, escape: char) -> Expr<bool> {
-        Expr {
-            untyped: stmt::Expr::ilike_with_escape(
-                self.untyped.into_stmt(),
-                pattern.into_expr().untyped,
-                escape,
-            ),
-            _p: PhantomData,
-        }
+        let pattern = pattern.into_expr().untyped;
+        self.build_filter(move |path| stmt::Expr::ilike_with_escape(path, pattern, escape))
     }
 }
 

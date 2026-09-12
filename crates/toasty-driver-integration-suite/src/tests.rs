@@ -44,6 +44,7 @@ pub mod embed_relation;
 pub mod embed_struct;
 pub mod embed_struct_index;
 pub mod embed_struct_optional;
+pub mod embed_variant_predicate_scope;
 pub mod field_auto;
 pub mod field_column_name;
 pub mod field_column_type;

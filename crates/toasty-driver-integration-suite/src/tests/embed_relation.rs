@@ -1,4 +1,333 @@
 use crate::prelude::*;
+use toasty::stmt::IntoExpr;
+
+/// Comparing two relations that live in enum variants requires *both*
+/// variants. Every variant here stores its key in the same shared column,
+/// so without both checks a row holding `Other` on either side would match
+/// on key equality alone. `ne` keeps both checks as well, and negating an
+/// equality negates the guarded comparison as a whole.
+#[driver_test]
+pub async fn compare_embedded_relations_preserves_both_variant_guards(
+    test: &mut Test,
+) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    #[index(id)]
+    enum Owner {
+        Primary {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[shared(active)]
+            active: bool,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+        Other {
+            #[shared(id)]
+            id: uuid::Uuid,
+            #[shared(active)]
+            active: bool,
+            #[belongs_to(key = id)]
+            other: toasty::Deferred<Human>,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        lhs: Owner,
+        rhs: Owner,
+    }
+
+    let mut db = test.setup_db(models!(Object, Human)).await;
+    let ann = toasty::create!(Human {}).exec(&mut db).await?;
+    let bea = toasty::create!(Human {}).exec(&mut db).await?;
+
+    // Eight rows: every combination of variant on each side, with the two
+    // keys equal or not. Only the row with Primary on both sides and equal
+    // keys satisfies the equality; only the Primary/Primary row with
+    // different keys satisfies the inequality.
+    let mut equal = None;
+    let mut unequal = None;
+    for left_primary in [true, false] {
+        for right_primary in [true, false] {
+            for same in [true, false] {
+                let right = if same { &ann } else { &bea };
+                let lhs = if left_primary {
+                    Owner::Primary {
+                        id: ann.id,
+                        active: true,
+                        human: toasty::Deferred::default(),
+                    }
+                } else {
+                    Owner::Other {
+                        id: ann.id,
+                        active: true,
+                        other: toasty::Deferred::default(),
+                    }
+                };
+                let rhs = if right_primary {
+                    Owner::Primary {
+                        id: right.id,
+                        active: same,
+                        human: toasty::Deferred::default(),
+                    }
+                } else {
+                    Owner::Other {
+                        id: right.id,
+                        active: same,
+                        other: toasty::Deferred::default(),
+                    }
+                };
+                let object = toasty::create!(Object { lhs, rhs }).exec(&mut db).await?;
+                if left_primary && right_primary {
+                    if same {
+                        equal = Some(object.id);
+                    } else {
+                        unequal = Some(object.id);
+                    }
+                }
+            }
+        }
+    }
+
+    let lhs = || Object::fields().lhs().primary();
+    let rhs = || Object::fields().rhs().primary();
+    for (predicate, expected) in [
+        // Relation against relation, in both directions.
+        (lhs().human().eq(rhs().human()), equal),
+        (rhs().human().eq(lhs().human()), equal),
+        (lhs().human().ne(rhs().human()), unequal),
+        (rhs().human().ne(lhs().human()), unequal),
+        // The key fields themselves.
+        (lhs().id().eq(rhs().id()), equal),
+        (rhs().id().eq(lhs().id()), equal),
+        (lhs().id().ne(rhs().id()), unequal),
+        (rhs().id().ne(lhs().id()), unequal),
+        // A path converted to an expression first.
+        (lhs().human().into_expr().eq(rhs().human()), equal),
+        (lhs().id().into_expr().ne(rhs().id()), unequal),
+    ] {
+        let found = Object::filter(predicate).exec(&mut db).await?;
+        assert_eq!(found.len(), 1);
+        assert_eq!(Some(found[0].id), expected);
+    }
+
+    // Negating the equality negates the whole guarded comparison: every row
+    // but the equal Primary/Primary one.
+    let found = Object::filter(lhs().human().eq(rhs().human()).not())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 7);
+
+    // A single-side predicate on a shared column still requires its variant.
+    let found = Object::filter(lhs().active().eq(true))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 4);
+    let found = Object::filter(rhs().active().eq(false))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 2);
+
+    Ok(())
+}
+
+/// A composite-key relation inside a variant of an enum that is itself a
+/// variant field of an outer enum. Every predicate through the nested path
+/// requires both variants, whether the comparison is at the relation, a
+/// path converted through `IntoExpr`, or a traversal into the target.
+#[driver_test]
+pub async fn nested_variant_composite_relation(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = namespace, local = revision)]
+    struct Parent {
+        namespace: uuid::Uuid,
+        revision: i64,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Parent {
+            #[index]
+            namespace: uuid::Uuid,
+            revision: i64,
+            #[belongs_to(key = [namespace, revision], references = [namespace, revision])]
+            parent: toasty::Deferred<Parent>,
+        },
+        Empty,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Envelope {
+        First { owner: Owner },
+        Second { other_owner: Owner },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        envelope: Envelope,
+    }
+
+    let mut db = test.setup_db(models!(Object, Parent)).await;
+    let namespace = uuid::Uuid::new_v4();
+    // The nested literal is written out with its keys: `create!` fills keys
+    // from a parent value only for the outer variant literal.
+    let owner = |parent: &Parent| Owner::Parent {
+        namespace: parent.namespace,
+        revision: parent.revision,
+        parent: toasty::Deferred::default(),
+    };
+    let first = toasty::create!(Parent {
+        namespace,
+        revision: 1,
+        name: "first"
+    })
+    .exec(&mut db)
+    .await?;
+    let second = toasty::create!(Parent {
+        namespace,
+        revision: 2,
+        name: "second"
+    })
+    .exec(&mut db)
+    .await?;
+    let third = toasty::create!(Parent {
+        namespace: uuid::Uuid::new_v4(),
+        revision: 2,
+        name: "third"
+    })
+    .exec(&mut db)
+    .await?;
+
+    // `Second { other_owner }` stores the same keys in other columns; it
+    // must never match a predicate through `first().owner()`.
+    let mut object = toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: owner(&first)
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        envelope: Envelope::Second {
+            other_owner: owner(&first)
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: owner(&second)
+        },
+    })
+    .exec(&mut db)
+    .await?;
+    let third_object = toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: owner(&third)
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        envelope: Envelope::First {
+            owner: Owner::Empty
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    let variant = || Object::fields().envelope().first();
+
+    // A model value against the relation, and the same through a path
+    // converted with `IntoExpr`.
+    let found = Object::filter(variant().owner().parent().parent().eq(&first))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+
+    let path: toasty::stmt::Path<Object, Parent> = variant().owner().parent().parent().into();
+    let found = Object::filter(path.into_expr().eq(&first))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+
+    // Traversal into the target model.
+    let found = Object::filter(
+        variant()
+            .owner()
+            .parent()
+            .matches(|v| v.parent().name().eq("first")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, object.id);
+
+    let found = Object::filter(
+        variant()
+            .owner()
+            .parent()
+            .matches(|v| v.parent().name().ne("second")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_eq!(found.len(), 2);
+    assert!(found.iter().any(|row| row.id == object.id));
+    assert!(found.iter().any(|row| row.id == third_object.id));
+
+    let found = Object::filter(
+        variant()
+            .owner()
+            .parent()
+            .matches(|v| v.parent().name().eq("missing")),
+    )
+    .exec(&mut db)
+    .await?;
+    assert!(found.is_empty());
+
+    // The inner variant check on its own requires the outer variant too.
+    let found = Object::filter(variant().owner().is_parent())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 3);
+    let found = Object::filter(variant().owner().is_empty())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    // Replacing the nested owner writes the new keys through both variants.
+    toasty::update!(object {
+        envelope: Envelope::First {
+            owner: owner(&second)
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, object.id).await?.envelope,
+        Envelope::First {
+            owner: Owner::Parent { revision: 2, .. }
+        }
+    );
+
+    Ok(())
+}
 
 /// The polymorphic-owner shape: `#[belongs_to]` fields inside embedded enum
 /// variants, exercised through the full CRUD cycle. The relation fields map

@@ -23,7 +23,9 @@
 //! - [`try_lift_relation_path_like`] does the same for `LIKE`/`ILIKE`
 //!   (`profile.user.name LIKE 'al%'`). These are `Expr::Like`, not
 //!   `Expr::BinaryOp`, so they need their own entry point. Both rewrites
-//!   share [`lift_relation_path_predicate`].
+//!   share [`lift_relation_path_predicate`], as does the variant check
+//!   ([`try_lift_relation_path_is_variant`]) on an enum reached through a
+//!   relation (`link.item.state IS Selected`).
 //!
 //! A pre-pass is necessary (rather than folding into
 //! `LowerStatement::visit_expr_mut` per #823's pattern) because not every
@@ -43,7 +45,7 @@ use toasty_core::{
 };
 
 use super::embedded_relation::{
-    EmbeddedRelationRef, VariantGate, collect_variant_gates, resolve_embedded_relation,
+    EmbeddedRelationRef, Step, build_expr_path, flatten_expr_path, resolve_embedded_relation,
 };
 
 /// Pre-lowering pass that lifts relation references out of `IN`-subquery
@@ -73,21 +75,20 @@ impl<'a> LiftInSubquery<'a> {
     }
 
     /// Try the embedded-relation rewrites on one expression, replacing it
-    /// when a rewrite fires. `gates` carries the `is_variant` context from
-    /// the enclosing conjunction; it is empty when the expression stands
-    /// alone, which suffices for relations inside embedded structs.
-    fn rewrite_embedded_relation(&self, expr: &mut stmt::Expr, gates: &[VariantGate]) {
+    /// when a rewrite fires.
+    fn rewrite_embedded_relation(&self, expr: &mut stmt::Expr) {
         let lifted = match expr {
             stmt::Expr::BinaryOp(e) => {
-                if rewrite_embedded_relation_operand(&self.cx, e, gates) {
+                if rewrite_embedded_relation_operand(&self.cx, e) {
                     return;
                 }
-                lift_embedded_relation_comparison(&self.cx, e, gates)
+                lift_embedded_relation_comparison(&self.cx, e)
             }
-            stmt::Expr::Like(e) => lift_embedded_relation_like(&self.cx, e, gates),
-            stmt::Expr::InSubquery(e) => lift_embedded_relation_in_subquery(&self.cx, e, gates),
+            stmt::Expr::Like(e) => lift_embedded_relation_like(&self.cx, e),
+            stmt::Expr::IsVariant(e) => lift_embedded_relation_is_variant(&self.cx, e),
+            stmt::Expr::InSubquery(e) => lift_embedded_relation_in_subquery(&self.cx, e),
             stmt::Expr::InList(e) => {
-                rewrite_embedded_relation_in_list(&self.cx, e, gates);
+                rewrite_embedded_relation_in_list(&self.cx, e);
                 None
             }
             _ => None,
@@ -136,7 +137,7 @@ impl VisitMut for LiftInSubquery<'_> {
                     self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 } else {
-                    self.rewrite_embedded_relation(expr, &[]);
+                    self.rewrite_embedded_relation(expr);
                 }
             }
             stmt::Expr::BinaryOp(e) => {
@@ -152,7 +153,7 @@ impl VisitMut for LiftInSubquery<'_> {
                     self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 } else {
-                    self.rewrite_embedded_relation(expr, &[]);
+                    self.rewrite_embedded_relation(expr);
                 }
             }
             stmt::Expr::Like(e) => {
@@ -160,25 +161,22 @@ impl VisitMut for LiftInSubquery<'_> {
                     self.exclude_nulls(&mut lifted);
                     *expr = lifted;
                 } else {
-                    self.rewrite_embedded_relation(expr, &[]);
+                    self.rewrite_embedded_relation(expr);
                 }
             }
-            stmt::Expr::InList(_) => self.rewrite_embedded_relation(expr, &[]),
-            // Relation references through an embedded *enum* only resolve
-            // with variant context, and the typed layer fuses the
-            // `is_variant` gate as a sibling operand of the comparison it
-            // scopes. Collect the gates of this conjunction and try the
-            // embedded rewrites on the other operands with that context.
-            // (The gate operands stay in place — the rewritten key
-            // comparison is only variant-correct alongside them.)
-            stmt::Expr::And(e) => {
-                let gates = collect_variant_gates(&e.operands);
-                if !gates.is_empty() {
-                    for operand in &mut e.operands {
-                        self.rewrite_embedded_relation(operand, &gates);
-                    }
+            // A variant check whose subject walks a relation is a predicate
+            // on the target model, like a comparison: the guard the typed
+            // layer fixed next to `link.item.state.selected.value == x`
+            // lifts into its own foreign-key subquery.
+            stmt::Expr::IsVariant(e) => {
+                if let Some(mut lifted) = try_lift_relation_path_is_variant(&self.cx, e) {
+                    self.exclude_nulls(&mut lifted);
+                    *expr = lifted;
+                } else {
+                    self.rewrite_embedded_relation(expr);
                 }
             }
+            stmt::Expr::InList(_) => self.rewrite_embedded_relation(expr),
             _ => {}
         }
 
@@ -267,8 +265,8 @@ pub(super) fn lift_in_subquery(
         // targets. Re-root the path at `rel`'s target model and rebuild as a
         // nested IN-subquery on that model, then recurse to lift the outer
         // `rel` hop.
-        stmt::Expr::Project(project_expr) => {
-            return lift_projection_in_subquery(cx, project_expr, query);
+        stmt::Expr::Project(_) | stmt::Expr::Variant(_) => {
+            return lift_projection_in_subquery(cx, expr, query);
         }
         stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => {
             cx.resolve_expr_reference(expr_reference).as_field_unwrap()
@@ -380,19 +378,19 @@ fn lift_via_in_subquery(
 /// visitor pass when [`LiftInSubquery`]'s children walk reaches it.
 fn lift_projection_in_subquery(
     cx: &ExprContext,
-    project_expr: &stmt::ExprProject,
+    path: &stmt::Expr,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
-    let Expr::Reference(expr_ref) = &*project_expr.base else {
-        return None;
-    };
-    let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
+    let (expr_ref, steps) = flatten_expr_path(path)?;
+    let ResolvedRef::Field(field) = cx.resolve_expr_reference(&expr_ref) else {
         return None;
     };
 
     let target_model_id = field.relation_target_id()?;
 
-    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
+    let (Step::Field(head_idx), tail) = steps.split_first()? else {
+        return None;
+    };
 
     if tail.is_empty()
         && let Some(direct) =
@@ -401,22 +399,14 @@ fn lift_projection_in_subquery(
         return Some(direct);
     }
 
-    let target_field = Expr::ref_self_field(FieldId {
-        model: target_model_id,
-        index: *head_idx,
-    });
-    let inner_lhs = if tail.is_empty() {
-        target_field
-    } else {
-        Expr::project(target_field, stmt::Projection::from(tail))
-    };
+    let inner_lhs = reroot(target_model_id, *head_idx, tail);
 
     let new_subquery = stmt::Query::new_select(
         stmt::Source::from(target_model_id),
         Expr::in_subquery(inner_lhs, query.clone()),
     );
 
-    lift_in_subquery(cx, &project_expr.base, &new_subquery)
+    lift_in_subquery(cx, &Expr::Reference(expr_ref), &new_subquery)
 }
 
 /// Fuses a `BelongsTo → Has` chain into a single FK-on-FK `IN` when both
@@ -575,6 +565,26 @@ pub(super) fn try_lift_relation_path_like(
     })
 }
 
+/// Rewrites a variant check whose subject walks a relation field into a
+/// foreign-key subquery — [`try_lift_relation_path_comparison`] for the
+/// `is_variant` guards of a predicate through a relation.
+///
+/// `Link::filter(Link::fields().item().state().is_selected())` rewrites to:
+///
+/// ```text
+/// Link.item_id IN (SELECT Item.id FROM Item WHERE Item.state IS Selected)
+/// ```
+///
+/// Returns `None` when the subject does not walk a relation field.
+pub(super) fn try_lift_relation_path_is_variant(
+    cx: &ExprContext,
+    is_variant: &stmt::ExprIsVariant,
+) -> Option<stmt::Expr> {
+    lift_relation_path_predicate(cx, &is_variant.expr, |target_lhs| {
+        Expr::is_variant(target_lhs, is_variant.variant)
+    })
+}
+
 /// Shared core of the relation-path lifts.
 ///
 /// `project_side` is the side of the predicate that walks a relation — the
@@ -595,13 +605,11 @@ fn lift_relation_path_predicate(
     project_side: &stmt::Expr,
     make_filter: impl FnOnce(stmt::Expr) -> stmt::Expr,
 ) -> Option<stmt::Expr> {
-    let Expr::Project(project_expr) = project_side else {
+    if !matches!(project_side, Expr::Project(_) | Expr::Variant(_)) {
         return None;
-    };
-    let Expr::Reference(expr_ref) = &*project_expr.base else {
-        return None;
-    };
-    let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
+    }
+    let (expr_ref, steps) = flatten_expr_path(project_side)?;
+    let ResolvedRef::Field(field) = cx.resolve_expr_reference(&expr_ref) else {
         return None;
     };
 
@@ -610,39 +618,37 @@ fn lift_relation_path_predicate(
     // The first step names the relation field on the source model; the
     // rest index into the target model. Drop the first step and re-root the
     // remainder at the target model.
-    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
-    let target_field = Expr::ref_self_field(FieldId {
-        model: target_model_id,
-        index: *head_idx,
-    });
-    let target_lhs = if tail.is_empty() {
-        target_field
-    } else {
-        Expr::project(target_field, stmt::Projection::from(tail))
+    let (Step::Field(head_idx), tail) = steps.split_first()? else {
+        return None;
     };
+    let target_lhs = reroot(target_model_id, *head_idx, tail);
 
     let subquery =
         stmt::Query::new_select(stmt::Source::from(target_model_id), make_filter(target_lhs));
 
-    lift_in_subquery(cx, &project_expr.base, &subquery)
+    lift_in_subquery(cx, &Expr::Reference(expr_ref), &subquery)
 }
 
-/// `<relation-projection> eq/ne <expr>`: substitute the projection of the
+/// Re-root a path at `model`: the field at `head` followed by `tail`. Variant
+/// selections in `tail` are preserved, so a path into an enum variant of the
+/// target model stays a selection there.
+fn reroot(model: ModelId, head: usize, tail: &[Step]) -> Expr {
+    build_expr_path(Expr::ref_self_field(FieldId { model, index: head }), tail)
+}
+
+/// `<relation-path> eq/ne <expr>`: substitute the projection of the
 /// relation's key field(s) for the relation reference, in place. The
 /// analogue of `rewrite_eq_operand`'s `BelongsTo` arm for relations inside
-/// embedded types; the variant scoping comes from the `is_variant` gates the
-/// typed layer fused next to the comparison (see `resolve_embedded_relation`).
+/// embedded types. The key expression keeps the path's variant selections,
+/// so the `is_variant` guards the typed layer fixed next to the comparison
+/// still scope it (see `resolve_embedded_relation`).
 ///
 /// Returns `true` when an operand was substituted; the binary op itself
 /// stays in place. Both operands are checked — comparing one embedded
 /// relation to another (key-versus-key) substitutes both sides; stopping
 /// at the first would leave the other side lowering to its storage-less
 /// `Null` slot.
-fn rewrite_embedded_relation_operand(
-    cx: &ExprContext,
-    e: &mut stmt::ExprBinaryOp,
-    gates: &[VariantGate],
-) -> bool {
+fn rewrite_embedded_relation_operand(cx: &ExprContext, e: &mut stmt::ExprBinaryOp) -> bool {
     if !e.op.is_eq() && !e.op.is_ne() {
         return false;
     }
@@ -650,7 +656,7 @@ fn rewrite_embedded_relation_operand(
     let mut rewrote = false;
 
     for side in [&mut e.lhs, &mut e.rhs] {
-        if let Some(resolved) = resolve_embedded_relation(cx, side, gates)
+        if let Some(resolved) = resolve_embedded_relation(cx, side)
             && resolved.tail.is_empty()
         {
             **side = resolved.key_expr;
@@ -661,16 +667,12 @@ fn rewrite_embedded_relation_operand(
     rewrote
 }
 
-/// `<relation-projection> IN (list)`: substitute the projection of the
-/// relation's key field(s) for the relation reference, in place — the
+/// `<relation-path> IN (list)`: substitute the projection of the relation's
+/// key field(s) for the relation reference, in place — the
 /// [`rewrite_embedded_relation_operand`] case for list membership. The list
 /// holds model values, which the typed layer already reduced to their keys.
-fn rewrite_embedded_relation_in_list(
-    cx: &ExprContext,
-    e: &mut stmt::ExprInList,
-    gates: &[VariantGate],
-) {
-    if let Some(resolved) = resolve_embedded_relation(cx, &e.expr, gates)
+fn rewrite_embedded_relation_in_list(cx: &ExprContext, e: &mut stmt::ExprInList) {
+    if let Some(resolved) = resolve_embedded_relation(cx, &e.expr)
         && resolved.tail.is_empty()
     {
         *e.expr = resolved.key_expr;
@@ -684,7 +686,6 @@ fn rewrite_embedded_relation_in_list(
 fn lift_embedded_relation_comparison(
     cx: &ExprContext,
     e: &stmt::ExprBinaryOp,
-    gates: &[VariantGate],
 ) -> Option<stmt::Expr> {
     let sides = [
         (&e.lhs, &e.rhs, Some(e.op)),
@@ -692,7 +693,7 @@ fn lift_embedded_relation_comparison(
     ];
 
     for (project_side, other_side, op) in sides {
-        let Some(resolved) = resolve_embedded_relation(cx, project_side, gates) else {
+        let Some(resolved) = resolve_embedded_relation(cx, project_side) else {
             continue;
         };
         // A comparison *at* the relation is the operand rewrite's case.
@@ -710,37 +711,57 @@ fn lift_embedded_relation_comparison(
 
 /// [`lift_embedded_relation_comparison`] for `LIKE` / `ILIKE` patterns —
 /// the counterpart of [`try_lift_relation_path_like`].
-fn lift_embedded_relation_like(
+fn lift_embedded_relation_like(cx: &ExprContext, like: &stmt::ExprLike) -> Option<stmt::Expr> {
+    lift_embedded_relation_predicate(cx, &like.expr, |target_lhs| {
+        stmt::ExprLike {
+            expr: Box::new(target_lhs),
+            pattern: like.pattern.clone(),
+            escape: like.escape,
+            case_insensitive: like.case_insensitive,
+        }
+        .into()
+    })
+}
+
+/// [`lift_embedded_relation_comparison`] for a variant check on an enum of
+/// the target model (`v.human().state().is_selected()`) — the counterpart of
+/// [`try_lift_relation_path_is_variant`].
+fn lift_embedded_relation_is_variant(
     cx: &ExprContext,
-    like: &stmt::ExprLike,
-    gates: &[VariantGate],
+    is_variant: &stmt::ExprIsVariant,
 ) -> Option<stmt::Expr> {
-    let resolved = resolve_embedded_relation(cx, &like.expr, gates)?;
+    lift_embedded_relation_predicate(cx, &is_variant.expr, |target_lhs| {
+        Expr::is_variant(target_lhs, is_variant.variant)
+    })
+}
+
+/// Shared core of the predicate lifts through an embedded relation:
+/// `subject` walks the relation into its target model, and `make_filter`
+/// builds the target-model predicate from the re-rooted subject.
+fn lift_embedded_relation_predicate(
+    cx: &ExprContext,
+    subject: &stmt::Expr,
+    make_filter: impl FnOnce(stmt::Expr) -> stmt::Expr,
+) -> Option<stmt::Expr> {
+    let resolved = resolve_embedded_relation(cx, subject)?;
     if resolved.tail.is_empty() {
         return None;
     }
 
-    let filter: stmt::Expr = stmt::ExprLike {
-        expr: Box::new(reroot_tail(&resolved)),
-        pattern: like.pattern.clone(),
-        escape: like.escape,
-        case_insensitive: like.case_insensitive,
-    }
-    .into();
+    let filter = make_filter(reroot_tail(&resolved));
     let query = stmt::Query::new_select(stmt::Source::from(resolved.belongs_to.target), filter);
     embedded_fk_in_subquery(&resolved, query)
 }
 
-/// `<relation-projection> IN (subquery)` for an embedded relation:
-/// `v.human().in_query(..)` when the projection ends at the relation, and
-/// relation chains continuing past it (re-rooted and recursed, as in
+/// `<relation-path> IN (subquery)` for an embedded relation:
+/// `v.human().in_query(..)` when the path ends at the relation, and relation
+/// chains continuing past it (re-rooted and recursed, as in
 /// [`lift_projection_in_subquery`]).
 fn lift_embedded_relation_in_subquery(
     cx: &ExprContext,
     e: &stmt::ExprInSubquery,
-    gates: &[VariantGate],
 ) -> Option<stmt::Expr> {
-    let resolved = resolve_embedded_relation(cx, &e.expr, gates)?;
+    let resolved = resolve_embedded_relation(cx, &e.expr)?;
 
     if resolved.tail.is_empty() {
         embedded_fk_in_subquery(&resolved, (*e.query).clone())
@@ -751,20 +772,14 @@ fn lift_embedded_relation_in_subquery(
     }
 }
 
-/// Re-root the projection steps continuing past an embedded relation at the
+/// Re-root the path steps continuing past an embedded relation at the
 /// relation's target model.
 fn reroot_tail(resolved: &EmbeddedRelationRef<'_>) -> Expr {
-    let (head, rest) = resolved.tail.split_first().expect("tail must be non-empty");
-    let field = Expr::ref_self_field(FieldId {
-        model: resolved.belongs_to.target,
-        index: *head,
-    });
-
-    if rest.is_empty() {
-        field
-    } else {
-        Expr::project(field, stmt::Projection::from(rest))
-    }
+    let (Step::Field(head), rest) = resolved.tail.split_first().expect("tail must be non-empty")
+    else {
+        panic!("a relation's target model is not an enum")
+    };
+    reroot(resolved.belongs_to.target, *head, rest)
 }
 
 /// Build the foreign-key `IN` subquery for an embedded relation edge: the

@@ -120,6 +120,9 @@ pub use expr_is_superset::ExprIsSuperset;
 mod expr_is_variant;
 pub use expr_is_variant::ExprIsVariant;
 
+mod expr_variant;
+pub use expr_variant::ExprVariant;
+
 mod expr_length;
 pub use expr_length::ExprLength;
 

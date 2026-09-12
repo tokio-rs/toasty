@@ -96,8 +96,12 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates tokens for an `is_variant(path, variant_id)` expression.
+    /// Generates tokens for an `is_variant(path, variant_id)` predicate.
     /// Reused by `is_{variant}()` methods and the `matches()` method.
+    ///
+    /// The check is built as a predicate so that, when the enum is itself
+    /// reached through a variant of an enclosing enum, that variant is
+    /// required as well.
     fn expand_is_variant_expr(&self, variant_idx: &TokenStream) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
@@ -111,7 +115,7 @@ impl Expand<'_> {
                     model: <#model_ident as #toasty::Embed>::id(),
                     index: #variant_idx,
                 };
-                #toasty::stmt::Expr::from_untyped(
+                #toasty::stmt::Expr::<bool>::from_predicate(
                     #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
                 )
             }
@@ -195,8 +199,9 @@ impl Expand<'_> {
         // both the entry point returned by `email()` (used for `.matches(...)`
         // filters and direct `.eq()`/include path access) and the namespace
         // for variant-field accessors. The struct stores the model-rooted path
-        // to the enum field. `matches()` uses it to build the `is_variant` gate,
-        // while field accessors add the variant step before chaining the field.
+        // to the enum field. `matches()` uses it to build the `is_variant`
+        // check, while field accessors add the variant step before chaining
+        // the field.
         let variant_field_structs: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -205,6 +210,7 @@ impl Expand<'_> {
             .map(|(variant_index, variant)| {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
+                let is_variant_check = self.expand_is_variant_expr(&variant_idx);
                 let variant_path = quote! {{
                     let variant_id = #toasty::core::schema::app::VariantId {
                         model: <#model_ident as #toasty::Embed>::id(),
@@ -259,17 +265,7 @@ impl Expand<'_> {
                             self,
                             f: impl FnOnce(Self) -> #toasty::stmt::Expr<bool>,
                         ) -> #toasty::stmt::Expr<bool> {
-                            let parent_stmt: #toasty::core::stmt::Expr = {
-                                let p: #toasty::core::stmt::Path = self.path.clone().into();
-                                p.into_stmt()
-                            };
-                            let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Embed>::id(),
-                                index: #variant_idx,
-                            };
-                            let is_var = #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::is_variant(parent_stmt, variant_id)
-                            );
+                            let is_var: #toasty::stmt::Expr<bool> = #is_variant_check;
                             let body = f(self);
                             is_var.and(body)
                         }

@@ -73,10 +73,10 @@ User::fields()
 
 `.matches()` does two things:
 
-1. ANDs in a discriminant check (`is_var`) so the filter only matches rows whose `contact` field is the `Email` variant.
+1. ANDs in a discriminant check (`is_variant`) so the filter only matches rows whose `contact` field is the `Email` variant.
 2. Hands the closure a fields struct whose path was converted via `Path::into_variant(variant_id)`, so accessors inside the closure produce variant-rooted paths.
 
-When the engine lowers a variant-rooted path to an expression, projection indices are offset by 1: position 0 of the variant's record holds the discriminant, and variant fields start at position 1. The offset is applied in `Path::into_stmt`.
+A variant-rooted path converts to an `ExprVariant` — the payload of the enum value as that variant — and its projection steps are the variant's local field positions. The expression carries no variant check; see [Variant guards](#variant-guards) for where the check comes from. Lowering resolves the selection against the enum's storage layout (discriminant column plus per-variant columns), so the physical record offsets stay inside the engine.
 
 ## Projection
 
@@ -102,7 +102,19 @@ Comparison methods on typed paths produce filter expressions:
 User::filter(User::fields().name().eq("Alice"))
 ```
 
-Each method (`eq`, `ne`, `gt`, `ge`, `lt`, `le`, `in_list`, `in_query`, `is_none`, `is_some`, `starts_with`, `like`, `ilike`) calls `Path::into_stmt()` to turn the path into an `Expr`, then wraps it with the appropriate operator.
+Each method (`eq`, `ne`, `gt`, `ge`, `lt`, `le`, `in_list`, `in_query`, `is_none`, `is_some`, `starts_with`, `like`, `ilike`) calls `Path::into_stmt()` to turn the path into an `Expr`, wraps it with the appropriate operator, and passes the result through `Expr::<bool>::from_predicate`, which adds the variant guards described below.
+
+### Variant guards
+
+A path into an enum variant (`contact().email().address()`) converts to an expression that selects the variant's payload without checking the variant. A predicate over such an operand only means something for rows of that variant, so every predicate constructor in the typed layer (`Path::eq`, `Expr::<T>::eq`, `Expr::<Option<T>>::is_none`, `in_list`, and the rest) runs `Expr::with_variant_guards` on the predicate it builds. This walks the predicate's operands, emits an `is_variant` check for every `ExprVariant` found — on either operand, and for each enclosing variant of a nested selection, outermost first — and ANDs the checks in front of the predicate.
+
+The guards are fixed when the predicate is built, before it is combined with others, which sets the boolean scope:
+
+- `a.ne(b)` requires the variants of both `a` and `b`; rows of other variants do not match, even when the variants share a column.
+- `a.eq(b).not()` is `NOT (is_variant AND a = b)`: it negates the guarded equality as a whole and matches rows of other variants.
+- Operands that are themselves predicates (`and`, `or` operands, subqueries) are not searched: they were built by these constructors and already carry their checks.
+
+The `is_{variant}()` and `.matches()` methods build their `is_variant` check the same way, so a check on an enum reached through a variant of an enclosing enum requires the outer variant too.
 
 ### Ordering
 
@@ -148,11 +160,13 @@ Update statements address fields by path. The same typed accessors used for filt
 - Non-empty projection → `Expr::ref_self_field(FieldId)` for the first step, followed by `Expr::project` for any remaining steps.
 
 **Variant root:**
-- Recursively lowers the parent path to an expression that reaches the enum field.
-- Empty projection → returns the parent expression unchanged.
-- Non-empty projection → projects the parent expression at `local_idx + 1` (skipping the discriminant), then applies any remaining steps as a further projection.
+- Recursively converts the parent path to an expression that reaches the enum field and wraps it in `Expr::variant(parent, variant_id)`.
+- Empty projection → the selection itself.
+- Non-empty projection → `Expr::project(selection, steps)`, indexing the variant's fields by their local positions.
 
-The result is consumed by the lowering phase, which then translates field references to column references using the `TableToModel` mapping. See [Query Engine Architecture](query-engine.md#phase-2-lowering) for how the resulting expressions become table-level statements.
+Chaining a variant-rooted path onto another path (`Path::chain`) keeps the selection: the result selects the same variant at the point the first path reaches the enum.
+
+The result is consumed by the lowering phase, which translates field references to column references using the `TableToModel` mapping and replaces each `ExprVariant` with the record of the selected variant's column expressions (the enum decode's arm for that variant, discriminant dropped, decoding casts kept). The `is_variant` guards lower to discriminant comparisons. No `ExprVariant` reaches a driver. See [Query Engine Architecture](query-engine.md#phase-2-lowering) for how the resulting expressions become table-level statements.
 
 ## Further Reading
 

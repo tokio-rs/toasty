@@ -761,21 +761,6 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 }
             }
             stmt::Expr::InSubquery(e) => {
-                // Lower the LHS first: a key projected out of an embedded
-                // enum lowers to a decode `Match`, which must be eliminated
-                // around the membership test before the subquery is
-                // processed — on the non-SQL path the subquery detaches into
-                // its own statement, out of reach of later simplification.
-                // The remaining lowering below re-visits the LHS, which is a
-                // no-op on the already-lowered expression.
-                self.visit_expr_mut(&mut e.expr);
-
-                if let Some(eliminated) = self.eliminate_enum_decode_membership(e) {
-                    *expr = eliminated;
-                    self.visit_expr_mut(expr);
-                    return;
-                }
-
                 if self.capability().sql() {
                     self.visit_expr_in_subquery_mut(e);
 
@@ -855,19 +840,48 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 // Lower the inner expression
                 self.visit_expr_mut(&mut e.expr);
 
-                let lowered_expr = e.expr.take();
+                let lowered_expr = collapse_projections(e.expr.take());
 
                 // Emit the appropriate comparison
-                if has_data {
-                    // Data-carrying: project([0]) to extract discriminant from Record
-                    *expr = stmt::Expr::eq(
+                *expr = match lowered_expr {
+                    // Data-carrying, lowered to the enum's decode: compare
+                    // the decode's subject, the discriminant column, rather
+                    // than distributing a `project([0])` over the arms — a
+                    // unit variant's arm is the bare discriminant, which
+                    // cannot be projected into.
+                    stmt::Expr::Match(decode) if has_data => {
+                        stmt::Expr::eq(*decode.subject, stmt::Expr::Value(disc_value))
+                    }
+                    // Data-carrying, in value form: project([0]) to extract
+                    // the discriminant from the record.
+                    lowered_expr if has_data => stmt::Expr::eq(
                         stmt::Expr::project(lowered_expr, [0usize]),
                         stmt::Expr::Value(disc_value),
-                    );
-                } else {
+                    ),
                     // Unit-only: compare directly
-                    *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
-                }
+                    lowered_expr => stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value)),
+                };
+            }
+            stmt::Expr::Variant(e) => {
+                // The selected variant's payload. The base lowers to the
+                // enum's decode — a `Match` on the discriminant column whose
+                // arms hold `Record([disc, field columns...])` — and the
+                // selection takes the matching arm's fields, discriminant
+                // dropped, so the projections above it index the variant's
+                // fields directly. No check is emitted here: the predicate
+                // carries its own `is_variant` guard, lowered separately.
+                let disc_value = self
+                    .schema()
+                    .app
+                    .model(e.variant.model)
+                    .as_embedded_enum_unwrap()
+                    .variants[e.variant.index]
+                    .discriminant
+                    .clone();
+
+                self.visit_expr_mut(&mut e.base);
+
+                *expr = variant_payload(e.base.take(), &disc_value);
             }
             stmt::Expr::Project(project)
                 if let stmt::Expr::Incoming(stmt::ExprIncoming::Model(model)) =
@@ -2045,79 +2059,6 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
     }
 
-    /// Eliminate an embedded-enum decode (`Match`, possibly under a record
-    /// projection) from the LHS of a membership test.
-    ///
-    /// `Match IN (q)` distributes into a disjunction of variant-gated
-    /// memberships — `(disc == p1 AND slot1 IN q) OR …` — mirroring what
-    /// `eliminate_match_in_binary_op` does for comparisons. Arms whose
-    /// projected slot decodes `Null` (another variant's slot, or a relation
-    /// slot) or `Error` (unreachable) can never satisfy a membership test
-    /// and drop out, as does the decode's else branch.
-    ///
-    /// Returns the replacement expression, or `None` when the LHS is not an
-    /// enum decode.
-    fn eliminate_enum_decode_membership(
-        &mut self,
-        e: &mut stmt::ExprInSubquery,
-    ) -> Option<stmt::Expr> {
-        // Normalize `Project(Match)` to a `Match` whose arms are the
-        // projected record slots.
-        let match_expr = match &mut *e.expr {
-            stmt::Expr::Match(_) => {
-                let stmt::Expr::Match(match_expr) = e.expr.take() else {
-                    unreachable!()
-                };
-                match_expr
-            }
-            stmt::Expr::Project(project) => {
-                let stmt::Expr::Match(match_base) = &*project.base else {
-                    return None;
-                };
-
-                // Project each arm non-destructively before committing, so
-                // a non-collapsible arm leaves the expression untouched.
-                let mut projected = Vec::with_capacity(match_base.arms.len());
-                for arm in &match_base.arms {
-                    projected.push(arm.expr.entry(&project.projection)?.to_expr());
-                }
-
-                let stmt::Expr::Match(mut match_expr) = project.base.take() else {
-                    unreachable!()
-                };
-                for (arm, slot) in match_expr.arms.iter_mut().zip(projected) {
-                    arm.expr = slot;
-                }
-                match_expr
-            }
-            _ => return None,
-        };
-
-        let mut operands = Vec::with_capacity(match_expr.arms.len());
-
-        for arm in match_expr.arms {
-            if matches!(
-                arm.expr,
-                stmt::Expr::Value(stmt::Value::Null) | stmt::Expr::Error(_)
-            ) {
-                continue;
-            }
-
-            let guard =
-                stmt::Expr::eq((*match_expr.subject).clone(), stmt::Expr::from(arm.pattern));
-            operands.push(stmt::Expr::and(
-                guard,
-                stmt::Expr::in_subquery(arm.expr, (*e.query).clone()),
-            ));
-        }
-
-        Some(match operands.len() {
-            0 => false.into(),
-            1 => operands.into_iter().next().unwrap(),
-            _ => stmt::Expr::or_from_vec(operands),
-        })
-    }
-
     fn cast_expr(&mut self, expr: &mut stmt::Expr, target_ty: &stmt::Type) {
         assert!(!target_ty.is_list(), "TODO");
         match expr {
@@ -2183,6 +2124,52 @@ fn expr_is_enum_decode(expr: &stmt::Expr) -> bool {
         stmt::Expr::Match(_) => true,
         stmt::Expr::Project(project) => expr_is_enum_decode(&project.base),
         _ => false,
+    }
+}
+
+/// Collapse projections into a lowered record — an embed lowers to
+/// `Record([..])` of its fields' expressions — so the expression at the
+/// projected position is exposed. Stops at a projection that cannot be
+/// collapsed (a base that is not a record).
+fn collapse_projections(mut expr: stmt::Expr) -> stmt::Expr {
+    while let stmt::Expr::Project(project) = &expr {
+        let Some(entry) = project.base.entry(&project.projection) else {
+            break;
+        };
+        expr = entry.to_expr();
+    }
+    expr
+}
+
+/// The payload of a lowered enum value as the variant with discriminant
+/// `disc_value`: the variant's field expressions, without the discriminant.
+///
+/// A lowered enum is its decode `Match` — possibly under projections into
+/// the lowered record of an enclosing embed, which collapse to expose it —
+/// or, for a value row, the encoded record itself. Slot 0 of an arm's record
+/// (and of a value record) is the discriminant; a unit variant's arm is the
+/// bare discriminant and has an empty payload.
+fn variant_payload(lowered: stmt::Expr, disc_value: &stmt::Value) -> stmt::Expr {
+    match collapse_projections(lowered) {
+        stmt::Expr::Match(match_expr) => {
+            let arm = match_expr
+                .arms
+                .into_iter()
+                .find(|arm| arm.pattern == *disc_value)
+                .expect("enum decode has an arm per variant");
+
+            match arm.expr {
+                stmt::Expr::Record(record) => stmt::Expr::record(record.fields.into_iter().skip(1)),
+                _ => stmt::Expr::record(Vec::<stmt::Expr>::new()),
+            }
+        }
+        stmt::Expr::Value(stmt::Value::Record(record))
+            if record.fields.first() == Some(disc_value) =>
+        {
+            stmt::Expr::record(record.fields.into_iter().skip(1).map(stmt::Expr::Value))
+        }
+        stmt::Expr::Value(_) => stmt::Expr::error("value is not the selected variant"),
+        lowered => todo!("variant selection on lowered expression {lowered:#?}"),
     }
 }
 
