@@ -16,12 +16,16 @@ pub async fn compare_embedded_relations_preserves_both_variant_guards(
         Primary {
             #[shared(id)]
             id: uuid::Uuid,
+            #[shared(active)]
+            active: bool,
             #[belongs_to(key = id)]
             human: toasty::Deferred<Human>,
         },
         Other {
             #[shared(id)]
             id: uuid::Uuid,
+            #[shared(active)]
+            active: bool,
             #[belongs_to(key = id)]
             other: toasty::Deferred<Human>,
         },
@@ -48,22 +52,26 @@ pub async fn compare_embedded_relations_preserves_both_variant_guards(
                 let lhs = if left_primary {
                     Owner::Primary {
                         id: ann.id,
+                        active: true,
                         human: toasty::Deferred::default(),
                     }
                 } else {
                     Owner::Other {
                         id: ann.id,
+                        active: true,
                         other: toasty::Deferred::default(),
                     }
                 };
                 let rhs = if right_primary {
                     Owner::Primary {
                         id: right.id,
+                        active: same,
                         human: toasty::Deferred::default(),
                     }
                 } else {
                     Owner::Other {
                         id: right.id,
+                        active: same,
                         other: toasty::Deferred::default(),
                     }
                 };
@@ -85,11 +93,64 @@ pub async fn compare_embedded_relations_preserves_both_variant_guards(
         (rhs().eq(lhs()), equal),
         (lhs().ne(rhs()), unequal),
         (rhs().ne(lhs()), unequal),
+        (
+            Object::fields()
+                .lhs()
+                .primary()
+                .id()
+                .eq(Object::fields().rhs().primary().id()),
+            equal,
+        ),
+        (
+            Object::fields()
+                .rhs()
+                .primary()
+                .id()
+                .eq(Object::fields().lhs().primary().id()),
+            equal,
+        ),
+        (
+            Object::fields()
+                .lhs()
+                .primary()
+                .id()
+                .ne(Object::fields().rhs().primary().id()),
+            unequal,
+        ),
+        (
+            Object::fields()
+                .rhs()
+                .primary()
+                .id()
+                .ne(Object::fields().lhs().primary().id()),
+            unequal,
+        ),
     ] {
         let found = Object::filter(predicate).exec(&mut db).await?;
         assert_eq!(found.len(), 1);
         assert_eq!(Some(found[0].id), expected);
     }
+    assert_eq!(
+        Object::filter(lhs().eq(rhs()).not())
+            .exec(&mut db)
+            .await?
+            .len(),
+        7
+    );
+    assert_eq!(
+        Object::filter(Object::fields().lhs().primary().active().eq(true))
+            .exec(&mut db)
+            .await?
+            .len(),
+        4
+    );
+    assert_eq!(
+        Object::filter(Object::fields().rhs().primary().active().eq(false))
+            .exec(&mut db)
+            .await?
+            .len(),
+        2
+    );
     Ok(())
 }
 

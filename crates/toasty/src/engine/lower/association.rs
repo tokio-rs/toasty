@@ -110,7 +110,7 @@ impl<'a> RewriteVia<'a> {
         association: stmt::Association,
     ) -> stmt::Filter {
         assert!(
-            !association.path.projection.is_empty(),
+            !association.path.steps().is_empty(),
             "via path must have at least one step"
         );
 
@@ -155,7 +155,9 @@ impl<'a> RewriteVia<'a> {
         let fields = super::relation_path::flatten_relation_path(
             self.schema(),
             source_model_id,
-            path.projection.as_slice(),
+            path.field_projection()
+                .expect("relation path must contain field steps")
+                .as_slice(),
         );
 
         self.unfold_fields(source, &fields)

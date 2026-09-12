@@ -4,8 +4,8 @@ use super::{
     Entry, EntryMut, EntryPath, ExprAllOp, ExprAnd, ExprAny, ExprAnyOp, ExprArg, ExprBetween,
     ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming,
     ExprIntersects, ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike,
-    ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith,
-    ExprStmt, Node, Projection, Resolve, Substitute, Type, Value, Visit, VisitMut,
+    ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprPath, ExprProject, ExprRecord,
+    ExprStartsWith, ExprStmt, Node, Projection, Resolve, Substitute, Type, Value, Visit, VisitMut,
     expr_reference::ExprReference,
 };
 use std::fmt;
@@ -131,6 +131,9 @@ pub enum Expr {
 
     /// Field projection from a composite value. See [`ExprProject`].
     Project(ExprProject),
+
+    /// Application-schema traversal, including enum variant selections.
+    Path(ExprPath),
 
     /// Fixed-size heterogeneous tuple of expressions. See [`ExprRecord`].
     Record(ExprRecord),
@@ -410,6 +413,7 @@ impl Expr {
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
             }
+            Self::Path(path) => path.base.is_stable(),
             Self::Project(expr_project) => expr_project.base.is_stable(),
             Self::Let(expr_let) => {
                 expr_let.bindings.iter().all(|b| b.is_stable()) && expr_let.body.is_stable()
@@ -532,6 +536,7 @@ impl Expr {
                 expr_in_list.expr.is_const_at_depth(map_depth)
                     && expr_in_list.list.is_const_at_depth(map_depth)
             }
+            Self::Path(_) => false,
             Self::Project(expr_project) => expr_project.base.is_const_at_depth(map_depth),
 
             // Let: binding is checked at the current depth; the body is checked
@@ -618,6 +623,7 @@ impl Expr {
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
+            Self::Path(_) => false,
             Self::Project(expr_project) => expr_project.base.is_eval(),
             Self::Let(expr_let) => {
                 expr_let.bindings.iter().all(|b| b.is_eval()) && expr_let.body.is_eval()
@@ -809,6 +815,7 @@ impl fmt::Debug for Expr {
             Self::Match(e) => e.fmt(f),
             Self::Not(e) => e.fmt(f),
             Self::Or(e) => e.fmt(f),
+            Self::Path(e) => e.fmt(f),
             Self::Project(e) => e.fmt(f),
             Self::Record(e) => e.fmt(f),
             Self::Reference(e) => e.fmt(f),

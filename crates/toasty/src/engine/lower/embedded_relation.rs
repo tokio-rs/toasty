@@ -4,13 +4,13 @@
 
 use toasty_core::{
     schema::app::{self, FieldTy},
-    stmt::{self, Expr, ExprContext, VisitMut},
+    stmt::{self, Expr, ExprContext, PathStep, VisitMut},
 };
 
 pub(super) struct Relation<'a> {
     pub field: &'a app::Field,
     pub path: Expr,
-    pub tail: Vec<usize>,
+    pub tail: Vec<PathStep>,
     parent: Expr,
     variant: Option<app::VariantId>,
     gates: Vec<Expr>,
@@ -19,22 +19,20 @@ pub(super) struct Relation<'a> {
 impl Relation<'_> {
     fn source(&self, schema: &app::Schema, field: app::FieldId) -> Expr {
         let index = match self.variant {
-            Some(variant) => {
-                schema
-                    .model(variant.model)
-                    .as_embedded_enum_unwrap()
-                    .variant_fields(variant.index)
-                    .position(|f| f.id == field)
-                    .unwrap()
-                    + 1
-            }
+            Some(variant) => schema
+                .model(variant.model)
+                .as_embedded_enum_unwrap()
+                .variant_fields(variant.index)
+                .position(|f| f.id == field)
+                .unwrap(),
             None => field.index,
         };
-        let mut expr = Expr::project(self.parent.clone(), [index]);
-        if let Expr::Project(project) = &mut expr {
-            project.variant = self.variant;
+        let mut steps = vec![];
+        if let Some(variant) = self.variant {
+            steps.push(PathStep::Variant(variant));
         }
-        expr
+        steps.push(PathStep::Field(index));
+        Expr::path(self.parent.clone(), steps)
     }
 
     fn gate(&self, expr: Expr) -> Expr {
@@ -109,28 +107,9 @@ impl Relation<'_> {
     }
 }
 
-pub(super) fn flatten<'a>(
-    expr: &'a Expr,
-    steps: &mut Vec<(usize, Option<app::VariantId>)>,
-) -> &'a Expr {
-    if let Expr::Project(project) = expr {
-        let base = flatten(&project.base, steps);
-        steps.extend(
-            project
-                .projection
-                .iter()
-                .enumerate()
-                .map(|(i, index)| (*index, if i == 0 { project.variant } else { None })),
-        );
-        base
-    } else {
-        expr
-    }
-}
-
 pub(super) fn resolve<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<Relation<'a>> {
     let mut steps = vec![];
-    let base = flatten(expr, &mut steps);
+    let base = super::path::flatten(expr, &mut steps);
     let Expr::Reference(reference @ stmt::ExprReference::Field { .. }) = base else {
         return None;
     };
@@ -139,38 +118,45 @@ pub(super) fn resolve<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<Relation<
     };
     let mut path = base.clone();
     let mut gates = vec![];
-    for (offset, (index, variant)) in steps.iter().enumerate() {
+    let mut selected = None;
+    for (offset, step) in steps.iter().enumerate() {
         let FieldTy::Embedded(embed) = &field.ty else {
             return None;
         };
         let model = cx.schema().app.model(embed.target);
-        let parent = path.clone();
-        field = match variant {
-            Some(variant) => {
-                gates.push(Expr::is_variant(parent.clone(), *variant));
-                model
-                    .as_embedded_enum_unwrap()
-                    .variant_fields(variant.index)
-                    .nth(index.checked_sub(1)?)?
+        let index = match step {
+            PathStep::Variant(variant) => {
+                assert_eq!(variant.model, model.id());
+                gates.push(Expr::is_variant(path.clone(), *variant));
+                selected = Some(*variant);
+                continue;
             }
-            None if matches!(model, app::Model::EmbeddedEnum(_)) => return None,
-            None => model.fields().get(*index)?,
+            PathStep::Field(index) => *index,
         };
-        path = Expr::project(path, [*index]);
-        if let Expr::Project(project) = &mut path {
-            project.variant = *variant;
+        let parent = path.clone();
+        let variant = selected.take();
+        field = match variant {
+            Some(variant) => model
+                .as_embedded_enum_unwrap()
+                .variant_fields(variant.index)
+                .nth(index)?,
+            None if matches!(model, app::Model::EmbeddedEnum(_)) => return None,
+            None => model.fields().get(index)?,
+        };
+        let mut field_steps = vec![];
+        if let Some(variant) = variant {
+            field_steps.push(PathStep::Variant(variant));
         }
+        field_steps.push(PathStep::Field(index));
+        path = Expr::path(path, field_steps);
         if field.ty.is_belongs_to() {
             return Some(Relation {
                 field,
                 parent,
                 path,
-                variant: *variant,
+                variant,
                 gates,
-                tail: steps[offset + 1..]
-                    .iter()
-                    .map(|(index, _)| *index)
-                    .collect(),
+                tail: steps[offset + 1..].to_vec(),
             });
         }
     }

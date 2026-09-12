@@ -137,11 +137,10 @@ macro_rules! impl_via_many_scalar {
 
                 fn via_field_ty(singular: Name, path: stmt::Path) -> FieldTy {
                     // The terminal scalar field is the path's last step.
-                    let terminal = *path
-                        .projection
-                        .as_slice()
-                        .last()
-                        .expect("via path has at least one step");
+                    let stmt::PathStep::Field(terminal) = *path.steps().last()
+                        .expect("via path has at least one step") else {
+                        panic!("via path must end in a field");
+                    };
                     let expr_ty = stmt::Type::List(Box::new(<$t as Load>::ty()));
                     // `target` (the model the relation chain reaches) is resolved
                     // in core's link phase; leave a placeholder it overwrites.

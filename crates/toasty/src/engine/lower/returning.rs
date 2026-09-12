@@ -387,11 +387,14 @@ pub(super) fn constantize_update_returning(
 }
 
 fn first_model_field(path: &stmt::Path, model_id: ModelId) -> Option<usize> {
-    if path.root.as_model()? != model_id {
+    if path.root != model_id {
         return None;
     }
 
-    path.projection.as_slice().first().copied()
+    match path.steps().first()? {
+        stmt::PathStep::Field(index) => Some(*index),
+        stmt::PathStep::Variant(_) => None,
+    }
 }
 
 impl stmt::Input for ConstantizeReturning<'_> {

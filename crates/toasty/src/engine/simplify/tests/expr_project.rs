@@ -9,7 +9,6 @@ fn project_non_constant_not_simplified() {
 
     // `project(arg(0), [0])` is not simplified (non-constant base)
     let mut expr = stmt::ExprProject {
-        variant: None,
         base: Box::new(Expr::arg(0)),
         projection: Projection::from(0),
     };
@@ -26,7 +25,6 @@ fn project_identity_path() {
 
     // `project(42, [])` → `42` (identity projection)
     let mut expr = stmt::ExprProject {
-        variant: None,
         base: Box::new(Expr::from(42i64)),
         projection: Projection::identity(),
     };
@@ -47,7 +45,6 @@ fn project_into_match_distributes() {
     //                   2 => project(Record([arg(0), arg(2)]), [0])],
     //               else: project(Record([arg(0), Error]), [0]))
     let mut expr = stmt::ExprProject {
-        variant: None,
         base: Box::new(Expr::Match(ExprMatch {
             subject: Box::new(Expr::arg(0)),
             arms: vec![
@@ -80,4 +77,29 @@ fn project_into_match_distributes() {
     } else {
         panic!("expected Match, got {:?}", result);
     }
+}
+
+#[test]
+fn guarded_path_allows_boolean_simplification() {
+    use toasty_core::schema::app::{ModelId, VariantId};
+
+    let schema = test_schema();
+    let mut simplify = Simplify::new(&schema, &toasty_core::driver::Capability::SQLITE);
+    let variant = VariantId {
+        model: ModelId(0),
+        index: 0,
+    };
+    let value = Expr::path(
+        Expr::arg(0),
+        vec![stmt::PathStep::Variant(variant), stmt::PathStep::Field(0)],
+    );
+    let predicate = Expr::eq(value.clone(), true).with_path_guards();
+    let mut expr = Expr::and(predicate, true);
+
+    stmt::VisitMut::visit_expr_mut(&mut simplify, &mut expr);
+
+    assert_eq!(
+        expr,
+        Expr::and(Expr::is_variant(Expr::arg(0), variant), value)
+    );
 }

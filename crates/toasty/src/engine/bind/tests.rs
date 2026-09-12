@@ -238,7 +238,6 @@ fn synthesize_multi_step_projection() {
     let mut projection = stmt::Projection::single(1);
     projection.push(0);
     let project_expr = Expr::Project(stmt::ExprProject {
-        variant: None,
         base: Box::new(expr),
         projection,
     });
@@ -284,7 +283,6 @@ fn synthesize_project_step_out_of_bounds_panics() {
 
     // Record with 1 field, projecting step 5
     let expr = Expr::Project(stmt::ExprProject {
-        variant: None,
         base: Box::new(Expr::Record(stmt::ExprRecord::from_vec(vec![Expr::arg(0)]))),
         projection: stmt::Projection::single(5),
     });
@@ -306,7 +304,6 @@ fn synthesize_project_from_scalar_panics() {
 
     // Project from a scalar Arg (not a record)
     let expr = Expr::Project(stmt::ExprProject {
-        variant: None,
         base: Box::new(Expr::arg(0)),
         projection: stmt::Projection::single(0),
     });

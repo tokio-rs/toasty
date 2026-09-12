@@ -6,21 +6,27 @@ This document describes how paths are represented, how the typed and untyped lay
 
 ## Overview
 
-A path has two parts:
+A path has a root model (`ModelId`) and an ordered sequence of selections:
 
-- A **root** — either a model (`PathRoot::Model(ModelId)`) or a specific enum variant (`PathRoot::Variant { parent, variant_id }`).
-- A **projection** — a sequence of field indices that navigate through the rooted value.
+- `PathStep::Field(index)` selects a field.
+- `PathStep::Variant(variant_id)` selects an embedded enum variant. Field
+  indices following this step are local to that variant.
 
+```rust
+Path::from_steps(user_model_id, [
+    PathStep::Field(2),
+    PathStep::Variant(email_variant_id),
+    PathStep::Field(0),
+])
 ```
-Path {
-    root: PathRoot::Model(user_model_id),
-    projection: [2],          // third field on User
-}
-```
 
-A path with an empty projection refers to the root itself. A path with a non-empty projection navigates one or more steps into the value.
+An empty path refers to the root model. Single-field paths store their step
+inline and support const construction for generated accessors. Chaining paths
+appends all selections, including variant steps.
 
-The core type lives in `toasty-core/src/stmt/path.rs`. `Projection` (in `toasty-core/src/stmt/projection.rs`) is a small inline-optimized vector of field indices that supports identity (zero steps), single-step, and multi-step forms.
+The core type lives in `crates/toasty-core/src/stmt/path.rs`. `Projection`,
+in `crates/toasty-core/src/stmt/projection.rs`, is a separate sequence of
+ordinary field indices used for record and database-value projections.
 
 ## Why Paths Exist
 
@@ -50,42 +56,37 @@ When a statement crosses into the engine via `db.exec()`, the generic parameters
 
 Conversion is one-way: typed paths convert to untyped via `From<Path<T, U>> for stmt::Path`, but the engine never reconstructs the typed form.
 
-## Roots
+## Variant selection
 
-`PathRoot` has two variants:
-
-### `Model(ModelId)`
-
-The default root. Subsequent projection steps index into the model's declared fields.
-
-### `Variant { parent: Box<Path>, variant_id: VariantId }`
-
-Used when a path navigates into a specific variant of an embedded enum. `parent` is the path that reaches the enum field itself; `variant_id` records which variant the path enters.
-
-Variant-rooted paths support the closure-based `.matches()` API on enum variant handles. For example:
+`Path::into_variant(variant_id)` appends a variant-selection step to the
+existing path. It preserves the root model and any enclosing selections.
+Variant handles use this operation for direct field access and `.matches()`:
 
 ```rust
 User::fields()
-    .contact()           // Path<User, ContactInfo>
-    .email()             // EmailVariantHandle<User>
+    .contact()
+    .email()
     .matches(|e| e.address().eq("alice@example.com"))
 ```
 
-`.matches()` does two things:
+The closure receives accessors carrying the selected variant. `.matches()`
+also adds an explicit discriminant check, so a body that does not reference
+any variant field still requires that variant.
 
-1. ANDs in a discriminant check (`is_var`) so the filter only matches rows whose `contact` field is the `Email` variant.
-2. Hands the closure a fields struct whose path was converted via `Path::into_variant(variant_id)`, so accessors inside the closure produce variant-rooted paths.
-
-When the engine lowers a variant-rooted path to an expression, projection indices are offset by 1: position 0 of the variant's record holds the discriminant, and variant fields start at position 1. The offset is applied in `Path::into_stmt`.
+Expression construction preserves these selections in `ExprPath`. It does
+not assign record offsets. Schema-aware lowering resolves each variant and
+field and produces ordinary projections. For
+an enum record, the first field after a variant selection gets a one-slot
+offset because slot zero holds the discriminant.
 
 ## Projection
 
 A `Projection` is a sequence of `usize` field indices. Projections support three internal representations — identity (zero steps), single-step, and multi-step — chosen based on size to avoid allocation for the common cases.
 
-The `path!` macro in `toasty-core/src/macros.rs` builds projections from a dot-separated index list:
+Construct an ordinary field projection from indices:
 
 ```rust
-let p: Path = path![.0 .1];   // two-step projection
+let projection = Projection::from([0, 1]);
 ```
 
 Projection equality and hashing are designed so single-step projections compare and hash like a bare `usize`, which lets `IndexMap` lookups accept either form interchangeably.
@@ -110,14 +111,14 @@ Each method (`eq`, `ne`, `gt`, `ge`, `lt`, `le`, `in_list`, `in_query`, `is_none
 
 ### Eager loading via `include`
 
-`Returning::Model` carries `include: Vec<Path>`. `Query::include` appends a path:
+`Returning::Model` carries `include: Vec<Include>`, where each entry contains a path and optional query modifiers. `Query::include` appends a path:
 
 ```rust
 let mut q = User::all();
 q.include(User::fields().todos());
 ```
 
-During lowering (`engine/lower.rs:889`), `build_include_subquery` walks each include path, resolves it to a relation field, and replaces the field's `Null` placeholder in the returning expression with a subquery that loads the related records.
+During lowering, `build_include_subquery` walks each include path, resolves it to a relation field, and replaces the field's `Null` placeholder in the returning expression with a subquery that loads the related records.
 
 ### Association traversal
 
@@ -129,7 +130,7 @@ Update statements address fields by path. The same typed accessors used for filt
 
 ### Variant filters
 
-`.matches()` on a variant handle uses `Path::into_variant` to root subsequent path steps at the variant. This is the only way a path can navigate through an enum to reach a variant-specific field.
+`.matches()` on a variant handle uses `Path::into_variant` to select the variant for subsequent field steps. Direct variant field access uses the same selections.
 
 ### Schema resolution
 
@@ -141,18 +142,36 @@ Update statements address fields by path. The same typed accessors used for filt
 
 ## Path-to-Expression Lowering
 
-`Path::into_stmt()` is the bridge from path to expression IR. The conversion depends on the root:
+`Path::into_stmt()` converts paths into expressions:
 
-**Model root:**
-- Empty projection → `Expr::ref_ancestor_model(0)` (the root record itself).
-- Non-empty projection → `Expr::ref_self_field(FieldId)` for the first step, followed by `Expr::project` for any remaining steps.
+- An empty path becomes `Expr::ref_ancestor_model(0)`.
+- A leading field becomes `Expr::ref_self_field(FieldId)`.
+- Remaining field-only steps become an ordinary `ExprProject`.
+- Steps containing a variant selection remain in `ExprPath`.
 
-**Variant root:**
-- Recursively lowers the parent path to an expression that reaches the enum field.
-- Empty projection → returns the parent expression unchanged.
-- Non-empty projection → projects the parent expression at `local_idx + 1` (skipping the discriminant), then applies any remaining steps as a further projection.
+Predicate constructors use `Expr::with_path_guards` to attach an `AND` of
+variant checks from every value operand. The paths keep their explicit steps
+for schema-aware lowering. Guards are present before folding, so a rewrite
+such as `flag == true` can simplify the comparison without losing its guard.
+Boolean combinations and subqueries retain their own predicate scopes.
 
-The result is consumed by the lowering phase, which then translates field references to column references using the `TableToModel` mapping. See [Query Engine Architecture](query-engine.md#phase-2-lowering) for how the resulting expressions become table-level statements.
+This boundary distinguishes testing a value from negating a predicate. For a
+variant-scoped optional field `p`, `p.is_some()` requires the selected variant
+and a non-null value. `p.is_none().not()` negates the entire guarded null
+predicate, so rows of other variants match. Lowering does not infer this
+scope from the expression's operator.
+
+Lowering resolves relation paths to foreign keys or subqueries and translates
+variant-local fields into ordinary projections or column references. Predicate
+guards include every enclosing variant on both operands. For example,
+comparing two `primary().human()` paths requires both enum fields to select
+`Primary`, even if other variants use the same key columns. The same rule
+applies to scalar field comparisons and to both equality and inequality.
+
+Include processing preserves explicit selections while traversing embedded
+fields and re-rooting nested includes at relations. Drivers receive ordinary
+field projections and discriminant predicates; they do not interpret path
+variant steps.
 
 ## Further Reading
 

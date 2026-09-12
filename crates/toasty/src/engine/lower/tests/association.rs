@@ -5,8 +5,8 @@ use toasty_core::{
     driver::Capability,
     schema::{Builder, app, app::FieldId, app::ModelId},
     stmt::{
-        self, Association, Expr, ExprContext, ExprInSubquery, Path, Projection, Query, Returning,
-        SourceModel, Value,
+        self, Association, Expr, ExprContext, ExprInSubquery, Path, Query, Returning, SourceModel,
+        Value,
     },
 };
 
@@ -173,9 +173,8 @@ fn multi_step_via_unfolds_into_nested_in_subqueries() {
     );
     let user_query = Query::new_select(s.user_model, user_filter);
 
-    let mut path = Path::model(s.user_model);
-    path.projection = Projection::single(s.user_posts.index);
-    path.projection.push(s.post_author.index);
+    let mut path = Path::field(s.user_model, s.user_posts.index);
+    path.push(stmt::PathStep::Field(s.post_author.index));
 
     let association = Association {
         source: Box::new(user_query),

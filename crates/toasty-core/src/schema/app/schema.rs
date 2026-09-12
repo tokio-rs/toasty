@@ -248,11 +248,49 @@ impl Schema {
         }
     }
 
-    /// Resolves a [`stmt::Path`] to a [`Field`] by extracting the root model
-    /// from the path and delegating to [`resolve_field`](Schema::resolve_field).
+    /// Resolve a path through fields and variant selections to its final field.
     pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {
-        let model = self.model(path.root.as_model_unwrap());
-        self.resolve_field(model, &path.projection)
+        let mut model = Some(self.model(path.root));
+        let mut selected = None;
+        let mut field = None;
+        for step in path.steps() {
+            let current = model?;
+            match step {
+                stmt::PathStep::Variant(variant) => {
+                    let Model::EmbeddedEnum(enum_model) = current else {
+                        return None;
+                    };
+                    if variant.model != current.id()
+                        || selected.is_some()
+                        || variant.index >= enum_model.variants.len()
+                    {
+                        return None;
+                    }
+                    selected = Some(variant.index);
+                    field = None;
+                }
+                stmt::PathStep::Field(index) => {
+                    let resolved = match selected.take() {
+                        Some(variant) => current
+                            .as_embedded_enum_unwrap()
+                            .variant_fields(variant)
+                            .nth(*index)?,
+                        None if matches!(current, Model::EmbeddedEnum(_)) => return None,
+                        None => current.fields().get(*index)?,
+                    };
+                    field = Some(resolved);
+                    model = match resolved.expr_ty() {
+                        stmt::Type::Model(target) => Some(self.model(*target)),
+                        stmt::Type::List(item) => match **item {
+                            stmt::Type::Model(target) => Some(self.model(target)),
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                }
+            }
+        }
+        field
     }
 }
 
@@ -311,7 +349,11 @@ impl Builder {
                 };
 
                 // The relation chain is the path minus its terminal field.
-                let projection = via.path.projection.as_slice();
+                let projection = via
+                    .path
+                    .field_projection()
+                    .expect("via path must contain field steps");
+                let projection = projection.as_slice();
                 let relation_steps = &projection[..projection.len() - 1];
                 let field_name = field.name.app_unwrap().to_string();
                 let target = self.walk_via_relation_chain(src, relation_steps, &field_name)?;
@@ -359,7 +401,11 @@ impl Builder {
                 // A nested via contributes its own relation chain (its terminal,
                 // if scalar, is not part of the path through it).
                 FieldTy::Via(inner) => {
-                    let inner_projection = inner.path.projection.as_slice();
+                    let inner_projection = inner
+                        .path
+                        .field_projection()
+                        .expect("via path must contain field steps");
+                    let inner_projection = inner_projection.as_slice();
                     let inner_steps = match inner.terminal {
                         Some(_) => &inner_projection[..inner_projection.len() - 1],
                         None => inner_projection,

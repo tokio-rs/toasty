@@ -12,13 +12,9 @@
 //! deferred sub-field of an embed struct nested inside an enum variant —
 //! the masked `Null` lives inside a `Match` expression, not a `Record`.
 //!
-//! Include entries arrive as [`stmt::Include`] values. The first thing we do
-//! is flatten any `PathRoot::Variant` chain
-//! into a plain projection of the form `[…parent_steps, variant_idx,
-//! …local_var_field_steps]`. This LOCAL form mirrors the IR's `Match` arm
-//! record (where each arm is `[disc, field_0, field_1, …]`), so descent
-//! through enum variants is just two index steps: one selecting the arm by
-//! variant index, the next addressing a local variant field.
+//! Include paths retain explicit field and variant selections. Variant steps
+//! select a `Match` arm; the following field step uses an index local to that
+//! variant. Nested includes retain these steps when re-rooted at a relation.
 //!
 //! The flow:
 //!
@@ -43,7 +39,7 @@ use crate::engine::lower::LowerStatement;
 use crate::schema::lazy_slot;
 
 struct FlatInclude {
-    projection: stmt::Projection,
+    steps: Vec<stmt::PathStep>,
     query: Option<stmt::Query>,
 }
 
@@ -69,9 +65,8 @@ struct FieldIncludes {
 
 impl LowerStatement<'_, '_> {
     /// Top-level entry from `visit_returning_mut` for a `Returning::Model`.
-    /// Flattens each include to its projection (folding any
-    /// `PathRoot::Variant` chain into discriminant-index steps), then runs
-    /// the recursion against the model's fields.
+    /// Copies each include's traversal steps, then recurses through the
+    /// model's fields.
     pub(super) fn process_top_level_includes(
         &mut self,
         returning: &mut stmt::Expr,
@@ -263,9 +258,14 @@ impl LowerStatement<'_, '_> {
             let arm_sub_includes: Vec<FlatInclude> = sub_includes
                 .iter()
                 .filter_map(|fi| {
-                    let (first, rest) = fi.projection.as_slice().split_first()?;
-                    (*first == variant_idx).then(|| FlatInclude {
-                        projection: stmt::Projection::from(rest),
+                    let (first, rest) = fi.steps.as_slice().split_first()?;
+                    (*first
+                        == stmt::PathStep::Variant(app::VariantId {
+                            model: app_enum.id,
+                            index: variant_idx,
+                        }))
+                    .then(|| FlatInclude {
+                        steps: rest.to_vec(),
                         query: fi.query.clone(),
                     })
                 })
@@ -357,9 +357,9 @@ impl LowerStatement<'_, '_> {
                     "include query modifiers on a multi-step `via` relation are not yet supported"
                 );
             }
-            let nested_projections: Vec<stmt::Projection> =
-                nested.iter().map(|fi| fi.projection.clone()).collect();
-            return self.build_via_include_subquery(field_index, via, &nested_projections);
+            let nested_steps: Vec<Vec<stmt::PathStep>> =
+                nested.iter().map(|fi| fi.steps.clone()).collect();
+            return self.build_via_include_subquery(field_index, via, &nested_steps);
         }
 
         let (mut stmt, target_model_id) = match &field.ty {
@@ -424,12 +424,9 @@ impl LowerStatement<'_, '_> {
         // recursively group and process the nested includes when it encounters
         // `Returning::Model` on this subquery.
         for fi in nested {
-            if !fi.projection.is_empty() {
+            if !fi.steps.is_empty() {
                 stmt.include(stmt::Include {
-                    path: stmt::Path {
-                        root: stmt::PathRoot::Model(target_model_id),
-                        projection: fi.projection.clone(),
-                    },
+                    path: stmt::Path::from_steps(target_model_id, fi.steps.iter().copied()),
                     query: fi.query.clone(),
                 });
             }
@@ -457,8 +454,8 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
     let mut top_order_by = None;
     let mut sub_paths = Vec::new();
     for fi in includes {
-        if let Some((first, rest)) = fi.projection.as_slice().split_first()
-            && *first == i
+        if let Some((first, rest)) = fi.steps.as_slice().split_first()
+            && *first == stmt::PathStep::Field(i)
         {
             if rest.is_empty() {
                 include_self = true;
@@ -478,7 +475,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
                 }
             } else {
                 sub_paths.push(FlatInclude {
-                    projection: stmt::Projection::from(rest),
+                    steps: rest.to_vec(),
                     query: fi.query.clone(),
                 });
             }
@@ -496,7 +493,7 @@ fn partition_includes(includes: &[FlatInclude], i: usize) -> FieldIncludes {
 
 fn flatten_include(include: &stmt::Include) -> FlatInclude {
     FlatInclude {
-        projection: flatten_path(&include.path),
+        steps: include.path.steps().to_vec(),
         query: include.query.clone(),
     }
 }
@@ -512,32 +509,6 @@ fn query_has_modifiers(query: &Option<stmt::Query>) -> bool {
     query.as_ref().is_some_and(|query| {
         query_filter_expr(&Some(query.clone())).is_some() || query.order_by.is_some()
     })
-}
-
-/// Flatten an include [`stmt::Path`] into a single projection, folding any
-/// `PathRoot::Variant` chain into a discriminant-index step.
-///
-/// The result uses LOCAL field indices for variant fields (matching the IR's
-/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
-/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
-/// not the schema, so LOCAL is what `process_enum_arms` needs.
-fn flatten_path(path: &stmt::Path) -> stmt::Projection {
-    let mut acc = stmt::Projection::identity();
-    push_root_steps(&path.root, &mut acc);
-    for step in path.projection.as_slice() {
-        acc.push(*step);
-    }
-    acc
-}
-
-fn push_root_steps(root: &stmt::PathRoot, acc: &mut stmt::Projection) {
-    if let stmt::PathRoot::Variant { parent, variant_id } = root {
-        push_root_steps(&parent.root, acc);
-        for step in parent.projection.as_slice() {
-            acc.push(*step);
-        }
-        acc.push(variant_id.index);
-    }
 }
 
 /// Build the loaded-form inner expression for a deferred field.

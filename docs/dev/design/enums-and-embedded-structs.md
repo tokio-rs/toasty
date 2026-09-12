@@ -180,10 +180,10 @@ column.
   the enum field's setter. The `ignore` rustdoc example on `stmt::patch`
   (`assignment.rs:354`) is written against the missing API and additionally uses
   `Kind::variants()`, which is not being built; fix it when `fields()` lands.
-- **Carry the variant root.** In `stmt::patch`, inspect `path.untyped.root`;
-  when it is `PathRoot::Variant { variant_id, .. }`, record `variant_id` on
-  the assignment (add a field to `AssignmentKind::Patch`, or a sibling
-  `PatchVariant` kind). A non-variant root behaves exactly as today.
+- **Preserve variant selections.** Variant-field patch paths retain explicit
+  `PathStep::Variant` selections until schema-aware assignment lowering.
+  Each enclosing variant contributes a condition on the update. Paths with
+  only field selections use ordinary assignment lowering.
 - **Lower to a guarded assignment (SQL).** For a variant-gated patch on
   column `C` with new value `E`, lowering (`engine/lower.rs`) emits
   ```sql

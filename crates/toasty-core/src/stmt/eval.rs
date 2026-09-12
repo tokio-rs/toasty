@@ -230,8 +230,8 @@ impl Expr {
                 let value = expr_is_null.expr.eval_ref(scope, input)?;
                 Ok(value.is_null().into())
             }
-            Expr::IsVariant(_) => Err(crate::Error::expression_evaluation_failed(
-                "IsVariant must be lowered before evaluation",
+            Expr::Path(_) | Expr::IsVariant(_) => Err(crate::Error::expression_evaluation_failed(
+                "application paths and variant checks must be lowered before evaluation",
             )),
             Expr::Let(expr_let) => {
                 let args: Vec<_> = expr_let

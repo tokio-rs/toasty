@@ -25,7 +25,7 @@ pub(super) fn flatten_relation_path(
         };
 
         if let app::FieldTy::Via(via) = &field.ty {
-            debug_assert_eq!(via.path.root.as_model(), Some(current_model));
+            debug_assert_eq!(via.path.root, current_model);
 
             for step in via_relation_steps(via).iter().rev() {
                 queue.push(*step);
@@ -47,14 +47,21 @@ pub(super) fn flatten_via_path(
     schema: &toasty_core::Schema,
     via: &app::Via,
 ) -> Option<Vec<app::FieldId>> {
-    let root = via.path.root.as_model()?;
-    Some(flatten_relation_path(schema, root, via_relation_steps(via)))
+    let root = via.path.root;
+    Some(flatten_relation_path(
+        schema,
+        root,
+        &via_relation_steps(via),
+    ))
 }
 
-fn via_relation_steps(via: &app::Via) -> &[usize] {
-    let projection = via.path.projection.as_slice();
+fn via_relation_steps(via: &app::Via) -> Vec<usize> {
+    let projection = via
+        .path
+        .field_projection()
+        .expect("via path must contain field steps");
     match via.terminal {
-        Some(_) => &projection[..projection.len() - 1],
-        None => projection,
+        Some(_) => projection[..projection.len() - 1].to_vec(),
+        None => projection.to_vec(),
     }
 }

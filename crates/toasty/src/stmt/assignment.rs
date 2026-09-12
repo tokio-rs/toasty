@@ -372,7 +372,10 @@ pub fn patch<T, U>(path: Path<T, U>, value: impl Assign<U>) -> Assignment<T> {
 
     Assignment {
         kind: AssignmentKind::Patch {
-            path_projection: path.untyped.projection,
+            path_projection: path
+                .untyped
+                .field_projection()
+                .expect("assignment path must contain field steps"),
             inner: Box::new(inner.kind),
         },
         _p: PhantomData,

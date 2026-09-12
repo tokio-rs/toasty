@@ -162,7 +162,7 @@ The generated query filters on both the key and the discriminant —
 `human.objects()` matches only rows whose `owner` column says `Human`, even
 though `Animal` rows store their key in the same `owner_id` column. Users do
 not write the discriminant predicate; it comes from the variant-scoped pair,
-the same way variant-rooted filter paths already gate on the discriminant.
+the same way variant-selecting filter paths gate on the discriminant.
 
 When inference is ambiguous, `pair` names the relation explicitly. It
 accepts a dotted path — the same syntax as `via` — whose segments name
@@ -377,12 +377,15 @@ construction sites migrate mechanically. Every level has a well-defined
 `FieldId` because embedded types have their own schema entries with
 flattened field lists.
 
-A purpose-built struct is used instead of `stmt::Path`: `stmt::Path` steps
-are bare indices and its variant root nests inside-out (the parent path is
-boxed inside the root), so consumers walk it by recursion and lose
-schema-level meaning. `Pair` reads outward-in — verify rules walk `steps`
-to find the discriminant and key columns, and lowering converts it to a
-projection expression directly.
+`Pair` records schema-qualified `FieldId` values for relation linking.
+`stmt::Path` records field indices and explicit variant-selection steps for
+query construction. Lowering resolves those steps against the schema before
+producing ordinary projections and discriminant predicates.
+
+Comparisons between variant-scoped relations require every enclosing variant
+on both operands. This applies to equality and inequality even when variants
+share a foreign-key column. Drivers receive the resolved projections and
+predicates; variant selections do not add a driver operation.
 
 ### The back-link: per-embedding pair instances
 
@@ -529,9 +532,9 @@ Checked for redundancy and deliberately kept:
 - **`Via.path` vs `Pair`** — duals over disjoint step domains (relation
   steps vs. value steps) with opposite validation rules; merging them
   would turn structural rejections into runtime checks.
-- **`stmt::PathRoot::Variant`** — serves typed filter paths generally;
-  `Pair` is schema-layer and converts to a variant-rooted projection
-  during lowering.
+- **`stmt::PathStep::Variant`** — serves typed query paths generally.
+  Expression construction preserves selections until schema-aware lowering
+  resolves them to ordinary projections and guards on both operands.
 - **`ForeignKey` / `ForeignKeyField`** — already host-independent
   (embed-local sources, owner-model targets); instancing never touches
   them.

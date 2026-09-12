@@ -5,12 +5,12 @@ use super::{
     ExprAny, ExprAnyOp, ExprArg, ExprBetween, ExprBinaryOp, ExprCast, ExprColumn, ExprError,
     ExprExists, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming, ExprIntersects, ExprIsNull,
     ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike, ExprList, ExprMap, ExprMatch,
-    ExprNot, ExprOr, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp, ExprStartsWith,
-    ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include, Insert, InsertTarget,
-    Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy, OrderByExpr, Path, Projection,
-    Query, Returning, Select, Source, SourceModel, SourceTable, SourceTableId, Statement,
-    TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update, UpdateTarget, Value,
-    ValueRecord, Values, With,
+    ExprNot, ExprOr, ExprPath, ExprProject, ExprRecord, ExprReference, ExprSet, ExprSetOp,
+    ExprStartsWith, ExprStmt, Filter, FuncCount, FuncJsonExtract, FuncLastInsertId, Include,
+    Insert, InsertTarget, Join, JoinOp, Limit, LimitCursor, LimitOffset, Node, OrderBy,
+    OrderByExpr, Path, Projection, Query, Returning, Select, Source, SourceModel, SourceTable,
+    SourceTableId, Statement, TableDerived, TableFactor, TableRef, TableWithJoins, Type, Update,
+    UpdateTarget, Value, ValueRecord, Values, With,
 };
 
 /// Mutable visitor trait for the statement AST.
@@ -352,6 +352,14 @@ pub trait VisitMut {
     fn visit_condition_mut(&mut self, i: &mut Condition) {
         visit_condition_mut(self, i);
     }
+
+    /// Visits an application-level path.
+    fn visit_expr_path_mut(&mut self, i: &mut ExprPath) {
+        visit_expr_path_mut(self, i);
+    }
+
+    /// Visits a field or variant selection.
+    fn visit_path_step_mut(&mut self, _i: &mut super::PathStep) {}
 
     /// Visits an [`ExprProject`] node mutably.
     ///
@@ -747,6 +755,14 @@ impl<V: VisitMut> VisitMut for &mut V {
         VisitMut::visit_condition_mut(&mut **self, i);
     }
 
+    fn visit_path_step_mut(&mut self, i: &mut super::PathStep) {
+        VisitMut::visit_path_step_mut(&mut **self, i);
+    }
+
+    fn visit_expr_path_mut(&mut self, i: &mut ExprPath) {
+        VisitMut::visit_expr_path_mut(&mut **self, i);
+    }
+
     fn visit_expr_project_mut(&mut self, i: &mut ExprProject) {
         VisitMut::visit_expr_project_mut(&mut **self, i);
     }
@@ -959,6 +975,7 @@ where
         Expr::Match(expr) => v.visit_expr_match_mut(expr),
         Expr::Not(expr) => v.visit_expr_not_mut(expr),
         Expr::Or(expr) => v.visit_expr_or_mut(expr),
+        Expr::Path(expr) => v.visit_expr_path_mut(expr),
         Expr::Project(expr) => v.visit_expr_project_mut(expr),
         Expr::Record(expr) => v.visit_expr_record_mut(expr),
         Expr::Reference(expr) => v.visit_expr_reference_mut(expr),
@@ -1313,6 +1330,17 @@ where
     v.visit_stmt_mut(&mut node.stmt);
 }
 
+/// Default traversal for [`ExprPath`] nodes. Visits the base and each step.
+pub fn visit_expr_path_mut<V>(v: &mut V, node: &mut ExprPath)
+where
+    V: VisitMut + ?Sized,
+{
+    v.visit_expr_mut(&mut node.base);
+    for step in &mut node.steps {
+        v.visit_path_step_mut(step);
+    }
+}
+
 /// Default mutable traversal for [`ExprProject`] nodes. Visits the base expression and the projection.
 pub fn visit_expr_project_mut<V>(v: &mut V, node: &mut ExprProject)
 where
@@ -1414,12 +1442,14 @@ where
     v.visit_expr_mut(&mut node.expr);
 }
 
-/// Default mutable traversal for [`Path`] nodes. Visits the projection.
+/// Default mutable traversal for [`Path`] nodes. Visits each path step.
 pub fn visit_path_mut<V>(v: &mut V, node: &mut Path)
 where
     V: VisitMut + ?Sized,
 {
-    v.visit_projection_mut(&mut node.projection);
+    for step in node.steps_mut() {
+        v.visit_path_step_mut(step);
+    }
 }
 
 /// Default mutable traversal for [`Projection`] nodes. This is a leaf node with no children to visit.

@@ -112,7 +112,7 @@ impl Expand<'_> {
                     index: #variant_idx,
                 };
                 #toasty::stmt::Expr::from_untyped(
-                    #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
+                    #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id).with_path_guards()
                 )
             }
         }
@@ -285,7 +285,7 @@ impl Expand<'_> {
                                 index: #variant_idx,
                             };
                             let is_var = #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::is_variant(parent_stmt, variant_id)
+                                #toasty::core::stmt::Expr::is_variant(parent_stmt, variant_id).with_path_guards()
                             );
                             let body = f(self);
                             is_var.and(body)

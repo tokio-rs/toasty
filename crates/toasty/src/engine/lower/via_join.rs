@@ -30,7 +30,7 @@ impl LowerStatement<'_, '_> {
         &mut self,
         field_index: usize,
         via: &app::Via,
-        nested: &[stmt::Projection],
+        nested: &[Vec<stmt::PathStep>],
     ) -> stmt::Expr {
         if !nested.is_empty() {
             todo!("nested `.include()` through a multi-step `via` relation");

@@ -91,6 +91,7 @@ pub(super) fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::Length(_)
         | Expr::Like(_)
         | Expr::Map(_)
+        | Expr::Path(_)
         | Expr::Project(_)
         | Expr::Reference(_)
         | Expr::StartsWith(_)

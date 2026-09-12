@@ -144,6 +144,9 @@ pub use expr_not::ExprNot;
 mod expr_or;
 pub use expr_or::ExprOr;
 
+mod expr_path;
+pub use expr_path::{ExprPath, PathStep};
+
 mod expr_project;
 pub use expr_project::ExprProject;
 
@@ -226,7 +229,7 @@ mod op_set;
 pub use op_set::SetOp;
 
 mod path;
-pub use path::{Path, PathRoot};
+pub use path::Path;
 
 mod path_field_set;
 pub use path_field_set::PathFieldSet;

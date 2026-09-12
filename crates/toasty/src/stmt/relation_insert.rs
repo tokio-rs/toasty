@@ -59,7 +59,7 @@ impl<M: Model> RelationInsert<M> {
     /// ```
     pub async fn exec(mut self, executor: &mut dyn Executor) -> Result<()> {
         match self.query.take_via_assoc() {
-            Some(untyped) if untyped.path.projection.as_slice().len() == 1 => {
+            Some(untyped) if untyped.path.steps().len() == 1 => {
                 let assoc = Association::<List<M>>::from_untyped(untyped);
                 executor.exec(assoc.insert(self.item)).await
             }

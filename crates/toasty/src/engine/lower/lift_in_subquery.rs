@@ -126,6 +126,16 @@ impl VisitMut for LiftInSubquery<'_> {
                     *expr = lifted;
                 }
             }
+            stmt::Expr::IsVariant(e) => {
+                if let Some(mut lifted) =
+                    lift_relation_path_predicate(&self.cx, &e.expr, |subject| {
+                        Expr::is_variant(subject, e.variant)
+                    })
+                {
+                    self.exclude_nulls(&mut lifted);
+                    *expr = lifted;
+                }
+            }
             _ => {}
         }
 
@@ -214,8 +224,10 @@ pub(super) fn lift_in_subquery(
             return Some(relation.rebase(&cx.schema().app, lifted));
         }
         let target = relation.field.relation_target_id()?;
-        let (head, tail) = relation.tail.split_first()?;
-        let inner = Expr::project(Expr::ref_self_field(target.field(*head)), tail);
+        let (stmt::PathStep::Field(head), tail) = relation.tail.split_first()? else {
+            return None;
+        };
+        let inner = Expr::path(Expr::ref_self_field(target.field(*head)), tail.to_vec());
         let query = stmt::Query::new_select(target, Expr::in_subquery(inner, query.clone()));
         return lift_in_subquery(cx, &relation.path, &query);
     }
@@ -226,8 +238,8 @@ pub(super) fn lift_in_subquery(
         // targets. Re-root the path at `rel`'s target model and rebuild as a
         // nested IN-subquery on that model, then recurse to lift the outer
         // `rel` hop.
-        stmt::Expr::Project(project_expr) => {
-            return lift_projection_in_subquery(cx, project_expr, query);
+        stmt::Expr::Project(_) | stmt::Expr::Path(_) => {
+            return lift_projection_in_subquery(cx, expr, query);
         }
         stmt::Expr::Reference(expr_reference @ stmt::ExprReference::Field { .. }) => {
             cx.resolve_expr_reference(expr_reference).as_field_unwrap()
@@ -339,10 +351,12 @@ fn lift_via_in_subquery(
 /// visitor pass when [`LiftInSubquery`]'s children walk reaches it.
 fn lift_projection_in_subquery(
     cx: &ExprContext,
-    project_expr: &stmt::ExprProject,
+    project_expr: &stmt::Expr,
     query: &stmt::Query,
 ) -> Option<stmt::Expr> {
-    let Expr::Reference(expr_ref) = &*project_expr.base else {
+    let mut steps = vec![];
+    let base = super::path::flatten(project_expr, &mut steps);
+    let Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }) = base else {
         return None;
     };
     let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
@@ -351,7 +365,9 @@ fn lift_projection_in_subquery(
 
     let target_model_id = field.relation_target_id()?;
 
-    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
+    let (stmt::PathStep::Field(head_idx), tail) = steps.split_first()? else {
+        return None;
+    };
 
     if tail.is_empty()
         && let Some(direct) =
@@ -364,18 +380,14 @@ fn lift_projection_in_subquery(
         model: target_model_id,
         index: *head_idx,
     });
-    let inner_lhs = if tail.is_empty() {
-        target_field
-    } else {
-        Expr::project(target_field, stmt::Projection::from(tail))
-    };
+    let inner_lhs = Expr::path(target_field, tail.to_vec());
 
     let new_subquery = stmt::Query::new_select(
         stmt::Source::from(target_model_id),
         Expr::in_subquery(inner_lhs, query.clone()),
     );
 
-    lift_in_subquery(cx, &project_expr.base, &new_subquery)
+    lift_in_subquery(cx, base, &new_subquery)
 }
 
 /// Fuses a `BelongsTo → Has` chain into a single FK-on-FK `IN` when both
@@ -571,7 +583,7 @@ pub(super) fn try_lift_relation_path_like(
 /// `IN` form.
 ///
 /// `make_filter` is the only difference between callers: a binary op for
-/// comparisons, a `LIKE` for pattern matches.
+/// comparisons, a `LIKE` for pattern matches, or a variant check.
 ///
 /// Returns `None` when `project_side` does not walk a relation field.
 fn lift_relation_path_predicate(
@@ -581,15 +593,16 @@ fn lift_relation_path_predicate(
 ) -> Option<stmt::Expr> {
     if let Some(relation) = super::embedded_relation::resolve(cx, project_side) {
         let target = relation.field.relation_target_id()?;
-        let (head, tail) = relation.tail.split_first()?;
-        let lhs = Expr::project(Expr::ref_self_field(target.field(*head)), tail);
+        let (stmt::PathStep::Field(head), tail) = relation.tail.split_first()? else {
+            return None;
+        };
+        let lhs = Expr::path(Expr::ref_self_field(target.field(*head)), tail.to_vec());
         let query = stmt::Query::new_select(target, make_filter(lhs));
         return lift_in_subquery(cx, &relation.path, &query);
     }
-    let Expr::Project(project_expr) = project_side else {
-        return None;
-    };
-    let Expr::Reference(expr_ref) = &*project_expr.base else {
+    let mut steps = vec![];
+    let base = super::path::flatten(project_side, &mut steps);
+    let Expr::Reference(expr_ref @ stmt::ExprReference::Field { .. }) = base else {
         return None;
     };
     let ResolvedRef::Field(field) = cx.resolve_expr_reference(expr_ref) else {
@@ -598,24 +611,21 @@ fn lift_relation_path_predicate(
 
     let target_model_id = field.relation_target_id()?;
 
-    // The first step names the relation field on the source model; the
-    // rest index into the target model. Drop the first step and re-root the
-    // remainder at the target model.
-    let (head_idx, tail) = project_expr.projection.as_slice().split_first()?;
+    // The base names the relation field on the source model. Re-root the
+    // remaining steps at the target model.
+    let (stmt::PathStep::Field(head_idx), tail) = steps.split_first()? else {
+        return None;
+    };
     let target_field = Expr::ref_self_field(FieldId {
         model: target_model_id,
         index: *head_idx,
     });
-    let target_lhs = if tail.is_empty() {
-        target_field
-    } else {
-        Expr::project(target_field, stmt::Projection::from(tail))
-    };
+    let target_lhs = Expr::path(target_field, tail.to_vec());
 
     let subquery =
         stmt::Query::new_select(stmt::Source::from(target_model_id), make_filter(target_lhs));
 
-    lift_in_subquery(cx, &project_expr.base, &subquery)
+    lift_in_subquery(cx, base, &subquery)
 }
 
 /// Build a foreign-key `IN` subquery for one direct relation edge.

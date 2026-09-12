@@ -73,37 +73,37 @@ impl<T> Expr<T> {
     /// Test whether this expression equals `rhs`.
     pub fn eq(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::eq(self.untyped, rhs))
+        Expr::from_predicate(stmt::Expr::eq(self.untyped, rhs))
     }
 
     /// Test whether this expression does not equal `rhs`.
     pub fn ne(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::ne(self.untyped, rhs))
+        Expr::from_predicate(stmt::Expr::ne(self.untyped, rhs))
     }
 
     /// Test whether this expression is greater than `rhs`.
     pub fn gt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::gt(self.untyped, rhs))
+        Expr::from_predicate(stmt::Expr::gt(self.untyped, rhs))
     }
 
     /// Test whether this expression is greater than or equal to `rhs`.
     pub fn ge(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::ge(self.untyped, rhs))
+        Expr::from_predicate(stmt::Expr::ge(self.untyped, rhs))
     }
 
     /// Test whether this expression is less than `rhs`.
     pub fn lt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::lt(self.untyped, rhs))
+        Expr::from_predicate(stmt::Expr::lt(self.untyped, rhs))
     }
 
     /// Test whether this expression is less than or equal to `rhs`.
     pub fn le(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_untyped(stmt::Expr::le(self.untyped, rhs))
+        Expr::from_predicate(stmt::Expr::le(self.untyped, rhs))
     }
 }
 
@@ -130,6 +130,11 @@ impl<T> Expr<List<T>> {
 }
 
 impl Expr<bool> {
+    /// Construct a predicate whose operand paths determine its variant guards.
+    pub(crate) fn from_predicate(expr: stmt::Expr) -> Self {
+        Self::from_untyped(expr.with_path_guards())
+    }
+
     /// Combine two boolean expressions with logical AND.
     ///
     /// # Examples
@@ -244,7 +249,7 @@ impl Expr<bool> {
         L: IntoExpr<T>,
         R: IntoExpr<List<T>>,
     {
-        Self::from_untyped(stmt::Expr::in_list(
+        Self::from_predicate(stmt::Expr::in_list(
             lhs.into_expr().untyped,
             rhs.into_expr().untyped,
         ))
@@ -270,7 +275,7 @@ impl<T> Expr<Option<T>> {
     /// let _is_null: Expr<bool> = expr.is_none();
     /// ```
     pub fn is_none(self) -> Expr<bool> {
-        Expr::from_untyped(stmt::Expr::is_null(self.untyped))
+        Expr::from_predicate(stmt::Expr::is_null(self.untyped))
     }
 
     /// Test whether this optional expression is not `NULL`.
@@ -283,7 +288,7 @@ impl<T> Expr<Option<T>> {
     /// let _is_not_null: Expr<bool> = expr.is_some();
     /// ```
     pub fn is_some(self) -> Expr<bool> {
-        Expr::from_untyped(stmt::Expr::is_not_null(self.untyped))
+        Expr::from_predicate(stmt::Expr::is_not_null(self.untyped))
     }
 }
 

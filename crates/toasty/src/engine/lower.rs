@@ -6,6 +6,7 @@ mod insert;
 mod lift_in_subquery;
 mod lift_update_query;
 mod paginate;
+mod path;
 mod relation;
 mod relation_path;
 mod returning;
@@ -719,10 +720,15 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
         if self.cx.is_statement()
-            && matches!(expr, stmt::Expr::Project(_))
+            && matches!(expr, stmt::Expr::Project(_) | stmt::Expr::Path(_))
             && let Some(column) = self.projected_column(expr, false)
         {
             *expr = column;
+        }
+        if let stmt::Expr::Path(path) = expr {
+            let ty = self.expr_cx.infer_expr_ty(&path.base, &[]);
+            let (_, projection) = self.expr_cx.resolve_path_steps(ty, &path.steps);
+            *expr = stmt::Expr::project(path.base.take(), projection);
         }
         match expr {
             stmt::Expr::BinaryOp(e) => {
@@ -1385,19 +1391,27 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 impl<'a, 'b> LowerStatement<'a, 'b> {
     fn projected_column(&self, expr: &stmt::Expr, discriminant: bool) -> Option<stmt::Expr> {
         let mut steps = vec![];
-        let base = embedded_relation::flatten(expr, &mut steps);
+        let base = path::flatten(expr, &mut steps);
         let stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index }) = base else {
             return None;
         };
         let mut field = self.mapping_at_unwrap(*nesting).fields.get(*index)?;
-        for (index, variant) in steps {
+        let mut selected = None;
+        for step in steps {
+            let index = match step {
+                stmt::PathStep::Variant(variant) => {
+                    selected = Some(variant);
+                    continue;
+                }
+                stmt::PathStep::Field(index) => index,
+            };
             field = match field {
                 mapping::Field::Struct(model) => model.fields.get(index)?,
                 mapping::Field::Enum(model) => model
                     .variants
-                    .get(variant?.index)?
+                    .get(selected.take()?.index)?
                     .fields
-                    .get(index.checked_sub(1)?)?,
+                    .get(index)?,
                 _ => return None,
             };
         }

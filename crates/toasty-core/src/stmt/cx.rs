@@ -445,6 +445,62 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
         self.infer_expr_ty2(&arg_ty_stack, expr, false)
     }
 
+    /// Resolve application path steps to a type and ordinary record projection.
+    pub fn resolve_path_steps(
+        &self,
+        mut ty: Type,
+        steps: &[super::PathStep],
+    ) -> (Type, super::Projection) {
+        let mut projection = super::Projection::identity();
+        let mut selected = None;
+        for step in steps {
+            match *step {
+                super::PathStep::Variant(variant) => {
+                    assert!(selected.is_none(), "variant already selected");
+                    assert_eq!(
+                        ty,
+                        Type::Model(variant.model),
+                        "variant belongs to another model"
+                    );
+                    let model = self
+                        .schema
+                        .model(variant.model)
+                        .unwrap()
+                        .as_embedded_enum_unwrap();
+                    assert!(variant.index < model.variants.len(), "invalid variant");
+                    selected = Some(variant);
+                }
+                super::PathStep::Field(index) => {
+                    let variant = selected.take();
+                    ty = if let Some(variant) = variant {
+                        self.schema
+                            .model(variant.model)
+                            .unwrap()
+                            .as_embedded_enum_unwrap()
+                            .variant_fields(variant.index)
+                            .nth(index)
+                            .expect("invalid variant field")
+                            .expr_ty()
+                            .clone()
+                    } else {
+                        match ty {
+                            Type::Model(id) => self.schema.model(id).unwrap().fields()[index]
+                                .expr_ty()
+                                .clone(),
+                            Type::Record(mut fields) => {
+                                std::mem::replace(&mut fields[index], Type::Null)
+                            }
+                            Type::List(item) => *item,
+                            _ => panic!("cannot traverse field {index} of {ty:?}"),
+                        }
+                    };
+                    projection.push(index + usize::from(variant.is_some()));
+                }
+            }
+        }
+        (ty, projection)
+    }
+
     fn infer_expr_ty2(&self, args: &ArgTyStack<'_>, expr: &Expr, returning_expr: bool) -> Type {
         match expr {
             Expr::Arg(e) => args.resolve_arg_ty(e).clone(),
@@ -487,6 +543,10 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
             }
             Expr::Not(_) => Type::Bool,
             Expr::Or(_) => Type::Bool,
+            Expr::Path(e) => {
+                let base = self.infer_expr_ty2(args, &e.base, returning_expr);
+                self.resolve_path_steps(base, &e.steps).0
+            }
             Expr::Project(e) => {
                 if returning_expr {
                     match &*e.base {

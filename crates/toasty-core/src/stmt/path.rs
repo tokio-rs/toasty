@@ -1,156 +1,120 @@
-use super::{Expr, Projection};
+use super::{Expr, PathStep, Projection};
 use crate::schema::app::{FieldId, ModelId, VariantId};
 
-/// The root of a path traversal.
+/// A rooted traversal through application fields and enum variants.
 ///
-/// A path can originate from a top-level model or from a specific variant of
-/// an embedded enum field.
-#[derive(Debug, Clone, PartialEq)]
-pub enum PathRoot {
-    /// The path originates from a top-level model.
-    Model(ModelId),
-
-    /// The path originates from a specific variant of an embedded enum.
-    ///
-    /// `parent` navigates to the enum field; subsequent projection steps index
-    /// into that variant's fields using 0-based local indices.
-    Variant {
-        /// Path that navigates to the enum field containing this variant.
-        parent: Box<Path>,
-        /// Identifies which variant of the enum this path targets.
-        variant_id: VariantId,
-    },
-}
-
-impl PathRoot {
-    /// Returns the `ModelId`, panicking if this root is a `Variant` root.
-    pub fn as_model_unwrap(&self) -> ModelId {
-        match self {
-            PathRoot::Model(id) => *id,
-            PathRoot::Variant { .. } => panic!("expected Model root, got Variant root"),
-        }
-    }
-
-    /// Returns the `ModelId` if this is a `Model` root, or `None` for a
-    /// `Variant` root.
-    pub fn as_model(&self) -> Option<ModelId> {
-        match self {
-            PathRoot::Model(id) => Some(*id),
-            PathRoot::Variant { .. } => None,
-        }
-    }
-}
-
-/// A rooted field traversal path through the application schema.
-///
-/// A `Path` starts at a [`PathRoot`] (a model or an enum variant) and
-/// navigates through fields via a [`Projection`]. It is used by the query
-/// engine to identify which field or nested field is being referenced.
-///
-/// # Examples
-///
-/// ```ignore
-/// use toasty_core::stmt::Path;
-/// use toasty_core::schema::app::ModelId;
-///
-/// // Path pointing to the root of model 0
-/// let p = Path::model(ModelId::from_index(0));
-/// assert!(p.projection.is_empty()); // no field steps
-/// ```
+/// Field indices following a variant selection are local to that variant.
+/// Schema-aware lowering resolves these steps to record projections.
 #[derive(Debug, Clone, PartialEq)]
 pub struct Path {
-    /// Where the path originates from.
-    pub root: PathRoot,
+    /// The model where traversal starts.
+    pub root: ModelId,
+    steps: Steps,
+}
 
-    /// Traversal through the fields.
-    pub projection: Projection,
+// Keep single-field paths const-compatible for generated field accessors.
+#[derive(Debug, Clone, PartialEq)]
+enum Steps {
+    Identity,
+    Single([PathStep; 1]),
+    Multi(Vec<PathStep>),
 }
 
 impl Path {
-    /// Creates a path rooted at a model with an identity projection (no field steps).
+    /// Create a path to the model itself.
     pub fn model(root: impl Into<ModelId>) -> Self {
         Self {
-            root: PathRoot::Model(root.into()),
-            projection: Projection::identity(),
+            root: root.into(),
+            steps: Steps::Identity,
         }
     }
 
-    /// Creates a path rooted at a model that navigates to a single field by index.
+    /// Create a path to one model field.
     pub fn field(root: impl Into<ModelId>, field: usize) -> Self {
-        Self {
-            root: PathRoot::Model(root.into()),
-            projection: Projection::single(field),
-        }
+        Self::from_index(root.into(), field)
     }
 
-    /// Creates a path rooted at a model with a single field step (const-compatible).
+    /// Create a single-field path in a const context.
     pub const fn from_index(root: ModelId, index: usize) -> Self {
         Self {
-            root: PathRoot::Model(root),
-            projection: Projection::from_index(index),
+            root,
+            steps: Steps::Single([PathStep::Field(index)]),
         }
     }
 
-    /// Creates a path rooted at a specific enum variant.
-    ///
-    /// `parent` is the path that navigates to the enum field. Subsequent
-    /// projection steps (appended via [`chain`][Path::chain]) index into the
-    /// variant's fields using 0-based local indices.
-    pub fn from_variant(parent: Path, variant_id: VariantId) -> Self {
-        Self {
-            root: PathRoot::Variant {
-                parent: Box::new(parent),
-                variant_id,
-            },
-            projection: Projection::identity(),
+    /// Select a variant of the enum reached by `parent`.
+    pub fn from_variant(mut parent: Path, variant: VariantId) -> Self {
+        parent.push(PathStep::Variant(variant));
+        parent
+    }
+
+    /// Create a path from an ordered sequence of selections.
+    pub fn from_steps(root: ModelId, steps: impl IntoIterator<Item = PathStep>) -> Self {
+        let mut path = Self::model(root);
+        for step in steps {
+            path.push(step);
+        }
+        path
+    }
+
+    /// Return all selections in traversal order.
+    pub fn steps(&self) -> &[PathStep] {
+        match &self.steps {
+            Steps::Identity => &[],
+            Steps::Single(step) => step,
+            Steps::Multi(steps) => steps,
         }
     }
 
-    /// Appends all field steps from `other` onto this path's projection.
+    /// Return mutable selections in traversal order.
+    pub fn steps_mut(&mut self) -> &mut [PathStep] {
+        match &mut self.steps {
+            Steps::Identity => &mut [],
+            Steps::Single(step) => step,
+            Steps::Multi(steps) => steps,
+        }
+    }
+
+    /// Append a field or variant selection.
+    pub fn push(&mut self, step: PathStep) {
+        match &mut self.steps {
+            Steps::Identity => self.steps = Steps::Single([step]),
+            Steps::Single([first]) => self.steps = Steps::Multi(vec![*first, step]),
+            Steps::Multi(steps) => steps.push(step),
+        }
+    }
+
+    /// Return a projection when this path contains only field selections.
+    pub fn field_projection(&self) -> Option<Projection> {
+        let mut projection = Projection::identity();
+        for step in self.steps() {
+            let PathStep::Field(index) = step else {
+                return None;
+            };
+            projection.push(*index);
+        }
+        Some(projection)
+    }
+
+    /// Append `other`'s selections to this path.
     pub fn chain(&mut self, other: &Self) {
-        for field in &other.projection[..] {
-            self.projection.push(*field);
+        for step in other.steps() {
+            self.push(*step);
         }
     }
 
-    /// Converts this path into an [`Expr`] that references the path's field.
+    /// Build an expression, preserving variant selections for lowering.
     pub fn into_stmt(self) -> Expr {
-        match self.root {
-            PathRoot::Model(model_id) => match self.projection.as_slice() {
-                [] => Expr::ref_ancestor_model(0),
-                [field, project @ ..] => {
-                    let mut ret = Expr::ref_self_field(FieldId {
-                        model: model_id,
-                        index: *field,
-                    });
-
-                    if !project.is_empty() {
-                        ret = Expr::project(ret, project);
-                    }
-
-                    ret
-                }
-            },
-            PathRoot::Variant { parent, variant_id } => {
-                let parent_expr = parent.into_stmt();
-                match self.projection.as_slice() {
-                    [] => parent_expr,
-                    [local_idx, rest @ ..] => {
-                        // Record position 0 is the discriminant; variant fields
-                        // start at position 1, so add 1 to the local field index.
-                        let mut ret = Expr::project(parent_expr, Projection::single(local_idx + 1));
-                        if let Expr::Project(project) = &mut ret {
-                            project.variant = Some(variant_id);
-                        }
-
-                        if !rest.is_empty() {
-                            ret = Expr::project(ret, rest);
-                        }
-
-                        ret
-                    }
-                }
+        match self.steps() {
+            [] => Expr::ref_ancestor_model(0),
+            [PathStep::Field(index), rest @ ..] => {
+                let base = Expr::ref_self_field(FieldId {
+                    model: self.root,
+                    index: *index,
+                });
+                Expr::path(base, rest.to_vec())
             }
+            steps => Expr::path(Expr::ref_ancestor_model(0), steps.to_vec()),
         }
     }
 }

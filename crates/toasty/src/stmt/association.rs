@@ -49,7 +49,7 @@ impl<T> Association<T> {
     /// Panics if the root of `path` does not match the model id of `S`.
     #[doc(hidden)]
     pub fn from_source_and_path<S: Model>(source: super::Query<List<S>>, path: Path<S, T>) -> Self {
-        assert_eq!(path.untyped.root.as_model_unwrap(), S::id());
+        assert_eq!(path.untyped.root, S::id());
 
         Self {
             untyped: stmt::Association {
@@ -92,7 +92,7 @@ impl<M: Model> Association<List<M>> {
     /// let _assoc = Association::many(source, path);
     /// ```
     pub fn many<T: Model>(source: super::Query<List<T>>, path: Path<T, List<M>>) -> Self {
-        assert_eq!(path.untyped.root.as_model_unwrap(), T::id());
+        assert_eq!(path.untyped.root, T::id());
 
         Self {
             untyped: stmt::Association {
@@ -112,7 +112,7 @@ impl<M: Model> Association<List<M>> {
     /// Panics if the root of `path` does not match the model id of `T`.
     ///
     pub(crate) fn many_via_one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {
-        assert_eq!(path.untyped.root.as_model_unwrap(), T::id());
+        assert_eq!(path.untyped.root, T::id());
 
         Self {
             untyped: stmt::Association {
@@ -157,7 +157,7 @@ impl<M: Model> Association<List<M>> {
     /// let _stmt = assoc.insert(todo_expr);
     /// ```
     pub fn insert(self, expr: impl IntoExpr<M>) -> Statement<()> {
-        let [index] = self.untyped.path.projection.as_slice() else {
+        let [stmt::PathStep::Field(index)] = self.untyped.path.steps() else {
             todo!()
         };
 
@@ -205,7 +205,7 @@ impl<M: Model> Association<List<M>> {
     /// let _stmt = assoc.remove(todo_expr);
     /// ```
     pub fn remove(self, expr: impl IntoExpr<M>) -> Statement<()> {
-        let [index] = self.untyped.path.projection.as_slice() else {
+        let [stmt::PathStep::Field(index)] = self.untyped.path.steps() else {
             todo!()
         };
         let mut stmt = self.untyped.source.update();
@@ -222,7 +222,7 @@ impl<M: Model> Association<List<M>> {
     /// struct — `field_index` must identify a relation field on `M`.
     #[doc(hidden)]
     pub fn chain_field<NewTarget>(mut self, field_index: usize) -> Association<List<NewTarget>> {
-        self.untyped.path.projection.push(field_index);
+        self.untyped.path.push(stmt::PathStep::Field(field_index));
         Association {
             untyped: self.untyped,
             _p: PhantomData,
@@ -281,7 +281,7 @@ impl<M: Model> Association<M> {
     /// let _assoc = Association::one(source, path);
     /// ```
     pub fn one<T: Model>(source: super::Query<List<T>>, path: Path<T, M>) -> Self {
-        assert_eq!(path.untyped.root.as_model_unwrap(), T::id());
+        assert_eq!(path.untyped.root, T::id());
 
         Self {
             untyped: stmt::Association {
