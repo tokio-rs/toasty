@@ -2211,7 +2211,12 @@ impl stmt::Input for AssignmentInput<'_> {
 
         let remaining_steps = &assignment_steps[1..];
 
-        if expr_projection.as_slice() == remaining_steps {
+        // The assignment value sits at `remaining_steps` below the field;
+        // a template projection outside that subtree refers to a sibling
+        // this assignment does not cover.
+        let inner_steps = expr_projection.as_slice().strip_prefix(remaining_steps)?;
+
+        if inner_steps.is_empty() {
             Some(self.value.clone())
         } else {
             // The column's encode template projects into variant-field
@@ -2224,7 +2229,7 @@ impl stmt::Input for AssignmentInput<'_> {
             // the simplifier drops the dead arm.
             Some(
                 self.value
-                    .entry(expr_projection)
+                    .entry(&stmt::Projection::from(inner_steps))
                     .map(|e| e.to_expr())
                     .unwrap_or_else(stmt::Expr::null),
             )

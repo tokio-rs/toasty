@@ -1322,6 +1322,73 @@ pub async fn unit_enum_in_embedded_struct(t: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A data-carrying enum inside an embedded struct is replaced through a
+/// patch on the struct: the record value is substituted into every column
+/// of the nested enum (discriminant and variant fields), and the struct's
+/// other fields are untouched.
+#[driver_test]
+pub async fn patch_data_enum_inside_embedded_struct(t: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Status {
+        Open,
+        Failed { reason: String },
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Meta {
+        label: String,
+        status: Status,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Task {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        meta: Meta,
+    }
+
+    let mut db = t.setup_db(models!(Task)).await;
+
+    let mut task = toasty::create!(Task {
+        meta: Meta {
+            label: "fix bug".to_string(),
+            status: Status::Open,
+        }
+    })
+    .exec(&mut db)
+    .await?;
+
+    task.update()
+        .meta(toasty::stmt::patch(
+            Meta::fields().status().into(),
+            Status::Failed {
+                reason: "flaky".to_string(),
+            },
+        ))
+        .exec(&mut db)
+        .await?;
+
+    let found = Task::get_by_id(&mut db, &task.id).await?;
+    assert_struct!(found.meta, _ {
+        label: "fix bug",
+        status: Status::Failed { reason: "flaky" },
+    });
+
+    task.update()
+        .meta(toasty::stmt::patch(
+            Meta::fields().status().into(),
+            Status::Open,
+        ))
+        .exec(&mut db)
+        .await?;
+
+    let found = Task::get_by_id(&mut db, &task.id).await?;
+    assert_struct!(found.meta, _ { label: "fix bug", status: Status::Open });
+
+    Ok(())
+}
+
 /// Tests that UUID fields inside embedded structs round-trip correctly.
 /// UUID requires a type cast on databases that don't support it natively
 /// (e.g., SQLite stores it as text). This exercises the table_to_model
