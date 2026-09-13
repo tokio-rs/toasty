@@ -258,8 +258,25 @@ impl stmt::Visit for Verify<'_, '_> {
         stmt::visit::visit_expr_stmt(self, i);
     }
 
+    fn visit_assignments(&mut self, i: &stmt::Assignments) {
+        // Builder combinators that cannot express their operation (a
+        // `stmt::patch` into an enum variant) record a reason instead of an
+        // entry. The statement fails as a whole, before planning.
+        for reason in i.unsupported() {
+            self.record(Error::unsupported_feature(reason.clone()));
+        }
+
+        stmt::visit::visit_assignments(self, i);
+    }
+
     fn visit_stmt_update(&mut self, i: &stmt::Update) {
         stmt::visit::visit_stmt_update(self, i);
+
+        // A rejected assignment may be the only one requested, so there is
+        // nothing further to check.
+        if !i.assignments.unsupported().is_empty() {
+            return;
+        }
 
         // Is not an empty update
         assert!(!i.assignments.is_empty(), "stmt = {i:#?}");
@@ -784,6 +801,23 @@ mod tests {
             lhs: Box::new(Expr::arg(0)),
             rhs: Box::new(rhs),
         })
+    }
+
+    #[test]
+    fn update_with_unsupported_assignment_is_rejected() {
+        let mut assignments = stmt::Assignments::new();
+        assignments.reject_unsupported("patch into variant");
+        let update = stmt::Update {
+            target: stmt::UpdateTarget::Model(ModelId(0)),
+            assignments,
+            filter: stmt::Filter::new(stmt::Expr::from(true)),
+            condition: stmt::Condition::default(),
+            returning: None,
+        };
+
+        let err = verify_with(&Capability::SQLITE, Statement::Update(update))
+            .expect_err("expected unsupported_feature error");
+        assert!(err.is_unsupported_feature());
     }
 
     #[test]

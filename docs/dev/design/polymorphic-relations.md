@@ -324,9 +324,12 @@ missing — the exclusivity that the status-quo encoding cannot enforce.
 - **Dangling keys.** As with model-level `belongs_to`, nothing prevents a
   stored key from referencing a deleted owner; loading it yields the same
   not-found behavior as any stale foreign key.
-- **Within-variant patch.** `stmt::patch` on a variant field follows the
-  existing embedded-enum rules (variant-gated, SQL-only). Patching a key
-  field re-points the relation without touching the kind.
+- **Within-variant patch.** `stmt::patch` cannot enter an enum variant on
+  any backend. A path into a variant — to change a key field, increment a
+  counter, or set any other variant field — makes the update fail with
+  `unsupported_feature` before it executes, so no assignment in that
+  statement is written. Re-pointing a relation through a variant is a
+  whole-value replacement of the embed, as shown above.
 
 ## Pair resolution and lowering
 
