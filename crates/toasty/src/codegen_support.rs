@@ -16,9 +16,9 @@ pub use crate::schema::inventory;
 pub use crate::{
     Db, Error, Executor, Result, Statement,
     schema::{
-        Auto, Deferred, DiscoverItem, Document, Embed, Field, Load, Model, QueryMany, QueryOne,
-        QueryOptionOne, RelationManyField, RelationOneField, Scalar, Scope, ViaMany, ViaManyField,
-        ViaPath, ViaTarget, generate_unique_id,
+        Auto, Deferred, DiscoverItem, Document, Embed, EmbedCreate, Field, Load, Model, QueryMany,
+        QueryOne, QueryOptionOne, RelationManyField, RelationOneField, Scalar, Scope, ViaMany,
+        ViaManyField, ViaPath, ViaTarget, generate_unique_id,
     },
     stmt::CreateMany,
     stmt::{self, Assign, Expr, IntoExpr, IntoInsert, IntoStatement, List, Path},
@@ -154,6 +154,20 @@ impl<M: Model> EmbeddedRelationValue<Deferred<Option<M>>> for Deferred<Option<M>
             self.get().as_ref()
         }
     }
+}
+
+/// Pin the enum that a variant construction builder produces.
+///
+/// `create!` and `update!` obtain the builder for `Owner::Human { .. }`
+/// through the destination field's fields handle
+/// (`Object::fields().owner().create().human()`), so the qualifier written
+/// in the literal takes no part in builder lookup. The macros wrap the
+/// finished chain in this call with `E` set to that qualifier, so a literal
+/// naming a different enum than the destination field holds
+/// (`Other::Human { .. }` into an `Owner` field) fails to compile at the
+/// qualifier instead of silently selecting the destination's variant.
+pub fn variant_of<E, B: IntoExpr<E>>(builder: B) -> B {
+    builder
 }
 
 /// Resolve the parent model of an embedded relation write, if one is present.

@@ -360,15 +360,20 @@ impl Expand<'_> {
                 }
             });
 
-        let create_method = if let ModelKind::Root(root) = &self.model.kind {
-            let create_struct_ident = &root.create_struct_ident;
-            quote! {
-                #vis fn create(&self) -> #create_struct_ident {
-                    #create_struct_ident::default()
+        let create_method = match &self.model.kind {
+            ModelKind::Root(root) => {
+                let create_struct_ident = &root.create_struct_ident;
+                quote! {
+                    #vis fn create(&self) -> #create_struct_ident {
+                        #create_struct_ident::default()
+                    }
                 }
             }
-        } else {
-            TokenStream::new()
+            // A has-many list item literal (`todos: [{ owner: Owner::Human
+            // { .. } }]`) reaches its variant builder through the list
+            // handle, so the enum's list handle offers `create()` too.
+            ModelKind::EmbeddedEnum(_) => self.expand_enum_create_method(),
+            ModelKind::EmbeddedStruct(_) => TokenStream::new(),
         };
 
         // any() / all() are only available on root models (they require the

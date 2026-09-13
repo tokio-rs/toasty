@@ -1,0 +1,10 @@
+error[E0502]: cannot borrow `object` as mutable because it is also borrowed as immutable
+  --> tests/ui/update_variant_literal_borrows_target.rs:43:29
+   |
+43 |     let _ = toasty::update!(object {
+   |                             ^^^^^^ mutable borrow occurs here
+44 |         owner: Owner::Human { human: &object.mirror }
+   |                                      --------------
+   |                                      |
+   |                                      immutable borrow occurs here
+   |                                      immutable borrow later used here

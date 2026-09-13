@@ -905,7 +905,7 @@ pub async fn write_relation_from_parent_value(test: &mut Test) -> Result<()> {
     assert_struct!(obj_b.owner, Owner::Bot { serial: == bot.serial, .. });
 
     // `update!` changes the owner — including its kind — through the same
-    // sugar.
+    // sugar, on an instance and on a query target.
     toasty::update!(obj {
         owner: Owner::Bot { bot: &bot }
     })
@@ -914,6 +914,16 @@ pub async fn write_relation_from_parent_value(test: &mut Test) -> Result<()> {
     assert_struct!(
         Object::get_by_id(&mut db, obj.id).await?.owner,
         Owner::Bot { serial: == bot.serial, .. }
+    );
+
+    toasty::update!(Object::filter_by_id(obj.id) {
+        owner: Owner::Human { human: &alice }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, obj.id).await?.owner,
+        Owner::Human { id: == alice.id, .. }
     );
 
     // A loaded relation value in a complete literal fills the key too; the
@@ -933,6 +943,303 @@ pub async fn write_relation_from_parent_value(test: &mut Test) -> Result<()> {
     assert_struct!(
         Object::get_by_id(&mut db, obj_c.id).await?.owner,
         Owner::Human { id: == carol_id, .. }
+    );
+
+    Ok(())
+}
+
+/// A variant literal written into an `Option<Enum>` field: the builder
+/// converts to the optional expression, so no `Some(..)` wrapper is needed
+/// in `create!` or `update!`.
+#[driver_test]
+pub async fn write_optional_enum_from_variant_literal(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Human {
+            #[index]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Option<Owner>,
+    }
+
+    let mut db = test.setup_db(models!(Object, Human)).await;
+    let ann = toasty::create!(Human {}).exec(&mut db).await?;
+    let bea = toasty::create!(Human {}).exec(&mut db).await?;
+
+    let obj = toasty::create!(Object {
+        owner: Owner::Human { human: &ann }
+    })
+    .exec(&mut db)
+    .await?;
+    let mut obj = Object::get_by_id(&mut db, obj.id).await?;
+    assert_struct!(obj.owner, Some(Owner::Human { id: == ann.id, .. }));
+
+    toasty::update!(obj {
+        owner: Owner::Human { human: &bea }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, obj.id).await?.owner,
+        Some(Owner::Human { id: == bea.id, .. })
+    );
+
+    toasty::update!(obj { owner: None }).exec(&mut db).await?;
+    assert!(Object::get_by_id(&mut db, obj.id).await?.owner.is_none());
+
+    Ok(())
+}
+
+/// A variant literal inside an embedded partial patch replaces the nested
+/// enum field as a whole while the patch leaves the sibling field alone,
+/// for both instance and query targets.
+#[driver_test]
+pub async fn replace_enum_inside_embedded_patch(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Human {
+            #[index]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+        Anonymous {
+            label: String,
+        },
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Meta {
+        title: String,
+        owner: Owner,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        meta: Meta,
+    }
+
+    let mut db = test.setup_db(models!(Object, Human)).await;
+    let ann = toasty::create!(Human {}).exec(&mut db).await?;
+    let bea = toasty::create!(Human {}).exec(&mut db).await?;
+
+    let obj = toasty::create!(Object {
+        meta: Meta {
+            title: "draft".to_string(),
+            owner: Owner::Anonymous {
+                label: "nobody".to_string(),
+            },
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    let mut obj = Object::get_by_id(&mut db, obj.id).await?;
+
+    toasty::update!(obj {
+        meta: { owner: Owner::Human { human: &ann } }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(Object::get_by_id(&mut db, obj.id).await?.meta, _ {
+        title: "draft",
+        owner: Owner::Human { id: == ann.id, .. },
+    });
+
+    toasty::update!(Object::filter_by_id(obj.id) {
+        meta: { owner: Owner::Human { human: &bea } }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(Object::get_by_id(&mut db, obj.id).await?.meta, _ {
+        title: "draft",
+        owner: Owner::Human { id: == bea.id, .. },
+    });
+
+    Ok(())
+}
+
+/// A variant literal inside a has-many item literal reaches its builder
+/// through the relation's list handle, in both `create!` and `update!`.
+#[driver_test]
+pub async fn variant_literal_in_has_many_item(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Human {
+            #[index]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct List {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[has_many]
+        items: toasty::Deferred<Vec<Item>>,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        list_id: uuid::Uuid,
+        #[belongs_to(key = list_id)]
+        list: toasty::Deferred<List>,
+        owner: Owner,
+    }
+
+    let mut db = test.setup_db(models!(List, Item, Human)).await;
+    let ann = toasty::create!(Human {}).exec(&mut db).await?;
+    let bea = toasty::create!(Human {}).exec(&mut db).await?;
+
+    let mut list = toasty::create!(List {
+        items: [{ owner: Owner::Human { human: &ann } }]
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::update!(list {
+        items: [{ owner: Owner::Human { human: &bea } }]
+    })
+    .exec(&mut db)
+    .await?;
+
+    let items: Vec<Item> = list.items().exec(&mut db).await?;
+    let mut owners: Vec<_> = items
+        .into_iter()
+        .map(|item| match item.owner {
+            Owner::Human { id, .. } => id,
+        })
+        .collect();
+    owners.sort();
+    let mut expected = vec![ann.id, bea.id];
+    expected.sort();
+    assert_eq!(owners, expected);
+
+    Ok(())
+}
+
+/// The values written in a variant literal are evaluated before the update
+/// target is borrowed, as a `match` scrutinee: a reference to a temporary
+/// stays valid for the chain, and an inference-dependent value takes its
+/// type from the monomorphic builder setter.
+#[driver_test]
+pub async fn update_variant_literal_value_expressions(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Human {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Human {
+            #[index]
+            id: uuid::Uuid,
+            #[belongs_to(key = id)]
+            human: toasty::Deferred<Human>,
+        },
+        Anonymous {
+            label: String,
+            note: Option<String>,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+
+    fn detached(human: &Human) -> Human {
+        Human {
+            id: human.id,
+            name: human.name.clone(),
+        }
+    }
+
+    let mut db = test.setup_db(models!(Object, Human)).await;
+    let ann = toasty::create!(Human { name: "Ann" }).exec(&mut db).await?;
+    let obj = toasty::create!(Object {
+        owner: Owner::Anonymous {
+            label: "nobody".to_string(),
+            note: None,
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    let mut obj = Object::get_by_id(&mut db, obj.id).await?;
+
+    // A reference to a temporary.
+    toasty::update!(obj {
+        owner: Owner::Human {
+            human: &detached(&ann)
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, obj.id).await?.owner,
+        Owner::Human { id: == ann.id, .. }
+    );
+
+    // Inference-dependent values, and one that reads the target.
+    let note = "note";
+    toasty::update!(obj {
+        owner: Owner::Anonymous {
+            label: "anon".into(),
+            note: Some(note.to_uppercase()),
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, obj.id).await?.owner,
+        Owner::Anonymous {
+            label: "anon",
+            note: Some("NOTE"),
+        }
     );
 
     Ok(())

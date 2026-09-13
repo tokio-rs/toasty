@@ -1,5 +1,5 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::schema::Field;
+use crate::schema::{EmbedCreate, Field};
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
     schema::app::{ModelId, VariantId},
@@ -551,6 +551,25 @@ impl<T, U> Path<T, Option<U>> {
     /// ```
     pub fn is_some(self) -> Expr<bool> {
         self.build_filter(stmt::Expr::is_not_null)
+    }
+}
+
+impl<T, U: EmbedCreate> Path<T, Option<U>> {
+    /// Start constructing a value for this optional embedded-enum field.
+    ///
+    /// Same builder as `create()` on the enum's own fields handle; `create!`
+    /// and `update!` reach it here when the destination field is
+    /// `Option<Enum>`.
+    pub fn create(&self) -> U::Create {
+        U::create()
+    }
+}
+
+impl<T, U: EmbedCreate> Path<T, List<Option<U>>> {
+    /// Start constructing a value for an optional embedded-enum field
+    /// reached through a has-many list handle.
+    pub fn create(&self) -> U::Create {
+        U::create()
     }
 }
 

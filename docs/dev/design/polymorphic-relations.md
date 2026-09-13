@@ -267,6 +267,12 @@ toasty::create!(Object { owner: Owner::Human { human: &alice } })
     .await?;
 ```
 
+The macro reaches the builder through the destination field's fields
+handle: `Object::fields().owner().create().human().human(&alice)`. The
+first `human()` selects the variant, the second sets its relation field.
+The same chain works outside the macros, and an `Option<Owner>` field
+offers `create()` on its path.
+
 Supplying the key directly also works; the relation field carries no
 storage, so an unloaded placeholder is valid:
 

@@ -1,4 +1,5 @@
 use super::parse::{FieldEntry, FieldSet, FieldValue, UpdateItem};
+use crate::variant_literal::VariantLiteral;
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
@@ -29,23 +30,24 @@ impl Hoist {
     /// ident that will be bound to it. Both carry the expression's span
     /// so type errors point at the user's code.
     fn hoist(&mut self, expr: &syn::Expr) -> TokenStream {
-        // A variant literal (`Enum::Variant { .. }`) hoists as its builder
-        // rewrite; the chain evaluates the user's field values in place.
-        let tokens = match crate::variant_literal::rewrite_variant_literal(expr) {
-            Some(rewritten) => rewritten,
-            None => {
-                let span = expr.span();
-                quote_spanned! { span=> #expr }
-            }
-        };
-        self.hoist_tokens(tokens, expr.span())
-    }
-
-    fn hoist_tokens(&mut self, tokens: TokenStream, span: proc_macro2::Span) -> TokenStream {
+        let span = expr.span();
         let ident = format_ident!("__value_{}", self.idents.len(), span = span);
-        self.exprs.push(tokens);
+        self.exprs.push(quote_spanned! { span=> #expr });
         self.idents.push(ident.clone());
         quote!(#ident)
+    }
+
+    /// Tokens for a field value whose destination fields handle is `dest`.
+    ///
+    /// A variant literal (`Enum::Variant { .. }`) becomes a construction
+    /// builder chain reached through `dest`; only its written field values
+    /// are hoisted, so the chain itself runs inside the `match` arm, after
+    /// the target's `.update()`. Any other expression is hoisted whole.
+    fn value(&mut self, expr: &syn::Expr, dest: &TokenStream) -> TokenStream {
+        match VariantLiteral::parse(expr) {
+            Some(literal) => literal.expand(dest, |value| self.hoist(value)),
+            None => self.hoist(expr),
+        }
     }
 }
 
@@ -130,7 +132,8 @@ fn expand_field_entry(
 
     match &entry.value {
         FieldValue::Expr(expr) => {
-            let value = hoist.hoist(expr);
+            let dest = quote_spanned! { span=> #parent_path.#name() };
+            let value = hoist.value(expr, &dest);
             quote_spanned! { span=> .#name(#value) }
         }
         FieldValue::Method { combinator, args } => {
@@ -240,20 +243,26 @@ fn expand_patch_entry(
 
     // The patch path is rooted at the embedded type itself, obtained
     // via the `into_root()` inherent method on the parent fields path.
-    let rooted = quote_spanned! { span=> #parent_path.into_root() };
+    // The `.into()` accepts both a plain `Path` (a scalar field) and a
+    // fields handle (an embedded field), which converts to its path.
+    let patch_path = quote_spanned! { span=> #parent_path.into_root().#name().into() };
 
     match &entry.value {
         FieldValue::Expr(expr) => {
-            let value = hoist.hoist(expr);
+            // A variant literal replaces the nested field as a whole: the
+            // builder is reached through the (origin-agnostic) nested
+            // destination and handed to `patch` like any other value.
+            let dest = quote_spanned! { span=> #parent_path.#name() };
+            let value = hoist.value(expr, &dest);
             quote_spanned! { span=>
-                toasty::stmt::patch(#rooted.#name(), #value)
+                toasty::stmt::patch(#patch_path, #value)
             }
         }
         FieldValue::Method { combinator, args } => {
             let args = hoist_args(args, hoist);
             quote_spanned! { span=>
                 toasty::stmt::patch(
-                    #rooted.#name(),
+                    #patch_path,
                     toasty::stmt::#combinator(#(#args),*),
                 )
             }
@@ -264,7 +273,7 @@ fn expand_patch_entry(
             let inner_patches = expand_patch_entries(sub_fields, &nested_path, hoist);
             quote_spanned! { span=>
                 toasty::stmt::patch(
-                    #rooted.#name(),
+                    #patch_path,
                     toasty::stmt::apply([ #( #inner_patches ),* ]),
                 )
             }
@@ -293,7 +302,7 @@ fn expand_has_many_list_item(
             // Build a child create builder via the field-list struct's
             // `.create()` method. A typo in any setter name surfaces as
             // a "no method named …" error at the macro call site.
-            let setters = expand_create_setters(fields, hoist);
+            let setters = expand_create_setters(fields, parent_path, hoist);
             quote_spanned! { span=>
                 toasty::stmt::insert(#parent_path.create() #(#setters)*)
             }
@@ -312,7 +321,11 @@ fn expand_has_many_list_item(
 /// `expand_field_entry`, but limited to entries that have a
 /// counterpart on a create builder. Deeper nesting inside a has-many
 /// list item is rejected for v1.
-fn expand_create_setters(fields: &FieldSet, hoist: &mut Hoist) -> Vec<TokenStream> {
+fn expand_create_setters(
+    fields: &FieldSet,
+    parent_path: &TokenStream,
+    hoist: &mut Hoist,
+) -> Vec<TokenStream> {
     fields
         .0
         .iter()
@@ -321,7 +334,8 @@ fn expand_create_setters(fields: &FieldSet, hoist: &mut Hoist) -> Vec<TokenStrea
             let span = name.span();
             match &entry.value {
                 FieldValue::Expr(expr) => {
-                    let value = hoist.hoist(expr);
+                    let dest = quote_spanned! { span=> #parent_path.#name() };
+                    let value = hoist.value(expr, &dest);
                     quote_spanned! { span=> .#name(#value) }
                 }
                 FieldValue::Method { combinator, args } => {

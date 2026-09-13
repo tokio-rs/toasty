@@ -1,0 +1,25 @@
+error[E0277]: the trait bound `OwnerHumanCreate: IntoExpr<Other>` is not satisfied
+  --> tests/ui/create_variant_literal_wrong_enum.rs:43:16
+   |
+43 |         owner: Other::Human { human: &alice }
+   |                ^^^^^ unsatisfied trait bound
+   |
+help: the trait `IntoExpr<Other>` is not implemented for `OwnerHumanCreate`
+  --> tests/ui/create_variant_literal_wrong_enum.rs:10:5
+   |
+10 |     Human {
+   |     ^^^^^
+help: `OwnerHumanCreate` implements trait `IntoExpr<T>`
+  --> tests/ui/create_variant_literal_wrong_enum.rs:8:17
+   |
+ 8 | #[derive(Debug, toasty::Embed)]
+   |                 ^^^^^^^^^^^^^
+   |                 |
+   |                 `IntoExpr<Option<Owner>>`
+   |                 `IntoExpr<Owner>`
+note: required by a bound in `toasty::codegen_support::variant_of`
+  --> $WORKSPACE/crates/toasty/src/codegen_support.rs
+   |
+   | pub fn variant_of<E, B: IntoExpr<E>>(builder: B) -> B {
+   |                         ^^^^^^^^^^^ required by this bound in `variant_of`
+   = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)
