@@ -156,11 +156,40 @@ impl<M: Model> EmbeddedRelationValue<Deferred<Option<M>>> for Deferred<Option<M>
     }
 }
 
+/// A destination field handle that supplies a construction builder.
+///
+/// Implemented by the generated fields handles of an embedded enum with
+/// data-carrying variants (`OwnerFields`, `OwnerListFields`) and by the
+/// [`Path`] of an `Option<Enum>` field. `create!` and `update!` obtain a
+/// variant literal's builder through [`create`], which dispatches through
+/// this trait explicitly. A trait method never takes part in inherent
+/// method lookup, so an enum may still declare a variant named `Create`:
+/// its field accessor `create()` stays available on the same handle.
+pub trait Create {
+    /// The variant-selection builder (`OwnerCreate`), with one method per
+    /// data-carrying variant.
+    type Create;
+
+    /// Returns the variant-selection builder.
+    fn create(&self) -> Self::Create;
+}
+
+/// Obtain the construction builder of the destination field `fields`.
+///
+/// `create!` and `update!` expand `Owner::Human { human: &alice }` written
+/// into `Object { owner: .. }` to
+/// `create(Object::fields().owner()).human().human(&alice)`. Rust infers the
+/// handle type from the argument, and the call reaches
+/// [`Create::create`] by trait dispatch rather than by method syntax.
+pub fn create<F: Create>(fields: F) -> F::Create {
+    <F as Create>::create(&fields)
+}
+
 /// Pin the enum that a variant construction builder produces.
 ///
 /// `create!` and `update!` obtain the builder for `Owner::Human { .. }`
 /// through the destination field's fields handle
-/// (`Object::fields().owner().create().human()`), so the qualifier written
+/// (`create(Object::fields().owner()).human()`), so the qualifier written
 /// in the literal takes no part in builder lookup. The macros wrap the
 /// finished chain in this call with `E` set to that qualifier, so a literal
 /// naming a different enum than the destination field holds

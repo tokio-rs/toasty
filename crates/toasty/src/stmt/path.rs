@@ -1,4 +1,5 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
+use crate::codegen_support::Create;
 use crate::schema::{EmbedCreate, Field};
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
@@ -554,21 +555,24 @@ impl<T, U> Path<T, Option<U>> {
     }
 }
 
-impl<T, U: EmbedCreate> Path<T, Option<U>> {
-    /// Start constructing a value for this optional embedded-enum field.
-    ///
-    /// Same builder as `create()` on the enum's own fields handle; `create!`
-    /// and `update!` reach it here when the destination field is
-    /// `Option<Enum>`.
-    pub fn create(&self) -> U::Create {
+/// An `Option<Enum>` field has no generated fields handle, so its plain
+/// path supplies the construction builder; `create!` and `update!` reach it
+/// through `codegen_support::create` when the destination field is
+/// `Option<Enum>`.
+impl<T, U: EmbedCreate> Create for Path<T, Option<U>> {
+    type Create = U::Create;
+
+    fn create(&self) -> U::Create {
         U::create()
     }
 }
 
-impl<T, U: EmbedCreate> Path<T, List<Option<U>>> {
-    /// Start constructing a value for an optional embedded-enum field
-    /// reached through a has-many list handle.
-    pub fn create(&self) -> U::Create {
+/// Same for an optional embedded-enum field reached through a has-many list
+/// handle.
+impl<T, U: EmbedCreate> Create for Path<T, List<Option<U>>> {
+    type Create = U::Create;
+
+    fn create(&self) -> U::Create {
         U::create()
     }
 }

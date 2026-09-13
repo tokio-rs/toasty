@@ -615,3 +615,66 @@ pub async fn global_field_indices(test: &mut Test) {
         ],
     }));
 }
+
+/// A data-carrying variant named `Create` keeps its `create()` field
+/// accessor on the enum's fields handle: `create!` and `update!` obtain the
+/// construction builder through `codegen_support::create`, which dispatches
+/// through a trait rather than an inherent method of the same name.
+#[driver_test]
+pub async fn variant_named_create(test: &mut Test) -> Result<()> {
+    #[derive(Debug, PartialEq, toasty::Embed)]
+    enum Action {
+        Create { name: String },
+        Delete,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = group, local = id)]
+    struct Event {
+        #[auto]
+        id: uuid::Uuid,
+        group: String,
+        action: Action,
+    }
+
+    let mut db = test.setup_db(models!(Event)).await;
+
+    let mut event = toasty::create!(Event {
+        group: "audit",
+        action: Action::Create {
+            name: "alpha".to_string()
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let found = Event::filter(
+        Event::fields().group().eq("audit").and(
+            Event::fields()
+                .action()
+                .create()
+                .matches(|c| c.name().eq("alpha")),
+        ),
+    )
+    .exec(&mut db)
+    .await?;
+    assert_struct!(found, [_ { id: == event.id, .. }]);
+
+    toasty::update!(event {
+        action: Action::Create {
+            name: "beta".to_string()
+        },
+    })
+    .exec(&mut db)
+    .await?;
+
+    let reloaded = Event::get_by_group_and_id(&mut db, "audit", &event.id).await?;
+    assert_eq!(
+        reloaded.action,
+        Action::Create {
+            name: "beta".to_string()
+        }
+    );
+
+    Ok(())
+}

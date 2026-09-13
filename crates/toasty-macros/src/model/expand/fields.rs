@@ -360,20 +360,24 @@ impl Expand<'_> {
                 }
             });
 
-        let create_method = match &self.model.kind {
-            ModelKind::Root(root) => {
-                let create_struct_ident = &root.create_struct_ident;
-                quote! {
-                    #vis fn create(&self) -> #create_struct_ident {
-                        #create_struct_ident::default()
-                    }
+        let create_method = if let ModelKind::Root(root) = &self.model.kind {
+            let create_struct_ident = &root.create_struct_ident;
+            quote! {
+                #vis fn create(&self) -> #create_struct_ident {
+                    #create_struct_ident::default()
                 }
             }
-            // A has-many list item literal (`todos: [{ owner: Owner::Human
-            // { .. } }]`) reaches its variant builder through the list
-            // handle, so the enum's list handle offers `create()` too.
-            ModelKind::EmbeddedEnum(_) => self.expand_enum_create_method(),
-            ModelKind::EmbeddedStruct(_) => TokenStream::new(),
+        } else {
+            TokenStream::new()
+        };
+
+        // A has-many list item literal (`todos: [{ owner: Owner::Human
+        // { .. } }]`) reaches its variant builder through the list handle,
+        // so the enum's list handle supplies the builder too.
+        let create_impl = if let ModelKind::EmbeddedEnum(_) = &self.model.kind {
+            self.expand_enum_create_impl(field_list_struct_ident)
+        } else {
+            TokenStream::new()
         };
 
         // any() / all() are only available on root models (they require the
@@ -422,6 +426,8 @@ impl Expand<'_> {
 
                 #( #methods )*
             }
+
+            #create_impl
 
             impl<__Origin> Into<#toasty::Path<__Origin, #toasty::List<#model_ident>>> for #field_list_struct_ident<__Origin> {
                 fn into(self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {

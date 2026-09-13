@@ -43,11 +43,12 @@ pub trait Embed {
 /// An embedded type that can be constructed as a write value through a
 /// builder: an enum with data-carrying variants.
 ///
-/// The fields handle of a field holding the type offers `create()`, which
-/// returns [`Create`](Self::Create); `create!` and `update!` expand a
-/// variant literal (`Owner::Human { human: &alice }`) into a chain on it.
-/// The trait lets the plain [`Path`] of an `Option<Enum>` field offer the
-/// same `create()`, since `Option` has no generated fields handle.
+/// The fields handles of a field holding the type implement
+/// `codegen_support::Create`, returning [`Create`](Self::Create); `create!`
+/// and `update!` expand a variant literal (`Owner::Human { human: &alice }`)
+/// into a chain on it. This trait lets the plain [`Path`] of an
+/// `Option<Enum>` field supply the same builder, since `Option` has no
+/// generated fields handle.
 pub trait EmbedCreate: Embed {
     /// The variant-selection builder (`OwnerCreate`), with one method per
     /// data-carrying variant.

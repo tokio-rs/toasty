@@ -268,10 +268,12 @@ toasty::create!(Object { owner: Owner::Human { human: &alice } })
 ```
 
 The macro reaches the builder through the destination field's fields
-handle: `Object::fields().owner().create().human().human(&alice)`. The
-first `human()` selects the variant, the second sets its relation field.
-The same chain works outside the macros, and an `Option<Owner>` field
-offers `create()` on its path.
+handle: `codegen_support::create(Object::fields().owner()).human().human(&alice)`.
+The first `human()` selects the variant, the second sets its relation
+field. The helper dispatches through an internal `Create` trait, which the
+enum's fields handles and the path of an `Option<Owner>` field implement.
+Explicit trait dispatch leaves the handle's inherent methods alone, so a
+variant named `Create` keeps its `create()` field accessor.
 
 Supplying the key directly also works; the relation field carries no
 storage, so an unloaded placeholder is valid:

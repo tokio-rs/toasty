@@ -277,7 +277,7 @@ impl Expand<'_> {
             .collect();
 
         let comparison_methods = self.expand_comparison_methods();
-        let create_method = self.expand_enum_create_method();
+        let create_impl = self.expand_enum_create_impl(field_struct_ident);
 
         quote! {
             #vis struct #field_struct_ident<__Origin> {
@@ -291,9 +291,9 @@ impl Expand<'_> {
                 #( #variant_accessor_methods )*
 
                 #comparison_methods
-
-                #create_method
             }
+
+            #create_impl
 
             impl<__Origin> Into<#toasty::Path<__Origin, #model_ident>> for #field_struct_ident<__Origin> {
                 fn into(self) -> #toasty::Path<__Origin, #model_ident> {
@@ -323,16 +323,19 @@ impl Expand<'_> {
         }
     }
 
-    /// Generates the `create()` method of the enum's fields handles, which
-    /// returns the variant-selection builder. Empty for an enum without
-    /// data-carrying variants (see `expand_enum_create_builders`).
-    pub(super) fn expand_enum_create_method(&self) -> TokenStream {
+    /// Generates the `codegen_support::Create` impl for the fields handle
+    /// `handle_ident<__Origin>`, through which `create!` and `update!`
+    /// obtain the variant-selection builder. A trait impl rather than an
+    /// inherent method: the handle also carries one accessor per
+    /// data-carrying variant, and a variant named `Create` owns the
+    /// inherent `create()`. Empty for an enum without data-carrying
+    /// variants (see `expand_enum_create_builders`).
+    pub(super) fn expand_enum_create_impl(&self, handle_ident: &syn::Ident) -> TokenStream {
         if !self.expand_enum_has_data_variants() {
             return TokenStream::new();
         }
 
         let toasty = &self.toasty;
-        let vis = &self.model.vis;
         let model_ident = &self.model.ident;
         let create_struct_ident = &self
             .model
@@ -341,12 +344,12 @@ impl Expand<'_> {
             .create_struct_ident;
 
         quote! {
-            /// Start constructing a variant of this enum as a write value.
-            /// `create!` and `update!` expand a variant literal
-            /// (`Owner::Human { human: &alice }`) into a chain on this
-            /// builder.
-            #vis fn create(&self) -> #create_struct_ident {
-                <#model_ident as #toasty::EmbedCreate>::create()
+            impl<__Origin> #toasty::Create for #handle_ident<__Origin> {
+                type Create = #create_struct_ident;
+
+                fn create(&self) -> #create_struct_ident {
+                    <#model_ident as #toasty::EmbedCreate>::create()
+                }
             }
         }
     }
@@ -354,11 +357,12 @@ impl Expand<'_> {
     /// Generates the construction builders behind `create!` / `update!`
     /// variant literals.
     ///
-    /// `{Enum}Fields::create()` (and the list handle's) returns the
-    /// variant-selection builder `{Enum}Create`, whose per-variant methods
-    /// (`human()`) return that variant's construction builder
-    /// `{Enum}{Variant}Create`. The macros rewrite `Owner::Human { human:
-    /// &alice }` into `<destination fields>.create().human().human(&alice)`,
+    /// `{Enum}Fields` and `{Enum}ListFields` implement
+    /// `codegen_support::Create`, returning the variant-selection builder
+    /// `{Enum}Create`, whose per-variant methods (`human()`) return that
+    /// variant's construction builder `{Enum}{Variant}Create`. The macros
+    /// rewrite `Owner::Human { human: &alice }` into
+    /// `codegen_support::create(<destination fields>).human().human(&alice)`,
     /// which is what allows a variant literal to set a relation from a
     /// parent model value: the relation setter reads the referenced key
     /// field(s) off the parent and records them for the sibling key

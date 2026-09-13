@@ -13,7 +13,10 @@ use syn::spanned::Spanned;
 ///
 /// The literal expands to a chain on the derive-generated construction
 /// builder, reached through the destination field's fields handle:
-/// `<dest>.create().variant().field(value)...`. The builder fills a
+/// `codegen_support::create(<dest>).variant().field(value)...`. The helper
+/// dispatches through the `codegen_support::Create` trait explicitly, so
+/// a variant named `Create` keeps its inherent `create()` accessor on the
+/// same handle. The builder fills a
 /// relation's sibling key slot(s) from a parent model value, which is what
 /// allows `Owner::Human { human: &alice }` — a literal that plain Rust would
 /// reject (missing key field, mismatched relation type) — as a `create!` /
@@ -112,7 +115,7 @@ impl<'a> VariantLiteral<'a> {
         });
 
         let builder = quote_spanned! { self.span=>
-            #dest.create().#method() #( #setters )*
+            toasty::codegen_support::create(#dest).#method() #( #setters )*
         };
 
         let enum_path = &self.enum_path;
