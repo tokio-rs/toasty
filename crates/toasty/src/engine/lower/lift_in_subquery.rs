@@ -183,6 +183,15 @@ impl VisitMut for LiftInSubquery<'_> {
         // Walk children (which may themselves be expressions needing
         // lifts on subtrees).
         stmt::visit_mut::visit_expr_mut(self, expr);
+
+        // A predicate through a relation lifts operand by operand: the
+        // variant guard the typed layer fixed next to
+        // `link.item.state.selected.value == x` and the comparison itself
+        // become two foreign-key subqueries on the same key. Fold them
+        // into one so the key is tested against a single subquery.
+        if let stmt::Expr::And(e) = expr {
+            merge_in_subqueries(&self.cx, &mut e.operands);
+        }
     }
 
     fn visit_stmt_delete_mut(&mut self, stmt: &mut stmt::Delete) {
@@ -234,6 +243,114 @@ impl VisitMut for LiftInSubquery<'_> {
             s.visit_returning_mut(returning);
         }
     }
+}
+
+/// Merge `IN` subqueries among a conjunction's operands that test the same
+/// expression against the same unique key of the same model:
+/// `k IN (SELECT id FROM m WHERE a) AND k IN (SELECT id FROM m WHERE b)`
+/// becomes `k IN (SELECT id FROM m WHERE a AND b)`.
+///
+/// The rewrite holds because the returned key identifies one row of `m`:
+/// `k` matches both subqueries exactly when that row satisfies both
+/// filters. Subqueries returning a non-unique projection are left alone,
+/// as are those with a limit, ordering, or CTEs.
+fn merge_in_subqueries(cx: &ExprContext, operands: &mut Vec<stmt::Expr>) {
+    let mut i = 0;
+
+    while i < operands.len() {
+        let mut j = i + 1;
+
+        while j < operands.len() {
+            if mergeable_in_subqueries(cx, &operands[i], &operands[j]) {
+                let stmt::Expr::InSubquery(other) = operands.remove(j) else {
+                    unreachable!()
+                };
+                let stmt::Expr::InSubquery(target) = &mut operands[i] else {
+                    unreachable!()
+                };
+                let filter = other.query.body.as_select_unwrap().filter.clone();
+                target.query.body.as_select_mut_unwrap().add_filter(filter);
+            } else {
+                j += 1;
+            }
+        }
+
+        i += 1;
+    }
+}
+
+/// Whether `a` and `b` are `IN` subqueries [`merge_in_subqueries`] can fold
+/// together.
+fn mergeable_in_subqueries(cx: &ExprContext, a: &stmt::Expr, b: &stmt::Expr) -> bool {
+    let (stmt::Expr::InSubquery(a), stmt::Expr::InSubquery(b)) = (a, b) else {
+        return false;
+    };
+    if a.expr != b.expr {
+        return false;
+    }
+
+    let (Some(a_select), Some(b_select)) = (simple_select(&a.query), simple_select(&b.query))
+    else {
+        return false;
+    };
+    if a_select.source != b_select.source || a_select.returning != b_select.returning {
+        return false;
+    }
+
+    let Some(model) = a_select.source.model_id() else {
+        return false;
+    };
+    returning_is_unique_key(cx, model, &a_select.returning)
+}
+
+/// The query's `SELECT` when nothing but its filter distinguishes the rows
+/// it returns: no CTE, ordering, limit, or lock.
+fn simple_select(query: &stmt::Query) -> Option<&stmt::Select> {
+    if query.with.is_some() || query.order_by.is_some() || query.limit.is_some() {
+        return None;
+    }
+    if !query.locks.is_empty() || query.single {
+        return None;
+    }
+    query.body.as_select()
+}
+
+/// Whether `returning` projects field(s) of `model` that identify one row:
+/// its primary key, or the fields of a unique index.
+fn returning_is_unique_key(cx: &ExprContext, model: ModelId, returning: &stmt::Returning) -> bool {
+    let stmt::Returning::Project(expr) = returning else {
+        return false;
+    };
+    let exprs = match expr {
+        Expr::Record(record) => record.fields.iter().collect::<Vec<_>>(),
+        expr => vec![expr],
+    };
+    let mut fields = Vec::with_capacity(exprs.len());
+    for expr in exprs {
+        let Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) = expr else {
+            return false;
+        };
+        fields.push(model.field(*index));
+    }
+
+    let Some(root) = cx.schema().app.model(model).as_root() else {
+        return false;
+    };
+    let same_fields = |key: &[FieldId]| {
+        key.len() == fields.len() && key.iter().all(|field| fields.contains(field))
+    };
+
+    same_fields(&root.primary_key.fields)
+        || root.indices.iter().any(|index| {
+            index.unique
+                && same_fields(
+                    &index
+                        .fields
+                        .iter()
+                        .map(|field| field.field)
+                        .collect::<Vec<_>>(),
+                )
+        })
 }
 
 struct LiftBelongsTo<'a> {

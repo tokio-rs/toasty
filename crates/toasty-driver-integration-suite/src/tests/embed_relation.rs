@@ -142,21 +142,20 @@ pub async fn compare_embedded_relations_preserves_both_variant_guards(
 }
 
 /// A composite-key relation inside a variant of an enum that is itself a
-/// variant field of an outer enum. Every predicate through the nested path
-/// requires both variants, whether the comparison is at the relation, a
-/// path converted through `IntoExpr`, or a traversal into the target.
-#[driver_test]
-pub async fn nested_variant_composite_relation(test: &mut Test) -> Result<()> {
+/// variant field of an outer enum, shared by the nested-variant tests.
+mod nested_composite {
+    use crate::prelude::*;
+
     #[derive(Debug, toasty::Model)]
     #[key(partition = namespace, local = revision)]
-    struct Parent {
-        namespace: uuid::Uuid,
-        revision: i64,
-        name: String,
+    pub struct Parent {
+        pub namespace: uuid::Uuid,
+        pub revision: i64,
+        pub name: String,
     }
 
     #[derive(Debug, toasty::Embed)]
-    enum Owner {
+    pub enum Owner {
         Parent {
             #[index]
             namespace: uuid::Uuid,
@@ -168,106 +167,161 @@ pub async fn nested_variant_composite_relation(test: &mut Test) -> Result<()> {
     }
 
     #[derive(Debug, toasty::Embed)]
-    enum Envelope {
+    pub enum Envelope {
         First { owner: Owner },
         Second { other_owner: Owner },
     }
 
     #[derive(Debug, toasty::Model)]
-    struct Object {
+    pub struct Object {
         #[key]
         #[auto]
-        id: uuid::Uuid,
-        envelope: Envelope,
+        pub id: uuid::Uuid,
+        pub envelope: Envelope,
     }
 
-    let mut db = test.setup_db(models!(Object, Parent)).await;
-    let namespace = uuid::Uuid::new_v4();
-    // The nested literal is written out with its keys: `create!` fills keys
-    // from a parent value only for the outer variant literal.
-    let owner = |parent: &Parent| Owner::Parent {
-        namespace: parent.namespace,
-        revision: parent.revision,
-        parent: toasty::Deferred::default(),
-    };
-    let first = toasty::create!(Parent {
-        namespace,
-        revision: 1,
-        name: "first"
-    })
-    .exec(&mut db)
-    .await?;
-    let second = toasty::create!(Parent {
-        namespace,
-        revision: 2,
-        name: "second"
-    })
-    .exec(&mut db)
-    .await?;
-    let third = toasty::create!(Parent {
-        namespace: uuid::Uuid::new_v4(),
-        revision: 2,
-        name: "third"
-    })
-    .exec(&mut db)
-    .await?;
+    /// The rows the tests query. `Second { other_owner }` stores the same
+    /// keys in other columns; it must never match a predicate through
+    /// `first().owner()`. `parents` are `first`, `second` (same namespace),
+    /// and `third` (another namespace). `objects` are the `First` objects
+    /// owned by each of them, in the same order.
+    pub struct Fixture {
+        pub parents: [Parent; 3],
+        pub objects: [Object; 3],
+    }
 
-    // `Second { other_owner }` stores the same keys in other columns; it
-    // must never match a predicate through `first().owner()`.
-    let mut object = toasty::create!(Object {
-        envelope: Envelope::First {
-            owner: owner(&first)
-        },
-    })
-    .exec(&mut db)
-    .await?;
-    toasty::create!(Object {
-        envelope: Envelope::Second {
-            other_owner: owner(&first)
-        },
-    })
-    .exec(&mut db)
-    .await?;
-    toasty::create!(Object {
-        envelope: Envelope::First {
-            owner: owner(&second)
-        },
-    })
-    .exec(&mut db)
-    .await?;
-    let third_object = toasty::create!(Object {
-        envelope: Envelope::First {
-            owner: owner(&third)
+    /// The nested literal is written out with its keys: `create!` fills
+    /// keys from a parent value only for the outer variant literal.
+    pub fn owner(parent: &Parent) -> Owner {
+        Owner::Parent {
+            namespace: parent.namespace,
+            revision: parent.revision,
+            parent: toasty::Deferred::default(),
         }
-    })
-    .exec(&mut db)
-    .await?;
-    toasty::create!(Object {
-        envelope: Envelope::First {
-            owner: Owner::Empty
-        }
-    })
-    .exec(&mut db)
-    .await?;
+    }
 
+    pub async fn setup(test: &mut Test) -> Result<(toasty::Db, Fixture)> {
+        let mut db = test.setup_db(models!(Object, Parent)).await;
+        let namespace = uuid::Uuid::new_v4();
+        let mut parents = Vec::with_capacity(3);
+        for (namespace, revision, name) in [
+            (namespace, 1, "first"),
+            (namespace, 2, "second"),
+            (uuid::Uuid::new_v4(), 2, "third"),
+        ] {
+            parents.push(
+                toasty::create!(Parent {
+                    namespace,
+                    revision,
+                    name
+                })
+                .exec(&mut db)
+                .await?,
+            );
+        }
+
+        let mut objects = Vec::with_capacity(3);
+        for parent in &parents {
+            objects.push(
+                toasty::create!(Object {
+                    envelope: Envelope::First {
+                        owner: owner(parent)
+                    },
+                })
+                .exec(&mut db)
+                .await?,
+            );
+        }
+        toasty::create!(Object {
+            envelope: Envelope::Second {
+                other_owner: owner(&parents[0])
+            },
+        })
+        .exec(&mut db)
+        .await?;
+        toasty::create!(Object {
+            envelope: Envelope::First {
+                owner: Owner::Empty
+            }
+        })
+        .exec(&mut db)
+        .await?;
+
+        let fixture = Fixture {
+            parents: parents.try_into().unwrap(),
+            objects: objects.try_into().unwrap(),
+        };
+        Ok((db, fixture))
+    }
+}
+
+/// Every predicate through the nested path requires both variants, whether
+/// the comparison is at the relation, a path converted through `IntoExpr`,
+/// or a check of the inner variant.
+#[driver_test]
+pub async fn nested_variant_composite_relation(test: &mut Test) -> Result<()> {
+    use nested_composite::{Envelope, Object, Owner, Parent, owner};
+
+    let (mut db, fixture) = nested_composite::setup(test).await?;
+    let [first, second, _] = &fixture.parents;
+    let [object, ..] = &fixture.objects;
     let variant = || Object::fields().envelope().first();
 
     // A model value against the relation, and the same through a path
     // converted with `IntoExpr`.
-    let found = Object::filter(variant().owner().parent().parent().eq(&first))
+    let found = Object::filter(variant().owner().parent().parent().eq(first))
         .exec(&mut db)
         .await?;
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, object.id);
 
     let path: toasty::stmt::Path<Object, Parent> = variant().owner().parent().parent().into();
-    let found = Object::filter(path.into_expr().eq(&first))
+    let found = Object::filter(path.into_expr().eq(first))
         .exec(&mut db)
         .await?;
     assert_eq!(found.len(), 1);
     assert_eq!(found[0].id, object.id);
 
-    // Traversal into the target model.
+    // The inner variant check on its own requires the outer variant too.
+    let found = Object::filter(variant().owner().is_parent())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 3);
+    let found = Object::filter(variant().owner().is_empty())
+        .exec(&mut db)
+        .await?;
+    assert_eq!(found.len(), 1);
+
+    // Replacing the nested owner writes the new keys through both variants.
+    let mut object = Object::get_by_id(&mut db, object.id).await?;
+    toasty::update!(object {
+        envelope: Envelope::First {
+            owner: owner(second)
+        }
+    })
+    .exec(&mut db)
+    .await?;
+    assert_struct!(
+        Object::get_by_id(&mut db, object.id).await?.envelope,
+        Envelope::First {
+            owner: Owner::Parent { revision: 2, .. }
+        }
+    );
+
+    Ok(())
+}
+
+/// Traversal into the target of the nested composite-key relation. A filter
+/// through a composite foreign key lifts to a tuple `IN` subquery, which
+/// only the SQL backends evaluate.
+#[driver_test(requires(sql))]
+pub async fn nested_variant_composite_relation_traversal(test: &mut Test) -> Result<()> {
+    use nested_composite::Object;
+
+    let (mut db, fixture) = nested_composite::setup(test).await?;
+    let [object, _, third_object] = &fixture.objects;
+    let variant = || Object::fields().envelope().first();
+
     let found = Object::filter(
         variant()
             .owner()
@@ -300,31 +354,6 @@ pub async fn nested_variant_composite_relation(test: &mut Test) -> Result<()> {
     .exec(&mut db)
     .await?;
     assert!(found.is_empty());
-
-    // The inner variant check on its own requires the outer variant too.
-    let found = Object::filter(variant().owner().is_parent())
-        .exec(&mut db)
-        .await?;
-    assert_eq!(found.len(), 3);
-    let found = Object::filter(variant().owner().is_empty())
-        .exec(&mut db)
-        .await?;
-    assert_eq!(found.len(), 1);
-
-    // Replacing the nested owner writes the new keys through both variants.
-    toasty::update!(object {
-        envelope: Envelope::First {
-            owner: owner(&second)
-        }
-    })
-    .exec(&mut db)
-    .await?;
-    assert_struct!(
-        Object::get_by_id(&mut db, object.id).await?.envelope,
-        Envelope::First {
-            owner: Owner::Parent { revision: 2, .. }
-        }
-    );
 
     Ok(())
 }
