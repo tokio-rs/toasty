@@ -1,9 +1,6 @@
 use toasty_core::{schema::db::TableId, stmt};
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::mir;
 
 /// Deletes records by primary key.
 ///
@@ -11,6 +8,8 @@ use crate::engine::{
 ///
 /// Keys are always specified as an input node, whether a [`Const`] or the
 /// output of a dependent operation.
+///
+/// [`Const`]: super::Const
 #[derive(Debug)]
 pub(crate) struct DeleteByKey {
     /// The node producing the list of primary keys to delete.
@@ -27,30 +26,6 @@ pub(crate) struct DeleteByKey {
 
     /// The return type.
     pub(crate) ty: stmt::Type,
-}
-
-impl DeleteByKey {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::DeleteByKey {
-        let input = logical_plan[self.input].var.get().unwrap();
-        let output = var_table.register_var(node.ty().clone());
-        node.var.set(Some(output));
-
-        exec::DeleteByKey {
-            input,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            table: self.table,
-            filter: self.filter.clone(),
-            condition: self.condition.clone(),
-        }
-    }
 }
 
 impl From<DeleteByKey> for mir::Node {

@@ -37,15 +37,15 @@ pub async fn include_preserves_pagination_cursor(test: &mut Test) -> Result<()> 
         .exec(&mut db)
         .await?;
 
-    assert_struct!(first.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
-    assert_struct!(first.items[0].author.get(), Some(_ { id: 1 }));
+    assert_struct!(first.items, [{ id: 1 }, { id: 2 }]);
+    assert_struct!(first.items[0].author.get(), Some({ id: 1 }));
     assert!(first.has_next());
 
     let second = first.next(&mut db).await?.unwrap();
-    assert_struct!(second.items, [_ { id: 3, .. }]);
+    assert_struct!(second.items, [{ id: 3 }]);
 
     let first_again = second.prev(&mut db).await?.unwrap();
-    assert_struct!(first_again.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_struct!(first_again.items, [{ id: 1 }, { id: 2 }]);
 
     Ok(())
 }

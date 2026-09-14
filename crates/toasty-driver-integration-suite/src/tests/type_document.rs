@@ -376,7 +376,6 @@ pub async fn struct_embed_update_returning_constantized(t: &mut Test) -> Result<
     assert_struct!(op, toasty_core::driver::Operation::QuerySql({
         stmt: toasty_core::stmt::Statement::Update(_),
         ret: None,
-        ..
     }));
     assert!(t.log().is_empty());
 

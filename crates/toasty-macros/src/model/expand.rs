@@ -105,6 +105,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
     let storage_compat_checks = expand.expand_storage_compat_checks();
     let column_type_requirement_checks = expand.expand_column_type_requirement_checks();
     let indexable_checks = expand.expand_indexable_checks();
+    let embedded_relation_checks = expand.expand_embedded_relation_checks();
     let newtype_marker = expand.expand_embedded_newtype_marker();
     let newtype_indexable_impl = expand.expand_embedded_indexable_impl();
     let field_list_struct_ident = &embedded.field_list_struct_ident;
@@ -123,6 +124,7 @@ pub(super) fn embedded_model(model: &Model) -> TokenStream {
         #storage_compat_checks
         #column_type_requirement_checks
         #indexable_checks
+        #embedded_relation_checks
 
         impl #toasty::Embed for #model_ident {
             fn id() -> #toasty::core::schema::app::ModelId {
@@ -264,6 +266,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
     let discriminant_storage_compat_impls = e.expand_enum_discriminant_compat_impls();
     let shared_column_checks = e.expand_shared_column_checks();
     let indexable_checks = e.expand_indexable_checks();
+    let embedded_relation_checks = e.expand_embedded_relation_checks();
 
     // A unit (data-less) enum is a single scalar discriminant: indexable, and a
     // valid `Vec<Enum>` element (`Scalar` unlocks the container operators).
@@ -286,6 +289,7 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
         #discriminant_storage_compat_impls
         #shared_column_checks
         #indexable_checks
+        #embedded_relation_checks
         #unit_enum_impls
 
         impl #toasty::Embed for #model_ident {
@@ -387,25 +391,60 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
+    /// For relation fields in embedded types, require the declared type to be
+    /// deferred (`toasty::Deferred<..>`). A non-deferred relation could never
+    /// load: the relation carries no storage, so its record slot always
+    /// decodes from `Null`, which only a deferred type represents (as the
+    /// unloaded state).
+    fn expand_embedded_relation_checks(&self) -> TokenStream {
+        let toasty = &self.toasty;
+
+        let checks = self.model.fields.iter().filter_map(|field| {
+            let FieldTy::BelongsTo(rel) = &field.ty else {
+                return None;
+            };
+            let ty = &rel.ty;
+
+            Some(quote_spanned! { syn::spanned::Spanned::span(ty)=>
+                const _: () = {
+                    assert!(
+                        <#ty as #toasty::RelationOneField>::DEFERRED,
+                        "a relation stored in an embedded type must be wrapped \
+                         in `toasty::Deferred`",
+                    );
+                };
+            })
+        });
+
+        quote! { #( #checks )* }
+    }
+
+    /// For canonical newtype `#[derive(Embed)]` types — a single unnamed
+    /// primitive field — return the inner field's type. Named single-field
+    /// structs are explicit wrappers and stay opaque, so they return `None`,
+    /// as do multi-field and root models.
+    fn canonical_newtype_inner(&self) -> Option<&syn::Type> {
+        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
+            return None;
+        };
+        if embedded.fields_named || self.model.fields.len() != 1 {
+            return None;
+        }
+        match &self.model.fields[0].ty {
+            FieldTy::Primitive(inner_ty) => Some(inner_ty),
+            // Relations are not allowed inside an `Embed` body today; nothing
+            // to mark if that ever changes.
+            _ => None,
+        }
+    }
+
     /// For tuple-newtype `#[derive(Embed)]` types (one unnamed field), emit
     /// the `NewtypeOf` marker carrying the inner field's type. The blanket
     /// `impl<T: NewtypeOf, T::Inner: Auto> Auto for T` in `codegen_support`
     /// then promotes the newtype to `Auto` whenever the inner type is auto,
     /// without errors when the inner type is not auto.
     fn expand_embedded_newtype_marker(&self) -> TokenStream {
-        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
-            return quote! {};
-        };
-        // Only canonical newtypes (single unnamed field) qualify. Named
-        // single-field structs are explicit wrappers and stay opaque.
-        if embedded.fields_named || self.model.fields.len() != 1 {
-            return quote! {};
-        }
-
-        let inner = &self.model.fields[0];
-        let FieldTy::Primitive(inner_ty) = &inner.ty else {
-            // Relations are not allowed inside an `Embed` body today; nothing
-            // to mark if that ever changes.
+        let Some(inner_ty) = self.canonical_newtype_inner() else {
             return quote! {};
         };
 
@@ -435,25 +474,24 @@ impl Expand<'_> {
     /// This is a per-type impl rather than a `NewtypeOf` blanket: a blanket
     /// would conflict with the `Box<T>` forwarding impl in
     /// `codegen_support::index`, because `Box` is `#[fundamental]`.
+    ///
+    /// Route the inner type through a generic parameter constrained by
+    /// `NewtypeOf::Inner`. This defers the `IndexableField` obligation until an
+    /// index uses the newtype instead of rejecting every non-indexable wrapper
+    /// at its derive site.
     fn expand_embedded_indexable_impl(&self) -> TokenStream {
-        let ModelKind::EmbeddedStruct(embedded) = &self.model.kind else {
-            return quote! {};
-        };
-        if embedded.fields_named || self.model.fields.len() != 1 {
+        if self.canonical_newtype_inner().is_none() {
             return quote! {};
         }
-
-        let FieldTy::Primitive(inner_ty) = &self.model.fields[0].ty else {
-            return quote! {};
-        };
 
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
 
         quote! {
-            impl #toasty::index::IndexableField for #model_ident
+            impl<__Inner> #toasty::index::IndexableField for #model_ident
             where
-                #inner_ty: #toasty::index::IndexableField,
+                #model_ident: #toasty::newtype::NewtypeOf<Inner = __Inner>,
+                __Inner: #toasty::index::IndexableField,
             {}
         }
     }
@@ -475,8 +513,8 @@ impl Expand<'_> {
 
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin> {
-                <<<#ty as #field_trait>::Target as #toasty::Model>::OneField<__Origin>>::from_path(
-                    self.path().chain(
+                <<#ty as #field_trait>::Target as #toasty::ModelCodegen>::new_one_field(
+                    self.path.clone().chain(
                         <#model_ident as #schema_trait>::path_field(#field_offset)
                     )
                 )
@@ -495,6 +533,7 @@ impl Expand<'_> {
         field_ident: &syn::Ident,
         ty: &syn::Type,
         field_offset: &TokenStream,
+        parent_path: &TokenStream,
     ) -> TokenStream {
         let toasty = &self.toasty;
         let vis = &self.model.vis;
@@ -509,7 +548,7 @@ impl Expand<'_> {
         quote_spanned! { span=>
             #vis fn #field_ident(&self) -> <#ty as #toasty::Field>::Path<__Origin> {
                 <#ty as #toasty::Field>::new_path(
-                    self.path().chain(
+                    #parent_path.chain(
                         <#model_ident as #schema_trait>::path_field::<<#ty as #toasty::Field>::ExprTarget>(#field_offset)
                     )
                 )

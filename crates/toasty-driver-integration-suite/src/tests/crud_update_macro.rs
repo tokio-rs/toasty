@@ -227,10 +227,10 @@ pub async fn update_macro_value_reads_target_field(test: &mut Test) -> Result<()
     .exec(&mut db)
     .await?;
 
-    assert_struct!(user, _ { active: true, age: 31, .. });
+    assert_struct!(user, { active: true, age: 31 });
 
     let reloaded = User::get_by_id(&mut db, &user.id).await?;
-    assert_struct!(reloaded, _ { active: true, age: 31, .. });
+    assert_struct!(reloaded, { active: true, age: 31 });
 
     Ok(())
 }

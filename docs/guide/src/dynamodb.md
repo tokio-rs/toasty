@@ -103,6 +103,8 @@ encodes Rust values into them as follows:
 | `rust_decimal::Decimal` *(feature)* | `S` |
 | `jiff::Timestamp` *(feature)* | `S` (ISO 8601) |
 | `jiff::civil::Date` / `Time` / `DateTime` *(feature)* | `S` |
+| `toasty::stmt::IpCidr`, `toasty::stmt::IpInet` *(feature)* | `S` |
+| `toasty::stmt::MacAddr6`, `toasty::stmt::MacAddr8` *(feature)* | `S` |
 | Embedded `enum` | `S` (variant tag) plus per-variant data attributes |
 | `Vec<T>` *(T scalar)* | `L` (DynamoDB list of element attributes) |
 

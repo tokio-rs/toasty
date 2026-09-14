@@ -143,13 +143,13 @@ impl Expand<'_> {
                 }
 
                 fn new_path<__Origin>(path: #toasty::Path<__Origin, Self>) -> Self::Path<__Origin> {
-                    #field_struct_ident::from_path(path)
+                    #field_struct_ident { path }
                 }
 
                 fn new_many_field<__Origin>(
                     path: #toasty::Path<__Origin, #toasty::List<Self>>,
                 ) -> #field_list_struct_ident<__Origin> {
-                    #field_list_struct_ident::from_path(path)
+                    #field_list_struct_ident { path }
                 }
 
                 fn find_by_primary_key(
@@ -177,6 +177,14 @@ impl Expand<'_> {
                 }
 
                 #field_name_to_id
+            }
+
+            impl #toasty::ModelCodegen for #model_ident {
+                fn new_one_field<__Origin>(
+                    path: #toasty::Path<__Origin, Self>,
+                ) -> Self::OneField<__Origin> {
+                    #field_struct_ident { path }
+                }
             }
 
             // A relation-terminal `#[has_many(via = …)]` reaching this model
@@ -458,33 +466,44 @@ impl Expand<'_> {
         let toasty = &self.toasty;
 
         // For embedded types, create a record expression from all fields
-        // Currently only primitive fields are supported in embedded types
         let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
             let ty = match &field.ty {
                 FieldTy::Primitive(ty) => ty,
-                _ => panic!("only primitive fields are supported in embedded types"),
+                FieldTy::BelongsTo(_) => {
+                    // The relation slot encodes as `Null`; the sibling key
+                    // fields carry the storage.
+                    let access = if fields_named {
+                        let field_ident = &field.name.ident;
+                        quote!(self.#field_ident)
+                    } else {
+                        let idx = syn::Index::from(index);
+                        quote!(self.#idx)
+                    };
+                    return quote!(#toasty::embedded_relation_expr(&#access));
+                }
+                _ => panic!("only primitive and belongs_to fields are supported in embedded types"),
             };
 
             let value = if fields_named {
                 let field_ident = &field.name.ident;
-                if by_ref {
-                    quote!((&self.#field_ident))
-                } else {
-                    quote!(self.#field_ident)
-                }
+                quote!(self.#field_ident)
             } else {
                 let idx = syn::Index::from(index);
-                if by_ref {
-                    quote!((&self.#idx))
-                } else {
-                    quote!(self.#idx)
-                }
+                quote!(self.#idx)
             };
 
             // Bind through `Field::ExprTarget` so wrappers such as
             // `Deferred<T>` encode the underlying expression type.
             let target_ty = quote!(FieldExprTarget<#ty>);
-            quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
+            if by_ref {
+                quote!({
+                    let expr: #toasty::core::stmt::Expr =
+                        <#ty as #toasty::IntoExpr<#target_ty>>::by_ref(&#value).into();
+                    expr
+                })
+            } else {
+                quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
+            }
         });
 
         quote! {

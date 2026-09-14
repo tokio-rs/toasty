@@ -44,7 +44,10 @@ pub async fn paginate_first_page_has_no_previous_page(test: &mut Test) -> Result
     Ok(())
 }
 
-#[driver_test(requires(and(sql, backward_pagination)))]
+// The outer query never references the CTE, so `cte_unreferenced` gates out
+// drivers that cannot prepare a statement whose eliminated CTE holds
+// placeholders.
+#[driver_test(requires(and(sql, backward_pagination, cte_unreferenced)))]
 pub async fn paginate_first_page_ignores_subquery_cursor(test: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Model)]
     struct Item {
@@ -156,14 +159,14 @@ pub async fn paginate_single_non_unique_column(test: &mut Test) -> Result<()> {
         .paginate(2)
         .exec(&mut db)
         .await?;
-    assert_struct!(first.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_struct!(first.items, [{ id: 1 }, { id: 2 }]);
     assert_eq!(cursor_len(first.next_cursor.as_ref()), 2);
 
     let second = first.next(&mut db).await?.unwrap();
-    assert_struct!(second.items, [_ { id: 3, .. }, _ { id: 4, .. }]);
+    assert_struct!(second.items, [{ id: 3 }, { id: 4 }]);
 
     let first_again = second.prev(&mut db).await?.unwrap();
-    assert_struct!(first_again.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_struct!(first_again.items, [{ id: 1 }, { id: 2 }]);
 
     Ok(())
 }
@@ -237,11 +240,11 @@ pub async fn paginate_accepts_cursor_without_hidden_primary_key(test: &mut Test)
         .after(0_i64)
         .exec(&mut db)
         .await?;
-    assert_struct!(first.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_struct!(first.items, [{ id: 1 }, { id: 2 }]);
     assert_eq!(cursor_len(first.next_cursor.as_ref()), 2);
 
     let second = first.next(&mut db).await?.unwrap();
-    assert_struct!(second.items, [_ { id: 3, .. }]);
+    assert_struct!(second.items, [{ id: 3 }]);
 
     Ok(())
 }
@@ -375,10 +378,10 @@ pub async fn paginate_multi_column_equal_leading_values(test: &mut Test) -> Resu
         .paginate(2)
         .exec(&mut db)
         .await?;
-    assert_struct!(page.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_struct!(page.items, [{ id: 1 }, { id: 2 }]);
 
     let page: Page<Item> = page.next(&mut db).await?.unwrap();
-    assert_struct!(page.items, [_ { id: 3, .. }]);
+    assert_struct!(page.items, [{ id: 3 }]);
 
     Ok(())
 }
@@ -409,10 +412,10 @@ pub async fn paginate_multi_column_mixed_directions(test: &mut Test) -> Result<(
         .paginate(2)
         .exec(&mut db)
         .await?;
-    assert_struct!(page.items, [_ { id: 3, .. }, _ { id: 4, .. }]);
+    assert_struct!(page.items, [{ id: 3 }, { id: 4 }]);
 
     let page: Page<Item> = page.next(&mut db).await?.unwrap();
-    assert_struct!(page.items, [_ { id: 1, .. }, _ { id: 2, .. }]);
+    assert_struct!(page.items, [{ id: 1 }, { id: 2 }]);
 
     Ok(())
 }

@@ -418,8 +418,9 @@ Three notes:
   syntax like `#[index(opclass = "jsonb_path_ops")]` covers the long
   tail.
 
-`#[unique]` on a `Vec<T>` is a schema-build error (use `HashSet<T>` if
-uniqueness is the intent; PG-side enforcement is an open question).
+`#[unique]` on a `Vec<scalar>` uses a PostgreSQL unique B-tree index over the
+complete ordered array. Other backends reject it during schema construction.
+Document collections and non-unique collection indexes remain unsupported.
 
 ## Behavior
 

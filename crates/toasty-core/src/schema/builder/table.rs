@@ -292,6 +292,29 @@ impl BuildTableFromModels<'_> {
                 // index.
                 let column = self.resolve_indexed_column(mapping);
 
+                if matches!(&self.table.column(column).ty, stmt::Type::List(_)) {
+                    let model_name = self.app.model(app_index.id.model).name();
+                    let field_name = fields[index_field.field.index].name.app_unwrap();
+
+                    if !app_index.unique {
+                        return Err(Error::unsupported_feature(format!(
+                            "model `{model_name}` field `{field_name}` uses `#[index]` on a \
+                             `Vec<T>` collection, but collection indexes are not supported"
+                        )));
+                    }
+
+                    if !self.db.unique_list_index
+                        || !matches!(&self.table.column(column).storage_ty, db::Type::List(_))
+                    {
+                        return Err(Error::unsupported_feature(format!(
+                            "model `{model_name}` field `{field_name}` uses `#[unique]` on a \
+                             `Vec<T>` collection, but {} does not support unique constraints \
+                             on complete collection values",
+                            self.db.driver_name
+                        )));
+                    }
+                }
+
                 index.columns.push(db::IndexColumn {
                     column,
                     op: index_field.op,
@@ -951,7 +974,9 @@ impl<'a, 'b> MapField<'a, 'b> {
                 }
             }
             app::FieldTy::BelongsTo(_) | app::FieldTy::Has(_) | app::FieldTy::Via(_) => {
-                assert!(!self.force_nullable);
+                // A relation field maps to no column, so the nullability
+                // context (`force_nullable`, set inside enum variants and
+                // nullable struct embeds) has nothing to apply to.
                 let bit = self.build.next_bit();
                 Ok(mapping::Field::Relation(mapping::FieldRelation {
                     field_mask: stmt::PathFieldSet::from_iter([bit]),

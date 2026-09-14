@@ -87,6 +87,10 @@ quirks worth knowing about; the notes below the table call them out.
 | `jiff::civil::Date` *(feature)* | `DATE` |
 | `jiff::civil::Time` *(feature)* | `TIME(6)` |
 | `jiff::civil::DateTime` *(feature)* | `DATETIME(6)` |
+| `toasty::stmt::IpCidr` *(feature)* | `VARCHAR(43)` |
+| `toasty::stmt::IpInet` *(feature)* | `VARCHAR(43)` |
+| `toasty::stmt::MacAddr6` *(feature)* | `VARCHAR(17)` |
+| `toasty::stmt::MacAddr8` *(feature)* | `VARCHAR(23)` |
 | `Vec<T>` *(T scalar)* | `JSON` |
 | Embedded `enum` | Inline `ENUM('a', 'b', ...)` column |
 
@@ -138,6 +142,10 @@ parses it back on read. Array predicates (`contains`, `is_superset`,
 carries an IANA zone name alongside an instant, so zoned values
 round-trip through text.
 
+**Network addresses use bounded text columns.** MySQL has no native
+network address types. Toasty stores the canonical text form and sizes
+each `VARCHAR` for the longest value of that address family.
+
 ## Behavior specific to MySQL
 
 Toasty enables these features automatically when the driver is MySQL.
@@ -186,16 +194,21 @@ case-insensitively, while binary and `_bin` collations match case-sensitively.
 Pick the collation that matches the semantics you want when declaring the
 column, then use [`.like()`](./filtering-with-expressions.md#like).
 
-**No `RETURNING` from INSERT or UPDATE.** MySQL does not support
-`RETURNING` clauses on mutations. For inserts into a table with an
-auto-increment primary key, Toasty fetches the generated ID with
-`LAST_INSERT_ID()` on the same connection and synthesizes the same
-result a `RETURNING` clause would produce. This is transparent at the
-API level — [`Model::create()`](./creating-records.md) returns a
-populated model the same way it does on other backends. The constraint to know about: if you wire
-up a `RETURNING`-style read through a non-auto-increment column,
-Toasty will reject the query rather than silently issue a second
-round-trip.
+**No native `RETURNING` from INSERT or UPDATE.** For a single-row insert with
+one auto-increment result, Toasty retrieves the exact generated ID with
+`LAST_INSERT_ID()` on the same connection. This lets
+[`Model::create()`](./creating-records.md) return a populated model.
+
+MySQL cannot return every generated ID from a multi-row insert. Toasty does not
+assume that later IDs are consecutive: a bulk insert that needs
+database-generated values is rejected with `unsupported_feature` before the
+statement is sent. Bulk inserts remain available when all returned values are
+known before execution, such as models with caller-generated or
+client-generated UUID keys. Otherwise, insert each record separately or use a
+backend with mutation `RETURNING` support.
+
+For updates that need returned columns, Toasty performs a follow-up `SELECT`.
+That read is not atomic with the update relative to concurrent writers.
 
 **No CTE-driven updates.** MySQL does not allow `UPDATE` inside a
 common table expression. The query planner avoids generating those.

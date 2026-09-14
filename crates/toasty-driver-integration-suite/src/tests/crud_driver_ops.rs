@@ -35,7 +35,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
     // Check the CREATE operation
     let (op, resp) = test.log().pop();
 
-    assert_struct!(op, Operation::QuerySql({
+    assert_struct!(op, Operation::Insert({
         stmt: Statement::Insert({
             target: toasty_core::stmt::InsertTarget::Table({
                 table: == user_table_id,
@@ -49,20 +49,9 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         // ret: None,
     }));
 
-    if driver_test_cfg!(id_u64) && test.capability().returning_from_mutation {
-        assert_struct!(op, Operation::QuerySql({
+    if driver_test_cfg!(id_u64) {
+        assert_struct!(op, Operation::Insert({
             ret: Some([Type::U64]),
-            last_insert_id_hack: None,
-        }));
-
-        let rows = resp.values.collect_as_value().await?;
-
-        // Check response
-        assert_struct!(rows, == [(1u64,)]);
-    } else if driver_test_cfg!(id_u64) {
-        assert_struct!(op, Operation::QuerySql({
-            ret: None,
-            last_insert_id_hack: Some(1),
         }));
 
         let rows = resp.values.collect_as_value().await?;
@@ -70,7 +59,7 @@ pub async fn basic_crud(test: &mut Test) -> Result<()> {
         // Check response
         assert_struct!(rows, == [(1u64,)]);
     } else {
-        assert_struct!(op, Operation::QuerySql({
+        assert_struct!(op, Operation::Insert({
             ret: None,
         }));
 

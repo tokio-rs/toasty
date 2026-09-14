@@ -1,6 +1,6 @@
 [package]
 name = "toasty-core"
-version = "0.9.0"
+version = "0.10.0"
 description = "Core types, schema representations, and driver interface for Toasty"
 authors.workspace = true
 edition.workspace = true
@@ -22,6 +22,8 @@ form_urlencoded.workspace = true
 hashbrown.workspace = true
 indexmap.workspace = true
 jiff = { workspace = true, optional = true }
+cidr = { workspace = true, optional = true }
+macaddr = { workspace = true, optional = true }
 percent-encoding.workspace = true
 rust_decimal = { workspace = true, optional = true }
 bigdecimal = { workspace = true, optional = true }
@@ -38,6 +40,7 @@ assert-struct = ["dep:assert-struct"]
 rust_decimal = ["dep:rust_decimal"]
 bigdecimal = ["dep:bigdecimal"]
 jiff = ["dep:jiff"]
+net = ["dep:cidr", "dep:macaddr"]
 migration = ["serde", "dep:toml"]
 serde = ["dep:serde", "bit-set/serde"]
 

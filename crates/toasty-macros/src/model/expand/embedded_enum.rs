@@ -1,5 +1,5 @@
 use super::{Expand, schema, util};
-use crate::model::schema::{EnumStorageStrategy, FieldTy, Name, VariantValue};
+use crate::model::schema::{BelongsTo, EnumStorageStrategy, FieldTy, Name, VariantValue};
 
 use hashbrown::HashMap;
 use proc_macro2::TokenStream;
@@ -104,7 +104,7 @@ impl Expand<'_> {
         quote! {
             {
                 let path_stmt: #toasty::core::stmt::Expr = {
-                    let p: #toasty::core::stmt::Path = self.path().into();
+                    let p: #toasty::core::stmt::Path = self.path.clone().into();
                     p.into_stmt()
                 };
                 let variant_id = #toasty::core::schema::app::VariantId {
@@ -119,7 +119,7 @@ impl Expand<'_> {
     }
 
     /// Generates delegated comparison methods (`eq`, `ne`, `in_list`) that
-    /// forward to `self.path()`. Ordered comparisons (`gt`, `ge`, `lt`, `le`)
+    /// forward to the stored path. Ordered comparisons (`gt`, `ge`, `lt`, `le`)
     /// are intentionally excluded because enums have no meaningful ordering.
     fn expand_comparison_methods(&self) -> TokenStream {
         let toasty = &self.toasty;
@@ -130,7 +130,7 @@ impl Expand<'_> {
             let method_ident = syn::Ident::new(name, proc_macro2::Span::call_site());
             quote! {
                 #vis fn #method_ident(&self, rhs: impl #toasty::stmt::IntoExpr<#model_ident>) -> #toasty::stmt::Expr<bool> {
-                    self.path().#method_ident(rhs)
+                    self.path.clone().#method_ident(rhs)
                 }
             }
         });
@@ -139,7 +139,7 @@ impl Expand<'_> {
             #( #methods )*
 
             #vis fn in_list(&self, rhs: impl #toasty::stmt::IntoExpr<#toasty::List<#model_ident>>) -> #toasty::stmt::Expr<bool> {
-                self.path().in_list(rhs)
+                self.path.clone().in_list(rhs)
             }
         }
     }
@@ -184,7 +184,7 @@ impl Expand<'_> {
                 quote! {
                     #vis fn #method_name(&self) -> #variant_handle_ident<__Origin> {
                         #variant_handle_ident {
-                            path: self.path()
+                            path: self.path.clone()
                         }
                     }
                 }
@@ -194,14 +194,9 @@ impl Expand<'_> {
         // Generate one struct per data-carrying variant. The same struct is
         // both the entry point returned by `email()` (used for `.matches(...)`
         // filters and direct `.eq()`/include path access) and the namespace
-        // for variant-field accessors. The struct stores the parent path
-        // (the path to the embed enum field) and exposes:
-        //
-        // - `parent_path()` — model-rooted path to the enum field. Used by
-        //   `matches()` to build the `is_variant` gate and by every filter
-        //   method on a variant-rooted Path to inject the implicit gate.
-        // - `path()` — variant-rooted path. Field accessors chain off this
-        //   so that the produced Path knows its variant context.
+        // for variant-field accessors. The struct stores the model-rooted path
+        // to the enum field. `matches()` uses it to build the `is_variant` gate,
+        // while field accessors add the variant step before chaining the field.
         let variant_field_structs: Vec<_> = embedded_enum
             .variants
             .iter()
@@ -210,16 +205,34 @@ impl Expand<'_> {
             .map(|(variant_index, variant)| {
                 let variant_handle_ident = variant.variant_handle_ident.as_ref().unwrap();
                 let variant_idx = util::int(variant_index);
+                let variant_path = quote! {{
+                    let variant_id = #toasty::core::schema::app::VariantId {
+                        model: <#model_ident as #toasty::Embed>::id(),
+                        index: #variant_idx,
+                    };
+                    self.path.clone().into_variant(variant_id)
+                }};
 
                 let field_methods: Vec<_> = self
                     .variant_fields(variant_index)
                     .iter()
                     .enumerate()
-                    .map(|(field_index, field)| {
+                    .filter_map(|(field_index, field)| {
+                        // A relation field has no filter path yet; only its
+                        // key fields are queryable. The offset comes from the
+                        // enumeration before this filter, so skipping does not
+                        // shift later fields.
+                        let FieldTy::Primitive(field_ty) = &field.ty else {
+                            return None;
+                        };
                         let field_ident = &field.name.ident;
-                        let field_ty = primitive_ty_unwrap(field);
                         let field_offset = util::int(field_index);
-                        self.expand_primitive_field_method(field_ident, field_ty, &field_offset)
+                        Some(self.expand_primitive_field_method(
+                            field_ident,
+                            field_ty,
+                            &field_offset,
+                            &variant_path,
+                        ))
                     })
                     .collect();
 
@@ -228,25 +241,14 @@ impl Expand<'_> {
                         path: #toasty::Path<__Origin, #model_ident>,
                     }
 
+                    #[allow(dead_code)]
                     impl<__Origin> #variant_handle_ident<__Origin> {
-                        fn parent_path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                            self.path.clone()
-                        }
-
-                        fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                            let variant_id = #toasty::core::schema::app::VariantId {
-                                model: <#model_ident as #toasty::Embed>::id(),
-                                index: #variant_idx,
-                            };
-                            self.parent_path().into_variant(variant_id)
-                        }
-
                         #vis fn matches(
                             self,
                             f: impl FnOnce(Self) -> #toasty::stmt::Expr<bool>,
                         ) -> #toasty::stmt::Expr<bool> {
                             let parent_stmt: #toasty::core::stmt::Expr = {
-                                let p: #toasty::core::stmt::Path = self.parent_path().into();
+                                let p: #toasty::core::stmt::Path = self.path.clone().into();
                                 p.into_stmt()
                             };
                             let variant_id = #toasty::core::schema::app::VariantId {
@@ -273,11 +275,8 @@ impl Expand<'_> {
                 path: #toasty::Path<__Origin, #model_ident>,
             }
 
+            #[allow(dead_code)]
             impl<__Origin> #field_struct_ident<__Origin> {
-                fn path(&self) -> #toasty::Path<__Origin, #model_ident> {
-                    self.path.clone()
-                }
-
                 #( #is_variant_methods )*
 
                 #( #variant_accessor_methods )*
@@ -365,13 +364,27 @@ impl Expand<'_> {
     /// Generates the flat list of `Field` schema tokens for all variant fields,
     /// with each field tagged with its `VariantId`.
     pub(super) fn expand_enum_schema_fields(&self) -> Vec<TokenStream> {
-        let toasty = &self.toasty;
+        let shared_overrides = self.shared_column_overrides();
 
-        // Effective `#[column("name")]` override per shared group: declaring
-        // the override on one sharing field suffices, so propagate it to every
-        // member. Disagreeing overrides are rejected by
-        // `expand_shared_column_checks`; here the first one wins.
-        let mut shared_overrides: HashMap<String, &syn::LitStr> = HashMap::new();
+        self.model
+            .fields
+            .iter()
+            .map(|field| {
+                let parts = match &field.ty {
+                    FieldTy::BelongsTo(rel) => self.belongs_to_schema_parts(rel),
+                    _ => self.primitive_schema_parts(field, &shared_overrides),
+                };
+                self.expand_schema_field(field, parts)
+            })
+            .collect()
+    }
+
+    /// Effective `#[column("name")]` override per shared group: declaring the
+    /// override on one sharing field suffices, so propagate it to every
+    /// member. Disagreeing overrides are rejected by
+    /// `expand_shared_column_checks`; here the first one wins.
+    fn shared_column_overrides(&self) -> HashMap<String, &syn::LitStr> {
+        let mut overrides = HashMap::new();
         for field in &self.model.fields {
             let Some(ident) = &field.attrs.shared else {
                 continue;
@@ -379,84 +392,164 @@ impl Expand<'_> {
             let Some(lit) = field.attrs.column.as_ref().and_then(|c| c.name.as_ref()) else {
                 continue;
             };
-            shared_overrides.entry(ident.to_string()).or_insert(lit);
+            overrides.entry(ident.to_string()).or_insert(lit);
         }
+        overrides
+    }
 
-        self.model
-            .fields
-            .iter()
-            .map(|field| {
-                let index = util::int(field.id);
-                let app_name = field.name.as_str();
-                // A `#[column("name")]` on a variant field overrides its
-                // database column name. For a `#[shared]` field, the override
-                // declared by any member of the group applies to all of them.
-                let storage_override = field
-                    .attrs
-                    .column
-                    .as_ref()
-                    .and_then(|column| column.name.as_ref())
-                    .or_else(|| {
-                        let ident = field.attrs.shared.as_ref()?.to_string();
-                        shared_overrides.get(&ident).copied()
-                    });
-                let storage_name = match storage_override {
-                    Some(name) => quote! { Some(#name.to_string()) },
-                    None => quote! { None },
-                };
-                // `#[shared(<ident>)]` names the logical field this variant
-                // field participates in. Fields declaring the same identifier
-                // are coalesced into one shared column by the schema builder
-                // (see `BuildMapping::map_field_primitive`).
-                let shared = match &field.attrs.shared {
-                    Some(ident) => {
-                        let name = Name::from_ident(ident);
-                        let name = schema::expand_name(toasty, &name);
-                        quote! { Some(#name) }
-                    }
-                    None => quote! { None },
-                };
-                let ty = primitive_ty_unwrap(field);
-                let storage_ty = match field
-                    .attrs
-                    .column
-                    .as_ref()
-                    .and_then(|column| column.ty.as_ref())
-                {
-                    Some(column_ty) => {
-                        let expanded = column_ty.expand_with(toasty);
-                        quote! { Some(#expanded) }
-                    }
-                    None => quote! { None },
-                };
-                let variant_index = field.variant.expect("enum field must have variant");
-                let variant_idx = util::int(variant_index);
-                quote! {
-                    #toasty::core::schema::app::Field {
-                        id: #toasty::core::schema::app::FieldId {
-                            model: id,
-                            index: #index,
-                        },
-                        name: #toasty::core::schema::app::FieldName {
-                            app: Some(#app_name.to_string()),
-                            storage: #storage_name,
-                        },
-                        ty: <#ty as #toasty::Field>::field_ty(#storage_ty),
-                        nullable: <#ty as #toasty::Field>::NULLABLE,
-                        primary_key: false,
-                        auto: None,
-                        versionable: false,
-                        deferred: <#ty as #toasty::Field>::DEFERRED,
-                        constraints: vec![],
-                        variant: Some(#toasty::core::schema::app::VariantId {
-                            model: id,
-                            index: #variant_idx,
-                        }),
-                        shared: #shared,
-                    }
+    /// A relation field owns no storage: the sibling key fields map to
+    /// columns, the relation itself registers only its schema entry
+    /// (target + foreign key).
+    fn belongs_to_schema_parts(&self, rel: &BelongsTo) -> SchemaFieldParts {
+        let toasty = &self.toasty;
+        let ty = &rel.ty;
+        let foreign_key = self.expand_belongs_to_foreign_key(rel);
+
+        SchemaFieldParts {
+            storage_name: quote! { None },
+            ty: quote! {
+                <#ty as #toasty::RelationOneField>::belongs_to_relation_field_ty(#foreign_key)
+            },
+            nullable: quote! { <#ty as #toasty::RelationOneField>::NULLABLE },
+            deferred: quote! { <#ty as #toasty::RelationOneField>::DEFERRED },
+            shared: quote! { None },
+        }
+    }
+
+    fn expand_belongs_to_foreign_key(&self, rel: &BelongsTo) -> TokenStream {
+        let toasty = &self.toasty;
+        let ty = &rel.ty;
+
+        let fk_fields = rel.foreign_key.iter().map(|fk_field| {
+            let source = util::int(fk_field.source);
+            let target = fk_field.target.to_string();
+
+            quote! {
+                #toasty::core::schema::app::ForeignKeyField {
+                    source: #toasty::core::schema::app::FieldId {
+                        model: id,
+                        index: #source,
+                    },
+                    target: {
+                        type __RelationTarget =
+                            <#ty as #toasty::RelationOneField>::Target;
+                        <__RelationTarget as #toasty::Model>::field_name_to_id(#target)
+                    },
                 }
-            })
-            .collect()
+            }
+        });
+
+        quote! {
+            #toasty::core::schema::app::ForeignKey {
+                fields: vec![ #( #fk_fields ),* ],
+            }
+        }
+    }
+
+    fn primitive_schema_parts(
+        &self,
+        field: &crate::model::schema::Field,
+        shared_overrides: &HashMap<String, &syn::LitStr>,
+    ) -> SchemaFieldParts {
+        let toasty = &self.toasty;
+        let ty = primitive_ty_unwrap(field);
+
+        // `#[shared(<ident>)]` names the logical field this variant field
+        // participates in. Fields declaring the same identifier are coalesced
+        // into one shared column by the schema builder
+        // (see `BuildMapping::map_field_primitive`).
+        let shared = match &field.attrs.shared {
+            Some(ident) => {
+                let name = Name::from_ident(ident);
+                let name = schema::expand_name(toasty, &name);
+                quote! { Some(#name) }
+            }
+            None => quote! { None },
+        };
+
+        // `#[column(type = ...)]` overrides the storage type.
+        let column_ty = field.attrs.column.as_ref().and_then(|c| c.ty.as_ref());
+        let storage_ty = match column_ty {
+            Some(column_ty) => {
+                let expanded = column_ty.expand_with(toasty);
+                quote! { Some(#expanded) }
+            }
+            None => quote! { None },
+        };
+
+        SchemaFieldParts {
+            storage_name: self.primitive_storage_name(field, shared_overrides),
+            ty: quote! { <#ty as #toasty::Field>::field_ty(#storage_ty) },
+            nullable: quote! { <#ty as #toasty::Field>::NULLABLE },
+            deferred: quote! { <#ty as #toasty::Field>::DEFERRED },
+            shared,
+        }
+    }
+
+    /// A `#[column("name")]` on a variant field overrides its database column
+    /// name. For a `#[shared]` field, the override declared by any member of
+    /// the group applies to all of them.
+    fn primitive_storage_name(
+        &self,
+        field: &crate::model::schema::Field,
+        shared_overrides: &HashMap<String, &syn::LitStr>,
+    ) -> TokenStream {
+        let own_override = field.attrs.column.as_ref().and_then(|c| c.name.as_ref());
+        let group_override = || {
+            let ident = field.attrs.shared.as_ref()?.to_string();
+            shared_overrides.get(&ident).copied()
+        };
+
+        match own_override.or_else(group_override) {
+            Some(name) => quote! { Some(#name.to_string()) },
+            None => quote! { None },
+        }
+    }
+
+    /// Emits one schema `Field` expression, combining the per-kind `parts`
+    /// with the attributes common to every variant field.
+    fn expand_schema_field(
+        &self,
+        field: &crate::model::schema::Field,
+        parts: SchemaFieldParts,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let index = util::int(field.id);
+        let app_name = field.name.as_str();
+        let variant_index = field.variant.expect("enum field must have variant");
+        let variant_idx = util::int(variant_index);
+        let SchemaFieldParts {
+            storage_name,
+            ty,
+            nullable,
+            deferred,
+            shared,
+        } = parts;
+
+        quote! {
+            #toasty::core::schema::app::Field {
+                id: #toasty::core::schema::app::FieldId {
+                    model: id,
+                    index: #index,
+                },
+                name: #toasty::core::schema::app::FieldName {
+                    app: Some(#app_name.to_string()),
+                    storage: #storage_name,
+                },
+                ty: #ty,
+                nullable: #nullable,
+                primary_key: false,
+                auto: None,
+                versionable: false,
+                deferred: #deferred,
+                constraints: vec![],
+                variant: Some(#toasty::core::schema::app::VariantId {
+                    model: id,
+                    index: #variant_idx,
+                }),
+                shared: #shared,
+            }
+        }
     }
 
     /// Emits compile-time checks for variant fields that declare a shared
@@ -676,7 +769,7 @@ impl Expand<'_> {
                         .enumerate()
                         .map(|(i, field)| {
                             let field_ident = &field.name.ident;
-                            let ty = primitive_ty_unwrap(field);
+                            let ty = loadable_ty(field);
                             let record_pos = util::int(i + 1);
                             let load = quote! {
                                 <#ty as #toasty::Load>::load(record[#record_pos].take())?
@@ -751,8 +844,17 @@ impl Expand<'_> {
 
                     let field_exprs = fields.iter().map(|field| {
                         let field_ident = &field.name.ident;
-                        let ty = primitive_ty_unwrap(field);
-                        quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#field_ident))
+                        match &field.ty {
+                            // The relation slot encodes as `Null`; the sibling
+                            // key fields carry the storage.
+                            FieldTy::BelongsTo(_) => {
+                                quote!(#toasty::embedded_relation_expr(&#field_ident))
+                            }
+                            _ => {
+                                let ty = primitive_ty_unwrap(field);
+                                quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#field_ident))
+                            }
+                        }
                     });
 
                     quote! {
@@ -844,10 +946,31 @@ impl Expand<'_> {
     }
 }
 
+/// The pieces of a schema `Field` expression that differ between relation
+/// and primitive variant fields; `expand_schema_field` supplies the rest.
+struct SchemaFieldParts {
+    storage_name: TokenStream,
+    ty: TokenStream,
+    nullable: TokenStream,
+    deferred: TokenStream,
+    shared: TokenStream,
+}
+
 fn primitive_ty_unwrap(field: &crate::model::schema::Field) -> &syn::Type {
     match &field.ty {
         FieldTy::Primitive(ty) => ty,
         _ => panic!("expected primitive field type for enum variant field"),
+    }
+}
+
+/// The Rust type a variant field loads through. A relation field loads
+/// through its declared type (`Deferred<..>`); the engine supplies `Null`
+/// for its record slot, which decodes to the unloaded state.
+fn loadable_ty(field: &crate::model::schema::Field) -> &syn::Type {
+    match &field.ty {
+        FieldTy::Primitive(ty) => ty,
+        FieldTy::BelongsTo(rel) => &rel.ty,
+        _ => panic!("unsupported field type in embedded enum"),
     }
 }
 

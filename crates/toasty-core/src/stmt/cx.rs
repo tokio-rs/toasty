@@ -485,6 +485,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 // The mapped type is a list
                 Type::list(ty)
             }
+            Expr::Not(_) => Type::Bool,
             Expr::Or(_) => Type::Bool,
             Expr::Project(e) => {
                 if returning_expr {

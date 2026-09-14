@@ -276,6 +276,12 @@ impl LowerStatement<'_, '_> {
                 .zip(&variant_mapping.fields)
                 .enumerate()
             {
+                // A relation in a variant has no include support; its slot
+                // stays `Null` (the unloaded state). The enumeration index is
+                // taken before this skip, so later fields keep their slots.
+                if var_field.ty.is_relation() {
+                    continue;
+                }
                 let field_includes = partition_includes(&arm_sub_includes, j);
                 self.process_field(
                     &mut arm_record[j + 1],
@@ -512,8 +518,8 @@ fn query_has_modifiers(query: &Option<stmt::Query>) -> bool {
 /// `PathRoot::Variant` chain into a discriminant-index step.
 ///
 /// The result uses LOCAL field indices for variant fields (matching the IR's
-/// `Match` arm record convention), not the GLOBAL `EmbeddedEnum::fields`
-/// indices used by `Schema::resolve`. Include lowering walks the IR shape,
+/// `Match` arm record convention and the local convention also used by
+/// `Schema::resolve`). Include lowering walks the IR shape,
 /// not the schema, so LOCAL is what `process_enum_arms` needs.
 fn flatten_path(path: &stmt::Path) -> stmt::Projection {
     let mut acc = stmt::Projection::identity();

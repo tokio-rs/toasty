@@ -1,22 +1,17 @@
 # `query!` Macro
 
-A declarative macro for building Toasty queries. `query!` provides a concise,
-SQL-inspired syntax for filtering, ordering, paginating, and eager-loading
-model data. It builds a query object without executing it — the caller chains
-`.exec(&mut db).await?` to run the query.
+`query!` builds queries against a single model: filters over that model's own
+fields, ordering, and pagination. It cannot cross an association boundary,
+eager-load related models, test an optional field for presence, or use a
+boolean field on its own as a predicate. This design covers those additions.
 
 ```rust
-let users = query!(User FILTER .name == "Carl").exec(&mut db).await?;
+// Users with at least one incomplete todo
+query!(User FILTER EXISTS(.todos FILTER .complete == false))
+
+// All users, eager-loading their todos
+query!(User { todos })
 ```
-
-Today, the equivalent query is:
-
-```rust
-let users = User::filter(User::fields().name().eq("Carl")).exec(&mut db).await?;
-```
-
-The macro eliminates the repetition of the model name in field paths, provides
-infix operators instead of method chains, and reads closer to a query language.
 
 Tracked in [#808] — discussion of the feature happens there.
 
@@ -24,22 +19,11 @@ Tracked in [#808] — discussion of the feature happens there.
 
 ## Syntax
 
-```
-query!($source [FILTER $filter] [ORDER BY $order_by] [OFFSET $offset] [LIMIT $limit])
-```
-
-All keywords are case-insensitive: `filter`, `FILTER`, `Filter` all work. The
-clauses are optional and can appear in any combination, but must follow the
-order shown above when present.
-
-### Source
+### Include blocks
 
 The source is a model type path, optionally followed by an include block:
 
 ```rust
-// All users
-query!(User)
-
 // All users, eager-loading their todos
 query!(User { todos })
 
@@ -49,87 +33,35 @@ query!(User {
 })
 ```
 
-### Filter expressions
-
-Filter expressions use infix operators and dot-prefixed field paths:
+### Null checks
 
 ```rust
-// Simple equality
-query!(User FILTER .name == "Carl")
-
-// Comparison operators
-query!(User FILTER .age > 18)
-query!(User FILTER .age >= 18)
-query!(User FILTER .age < 65)
-query!(User FILTER .age <= 65)
-query!(User FILTER .name != "Carl")
-
-// Logical operators
-query!(User FILTER .name == "Carl" AND .age > 18)
-query!(User FILTER .name == "Carl" OR .name == "Alice")
-
-// Parenthesized grouping
-query!(User FILTER .name == "Carl" AND (.age > 18 OR .age < 10))
-
-// Null checks
 query!(User FILTER .bio IS NONE)
 query!(User FILTER .bio IS SOME)
+```
 
-// Negation
+### Boolean fields as predicates
+
+A boolean field path used on its own is a predicate, with or without `NOT`:
+
+```rust
+query!(User FILTER .active)
 query!(User FILTER NOT .active)
-query!(User FILTER NOT (.age > 18 AND .age < 65))
+query!(User FILTER .active AND .age > 18)
 ```
 
-### Dot-prefixed field paths
+### Multi-key order by
 
-A leading `.` starts a field path rooted at the source model's `fields()`
-method. `.name` expands to `User::fields().name()`. Chained dots navigate
-associations: `.todos.title` expands to `User::fields().todos().title()`.
-
-### External references
-
-`#ident` pulls a variable from the surrounding scope. `#(expr)` embeds an
-arbitrary Rust expression. This follows the `quote!` convention:
+`ORDER BY` takes a comma-separated list of keys, each with its own direction:
 
 ```rust
-let name = "Carl";
-query!(User FILTER .name == #name)
-
-query!(User FILTER .age > #(calculate_min_age()))
-```
-
-### Order by
-
-```rust
-query!(User ORDER BY .name ASC)
-query!(User ORDER BY .created_at DESC)
-query!(User FILTER .active == true ORDER BY .name ASC)
-```
-
-### Limit and offset
-
-```rust
-query!(User LIMIT 10)
-query!(User OFFSET 20 LIMIT 10)
-query!(User FILTER .active == true ORDER BY .name ASC LIMIT 10)
+query!(User ORDER BY .last_name ASC, .first_name ASC)
+query!(User ORDER BY .active DESC, .name)
 ```
 
 ## Expansion
 
-The macro expands each syntactic element into the corresponding method-chain
-calls on the existing query builder API.
-
-### Source expansion
-
-```rust
-// Input:
-query!(User)
-
-// Expands to:
-User::all()
-```
-
-### Source with includes
+### Include expansion
 
 ```rust
 // Input:
@@ -138,7 +70,6 @@ query!(User { todos })
 // Expands to:
 User::all().include(User::fields().todos())
 
-// Nested:
 // Input:
 query!(User { todos { tags } })
 
@@ -149,49 +80,28 @@ User::all()
 
 ### Filter expansion
 
-Dot-prefixed paths expand to `Source::fields().path()` calls. Operators map to
-method calls on the resulting field expression:
-
 | Macro operator | Expansion |
 |---|---|
-| `.field == val` | `Source::fields().field().eq(val)` |
-| `.field != val` | `Source::fields().field().ne(val)` |
-| `.field > val` | `Source::fields().field().gt(val)` |
-| `.field >= val` | `Source::fields().field().ge(val)` |
-| `.field < val` | `Source::fields().field().lt(val)` |
-| `.field <= val` | `Source::fields().field().le(val)` |
 | `.field IS NONE` | `Source::fields().field().is_none()` |
 | `.field IS SOME` | `Source::fields().field().is_some()` |
-| `a AND b` | `a.and(b)` |
-| `a OR b` | `a.or(b)` |
-| `NOT expr` | `!expr` |
+| `.field` (boolean) | `Source::fields().field().eq(true)` |
+
+`NOT` applies to the expanded expression, so `NOT .active` expands to
+`User::fields().active().eq(true).not()`.
+
+### Order by expansion
+
+Multiple keys expand to a tuple, which `Query::order_by` accepts:
 
 ```rust
 // Input:
-query!(User FILTER .name == "Carl" AND .age > 18)
+query!(User ORDER BY .last_name ASC, .first_name DESC)
 
 // Expands to:
-User::filter(
-    User::fields().name().eq("Carl")
-        .and(User::fields().age().gt(18))
-)
-```
-
-### External reference expansion
-
-```rust
-// Input:
-let name = "Carl";
-query!(User FILTER .name == #name)
-
-// Expands to:
-User::filter(User::fields().name().eq(name))
-
-// Input:
-query!(User FILTER .age > #(calculate_min_age()))
-
-// Expands to:
-User::filter(User::fields().age().gt(calculate_min_age()))
+User::all().order_by((
+    User::fields().last_name().asc(),
+    User::fields().first_name().desc(),
+))
 ```
 
 ### Full expansion example
@@ -209,8 +119,11 @@ User::filter(User::fields().name().eq("Carl"))
 
 ## Association filters
 
-The macro needs to express filters that cross association boundaries. There are
-several patterns to consider.
+Dot-path chaining covers associations with a cardinality of one — `.user.name`
+on a `BelongsTo` names a single value. It does not extend to has-many
+associations: `.todos.title` names a list of values, not one value, so it
+cannot be compared against a scalar. Filters that cross a has-many go through
+`EXISTS`.
 
 ### Existence checks (`EXISTS`)
 
@@ -296,46 +209,6 @@ filter. The nested form is required when it does:
 query!(User FILTER EXISTS(.todos FILTER .complete == false AND EXISTS(.tags FILTER .name == "urgent")))
 ```
 
-### Cardinality-one traversal
-
-When an association has a cardinality of one — `BelongsTo` or `HasOne` — the
-macro can traverse it with dot-path chaining, just like accessing a field.
-
-"Find todos whose user has name Carl."
-
-```rust
-query!(Todo FILTER .user.name == "Carl")
-```
-
-This expands to:
-
-```rust
-Todo::filter(
-    Todo::fields().user().name().eq("Carl")
-)
-```
-
-This works because `.user` has a cardinality of one: there is exactly one user
-per todo, so `.user.name` unambiguously refers to a single value. The same
-pattern works for `HasOne` associations:
-
-```rust
-// User has_one profile
-query!(User FILTER .profile.bio IS SOME)
-```
-
-For direct equality against a model instance, no traversal is needed:
-
-```rust
-query!(Todo FILTER .user == #carl)
-```
-
-Expands to:
-
-```rust
-Todo::filter(Todo::fields().user().eq(carl))
-```
-
 ### Referencing the parent scope
 
 Inside an `EXISTS` sub-query, dot-prefixed paths are relative to the sub-query's
@@ -353,6 +226,12 @@ is an absolute path — it references the `name` field on the outer `User` query
 The macro recognizes `User.name` as absolute because `User` matches the root
 select's model type.
 
+This form needs a builder API to expand into. `Path::any` takes a predicate
+over the child model alone and gives the caller no handle on the outer row. The
+statement AST already carries what is needed — `ExprReference` records a nesting
+level and resolves against an ancestor model — so the work is a typed surface
+over it, not a new engine capability.
+
 ### Summary of association filter syntax
 
 | Pattern | Syntax | Meaning |
@@ -360,56 +239,31 @@ select's model type.
 | Has-many EXISTS | `EXISTS(.assoc FILTER expr)` | At least one child matches |
 | Multi-hop EXISTS | `EXISTS(.a.b FILTER expr)` | Traverse multiple associations |
 | Nested EXISTS | `EXISTS(.a FILTER EXISTS(.b FILTER expr))` | Nested existence with intermediate filter |
-| Cardinality-one field | `.assoc.field op val` | Filter by belongs-to/has-one field |
-| Cardinality-one equality | `.assoc == #val` | Association equals a model instance |
 | Parent reference | `Root.field` | Absolute path to outer query field |
 
 ## Parsing strategy
 
-The macro input is parsed left-to-right with keyword-driven sections:
-
-1. Parse the source: a type path, optionally followed by `{ includes }`.
-2. If the next token is `FILTER` (case-insensitive): parse a filter expression.
-3. If the next token is `ORDER` followed by `BY`: parse order-by expressions.
-4. If the next token is `OFFSET`: parse an expression for the offset.
-5. If the next token is `LIMIT`: parse an expression for the limit.
-
-### Filter expression parsing
-
-Filter expressions are parsed with standard precedence:
-
-1. `OR` (lowest precedence)
-2. `AND`
-3. `NOT` (prefix unary)
-4. Comparison operators (`==`, `!=`, `>`, `>=`, `<`, `<=`, `IS NONE`, `IS SOME`)
-5. `EXISTS(sub-query)` and parenthesized groups `(expr)` (atoms)
-
-A dot-prefixed path (`.field` or `.field.subfield`) is parsed as a sequence of
-`.ident` tokens. An absolute path (`Model.field`) is parsed as an `ident`
-followed by `.ident` tokens. On the right side of a comparison, the value is
-one of:
-
-- A string literal (`"Carl"`)
-- A numeric literal (`18`)
-- A boolean literal (`true`, `false`)
-- An external reference (`#ident` or `#(expr)`)
-- A dot-prefixed field path (for field-to-field comparisons)
-- An absolute path (`Model.field`, for parent scope references)
+- The source parser accepts `{ includes }` after the type path, with nested
+  blocks for nested includes.
+- `ORDER BY` parses a comma-separated list of order-by expressions rather than a
+  single one.
+- `IS NONE` and `IS SOME` are postfix comparison operators on a field path.
+- A field path with no operator after it is an atom, alongside parenthesized
+  groups.
+- `EXISTS(sub-query)` is an atom. Its body opens a new scope: the select path is
+  resolved relative to the enclosing scope, and dot-prefixed paths in the body
+  are rooted at the model that path reaches. The macro tracks the current
+  model type per scope so it can emit the inner `Todo::fields()` root.
+- An absolute path (`Model.field`) is parsed as an `ident` followed by `.ident`
+  tokens, and is a valid right-hand side of a comparison.
 
 ### Case-insensitive keywords
 
-Keywords are matched case-insensitively by comparing the identifier's string
-representation. `FILTER`, `filter`, `Filter` all match. This is handled
-during parsing by lowercasing the identifier text before comparison.
-
-`AND`, `OR`, `NOT`, `EXISTS`, `IS`, `NONE`, `SOME`, `ORDER`, `BY`, `ASC`,
-`DESC`, `OFFSET`, `LIMIT` are all case-insensitive.
+`EXISTS`, `IS`, `NONE`, and `SOME` match case-insensitively, like the keywords
+already recognized.
 
 ### Disambiguation
 
-- `.` always starts a relative field path (no valid Rust expression starts with
-  `.` in this context).
-- `#` always starts an external reference.
 - `EXISTS` is a keyword when followed by `(`. If the user has a variable named
   `exists`, they use `#exists`.
 - An identifier followed by `.` on the right side of a comparison is an absolute
@@ -417,4 +271,3 @@ during parsing by lowercasing the identifier text before comparison.
   start with `.`, not an identifier.
 - `{` after the source type starts an include block, not a Rust block
   expression, because the source is always a type path.
-

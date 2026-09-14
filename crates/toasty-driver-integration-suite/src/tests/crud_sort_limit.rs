@@ -32,7 +32,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     let (op, resp) = test.log().pop();
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
+            body: ExprSet::Select({}),
             order_by: Some(_),
         }),
     }));
@@ -54,7 +54,7 @@ pub async fn sort_asc(test: &mut Test) -> Result<()> {
     let (op, resp) = test.log().pop();
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
+            body: ExprSet::Select({}),
             order_by: Some(_),
         }),
     }));
@@ -88,7 +88,7 @@ pub async fn paginate(test: &mut Test) -> Result<()> {
     let (op, resp) = test.log().pop();
     assert_struct!(op, Operation::QuerySql({
         stmt: Statement::Query({
-            body: ExprSet::Select({ .. }),
+            body: ExprSet::Select({}),
             order_by: Some(_),
             limit: Some(_),
         }),
@@ -147,12 +147,12 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Query({
-                body: ExprSet::Select({ .. }),
+                body: ExprSet::Select({}),
                 limit: Some(_),
             }),
         }));
     } else {
-        assert_struct!(op, Operation::QueryPk({ .. }));
+        assert_struct!(op, Operation::QueryPk({}));
     }
 
     t.log().clear();
@@ -172,13 +172,13 @@ pub async fn limit_offset(t: &mut Test) -> Result<()> {
     if t.capability().sql() {
         assert_struct!(op, Operation::QuerySql({
             stmt: Statement::Query({
-                body: ExprSet::Select({ .. }),
+                body: ExprSet::Select({}),
                 order_by: Some(_),
                 limit: Some(_),
             }),
         }));
     } else {
-        assert_struct!(op, Operation::QueryPk({ .. }));
+        assert_struct!(op, Operation::QueryPk({}));
     }
 
     t.log().clear();
@@ -223,7 +223,7 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
         .first()
         .exec(&mut db)
         .await?;
-    assert_struct!(youngest, Some(_ { name: "Bob", .. }));
+    assert_struct!(youngest, Some({ name: "Bob" }));
 
     let (op, _) = t.log().pop();
     assert_struct!(op, Operation::QuerySql({
@@ -241,7 +241,7 @@ pub async fn first_narrows_to_single_row(t: &mut Test) -> Result<()> {
         .first()
         .exec(&mut db)
         .await?;
-    assert_struct!(oldest, Some(_ { name: "Carol", .. }));
+    assert_struct!(oldest, Some({ name: "Carol" }));
 
     Ok(())
 }
@@ -266,7 +266,7 @@ pub async fn first_respects_offset(t: &mut Test) -> Result<()> {
         .exec(&mut db)
         .await?;
 
-    assert_struct!(user, Some(_ { name: "Alice", .. }));
+    assert_struct!(user, Some({ name: "Alice" }));
 
     Ok(())
 }

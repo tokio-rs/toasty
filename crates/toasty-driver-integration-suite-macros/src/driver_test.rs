@@ -279,6 +279,12 @@ fn extract_db_capabilities(expr: &BoolExpr, expansion: &Expansion) -> Vec<(Strin
                     return; // Skip ID variant identifiers
                 }
 
+                // Test flags have no `Capability` field to assert against; the
+                // per-driver list gates them at expansion time instead.
+                if crate::parse::is_test_flag(name) {
+                    return;
+                }
+
                 // This must be a database capability
                 result.push((name.clone(), negated));
             }

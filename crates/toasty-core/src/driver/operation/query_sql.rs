@@ -15,8 +15,8 @@ use crate::stmt;
 ///
 /// let op = QuerySql {
 ///     stmt: sql_statement,
+///     params: vec![],
 ///     ret: Some(vec![stmt::Type::String, stmt::Type::I64]),
-///     last_insert_id_hack: None,
 /// };
 /// let operation: Operation = op.into();
 /// assert!(operation.is_query_sql());
@@ -36,13 +36,6 @@ pub struct QuerySql {
     /// these types to decode returned rows. When `None`, the statement does
     /// not return rows (e.g., `DELETE` without `RETURNING`).
     pub ret: Option<Vec<stmt::Type>>,
-
-    /// **Temporary MySQL workaround** for `RETURNING` from `INSERT`.
-    ///
-    /// When set, the driver should fetch `LAST_INSERT_ID()` to simulate
-    /// `RETURNING` behavior for the specified number of inserted rows.
-    /// Non-MySQL drivers should assert this is `None`.
-    pub last_insert_id_hack: Option<u64>,
 }
 
 impl Operation {

@@ -247,6 +247,8 @@ impl<M: Load> Paginate<M> {
         } else {
             (response.next_cursor, response.prev_cursor)
         };
+        let next_cursor = next_cursor.map(|cursor| *cursor);
+        let prev_cursor = prev_cursor.map(|cursor| *cursor);
 
         // Store the original query (not the reversed one) in the Page so that
         // subsequent .next() and .prev() calls use the correct ORDER BY direction

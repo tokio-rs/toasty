@@ -1,6 +1,6 @@
 [package]
 name = "toasty-driver-turso"
-version = "0.9.0"
+version = "0.10.0"
 description = "Turso (SQLite-compatible) driver for Toasty"
 authors.workspace = true
 edition.workspace = true
@@ -19,6 +19,7 @@ sync = ["turso/sync"]
 rust_decimal = ["toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
 bigdecimal = ["toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
 jiff = ["toasty-core/jiff", "toasty-sql/jiff"]
+net = ["toasty-core/net", "toasty-sql/net"]
 
 [dependencies]
 async-trait.workspace = true

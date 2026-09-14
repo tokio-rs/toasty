@@ -1,6 +1,6 @@
 use crate::schema::db;
 
-use hashbrown::HashMap;
+use hashbrown::{HashMap, HashSet};
 
 /// A single change to a named enum type between two schema versions.
 ///
@@ -10,6 +10,14 @@ use hashbrown::HashMap;
 pub enum Type<'a> {
     /// A new named enum type must be created.
     Create(&'a db::TypeEnum),
+
+    /// An existing named enum type is renamed without changing its identity.
+    Rename {
+        /// The enum type before the rename.
+        previous: &'a db::TypeEnum,
+        /// The enum type after the rename.
+        next: &'a db::TypeEnum,
+    },
 
     /// An existing named enum type has new variants appended.
     AddVariants {
@@ -24,7 +32,8 @@ impl<'a> Type<'a> {
     /// Computes the enum type diff between two schemas.
     ///
     /// Collects all named `TypeEnum` types from column definitions in both
-    /// schemas, matches them by name, and produces the appropriate changes.
+    /// schemas. A new name is a rename when the same columns use the type in
+    /// both schemas; otherwise, it creates a distinct type.
     ///
     /// # Panics
     ///
@@ -35,41 +44,31 @@ impl<'a> Type<'a> {
         let next_types = collect_named_enums(next);
 
         let mut changes = Vec::new();
+        let mut renamed = HashSet::new();
 
-        for (name, next_ty) in &next_types {
+        for (name, next_type) in &next_types {
             match prev_types.get(name) {
                 None => {
-                    changes.push(Self::Create(next_ty));
+                    let rename = prev_types.iter().find(|(previous_name, previous_type)| {
+                        !next_types.contains_key(*previous_name)
+                            && !renamed.contains(*previous_name)
+                            && previous_type.columns == next_type.columns
+                            && variants_are_prefix(previous_type.ty, next_type.ty)
+                    });
+
+                    if let Some((previous_name, previous_type)) = rename {
+                        changes.push(Self::Rename {
+                            previous: previous_type.ty,
+                            next: next_type.ty,
+                        });
+                        renamed.insert(*previous_name);
+                        add_variants(&mut changes, name, previous_type.ty, next_type.ty);
+                    } else {
+                        changes.push(Self::Create(next_type.ty));
+                    }
                 }
-                Some(prev_ty) => {
-                    let prev_names: Vec<&str> =
-                        prev_ty.variants.iter().map(|v| v.name.as_str()).collect();
-                    let next_names: Vec<&str> =
-                        next_ty.variants.iter().map(|v| v.name.as_str()).collect();
-
-                    assert!(
-                        next_names.len() >= prev_names.len(),
-                        "enum type `{name}`: removing variants is not supported; \
-                         previous had {} variants, next has {}",
-                        prev_names.len(),
-                        next_names.len()
-                    );
-
-                    for (i, prev_name) in prev_names.iter().enumerate() {
-                        assert!(
-                            next_names[i] == *prev_name,
-                            "enum type `{name}`: variant at position {i} changed from \
-                             `{prev_name}` to `{}`; reordering or renaming variants \
-                             is not supported",
-                            next_names[i]
-                        );
-                    }
-
-                    if next_names.len() > prev_names.len() {
-                        let added: Vec<&'a db::EnumVariant> =
-                            next_ty.variants[prev_names.len()..].iter().collect();
-                        changes.push(Self::AddVariants { ty: next_ty, added });
-                    }
+                Some(previous_type) => {
+                    add_variants(&mut changes, name, previous_type.ty, next_type.ty)
                 }
             }
         }
@@ -78,16 +77,72 @@ impl<'a> Type<'a> {
     }
 }
 
-fn collect_named_enums(schema: &db::Schema) -> HashMap<&str, &db::TypeEnum> {
+struct NamedEnum<'a> {
+    ty: &'a db::TypeEnum,
+    columns: HashSet<(&'a str, &'a str, bool)>,
+}
+
+fn collect_named_enums(schema: &db::Schema) -> HashMap<&str, NamedEnum<'_>> {
     let mut result = HashMap::new();
     for table in &schema.tables {
         for column in &table.columns {
             if let Some(type_enum) = column.storage_ty.named_enum()
                 && let Some(name) = &type_enum.name
             {
-                result.entry(name.as_str()).or_insert(type_enum);
+                result
+                    .entry(name.as_str())
+                    .or_insert_with(|| NamedEnum {
+                        ty: type_enum,
+                        columns: HashSet::new(),
+                    })
+                    .columns
+                    .insert((
+                        table.name.as_str(),
+                        column.name.as_str(),
+                        matches!(column.storage_ty, db::Type::List(_)),
+                    ));
             }
         }
     }
     result
+}
+
+fn variants_are_prefix(previous: &db::TypeEnum, next: &db::TypeEnum) -> bool {
+    previous.variants.len() <= next.variants.len()
+        && previous
+            .variants
+            .iter()
+            .zip(&next.variants)
+            .all(|(previous, next)| previous.name == next.name)
+}
+
+fn add_variants<'a>(
+    changes: &mut Vec<Type<'a>>,
+    name: &str,
+    previous: &'a db::TypeEnum,
+    next: &'a db::TypeEnum,
+) {
+    assert!(
+        next.variants.len() >= previous.variants.len(),
+        "enum type `{name}`: removing variants is not supported; previous had {} variants, next has {}",
+        previous.variants.len(),
+        next.variants.len()
+    );
+
+    for (i, (previous, next)) in previous.variants.iter().zip(&next.variants).enumerate() {
+        assert!(
+            previous.name == next.name,
+            "enum type `{name}`: variant at position {i} changed from `{}` to `{}`; \
+             reordering or renaming variants is not supported",
+            previous.name,
+            next.name
+        );
+    }
+
+    if next.variants.len() > previous.variants.len() {
+        changes.push(Type::AddVariants {
+            ty: next,
+            added: next.variants[previous.variants.len()..].iter().collect(),
+        });
+    }
 }

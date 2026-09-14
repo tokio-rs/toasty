@@ -1,10 +1,7 @@
 use indexmap::IndexSet;
 use toasty_core::stmt;
 
-use crate::engine::{
-    exec,
-    mir::{self, LogicalPlan},
-};
+use crate::engine::mir;
 
 /// Executes a single-row upsert on a non-SQL database.
 ///
@@ -20,34 +17,6 @@ pub(crate) struct Upsert {
 
     /// The return type of this operation.
     pub(crate) ty: stmt::Type,
-}
-
-impl Upsert {
-    pub(crate) fn to_exec(
-        &self,
-        logical_plan: &LogicalPlan,
-        node: &mir::Node,
-        var_table: &mut exec::VarDecls,
-    ) -> exec::Upsert {
-        let input = self
-            .inputs
-            .iter()
-            .map(|input| logical_plan[input].var.get().unwrap())
-            .collect();
-
-        let output = var_table.register_var(self.ty.clone());
-        node.var.set(Some(output));
-
-        exec::Upsert {
-            input,
-            output: exec::Output {
-                var: output,
-                num_uses: node.num_uses.get(),
-            },
-            stmt: self.stmt.clone(),
-            ret: mir::row_field_types(&self.ty),
-        }
-    }
 }
 
 impl From<Upsert> for mir::Node {

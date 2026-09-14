@@ -397,6 +397,9 @@ impl_scalar!(
     jiff::civil::DateTime
 );
 
+#[cfg(feature = "net")]
+impl_scalar!(stmt::IpCidr, stmt::IpInet, stmt::MacAddr6, stmt::MacAddr8);
+
 impl<T: Field> Field for Option<T> {
     const REQUIRES_EXPLICIT_COLUMN_TYPE: bool = T::REQUIRES_EXPLICIT_COLUMN_TYPE;
 

@@ -1,31 +1,14 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::{exec::Exec, mir},
 };
 use toasty_core::{
     driver::{ExecResponse, Rows, operation},
-    schema::db::{ColumnId, TableId},
     stmt::{ValueSet, ValueStream},
 };
 
-/// Get a model by key
-#[derive(Debug)]
-pub(crate) struct GetByKey {
-    /// Where to get the keys to load
-    pub input: VarId,
-
-    /// Where to store the result
-    pub output: Output,
-
-    /// Table to query
-    pub table: TableId,
-
-    /// Columns to get
-    pub columns: Vec<ColumnId>,
-}
-
 impl Exec<'_> {
-    pub(super) async fn action_get_by_key(&mut self, action: &GetByKey) -> Result<()> {
+    pub(super) async fn exec_get_by_key(&mut self, action: &mir::GetByKey) -> Result<ExecResponse> {
         let mut seen = ValueSet::new();
         let keys: Vec<_> = self
             .vars
@@ -45,7 +28,7 @@ impl Exec<'_> {
         } else {
             let op = operation::GetByKey {
                 table: action.table,
-                select: action.columns.clone(),
+                select: mir::column_ids(action.table, &action.columns).collect(),
                 keys,
             };
 
@@ -53,17 +36,6 @@ impl Exec<'_> {
             res.values
         };
 
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse::from_rows(res),
-        );
-        Ok(())
-    }
-}
-
-impl From<GetByKey> for Action {
-    fn from(src: GetByKey) -> Self {
-        Self::GetByKey(src)
+        Ok(ExecResponse::from_rows(res))
     }
 }

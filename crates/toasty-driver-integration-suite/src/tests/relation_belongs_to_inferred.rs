@@ -75,7 +75,7 @@ pub async fn infers_optional_relation(test: &mut Test) -> Result<()> {
     assert_eq!(post.user_id, Some(user.id));
 
     let loaded = post.user().exec(&mut db).await?;
-    assert_struct!(loaded, Some(_ { id: == user.id }));
+    assert_struct!(loaded, Some({ id: == user.id }));
 
     Ok(())
 }

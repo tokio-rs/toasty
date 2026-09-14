@@ -46,6 +46,9 @@ pub use name::Name;
 mod pragma;
 pub use pragma::Pragma;
 
+mod rename_type;
+pub use rename_type::RenameType;
+
 mod table_name;
 pub use table_name::TableName;
 
@@ -60,7 +63,7 @@ pub enum Statement {
     AlterColumn(AlterColumn),
     /// Alter an existing table (e.g. rename).
     AlterTable(AlterTable),
-    /// Alter a type (e.g. `ALTER TYPE ... ADD VALUE '...'`).
+    /// Add a value to an enum type.
     AlterType(AlterType),
     /// Copy rows from one table to another.
     CopyTable(CopyTable),
@@ -78,6 +81,8 @@ pub enum Statement {
     DropIndex(DropIndex),
     /// A SQLite PRAGMA statement.
     Pragma(Pragma),
+    /// Rename a type.
+    RenameType(RenameType),
     /// A DELETE statement.
     Delete(Delete),
     /// An INSERT statement.

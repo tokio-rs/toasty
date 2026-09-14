@@ -34,7 +34,7 @@ pub async fn batch_two_creates_rolls_back_on_second_failure(t: &mut Test) -> Res
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // first INSERT
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // first INSERT
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)
@@ -85,7 +85,7 @@ pub async fn batch_create_and_update_rolls_back_on_update_failure(t: &mut Test) 
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)
@@ -192,8 +192,8 @@ pub async fn batch_array_creates_rolls_back_on_failure(t: &mut Test) -> Result<(
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT first
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT second
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT first
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT second
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)
@@ -236,7 +236,7 @@ pub async fn batch_different_models_rolls_back_on_failure(t: &mut Test) -> Resul
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT user
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT user
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)

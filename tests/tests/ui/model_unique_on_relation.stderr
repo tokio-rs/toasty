@@ -1,0 +1,5 @@
+error: a relation field cannot be indexed; index its foreign key field(s) instead
+  --> tests/ui/model_unique_on_relation.rs:13:10
+   |
+13 | #[unique(author, slug)]
+   |          ^^^^^^

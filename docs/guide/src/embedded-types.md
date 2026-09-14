@@ -34,7 +34,7 @@ parent field's name — no prefix is added:
 CREATE TABLE users (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     name TEXT NOT NULL,
-    email TEXT NOT NULL     -- not "email_0"
+    email TEXT NOT NULL     -- not "email_inner"
 );
 ```
 
@@ -67,6 +67,38 @@ user.update()
     .exec(&mut db)
     .await?;
 ```
+
+The wrapped value has its own field accessor, `inner()`. It returns a path to
+the single column the newtype maps to, so a filter can compare against the
+inner type instead of constructing a wrapper:
+
+```rust,ignore
+let users = User::filter(User::fields().email().inner().eq("alice@example.com"))
+    .exec(&mut db)
+    .await?;
+```
+
+Comparison operators (`ne`, `gt`, `ge`, `lt`, `le`) take the wrapper value and
+compare the underlying column, using the backend's ordering for the inner type.
+`asc()` and `desc()` sort by the underlying column the same way:
+
+```rust,ignore
+#[derive(Debug, toasty::Embed)]
+struct Millis(i64);
+
+let recent = Credit::filter(Credit::fields().timestamp().ge(Millis(cutoff)))
+    .exec(&mut db)
+    .await?;
+
+let newest_first = Credit::all()
+    .order_by(Credit::fields().timestamp().desc())
+    .exec(&mut db)
+    .await?;
+```
+
+Multi-field embedded structs support `eq` and `ne`, which compare every column.
+The ordering operators and `asc()`/`desc()` are newtype-only — backends do not
+share an ordering for multi-column values.
 
 A newtype can also be used as a primary key:
 

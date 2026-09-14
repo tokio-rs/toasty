@@ -130,6 +130,10 @@ impl Driver for Connect {
         self.driver.connect(cx).await
     }
 
+    fn max_connections(&self) -> Option<usize> {
+        self.driver.max_connections()
+    }
+
     async fn reset_db(&self) -> Result<()> {
         self.driver.reset_db().await
     }

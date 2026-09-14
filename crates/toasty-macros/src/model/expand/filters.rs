@@ -181,7 +181,7 @@ impl Expand<'_> {
                 _ => todo!(),
             };
 
-            quote!(#name: impl #toasty::IntoExpr<#ty>)
+            quote!(#name: impl #toasty::IntoExpr<#toasty::FieldExprTarget<#ty>>)
         })
     }
 

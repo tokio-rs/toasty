@@ -91,6 +91,8 @@ underlying SQLite storage class.
 | `jiff::civil::Date` *(feature)* | `TEXT` (ISO 8601) |
 | `jiff::civil::Time` *(feature)* | `TEXT` (ISO 8601) |
 | `jiff::civil::DateTime` *(feature)* | `TEXT` (ISO 8601) |
+| `toasty::stmt::IpCidr`, `toasty::stmt::IpInet` *(feature)* | `TEXT` |
+| `toasty::stmt::MacAddr6`, `toasty::stmt::MacAddr8` *(feature)* | `TEXT` |
 | `Vec<T>` *(T scalar)* | `TEXT` holding a JSON array |
 | Embedded `enum` | `TEXT` with a `CHECK` constraint over the variant names |
 
@@ -112,6 +114,9 @@ ISO 8601 matches chronological order.
 type. Both `rust_decimal::Decimal` and `bigdecimal::BigDecimal`
 round-trip through text. Arithmetic in SQL coerces to `REAL`, which
 loses precision — keep decimal math in Rust.
+
+**Network addresses are stored as `TEXT`.** The `net` feature stores
+CIDR, INET, EUI-48, and EUI-64 values in their canonical text forms.
 
 **`VARCHAR(N)` does not enforce `N`.** SQLite ignores the length
 specifier on `VARCHAR`, `CHAR`, and `TEXT`-affinity types. A field

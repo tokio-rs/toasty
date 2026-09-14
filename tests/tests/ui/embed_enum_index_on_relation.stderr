@@ -1,0 +1,5 @@
+error: a relation field cannot be indexed; index its foreign key field(s) instead
+  --> tests/ui/embed_enum_index_on_relation.rs:12:9
+   |
+12 | #[index(human::human)]
+   |         ^^^^^^^^^^^^

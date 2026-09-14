@@ -1,50 +1,18 @@
 use crate::{
     Result,
-    engine::exec::{Action, Exec, Output, VarId},
+    engine::{exec::Exec, mir},
 };
 use toasty_core::{
-    driver::operation::Pagination,
     driver::{ExecResponse, Rows, operation},
-    schema::db::{ColumnId, IndexId, TableId},
     stmt,
 };
 
-#[derive(Debug)]
-pub(crate) struct QueryPk {
-    /// Where to get the input
-    pub input: Option<VarId>,
-
-    /// Where to store the result
-    pub output: Output,
-
-    /// Table to query
-    pub table: TableId,
-
-    /// Optional index to query. None = primary key, Some(id) = secondary index
-    pub index: Option<IndexId>,
-
-    /// Columns to get
-    pub columns: Vec<ColumnId>,
-
-    /// How to filter the index.
-    pub pk_filter: stmt::Expr,
-
-    /// Filter to pass to the database
-    pub row_filter: Option<stmt::Expr>,
-
-    /// Limit and pagination bounds for this query. `None` means unbounded.
-    pub limit: Option<Pagination>,
-
-    /// Sort key ordering direction.
-    pub order: Option<stmt::Direction>,
-}
-
 impl Exec<'_> {
-    pub(super) async fn action_query_pk(&mut self, action: &QueryPk) -> Result<()> {
+    pub(super) async fn exec_query_pk(&mut self, action: &mir::QueryPk) -> Result<ExecResponse> {
         let mut pk_filter = action.pk_filter.clone();
 
-        if let Some(input) = &action.input {
-            let input = self.collect_input(&[*input]).await?;
+        if let Some(input) = action.input {
+            let input = self.collect_input([input]).await?;
             pk_filter.substitute(&input);
         }
 
@@ -75,7 +43,7 @@ impl Exec<'_> {
                     operation::QueryPk {
                         table: action.table,
                         index: action.index,
-                        select: action.columns.clone(),
+                        select: mir::column_ids(action.table, &action.columns).collect(),
                         pk_filter: f,
                         filter: action.row_filter.clone(),
                         limit: action.limit.clone(),
@@ -93,22 +61,10 @@ impl Exec<'_> {
             all_rows.extend(res.values.into_value_stream().collect().await?);
         }
 
-        self.vars.store(
-            action.output.var,
-            action.output.num_uses,
-            ExecResponse {
-                values: Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
-                next_cursor: response_cursor,
-                prev_cursor: None,
-            },
-        );
-
-        Ok(())
-    }
-}
-
-impl From<QueryPk> for Action {
-    fn from(value: QueryPk) -> Self {
-        Action::QueryPk(value)
+        Ok(ExecResponse {
+            values: Rows::Stream(stmt::ValueStream::from_vec(all_rows)),
+            next_cursor: response_cursor,
+            prev_cursor: None,
+        })
     }
 }

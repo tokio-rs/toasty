@@ -100,7 +100,8 @@
 //! | `turso`        | `toasty-driver-turso`        |
 //!
 //! Additional feature flags: `rust_decimal`, `bigdecimal`, `jiff` (date/time
-//! via the `jiff` crate), and `serde` (JSON serialization support).
+//! via the `jiff` crate), `net` (IP network and MAC address types via the
+//! `cidr` and `macaddr` crates), and `serde` (JSON serialization support).
 //!
 //! # Other crates in the workspace
 //!

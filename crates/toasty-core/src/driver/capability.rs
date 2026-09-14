@@ -141,6 +141,18 @@ pub struct Capability {
     /// Whether the database has native support for DateTime types.
     pub native_datetime: bool,
 
+    /// Whether the database has a native CIDR network type.
+    pub native_cidr: bool,
+
+    /// Whether the database has a native INET address type.
+    pub native_inet: bool,
+
+    /// Whether the database has a native six-byte MACADDR type.
+    pub native_macaddr: bool,
+
+    /// Whether the database has a native eight-byte MACADDR8 type.
+    pub native_macaddr8: bool,
+
     /// Whether the database supports native enum types.
     ///
     /// - PostgreSQL: `true` — `CREATE TYPE ... AS ENUM`
@@ -320,6 +332,14 @@ pub struct Capability {
     /// accepting `stmt::Type::List(_)` fields.
     pub vec_scalar: bool,
 
+    /// Whether the database can enforce a unique constraint on the complete
+    /// ordered value of a native list column.
+    ///
+    /// This is narrower than [`Self::native_array`]: storing a list as an
+    /// array does not by itself guarantee that the backend has an index type
+    /// whose equality semantics preserve element order and multiplicity.
+    pub unique_list_index: bool,
+
     /// Whether the driver can store a `#[document]` collection field — a
     /// `Vec<T>` of an embedded struct — as a single document column
     /// (`jsonb` / `JSON` on the SQL backends). Used by the schema builder as
@@ -423,6 +443,18 @@ pub struct StorageTypes {
 
     /// The default storage type for a DateTime (civil datetime).
     pub default_datetime_type: db::Type,
+
+    /// The default storage type for an IP network prefix.
+    pub default_cidr_type: db::Type,
+
+    /// The default storage type for an IP host address and prefix.
+    pub default_inet_type: db::Type,
+
+    /// The default storage type for a six-byte MAC address.
+    pub default_macaddr_type: db::Type,
+
+    /// The default storage type for an eight-byte MAC address.
+    pub default_macaddr8_type: db::Type,
 
     /// Maximum value for unsigned integers. When `Some`, unsigned integers
     /// are limited to this value. When `None`, full u64 range is supported.
@@ -561,6 +593,12 @@ impl Capability {
             ));
         }
 
+        if self.unique_list_index && !self.native_array {
+            return Err(crate::Error::invalid_driver_configuration(
+                "unique_list_index is true but native_array is false",
+            ));
+        }
+
         Ok(())
     }
 
@@ -596,6 +634,14 @@ impl Capability {
             stmt::Type::Time => self.storage_types.default_time_type.bridge_type(ty),
             #[cfg(feature = "jiff")]
             stmt::Type::DateTime => self.storage_types.default_datetime_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::Cidr => self.storage_types.default_cidr_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::Inet => self.storage_types.default_inet_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr => self.storage_types.default_macaddr_type.bridge_type(ty),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr8 => self.storage_types.default_macaddr8_type.bridge_type(ty),
             _ => ty.clone(),
         }
     }
@@ -634,6 +680,11 @@ impl Capability {
         native_date: false,
         native_time: false,
         native_datetime: false,
+
+        native_cidr: false,
+        native_inet: false,
+        native_macaddr: false,
+        native_macaddr8: false,
 
         // SQLite does not have native decimal types
         native_decimal: false,
@@ -680,6 +731,7 @@ impl Capability {
         // model fields are stored as a JSON document in a `TEXT` column.
         native_array: false,
         vec_scalar: true,
+        unique_list_index: false,
         document_collections: true,
 
         // SQLite renders `IsSuperset` / `Intersects` as `json_each`
@@ -728,6 +780,12 @@ impl Capability {
         native_time: true,
         native_datetime: true,
 
+        // PostgreSQL has native network address types.
+        native_cidr: true,
+        native_inet: true,
+        native_macaddr: true,
+        native_macaddr8: true,
+
         // PostgreSQL has native NUMERIC type with arbitrary precision
         native_decimal: true,
         decimal_arbitrary_precision: true,
@@ -747,6 +805,7 @@ impl Capability {
         // representation for `Vec<scalar>` model fields.
         native_array: true,
         vec_scalar: true,
+        unique_list_index: true,
         document_collections: true,
 
         // PostgreSQL: all three collection removals are atomic via native
@@ -869,6 +928,11 @@ impl Capability {
         native_time: false,
         native_datetime: false,
 
+        native_cidr: false,
+        native_inet: false,
+        native_macaddr: false,
+        native_macaddr8: false,
+
         // DynamoDB does not have native decimal types
         native_decimal: false,
         decimal_arbitrary_precision: false,
@@ -904,6 +968,7 @@ impl Capability {
         // `AttributeValue` encoding.
         native_array: false,
         vec_scalar: true,
+        unique_list_index: false,
         // `#[document]` embeds store as a native Map `M` attribute (a
         // `Vec<embed>` collection as a List `L` of Maps). DynamoDB caps
         // attribute nesting at 32 levels; documents deeper than that are not
@@ -957,6 +1022,12 @@ impl StorageTypes {
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
 
+        // SQLite stores network address values as canonical text.
+        default_cidr_type: db::Type::Text,
+        default_inet_type: db::Type::Text,
+        default_macaddr_type: db::Type::Text,
+        default_macaddr8_type: db::Type::Text,
+
         // SQLite INTEGER is a signed 64-bit integer, so unsigned integers
         // are limited to i64::MAX to prevent overflow
         max_unsigned_integer: Some(i64::MAX as u64),
@@ -987,6 +1058,11 @@ impl StorageTypes {
         default_date_type: db::Type::Date,
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
+
+        default_cidr_type: db::Type::Cidr,
+        default_inet_type: db::Type::Inet,
+        default_macaddr_type: db::Type::MacAddr,
+        default_macaddr8_type: db::Type::MacAddr8,
 
         // PostgreSQL BIGINT is signed 64-bit, so unsigned integers are limited
         // to i64::MAX. While NUMERIC could theoretically support larger values,
@@ -1026,6 +1102,13 @@ impl StorageTypes {
         default_time_type: db::Type::Time(6),
         default_datetime_type: db::Type::DateTime(6),
 
+        // MySQL has no native network address types. Bounded text keeps
+        // indexes compact while accommodating IPv6 prefixes and EUI-64.
+        default_cidr_type: db::Type::VarChar(43),
+        default_inet_type: db::Type::VarChar(43),
+        default_macaddr_type: db::Type::VarChar(17),
+        default_macaddr8_type: db::Type::VarChar(23),
+
         // MySQL supports full u64 range via BIGINT UNSIGNED
         max_unsigned_integer: None,
     };
@@ -1051,6 +1134,12 @@ impl StorageTypes {
         default_date_type: db::Type::Text,
         default_time_type: db::Type::Text,
         default_datetime_type: db::Type::Text,
+
+        // DynamoDB stores network address values as canonical strings.
+        default_cidr_type: db::Type::Text,
+        default_inet_type: db::Type::Text,
+        default_macaddr_type: db::Type::Text,
+        default_macaddr8_type: db::Type::Text,
 
         // DynamoDB supports full u64 range (numbers stored as strings)
         max_unsigned_integer: None,
@@ -1144,6 +1233,23 @@ mod tests {
                 .unwrap_err()
                 .to_string()
                 .contains("sql is None but sql_placeholder is Some")
+        );
+    }
+
+    #[test]
+    fn test_validate_fails_when_unique_list_index_has_no_native_array() {
+        let invalid = Capability {
+            unique_list_index: true,
+            ..Capability::SQLITE
+        };
+
+        let result = invalid.validate();
+        assert!(result.is_err());
+        assert!(
+            result
+                .unwrap_err()
+                .to_string()
+                .contains("unique_list_index is true but native_array is false")
         );
     }
 

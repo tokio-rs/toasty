@@ -120,6 +120,39 @@ pub async fn select_first(test: &mut Test) -> Result<()> {
     Ok(())
 }
 
+/// A fully constant projection is planned as a `Repeat` over the data load.
+/// The repeated output must forward the data load's page cursors so the page
+/// can still advance.
+#[driver_test(scenario(crate::scenarios::fixed_item_name_quantity), requires(sql))]
+pub async fn select_const_preserves_pagination(test: &mut Test) -> Result<()> {
+    use toasty::stmt::{Page, Paginate};
+
+    let mut db = setup(test).await;
+
+    toasty::create!(Item::[
+        { id: 1_i64, name: "Alice",   quantity: 7_i64  },
+        { id: 2_i64, name: "Bob",     quantity: 3_i64  },
+        { id: 3_i64, name: "Charlie", quantity: 11_i64 },
+    ])
+    .exec(&mut db)
+    .await
+    .unwrap();
+
+    let query = Item::all()
+        .order_by(Item::fields().id().asc())
+        .select::<i64, i64>(1_i64);
+    let first: Page<i64> = Paginate::new(query, 2).exec(&mut db).await?;
+
+    assert_eq!(first.items, [1, 1]);
+    assert!(first.has_next());
+
+    let second = first.next(&mut db).await?.unwrap();
+    assert_eq!(second.items, [1]);
+    assert!(!second.has_next());
+
+    Ok(())
+}
+
 /// `.select(...).first()` returns `None` when no rows match.
 #[driver_test(scenario(crate::scenarios::fixed_item_name_quantity))]
 pub async fn select_first_no_match(test: &mut Test) -> Result<()> {

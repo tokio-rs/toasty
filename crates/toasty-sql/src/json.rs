@@ -113,6 +113,12 @@ impl Serialize for Encode<'_> {
             }
             #[cfg(feature = "jiff")]
             Value::Zoned(v) => s.collect_str(v),
+            #[cfg(feature = "net")]
+            v @ (Value::Cidr(_) | Value::Inet(_) | Value::MacAddr(_) | Value::MacAddr8(_)) => s
+                .collect_str(
+                    &v.document_storage_text()
+                        .expect("network address value has a document text form"),
+                ),
             other => Err(S::Error::custom(format!("cannot encode {other:?} as JSON"))),
         }
     }
@@ -286,6 +292,14 @@ impl<'de> Visitor<'de> for ValueVisitor<'_> {
             stmt::Type::Time => Ok(Value::Time(v.parse().map_err(E::custom)?)),
             #[cfg(feature = "jiff")]
             stmt::Type::DateTime => Ok(Value::DateTime(v.parse().map_err(E::custom)?)),
+            #[cfg(feature = "net")]
+            stmt::Type::Cidr => Ok(Value::Cidr(v.parse().map_err(E::custom)?)),
+            #[cfg(feature = "net")]
+            stmt::Type::Inet => Ok(Value::Inet(v.parse().map_err(E::custom)?)),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr => Ok(Value::MacAddr(v.parse().map_err(E::custom)?)),
+            #[cfg(feature = "net")]
+            stmt::Type::MacAddr8 => Ok(Value::MacAddr8(v.parse().map_err(E::custom)?)),
             other => Err(E::custom(format!(
                 "unexpected JSON string for type {other:?}"
             ))),

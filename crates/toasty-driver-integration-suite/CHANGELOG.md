@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.9.0...toasty-driver-integration-suite-v0.10.0) - 2026-08-11
+
+### Added
+
+- *(macros)* generate asc/desc on newtype embed fields ([#1180](https://github.com/tokio-rs/toasty/pull/1180))
+- add network address types ([#1178](https://github.com/tokio-rs/toasty/pull/1178))
+- *(macros)* generate ordering comparisons on newtype embed fields ([#1177](https://github.com/tokio-rs/toasty/pull/1177))
+- accept #[belongs_to] fields in embedded types ([#1170](https://github.com/tokio-rs/toasty/pull/1170))
+
+### Fixed
+
+- *(engine)* omit previous cursor on first page ([#1153](https://github.com/tokio-rs/toasty/pull/1153))
+- *(engine)* run post-lower simplify on detached IN-subquery statements ([#1138](https://github.com/tokio-rs/toasty/pull/1138))
+- *(engine)* preserve pagination cursors through includes ([#1152](https://github.com/tokio-rs/toasty/pull/1152))
+- preserve query offset when selecting one row ([#1151](https://github.com/tokio-rs/toasty/pull/1151))
+- *(engine)* exclude null foreign keys from relation subqueries ([#1148](https://github.com/tokio-rs/toasty/pull/1148))
+- *(engine)* make cursor pagination deterministic ([#1142](https://github.com/tokio-rs/toasty/pull/1142))
+- *(engine)* lower newtype foreign keys in via includes ([#1137](https://github.com/tokio-rs/toasty/pull/1137))
+- paginate with multiple order by keys ([#1124](https://github.com/tokio-rs/toasty/pull/1124))
+
+### Other
+
+- *(tests)* gate unreferenced-CTE pagination test off MySQL ([#1158](https://github.com/tokio-rs/toasty/pull/1158))
+- *(core)* [**breaking**] name the SQL dialect on `Capability::sql` ([#1155](https://github.com/tokio-rs/toasty/pull/1155))
+- *(tests)* remove redundant driver test executions ([#1144](https://github.com/tokio-rs/toasty/pull/1144))
 ## [0.9.0](https://github.com/tokio-rs/toasty/compare/toasty-driver-integration-suite-v0.8.0...toasty-driver-integration-suite-v0.9.0) - 2026-07-23
 
 ### Added

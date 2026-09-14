@@ -265,7 +265,7 @@ pub async fn driver_sees_begin_commit(t: &mut Test) -> Result<()> {
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Commit)
@@ -294,7 +294,7 @@ pub async fn driver_sees_begin_rollback(t: &mut Test) -> Result<()> {
             ..
         })
     );
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_)); // INSERT
+    assert_struct!(t.log().pop_op(), Operation::Insert(_)); // INSERT
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Rollback)
@@ -427,14 +427,14 @@ pub async fn nested_driver_sees_savepoint_ops(t: &mut Test) -> Result<()> {
         })
     );
     // INSERT Alice
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     // SAVEPOINT
     assert_struct!(
         t.log().pop_op(),
         Operation::Transaction(Transaction::Savepoint(_))
     );
     // INSERT Bob
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     // RELEASE SAVEPOINT
     assert_struct!(
         t.log().pop_op(),
@@ -481,7 +481,7 @@ pub async fn nested_driver_sees_rollback_to_savepoint(t: &mut Test) -> Result<()
         Operation::Transaction(Transaction::Savepoint(_))
     );
     // INSERT Ghost
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     // ROLLBACK TO SAVEPOINT
     assert_struct!(
         t.log().pop_op(),
@@ -563,9 +563,9 @@ pub async fn multi_op_inside_tx_uses_savepoints(t: &mut Test) -> Result<()> {
         Operation::Transaction(Transaction::Savepoint(_))
     );
     // INSERT user
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     // INSERT todo
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
     // RELEASE SAVEPOINT
     assert_struct!(
         t.log().pop_op(),

@@ -28,7 +28,7 @@ pub async fn batch_create_one(test: &mut Test) -> Result<()> {
 
     // Single-row batch: no transaction wrapping needed
     if test.capability().sql() {
-        assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
+        assert_struct!(test.log().pop_op(), Operation::Insert(_));
         assert!(test.log().is_empty());
     }
 
@@ -56,7 +56,7 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
     // Multi-row batch in a single INSERT statement: no transaction wrapping
     // needed because single SQL statements are inherently atomic.
     if test.capability().sql() {
-        assert_struct!(test.log().pop_op(), Operation::QuerySql(_));
+        assert_struct!(test.log().pop_op(), Operation::Insert(_));
         assert!(test.log().is_empty());
     }
 
@@ -65,6 +65,77 @@ pub async fn batch_create_many(test: &mut Test) -> Result<()> {
         assert_eq!(1, reloaded.len());
         assert_eq!(reloaded[0].id, post.id);
     }
+    Ok(())
+}
+
+#[driver_test(requires(and(auto_increment, returning_from_mutation)))]
+pub async fn batch_create_many_auto_increment(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: u64,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+    let items = Item::create_many()
+        .item(Item::create().name("one"))
+        .item(Item::create().name("two"))
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(items, [{ id: 1, name: "one" }, { id: 2, name: "two" }]);
+
+    Ok(())
+}
+
+#[driver_test(requires(and(auto_increment, not(returning_from_mutation))))]
+pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Generated {
+        #[key]
+        #[auto]
+        id: u64,
+
+        name: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Manual {
+        #[key]
+        id: u64,
+
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(Generated, Manual)).await;
+
+    test.log().clear();
+    let err = assert_err!(
+        Generated::create_many()
+            .item(Generated::create().name("one"))
+            .item(Generated::create().name("two"))
+            .exec(&mut db)
+            .await
+    );
+
+    assert!(err.is_unsupported_feature());
+    assert!(err.to_string().contains(test.capability().driver_name));
+    assert!(err.to_string().contains("generateds.id"));
+    assert!(test.log().is_empty());
+
+    let items = Manual::create_many()
+        .item(Manual::create().id(10).name("one"))
+        .item(Manual::create().id(20).name("two"))
+        .exec(&mut db)
+        .await?;
+
+    assert_struct!(items, [{ id: 10, name: "one" }, { id: 20, name: "two" }]);
+    assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None, .. }));
+    assert!(test.log().is_empty());
+
     Ok(())
 }
 
@@ -198,7 +269,7 @@ pub async fn batch_create_inside_transaction_uses_savepoints(t: &mut Test) -> Re
         .await?;
 
     // Single INSERT statement — no savepoint needed
-    assert_struct!(t.log().pop_op(), Operation::QuerySql(_));
+    assert_struct!(t.log().pop_op(), Operation::Insert(_));
 
     tx.commit().await?;
 
