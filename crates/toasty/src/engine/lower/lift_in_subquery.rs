@@ -48,12 +48,10 @@
 
 use toasty_core::{
     schema::app::{self, BelongsTo, FieldId, FieldTy, ModelId},
-    stmt::{self, Expr, ExprContext, IntoExprTarget, ResolvedRef, Visit, VisitMut},
+    stmt::{self, Expr, ExprContext, IntoExprTarget, Visit, VisitMut},
 };
 
-use super::embedded_relation::{
-    Step, build_expr_path, flatten_expr_path, resolve_embedded_relation,
-};
+use super::relation_expr;
 
 /// Pre-lowering pass that lifts relation references out of `IN`-subquery
 /// and projection comparisons into direct foreign-key forms.  Runs as a
@@ -291,14 +289,11 @@ pub(super) fn lift_in_subquery(
     }
 }
 
-/// A path expression resolved to the relation it walks: the relation, its
-/// target model, and the steps continuing into the target.
+/// A resolved relation with the expressions needed for subquery lifting.
 struct RelationPath<'a> {
     relation: Relation<'a>,
     target: ModelId,
-    /// Path steps after the relation — a path into `target`. Empty when the
-    /// expression references the relation itself.
-    tail: Vec<Step>,
+    target_expr: Option<Expr>,
 }
 
 /// The relation a path walks. Both lift to a foreign-key `IN` subquery on
@@ -345,35 +340,19 @@ impl Relation<'_> {
     }
 }
 
-/// Resolve `path` to the relation it walks.
-///
-/// `path` is a field reference or a projection from one. When the base
-/// field is a relation, the steps are the path into its target model. When
-/// it is an embedded type, the steps lead to a `belongs_to` inside the
-/// embed (see [`resolve_embedded_relation`]), possibly continuing into its
-/// target. Returns `None` for any other path.
-fn resolve_relation_path<'a>(cx: &ExprContext<'a>, path: &Expr) -> Option<RelationPath<'a>> {
-    let (expr_ref, steps) = flatten_expr_path(path)?;
-    let ResolvedRef::Field(field) = cx.resolve_expr_reference(&expr_ref) else {
-        return None;
+fn resolve_relation_path<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<RelationPath<'a>> {
+    let resolved = relation_expr::resolve(cx, expr)?;
+    let relation = match resolved.embedded() {
+        Some(belongs_to) => Relation::Embedded {
+            belongs_to,
+            key_expr: resolved.key_expr()?,
+        },
+        None => Relation::Field(resolved.field),
     };
-
-    if matches!(field.ty, FieldTy::Embedded(_)) {
-        let resolved = resolve_embedded_relation(cx, path)?;
-        return Some(RelationPath {
-            target: resolved.belongs_to.target,
-            relation: Relation::Embedded {
-                belongs_to: resolved.belongs_to,
-                key_expr: resolved.key_expr,
-            },
-            tail: resolved.tail,
-        });
-    }
-
     Some(RelationPath {
-        relation: Relation::Field(field),
-        target: field.relation_target_id()?,
-        tail: steps,
+        relation,
+        target: resolved.target,
+        target_expr: resolved.target_expr(),
     })
 }
 
@@ -511,25 +490,20 @@ fn lift_projection_in_subquery(
     let RelationPath {
         relation,
         target,
-        tail,
+        target_expr,
     } = resolve_relation_path(cx, path)?;
 
-    let (head_idx, tail) = match tail.split_first() {
-        // The path ends at a relation inside an embedded type
-        // (`v.human IN (subquery)`): lift it directly.
-        None => return lift_relation_in_subquery(cx, &relation, query),
-        Some((Step::Field(head_idx), tail)) => (*head_idx, tail),
-        Some((Step::Variant(_), _)) => return None,
+    let Some(inner_lhs) = target_expr else {
+        // The path ends at the relation (`v.human IN (subquery)`).
+        return lift_relation_in_subquery(cx, &relation, query);
     };
 
-    if tail.is_empty()
+    if let Some(index) = inner_lhs.as_self_field_index()
         && let Relation::Field(field) = relation
-        && let Some(direct) = try_fuse_paired_relations(cx, field, target, head_idx, query)
+        && let Some(direct) = try_fuse_paired_relations(cx, field, target, index, query)
     {
         return Some(direct);
     }
-
-    let inner_lhs = reroot(target, head_idx, tail);
 
     let new_subquery = stmt::Query::new_select(
         stmt::Source::from(target),
@@ -723,10 +697,7 @@ fn resolve_relation_path_predicate<'a>(
 ) -> Option<(RelationPath<'a>, stmt::Expr)> {
     let path = resolve_relation_path(cx, subject)?;
 
-    let (Step::Field(head_idx), tail) = path.tail.split_first()? else {
-        return None;
-    };
-    let filter = make_filter(reroot(path.target, *head_idx, tail));
+    let filter = make_filter(path.target_expr.clone()?);
 
     Some((path, filter))
 }
@@ -740,13 +711,6 @@ fn lift_relation_predicate(
 ) -> Option<stmt::Expr> {
     let subquery = stmt::Query::new_select(stmt::Source::from(path.target), filter);
     lift_relation_in_subquery(cx, &path.relation, &subquery)
-}
-
-/// Re-root a path at `model`: the field at `head` followed by `tail`. Variant
-/// selections in `tail` are preserved, so a path into an enum variant of the
-/// target model stays a selection there.
-fn reroot(model: ModelId, head: usize, tail: &[Step]) -> Expr {
-    build_expr_path(Expr::ref_self_field(FieldId { model, index: head }), tail)
 }
 
 /// Build a foreign-key `IN` subquery for one direct relation edge.

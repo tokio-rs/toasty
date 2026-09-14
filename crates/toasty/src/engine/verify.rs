@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::engine::lower::embedded_relation::Level;
+use crate::engine::lower::relation_expr::Level;
 use crate::engine::{Engine, upsert};
 use toasty_core::Error;
 use toasty_core::driver::Capability;

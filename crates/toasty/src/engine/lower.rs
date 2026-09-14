@@ -1,5 +1,4 @@
 mod association;
-pub(super) mod embedded_relation;
 mod expr_or;
 mod include;
 mod insert;
@@ -7,6 +6,7 @@ mod lift_in_subquery;
 mod lift_update_query;
 mod paginate;
 mod relation;
+pub(super) mod relation_expr;
 mod relation_path;
 mod returning;
 mod via_join;
@@ -1453,16 +1453,18 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     /// is a predicate on the target, lifted by `LiftInSubquery` before
     /// lowering. The key expression keeps the path's variant selections, so
     /// the `is_variant` guards the typed layer fixed next to the comparison
-    /// still scope it (see `resolve_embedded_relation`).
+    /// still scope it (see `relation_expr::resolve`).
     ///
     /// Returns whether the operand was substituted.
     fn rewrite_embedded_relation_operand(&self, operand: &mut stmt::Expr) -> bool {
-        match embedded_relation::resolve_embedded_relation(&self.expr_cx, operand) {
-            Some(resolved) if resolved.tail.is_empty() => {
-                *operand = resolved.key_expr;
-                true
-            }
-            _ => false,
+        if let Some(relation) = relation_expr::resolve(&self.expr_cx, operand)
+            && relation.is_endpoint()
+            && let Some(key_expr) = relation.key_expr()
+        {
+            *operand = key_expr;
+            true
+        } else {
+            false
         }
     }
 
