@@ -503,24 +503,10 @@ impl Expand<'_> {
                 quote!(#toasty::into_untyped_expr::<#target_ty, _>(#field_access))
             };
 
-            // A key field backing a sibling relation takes its value from
-            // the loaded parent model when one is present; the explicit key
-            // stands otherwise. The parent's field is read through its
-            // hidden getter, as the field may be private to the parent's
-            // module.
-            match key_fill.get(&field.id) {
-                Some((rel_ident, target_ident)) => {
-                    let target_ref = util::field_ref_ident(target_ident);
-                    quote!(
-                        match #toasty::embedded_relation_target(&self.#rel_ident) {
-                            #toasty::Option::Some(__rel) =>
-                                #toasty::into_untyped_expr::<#target_ty, _>(__rel.#target_ref()),
-                            #toasty::Option::None => #explicit,
-                        }
-                    )
-                }
-                None => explicit,
-            }
+            let key = key_fill
+                .get(&field.id)
+                .map(|(relation, target)| (quote!(self.#relation), *target));
+            self.expand_relation_key_expr(ty, key, explicit)
         });
 
         quote! {

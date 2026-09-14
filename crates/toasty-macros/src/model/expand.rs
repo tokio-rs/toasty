@@ -393,6 +393,29 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
+    /// Uses a loaded relation's referenced key when present, otherwise the
+    /// explicit field value. Hidden getters allow access to private target fields.
+    fn expand_relation_key_expr(
+        &self,
+        ty: &syn::Type,
+        key: Option<(TokenStream, &syn::Ident)>,
+        explicit: TokenStream,
+    ) -> TokenStream {
+        let Some((relation, target)) = key else {
+            return explicit;
+        };
+        let toasty = &self.toasty;
+        let target_ref = util::field_ref_ident(target);
+
+        quote! {
+            match #toasty::embedded_relation_target(&#relation) {
+                #toasty::Option::Some(__rel) =>
+                    #toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(__rel.#target_ref()),
+                #toasty::Option::None => #explicit,
+            }
+        }
+    }
+
     /// For relation fields in embedded types, require the declared type to be
     /// deferred (`toasty::Deferred<..>`). A non-deferred relation could never
     /// load: the relation carries no storage, so its record slot always
