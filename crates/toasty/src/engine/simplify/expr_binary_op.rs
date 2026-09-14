@@ -18,6 +18,13 @@ impl Simplify<'_> {
         lhs: &mut stmt::Expr,
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
+        if (op.is_eq() || op.is_ne())
+            && let (Some(lhs_len), Some(rhs_len)) = (lhs.record_len(), rhs.record_len())
+            && lhs_len != rhs_len
+        {
+            return Some(op.is_ne().into());
+        }
+
         let result = match (&mut *lhs, &mut *rhs) {
             // Self-comparison, e.g.,
             //
@@ -46,14 +53,16 @@ impl Simplify<'_> {
                 let comparisons: Vec<_> = std::mem::take(&mut lhs_rec.fields)
                     .into_iter()
                     .zip(std::mem::take(&mut rhs_rec.fields))
-                    .map(|(l, r)| Expr::binary_op(l, op, r))
+                    .map(|(l, r)| record_field_comparison(l, op, r))
                     .collect();
 
-                if op.is_eq() {
-                    Some(Expr::and_from_vec(comparisons))
+                let mut comparison = if op.is_eq() {
+                    Expr::and_from_vec(comparisons)
                 } else {
-                    Some(Expr::or_from_vec(comparisons))
-                }
+                    Expr::or_from_vec(comparisons)
+                };
+                self.visit_expr_mut(&mut comparison);
+                Some(comparison)
             }
             // Tuple decomposition with a Value::Record on one side,
             //
@@ -67,14 +76,16 @@ impl Simplify<'_> {
                 let comparisons: Vec<_> = std::mem::take(&mut rec.fields)
                     .into_iter()
                     .zip(std::mem::take(&mut val_rec.fields))
-                    .map(|(expr, val)| Expr::binary_op(expr, op, Expr::from(val)))
+                    .map(|(expr, val)| record_field_comparison(expr, op, Expr::from(val)))
                     .collect();
 
-                if op.is_eq() {
-                    Some(Expr::and_from_vec(comparisons))
+                let mut comparison = if op.is_eq() {
+                    Expr::and_from_vec(comparisons)
                 } else {
-                    Some(Expr::or_from_vec(comparisons))
-                }
+                    Expr::or_from_vec(comparisons)
+                };
+                self.visit_expr_mut(&mut comparison);
+                Some(comparison)
             }
             // Match elimination: distribute binary op into match arms as OR
             //
@@ -285,13 +296,20 @@ impl Simplify<'_> {
         let patterns: Vec<_> = match_expr.arms.iter().map(|a| a.pattern.clone()).collect();
 
         for arm in match_expr.arms {
+            // Unit enum variants return the discriminant subject. The arm's
+            // pattern is the value of that subject within this branch.
+            let arm_expr = if arm.expr == *match_expr.subject {
+                Expr::from(arm.pattern.clone())
+            } else {
+                arm.expr
+            };
             let guard = Expr::binary_op(
                 (*match_expr.subject).clone(),
                 stmt::BinaryOp::Eq,
                 Expr::from(arm.pattern),
             );
 
-            let mut term = Expr::and_from_vec(vec![guard, term(arm.expr)]);
+            let mut term = Expr::and_from_vec(vec![guard, term(arm_expr)]);
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
@@ -381,4 +399,20 @@ fn contains_error(expr: &Expr) -> bool {
     let mut find = FindError(false);
     find.visit_expr(expr);
     find.0
+}
+
+/// Uses null checks for record fields, including empty relation slots.
+fn record_field_comparison(lhs: Expr, op: stmt::BinaryOp, rhs: Expr) -> Expr {
+    let other = if lhs.is_value_null() {
+        rhs
+    } else if rhs.is_value_null() {
+        lhs
+    } else {
+        return Expr::binary_op(lhs, op, rhs);
+    };
+    if op.is_eq() {
+        Expr::is_null(other)
+    } else {
+        Expr::is_not_null(other)
+    }
 }

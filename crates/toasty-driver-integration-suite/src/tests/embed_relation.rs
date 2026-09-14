@@ -1968,3 +1968,194 @@ pub async fn embedded_relation_plans_nested_insert(test: &mut Test) -> Result<()
     assert_eq!(User::all().exec(&mut db).await?.len(), 2);
     Ok(())
 }
+
+#[driver_test(requires(scan))]
+pub async fn filter_whole_struct_loaded_relation(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    #[key(partition = namespace, local = revision)]
+    struct Author {
+        namespace: uuid::Uuid,
+        revision: i64,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    struct Attribution {
+        revision: i64,
+        namespace: uuid::Uuid,
+        #[belongs_to(key = [namespace, revision], references = [namespace, revision])]
+        author: toasty::Deferred<Author>,
+        label: String,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        attribution: Attribution,
+    }
+
+    let mut db = test.setup_db(models!(Post, Author)).await;
+    let namespace = uuid::Uuid::new_v4();
+    let alice = toasty::create!(Author {
+        namespace,
+        revision: 1
+    })
+    .exec(&mut db)
+    .await?;
+    let bea = toasty::create!(Author {
+        namespace,
+        revision: 2
+    })
+    .exec(&mut db)
+    .await?;
+    let cid = toasty::create!(Author {
+        namespace: uuid::Uuid::new_v4(),
+        revision: 1
+    })
+    .exec(&mut db)
+    .await?;
+    let mut post_ids = Vec::new();
+    for (author, label) in [
+        (&alice, "written"),
+        (&bea, "written"),
+        (&cid, "written"),
+        (&alice, "reviewed"),
+    ] {
+        post_ids.push(
+            toasty::create!(Post {
+                attribution: Attribution {
+                    revision: author.revision,
+                    namespace: author.namespace,
+                    author: toasty::Deferred::default(),
+                    label: label.to_string(),
+                },
+            })
+            .exec(&mut db)
+            .await?
+            .id,
+        );
+    }
+    let alice_attribution = Attribution {
+        revision: 0,
+        namespace: uuid::Uuid::nil(),
+        author: toasty::Deferred::from(alice),
+        label: "written".to_string(),
+    };
+    let bea_attribution = Attribution {
+        revision: 0,
+        namespace: uuid::Uuid::nil(),
+        author: toasty::Deferred::from(bea),
+        label: "written".to_string(),
+    };
+    for (filter, mut expected) in [
+        (
+            Post::fields().attribution().eq(&alice_attribution),
+            vec![post_ids[0]],
+        ),
+        (
+            (&alice_attribution)
+                .into_expr()
+                .eq(Post::fields().attribution()),
+            vec![post_ids[0]],
+        ),
+        (
+            Post::fields().attribution().ne(&alice_attribution),
+            post_ids[1..].to_vec(),
+        ),
+        (
+            toasty::stmt::Expr::in_list(
+                Post::fields().attribution(),
+                [&alice_attribution, &bea_attribution],
+            ),
+            vec![post_ids[0], post_ids[1]],
+        ),
+    ] {
+        let found: Vec<Post> = Post::filter(filter).exec(&mut db).await?;
+        let mut actual: Vec<_> = found.into_iter().map(|post| post.id).collect();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected);
+    }
+    Ok(())
+}
+
+#[driver_test(requires(scan))]
+pub async fn filter_whole_enum_loaded_relation(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Author {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Other {
+            id: uuid::Uuid,
+        },
+        Author {
+            author_id: uuid::Uuid,
+            #[belongs_to(key = author_id)]
+            author: toasty::Deferred<Author>,
+        },
+        Nobody,
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Post {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+
+    let mut db = test.setup_db(models!(Post, Author)).await;
+    let alice = toasty::create!(Author {}).exec(&mut db).await?;
+    let bea = toasty::create!(Author {}).exec(&mut db).await?;
+    let mut post_ids = Vec::new();
+    for owner in [
+        Owner::Author {
+            author_id: alice.id,
+            author: toasty::Deferred::default(),
+        },
+        Owner::Author {
+            author_id: bea.id,
+            author: toasty::Deferred::default(),
+        },
+        Owner::Other { id: alice.id },
+        Owner::Nobody,
+    ] {
+        post_ids.push(toasty::create!(Post { owner }).exec(&mut db).await?.id);
+    }
+    let alice_owner = Owner::Author {
+        author_id: uuid::Uuid::nil(),
+        author: toasty::Deferred::from(alice),
+    };
+    let bea_owner = Owner::Author {
+        author_id: uuid::Uuid::nil(),
+        author: toasty::Deferred::from(bea),
+    };
+    for (filter, mut expected) in [
+        (Post::fields().owner().eq(&alice_owner), vec![post_ids[0]]),
+        (
+            (&alice_owner).into_expr().eq(Post::fields().owner()),
+            vec![post_ids[0]],
+        ),
+        (
+            Post::fields().owner().ne(&alice_owner),
+            post_ids[1..].to_vec(),
+        ),
+        (
+            toasty::stmt::Expr::in_list(Post::fields().owner(), [&alice_owner, &bea_owner]),
+            vec![post_ids[0], post_ids[1]],
+        ),
+    ] {
+        let found: Vec<Post> = Post::filter(filter).exec(&mut db).await?;
+        let mut actual: Vec<_> = found.into_iter().map(|post| post.id).collect();
+        actual.sort();
+        expected.sort();
+        assert_eq!(actual, expected);
+    }
+    Ok(())
+}

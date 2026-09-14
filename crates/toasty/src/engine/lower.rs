@@ -1644,6 +1644,37 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         expr: &mut stmt::Expr,
         list: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
+        // Whole embedded values can contain decode casts and relation
+        // placeholders. Lower each candidate as an equality comparison so
+        // those fields receive the same handling as `=`.
+        let expand_to_equalities = matches!(expr, stmt::Expr::Match(_))
+            || matches!(expr, stmt::Expr::Record(record) if record.fields.iter().any(|field| !field.is_column()));
+
+        if expand_to_equalities {
+            let items = match list {
+                stmt::Expr::List(list) => Some(std::mem::take(&mut list.items)),
+                stmt::Expr::Value(stmt::Value::List(items)) => Some(
+                    std::mem::take(items)
+                        .into_iter()
+                        .map(stmt::Expr::Value)
+                        .collect(),
+                ),
+                _ => None,
+            };
+            if let Some(items) = items {
+                return Some(stmt::Expr::or_from_vec(
+                    items
+                        .into_iter()
+                        .map(|mut item| {
+                            let mut lhs = expr.clone();
+                            self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut lhs, &mut item)
+                                .unwrap_or_else(|| stmt::Expr::eq(lhs, item))
+                        })
+                        .collect(),
+                ));
+            }
+        }
+
         match (&mut *expr, list) {
             (expr, stmt::Expr::Map(expr_map)) => {
                 assert!(expr_map.base.is_arg(), "TODO");
