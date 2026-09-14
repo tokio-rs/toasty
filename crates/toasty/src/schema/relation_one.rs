@@ -32,7 +32,9 @@ pub trait RelationOneField: Load<Output = Self> {
     const NULLABLE: bool;
 
     /// Reloads this relation field from a returned value.
-    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()>;
+    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
+        <Self as Load>::reload(target, value)
+    }
 
     /// Narrow a list query targeting the related model into the appropriate
     /// "one" query — `Query<Model>` for non-nullable impls and
@@ -53,11 +55,38 @@ pub trait RelationOneField: Load<Output = Self> {
     /// `via` carries the fully resolved [`stmt::Path`] of a
     /// `#[has_one(via = a.b)]` multi-step relation, rooted at the declaring
     /// model. A `via` relation has no pair.
-    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy;
+    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
+        let target = <Self::Target as Model>::id();
+        let expr_ty = stmt::Type::Model(target);
+        let cardinality = app::Cardinality::One;
+
+        match via {
+            Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path, None)),
+            None => FieldTy::Has(app::Has {
+                target,
+                expr_ty,
+                cardinality,
+                pair_id: pair.unwrap_or(FieldId {
+                    model: ModelId(usize::MAX),
+                    index: usize::MAX,
+                }),
+            }),
+        }
+    }
 
     /// Build the [`FieldTy`] for a `BelongsTo` relation field, given the
     /// foreign key resolved from the field's `#[belongs_to(...)]` attribute.
-    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy;
+    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
+        let target = <Self::Target as Model>::id();
+
+        FieldTy::BelongsTo(app::BelongsTo {
+            target,
+            expr_ty: stmt::Type::Model(target),
+            // The pair is populated at runtime.
+            pair: None,
+            foreign_key,
+        })
+    }
 }
 
 impl<M: Model> RelationOneField for M {
@@ -68,20 +97,8 @@ impl<M: Model> RelationOneField for M {
     const DEFERRED: bool = false;
     const NULLABLE: bool = false;
 
-    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
-        <Self as Load>::reload(target, value)
-    }
-
     fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_one(query)
-    }
-
-    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-        has_one_relation_field_ty::<M>(pair, via)
-    }
-
-    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
-        belongs_to_relation_field_ty::<M>(foreign_key)
     }
 }
 
@@ -93,20 +110,8 @@ impl<M: Model> RelationOneField for Option<M> {
     const DEFERRED: bool = false;
     const NULLABLE: bool = true;
 
-    fn reload(target: &mut Self, value: stmt::Value) -> crate::Result<()> {
-        <Self as Load>::reload(target, value)
-    }
-
     fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_first(query)
-    }
-
-    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-        has_one_relation_field_ty::<M>(pair, via)
-    }
-
-    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
-        belongs_to_relation_field_ty::<M>(foreign_key)
     }
 }
 
@@ -126,14 +131,6 @@ impl<M: Model> RelationOneField for Deferred<M> {
     fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_one(query)
     }
-
-    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-        has_one_relation_field_ty::<M>(pair, via)
-    }
-
-    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
-        belongs_to_relation_field_ty::<M>(foreign_key)
-    }
 }
 
 impl<M: Model> RelationOneField for Deferred<Option<M>> {
@@ -152,43 +149,4 @@ impl<M: Model> RelationOneField for Deferred<Option<M>> {
     fn make_one(query: QueryMany<Self::Target>) -> Self::One {
         <M as Model>::query_first(query)
     }
-
-    fn has_one_relation_field_ty(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-        has_one_relation_field_ty::<M>(pair, via)
-    }
-
-    fn belongs_to_relation_field_ty(foreign_key: ForeignKey) -> FieldTy {
-        belongs_to_relation_field_ty::<M>(foreign_key)
-    }
-}
-
-fn has_one_relation_field_ty<M: Model>(pair: Option<FieldId>, via: Option<stmt::Path>) -> FieldTy {
-    let target = <M as Model>::id();
-    let expr_ty = stmt::Type::Model(target);
-    let cardinality = app::Cardinality::One;
-
-    match via {
-        Some(path) => FieldTy::Via(app::Via::new(target, expr_ty, cardinality, path, None)),
-        None => FieldTy::Has(app::Has {
-            target,
-            expr_ty,
-            cardinality,
-            pair_id: pair.unwrap_or(FieldId {
-                model: ModelId(usize::MAX),
-                index: usize::MAX,
-            }),
-        }),
-    }
-}
-
-fn belongs_to_relation_field_ty<M: Model>(foreign_key: ForeignKey) -> FieldTy {
-    let target = <M as Model>::id();
-
-    FieldTy::BelongsTo(app::BelongsTo {
-        target,
-        expr_ty: stmt::Type::Model(target),
-        // The pair is populated at runtime.
-        pair: None,
-        foreign_key,
-    })
 }
