@@ -45,5 +45,10 @@
       automerge: true,
       platformAutomerge: true,
     },
+    // Pinned to the version `postgres-protocol` uses; see Cargo.toml.
+    {
+      matchPackageNames: ["fallible-iterator"],
+      enabled: false,
+    },
   ],
 }
