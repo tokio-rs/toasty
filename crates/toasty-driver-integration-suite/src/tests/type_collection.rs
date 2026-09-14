@@ -63,6 +63,35 @@ pub async fn vec_zoned_create_get(t: &mut Test) -> Result<(), BoxError> {
     Ok(())
 }
 
+#[driver_test(requires(vec_scalar))]
+pub async fn vec_time_zone_create_get(t: &mut Test) -> Result<(), BoxError> {
+    use jiff::tz::{self, TimeZone};
+
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        values: Vec<TimeZone>,
+    }
+
+    let mut db = t.setup_db(models!(Item)).await;
+    let values = [
+        TimeZone::get("America/New_York")?,
+        TimeZone::UTC,
+        TimeZone::fixed(tz::offset(9)),
+    ];
+
+    let item = toasty::create!(Item { values: &values })
+        .exec(&mut db)
+        .await?;
+
+    let reloaded = Item::get_by_id(&mut db, &item.id).await?;
+    assert_eq!(reloaded.values, values);
+
+    Ok(())
+}
+
 #[driver_test(requires(and(native_array, native_date)))]
 pub async fn vec_date_create_get(t: &mut Test) -> Result<(), BoxError> {
     #[derive(Debug, toasty::Model)]

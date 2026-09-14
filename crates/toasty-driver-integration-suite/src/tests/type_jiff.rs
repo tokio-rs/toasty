@@ -582,3 +582,150 @@ pub async fn filter_by_timestamp(test: &mut Test) -> Result<(), BoxError> {
 
     Ok(())
 }
+
+#[driver_test]
+pub async fn ty_time_zone(test: &mut Test) -> Result<(), BoxError> {
+    use jiff::tz::{self, TimeZone};
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        val: TimeZone,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let test_values = [
+        TimeZone::get("America/New_York")?,
+        TimeZone::get("Asia/Tokyo")?,
+        TimeZone::UTC,
+        TimeZone::fixed(tz::offset(-5)),
+        TimeZone::posix("EST5EDT,M3.2.0,M11.1.0")?,
+        TimeZone::unknown(),
+    ];
+
+    for val in &test_values {
+        let created = toasty::create!(Item { val }).exec(&mut db).await?;
+        let read = Item::get_by_id(&mut db, &created.id).await?;
+        assert_eq!(read.val, *val, "Round-trip failed for: {val:?}");
+    }
+    Ok(())
+}
+
+/// A time zone in each field position — primary key, plain, and optional —
+/// through create, read, and update.
+#[driver_test]
+pub async fn time_zone_key_optional_and_update(test: &mut Test) -> Result<(), BoxError> {
+    use jiff::tz::TimeZone;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct ZoneConfig {
+        #[key]
+        zone: TimeZone,
+        display: TimeZone,
+        fallback: Option<TimeZone>,
+    }
+
+    let mut db = test.setup_db(models!(ZoneConfig)).await;
+
+    let tokyo = TimeZone::get("Asia/Tokyo")?;
+    let amsterdam = TimeZone::get("Europe/Amsterdam")?;
+
+    let mut config = toasty::create!(ZoneConfig {
+        zone: &tokyo,
+        display: &tokyo
+    })
+    .exec(&mut db)
+    .await?;
+
+    let read = ZoneConfig::get_by_zone(&mut db, &tokyo).await?;
+    assert_struct!(read, _ { display: == tokyo, fallback: None, .. });
+
+    config
+        .update()
+        .display(&amsterdam)
+        .fallback(&amsterdam)
+        .exec(&mut db)
+        .await?;
+
+    let read = ZoneConfig::get_by_zone(&mut db, &tokyo).await?;
+    assert_struct!(read, _ { display: == amsterdam, fallback: Some(== amsterdam), .. });
+
+    Ok(())
+}
+
+/// Printing a zone canonicalizes its IANA identifier, so a zone resolved from
+/// a differently-cased name stores and reads back as the canonical one.
+#[driver_test]
+pub async fn ty_time_zone_canonicalized(test: &mut Test) -> Result<(), BoxError> {
+    use jiff::tz::TimeZone;
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        val: TimeZone,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let created = toasty::create!(Item {
+        val: TimeZone::get("america/NEW_YORK")?
+    })
+    .exec(&mut db)
+    .await?;
+
+    let read = Item::get_by_id(&mut db, &created.id).await?;
+    assert_eq!(read.val.iana_name(), Some("America/New_York"));
+
+    Ok(())
+}
+
+#[driver_test]
+pub async fn filter_by_time_zone(test: &mut Test) -> Result<(), BoxError> {
+    use jiff::tz::{self, TimeZone};
+
+    #[derive(Debug, toasty::Model)]
+    #[allow(dead_code)]
+    struct User {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        #[index]
+        time_zone: TimeZone,
+        name: String,
+    }
+
+    let mut db = test.setup_db(models!(User)).await;
+
+    let amsterdam = TimeZone::get("Europe/Amsterdam")?;
+    let tokyo = TimeZone::get("Asia/Tokyo")?;
+
+    User::create()
+        .time_zone(&amsterdam)
+        .name("ada")
+        .exec(&mut db)
+        .await?;
+    User::create()
+        .time_zone(&tokyo)
+        .name("kenji")
+        .exec(&mut db)
+        .await?;
+
+    let results = User::filter_by_time_zone(&tokyo).exec(&mut db).await?;
+    assert_struct!(results, [{ name: "kenji" }]);
+
+    // A fixed offset never matches a named zone, even at the same offset.
+    let results = User::filter_by_time_zone(tz::offset(1).to_time_zone())
+        .exec(&mut db)
+        .await?;
+    assert!(results.is_empty());
+
+    Ok(())
+}

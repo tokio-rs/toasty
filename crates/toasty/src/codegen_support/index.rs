@@ -89,6 +89,7 @@ mod jiff_impls {
     impl IndexableField for jiff::civil::Date {}
     impl IndexableField for jiff::civil::Time {}
     impl IndexableField for jiff::civil::DateTime {}
+    impl IndexableField for jiff::tz::TimeZone {}
 }
 
 #[cfg(feature = "net")]
