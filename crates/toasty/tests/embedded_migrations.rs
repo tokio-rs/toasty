@@ -9,10 +9,7 @@ use async_trait::async_trait;
 use toasty::codegen_support::core::{
     Result, Schema,
     driver::{Capability, ConnectContext, Connection, Driver, ExecResponse, Operation},
-    schema::{
-        db::{AppliedMigration, Migration},
-        diff,
-    },
+    schema::db::{AppliedMigration, Migration},
 };
 
 #[derive(Debug, toasty::Model)]
