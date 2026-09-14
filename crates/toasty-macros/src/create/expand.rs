@@ -90,8 +90,7 @@ fn expand_field(field: &FieldEntry, path: &TokenStream) -> TokenStream {
 
     match &field.value {
         FieldValue::Expr(expr) => {
-            let dest = quote_spanned! { span=> #path.#name() };
-            let value = expand_value(expr, &dest);
+            let value = expand_value(expr);
             quote_spanned! { span=> .#name(#value) }
         }
         FieldValue::Single(sub_fields) => {
@@ -128,8 +127,6 @@ fn expand_nested_item(
             let sub_calls = expand_field_set(fields, nested_path);
             quote_spanned! { span=> #parent_path.#field_name().create() #(#sub_calls)* }
         }
-        // A list item has no destination field of its own to reach a
-        // variant builder through, so it passes through as a plain value.
         FieldValue::Expr(e) => quote! { #e },
         FieldValue::List(_) => {
             quote! { compile_error!("nested lists are not supported in create!") }
@@ -138,11 +135,10 @@ fn expand_nested_item(
 }
 
 /// Expand a field's value expression. A variant literal becomes a
-/// construction builder chain reached through `dest`, the destination
-/// field's fields handle; anything else passes through unchanged.
-fn expand_value(expr: &syn::Expr, dest: &TokenStream) -> TokenStream {
+/// construction builder chain; anything else passes through unchanged.
+fn expand_value(expr: &syn::Expr) -> TokenStream {
     match VariantLiteral::parse(expr) {
-        Some(literal) => literal.expand(dest, |value| quote! { #value }),
+        Some(literal) => literal.expand(|value| quote! { #value }),
         None => quote! { #expr },
     }
 }

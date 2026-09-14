@@ -1,6 +1,5 @@
 //! Recognizes embedded-enum variant literals in `create!` / `update!` field
-//! values and expands them into construction builder chains obtained
-//! through the destination field.
+//! values and expands them into construction builder chains.
 
 use crate::model::schema::Name;
 
@@ -12,26 +11,23 @@ use syn::spanned::Spanned;
 /// (`Enum::Variant { field: value, .. }`).
 ///
 /// The literal expands to a chain on the derive-generated construction
-/// builder, reached through the destination field's fields handle:
-/// `codegen_support::create(<dest>).variant().field(value)...`. The helper
-/// dispatches through the `codegen_support::Create` trait explicitly, so
-/// a variant named `Create` keeps its inherent `create()` accessor on the
-/// same handle. The builder fills a
-/// relation's sibling key slot(s) from a parent model value, which is what
-/// allows `Owner::Human { human: &alice }` — a literal that plain Rust would
-/// reject (missing key field, mismatched relation type) — as a `create!` /
-/// `update!` field value. Complete literals keep their meaning: every field
-/// maps to the builder setter of the same name, and an unloaded `Deferred`
-/// sets nothing. The builder panics when a required field ends up unset —
-/// neither written in the literal nor filled from a loaded relation value —
-/// restoring the exhaustiveness check the rewrite takes away from Rust.
+/// builder of the enum it names:
+/// `<Enum as EmbedCreate>::create().variant().field(value)...`. The
+/// builder fills a relation's sibling key slot(s) from a parent model
+/// value, which is what allows `Owner::Human { human: &alice }` — a literal
+/// that plain Rust would reject (missing key field, mismatched relation
+/// type) — as a `create!` / `update!` field value. Complete literals keep
+/// their meaning: every field maps to the builder setter of the same name,
+/// and an unloaded `Deferred` sets nothing. The builder panics when a
+/// required field ends up unset — neither written in the literal nor
+/// filled from a loaded relation value — restoring the exhaustiveness
+/// check the rewrite takes away from Rust.
 ///
-/// The destination field selects the enum; the qualifier only names it.
-/// Builder lookup never resolves the qualifier, so an imported or renamed
+/// The qualifier is resolved as written, so an imported or renamed
 /// variant (`Human { .. }`) is not recognized and passes through as an
-/// ordinary value. The qualifier is still checked: the expansion pins the
-/// builder to `IntoExpr<Qualifier>`, so `Other::Human { .. }` written into
-/// an `Owner` field fails to compile at `Other`.
+/// ordinary value. A literal naming a different enum than the destination
+/// field holds (`Other::Human { .. }` into an `Owner` field) builds an
+/// `Other` expression, which the destination setter rejects.
 pub(crate) struct VariantLiteral<'a> {
     /// The literal's path minus the variant segment: the enum qualifier.
     enum_path: syn::Path,
@@ -95,17 +91,12 @@ impl<'a> VariantLiteral<'a> {
         })
     }
 
-    /// Expand into the builder chain rooted at `dest`, the fields-handle
-    /// expression of the destination field (`Object::fields().owner()`).
+    /// Expand into the builder chain of the enum the literal names.
     ///
     /// `value` maps each written field value to the tokens passed to its
     /// setter; `create!` passes the expression through, `update!` registers
     /// it with its hoister.
-    pub(crate) fn expand(
-        &self,
-        dest: &TokenStream,
-        mut value: impl FnMut(&syn::Expr) -> TokenStream,
-    ) -> TokenStream {
+    pub(crate) fn expand(&self, mut value: impl FnMut(&syn::Expr) -> TokenStream) -> TokenStream {
         // The selector method is named like the variant's field accessor.
         let method = Name::from_ident(self.variant).ident;
 
@@ -114,13 +105,15 @@ impl<'a> VariantLiteral<'a> {
             quote_spanned! { name.span()=> .#name(#value) }
         });
 
-        let builder = quote_spanned! { self.span=>
-            toasty::codegen_support::create(#dest).#method() #( #setters )*
+        // Explicit trait invocation keeps the call independent of the
+        // enum's inherent items.
+        let enum_path = &self.enum_path;
+        let builder = quote_spanned! { enum_path.span()=>
+            <#enum_path as toasty::codegen_support::EmbedCreate>::create()
         };
 
-        let enum_path = &self.enum_path;
-        quote_spanned! { enum_path.span()=>
-            toasty::codegen_support::variant_of::<#enum_path, _>(#builder)
+        quote_spanned! { self.span=>
+            #builder.#method() #( #setters )*
         }
     }
 }

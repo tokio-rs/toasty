@@ -267,13 +267,11 @@ toasty::create!(Object { owner: Owner::Human { human: &alice } })
     .await?;
 ```
 
-The macro reaches the builder through the destination field's fields
-handle: `codegen_support::create(Object::fields().owner()).human().human(&alice)`.
-The first `human()` selects the variant, the second sets its relation
-field. The helper dispatches through an internal `Create` trait, which the
-enum's fields handles and the path of an `Option<Owner>` field implement.
-Explicit trait dispatch leaves the handle's inherent methods alone, so a
-variant named `Create` keeps its `create()` field accessor.
+The macro expands the literal into a chain on the builder of the enum it
+names: `<Owner as EmbedCreate>::create().human().human(&alice)`. The first
+`human()` selects the variant, the second sets its relation field. A
+literal naming a different enum than the field holds fails to compile at
+the field's setter.
 
 Supplying the key directly also works; the relation field carries no
 storage, so an unloaded placeholder is valid:

@@ -371,15 +371,6 @@ impl Expand<'_> {
             TokenStream::new()
         };
 
-        // A has-many list item literal (`todos: [{ owner: Owner::Human
-        // { .. } }]`) reaches its variant builder through the list handle,
-        // so the enum's list handle supplies the builder too.
-        let create_impl = if let ModelKind::EmbeddedEnum(_) = &self.model.kind {
-            self.expand_enum_create_impl(field_list_struct_ident)
-        } else {
-            TokenStream::new()
-        };
-
         // any() / all() are only available on root models (they require the
         // `Model` trait bound).
         let any_method = if is_root {
@@ -426,8 +417,6 @@ impl Expand<'_> {
 
                 #( #methods )*
             }
-
-            #create_impl
 
             impl<__Origin> Into<#toasty::Path<__Origin, #toasty::List<#model_ident>>> for #field_list_struct_ident<__Origin> {
                 fn into(self) -> #toasty::Path<__Origin, #toasty::List<#model_ident>> {

@@ -1,6 +1,5 @@
 use super::{Expr, IntoExpr, IntoStatement, List};
-use crate::codegen_support::Create;
-use crate::schema::{EmbedCreate, Field};
+use crate::schema::Field;
 use std::{fmt, marker::PhantomData};
 use toasty_core::{
     schema::app::{ModelId, VariantId},
@@ -552,28 +551,6 @@ impl<T, U> Path<T, Option<U>> {
     /// ```
     pub fn is_some(self) -> Expr<bool> {
         self.build_filter(stmt::Expr::is_not_null)
-    }
-}
-
-/// An `Option<Enum>` field has no generated fields handle, so its plain
-/// path supplies the construction builder; `create!` and `update!` reach it
-/// through `codegen_support::create` when the destination field is
-/// `Option<Enum>`.
-impl<T, U: EmbedCreate> Create for Path<T, Option<U>> {
-    type Create = U::Create;
-
-    fn create(&self) -> U::Create {
-        U::create()
-    }
-}
-
-/// Same for an optional embedded-enum field reached through a has-many list
-/// handle.
-impl<T, U: EmbedCreate> Create for Path<T, List<Option<U>>> {
-    type Create = U::Create;
-
-    fn create(&self) -> U::Create {
-        U::create()
     }
 }
 

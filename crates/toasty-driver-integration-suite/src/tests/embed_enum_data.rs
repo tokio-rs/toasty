@@ -618,8 +618,8 @@ pub async fn global_field_indices(test: &mut Test) {
 
 /// A data-carrying variant named `Create` keeps its `create()` field
 /// accessor on the enum's fields handle: `create!` and `update!` obtain the
-/// construction builder through `codegen_support::create`, which dispatches
-/// through a trait rather than an inherent method of the same name.
+/// construction builder from the enum itself, through `EmbedCreate`, so the
+/// handle carries no method of the same name.
 #[driver_test]
 pub async fn variant_named_create(test: &mut Test) -> Result<()> {
     #[derive(Debug, PartialEq, toasty::Embed)]

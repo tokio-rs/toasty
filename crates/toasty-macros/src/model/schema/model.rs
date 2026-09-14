@@ -108,8 +108,8 @@ pub(crate) struct ModelEmbeddedEnum {
     pub(crate) field_list_struct_ident: syn::Ident,
 
     /// Variant-selection builder struct identifier (e.g., `OwnerCreate`).
-    /// Returned by `create()` on the fields handles; one method per
-    /// data-carrying variant returns that variant's construction builder.
+    /// Returned by `EmbedCreate::create()`; one method per data-carrying
+    /// variant returns that variant's construction builder.
     pub(crate) create_struct_ident: syn::Ident,
 
     /// The enum's variants with their names and discriminant values

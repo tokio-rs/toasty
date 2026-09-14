@@ -37,8 +37,8 @@ fn main() {
     let alice = Human {
         id: uuid::Uuid::nil(),
     };
-    // The builder comes from the `owner` field (an `Owner`); the literal
-    // names `Other`, which must be rejected at the qualifier.
+    // The literal builds an `Other` expression; the `owner` setter takes
+    // an `Owner` and must reject it.
     let _ = toasty::create!(Object {
         owner: Other::Human { human: &alice }
     });

@@ -1,25 +1,30 @@
-error[E0277]: the trait bound `OwnerHumanCreate: IntoExpr<Other>` is not satisfied
+error[E0277]: the trait bound `OtherHumanCreate: IntoExpr<Owner>` is not satisfied
   --> tests/ui/create_variant_literal_wrong_enum.rs:43:16
    |
 43 |         owner: Other::Human { human: &alice }
-   |                ^^^^^ unsatisfied trait bound
+   |         -----  ^^^^^^^^^^^^^^^^^^^^ unsatisfied trait bound
+   |         |
+   |         required by a bound introduced by this call
    |
-help: the trait `IntoExpr<Other>` is not implemented for `OwnerHumanCreate`
-  --> tests/ui/create_variant_literal_wrong_enum.rs:10:5
+help: the trait `IntoExpr<Owner>` is not implemented for `OtherHumanCreate`
+  --> tests/ui/create_variant_literal_wrong_enum.rs:20:5
    |
-10 |     Human {
+20 |     Human {
    |     ^^^^^
-help: `OwnerHumanCreate` implements trait `IntoExpr<T>`
-  --> tests/ui/create_variant_literal_wrong_enum.rs:8:17
+help: `OtherHumanCreate` implements trait `IntoExpr<T>`
+  --> tests/ui/create_variant_literal_wrong_enum.rs:18:17
    |
- 8 | #[derive(Debug, toasty::Embed)]
+18 | #[derive(Debug, toasty::Embed)]
    |                 ^^^^^^^^^^^^^
    |                 |
-   |                 `IntoExpr<Option<Owner>>`
-   |                 `IntoExpr<Owner>`
-note: required by a bound in `toasty::codegen_support::variant_of`
-  --> $WORKSPACE/crates/toasty/src/codegen_support.rs
+   |                 `IntoExpr<Option<Other>>`
+   |                 `IntoExpr<Other>`
+note: required by a bound in `ObjectCreate::owner`
+  --> tests/ui/create_variant_literal_wrong_enum.rs:28:17
    |
-   | pub fn variant_of<E, B: IntoExpr<E>>(builder: B) -> B {
-   |                         ^^^^^^^^^^^ required by this bound in `variant_of`
-   = note: this error originates in the derive macro `toasty::Embed` (in Nightly builds, run with -Z macro-backtrace for more info)
+28 | #[derive(Debug, toasty::Model)]
+   |                 ^^^^^^^^^^^^^ required by this bound in `ObjectCreate::owner`
+...
+33 |     owner: Owner,
+   |     ----- required by a bound in this associated function
+   = note: this error originates in the derive macro `toasty::Embed` which comes from the expansion of the derive macro `toasty::Model` (in Nightly builds, run with -Z macro-backtrace for more info)
