@@ -412,13 +412,15 @@ impl Expand<'_> {
                                 _ => return None,
                             };
                             let key_slot = util::int(key_local + 1);
-                            let target_ref = util::field_ref_ident(&fk_field.target);
+                            let key = self.expand_relation_key_expr(
+                                key_ty,
+                                quote!(__rel),
+                                &fk_field.target,
+                            );
                             Some(quote! {
-                                self.rel_keys[#key_slot] = #toasty::Option::Some(
-                                    #toasty::into_untyped_expr::<FieldExprTarget<#key_ty>, _>(
-                                        __rel.#target_ref(),
-                                    ),
-                                );
+                                if let #toasty::Option::Some(key) = #key {
+                                    self.rel_keys[#key_slot] = #toasty::Option::Some(key);
+                                }
                             })
                         });
 
@@ -430,11 +432,8 @@ impl Expand<'_> {
                                     Model = <#rel_ty as #toasty::RelationOneField>::Target,
                                 >,
                             ) -> Self {
-                                if let #toasty::Option::Some(__rel) =
-                                    #toasty::embedded_relation_target(&value)
-                                {
-                                    #( #key_fills )*
-                                }
+                                let __rel = #toasty::embedded_relation_target(&value);
+                                #( #key_fills )*
                                 self
                             }
                         }
@@ -458,10 +457,10 @@ impl Expand<'_> {
                     };
                     let slot = util::int(local + 1);
                     let msg = match key_fill.get(&field.id) {
-                        Some((rel_ident, _)) => format!(
+                        Some((relation, _)) => format!(
                             "cannot build `{}::{}` expression: key field `{}` is not set \
                          and relation `{}` has no loaded value to fill it from",
-                            model_ident, variant.ident, field.name.ident, rel_ident,
+                            model_ident, variant.ident, field.name.ident, relation.name.ident,
                         ),
                         None => format!(
                             "cannot build `{}::{}` expression: missing required field `{}`",
@@ -1078,27 +1077,9 @@ impl Expand<'_> {
                         quote! { #model_ident::#ident( #( #field_idents ),* ) }
                     };
 
-                    let key_fill = relation_key_fill(&fields);
-
-                    let field_exprs = fields.iter().map(|field| {
-                        let field_ident = &field.name.ident;
-                        match &field.ty {
-                            // The relation slot encodes as `Null`; the sibling
-                            // key fields carry the storage.
-                            FieldTy::BelongsTo(_) => {
-                                quote!(#toasty::embedded_relation_expr(&#field_ident))
-                            }
-                            _ => {
-                                let ty = primitive_ty_unwrap(field);
-                                let explicit = quote!(
-                                    #toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#field_ident)
-                                );
-
-                                let key = key_fill.get(&field.id)
-                                    .map(|(relation, target)| (quote!(#relation), *target));
-                                self.expand_relation_key_expr(ty, key, explicit)
-                            }
-                        }
+                    let field_exprs = self.expand_embedded_field_exprs(&fields, false, |field| {
+                        let ident = &field.name.ident;
+                        quote!(#ident)
                     });
 
                     quote! {
@@ -1201,17 +1182,17 @@ struct SchemaFieldParts {
 }
 
 /// Maps a key field's index (within the containing model) to the sibling
-/// relation that can fill it in a write: `(relation field ident, referenced
+/// relation that can fill it in a write: `(relation field, referenced
 /// field ident on the target model)`. Built per variant, so only same-variant
 /// siblings fill each other.
 pub(super) fn relation_key_fill<'a>(
     fields: &[&'a crate::model::schema::Field],
-) -> HashMap<usize, (&'a syn::Ident, &'a syn::Ident)> {
+) -> HashMap<usize, (&'a crate::model::schema::Field, &'a syn::Ident)> {
     let mut fill = HashMap::new();
     for field in fields {
         if let FieldTy::BelongsTo(rel) = &field.ty {
             for fk_field in &rel.foreign_key {
-                fill.insert(fk_field.source, (&field.name.ident, &fk_field.target));
+                fill.insert(fk_field.source, (*field, &fk_field.target));
             }
         }
     }

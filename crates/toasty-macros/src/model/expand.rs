@@ -393,26 +393,43 @@ pub(super) fn embedded_enum(model: &Model) -> TokenStream {
 // === Shared token-generation helpers ===
 
 impl Expand<'_> {
-    /// Uses a loaded relation's referenced key when present, otherwise the
-    /// explicit field value. Hidden getters allow access to private target fields.
+    /// Expression target for create/update setters. Via relations cannot be
+    /// assigned directly because they require an intermediate record.
+    fn expand_setter_target(&self, field: &FieldTy) -> Option<TokenStream> {
+        let toasty = &self.toasty;
+        Some(match field {
+            // Field decides the target for scalars, collections, and embeds,
+            // including fields stored as documents.
+            FieldTy::Primitive(ty) => quote!(FieldExprTarget<#ty>),
+            FieldTy::BelongsTo(rel) => {
+                let ty = &rel.ty;
+                quote!(<#ty as #toasty::RelationOneField>::Expr)
+            }
+            FieldTy::HasOne(rel) if rel.via.is_none() => {
+                let ty = &rel.ty;
+                quote!(<#ty as #toasty::RelationOneField>::Expr)
+            }
+            FieldTy::HasMany(rel) if rel.via.is_none() => {
+                let ty = &rel.ty;
+                quote!(#toasty::List<<#ty as #toasty::RelationManyField>::Target>)
+            }
+            _ => return None,
+        })
+    }
+
+    /// Extracts a loaded relation's key using the target's hidden getter.
     fn expand_relation_key_expr(
         &self,
         ty: &syn::Type,
-        key: Option<(TokenStream, &syn::Ident)>,
-        explicit: TokenStream,
+        relation: TokenStream,
+        target: &syn::Ident,
     ) -> TokenStream {
-        let Some((relation, target)) = key else {
-            return explicit;
-        };
         let toasty = &self.toasty;
         let target_ref = util::field_ref_ident(target);
-
         quote! {
-            match #toasty::embedded_relation_target(&#relation) {
-                #toasty::Option::Some(__rel) =>
-                    #toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(__rel.#target_ref()),
-                #toasty::Option::None => #explicit,
-            }
+            (#relation).map(|__rel|
+                #toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(__rel.#target_ref())
+            )
         }
     }
 
