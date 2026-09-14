@@ -13,6 +13,11 @@ impl Expand<'_> {
         let create_struct_ident = &self.model.kind.as_root_unwrap().create_struct_ident;
         let create_methods = self.expand_create_methods();
         let default_stmts = self.expand_create_default_stmts();
+        let conversions = self.expand_create_conversions(
+            create_struct_ident,
+            quote!(self.stmt.into()),
+            quote!(todo!()),
+        );
 
         // Span the struct definition to the model ident so that "method not
         // found for this struct" errors point at `struct User`, not the derive
@@ -51,41 +56,7 @@ impl Expand<'_> {
                 }
             }
 
-            impl #toasty::IntoExpr<#model_ident> for #create_struct_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
-                    self.stmt.into()
-                }
-
-                fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
-                    todo!()
-                }
-            }
-
-            impl #toasty::IntoExpr<Option<#model_ident>> for #create_struct_ident {
-                fn into_expr(self) -> #toasty::stmt::Expr<Option<#model_ident>> {
-                    self.stmt.into()
-                }
-
-                fn by_ref(&self) -> #toasty::stmt::Expr<Option<#model_ident>> {
-                    todo!()
-                }
-            }
-
-            impl #toasty::Assign<#model_ident> for #create_struct_ident {
-                fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
-                    #toasty::stmt::set(
-                        <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
-                    )
-                }
-            }
-
-            impl #toasty::Assign<Option<#model_ident>> for #create_struct_ident {
-                fn into_assignment(self) -> #toasty::stmt::Assignment<Option<#model_ident>> {
-                    #toasty::stmt::set(
-                        <Self as #toasty::IntoExpr<Option<#model_ident>>>::into_expr(self)
-                    )
-                }
-            }
+            #conversions
 
             impl Default for #create_struct_ident {
                 fn default() -> #create_struct_ident {
@@ -97,6 +68,50 @@ impl Expand<'_> {
                 }
             }
         }
+    }
+
+    /// Generates expression and assignment conversions for a construction
+    /// builder, accepting both the model and its nullable form.
+    pub(super) fn expand_create_conversions(
+        &self,
+        builder_ident: &syn::Ident,
+        into_expr: TokenStream,
+        by_ref: TokenStream,
+    ) -> TokenStream {
+        let toasty = &self.toasty;
+        let model_ident = &self.model.ident;
+
+        [
+            (quote!(#model_ident), into_expr, by_ref),
+            (
+                quote!(#toasty::Option<#model_ident>),
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::into_expr(self).cast()),
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::by_ref(self).cast()),
+            ),
+        ]
+        .into_iter()
+        .map(|(target, into_expr, by_ref)| {
+            quote! {
+                impl #toasty::IntoExpr<#target> for #builder_ident {
+                    fn into_expr(self) -> #toasty::stmt::Expr<#target> {
+                        #into_expr
+                    }
+
+                    fn by_ref(&self) -> #toasty::stmt::Expr<#target> {
+                        #by_ref
+                    }
+                }
+
+                impl #toasty::Assign<#target> for #builder_ident {
+                    fn into_assignment(self) -> #toasty::stmt::Assignment<#target> {
+                        #toasty::stmt::set(
+                            <Self as #toasty::IntoExpr<#target>>::into_expr(self)
+                        )
+                    }
+                }
+            }
+        })
+        .collect()
     }
 
     fn expand_create_default_stmts(&self) -> TokenStream {

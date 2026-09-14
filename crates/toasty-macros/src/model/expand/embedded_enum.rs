@@ -491,6 +491,23 @@ impl Expand<'_> {
                 }
             };
 
+            let conversions = self.expand_create_conversions(
+                builder_ident,
+                quote! {
+                    let mut slots = self.slots;
+                    for (slot, key) in slots.iter_mut().zip(self.rel_keys) {
+                        if let #toasty::Option::Some(key) = key {
+                            *slot = key;
+                        }
+                    }
+                    #( #required_checks )*
+                    #toasty::stmt::Expr::from_untyped(
+                        #toasty::core::stmt::Expr::record_from_vec(slots)
+                    )
+                },
+                quote!(<Self as #toasty::IntoExpr<#model_ident>>::into_expr(self.clone())),
+            );
+
             builders.push(quote! {
                 #struct_def
 
@@ -498,52 +515,7 @@ impl Expand<'_> {
                     #( #setters )*
                 }
 
-                impl #toasty::IntoExpr<#model_ident> for #builder_ident {
-                    fn into_expr(self) -> #toasty::stmt::Expr<#model_ident> {
-                        let mut slots = self.slots;
-                        for (slot, key) in slots.iter_mut().zip(self.rel_keys) {
-                            if let #toasty::Option::Some(key) = key {
-                                *slot = key;
-                            }
-                        }
-                        #( #required_checks )*
-                        #toasty::stmt::Expr::from_untyped(
-                            #toasty::core::stmt::Expr::record_from_vec(slots)
-                        )
-                    }
-
-                    fn by_ref(&self) -> #toasty::stmt::Expr<#model_ident> {
-                        <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self.clone())
-                    }
-                }
-
-                impl #toasty::IntoExpr<#toasty::Option<#model_ident>> for #builder_ident {
-                    fn into_expr(self) -> #toasty::stmt::Expr<#toasty::Option<#model_ident>> {
-                        <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self).cast()
-                    }
-
-                    fn by_ref(&self) -> #toasty::stmt::Expr<#toasty::Option<#model_ident>> {
-                        <Self as #toasty::IntoExpr<#model_ident>>::by_ref(self).cast()
-                    }
-                }
-
-                impl #toasty::Assign<#model_ident> for #builder_ident {
-                    fn into_assignment(self) -> #toasty::stmt::Assignment<#model_ident> {
-                        #toasty::stmt::set(
-                            <Self as #toasty::IntoExpr<#model_ident>>::into_expr(self)
-                        )
-                    }
-                }
-
-                impl #toasty::Assign<#toasty::Option<#model_ident>> for #builder_ident {
-                    fn into_assignment(
-                        self,
-                    ) -> #toasty::stmt::Assignment<#toasty::Option<#model_ident>> {
-                        #toasty::stmt::set(
-                            <Self as #toasty::IntoExpr<#toasty::Option<#model_ident>>>::into_expr(self)
-                        )
-                    }
-                }
+                #conversions
             });
         }
 

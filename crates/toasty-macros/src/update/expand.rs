@@ -1,5 +1,5 @@
 use super::parse::{FieldEntry, FieldSet, FieldValue, UpdateItem};
-use crate::variant_literal::VariantLiteral;
+use crate::variant_literal::expand_value;
 
 use proc_macro2::TokenStream;
 use quote::{format_ident, quote, quote_spanned};
@@ -44,10 +44,7 @@ impl Hoist {
     /// chain itself runs inside the `match` arm, after the target's
     /// `.update()`. Any other expression is hoisted whole.
     fn value(&mut self, expr: &syn::Expr) -> TokenStream {
-        match VariantLiteral::parse(expr) {
-            Some(literal) => literal.expand(|value| self.hoist(value)),
-            None => self.hoist(expr),
-        }
+        expand_value(expr, |value| self.hoist(value))
     }
 }
 

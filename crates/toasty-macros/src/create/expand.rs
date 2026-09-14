@@ -1,5 +1,5 @@
 use super::parse::{CreateItem, FieldEntry, FieldSet, FieldValue};
-use crate::variant_literal::VariantLiteral;
+use crate::variant_literal::expand_value;
 
 use proc_macro2::{Span, TokenStream};
 use quote::{quote, quote_spanned};
@@ -90,7 +90,7 @@ fn expand_field(field: &FieldEntry, path: &TokenStream) -> TokenStream {
 
     match &field.value {
         FieldValue::Expr(expr) => {
-            let value = expand_value(expr);
+            let value = expand_value(expr, |value| quote! { #value });
             quote_spanned! { span=> .#name(#value) }
         }
         FieldValue::Single(sub_fields) => {
@@ -131,14 +131,5 @@ fn expand_nested_item(
         FieldValue::List(_) => {
             quote! { compile_error!("nested lists are not supported in create!") }
         }
-    }
-}
-
-/// Expand a field's value expression. A variant literal becomes a
-/// construction builder chain; anything else passes through unchanged.
-fn expand_value(expr: &syn::Expr) -> TokenStream {
-    match VariantLiteral::parse(expr) {
-        Some(literal) => literal.expand(|value| quote! { #value }),
-        None => quote! { #expr },
     }
 }
