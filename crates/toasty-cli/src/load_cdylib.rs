@@ -38,8 +38,12 @@ impl LoadCdylibCommand {
         unsafe {
             std::env::set_var(DUMP_SCHEMA_ENV, &self.flavor);
 
-            if let Some(prefix) = &self.table_name_prefix {
-                std::env::set_var(DUMP_TABLE_NAME_PREFIX_ENV, prefix);
+            // This process inherited the parent's environment, so an ambient
+            // prefix would silently rename every table. `Toasty.toml`, passed
+            // through as an argument, is the only source for it.
+            match &self.table_name_prefix {
+                Some(prefix) => std::env::set_var(DUMP_TABLE_NAME_PREFIX_ENV, prefix),
+                None => std::env::remove_var(DUMP_TABLE_NAME_PREFIX_ENV),
             }
         }
 

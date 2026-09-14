@@ -2,3 +2,6 @@
 path = "toasty"
 prefix_style = "Sequential"
 flavor = "sqlite"
+# Must match the prefix `build_db` passes to `Db::builder()`; the schema is
+# extracted before any of that code runs.
+table_name_prefix = "svc_"

@@ -41,6 +41,13 @@ needed: for commands that need your schema, the CLI compiles your package
 and reads the schema out of the build artifact, so it always sees exactly
 the model types your application runs.
 
+The default build includes every database driver. A project that talks to
+one database can install a smaller binary by selecting only that driver:
+
+```bash
+cargo install toasty-cli --no-default-features --features postgresql
+```
+
 | Command | What it does |
 |---|---|
 | `migrate generate` | Diffs the current schema against the last snapshot and writes a SQL migration file |

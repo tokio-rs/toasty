@@ -100,6 +100,27 @@ The build always runs in the `dev` profile. Release-profile concerns
 (LTO, dead-stripping, link-section gc) do not apply to the schema-dump
 ctor.
 
+### Feature selection
+
+`-F/--features`, `--all-features`, and `--no-default-features` are global
+flags, forwarded verbatim to cargo. They are not cosmetic: a model behind
+`#[cfg(feature = "…")]` is absent from an artifact built without it, so
+extracting without the flag yields a schema missing those tables and a
+diff that drops them. A bin with `required-features` cannot be built at
+all until they are selected.
+
+The flags reach `cargo metadata` as well as the build. The resolved graph
+is feature-dependent, so a `toasty` dependency declared `optional` is
+absent from it — and extraction is refused as unlinked — until the feature
+enabling it is on.
+
+The environment is otherwise passed through. Cargo's own variables and
+`RUSTUP_TOOLCHAIN` are scrubbed so a CLI running under `cargo run` does
+not cache-bust the user's builds or pin their toolchain, but
+`RUSTFLAGS`, `RUSTC`, and the compiler wrappers are left alone: cargo
+never sets them, so a value there is the user's own, and dropping it
+would build the project differently than they build it themselves.
+
 ### The dump constructor
 
 `toasty` itself contributes a constructor through [`linktime`]:
@@ -208,12 +229,23 @@ the public surface — its only caller is `toasty-cli` itself.
   link-section attributes that survive ordinary optimization. Aggressive
   cross-crate LTO at `dev` level is unusual; if a setting strips the ctor,
   the CLI errors with "the schema dumper produced no schema; check that
-  `toasty` is a direct dependency of `<pkg>`."
+  `<pkg>` references the crate holding the models, and that its `dev`
+  profile does not strip link-time constructors."
 - **`toasty` not actually depended on.** The ctor is in `toasty`; without
-  the dependency the env var has no effect. A transitive dependency still
-  carries it — a `models` crate paired with a `server` binary extracts
-  fine — so `cargo metadata` is used only to sharpen the error when no
-  schema comes back, never to reject a package before building.
+  the dependency the env var has no effect and running the artifact would
+  just run the user's program. Before building anything, the CLI resolves
+  the dependency graph and refuses a package that cannot reach `toasty` at
+  all. The whole graph is walked, not just direct dependencies, so a
+  `models` crate paired with a `server` binary still extracts. Reachability
+  is not linkage, though — rustc links only what the target references, so a
+  binary that declares a `toasty`-dependent crate and never names it carries
+  no ctor and its `main` runs. That shape is a project bug in its own right
+  (the binary cannot use its models), so the CLI does not inspect the
+  artifact for it; the missing dump is reported with the error above.
+- **An empty schema.** An artifact that links `toasty` but never references
+  the crate holding the models dumps zero models. Generating from that would
+  write a `DROP TABLE` for every table in the previous snapshot, so the CLI
+  rejects a dump with no tables instead.
 - **Release builds.** The ctor is `cfg(debug_assertions)`-gated, so a
   release-only project would compile a binary without it. The CLI always
   uses the dev profile, so this does not affect the schema-extract path,
