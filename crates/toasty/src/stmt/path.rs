@@ -125,28 +125,23 @@ impl<T, U> Path<T, U> {
         }
     }
 
-    /// Build a filter `Expr<bool>` from this path, requiring every enum
-    /// variant the predicate's operands select.
+    /// Build a filter `Expr<bool>` from this path's expression.
     ///
-    /// All boolean-producing methods on `Path` (`eq`, `ne`, `gt`, `is_none`,
-    /// `starts_with`, `any`, …) funnel through this so that filter-context
-    /// uses of a variant-rooted path implicitly require the variant to
-    /// match — on this path, on the other operand, and for every enclosing
-    /// variant of a nested selection (see [`Expr::<bool>::from_predicate`]).
-    /// Path-yielding contexts (`include`, `order_by`, `chain`) bypass this
-    /// helper and keep the bare path.
+    /// The filter is the bare predicate. For a variant-rooted path, the
+    /// engine's statement normalization adds the `is_variant` checks the
+    /// predicate requires.
     fn build_filter<F>(self, build_body: F) -> Expr<bool>
     where
         F: FnOnce(stmt::Expr) -> stmt::Expr,
     {
-        Expr::from_predicate(build_body(self.untyped.into_stmt()))
+        Expr::from_untyped(build_body(self.untyped.into_stmt()))
     }
 
     /// Test whether this field equals `rhs`.
     ///
     /// For a variant-rooted path (e.g. `contact().email().address()`), the
-    /// resulting filter implicitly requires the variant to match — it
-    /// expands to `is_email(contact) AND address == rhs`.
+    /// resulting filter implicitly requires the variant to match — the
+    /// engine expands it to `is_email(contact) AND address == rhs`.
     ///
     /// # Examples
     ///
@@ -449,9 +444,7 @@ impl<T, U> Path<T, List<U>> {
     {
         // parent NOT IN (SELECT child_fk FROM child WHERE NOT filter)
         let child_query = super::Query::<List<U>>::all().filter(filter.not());
-        self.build_filter(move |path| {
-            stmt::Expr::not(stmt::Expr::in_subquery(path, child_query.untyped))
-        })
+        self.build_filter(move |path| stmt::Expr::not_in_subquery(path, child_query.untyped))
     }
 }
 

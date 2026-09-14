@@ -71,6 +71,8 @@ impl<'stmt> IndexMatch<'stmt> {
                 _ => false,
             },
             InList(e) => self.match_expr_in_list(cx, &e.expr, expr),
+            // `IS NOT NULL` is a range, not a key value.
+            IsNull(e) if e.negated => false,
             IsNull(e) => match &*e.expr {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
                     self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)

@@ -132,8 +132,8 @@ impl Path {
     ///
     /// A variant root becomes an [`ExprVariant`](super::ExprVariant) over the
     /// parent path's expression, projected by the variant-local steps. The
-    /// expression carries no variant check; a predicate built over it adds
-    /// one per selection with [`Expr::with_variant_guards`].
+    /// expression carries no variant check; the engine's statement
+    /// normalization adds one per selection to the predicate built over it.
     pub fn into_stmt(self) -> Expr {
         match self.root {
             PathRoot::Model(model_id) => match self.projection.as_slice() {

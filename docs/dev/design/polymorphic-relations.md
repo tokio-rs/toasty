@@ -451,17 +451,16 @@ A reference to a relation reached through `Pair` steps is a path expression
 whose variant steps are `ExprVariant` selections. The rewrite substitutes
 the foreign-key comparison, with source fields projected through the same
 selections (the shared or per-variant key columns), and the `is_variant`
-gate for each selected variant is already part of the predicate: the typed
-layer collects the gates from both operands and every enclosing variant
-when it builds the predicate (`Expr::with_variant_guards`), before the
-predicate is combined with others.
+gate for each selected variant is already part of the predicate: statement
+normalization collects the gates from both operands and every enclosing
+variant at each predicate boundary, before lowering sees the statement.
 
 Keeping the gate with the key comparison is a correctness requirement, not
 a style choice: with a `#[shared]` key column, `owner_id = ?` without the
-gate matches an `Animal` row holding the same UUID. The gate is fixed at
-predicate construction and the rewrite keeps the selection in the key
-expression, so no consumer can obtain the key comparison without the gate
-and no expansion site can leak rows of the wrong variant.
+gate matches an `Animal` row holding the same UUID. The gate is fixed by
+normalization and the rewrite keeps the selection in the key expression,
+so no consumer can obtain the key comparison without the gate and no
+expansion site can leak rows of the wrong variant.
 
 Negation follows the existing variant-field convention: `ne` on a variant
 field is `is_variant AND field != x`, and a `ne` through a variant-scoped

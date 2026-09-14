@@ -820,11 +820,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                     let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
-                    *expr = stmt::ExprInList {
+                    let membership: stmt::Expr = stmt::ExprInList {
                         expr: e.expr,
                         list: Box::new(arg),
                     }
                     .into();
+                    *expr = if e.negated {
+                        stmt::Expr::not(membership)
+                    } else {
+                        membership
+                    };
                 }
             }
             stmt::Expr::IsVariant(e) => {
@@ -911,10 +916,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // every flattened column. The head column is `NULL` for `None`, so
             // for `Account::fields().contact().is_none()` (an `Option<enum>`)
             // this emits `contact IS NULL` rather than checking each variant
-            // column. `.is_some()` arrives as `Not(IsNull(..))`, so the
-            // surrounding `Not` yields `contact IS NOT NULL`. Scalar `Option`
-            // and non-nullable fields fall through to the normal reference
-            // lowering below.
+            // column. Normalization expands `.is_some()` to `Not(IsNull(..))`,
+            // so the surrounding `Not` yields `contact IS NOT NULL`. Scalar
+            // `Option` and non-nullable fields fall through to the normal
+            // reference lowering below.
             //
             // Only fires for WHERE-clause predicates (`Statement` context),
             // where a field reference lowers to a column. The `model_to_table`
@@ -924,6 +929,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // intercept it. (The UPDATE encode substitutes the value before
             // re-visiting, so the inner is no longer a field reference there.)
             stmt::Expr::IsNull(e) => {
+                let negated = e.negated;
                 let head_column = match &*e.expr {
                     stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index })
                         if self.cx.is_statement() =>
@@ -953,7 +959,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         column,
                     });
                     self.visit_expr_mut(&mut col_ref);
-                    *expr = stmt::Expr::is_null(col_ref);
+                    *expr = if negated {
+                        stmt::Expr::is_not_null(col_ref)
+                    } else {
+                        stmt::Expr::is_null(col_ref)
+                    };
                 } else {
                     stmt::visit_mut::visit_expr_mut(self, expr);
                 }

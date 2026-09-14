@@ -99,9 +99,9 @@ impl Expand<'_> {
     /// Generates tokens for an `is_variant(path, variant_id)` predicate.
     /// Reused by `is_{variant}()` methods and the `matches()` method.
     ///
-    /// The check is built as a predicate so that, when the enum is itself
-    /// reached through a variant of an enclosing enum, that variant is
-    /// required as well.
+    /// When the enum is itself reached through a variant of an enclosing
+    /// enum, the engine's statement normalization requires that variant as
+    /// well.
     fn expand_is_variant_expr(&self, variant_idx: &TokenStream) -> TokenStream {
         let toasty = &self.toasty;
         let model_ident = &self.model.ident;
@@ -115,7 +115,7 @@ impl Expand<'_> {
                     model: <#model_ident as #toasty::Embed>::id(),
                     index: #variant_idx,
                 };
-                #toasty::stmt::Expr::<bool>::from_predicate(
+                #toasty::stmt::Expr::<bool>::from_untyped(
                     #toasty::core::stmt::Expr::is_variant(path_stmt, variant_id)
                 )
             }

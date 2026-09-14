@@ -86,8 +86,8 @@ impl<'a> LiftInSubquery<'a> {
     /// them: `k IN (SELECT id FROM m WHERE a AND b)` rather than
     /// `k IN (SELECT id FROM m WHERE a) AND k IN (SELECT id FROM m WHERE b)`.
     ///
-    /// A predicate through a relation routinely arrives as such a pair: the
-    /// typed layer fixes a variant guard next to the predicate it scopes
+    /// A predicate through a relation routinely arrives as such a pair:
+    /// normalization fixes a variant guard next to the predicate it scopes
     /// (`link.item.state IS Selected AND link.item.state.selected.value = x`).
     /// Lifted one at a time they become two subqueries on the same key,
     /// which the DynamoDB planner rejects — a key query takes one
@@ -174,7 +174,12 @@ impl VisitMut for LiftInSubquery<'_> {
         // level `Reference::Field` to a relation, and the children walk
         // would not introduce relation references that were not there.
         let lifted = match expr {
-            stmt::Expr::InSubquery(e) => lift_in_subquery(&self.cx, &e.expr, &e.query),
+            // Normalization expands `NOT IN` to `Not(InSubquery(..))`, so the
+            // lift below fires on the inner membership and keeps the
+            // negation outside.
+            stmt::Expr::InSubquery(e) if !e.negated => {
+                lift_in_subquery(&self.cx, &e.expr, &e.query)
+            }
             stmt::Expr::And(e) => {
                 self.lift_relation_path_conjunction(&mut e.operands);
                 None

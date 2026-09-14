@@ -74,10 +74,11 @@ impl<T> Expr<T> {
     ///
     /// When either side selects an enum variant (a path such as
     /// `contact().email().address()`), the filter also requires that
-    /// variant — see [`Expr::<bool>::from_predicate`].
+    /// variant: the engine attaches the check when it normalizes the
+    /// statement.
     pub fn eq(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_predicate(stmt::Expr::eq(self.untyped, rhs))
+        Expr::from_untyped(stmt::Expr::eq(self.untyped, rhs))
     }
 
     /// Test whether this expression does not equal `rhs`.
@@ -86,31 +87,31 @@ impl<T> Expr<T> {
     /// selects: rows of other variants do not match.
     pub fn ne(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_predicate(stmt::Expr::ne(self.untyped, rhs))
+        Expr::from_untyped(stmt::Expr::ne(self.untyped, rhs))
     }
 
     /// Test whether this expression is greater than `rhs`.
     pub fn gt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_predicate(stmt::Expr::gt(self.untyped, rhs))
+        Expr::from_untyped(stmt::Expr::gt(self.untyped, rhs))
     }
 
     /// Test whether this expression is greater than or equal to `rhs`.
     pub fn ge(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_predicate(stmt::Expr::ge(self.untyped, rhs))
+        Expr::from_untyped(stmt::Expr::ge(self.untyped, rhs))
     }
 
     /// Test whether this expression is less than `rhs`.
     pub fn lt(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_predicate(stmt::Expr::lt(self.untyped, rhs))
+        Expr::from_untyped(stmt::Expr::lt(self.untyped, rhs))
     }
 
     /// Test whether this expression is less than or equal to `rhs`.
     pub fn le(self, rhs: impl IntoExpr<T>) -> Expr<bool> {
         let rhs = rhs.into_expr().untyped;
-        Expr::from_predicate(stmt::Expr::le(self.untyped, rhs))
+        Expr::from_untyped(stmt::Expr::le(self.untyped, rhs))
     }
 }
 
@@ -137,35 +138,6 @@ impl<T> Expr<List<T>> {
 }
 
 impl Expr<bool> {
-    /// Wrap a freshly built predicate, requiring every enum variant its
-    /// operands select.
-    ///
-    /// A path into an enum variant (`contact().email().address()`) converts
-    /// to an expression that selects the variant's payload without checking
-    /// the variant. A predicate over such an operand is only meaningful for
-    /// rows of that variant, so this conjoins an `is_variant` check for each
-    /// selection found in `predicate` — on either operand, and for every
-    /// enclosing variant of a nested selection. The checks are fixed here,
-    /// before the predicate is combined with others: `a.ne(b)` requires the
-    /// variants of both `a` and `b`, and `a.eq(b).not()` negates the guarded
-    /// equality as a whole, so it matches rows of other variants.
-    ///
-    /// Every predicate constructor in the typed layer funnels through this.
-    /// Operands that are themselves predicates (`and`, `or`, subqueries) are
-    /// not searched: they were built here and already carry their checks.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # use toasty::stmt::Expr;
-    /// # use toasty_core::stmt as core_stmt;
-    /// // No variant selection: the predicate is wrapped unchanged.
-    /// let filter = Expr::<bool>::from_predicate(core_stmt::Expr::eq(1_i64, 1_i64));
-    /// ```
-    pub fn from_predicate(predicate: impl Into<stmt::Expr>) -> Self {
-        Self::from_untyped(predicate.into().with_variant_guards())
-    }
-
     /// Combine two boolean expressions with logical AND.
     ///
     /// # Examples
@@ -280,7 +252,7 @@ impl Expr<bool> {
         L: IntoExpr<T>,
         R: IntoExpr<List<T>>,
     {
-        Self::from_predicate(stmt::Expr::in_list(
+        Self::from_untyped(stmt::Expr::in_list(
             lhs.into_expr().untyped,
             rhs.into_expr().untyped,
         ))
@@ -306,7 +278,7 @@ impl<T> Expr<Option<T>> {
     /// let _is_null: Expr<bool> = expr.is_none();
     /// ```
     pub fn is_none(self) -> Expr<bool> {
-        Expr::from_predicate(stmt::Expr::is_null(self.untyped))
+        Expr::from_untyped(stmt::Expr::is_null(self.untyped))
     }
 
     /// Test whether this optional expression is not `NULL`.
@@ -319,7 +291,7 @@ impl<T> Expr<Option<T>> {
     /// let _is_not_null: Expr<bool> = expr.is_some();
     /// ```
     pub fn is_some(self) -> Expr<bool> {
-        Expr::from_predicate(stmt::Expr::is_not_null(self.untyped))
+        Expr::from_untyped(stmt::Expr::is_not_null(self.untyped))
     }
 }
 

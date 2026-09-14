@@ -11,8 +11,8 @@
 //! The variant selection is part of the expression, so resolution needs no
 //! context from the enclosing predicate: the steps after a
 //! [`Expr::Variant`] index that variant's fields. The selection carries no
-//! variant check of its own — the typed layer fixed the `is_variant` guards
-//! next to the predicate when it was built (`Expr::with_variant_guards`),
+//! variant check of its own — statement normalization fixed the
+//! `is_variant` guards next to the predicate (`normalize/variant_guards.rs`),
 //! and the key expression built here keeps the selection, so the guards
 //! still apply to the substituted comparison.
 //!

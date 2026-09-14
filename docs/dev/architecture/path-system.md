@@ -102,19 +102,20 @@ Comparison methods on typed paths produce filter expressions:
 User::filter(User::fields().name().eq("Alice"))
 ```
 
-Each method (`eq`, `ne`, `gt`, `ge`, `lt`, `le`, `in_list`, `in_query`, `is_none`, `is_some`, `starts_with`, `like`, `ilike`) calls `Path::into_stmt()` to turn the path into an `Expr`, wraps it with the appropriate operator, and passes the result through `Expr::<bool>::from_predicate`, which adds the variant guards described below.
+Each method (`eq`, `ne`, `gt`, `ge`, `lt`, `le`, `in_list`, `in_query`, `is_none`, `is_some`, `starts_with`, `like`, `ilike`) calls `Path::into_stmt()` to turn the path into an `Expr` and wraps it with the appropriate operator. The result is the bare predicate; the variant guards described below are added by the engine.
 
 ### Variant guards
 
-A path into an enum variant (`contact().email().address()`) converts to an expression that selects the variant's payload without checking the variant. A predicate over such an operand only means something for rows of that variant, so every predicate constructor in the typed layer (`Path::eq`, `Expr::<T>::eq`, `Expr::<Option<T>>::is_none`, `in_list`, and the rest) runs `Expr::with_variant_guards` on the predicate it builds. This walks the predicate's operands, emits an `is_variant` check for every `ExprVariant` found — on either operand, and for each enclosing variant of a nested selection, outermost first — and ANDs the checks in front of the predicate.
+A path into an enum variant (`contact().email().address()`) converts to an expression that selects the variant's payload without checking the variant. A predicate over such an operand only means something for rows of that variant, so statement normalization in the engine (`engine/normalize/variant_guards.rs`) conjoins an `is_variant` check for every `ExprVariant` a predicate's operands reach — on either operand, and for each enclosing variant of a nested selection, outermost first — in front of the predicate. `is_some()` and `Path::all()` are predicates of their own (`ExprIsNull` and `ExprInSubquery` carry a `negated` flag), so their guards attach before normalization expands them to `NOT (..)`.
 
-The guards are fixed when the predicate is built, before it is combined with others, which sets the boolean scope:
+Guards attach at each predicate boundary, which sets the boolean scope:
 
 - `a.ne(b)` requires the variants of both `a` and `b`; rows of other variants do not match, even when the variants share a column.
-- `a.eq(b).not()` is `NOT (is_variant AND a = b)`: it negates the guarded equality as a whole and matches rows of other variants.
-- Operands that are themselves predicates (`and`, `or` operands, subqueries) are not searched: they were built by these constructors and already carry their checks.
+- `a.eq(b).not()` is `NOT (is_variant AND a = b)`: it negates the guarded equality as a whole and matches rows of other variants. `a.is_some()` is `is_variant AND NOT (a IS NULL)`.
+- `and`, `or`, and `not` operands and subqueries are predicate scopes of their own; a selection used only as a value (an ordering expression) stays unguarded.
+- A guard an enclosing conjunction already states is not repeated, so normalizing twice changes nothing, and conjunctions the rewrite produces flatten into the enclosing one so a guard stays a sibling of the predicate it scopes.
 
-The `is_{variant}()` and `.matches()` methods build their `is_variant` check the same way, so a check on an enum reached through a variant of an enclosing enum requires the outer variant too.
+The `is_{variant}()` and `.matches()` methods build a bare `is_variant` check; normalization adds the outer variant's check when the enum is reached through a variant of an enclosing enum.
 
 ### Ordering
 

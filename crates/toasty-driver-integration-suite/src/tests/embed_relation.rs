@@ -141,6 +141,57 @@ pub async fn compare_embedded_relations_preserves_both_variant_guards(
     Ok(())
 }
 
+/// A predicate assembled from the statement AST, rather than through the
+/// typed constructors, requires the variant it selects all the same: the
+/// engine attaches the check when it normalizes the statement.
+#[driver_test]
+pub async fn raw_ast_predicate_requires_the_selected_variant(test: &mut Test) -> Result<()> {
+    use toasty_core::stmt as core_stmt;
+
+    #[derive(Debug, toasty::Embed)]
+    enum Owner {
+        Primary {
+            #[shared(active)]
+            active: bool,
+        },
+        Other {
+            #[shared(active)]
+            active: bool,
+        },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct Object {
+        #[key]
+        #[auto]
+        id: uuid::Uuid,
+        owner: Owner,
+    }
+
+    let mut db = test.setup_db(models!(Object)).await;
+    let primary = toasty::create!(Object {
+        owner: Owner::Primary { active: true }
+    })
+    .exec(&mut db)
+    .await?;
+    toasty::create!(Object {
+        owner: Owner::Other { active: true }
+    })
+    .exec(&mut db)
+    .await?;
+
+    // Both rows store `true` in the shared column; only the Primary row
+    // satisfies a predicate on the Primary variant's field.
+    let active: core_stmt::Path = Object::fields().owner().primary().active().into();
+    let predicate =
+        toasty::stmt::Expr::<bool>::from_untyped(core_stmt::Expr::eq(active.into_stmt(), true));
+    let found = Object::filter(predicate).exec(&mut db).await?;
+    assert_eq!(found.len(), 1);
+    assert_eq!(found[0].id, primary.id);
+
+    Ok(())
+}
+
 /// A composite-key relation inside a variant of an enum that is itself a
 /// variant field of an outer enum, shared by the nested-variant tests.
 mod nested_composite {
