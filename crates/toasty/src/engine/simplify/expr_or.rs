@@ -181,15 +181,7 @@ impl Simplify<'_> {
     /// Groups equality comparisons by their LHS and converts groups with 2+
     /// values into IN lists. Non-equality operands are preserved.
     fn try_or_to_in_list(&self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
-        use hashbrown::HashMap;
-
-        // Group equalities by their LHS expression
-        // Key: index into `lhs_exprs`, Value: list of RHS constant values
-        //
-        // TODO: this could be simplified to use `Expr` as the `HashMap` key
-        // directly if `Expr` ever implements `Hash`.
-        let mut lhs_exprs: Vec<stmt::Expr> = Vec::new();
-        let mut groups: HashMap<usize, Vec<stmt::Value>> = HashMap::new();
+        let mut groups: Vec<(stmt::Expr, Vec<stmt::Value>)> = Vec::new();
         let mut other_operands: Vec<stmt::Expr> = Vec::new();
 
         for operand in mem::take(&mut expr.operands) {
@@ -197,22 +189,16 @@ impl Simplify<'_> {
                 && bin_op.op.is_eq()
                 && let stmt::Expr::Value(value) = bin_op.rhs.as_ref()
             {
-                // Find or create index for this LHS. `is_equivalent_to` is
-                // crucial here: if the lhs is non-deterministic (e.g. `RAND()`),
-                // it is never equivalent to another occurrence of itself, so
-                // each instance falls into its own singleton group and no IN
-                // list is produced. Rewriting `RAND() = 1 OR RAND() = 2` into
-                // `RAND() IN (1, 2)` would collapse two independent draws into
-                // one, which is unsound.
-                let lhs_idx = lhs_exprs
-                    .iter()
-                    .position(|e| e.is_equivalent_to(bin_op.lhs.as_ref()))
-                    .unwrap_or_else(|| {
-                        lhs_exprs.push(bin_op.lhs.as_ref().clone());
-                        lhs_exprs.len() - 1
-                    });
-
-                groups.entry(lhs_idx).or_default().push(value.clone());
+                // Keep non-deterministic expressions in separate groups so an
+                // IN list cannot collapse independent evaluations into one.
+                if let Some((_, values)) = groups
+                    .iter_mut()
+                    .find(|(lhs, _)| lhs.is_equivalent_to(&bin_op.lhs))
+                {
+                    values.push(value.clone());
+                } else {
+                    groups.push(((*bin_op.lhs).clone(), vec![value.clone()]));
+                }
                 continue;
             }
 
@@ -220,37 +206,19 @@ impl Simplify<'_> {
             other_operands.push(operand);
         }
 
-        // Check if any conversion will happen (any group with 2+ values)
-        let has_conversion = groups.values().any(|v| v.len() >= 2);
-        if !has_conversion {
-            // Restore original operands and return None
-            for (idx, values) in groups {
-                let lhs = &lhs_exprs[idx];
-                for value in values {
-                    other_operands.push(stmt::Expr::eq(lhs.clone(), stmt::Expr::Value(value)));
-                }
-            }
-            expr.operands = other_operands;
-            return None;
-        }
-
-        // Build result operands
+        let has_conversion = groups.iter().any(|(_, values)| values.len() >= 2);
         let mut result_operands = other_operands;
 
-        for (idx, values) in groups {
-            let lhs = lhs_exprs[idx].clone();
-            if values.len() >= 2 {
-                // Convert to IN list
-                result_operands.push(stmt::Expr::in_list(lhs, stmt::Expr::list(values)));
+        for (lhs, mut values) in groups {
+            let operand = if values.len() >= 2 {
+                stmt::Expr::in_list(lhs, stmt::Expr::list(values))
             } else {
-                // Keep as equality
-                for value in values {
-                    result_operands.push(stmt::Expr::eq(lhs.clone(), stmt::Expr::Value(value)));
-                }
-            }
+                stmt::Expr::eq(lhs, values.pop().unwrap())
+            };
+            result_operands.push(operand);
         }
 
-        if result_operands.len() == 1 {
+        if has_conversion && result_operands.len() == 1 {
             Some(result_operands.remove(0))
         } else {
             expr.operands = result_operands;
