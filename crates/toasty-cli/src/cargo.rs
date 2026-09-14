@@ -108,27 +108,45 @@ impl Package<'_> {
             .unwrap_or_default()
     }
 
-    /// Returns `true` if the package has `toasty` as a direct dependency.
+    /// Returns `true` if the package lists `toasty` as a normal dependency.
+    ///
+    /// Dev- and build-dependencies do not count: neither is linked into the
+    /// artifact the schema is extracted from. A `false` here is only a hint,
+    /// though — the constructor also fires when `toasty` is reached
+    /// transitively, which is the usual shape of a `models` crate paired with
+    /// a `server` binary.
     pub fn depends_on_toasty(&self) -> bool {
         self.0["dependencies"]
             .as_array()
             .into_iter()
             .flatten()
-            .any(|dep| dep["name"].as_str() == Some("toasty"))
+            .any(|dep| {
+                dep["name"].as_str() == Some("toasty")
+                    // `cargo metadata` reports normal dependencies with a null
+                    // kind, and dev/build dependencies as "dev"/"build".
+                    && dep["kind"].is_null()
+            })
     }
 
     /// Names of the package's `[[bin]]` targets.
     pub fn bin_names(&self) -> Vec<&str> {
-        self.targets_with_kind("bin")
+        self.targets_with_kind(&["bin"])
     }
 
     /// Returns `true` if the package has a lib target that can be rebuilt as
     /// a `cdylib`.
+    ///
+    /// Every linkable crate type qualifies: `cargo rustc --crate-type cdylib`
+    /// overrides whatever the manifest declares, so a lib that is normally
+    /// built as a `staticlib` (or already as a `cdylib`) works just as well as
+    /// the default `rlib`.
     pub fn has_lib(&self) -> bool {
-        !self.targets_with_kind("lib").is_empty() || !self.targets_with_kind("rlib").is_empty()
+        !self
+            .targets_with_kind(&["lib", "rlib", "dylib", "cdylib", "staticlib"])
+            .is_empty()
     }
 
-    fn targets_with_kind(&self, kind: &str) -> Vec<&str> {
+    fn targets_with_kind(&self, kinds: &[&str]) -> Vec<&str> {
         self.0["targets"]
             .as_array()
             .into_iter()
@@ -138,7 +156,7 @@ impl Package<'_> {
                     .as_array()
                     .into_iter()
                     .flatten()
-                    .any(|k| k.as_str() == Some(kind))
+                    .any(|k| k.as_str().is_some_and(|k| kinds.contains(&k)))
             })
             .filter_map(|target| target["name"].as_str())
             .collect()

@@ -73,14 +73,22 @@ database URL directly; they do not build your package.
 
 ## Configuration options
 
-The CLI writes a default `Toasty.toml` next to your package's `Cargo.toml`
-on first use. The `[migration]` section controls migration behavior:
+`toasty migrate generate` writes a default `Toasty.toml` next to your
+package's `Cargo.toml` on first use. The `[migration]` section controls
+migration behavior:
 
 | Option | Default | Description |
 |---|---|---|
 | `path` | `"toasty"` | Base directory for migration files, snapshots, and history |
 | `prefix_style` | `"Sequential"` | File naming: `"Sequential"` (0001_, 0002_) or `"Timestamp"` (20240112_153045_) |
 | `flavor` | unset | Database flavor used when `--flavor` is not passed: `"sqlite"`, `"postgresql"`, `"mysql"`, or `"turso"` |
+| `table_name_prefix` | unset | Prefix applied to every table name in the extracted schema |
+
+Set `table_name_prefix` to the same value the application passes to
+`Db::builder().table_name_prefix(..)`. The schema is extracted by a
+constructor that runs before any of your code, so a prefix set on the
+builder is not visible to the CLI. Without this key the generated migration
+creates unprefixed tables that the application never queries.
 
 ## Generating a migration
 
@@ -204,8 +212,13 @@ Print the schema snapshot derived from your current model definitions:
 toasty migrate snapshot --flavor sqlite
 ```
 
-This compiles your package, extracts the schema, and outputs it as TOML,
-showing all tables, columns, and indexes. It does not modify any files.
+This compiles your package, extracts the schema, and writes it to stdout as
+TOML, showing all tables, columns, and indexes. It does not modify any
+files. Progress and headings go to stderr, so the output can be redirected:
+
+```bash
+toasty migrate snapshot --flavor sqlite > schema.toml
+```
 
 ## Dropping a migration
 

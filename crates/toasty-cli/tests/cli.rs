@@ -18,39 +18,7 @@ fn workspace_root() -> PathBuf {
         .to_path_buf()
 }
 
-/// Scaffolds a package using Toasty. `bin` selects a bin package (schema
-/// extracted by running the built binary) or a lib-only package (schema
-/// extracted by building the lib as a cdylib and loading it).
-fn scaffold_project(dir: &Path, bin: bool) {
-    let root = workspace_root();
-
-    fs::write(
-        dir.join("Cargo.toml"),
-        format!(
-            r#"[package]
-name = "cli-e2e"
-version = "0.0.0"
-edition = "2024"
-
-[dependencies]
-toasty = {{ path = {toasty_path:?} }}
-
-[workspace]
-
-# Match the Toasty workspace profile so shared dependency builds are reused.
-[profile.dev]
-debug = "line-tables-only"
-"#,
-            toasty_path = root.join("crates/toasty"),
-        ),
-    )
-    .unwrap();
-
-    // Pin dependency versions to the workspace's lockfile when there is one;
-    // extra entries are pruned by cargo.
-    let _ = fs::copy(root.join("Cargo.lock"), dir.join("Cargo.lock"));
-
-    let model = r#"
+const MODEL: &str = r#"
 #[derive(Debug, toasty::Model)]
 pub struct User {
     #[key]
@@ -62,15 +30,53 @@ pub struct User {
 }
 "#;
 
+/// Renders a manifest for a package depending on the workspace's `toasty`.
+///
+/// `extra` is spliced in after that dependency, so it can add further
+/// dependencies or open a new table such as `[lib]`.
+fn manifest(name: &str, extra: &str) -> String {
+    format!(
+        r#"[package]
+name = "{name}"
+version = "0.0.0"
+edition = "2024"
+
+[dependencies]
+toasty = {{ path = {toasty_path:?} }}
+{extra}
+
+[workspace]
+
+# Match the Toasty workspace profile so shared dependency builds are reused.
+[profile.dev]
+debug = "line-tables-only"
+"#,
+        toasty_path = workspace_root().join("crates/toasty"),
+    )
+}
+
+/// Pins dependency versions to the workspace lockfile when there is one;
+/// extra entries are pruned by cargo.
+fn copy_lockfile(dir: &Path) {
+    let _ = fs::copy(workspace_root().join("Cargo.lock"), dir.join("Cargo.lock"));
+}
+
+/// Scaffolds a package using Toasty. `bin` selects a bin package (schema
+/// extracted by running the built binary) or a lib-only package (schema
+/// extracted by building the lib as a cdylib and loading it).
+fn scaffold_project(dir: &Path, bin: bool) {
+    fs::write(dir.join("Cargo.toml"), manifest("cli-e2e", "")).unwrap();
+    copy_lockfile(dir);
+
     fs::create_dir_all(dir.join("src")).unwrap();
     if bin {
         fs::write(
             dir.join("src/main.rs"),
-            format!("{model}\nfn main() {{ panic!(\"user main must not run during schema extraction\"); }}"),
+            format!("{MODEL}\nfn main() {{ panic!(\"user main must not run during schema extraction\"); }}"),
         )
         .unwrap();
     } else {
-        fs::write(dir.join("src/lib.rs"), model).unwrap();
+        fs::write(dir.join("src/lib.rs"), MODEL).unwrap();
     }
 }
 
@@ -187,4 +193,164 @@ fn flavor_from_toasty_toml() {
     let output = toasty(dir.path(), &["migrate", "generate", "--name", "init"]);
     let stdout = assert_success(&output);
     assert!(stdout.contains("0000_init.sql"), "{stdout}");
+}
+
+/// The constructor runs before any user code, so a prefix passed to
+/// `Db::builder().table_name_prefix(..)` is invisible to it. `Toasty.toml`
+/// carries it instead — otherwise the migration creates tables the
+/// application never queries.
+fn assert_table_name_prefix_is_applied(bin: bool) {
+    let dir = tempfile::tempdir().unwrap();
+    scaffold_project(dir.path(), bin);
+    fs::write(
+        dir.path().join("Toasty.toml"),
+        "[migration]\npath = \"toasty\"\nprefix_style = \"Sequential\"\n\
+         table_name_prefix = \"svc_\"\n",
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"svc_users\""), "{sql}");
+}
+
+#[test]
+fn table_name_prefix_reaches_a_bin_dumper() {
+    assert_table_name_prefix_is_applied(true);
+}
+
+#[test]
+fn table_name_prefix_reaches_a_cdylib_dumper() {
+    // The prefix travels as a CLI argument on this path rather than as an
+    // environment variable, so it needs its own coverage.
+    assert_table_name_prefix_is_applied(false);
+}
+
+#[test]
+fn schema_is_extracted_through_a_transitive_toasty_dependency() {
+    // The `models` crate paired with a `server` binary is the layout the guide
+    // recommends: `server` reaches `toasty` only through `models`, but the
+    // constructor is linked into the binary all the same.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"models\", \"server\"]\nresolver = \"3\"\n\n\
+         [profile.dev]\ndebug = \"line-tables-only\"\n",
+    )
+    .unwrap();
+    copy_lockfile(root);
+
+    fs::create_dir_all(root.join("models/src")).unwrap();
+    let models_manifest = manifest("models", "");
+    fs::write(
+        root.join("models/Cargo.toml"),
+        // The member manifests must not each declare their own `[workspace]`.
+        models_manifest.replace("[workspace]\n", ""),
+    )
+    .unwrap();
+    fs::write(root.join("models/src/lib.rs"), MODEL).unwrap();
+
+    fs::create_dir_all(root.join("server/src")).unwrap();
+    fs::write(
+        root.join("server/Cargo.toml"),
+        "[package]\nname = \"server\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+         [dependencies]\nmodels = { path = \"../models\" }\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("server/src/main.rs"),
+        "fn main() { let _ = std::any::type_name::<models::User>(); }\n",
+    )
+    .unwrap();
+
+    let output = toasty(
+        root,
+        &[
+            "-p", "server", "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    let sql = fs::read_to_string(root.join("server/toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
+}
+
+#[test]
+fn a_lib_declared_only_as_a_cdylib_is_extractable() {
+    // `cargo rustc --crate-type cdylib` overrides whatever the manifest
+    // declares, so any linkable crate type works as a dump target.
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        manifest("cdylib-only", "\n[lib]\ncrate-type = [\"cdylib\"]\n"),
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(dir.path().join("src/lib.rs"), MODEL).unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
+}
+
+#[test]
+fn read_only_commands_do_not_write_to_the_source_tree() {
+    // `migrate apply` reads saved migration files and talks to a database; it
+    // has no business creating `Toasty.toml`, which would fail outright in a
+    // read-only checkout.
+    let dir = tempfile::tempdir().unwrap();
+    scaffold_project(dir.path(), true);
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    let config = dir.path().join("Toasty.toml");
+    assert!(config.is_file(), "generate should create the config");
+    fs::remove_file(&config).unwrap();
+
+    let url = format!("sqlite:{}", dir.path().join("app.db").display());
+    let output = toasty(dir.path(), &["migrate", "apply", "--url", &url]);
+    assert_success(&output);
+
+    assert!(!config.exists(), "apply must not write Toasty.toml");
+}
+
+#[test]
+fn snapshot_stdout_is_parseable_toml() {
+    let dir = tempfile::tempdir().unwrap();
+    scaffold_project(dir.path(), true);
+
+    let output = toasty(dir.path(), &["migrate", "snapshot", "--flavor", "sqlite"]);
+    let stdout = assert_success(&output);
+
+    // Headers and build progress belong on stderr so that redirecting stdout
+    // to a file yields a usable snapshot.
+    let snapshot: toml::Value = toml::from_str(&stdout)
+        .unwrap_or_else(|err| panic!("stdout is not valid TOML: {err}\n---\n{stdout}"));
+
+    let tables = snapshot["schema"]["tables"].as_array().unwrap();
+    assert_eq!(tables.len(), 1);
+    assert_eq!(tables[0]["name"].as_str(), Some("users"));
 }

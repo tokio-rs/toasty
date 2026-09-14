@@ -116,7 +116,8 @@ fn __toasty_maybe_dump_schema() {
 
 This runs before `main` (for binaries) or during `dlopen` (for cdylibs).
 The env var's value names the flavor (`sqlite`, `postgresql`, `mysql`,
-`turso`). When it is set, the constructor collects the same `inventory`
+`turso`); a second variable carries the table name prefix, when one is
+configured. When it is set, the constructor collects the same `inventory`
 registrations `#[derive(Model)]` already produces (sorted by model name, so
 output is stable across rebuilds regardless of link order), builds an
 `app::Schema`, lowers it with the flavor's `Capability`, serializes the
@@ -171,7 +172,8 @@ toasty __load-cdylib /path/to/libuser_app.dylib --flavor postgresql
 
 The subcommand sets `TOASTY_DUMP_SCHEMA` in its own environment and then
 loads the library with `libloading::Library::new`; the ctor dumps and exits
-during the load. The flavor travels as an argument rather than as an env
+during the load. `main` dispatches it before building the async runtime, so
+the process is still single-threaded when it mutates its own environment. The flavor travels as an argument rather than as an env
 var on the child because a debug build of the CLI links `toasty` itself and
 would otherwise trigger its own dump constructor — with an empty schema —
 before reaching the subcommand. The parent CLI captures the child's stdout
@@ -208,8 +210,10 @@ the public surface — its only caller is `toasty-cli` itself.
   the CLI errors with "the schema dumper produced no schema; check that
   `toasty` is a direct dependency of `<pkg>`."
 - **`toasty` not actually depended on.** The ctor is in `toasty`; without
-  the dependency the env var has no effect. The CLI detects this in
-  `cargo metadata` and errors before building.
+  the dependency the env var has no effect. A transitive dependency still
+  carries it — a `models` crate paired with a `server` binary extracts
+  fine — so `cargo metadata` is used only to sharpen the error when no
+  schema comes back, never to reject a package before building.
 - **Release builds.** The ctor is `cfg(debug_assertions)`-gated, so a
   release-only project would compile a binary without it. The CLI always
   uses the dev profile, so this does not affect the schema-extract path,
@@ -218,9 +222,11 @@ the public surface — its only caller is `toasty-cli` itself.
   envelope carries a format version; on mismatch the CLI reports it and
   asks the user to align the two, instead of failing on a parse error.
 - **Builder-level schema options.** Options set on `Db::builder()` at
-  runtime — currently `table_name_prefix` — are not visible to the
-  constructor, which runs before any user code. Projects using them keep
-  working at runtime, but the extracted schema does not include them.
+  runtime are not visible to the constructor, which runs before any user
+  code. `table_name_prefix` is therefore configured a second time, as
+  `migration.table_name_prefix` in `Toasty.toml`; the CLI passes it to the
+  dumper so the extracted schema names tables the way the application
+  does. The two values are not checked against each other.
 - **Env var leaking to user processes.** The env var is set only on the
   child the CLI spawns, never exported in the user's shell. Users who
   manually `TOASTY_DUMP_SCHEMA=sqlite cargo run` get the dump-and-exit

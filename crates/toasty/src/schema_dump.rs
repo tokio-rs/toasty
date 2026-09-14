@@ -17,6 +17,15 @@ use toasty_core::{driver::Capability, schema::db};
 /// flavor to lower the schema for (e.g. `sqlite`, `postgresql`, `mysql`).
 pub const DUMP_SCHEMA_ENV: &str = "TOASTY_DUMP_SCHEMA";
 
+/// Environment variable carrying the table name prefix to lower the schema
+/// with, mirroring [`Builder::table_name_prefix`](crate::db::Builder::table_name_prefix).
+///
+/// The constructor runs before any user code, so a prefix set on the builder
+/// at runtime is invisible to it. The CLI reads `migration.table_name_prefix`
+/// from `Toasty.toml` and passes it through here, so that the extracted schema
+/// names tables the same way the running application does.
+pub const DUMP_TABLE_NAME_PREFIX_ENV: &str = "TOASTY_DUMP_TABLE_NAME_PREFIX";
+
 /// Version of the JSON envelope written by the dump constructor.
 pub const SCHEMA_DUMP_VERSION: u32 = 1;
 
@@ -95,7 +104,13 @@ mod dump {
         let app_schema = toasty_core::schema::app::Schema::from_macro(models)
             .map_err(|err| format!("failed to build schema from registered models: {err}"))?;
 
-        let schema = toasty_core::schema::Builder::new()
+        let mut builder = toasty_core::schema::Builder::new();
+
+        if let Some(prefix) = std::env::var_os(DUMP_TABLE_NAME_PREFIX_ENV) {
+            builder.table_name_prefix(&prefix.to_string_lossy());
+        }
+
+        let schema = builder
             .build(app_schema, capability)
             .map_err(|err| format!("failed to lower schema for flavor `{flavor}`: {err}"))?;
 

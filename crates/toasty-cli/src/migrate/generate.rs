@@ -244,6 +244,8 @@ impl GenerateCommand {
         let flavor = project.flavor(self.flavor)?;
         let schema = extract::extract_schema(project, flavor, self.bin.as_deref())?;
 
+        crate::Config::create_if_missing(&project.package_root)?;
+
         let history_path = project.history_file_path();
 
         fs::create_dir_all(project.migrations_dir())?;

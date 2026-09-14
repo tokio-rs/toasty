@@ -44,6 +44,16 @@ pub struct MigrationConfig {
     /// Database flavor migrations target when `--flavor` is not passed.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub flavor: Option<Flavor>,
+
+    /// Prefix applied to every table name when the schema is extracted.
+    ///
+    /// Must match the prefix the application passes to
+    /// `Db::builder().table_name_prefix(..)`. The schema is extracted by a
+    /// constructor that runs before any user code, so a prefix set on the
+    /// builder cannot be observed — without this key the generated migration
+    /// would create unprefixed tables the application never queries.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table_name_prefix: Option<String>,
 }
 
 /// Controls the prefix format used when naming generated migration files.
@@ -75,6 +85,7 @@ impl Default for MigrationConfig {
             path: PathBuf::from("toasty"),
             prefix_style: MigrationPrefixStyle::Sequential,
             flavor: None,
+            table_name_prefix: None,
         }
     }
 }
@@ -100,6 +111,12 @@ impl MigrationConfig {
     /// Set the default database flavor
     pub fn flavor(mut self, flavor: Flavor) -> Self {
         self.flavor = Some(flavor);
+        self
+    }
+
+    /// Set the table name prefix the extracted schema is lowered with
+    pub fn table_name_prefix(mut self, prefix: impl Into<String>) -> Self {
+        self.table_name_prefix = Some(prefix.into());
         self
     }
 
