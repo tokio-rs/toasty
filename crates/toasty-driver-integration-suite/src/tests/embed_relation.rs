@@ -1117,7 +1117,7 @@ pub async fn replace_enum_inside_embedded_patch(test: &mut Test) -> Result<()> {
     })
     .exec(&mut db)
     .await?;
-    assert_struct!(Object::get_by_id(&mut db, obj.id).await?.meta, _ {
+    assert_struct!(Object::get_by_id(&mut db, obj.id).await?.meta, {
         title: "draft",
         owner: Owner::Human { id: == ann.id, .. },
     });
@@ -1127,7 +1127,7 @@ pub async fn replace_enum_inside_embedded_patch(test: &mut Test) -> Result<()> {
     })
     .exec(&mut db)
     .await?;
-    assert_struct!(Object::get_by_id(&mut db, obj.id).await?.meta, _ {
+    assert_struct!(Object::get_by_id(&mut db, obj.id).await?.meta, {
         title: "draft",
         owner: Owner::Human { id: == bea.id, .. },
     });
@@ -1579,7 +1579,7 @@ pub async fn filter_enum_embed_relation_in_list(test: &mut Test) -> Result<()> {
 
     let mut expected = [alice_obj.id, bea_obj.id];
     expected.sort();
-    assert_struct!(found, [_ { id: == expected[0], .. }, _ { id: == expected[1], .. }]);
+    assert_struct!(found, [{ id: == expected[0] }, { id: == expected[1] }]);
 
     Ok(())
 }
@@ -1659,7 +1659,7 @@ pub async fn filter_struct_embed_relation_in_list(test: &mut Test) -> Result<()>
 
     let mut expected = [alice_post.id, bea_post.id];
     expected.sort();
-    assert_struct!(found, [_ { id: == expected[0], .. }, _ { id: == expected[1], .. }]);
+    assert_struct!(found, [{ id: == expected[0] }, { id: == expected[1] }]);
 
     Ok(())
 }

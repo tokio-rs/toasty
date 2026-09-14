@@ -1370,7 +1370,7 @@ pub async fn patch_data_enum_inside_embedded_struct(t: &mut Test) -> Result<()> 
         .await?;
 
     let found = Task::get_by_id(&mut db, &task.id).await?;
-    assert_struct!(found.meta, _ {
+    assert_struct!(found.meta, {
         label: "fix bug",
         status: Status::Failed { reason: "flaky" },
     });
@@ -1384,7 +1384,7 @@ pub async fn patch_data_enum_inside_embedded_struct(t: &mut Test) -> Result<()> 
         .await?;
 
     let found = Task::get_by_id(&mut db, &task.id).await?;
-    assert_struct!(found.meta, _ { label: "fix bug", status: Status::Open });
+    assert_struct!(found.meta, { label: "fix bug", status: Status::Open });
 
     Ok(())
 }

@@ -105,7 +105,7 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
 /// Schema:
 ///   User { id, name, status: Status, contact: ContactInfo, address: Address }
 ///   Status = enum { Active(0), Inactive(1) }  (unit variants only)
-///   ContactInfo = enum { Email(0, fields: [address]), Phone(1, fields: [number]) }
+///   ContactInfo = enum { Email(0, fields: [address]), Phone(1, fields: [country_code, number]) }
 ///   Address = struct { street, city }
 fn schema() -> Schema {
     let status = Model::EmbeddedEnum(EmbeddedEnum {
@@ -150,7 +150,8 @@ fn schema() -> Schema {
         ],
         fields: vec![
             variant_field(CONTACT_ENUM, 0, "address", 0),
-            variant_field(CONTACT_ENUM, 1, "number", 1),
+            variant_field(CONTACT_ENUM, 1, "country_code", 1),
+            variant_field(CONTACT_ENUM, 2, "number", 1),
         ],
         indices: vec![],
     });
@@ -253,7 +254,7 @@ fn resolve_embedded_struct_field() {
     assert_eq!(field.name.app.as_deref(), Some("city"));
 }
 
-// === Embedded enum (data-carrying) — valid two-step projection ===
+// === Embedded enum (data-carrying) — field step is local to the variant ===
 
 #[test]
 fn resolve_data_enum_variant_field() {
@@ -266,7 +267,13 @@ fn resolve_data_enum_variant_field() {
         .unwrap();
     assert_eq!(field.name.app.as_deref(), Some("address"));
 
-    // User.contact -> Phone(disc=1) -> number(global index=1) => [3, 1, 1]
+    // Phone local 0 = country_code => [3, 1, 0]
+    let field = s
+        .resolve_field(root, &stmt::Projection::from([3, 1, 0]))
+        .unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("country_code"));
+
+    // Phone local 1 = number => [3, 1, 1]
     let field = s
         .resolve_field(root, &stmt::Projection::from([3, 1, 1]))
         .unwrap();
@@ -321,6 +328,23 @@ fn resolve_enum_invalid_field_in_variant_returns_none() {
     // User.contact -> Email(disc=0) -> field 99 doesn't exist
     assert!(
         s.resolve_field(root, &stmt::Projection::from([3, 0, 99]))
+            .is_none()
+    );
+}
+
+// Field steps must not leak across variants: [3, 0, 1] is Email + Phone's
+// field, and [3, 1, 2] is past Phone's two locals.
+#[test]
+fn resolve_enum_field_index_is_variant_local() {
+    let s = schema();
+    let root = s.model(USER);
+
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 0, 1]))
+            .is_none()
+    );
+    assert!(
+        s.resolve_field(root, &stmt::Projection::from([3, 1, 2]))
             .is_none()
     );
 }

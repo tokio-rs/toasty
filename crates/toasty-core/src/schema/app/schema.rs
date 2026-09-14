@@ -204,12 +204,14 @@ impl Schema {
                             current_field = s.fields.get(*step)?;
                         }
                         Model::EmbeddedEnum(e) => {
-                            let variant = e.variants.get(*step)?;
+                            let variant_index = *step;
+                            let variant = e.variants.get(variant_index)?;
 
                             // Check if there's a field index step after the variant
                             if let Some(field_step) = steps.next() {
-                                // Two steps: variant disc + field index → field
-                                current_field = e.fields.get(*field_step)?;
+                                // Local index within the variant, not into
+                                // `EmbeddedEnum::fields`.
+                                current_field = e.variant_fields(variant_index).nth(*field_step)?;
                             } else {
                                 // Single step: variant discriminant only → variant
                                 return Some(Resolved::Variant(variant));

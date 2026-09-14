@@ -658,7 +658,7 @@ pub async fn variant_named_create(test: &mut Test) -> Result<()> {
     )
     .exec(&mut db)
     .await?;
-    assert_struct!(found, [_ { id: == event.id, .. }]);
+    assert_struct!(found, [{ id: == event.id }]);
 
     toasty::update!(event {
         action: Action::Create {
