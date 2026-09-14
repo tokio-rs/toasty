@@ -29,6 +29,7 @@ toasty = { workspace = true, features = ["migration"] }
 toasty-core.workspace = true
 
 anyhow = "1.0.102"
+cargo_metadata.workspace = true
 clap = { workspace = true, features = ["env"] }
 console.workspace = true
 dialoguer.workspace = true

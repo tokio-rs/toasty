@@ -32,11 +32,7 @@ pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> R
         style(&project.package_name).bold()
     );
 
-    let artifact = cargo::build_artifact(
-        project.workspace_root.to_str().unwrap_or("."),
-        &project.package_name,
-        &target,
-    )?;
+    let artifact = cargo::build_artifact(&project.workspace_root, &project.package_name, &target)?;
 
     let prefix = project.config.migration.table_name_prefix.as_deref();
     let output = run_dumper(&artifact, &target, flavor, prefix)?;

@@ -1,24 +1,27 @@
 //! Cargo interaction: workspace metadata, artifact builds, and JSON message
 //! parsing.
 //!
-//! Cargo is driven through subprocesses. `cargo`'s stderr is inherited so the
-//! user sees ordinary build progress and compiler diagnostics; stdout carries
-//! the `--message-format=json-render-diagnostics` stream the artifact paths
-//! are parsed from.
+//! Cargo is driven through subprocesses so that the environment can be
+//! scrubbed (see [`scrubbed_command`]); its JSON output is then handed to
+//! [`cargo_metadata`] for typed parsing. `cargo`'s stderr is inherited so the
+//! user sees ordinary build progress and compiler diagnostics.
 
 use anyhow::{Context, Result, bail};
-use serde_json::Value;
+use cargo_metadata::{CrateType, DependencyKind, Message, Target, TargetKind};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
 /// Output of `cargo metadata --no-deps`.
 pub struct Metadata {
-    json: Value,
+    inner: cargo_metadata::Metadata,
 }
 
 impl Metadata {
     /// Runs `cargo metadata --no-deps` in the current directory.
     pub fn load() -> Result<Self> {
+        // `MetadataCommand` would spawn cargo itself, but the environment has
+        // to be scrubbed first, so the command is run here and only its output
+        // handed over for parsing.
         let output = scrubbed_command("cargo")
             .args(["metadata", "--no-deps", "--format-version=1"])
             .stdout(Stdio::piped())
@@ -30,22 +33,18 @@ impl Metadata {
             bail!("`cargo metadata` failed; run from inside a Cargo package");
         }
 
-        let json: Value =
-            serde_json::from_slice(&output.stdout).context("failed to parse `cargo metadata`")?;
+        let stdout =
+            String::from_utf8(output.stdout).context("`cargo metadata` produced invalid UTF-8")?;
 
-        Ok(Metadata { json })
+        let inner = cargo_metadata::MetadataCommand::parse(stdout)
+            .context("failed to parse `cargo metadata`")?;
+
+        Ok(Metadata { inner })
     }
 
     /// The workspace root directory.
-    pub fn workspace_root(&self) -> &str {
-        self.json["workspace_root"].as_str().unwrap_or(".")
-    }
-
-    fn packages(&self) -> &[Value] {
-        self.json["packages"]
-            .as_array()
-            .map(Vec::as_slice)
-            .unwrap_or(&[])
+    pub fn workspace_root(&self) -> &Path {
+        self.inner.workspace_root.as_std_path()
     }
 
     /// Selects the target package: the named one when `-p` was given,
@@ -53,9 +52,10 @@ impl Metadata {
     pub fn select_package(&self, name: Option<&str>) -> Result<Package<'_>> {
         if let Some(name) = name {
             return self
-                .packages()
+                .inner
+                .packages
                 .iter()
-                .find(|pkg| pkg["name"].as_str() == Some(name))
+                .find(|pkg| pkg.name.as_str() == name)
                 .map(Package)
                 .with_context(|| {
                     format!(
@@ -65,46 +65,39 @@ impl Metadata {
                 });
         }
 
-        let root_manifest = Path::new(self.workspace_root()).join("Cargo.toml");
-        self.packages()
-            .iter()
-            .find(|pkg| {
-                pkg["manifest_path"]
-                    .as_str()
-                    .is_some_and(|path| Path::new(path) == root_manifest)
-            })
-            .map(Package)
-            .with_context(|| {
-                format!(
-                    "the workspace root has no package (virtual manifest); select one with \
+        self.inner.root_package().map(Package).with_context(|| {
+            format!(
+                "the workspace root has no package (virtual manifest); select one with \
                      `-p <package>`; available packages: {}",
-                    self.package_names().join(", ")
-                )
-            })
+                self.package_names().join(", ")
+            )
+        })
     }
 
     fn package_names(&self) -> Vec<&str> {
-        self.packages()
+        self.inner
+            .packages
             .iter()
-            .filter_map(|pkg| pkg["name"].as_str())
+            .map(|pkg| pkg.name.as_str())
             .collect()
     }
 }
 
 /// A package entry from `cargo metadata`.
-pub struct Package<'a>(&'a Value);
+pub struct Package<'a>(&'a cargo_metadata::Package);
 
 impl Package<'_> {
     /// The package name.
     pub fn name(&self) -> &str {
-        self.0["name"].as_str().unwrap_or_default()
+        self.0.name.as_str()
     }
 
     /// The directory containing the package's `Cargo.toml`.
     pub fn root(&self) -> PathBuf {
-        Path::new(self.0["manifest_path"].as_str().unwrap_or_default())
+        self.0
+            .manifest_path
             .parent()
-            .map(Path::to_path_buf)
+            .map(|path| path.as_std_path().to_path_buf())
             .unwrap_or_default()
     }
 
@@ -116,21 +109,15 @@ impl Package<'_> {
     /// transitively, which is the usual shape of a `models` crate paired with
     /// a `server` binary.
     pub fn depends_on_toasty(&self) -> bool {
-        self.0["dependencies"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .any(|dep| {
-                dep["name"].as_str() == Some("toasty")
-                    // `cargo metadata` reports normal dependencies with a null
-                    // kind, and dev/build dependencies as "dev"/"build".
-                    && dep["kind"].is_null()
-            })
+        self.0
+            .dependencies
+            .iter()
+            .any(|dep| dep.name == "toasty" && dep.kind == DependencyKind::Normal)
     }
 
     /// Names of the package's `[[bin]]` targets.
     pub fn bin_names(&self) -> Vec<&str> {
-        self.targets_with_kind(&["bin"])
+        self.targets_with_kind(&[TargetKind::Bin])
     }
 
     /// Returns `true` if the package has a lib target that can be rebuilt as
@@ -142,23 +129,22 @@ impl Package<'_> {
     /// the default `rlib`.
     pub fn has_lib(&self) -> bool {
         !self
-            .targets_with_kind(&["lib", "rlib", "dylib", "cdylib", "staticlib"])
+            .targets_with_kind(&[
+                TargetKind::Lib,
+                TargetKind::RLib,
+                TargetKind::DyLib,
+                TargetKind::CDyLib,
+                TargetKind::StaticLib,
+            ])
             .is_empty()
     }
 
-    fn targets_with_kind(&self, kinds: &[&str]) -> Vec<&str> {
-        self.0["targets"]
-            .as_array()
-            .into_iter()
-            .flatten()
-            .filter(|target| {
-                target["kind"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .any(|k| k.as_str().is_some_and(|k| kinds.contains(&k)))
-            })
-            .filter_map(|target| target["name"].as_str())
+    fn targets_with_kind(&self, kinds: &[TargetKind]) -> Vec<&str> {
+        self.0
+            .targets
+            .iter()
+            .filter(|target| kinds.iter().any(|kind| target.is_kind(kind.clone())))
+            .map(|target| target.name.as_str())
             .collect()
     }
 }
@@ -177,7 +163,7 @@ pub enum BuildTarget {
 /// Builds the selected target of `package` in the `dev` profile and returns
 /// the artifact path.
 pub fn build_artifact(
-    workspace_root: &str,
+    workspace_root: &Path,
     package: &str,
     target: &BuildTarget,
 ) -> Result<PathBuf> {
@@ -204,35 +190,26 @@ pub fn build_artifact(
         bail!("building `{package}` failed");
     }
 
-    let stdout = String::from_utf8_lossy(&output.stdout);
-    find_artifact(&stdout, target)
+    find_artifact(&output.stdout, target)
         .with_context(|| format!("`cargo build` produced no artifact for `{package}`"))
 }
 
 /// Extracts the artifact path from a `--message-format=json` stream.
-fn find_artifact(messages: &str, target: &BuildTarget) -> Option<PathBuf> {
+fn find_artifact(messages: &[u8], target: &BuildTarget) -> Option<PathBuf> {
     let mut fallback = None;
 
-    for line in messages.lines() {
-        let Ok(message) = serde_json::from_str::<Value>(line) else {
+    for message in Message::parse_stream(messages).filter_map(Result::ok) {
+        let Message::CompilerArtifact(artifact) = message else {
             continue;
         };
-        if message["reason"].as_str() != Some("compiler-artifact") {
-            continue;
-        }
 
         match target {
             BuildTarget::Bin(name) => {
-                let is_bin = message["target"]["kind"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .any(|k| k.as_str() == Some("bin"));
-                if is_bin
-                    && message["target"]["name"].as_str() == Some(name)
-                    && let Some(path) = message["executable"].as_str()
+                if artifact.target.is_kind(TargetKind::Bin)
+                    && artifact.target.name == *name
+                    && let Some(path) = artifact.executable
                 {
-                    return Some(PathBuf::from(path));
+                    return Some(path.into_std_path_buf());
                 }
             }
             BuildTarget::Cdylib => {
@@ -240,18 +217,12 @@ fn find_artifact(messages: &str, target: &BuildTarget) -> Option<PathBuf> {
                 // dependencies compile as rlibs, so a cdylib artifact is
                 // unambiguous. Cargo lists both the `deps/` output and the
                 // final uplifted copy; prefer the uplifted one.
-                let is_cdylib = message["target"]["crate_types"]
-                    .as_array()
-                    .into_iter()
-                    .flatten()
-                    .any(|k| k.as_str() == Some("cdylib"));
-                if !is_cdylib {
+                if !is_cdylib(&artifact.target) {
                     continue;
                 }
-                for path in message["filenames"].as_array().into_iter().flatten() {
-                    let Some(path) = path.as_str() else { continue };
-                    let path = Path::new(path);
-                    if !is_dylib(path) {
+                for path in artifact.filenames {
+                    let path = path.into_std_path_buf();
+                    if !is_dylib(&path) {
                         continue;
                     }
                     let in_deps = path
@@ -259,9 +230,9 @@ fn find_artifact(messages: &str, target: &BuildTarget) -> Option<PathBuf> {
                         .and_then(Path::file_name)
                         .is_some_and(|dir| dir == "deps");
                     if in_deps {
-                        fallback = Some(path.to_path_buf());
+                        fallback = Some(path);
                     } else {
-                        return Some(path.to_path_buf());
+                        return Some(path);
                     }
                 }
             }
@@ -269,6 +240,10 @@ fn find_artifact(messages: &str, target: &BuildTarget) -> Option<PathBuf> {
     }
 
     fallback
+}
+
+fn is_cdylib(target: &Target) -> bool {
+    target.crate_types.contains(&CrateType::CDyLib)
 }
 
 fn is_dylib(path: &Path) -> bool {
@@ -284,10 +259,10 @@ mod tests {
 
     #[test]
     fn find_bin_artifact() {
-        let messages = r#"
-{"reason":"compiler-artifact","target":{"kind":["lib"],"crate_types":["lib"],"name":"dep"},"filenames":["/t/debug/deps/libdep.rlib"],"executable":null}
-{"reason":"compiler-artifact","target":{"kind":["bin"],"crate_types":["bin"],"name":"other"},"filenames":["/t/debug/other"],"executable":"/t/debug/other"}
-{"reason":"compiler-artifact","target":{"kind":["bin"],"crate_types":["bin"],"name":"app"},"filenames":["/t/debug/app"],"executable":"/t/debug/app"}
+        let messages = br#"
+{"reason":"compiler-artifact","package_id":"path+file:///t#dep@0.0.0","manifest_path":"/t/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"dep","src_path":"/t/src/lib.rs","edition":"2021","doctest":false,"test":true,"doc":true},"profile":{"opt_level":"0","debug_assertions":true,"overflow_checks":true,"test":false},"features":[],"filenames":["/t/debug/deps/libdep.rlib"],"executable":null,"fresh":false}
+{"reason":"compiler-artifact","package_id":"path+file:///t#app@0.0.0","manifest_path":"/t/Cargo.toml","target":{"kind":["bin"],"crate_types":["bin"],"name":"other","src_path":"/t/src/main.rs","edition":"2021","doctest":false,"test":true,"doc":true},"profile":{"opt_level":"0","debug_assertions":true,"overflow_checks":true,"test":false},"features":[],"filenames":["/t/debug/other"],"executable":"/t/debug/other","fresh":false}
+{"reason":"compiler-artifact","package_id":"path+file:///t#app@0.0.0","manifest_path":"/t/Cargo.toml","target":{"kind":["bin"],"crate_types":["bin"],"name":"app","src_path":"/t/src/main.rs","edition":"2021","doctest":false,"test":true,"doc":true},"profile":{"opt_level":"0","debug_assertions":true,"overflow_checks":true,"test":false},"features":[],"filenames":["/t/debug/app"],"executable":"/t/debug/app","fresh":false}
 {"reason":"build-finished","success":true}
 "#;
         let path = find_artifact(messages, &BuildTarget::Bin("app".into())).unwrap();
@@ -296,16 +271,16 @@ mod tests {
 
     #[test]
     fn find_cdylib_artifact_prefers_uplifted_copy() {
-        let messages = r#"
-{"reason":"compiler-artifact","target":{"kind":["lib"],"crate_types":["lib"],"name":"dep"},"filenames":["/t/debug/deps/libdep.rlib"],"executable":null}
-{"reason":"compiler-artifact","target":{"kind":["lib"],"crate_types":["cdylib"],"name":"app"},"filenames":["/t/debug/deps/libapp.so","/t/debug/libapp.so"],"executable":null}
+        let messages = br#"
+{"reason":"compiler-artifact","package_id":"path+file:///t#dep@0.0.0","manifest_path":"/t/Cargo.toml","target":{"kind":["lib"],"crate_types":["lib"],"name":"dep","src_path":"/t/src/lib.rs","edition":"2021","doctest":false,"test":true,"doc":true},"profile":{"opt_level":"0","debug_assertions":true,"overflow_checks":true,"test":false},"features":[],"filenames":["/t/debug/deps/libdep.rlib"],"executable":null,"fresh":false}
+{"reason":"compiler-artifact","package_id":"path+file:///t#app@0.0.0","manifest_path":"/t/Cargo.toml","target":{"kind":["lib"],"crate_types":["cdylib"],"name":"app","src_path":"/t/src/lib.rs","edition":"2021","doctest":false,"test":true,"doc":true},"profile":{"opt_level":"0","debug_assertions":true,"overflow_checks":true,"test":false},"features":[],"filenames":["/t/debug/deps/libapp.so","/t/debug/libapp.so"],"executable":null,"fresh":false}
 "#;
         let path = find_artifact(messages, &BuildTarget::Cdylib).unwrap();
         assert_eq!(path, PathBuf::from("/t/debug/libapp.so"));
 
         // Fall back to the deps/ copy when no uplifted path is listed.
-        let messages = r#"
-{"reason":"compiler-artifact","target":{"kind":["lib"],"crate_types":["cdylib"],"name":"app"},"filenames":["/t/debug/deps/libapp.so"],"executable":null}
+        let messages = br#"
+{"reason":"compiler-artifact","package_id":"path+file:///t#app@0.0.0","manifest_path":"/t/Cargo.toml","target":{"kind":["lib"],"crate_types":["cdylib"],"name":"app","src_path":"/t/src/lib.rs","edition":"2021","doctest":false,"test":true,"doc":true},"profile":{"opt_level":"0","debug_assertions":true,"overflow_checks":true,"test":false},"features":[],"filenames":["/t/debug/deps/libapp.so"],"executable":null,"fresh":false}
 "#;
         let path = find_artifact(messages, &BuildTarget::Cdylib).unwrap();
         assert_eq!(path, PathBuf::from("/t/debug/deps/libapp.so"));
@@ -313,8 +288,8 @@ mod tests {
 
     #[test]
     fn find_artifact_none_when_missing() {
-        assert!(find_artifact("", &BuildTarget::Cdylib).is_none());
-        assert!(find_artifact("not json\n", &BuildTarget::Bin("app".into())).is_none());
+        assert!(find_artifact(b"", &BuildTarget::Cdylib).is_none());
+        assert!(find_artifact(b"not json\n", &BuildTarget::Bin("app".into())).is_none());
     }
 }
 

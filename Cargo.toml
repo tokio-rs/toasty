@@ -112,6 +112,7 @@ index_vec = "0.1.4"
 inventory = "0.3.24"
 libloading = "0.9"
 linktime = { version = "0.18.0", default-features = false, features = ["std", "proc_macro", "ctor"] }
+cargo_metadata = "0.23.1"
 # Must match the version used by `postgres-protocol` (the postgres driver
 # iterates over its `FallibleIterator` types); do not bump independently.
 fallible-iterator = "0.2"

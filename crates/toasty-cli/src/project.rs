@@ -44,7 +44,7 @@ impl Project {
         Ok(Project {
             package_name: pkg.name().to_string(),
             package_root,
-            workspace_root: PathBuf::from(metadata.workspace_root()),
+            workspace_root: metadata.workspace_root().to_path_buf(),
             depends_on_toasty: pkg.depends_on_toasty(),
             bin_names: pkg.bin_names().iter().map(|s| s.to_string()).collect(),
             has_lib: pkg.has_lib(),
