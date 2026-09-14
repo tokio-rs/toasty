@@ -8,22 +8,28 @@
 
 use anyhow::{Context, Result, bail};
 use cargo_metadata::{CrateType, DependencyKind, Message, Target, TargetKind};
+use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
-/// Output of `cargo metadata --no-deps`.
+/// Output of `cargo metadata`.
 pub struct Metadata {
     inner: cargo_metadata::Metadata,
 }
 
 impl Metadata {
-    /// Runs `cargo metadata --no-deps` in the current directory.
+    /// Runs `cargo metadata` in the current directory.
+    ///
+    /// The dependency graph is resolved — not `--no-deps` — because schema
+    /// extraction runs the built artifact, and running it is only safe once
+    /// `toasty` is known to be somewhere in the graph. See
+    /// [`Metadata::links_toasty`].
     pub fn load() -> Result<Self> {
         // `MetadataCommand` would spawn cargo itself, but the environment has
         // to be scrubbed first, so the command is run here and only its output
         // handed over for parsing.
         let output = scrubbed_command("cargo")
-            .args(["metadata", "--no-deps", "--format-version=1"])
+            .args(["metadata", "--format-version=1"])
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .output()
@@ -76,10 +82,69 @@ impl Metadata {
 
     fn package_names(&self) -> Vec<&str> {
         self.inner
-            .packages
+            .workspace_packages()
             .iter()
             .map(|pkg| pkg.name.as_str())
             .collect()
+    }
+
+    /// Returns `true` if `toasty` is reachable from `package` through normal
+    /// dependencies.
+    ///
+    /// Schema extraction runs the built artifact. When `toasty` is linked the
+    /// constructor dumps and exits before `main`; when it is not, the artifact
+    /// is just the user's program, and running it executes whatever `main`
+    /// does. So this gates extraction rather than merely shaping an error.
+    ///
+    /// The whole graph is walked, not just direct dependencies: a `models`
+    /// crate paired with a `server` binary reaches `toasty` transitively, and
+    /// the constructor is linked into the binary all the same.
+    pub fn links_toasty(&self, package: &Package<'_>) -> bool {
+        let Some(resolve) = &self.inner.resolve else {
+            // Without a resolved graph there is nothing to check against;
+            // treat it as reachable rather than blocking extraction outright.
+            return true;
+        };
+
+        let nodes: HashMap<_, _> = resolve.nodes.iter().map(|node| (&node.id, node)).collect();
+
+        let mut seen = HashSet::new();
+        let mut queue = vec![&package.0.id];
+
+        while let Some(id) = queue.pop() {
+            if !seen.insert(id) {
+                continue;
+            }
+
+            let Some(node) = nodes.get(id) else { continue };
+
+            for dep in &node.deps {
+                // Dev- and build-dependencies are not linked into the
+                // artifact being run.
+                let normal = dep.dep_kinds.is_empty()
+                    || dep
+                        .dep_kinds
+                        .iter()
+                        .any(|kind| kind.kind == DependencyKind::Normal);
+
+                if !normal {
+                    continue;
+                }
+
+                if self
+                    .inner
+                    .packages
+                    .iter()
+                    .any(|pkg| pkg.id == dep.pkg && pkg.name.as_str() == "toasty")
+                {
+                    return true;
+                }
+
+                queue.push(&dep.pkg);
+            }
+        }
+
+        false
     }
 }
 

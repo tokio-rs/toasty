@@ -25,7 +25,18 @@ mysql = ["toasty/mysql"]
 turso = ["toasty/turso"]
 
 [dependencies]
-toasty = { workspace = true, features = ["migration"] }
+# Every optional column type is enabled unconditionally: the CLI decodes
+# whatever schema the user's project dumps, and a type whose feature is off
+# here is missing from this copy of `stmt::Type`, so the dump fails to
+# deserialize with `unknown variant`. These are not user-selectable features
+# of the CLI for that reason.
+toasty = { workspace = true, features = [
+	"migration",
+	"bigdecimal",
+	"jiff",
+	"net",
+	"rust_decimal",
+] }
 toasty-core.workspace = true
 
 anyhow = "1.0.102"

@@ -21,6 +21,10 @@ pub struct Project {
     /// Whether the package declares a direct dependency on `toasty`.
     pub depends_on_toasty: bool,
 
+    /// Whether `toasty` is reachable from the package at all, directly or
+    /// transitively. Extraction runs the built artifact, so this gates it.
+    pub links_toasty: bool,
+
     /// Bin target names declared by the package.
     pub bin_names: Vec<String>,
 
@@ -46,6 +50,7 @@ impl Project {
             package_root,
             workspace_root: metadata.workspace_root().to_path_buf(),
             depends_on_toasty: pkg.depends_on_toasty(),
+            links_toasty: metadata.links_toasty(&pkg),
             bin_names: pkg.bin_names().iter().map(|s| s.to_string()).collect(),
             has_lib: pkg.has_lib(),
             config,

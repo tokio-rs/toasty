@@ -338,6 +338,82 @@ fn read_only_commands_do_not_write_to_the_source_tree() {
 }
 
 #[test]
+fn a_package_without_toasty_is_never_executed() {
+    // Without `toasty` there is no dump constructor, so running the artifact
+    // would run the user's `main` — starting a server, writing files, whatever
+    // it does. The CLI must refuse before building.
+    let dir = tempfile::tempdir().unwrap();
+    let marker = dir.path().join("main-ran");
+
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        "[package]\nname = \"no-toasty\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+         [dependencies]\n\n[workspace]\n\n[profile.dev]\ndebug = \"line-tables-only\"\n",
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/main.rs"),
+        format!(
+            "fn main() {{ std::fs::write({:?}, \"ran\").unwrap(); }}\n",
+            marker.display().to_string()
+        ),
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not depend on `toasty`"), "{stderr}");
+    assert!(!marker.exists(), "the user's main() must not be executed");
+}
+
+#[test]
+fn an_empty_schema_is_rejected_rather_than_dropping_every_table() {
+    // A bin that links `toasty` but never references the models dumps zero
+    // models. Generating from that writes a DROP for every existing table.
+    let dir = tempfile::tempdir().unwrap();
+    scaffold_project(dir.path(), false);
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert_success(&output);
+
+    fs::create_dir_all(dir.path().join("src/bin")).unwrap();
+    fs::write(
+        dir.path().join("src/bin/tool.rs"),
+        "fn main() { let _ = toasty::Db::builder(); }\n",
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "oops",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("has no tables"), "{stderr}");
+    assert!(
+        !dir.path().join("toasty/migrations/0001_oops.sql").exists(),
+        "no migration should be written"
+    );
+}
+
+#[test]
 fn snapshot_stdout_is_parseable_toml() {
     let dir = tempfile::tempdir().unwrap();
     scaffold_project(dir.path(), true);

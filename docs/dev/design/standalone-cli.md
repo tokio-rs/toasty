@@ -207,13 +207,18 @@ the public surface — its only caller is `toasty-cli` itself.
   or LTO settings, the ctor still runs — `linktime` uses `#[used]` plus
   link-section attributes that survive ordinary optimization. Aggressive
   cross-crate LTO at `dev` level is unusual; if a setting strips the ctor,
-  the CLI errors with "the schema dumper produced no schema; check that
-  `toasty` is a direct dependency of `<pkg>`."
+  the CLI errors with "the schema dumper produced no schema; check that the
+  `dev` profile of `<pkg>` does not strip link-time constructors."
 - **`toasty` not actually depended on.** The ctor is in `toasty`; without
-  the dependency the env var has no effect. A transitive dependency still
-  carries it — a `models` crate paired with a `server` binary extracts
-  fine — so `cargo metadata` is used only to sharpen the error when no
-  schema comes back, never to reject a package before building.
+  the dependency the env var has no effect and running the artifact would
+  just run the user's program. The CLI resolves the dependency graph and
+  refuses to run anything unless `toasty` is reachable. The whole graph is
+  walked, not just direct dependencies, so a `models` crate paired with a
+  `server` binary still extracts.
+- **An empty schema.** An artifact that links `toasty` but never references
+  the crate holding the models dumps zero models. Generating from that would
+  write a `DROP TABLE` for every table in the previous snapshot, so the CLI
+  rejects a dump with no tables instead.
 - **Release builds.** The ctor is `cfg(debug_assertions)`-gated, so a
   release-only project would compile a binary without it. The CLI always
   uses the dev profile, so this does not affect the schema-extract path,
