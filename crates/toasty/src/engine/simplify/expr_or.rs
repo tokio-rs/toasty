@@ -1,4 +1,4 @@
-use super::Simplify;
+use super::{Simplify, dedup_operands, has_complement};
 use std::mem;
 use toasty_core::stmt;
 
@@ -7,20 +7,7 @@ impl Simplify<'_> {
     /// short-circuit, drop false, null propagation) runs in `fold::expr_or`
     /// before this is reached.
     pub(super) fn simplify_expr_or(&mut self, expr: &mut stmt::ExprOr) -> Option<stmt::Expr> {
-        // Idempotent law, `a or a` → `a`
-        // Note: O(n) lookups are acceptable here since operand lists are typically small.
-        // `is_equivalent_to` (not `PartialEq`) keeps this sound for non-deterministic
-        // operands like `LAST_INSERT_ID()` — two syntactically identical calls may
-        // return different values, so the second occurrence must survive.
-        let mut seen: Vec<stmt::Expr> = Vec::new();
-        expr.operands.retain(|operand| {
-            if seen.iter().any(|e| e.is_equivalent_to(operand)) {
-                false
-            } else {
-                seen.push(operand.clone());
-                true
-            }
-        });
+        dedup_operands(&mut expr.operands);
 
         // Absorption law, `x or (x and y)` → `x`
         // If an operand is an AND that contains another operand of the OR, remove the AND.
@@ -50,7 +37,7 @@ impl Simplify<'_> {
         }
 
         // Complement law, `a or not(a)` → `true` (only if `a` is non-nullable)
-        if self.try_complement_or(expr) {
+        if has_complement(&expr.operands) {
             return Some(true.into());
         }
 
@@ -136,41 +123,6 @@ impl Simplify<'_> {
         };
         result.push(stmt::Expr::Or(or_expr));
         Some(stmt::Expr::and_from_vec(result))
-    }
-
-    /// Checks for complement law: `a or not(a)` → `true`
-    ///
-    /// Returns true if a complementary pair is found and both are non-nullable.
-    fn try_complement_or(&self, expr: &stmt::ExprOr) -> bool {
-        // Collect all NOT expressions and their inner expressions
-        let negated: Vec<_> = expr
-            .operands
-            .iter()
-            .filter_map(|op| {
-                if let stmt::Expr::Not(not_expr) = op {
-                    Some(not_expr.expr.as_ref())
-                } else {
-                    None
-                }
-            })
-            .collect();
-
-        // Check if any operand has its negation also present
-        for operand in &expr.operands {
-            // Skip NOT expressions themselves
-            if matches!(operand, stmt::Expr::Not(_)) {
-                continue;
-            }
-
-            // Check if not(operand) exists and operand is non-nullable
-            if negated.iter().any(|n| n.is_equivalent_to(operand))
-                && operand.is_always_non_nullable()
-            {
-                return true;
-            }
-        }
-
-        false
     }
 
     /// Converts disjunctive equality chains to IN lists.
