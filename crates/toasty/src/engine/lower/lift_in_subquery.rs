@@ -30,7 +30,9 @@
 //! `human` is a field of the `Human` variant of `v`). [`resolve_relation_path`]
 //! resolves either to a [`Relation`]; the rewrites above are the same for
 //! both, differing only in how the relation's foreign-key `IN` subquery
-//! names the key on the host side.
+//! names the key on the host side. A predicate *at* an embedded relation
+//! (`v.human = alice`, `v.human IN list`) compares keys and is not lifted:
+//! `LowerStatement`'s operand hooks substitute the key projection.
 //!
 //! A pre-pass is necessary (rather than folding into
 //! `LowerStatement::visit_expr_mut` per #823's pattern) because not every
@@ -180,24 +182,12 @@ impl VisitMut for LiftInSubquery<'_> {
             stmt::Expr::BinaryOp(_) | stmt::Expr::Like(_) | stmt::Expr::IsVariant(_) => {
                 try_lift_relation_path_predicate(&self.cx, expr)
             }
-            stmt::Expr::InList(e) => {
-                rewrite_embedded_relation_in_list(&self.cx, e);
-                None
-            }
             _ => None,
         };
 
-        match lifted {
-            Some(mut lifted) => {
-                self.exclude_nulls(&mut lifted);
-                *expr = lifted;
-            }
-            // A comparison *at* an embedded relation compares keys, in place.
-            None => {
-                if let stmt::Expr::BinaryOp(e) = expr {
-                    rewrite_embedded_relation_operand(&self.cx, e);
-                }
-            }
+        if let Some(mut lifted) = lifted {
+            self.exclude_nulls(&mut lifted);
+            *expr = lifted;
         }
 
         // Walk children (which may themselves be expressions needing
@@ -752,49 +742,6 @@ fn lift_relation_predicate(
 /// target model stays a selection there.
 fn reroot(model: ModelId, head: usize, tail: &[Step]) -> Expr {
     build_expr_path(Expr::ref_self_field(FieldId { model, index: head }), tail)
-}
-
-/// `<relation-path> eq/ne <expr>`: substitute the projection of the
-/// relation's key field(s) for the relation reference, in place. The
-/// analogue of `rewrite_eq_operand`'s `BelongsTo` arm for relations inside
-/// embedded types. The key expression keeps the path's variant selections,
-/// so the `is_variant` guards the typed layer fixed next to the comparison
-/// still scope it (see `resolve_embedded_relation`).
-///
-/// Returns `true` when an operand was substituted; the binary op itself
-/// stays in place. Both operands are checked — comparing one embedded
-/// relation to another (key-versus-key) substitutes both sides; stopping
-/// at the first would leave the other side lowering to its storage-less
-/// `Null` slot.
-fn rewrite_embedded_relation_operand(cx: &ExprContext, e: &mut stmt::ExprBinaryOp) -> bool {
-    if !e.op.is_eq() && !e.op.is_ne() {
-        return false;
-    }
-
-    let mut rewrote = false;
-
-    for side in [&mut e.lhs, &mut e.rhs] {
-        if let Some(resolved) = resolve_embedded_relation(cx, side)
-            && resolved.tail.is_empty()
-        {
-            **side = resolved.key_expr;
-            rewrote = true;
-        }
-    }
-
-    rewrote
-}
-
-/// `<relation-path> IN (list)`: substitute the projection of the relation's
-/// key field(s) for the relation reference, in place — the
-/// [`rewrite_embedded_relation_operand`] case for list membership. The list
-/// holds model values, which the typed layer already reduced to their keys.
-fn rewrite_embedded_relation_in_list(cx: &ExprContext, e: &mut stmt::ExprInList) {
-    if let Some(resolved) = resolve_embedded_relation(cx, &e.expr)
-        && resolved.tail.is_empty()
-    {
-        *e.expr = resolved.key_expr;
-    }
 }
 
 /// Build a foreign-key `IN` subquery for one direct relation edge.

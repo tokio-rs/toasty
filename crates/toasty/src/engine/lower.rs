@@ -1389,55 +1389,87 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     ///
     /// `Reference::Model { nesting }` becomes a reference to the model's
     /// primary-key field; a `BelongsTo` field reference becomes a reference
-    /// to the relation's foreign-key field.  Both rewrites only match on
-    /// app-level shapes; after the surrounding lowering walk converts the
-    /// references to columns, this method has nothing to rewrite.
+    /// to the relation's foreign-key field; a path to a `belongs_to` inside
+    /// an embedded type becomes the projection of its key field(s). All
+    /// rewrites only match on app-level shapes; after the surrounding
+    /// lowering walk converts the references to columns, this method has
+    /// nothing to rewrite.
     ///
     /// Must fire before the operand's children are visited, since lowering
     /// otherwise replaces the field reference with a column reference and
     /// the rewrite has no app-level shape to match on.
     fn rewrite_eq_operand(&self, operand: &mut stmt::Expr) {
-        if let stmt::Expr::Reference(expr_reference) = operand {
-            match &*expr_reference {
-                stmt::ExprReference::Model { nesting } => {
-                    let nesting = *nesting;
-                    let model = self
-                        .expr_cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_model_unwrap();
+        let stmt::Expr::Reference(expr_reference) = operand else {
+            self.rewrite_embedded_relation_operand(operand);
+            return;
+        };
 
-                    *operand = key_field_refs(nesting, model.primary_key.fields.iter().copied());
-                }
-                stmt::ExprReference::Field { nesting, .. } => {
-                    let nesting = *nesting;
-                    let field = self
-                        .expr_cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_field_unwrap();
+        match &*expr_reference {
+            stmt::ExprReference::Model { nesting } => {
+                let nesting = *nesting;
+                let model = self
+                    .expr_cx
+                    .resolve_expr_reference(expr_reference)
+                    .as_model_unwrap();
 
-                    match &field.ty {
-                        app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
-                        app::FieldTy::Has(_) | app::FieldTy::Via(_) => todo!(),
-                        app::FieldTy::BelongsTo(rel) => {
-                            *operand = key_field_refs(
-                                nesting,
-                                rel.foreign_key.fields.iter().map(|fk| fk.source),
-                            );
-                        }
+                *operand = key_field_refs(nesting, model.primary_key.fields.iter().copied());
+            }
+            stmt::ExprReference::Field { nesting, .. } => {
+                let nesting = *nesting;
+                let field = self
+                    .expr_cx
+                    .resolve_expr_reference(expr_reference)
+                    .as_field_unwrap();
+
+                match &field.ty {
+                    app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
+                    app::FieldTy::Has(_) | app::FieldTy::Via(_) => todo!(),
+                    app::FieldTy::BelongsTo(rel) => {
+                        *operand = key_field_refs(
+                            nesting,
+                            rel.foreign_key.fields.iter().map(|fk| fk.source),
+                        );
                     }
                 }
-                _ => {}
             }
+            _ => {}
+        }
+    }
+
+    /// Substitute the projection of the relation's key field(s) for a path
+    /// ending at a `belongs_to` inside an embedded type, in place. The
+    /// analogue of `rewrite_eq_operand`'s `BelongsTo` arm for relations
+    /// inside embedded types; a path continuing into the relation's target
+    /// is a predicate on the target, lifted by `LiftInSubquery` before
+    /// lowering. The key expression keeps the path's variant selections, so
+    /// the `is_variant` guards the typed layer fixed next to the comparison
+    /// still scope it (see `resolve_embedded_relation`).
+    ///
+    /// Returns whether the operand was substituted.
+    fn rewrite_embedded_relation_operand(&self, operand: &mut stmt::Expr) -> bool {
+        match embedded_relation::resolve_embedded_relation(&self.expr_cx, operand) {
+            Some(resolved) if resolved.tail.is_empty() => {
+                *operand = resolved.key_expr;
+                true
+            }
+            _ => false,
         }
     }
 
     /// App-level rewrite for the LHS of an `IN`-list expression:
-    /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`.
+    /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`,
+    /// and `<embedded-relation-path> IN list` becomes
+    /// `<key projection> IN list`. The list holds model values, which the
+    /// typed layer already reduced to their keys.
     ///
     /// Must fire before the LHS is walked, since walking lowers the model
     /// reference into a column reference and the rewrite has nothing to
     /// match on.
     fn rewrite_in_list_model_operand(&self, expr: &mut stmt::ExprInList) {
+        if self.rewrite_embedded_relation_operand(&mut expr.expr) {
+            return;
+        }
+
         let (nesting, pk_field_id) = {
             let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Model { nesting }) =
                 &*expr.expr
