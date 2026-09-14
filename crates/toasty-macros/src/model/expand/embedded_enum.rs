@@ -376,20 +376,7 @@ impl Expand<'_> {
                 }
             });
 
-            // Foreign-key source field id → the relation field that can
-            // fill it from a loaded parent value.
-            let key_sources: std::collections::HashMap<usize, &syn::Ident> = fields
-                .iter()
-                .filter_map(|field| match &field.ty {
-                    FieldTy::BelongsTo(rel) => Some((field, rel)),
-                    _ => None,
-                })
-                .flat_map(|(field, rel)| {
-                    rel.foreign_key
-                        .iter()
-                        .map(move |fk_field| (fk_field.source, &field.name.ident))
-                })
-                .collect();
+            let key_fill = relation_key_fill(&fields);
 
             let setters = fields.iter().enumerate().map(|(local, field)| {
                 let field_ident = &field.name.ident;
@@ -470,8 +457,8 @@ impl Expand<'_> {
                         return None;
                     };
                     let slot = util::int(local + 1);
-                    let msg = match key_sources.get(&field.id) {
-                        Some(rel_ident) => format!(
+                    let msg = match key_fill.get(&field.id) {
+                        Some((rel_ident, _)) => format!(
                             "cannot build `{}::{}` expression: key field `{}` is not set \
                          and relation `{}` has no loaded value to fill it from",
                             model_ident, variant.ident, field.name.ident, rel_ident,
