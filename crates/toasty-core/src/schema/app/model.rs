@@ -355,40 +355,68 @@ impl EmbeddedEnum {
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
-        let mut start = 0;
-        for (index, variant) in self.variants.iter().enumerate() {
-            let range = &variant.field_range;
-            let valid = range.start == start
-                && self.fields.get(range.clone()).is_some_and(|fields| {
-                    fields.iter().enumerate().all(|(local, field)| {
-                        field.id == self.id.field(range.start + local)
-                            && field.variant
-                                == Some(VariantId {
-                                    model: self.id,
-                                    index,
-                                })
-                    })
-                });
-            if !valid {
-                return Err(crate::Error::invalid_schema(format!(
-                    "invalid field range for enum variant {}::{}",
-                    self.name.upper_camel_case(),
-                    variant.name.upper_camel_case(),
-                )));
-            }
-            start = range.end;
+        self.verify_variant_field_layout()?;
+
+        for field in &self.fields {
+            field.verify(db)?;
         }
-        if start != self.fields.len() {
+        Ok(())
+    }
+
+    fn verify_variant_field_layout(&self) -> Result<()> {
+        let mut next_field = 0;
+
+        for (variant_index, variant) in self.variants.iter().enumerate() {
+            self.verify_variant_field_range(variant_index, variant, next_field)?;
+            next_field = variant.field_range.end;
+        }
+
+        if next_field != self.fields.len() {
             return Err(crate::Error::invalid_schema(format!(
                 "variant field ranges do not cover enum {}",
                 self.name.upper_camel_case(),
             )));
         }
 
-        for field in &self.fields {
-            field.verify(db)?;
-        }
         Ok(())
+    }
+
+    fn verify_variant_field_range(
+        &self,
+        variant_index: usize,
+        variant: &EnumVariant,
+        expected_start: usize,
+    ) -> Result<()> {
+        let range = &variant.field_range;
+
+        if range.start != expected_start {
+            return Err(self.invalid_variant_field_range(variant));
+        }
+
+        let Some(fields) = self.fields.get(range.clone()) else {
+            return Err(self.invalid_variant_field_range(variant));
+        };
+
+        let variant_id = VariantId {
+            model: self.id,
+            index: variant_index,
+        };
+
+        for (field_index, field) in range.clone().zip(fields) {
+            if field.id != self.id.field(field_index) || field.variant != Some(variant_id) {
+                return Err(self.invalid_variant_field_range(variant));
+            }
+        }
+
+        Ok(())
+    }
+
+    fn invalid_variant_field_range(&self, variant: &EnumVariant) -> crate::Error {
+        crate::Error::invalid_schema(format!(
+            "invalid field range for enum variant {}::{}",
+            self.name.upper_camel_case(),
+            variant.name.upper_camel_case(),
+        ))
     }
 }
 
