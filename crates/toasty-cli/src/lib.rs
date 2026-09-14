@@ -25,34 +25,47 @@ pub use flavor::Flavor;
 pub use migrate::{MigrationConfig, MigrationPrefixStyle};
 pub use project::Project;
 
-use anyhow::Result;
+use anyhow::{Context, Result};
 use clap::Parser;
 
 /// Parses `std::env::args` and runs the matching subcommand.
-pub async fn run() -> Result<()> {
-    let cli = Cli::parse();
-    run_parsed(cli).await
+pub fn run() -> Result<()> {
+    run_parsed(Cli::parse())
 }
 
 /// Parses from an explicit argument list and runs the matching subcommand.
 /// Useful for testing.
-pub async fn run_from<I, T>(args: I) -> Result<()>
+pub fn run_from<I, T>(args: I) -> Result<()>
 where
     I: IntoIterator<Item = T>,
     T: Into<std::ffi::OsString> + Clone,
 {
-    let cli = Cli::parse_from(args);
-    run_parsed(cli).await
+    run_parsed(Cli::parse_from(args))
 }
 
-async fn run_parsed(cli: Cli) -> Result<()> {
+fn run_parsed(cli: Cli) -> Result<()> {
     match cli.command {
+        // Dispatched before the async runtime is built: the subcommand sets
+        // `TOASTY_DUMP_SCHEMA` in its own environment, which is only sound
+        // while the process is still single-threaded.
+        Command::LoadCdylib(cmd) => cmd.run(),
         Command::Migrate(cmd) => {
             let project = Project::locate(cli.package.as_deref())?;
-            cmd.run(&project).await
+            runtime()?.block_on(cmd.run(&project))
         }
-        Command::LoadCdylib(cmd) => cmd.run(),
     }
+}
+
+/// Builds the Tokio runtime used by the subcommands that talk to a database.
+///
+/// Spawning worker threads is deferred to here rather than wrapping `main` in
+/// `#[tokio::main]` so that `__load-cdylib` can mutate its own environment
+/// while the process is single-threaded.
+fn runtime() -> Result<tokio::runtime::Runtime> {
+    tokio::runtime::Builder::new_multi_thread()
+        .enable_all()
+        .build()
+        .context("failed to start the async runtime")
 }
 
 #[derive(Parser, Debug)]

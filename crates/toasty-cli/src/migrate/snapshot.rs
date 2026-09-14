@@ -22,42 +22,31 @@ pub struct SnapshotCommand {
 
 impl SnapshotCommand {
     pub(crate) fn run(self, project: &Project) -> Result<()> {
-        println!();
-        println!(
+        // Headers and progress go to stderr; stdout carries the TOML alone, so
+        // `toasty migrate snapshot > schema.toml` yields a parseable file.
+        eprintln!();
+        eprintln!(
             "  {}",
             style("Current Schema Snapshot").cyan().bold().underlined()
         );
-        println!();
+        eprintln!();
 
         let flavor = project.flavor(self.flavor)?;
         let schema = extract::extract_schema(project, flavor, self.bin.as_deref())?;
         let snapshot = Snapshot::new(schema);
 
-        // Print the snapshot with nice formatting
-        let snapshot_str = snapshot.to_toml_string()?;
-        for line in snapshot_str.lines() {
+        // Table headers are highlighted for terminal display. `console`
+        // suppresses the escapes when stdout is not a terminal, and nothing
+        // here reflows the line, so a redirected snapshot is byte-for-byte
+        // the TOML that `Snapshot` produced.
+        for line in snapshot.to_toml_string()?.lines() {
             if line.starts_with('[') {
-                println!("  {}", style(line).yellow().bold());
-            } else if line.contains('=') {
-                let parts: Vec<&str> = line.splitn(2, '=').collect();
-                if parts.len() == 2 {
-                    println!(
-                        "  {}{} {}",
-                        style(parts[0]).cyan(),
-                        style("=").dim(),
-                        style(parts[1]).green()
-                    );
-                } else {
-                    println!("  {}", style(line).dim());
-                }
-            } else if line.trim().is_empty() {
-                println!();
+                println!("{}", style(line).yellow().bold());
             } else {
-                println!("  {}", style(line).dim());
+                println!("{line}");
             }
         }
 
-        println!();
         Ok(())
     }
 }

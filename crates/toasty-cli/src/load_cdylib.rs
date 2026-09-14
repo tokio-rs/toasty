@@ -1,7 +1,7 @@
-use anyhow::{Context, Result, bail};
+use anyhow::{Context, Result};
 use clap::Parser;
 use std::path::PathBuf;
-use toasty::schema_dump::DUMP_SCHEMA_ENV;
+use toasty::schema_dump::{DUMP_SCHEMA_ENV, DUMP_TABLE_NAME_PREFIX_ENV};
 
 /// Hidden subcommand: loads a cdylib so the schema-dump constructor inside
 /// `toasty` runs.
@@ -18,6 +18,10 @@ pub struct LoadCdylibCommand {
     /// Flavor to dump the schema for
     #[arg(long)]
     flavor: String,
+
+    /// Table name prefix to lower the schema with
+    #[arg(long)]
+    table_name_prefix: Option<String>,
 }
 
 impl LoadCdylibCommand {
@@ -27,11 +31,16 @@ impl LoadCdylibCommand {
         // dump constructor itself) does not dump its own — empty — schema at
         // startup before reaching this subcommand.
         //
-        // SAFETY: the process is single-threaded at this point; no other
-        // thread can be reading the environment.
+        // SAFETY: the process is single-threaded at this point. `main` runs
+        // this subcommand before building the async runtime precisely so that
+        // no other thread can be reading the environment concurrently.
         #[allow(unsafe_code)]
         unsafe {
             std::env::set_var(DUMP_SCHEMA_ENV, &self.flavor);
+
+            if let Some(prefix) = &self.table_name_prefix {
+                std::env::set_var(DUMP_TABLE_NAME_PREFIX_ENV, prefix);
+            }
         }
 
         // SAFETY: loading a library runs its initialization code, which for a
@@ -43,12 +52,10 @@ impl LoadCdylibCommand {
 
         library.with_context(|| format!("failed to load `{}`", self.path.display()))?;
 
-        // Reached only if the constructor did not fire — e.g. the library
-        // does not actually link `toasty`.
-        bail!(
-            "loaded `{}` but no schema dump was produced; check that `toasty` is a \
-             direct dependency of the package",
-            self.path.display()
-        );
+        // Reached only if the constructor did not fire — e.g. the library does
+        // not actually link `toasty`. Exit cleanly with no dump on stdout: the
+        // parent knows which package it selected and how `toasty` is reached
+        // from it, so it words the diagnosis far better than this can.
+        Ok(())
     }
 }
