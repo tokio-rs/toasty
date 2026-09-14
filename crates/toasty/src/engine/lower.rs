@@ -703,6 +703,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        self.plan_typed_record_relations(expr);
         match expr {
             stmt::Expr::BinaryOp(e) => {
                 self.visit_expr_binary_op_mut(e);

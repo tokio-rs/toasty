@@ -261,7 +261,7 @@ impl<'a> Level<'a> {
         match self {
             Level::Struct(embedded) => embedded.fields.get(index),
             Level::Enum(embedded, Some(variant)) => {
-                embedded.variant_fields(variant.index).nth(index)
+                embedded.variant_fields(variant.index).get(index)
             }
             Level::Enum(_, None) => None,
         }
@@ -274,6 +274,7 @@ impl<'a> Level<'a> {
             Level::Struct(_) => Some(field_index),
             Level::Enum(embedded, Some(variant)) => embedded
                 .variant_fields(variant.index)
+                .iter()
                 .position(|field| field.id.index == field_index),
             Level::Enum(_, None) => None,
         }

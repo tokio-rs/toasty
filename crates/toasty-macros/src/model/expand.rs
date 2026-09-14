@@ -417,18 +417,22 @@ impl Expand<'_> {
         })
     }
 
-    /// Extracts a loaded relation's key using the target's hidden getter.
-    fn expand_relation_key_expr(
-        &self,
-        ty: &syn::Type,
-        relation: TokenStream,
-        target: &syn::Ident,
-    ) -> TokenStream {
+    /// Retains the schema identity of records whose relations the engine resolves.
+    fn expand_embedded_record(&self, record: TokenStream) -> TokenStream {
+        if !self
+            .model
+            .fields
+            .iter()
+            .any(|f| matches!(f.ty, FieldTy::BelongsTo(_)))
+        {
+            return record;
+        }
         let toasty = &self.toasty;
-        let target_ref = util::field_ref_ident(target);
+        let model = &self.model.ident;
         quote! {
-            (#relation).map(|__rel|
-                #toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(__rel.#target_ref())
+            #toasty::core::stmt::Expr::cast(
+                #record,
+                #toasty::core::stmt::Type::Model(<#model as #toasty::Embed>::id()),
             )
         }
     }

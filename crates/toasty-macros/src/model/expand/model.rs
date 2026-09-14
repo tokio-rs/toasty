@@ -35,10 +35,27 @@ impl Expand<'_> {
         let load_body = self.expand_load_body(true);
         let filter_methods = self.expand_model_filter_methods();
         let field_name_to_id = self.expand_field_name_to_id();
-        let field_ref_methods = self.expand_field_ref_methods();
         let relation_methods = self.expand_model_relation_methods();
         let into_statement_body = self.expand_model_into_statement_body();
         let into_delete_body = self.expand_model_into_delete_body();
+        let field_count = self.model.fields.len();
+        let relation_fields = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let name = &field.name.ident;
+                let field_name = util::bare_ident_name(name);
+                Some(quote! {
+                    #field_name => record[#index] = #toasty::core::stmt::Expr::from(
+                        <#ty as #toasty::IntoExpr<FieldExprTarget<#ty>>>::by_ref(&self.#name)
+                    ),
+                })
+            });
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
@@ -58,7 +75,6 @@ impl Expand<'_> {
                 #model_fields
                 #filter_methods
                 #relation_methods
-                #field_ref_methods
 
                 #[doc = #doc_create]
                 #vis fn create() -> #create_struct_ident {
@@ -182,6 +198,20 @@ impl Expand<'_> {
             }
 
             impl #toasty::ModelCodegen for #model_ident {
+                fn to_relation_expr(&self, fields: &[&str]) -> #toasty::core::stmt::Expr {
+                    let mut record = ::std::vec![#toasty::core::stmt::Expr::null(); #field_count];
+                    for field in fields {
+                        match *field {
+                            #( #relation_fields )*
+                            _ => panic!("unknown relation target field: {}", field),
+                        }
+                    }
+                    #toasty::core::stmt::Expr::cast(
+                        #toasty::core::stmt::Expr::record_from_vec(record),
+                        #toasty::core::stmt::Type::Model(<Self as #toasty::Model>::id()),
+                    )
+                }
+
                 fn new_one_field<__Origin>(
                     path: #toasty::Path<__Origin, Self>,
                 ) -> Self::OneField<__Origin> {
@@ -478,16 +508,13 @@ impl Expand<'_> {
             }
         });
 
-        quote! {
-            #toasty::stmt::Expr::from_untyped(
-                #toasty::core::stmt::Expr::record([
-                    #( #field_exprs ),*
-                ])
-            )
-        }
+        let record = self.expand_embedded_record(quote! {
+            #toasty::core::stmt::Expr::record([ #( #field_exprs ),* ])
+        });
+        quote!(#toasty::stmt::Expr::from_untyped(#record))
     }
 
-    /// Encodes embedded fields, with loaded relation keys overriding explicit values.
+    /// Encodes embedded fields, retaining relation expressions for the engine.
     pub(super) fn expand_embedded_field_exprs(
         &self,
         fields: &[&crate::model::schema::Field],
@@ -495,36 +522,24 @@ impl Expand<'_> {
         access: impl Fn(&crate::model::schema::Field) -> TokenStream,
     ) -> Vec<TokenStream> {
         let toasty = &self.toasty;
-        let key_fill = super::embedded_enum::relation_key_fill(fields);
         fields
             .iter()
             .map(|field| {
                 let value = access(field);
                 let ty = match &field.ty {
                     FieldTy::Primitive(ty) => ty,
-                    FieldTy::BelongsTo(_) => {
-                        return quote!(#toasty::embedded_relation_expr(&#value));
+                    FieldTy::BelongsTo(rel) => {
+                        let targets = rel.foreign_key.iter().map(|fk| util::bare_ident_name(&fk.target));
+                        return quote!(#toasty::embedded_relation_expr(&#value, &[ #( #targets ),* ]));
                     }
                     _ => unreachable!("unsupported embedded field type"),
                 };
-                let explicit = if by_ref {
+                if by_ref {
                     quote!(#toasty::core::stmt::Expr::from(
                         <#ty as #toasty::IntoExpr<FieldExprTarget<#ty>>>::by_ref(&#value)
                     ))
                 } else {
                     quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#value))
-                };
-                match key_fill.get(&field.id) {
-                    Some((relation, target)) => {
-                        let relation = access(relation);
-                        let key = self.expand_relation_key_expr(
-                            ty,
-                            quote!(#toasty::embedded_relation_target(&#relation)),
-                            target,
-                        );
-                        quote!(#key.unwrap_or_else(|| #explicit))
-                    }
-                    None => explicit,
                 }
             })
             .collect()

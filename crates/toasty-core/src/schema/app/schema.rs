@@ -211,7 +211,7 @@ impl Schema {
                             if let Some(field_step) = steps.next() {
                                 // Local index within the variant, not into
                                 // `EmbeddedEnum::fields`.
-                                current_field = e.variant_fields(variant_index).nth(*field_step)?;
+                                current_field = e.variant_fields(variant_index).get(*field_step)?;
                             } else {
                                 // Single step: variant discriminant only → variant
                                 return Some(Resolved::Variant(variant));

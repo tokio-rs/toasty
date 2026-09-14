@@ -329,12 +329,8 @@ impl Expand<'_> {
     /// macros rewrite `Owner::Human { human: &alice }` into
     /// `<Owner as EmbedCreate>::create().human().human(&alice)`,
     /// which is what allows a variant literal to set a relation from a
-    /// parent model value: the relation setter reads the referenced key
-    /// field(s) off the parent and records them for the sibling key
-    /// slot(s), and the relation slot itself stays `Null` (it has no
-    /// storage). A key taken from a parent value wins over an explicitly
-    /// set key regardless of setter order; a slot with neither stays
-    /// `Null`.
+    /// parent model value. The setter records the parent's expression in
+    /// the relation slot; the engine assigns the sibling foreign-key fields.
     ///
     /// Nothing is generated for an enum without data-carrying variants: it
     /// encodes as a bare discriminant, and a unit variant is written as a
@@ -371,7 +367,6 @@ impl Expand<'_> {
                     slots.resize_with(#slot_count, #toasty::core::stmt::Expr::null);
                     #builder_ident {
                         slots,
-                        rel_keys: ::std::vec![#toasty::Option::None; #slot_count],
                     }
                 }
             });
@@ -397,32 +392,7 @@ impl Expand<'_> {
                     },
                     FieldTy::BelongsTo(rel) => {
                         let rel_ty = &rel.ty;
-
-                        // For each foreign-key field, the sibling key
-                        // slot and the referenced field on the target
-                        // model it is filled from.
-                        let key_fills = rel.foreign_key.iter().filter_map(|fk_field| {
-                            let key_field = fields
-                                .iter()
-                                .enumerate()
-                                .find(|(_, f)| f.id == fk_field.source)?;
-                            let (key_local, key_field) = key_field;
-                            let key_ty = match &key_field.ty {
-                                FieldTy::Primitive(ty) => ty,
-                                _ => return None,
-                            };
-                            let key_slot = util::int(key_local + 1);
-                            let key = self.expand_relation_key_expr(
-                                key_ty,
-                                quote!(__rel),
-                                &fk_field.target,
-                            );
-                            Some(quote! {
-                                if let #toasty::Option::Some(key) = #key {
-                                    self.rel_keys[#key_slot] = #toasty::Option::Some(key);
-                                }
-                            })
-                        });
+                        let targets = rel.foreign_key.iter().map(|fk| util::bare_ident_name(&fk.target));
 
                         quote! {
                             #vis fn #field_ident(
@@ -432,8 +402,7 @@ impl Expand<'_> {
                                     Model = <#rel_ty as #toasty::RelationOneField>::Target,
                                 >,
                             ) -> Self {
-                                let __rel = #toasty::embedded_relation_target(&value);
-                                #( #key_fills )*
+                                self.slots[#slot] = #toasty::embedded_relation_value_expr::<#rel_ty, _>(&value, &[ #( #targets ),* ]);
                                 self
                             }
                         }
@@ -467,8 +436,13 @@ impl Expand<'_> {
                             model_ident, variant.ident, field.name.ident,
                         ),
                     };
+                    let relation_unset = key_fill.get(&field.id).map(|(relation, _)| {
+                        let local = fields.iter().position(|f| f.id == relation.id).unwrap();
+                        let slot = util::int(local + 1);
+                        quote!(&& slots[#slot].is_value_null())
+                    });
                     Some(quote! {
-                        if !<#ty as #toasty::Field>::NULLABLE && slots[#slot].is_value_null() {
+                        if !<#ty as #toasty::Field>::NULLABLE && slots[#slot].is_value_null() #relation_unset {
                             ::std::panic!(#msg);
                         }
                     })
@@ -484,24 +458,19 @@ impl Expand<'_> {
                     /// Record slots: `[discriminant, variant fields...]`.
                     /// Unset slots stay `Null`.
                     slots: Vec<#toasty::core::stmt::Expr>,
-                    /// Key expressions taken from a parent model value,
-                    /// merged over `slots` (winning) at `into_expr`.
-                    rel_keys: Vec<#toasty::Option<#toasty::core::stmt::Expr>>,
                 }
             };
 
+            let record = self.expand_embedded_record(quote!(
+                #toasty::core::stmt::Expr::record_from_vec(slots)
+            ));
             let conversions = self.expand_create_conversions(
                 builder_ident,
                 quote! {
-                    let mut slots = self.slots;
-                    for (slot, key) in slots.iter_mut().zip(self.rel_keys) {
-                        if let #toasty::Option::Some(key) = key {
-                            *slot = key;
-                        }
-                    }
+                    let slots = self.slots;
                     #( #required_checks )*
                     #toasty::stmt::Expr::from_untyped(
-                        #toasty::core::stmt::Expr::record_from_vec(slots)
+                        #record
                     )
                 },
                 quote!(<Self as #toasty::IntoExpr<#model_ident>>::into_expr(self.clone())),
@@ -553,10 +522,21 @@ impl Expand<'_> {
         let toasty = &self.toasty;
         let embedded_enum = self.model.kind.as_embedded_enum_unwrap();
 
+        let mut field_start = 0;
         embedded_enum
             .variants
             .iter()
-            .map(|variant| {
+            .enumerate()
+            .map(|(index, variant)| {
+                let field_end = field_start
+                    + self
+                        .model
+                        .fields
+                        .iter()
+                        .filter(|f| f.variant == Some(index))
+                        .count();
+                let field_range = quote! { #field_start..#field_end };
+                field_start = field_end;
                 let variant_name = schema::expand_name(toasty, &variant.name);
                 let discriminant_expr =
                     self.expand_discriminant_schema(&variant.attrs.discriminant);
@@ -564,6 +544,7 @@ impl Expand<'_> {
                     #toasty::core::schema::app::EnumVariant {
                         name: #variant_name,
                         discriminant: #discriminant_expr,
+                        field_range: #field_range,
                     }
                 }
             })
@@ -1082,14 +1063,14 @@ impl Expand<'_> {
                         quote!(#ident)
                     });
 
+                    let record = self.expand_embedded_record(quote! {
+                        #toasty::core::stmt::Expr::record([
+                            #discriminant_expr,
+                            #( #field_exprs ),*
+                        ])
+                    });
                     quote! {
-                        #pattern =>
-                            #toasty::stmt::Expr::from_untyped(
-                                #toasty::core::stmt::Expr::record([
-                                    #discriminant_expr,
-                                    #( #field_exprs ),*
-                                ])
-                            ),
+                        #pattern => #toasty::stmt::Expr::from_untyped(#record),
                     }
                 }
             })

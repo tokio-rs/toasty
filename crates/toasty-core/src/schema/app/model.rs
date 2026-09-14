@@ -336,6 +336,11 @@ pub struct EnumVariant {
     /// Typically `Value::I64` for integer discriminants or `Value::String` for
     /// string discriminants.
     pub discriminant: stmt::Value,
+
+    /// The contiguous range of this variant's fields in [`EmbeddedEnum::fields`].
+    /// Ranges follow variant order and partition the enum's fields, including
+    /// empty ranges for unit variants.
+    pub field_range: std::ops::Range<usize>,
 }
 
 impl EmbeddedEnum {
@@ -345,17 +350,41 @@ impl EmbeddedEnum {
     }
 
     /// Returns fields belonging to a specific variant.
-    pub fn variant_fields(&self, variant_index: usize) -> impl Iterator<Item = &Field> {
-        let variant_id = VariantId {
-            model: self.id,
-            index: variant_index,
-        };
-        self.fields
-            .iter()
-            .filter(move |f| f.variant == Some(variant_id))
+    pub fn variant_fields(&self, variant_index: usize) -> &[Field] {
+        &self.fields[self.variants[variant_index].field_range.clone()]
     }
 
     pub(crate) fn verify(&self, db: &driver::Capability) -> Result<()> {
+        let mut start = 0;
+        for (index, variant) in self.variants.iter().enumerate() {
+            let range = &variant.field_range;
+            let valid = range.start == start
+                && self.fields.get(range.clone()).is_some_and(|fields| {
+                    fields.iter().enumerate().all(|(local, field)| {
+                        field.id == self.id.field(range.start + local)
+                            && field.variant
+                                == Some(VariantId {
+                                    model: self.id,
+                                    index,
+                                })
+                    })
+                });
+            if !valid {
+                return Err(crate::Error::invalid_schema(format!(
+                    "invalid field range for enum variant {}::{}",
+                    self.name.upper_camel_case(),
+                    variant.name.upper_camel_case(),
+                )));
+            }
+            start = range.end;
+        }
+        if start != self.fields.len() {
+            return Err(crate::Error::invalid_schema(format!(
+                "variant field ranges do not cover enum {}",
+                self.name.upper_camel_case(),
+            )));
+        }
+
         for field in &self.fields {
             field.verify(db)?;
         }

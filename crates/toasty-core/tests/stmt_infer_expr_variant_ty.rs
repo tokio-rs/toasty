@@ -60,6 +60,7 @@ fn embedded(target: ModelId) -> FieldTy {
 }
 
 fn enum_model(id: ModelId, name: &str, variants: [&str; 2], fields: Vec<Field>) -> Model {
+    let mut field_start = 0;
     Model::EmbeddedEnum(EmbeddedEnum {
         id,
         name: Name::new(name),
@@ -71,9 +72,17 @@ fn enum_model(id: ModelId, name: &str, variants: [&str; 2], fields: Vec<Field>) 
         variants: variants
             .iter()
             .enumerate()
-            .map(|(index, name)| EnumVariant {
-                name: Name::new(name),
-                discriminant: stmt::Value::I64(index as i64),
+            .map(|(index, name)| {
+                let start = field_start;
+                field_start += fields
+                    .iter()
+                    .filter(|f| f.variant.unwrap().index == index)
+                    .count();
+                EnumVariant {
+                    name: Name::new(name),
+                    discriminant: stmt::Value::I64(index as i64),
+                    field_range: start..field_start,
+                }
             })
             .collect(),
         fields,

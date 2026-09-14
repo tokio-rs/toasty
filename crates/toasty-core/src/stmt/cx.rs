@@ -475,6 +475,7 @@ impl<'a, T: Resolve> ExprContext<'a, T> {
                 Type::Record(
                     embedded
                         .variant_fields(e.variant.index)
+                        .iter()
                         .map(|field| field.expr_ty().clone())
                         .collect(),
                 )
