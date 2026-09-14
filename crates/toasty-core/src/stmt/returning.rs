@@ -26,6 +26,9 @@ pub enum Returning {
     /// Return whether the operation changed any rows.
     Changed,
 
+    /// Return every column produced by the source.
+    Star,
+
     /// Return the result of evaluating an expression against the source rows.
     Project(Expr),
 

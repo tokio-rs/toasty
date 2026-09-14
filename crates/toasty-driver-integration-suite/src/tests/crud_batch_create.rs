@@ -2,7 +2,12 @@
 
 use crate::prelude::*;
 
-use toasty_core::driver::{Operation, operation::Transaction};
+use toasty::Json;
+use toasty_core::{
+    driver::{Operation, operation::Transaction},
+    schema::db,
+    stmt::{Expr, ExprFunc, ExprSet, Statement, TableRef, Value},
+};
 
 #[driver_test(scenario(crate::scenarios::two_models))]
 pub async fn batch_create_empty(test: &mut Test) -> Result<()> {
@@ -135,6 +140,148 @@ pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test
     assert_struct!(items, [{ id: 10, name: "one" }, { id: 20, name: "two" }]);
     assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None }));
     assert!(test.log().is_empty());
+
+    Ok(())
+}
+
+/// A NULL cell in an optional column survives a multi-row create with a
+/// generated key, under both ID strategies. On PostgreSQL this exercises the
+/// INSERT → `unnest` transpose with a NULL cell inside a column array bind.
+///
+/// Gated on `returning_from_mutation`: the `id(ID)` expansion gates its
+/// `id_u64` variant on `auto_increment` alone, so without this the test also
+/// runs on MySQL, where a multi-row insert with a generated key needs the
+/// mutation `RETURNING` MySQL lacks.
+#[driver_test(id(ID), requires(returning_from_mutation))]
+pub async fn batch_create_with_null_field(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        #[auto]
+        id: ID,
+        name: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    let res = Item::create_many()
+        .item(Item::create().name("n1"))
+        .item(Item::create())
+        .item(Item::create().name("n3"))
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(3, res.len());
+    assert_eq!(res[0].name.as_deref(), Some("n1"));
+    assert_eq!(res[1].name, None);
+    assert_eq!(res[2].name.as_deref(), Some("n3"));
+
+    let reloaded = Item::get_by_id(&mut db, &res[1].id).await?;
+    assert_eq!(reloaded.name, None);
+    Ok(())
+}
+
+#[driver_test(requires(insert_values_unnest))]
+pub async fn batch_create_uses_unnest_array_params(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Item {
+        #[key]
+        id: String,
+        name: Option<String>,
+    }
+
+    let mut db = test.setup_db(models!(Item)).await;
+
+    test.log().clear();
+    Item::create_many()
+        .item(Item::create().id("item-1").name("n1"))
+        .item(Item::create().id("item-2"))
+        .exec(&mut db)
+        .await?;
+
+    let Operation::Insert(op) = test.log().pop_op() else {
+        panic!("expected Insert operation");
+    };
+    let Statement::Insert(insert) = op.stmt else {
+        panic!("expected Insert statement");
+    };
+    let ExprSet::Select(select) = insert.source.body else {
+        panic!("expected Select insert source");
+    };
+    let [TableRef::RowsFrom(funcs)] = select.source.as_table_unwrap().tables.as_slice() else {
+        panic!("expected ROWS FROM table source");
+    };
+    let [ExprFunc::Unnest(ids), ExprFunc::Unnest(names)] = funcs.as_slice() else {
+        panic!("expected one unnest function per inserted column");
+    };
+
+    assert_eq!(ids.arg.as_ref(), &Expr::arg(0));
+    assert_eq!(names.arg.as_ref(), &Expr::arg(1));
+    assert_eq!(op.params.len(), 2);
+    assert_eq!(
+        op.params[0].value,
+        Value::List(vec![Value::from("item-1"), Value::from("item-2")])
+    );
+    assert_eq!(op.params[0].ty, db::Type::list(db::Type::Text));
+    assert_eq!(
+        op.params[1].value,
+        Value::List(vec![Value::from("n1"), Value::Null])
+    );
+    assert_eq!(op.params[1].ty, db::Type::list(db::Type::Text));
+    assert!(test.log().is_empty());
+
+    // The plan assertions above can't catch a swapped or misaligned column
+    // array — read the rows back to confirm each cell landed on its own row.
+    let first = Item::get_by_id(&mut db, "item-1").await?;
+    assert_eq!(first.name.as_deref(), Some("n1"));
+
+    let second = Item::get_by_id(&mut db, "item-2").await?;
+    assert_eq!(second.name, None);
+
+    Ok(())
+}
+
+/// Native `json`/`jsonb` columns hold a document per row, so they must not be
+/// transposed into a per-column array bind: PostgreSQL has no array type
+/// registered for either, and binding one panics the driver.
+#[driver_test(requires(and(native_json, native_jsonb)))]
+pub async fn batch_create_document_columns(test: &mut Test) -> Result<()> {
+    #[derive(Debug, toasty::Model)]
+    struct Doc {
+        #[key]
+        id: String,
+        #[column(type = "json")]
+        text_encoded: Json<String>,
+        #[column(type = "jsonb")]
+        binary_encoded: Json<String>,
+    }
+
+    let mut db = test.setup_db(models!(Doc)).await;
+
+    let res = Doc::create_many()
+        .item(
+            Doc::create()
+                .id("a")
+                .text_encoded("one".to_string())
+                .binary_encoded("two".to_string()),
+        )
+        .item(
+            Doc::create()
+                .id("b")
+                .text_encoded("three".to_string())
+                .binary_encoded("four".to_string()),
+        )
+        .exec(&mut db)
+        .await?;
+
+    assert_eq!(2, res.len());
+
+    let reloaded = Doc::get_by_id(&mut db, "b").await?;
+    assert_struct!(reloaded, _ {
+        text_encoded: Json(== "three"),
+        binary_encoded: Json(== "four"),
+        ..
+    });
 
     Ok(())
 }
