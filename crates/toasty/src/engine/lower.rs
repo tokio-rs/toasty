@@ -1,5 +1,5 @@
 mod association;
-mod embedded_relation;
+pub(super) mod embedded_relation;
 mod expr_or;
 mod include;
 mod insert;

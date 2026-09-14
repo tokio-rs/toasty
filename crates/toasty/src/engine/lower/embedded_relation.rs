@@ -16,6 +16,10 @@
 //! and the key expression built here keeps the selection, so the guards
 //! still apply to the substituted comparison.
 //!
+//! [`Level`] holds the per-embed rules of the walk — which variant a
+//! selection may pick, which field a step names — and is shared with
+//! statement verification, which walks a path to its endpoint.
+//!
 //! [`lift_in_subquery`]: super::lift_in_subquery
 
 use toasty_core::{
@@ -125,7 +129,7 @@ pub(super) fn resolve_embedded_relation<'a>(
         return None;
     };
 
-    let mut level = Level::embed(cx, embedded.target)?;
+    let mut level = Level::embed(&cx.schema().app, embedded.target)?;
     // The expression reaching the current embed level.
     let mut level_expr = Expr::Reference(base);
 
@@ -148,7 +152,7 @@ pub(super) fn resolve_embedded_relation<'a>(
                         });
                     }
                     FieldTy::Embedded(embedded) => {
-                        level = Level::embed(cx, embedded.target)?;
+                        level = Level::embed(&cx.schema().app, embedded.target)?;
                         level_expr = Expr::project(level_expr, [*index]);
                     }
                     _ => return None,
@@ -160,16 +164,17 @@ pub(super) fn resolve_embedded_relation<'a>(
     None
 }
 
-/// One embedded level of a resolution walk: the embed's model, with the
-/// variant selected so far when it is an enum.
-enum Level<'a> {
+/// One embedded level of a path walk: the embed's model, with the variant
+/// selected so far when it is an enum.
+pub(crate) enum Level<'a> {
     Struct(&'a app::EmbeddedStruct),
     Enum(&'a app::EmbeddedEnum, Option<VariantId>),
 }
 
 impl<'a> Level<'a> {
-    fn embed(cx: &ExprContext<'a>, model_id: app::ModelId) -> Option<Self> {
-        match cx.schema().app.model(model_id) {
+    /// The level for the embedded model `model_id`; `None` for a root model.
+    pub(crate) fn embed(schema: &'a app::Schema, model_id: app::ModelId) -> Option<Self> {
+        match schema.model(model_id) {
             app::Model::EmbeddedStruct(embedded) => Some(Level::Struct(embedded)),
             app::Model::EmbeddedEnum(embedded) => Some(Level::Enum(embedded, None)),
             app::Model::Root(_) => None,
@@ -178,7 +183,7 @@ impl<'a> Level<'a> {
 
     /// Apply a variant selection: only an enum level with no variant selected
     /// yet accepts one, and only for its own variants.
-    fn select(self, variant: VariantId) -> Option<Self> {
+    pub(crate) fn select(self, variant: VariantId) -> Option<Self> {
         match self {
             Level::Enum(embedded, None)
                 if embedded.id == variant.model && variant.index < embedded.variants.len() =>
@@ -190,8 +195,10 @@ impl<'a> Level<'a> {
     }
 
     /// The field a step selects at this level: a struct field, or a field of
-    /// the selected variant by its variant-local position.
-    fn field_at(&self, index: usize) -> Option<&'a app::Field> {
+    /// the selected variant by its variant-local position. An enum with no
+    /// variant selected has no addressable fields: its record layout is a
+    /// lowering concern, and a path names the variant it enters.
+    pub(crate) fn field_at(&self, index: usize) -> Option<&'a app::Field> {
         match self {
             Level::Struct(embedded) => embedded.fields.get(index),
             Level::Enum(embedded, Some(variant)) => {

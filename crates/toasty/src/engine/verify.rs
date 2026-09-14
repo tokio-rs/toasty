@@ -1,4 +1,5 @@
 use crate::Result;
+use crate::engine::lower::embedded_relation::Level;
 use crate::engine::{Engine, upsert};
 use toasty_core::Error;
 use toasty_core::driver::Capability;
@@ -29,8 +30,9 @@ enum PathTarget<'a> {
     /// A field of a model, embed, or relation target.
     Field(&'a app::Field),
 
-    /// The payload of an embedded enum's variant, by index.
-    Variant(&'a app::EmbeddedEnum, usize),
+    /// The payload of an embedded enum's variant: the enum's level with
+    /// the variant selected.
+    Variant(Level<'a>),
 
     /// A position inside a `#[document]` value, which the schema does not
     /// describe field by field.
@@ -499,9 +501,7 @@ impl<'a> VerifyExpr<'a, '_> {
     ///
     /// A projection step continues into a struct embed's fields, a relation
     /// target's fields, or the fields of a selected enum variant, by their
-    /// variant-local position. A step into an enum without a selection does
-    /// not resolve: the enum's record layout is a lowering concern, and a
-    /// path names the variant it enters.
+    /// variant-local position (see [`Level::field_at`]).
     fn resolve_expr_path(&self, expr: &stmt::Expr) -> Option<PathTarget<'a>> {
         match expr {
             stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) => self
@@ -526,15 +526,9 @@ impl<'a> VerifyExpr<'a, '_> {
                 let app::FieldTy::Embedded(embedded) = &field.ty else {
                     return None;
                 };
-                if embedded.target != variant.variant.model {
-                    return None;
-                }
-                let app::Model::EmbeddedEnum(embedded) = self.schema.app.model(embedded.target)
-                else {
-                    return None;
-                };
-                (variant.variant.index < embedded.variants.len())
-                    .then_some(PathTarget::Variant(embedded, variant.variant.index))
+                Level::embed(&self.schema.app, embedded.target)?
+                    .select(variant.variant)
+                    .map(PathTarget::Variant)
             }
             _ => None,
         }
@@ -545,15 +539,12 @@ impl<'a> VerifyExpr<'a, '_> {
         use app::FieldTy;
 
         let field = match target {
-            PathTarget::Variant(embedded, index) => embedded.variant_fields(index).nth(step),
+            PathTarget::Variant(level) => level.field_at(step),
             PathTarget::Document => return Some(PathTarget::Document),
             PathTarget::Field(field) => match &field.ty {
-                FieldTy::Embedded(embedded) => match self.schema.app.model(embedded.target) {
-                    app::Model::EmbeddedStruct(embedded) => embedded.fields.get(step),
-                    // A variant must be selected before stepping into an
-                    // enum's fields.
-                    app::Model::EmbeddedEnum(_) | app::Model::Root(_) => None,
-                },
+                FieldTy::Embedded(embedded) => {
+                    Level::embed(&self.schema.app, embedded.target)?.field_at(step)
+                }
                 FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
                     let target = field.relation_target_id().expect("relation has a target");
                     self.schema
