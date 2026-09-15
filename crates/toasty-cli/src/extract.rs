@@ -205,7 +205,7 @@ fn check_has_dumper(artifact: &Path, project: &Project, target: &BuildTarget) ->
     let bytes = std::fs::read(artifact)
         .with_context(|| format!("failed to read `{}`", artifact.display()))?;
 
-    if contains(&bytes, DUMP_SCHEMA_ENV.as_bytes()) {
+    if memchr::memmem::find(&bytes, DUMP_SCHEMA_ENV.as_bytes()).is_some() {
         return Ok(());
     }
 
@@ -226,19 +226,6 @@ fn check_has_dumper(artifact: &Path, project: &Project, target: &BuildTarget) ->
          `debug-assertions` on",
         project.package_name
     )
-}
-
-/// Returns `true` if `needle` appears anywhere in `haystack`.
-fn contains(haystack: &[u8], needle: &[u8]) -> bool {
-    let Some((first, rest)) = needle.split_first() else {
-        return true;
-    };
-
-    haystack
-        .iter()
-        .enumerate()
-        .filter(|(_, byte)| *byte == first)
-        .any(|(i, _)| haystack[i + 1..].starts_with(rest))
 }
 
 /// Rejects a schema with no tables in it.
@@ -337,21 +324,6 @@ mod tests {
             let parsed = serde_json::from_str::<toasty_core::stmt::Type>(&format!("\"{ty}\""));
             assert!(parsed.is_ok(), "cannot decode `{ty}`: {parsed:?}");
         }
-    }
-
-    #[test]
-    fn the_dumper_marker_is_found_anywhere_in_the_artifact() {
-        let needle = DUMP_SCHEMA_ENV.as_bytes();
-
-        assert!(contains(needle, needle));
-        assert!(contains(
-            &[b"\x7fELF...", needle, b"...rest"].concat(),
-            needle
-        ));
-        assert!(!contains(b"", needle));
-        assert!(!contains(b"TOASTY_DUMP_SCHEM", needle));
-        // A truncated tail must not match past the end of the haystack.
-        assert!(!contains(&needle[..needle.len() - 1], needle));
     }
 
     #[test]

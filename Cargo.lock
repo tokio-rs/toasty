@@ -5295,6 +5295,7 @@ dependencies = [
  "hashbrown 0.17.1",
  "jiff",
  "libloading 0.9.0",
+ "memchr",
  "rand 0.10.2",
  "serde",
  "serde_json",

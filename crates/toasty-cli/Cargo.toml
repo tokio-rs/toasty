@@ -51,6 +51,7 @@ dialoguer.workspace = true
 hashbrown.workspace = true
 jiff.workspace = true
 libloading.workspace = true
+memchr.workspace = true
 rand.workspace = true
 serde.workspace = true
 serde_json.workspace = true
