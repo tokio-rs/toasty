@@ -153,7 +153,7 @@ impl Driver for InstrumentedDriver {
         self.inner.url()
     }
 
-    fn capability(&self) -> &'static Capability {
+    fn capability(&self) -> &Capability {
         self.inner.capability()
     }
 

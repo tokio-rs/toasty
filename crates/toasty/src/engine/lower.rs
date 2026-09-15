@@ -106,7 +106,7 @@ impl LoweringState<'_> {
             .rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
-        Simplify::with_context(expr_cx, self.engine.capability).visit_mut(&mut stmt);
+        Simplify::with_context(expr_cx, &self.engine.capability).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(
             self.dependencies
@@ -1817,7 +1817,7 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
             .rewrite(&mut stmt);
             // Pre-lower simplify: remaining heavyweight rules the lowering
             // visitor expects to have already fired.
-            Simplify::with_context(child.expr_cx, child.state.engine.capability)
+            Simplify::with_context(child.expr_cx, &child.state.engine.capability)
                 .visit_mut(&mut *stmt);
             // Lowering walk.
             child.visit_stmt_mut(&mut stmt);

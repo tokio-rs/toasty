@@ -38,7 +38,7 @@ pub(crate) struct Simplify<'a> {
 impl Engine {
     /// Simplifies a statement or expression in place.
     pub(crate) fn simplify_stmt<T: Node>(&self, stmt: &mut T) {
-        Simplify::new(&self.schema, self.capability).visit_mut(stmt);
+        Simplify::new(&self.schema, &self.capability).visit_mut(stmt);
     }
 }
 

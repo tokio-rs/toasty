@@ -59,18 +59,21 @@ pub(crate) struct Engine {
     pub(crate) schema: Arc<Schema>,
 
     /// Driver capabilities, used during planning.
-    pub(crate) capability: &'static Capability,
+    pub(crate) capability: Arc<Capability>,
 }
 
 impl Engine {
     /// Creates a new [`Engine`] with the given schema and capability.
-    pub(crate) fn new(schema: Arc<Schema>, capability: &'static Capability) -> Engine {
-        Engine { schema, capability }
+    pub(crate) fn new(schema: Arc<Schema>, capability: &Capability) -> Engine {
+        Engine {
+            schema,
+            capability: Arc::new(capability.clone()),
+        }
     }
 
     /// Returns the driver's capabilities.
     pub(crate) fn capability(&self) -> &Capability {
-        self.capability
+        &self.capability
     }
 
     /// Executes a statement and returns the full response including pagination metadata.

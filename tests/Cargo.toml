@@ -22,6 +22,15 @@ mysql = [
     "dep:sqlx-core",
     "dep:sqlx-mysql",
 ]
+# Same driver as `mysql`, against a server with a different capability set.
+# Deliberately does not enable `mysql`: features are additive, so that would
+# also run the MySQL suite, which needs a second server on another port.
+mariadb = [
+    "toasty/mysql",
+    "dep:toasty-driver-mysql",
+    "dep:sqlx-core",
+    "dep:sqlx-mysql",
+]
 dynamodb = ["toasty/dynamodb", "dep:toasty-driver-dynamodb", "dep:aws-config", "dep:aws-sdk-dynamodb"]
 postgresql = ["toasty/postgresql", "dep:toasty-driver-postgresql", "dep:tokio-postgres"]
 

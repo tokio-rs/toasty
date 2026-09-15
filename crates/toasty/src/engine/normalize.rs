@@ -27,7 +27,7 @@ impl Engine {
     pub(super) fn normalize_stmt(&self, stmt: &mut stmt::Statement) -> Result<()> {
         let mut normalize = Normalize {
             schema: &self.schema,
-            capability: self.capability,
+            capability: &self.capability,
             error: None,
         };
         normalize.visit_stmt_mut(stmt);

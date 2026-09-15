@@ -1,6 +1,6 @@
 use std::{
     error::Error,
-    sync::{Arc, RwLock},
+    sync::{Arc, OnceLock, RwLock},
 };
 
 use toasty::{Db, schema::ModelSet};
@@ -12,6 +12,10 @@ use crate::{Fault, InstrumentedDriver, InstrumentedHandle, Isolate, Setup};
 /// Normal tests acquire a read lock (allowing parallelism).
 /// Serial tests acquire a write lock (exclusive access).
 static TEST_LOCK: RwLock<()> = RwLock::new(());
+
+/// Resolved once per test binary. Constructing a driver can connect, and every
+/// test in a binary shares the same `Setup`.
+static CAPABILITY: OnceLock<Arc<toasty_core::driver::Capability>> = OnceLock::new();
 
 /// Wraps the Tokio runtime and ensures cleanup happens.
 ///
@@ -36,6 +40,10 @@ pub struct Test {
 
     /// Whether this test requires exclusive (serial) execution
     serial: bool,
+
+    /// Shared from [`CAPABILITY`]. A driver may connect to resolve its
+    /// capability, so this cannot come from a throwaway `Setup::driver()`.
+    capability: Arc<toasty_core::driver::Capability>,
 }
 
 impl Test {
@@ -45,8 +53,16 @@ impl Test {
             .build()
             .expect("failed to create Tokio runtime");
 
+        // Resolved eagerly so `capability()` stays sync for its many callers.
+        let capability = CAPABILITY
+            .get_or_init(|| {
+                runtime.block_on(async { Arc::new(setup.driver().await.capability().clone()) })
+            })
+            .clone();
+
         Test {
             setup,
+            capability,
             isolate: Isolate::new(),
             runtime: Some(runtime),
             handle: InstrumentedHandle::default(),
@@ -78,7 +94,7 @@ impl Test {
         customize(&mut builder);
 
         // Always wrap with the instrumented test driver
-        let instrumented_driver = InstrumentedDriver::new(self.setup.driver());
+        let instrumented_driver = InstrumentedDriver::new(self.setup.driver().await);
         self.handle = instrumented_driver.handle();
 
         // Build the database with the instrumented driver
@@ -108,8 +124,8 @@ impl Test {
     }
 
     /// Get the driver capability
-    pub fn capability(&self) -> &'static toasty_core::driver::Capability {
-        self.setup.driver().capability()
+    pub fn capability(&self) -> &toasty_core::driver::Capability {
+        &self.capability
     }
 
     /// Get the instrumented-driver control handle. The handle exposes

@@ -58,7 +58,7 @@ impl Default for PoolConfig {
 #[derive(Debug)]
 pub struct Pool {
     inner: deadpool::managed::Pool<Manager>,
-    capability: &'static Capability,
+    capability: Arc<Capability>,
     /// Handle for the background health-check sweep, if one was spawned.
     /// Aborted on `Pool::drop` so the task does not outlive the pool.
     sweep_task: Option<JoinHandle<()>>,
@@ -80,7 +80,7 @@ impl Pool {
         engine: Engine,
         config: PoolConfig,
     ) -> crate::Result<Self> {
-        let capability = driver.capability();
+        let capability = engine.capability.clone();
         let driver_cap = driver.max_connections();
 
         let effective_max = match driver_cap {
@@ -153,8 +153,8 @@ impl Pool {
     }
 
     /// Returns the database driver's capabilities.
-    pub fn capability(&self) -> &'static Capability {
-        self.capability
+    pub fn capability(&self) -> &Capability {
+        &self.capability
     }
 
     /// Returns the current status of the pool, including the number of

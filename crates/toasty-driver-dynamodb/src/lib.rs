@@ -100,7 +100,7 @@ impl Driver for DynamoDb {
         Cow::Borrowed(&self.url)
     }
 
-    fn capability(&self) -> &'static Capability {
+    fn capability(&self) -> &Capability {
         &Capability::DYNAMODB
     }
 

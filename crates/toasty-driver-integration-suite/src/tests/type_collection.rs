@@ -225,6 +225,7 @@ pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
         { tags: vec!["admin".to_string(), "verified".to_string()] },
         { tags: vec!["guest".to_string()] },
         { tags: vec!["admin".to_string(), "moderator".to_string()] },
+        { tags: vec!["Admin".to_string()] },
     ])
     .exec(&mut db)
     .await?;
@@ -233,6 +234,13 @@ pub async fn vec_string_contains_filter(t: &mut Test) -> Result<(), BoxError> {
         .exec(&mut db)
         .await?;
     assert_eq!(admins.len(), 2);
+
+    // Matching is case-sensitive everywhere; a server-default collation must
+    // not leak into the comparison.
+    let capitalized = Item::filter(Item::fields().tags().contains("Admin"))
+        .exec(&mut db)
+        .await?;
+    assert_eq!(capitalized.len(), 1);
 
     let none = Item::filter(Item::fields().tags().contains("missing"))
         .exec(&mut db)
