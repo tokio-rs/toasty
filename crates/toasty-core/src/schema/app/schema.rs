@@ -36,7 +36,8 @@ pub enum Resolved<'a> {
 /// accessors turn them into panic messages.
 #[derive(Debug)]
 pub enum ResolveError {
-    /// The path does not name a field: its projection is empty.
+    /// The path does not name a field: its projection is empty, or it stops
+    /// at a variant discriminant.
     Empty,
     /// A projection step does not index a field (or variant) of the model it
     /// lands on.
@@ -45,13 +46,15 @@ pub enum ResolveError {
         step: usize,
     },
     /// A projection step descends through a field that cannot be projected
-    /// through: a scalar, a `List(Model)` document collection, or a relation
-    /// when the resolver does not follow relations.
+    /// through: a scalar, a `List(Model)` document collection, an `Embedded`
+    /// field whose target is not an embedded model, or a relation when the
+    /// resolver does not follow relations.
     NonEmbedded {
         /// The step that cannot be crossed.
         step: usize,
     },
-    /// A `Variant` root's parent does not end at an embedded enum field.
+    /// A `Variant` root's parent does not end at the embedded enum field the
+    /// variant id names.
     NotEmbeddedEnum {
         /// The parent path's last step.
         step: usize,
@@ -309,14 +312,10 @@ pub(crate) fn resolve_in<'a>(
         stmt::PathRoot::Variant { parent, variant_id } => {
             let parent_step = parent.projection.as_slice().last().copied().unwrap_or(0);
 
-            let enum_field = match resolve_in(models, parent, follow_relations)? {
-                CoreResolved::Field { leaf, document } => {
-                    debug_assert!(
-                        document.is_none(),
-                        "variant path parent crosses a #[document] field"
-                    );
-                    leaf
-                }
+            // A document crossed on the way to the enum stays crossed: the
+            // variant's fields live inside the same document.
+            let (enum_field, document) = match resolve_in(models, parent, follow_relations)? {
+                CoreResolved::Field { leaf, document } => (leaf, document),
                 CoreResolved::Variant(_) => {
                     return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
                 }
@@ -325,14 +324,13 @@ pub(crate) fn resolve_in<'a>(
             let FieldTy::Embedded(embedded) = &enum_field.ty else {
                 return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
             };
-            debug_assert_eq!(
-                embedded.target, variant_id.model,
-                "variant id does not match the parent field's enum target"
-            );
+            if embedded.target != variant_id.model {
+                return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
+            }
 
             let enum_model = models
-                .get(&variant_id.model)
-                .ok_or(ResolveError::UnknownModel(variant_id.model))?;
+                .get(&embedded.target)
+                .ok_or(ResolveError::UnknownModel(embedded.target))?;
             let Model::EmbeddedEnum(e) = enum_model else {
                 return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
             };
@@ -351,7 +349,7 @@ pub(crate) fn resolve_in<'a>(
                 .variant_fields(variant_id.index)
                 .get(*first)
                 .ok_or(ResolveError::OutOfBounds { step: *first })?;
-            resolve_steps(models, first, rest, follow_relations, None)
+            resolve_steps(models, first, rest, follow_relations, document)
         }
     }
 }
@@ -397,7 +395,7 @@ fn resolve_steps<'a>(
                     }
                     // `Embedded` fields target embedded models; a hand-built
                     // field pointing elsewhere has nothing to project into.
-                    _ => return Err(ResolveError::NotEmbeddedEnum { step: *step }),
+                    _ => return Err(ResolveError::NonEmbedded { step: *step }),
                 }
             }
             FieldTy::Primitive(primitive) => {

@@ -134,7 +134,11 @@ fn document_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
 ///   Status = enum { Active(0), Inactive(1) }  (unit variants only)
 ///   ContactInfo = enum { Email(0, fields: [address]), Phone(1, fields: [country_code, number]) }
 ///   Address = struct { street, city }
-///   DocProfile = struct { city, zip }
+///   DocProfile = struct { city, zip, contact: ContactInfo }
+///
+/// The enum inside `DocProfile` is not a valid Db document shape
+/// (`schema::Builder` rejects it), but `Schema::from_macro` accepts it, so
+/// the app-schema walk must still resolve paths through it.
 fn schema() -> Schema {
     let status = Model::EmbeddedEnum(EmbeddedEnum {
         id: STATUS_ENUM,
@@ -204,6 +208,7 @@ fn schema() -> Schema {
         fields: vec![
             prim_field(DOC_PROFILE, 0, "city"),
             prim_field(DOC_PROFILE, 1, "zip"),
+            embedded_field(DOC_PROFILE, 2, "contact", CONTACT_ENUM),
         ],
         indices: vec![],
     });
@@ -549,6 +554,57 @@ fn resolve_path_variant_root_resolves_local_field() {
     let (leaf, document) = models.resolve_path(&variant).unwrap();
     assert_eq!(leaf.name.app.as_deref(), Some("number"));
     assert!(document.is_none());
+}
+
+#[test]
+fn resolve_path_variant_root_crossing_document_reports_document() {
+    let s = schema();
+    let models = model_set(&s);
+
+    // User.profile.contact -> Email -> local 0 (address): the parent path
+    // crosses the `profile` document field.
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path {
+            root: stmt::PathRoot::Model(USER),
+            projection: stmt::Projection::from([5, 2]),
+        },
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 0,
+        },
+    );
+    variant.projection.push(0);
+
+    let (leaf, document) = models.resolve_path(&variant).unwrap();
+    assert_eq!(leaf.name.app.as_deref(), Some("address"));
+    assert_eq!(document.unwrap().name.app.as_deref(), Some("profile"));
+
+    // `Schema::resolve_field_path` reports the leaf, not the document field.
+    let field = s.resolve_field_path(&variant).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("address"));
+}
+
+#[test]
+fn resolve_path_variant_root_with_mismatched_enum_model_is_err() {
+    let s = schema();
+    let models = model_set(&s);
+
+    // The parent field is `ContactInfo`, but the variant id names `Status`.
+    // Without the check, the local step would be read against `ContactInfo`.
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: STATUS_ENUM,
+            index: 0,
+        },
+    );
+    variant.projection.push(0);
+
+    assert!(matches!(
+        models.resolve_path(&variant),
+        Err(ResolveError::NotEmbeddedEnum { .. })
+    ));
+    assert!(s.resolve_field_path(&variant).is_none());
 }
 
 // === resolve() covers all old is_valid_projection cases ===

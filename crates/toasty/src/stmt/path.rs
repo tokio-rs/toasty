@@ -899,7 +899,7 @@ where
                 panic!("cannot project through non-embedded field")
             }
             Err(app::ResolveError::NotEmbeddedEnum { .. }) => {
-                panic!("variant path parent is not an embedded enum")
+                panic!("variant path parent is not the embedded enum the variant id names")
             }
             Err(app::ResolveError::UnknownModel(id)) => {
                 panic!("model {id:?} is not registered")
