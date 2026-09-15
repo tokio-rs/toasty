@@ -1875,6 +1875,11 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         let mut stmt = Box::new(stmt);
 
         let target_id = self.scope_statement(|child| {
+            // A `LIMIT` here caps rows per parent row (`.include(...).limit(n)`),
+            // but the planner batch-loads every parent's children with one
+            // query, where a `LIMIT` would cap the whole batch. Move it off the
+            // statement before anything else can see it.
+            child.take_per_parent_limit(&mut stmt);
             // Via-association rewrite: `Source::Model { via }` becomes an
             // explicit WHERE filter so the lowering walk only sees rewritten
             // sources.  The IN-subquery lift fires next so non-walk code
@@ -1913,6 +1918,31 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         }
 
         arg
+    }
+
+    /// Moves a returning sub-statement's `LIMIT` off the statement and onto
+    /// [`hir::StatementInfo::per_parent_limit`], where `NestedMerge` applies it
+    /// per parent row while merging.
+    fn take_per_parent_limit(&mut self, stmt: &mut stmt::Statement) {
+        let stmt::Statement::Query(query) = stmt else {
+            return;
+        };
+        let Some(limit) = query.limit.take() else {
+            return;
+        };
+        let stmt::Limit::Offset(limit_offset) = limit else {
+            todo!("cursor pagination on an `.include(...)` query")
+        };
+        assert!(
+            limit_offset.offset.is_none(),
+            "include limits do not support offset"
+        );
+        let n = match &limit_offset.limit {
+            stmt::Expr::Value(stmt::Value::I64(n)) | stmt::Expr::Static(stmt::Value::I64(n)) => *n,
+            expr => panic!("include limit must be an i64 literal; got {expr:#?}"),
+        };
+        self.curr_stmt_info().per_parent_limit =
+            Some(usize::try_from(n).expect("include limit must be non-negative"));
     }
 
     fn schema(&self) -> &'b Schema {
