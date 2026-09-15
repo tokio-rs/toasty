@@ -35,7 +35,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-42faae4f.js";
+            window.path_to_searchindex_js = "searchindex-5baed9ed.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -328,7 +328,9 @@ compare the same values that reads reconstruct.</p>
 document keys.</li>
 <li>Relations cannot appear inside a document.</li>
 <li><code>jiff::Zoned</code> is rejected because its IANA time-zone annotation does
-not have a supported document representation.</li>
+not have a supported document representation. A <code>jiff::tz::TimeZone</code>
+leaf is supported: it stores as plain text and needs no cast back to
+a temporal type.</li>
 <li><code>Vec&lt;u8&gt;</code> is rejected because JSON has no binary scalar type.</li>
 <li><code>#[column]</code> renames inside an embedded document are rejected because
 document keys use Rust field names.</li>

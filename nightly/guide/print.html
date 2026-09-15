@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-42faae4f.js";
+            window.path_to_searchindex_js = "searchindex-5baed9ed.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -416,9 +416,11 @@ to <code>NOT NULL</code> columns. The <code>#[key]</code> attribute marks the pr
 <tr><td><code>rust_decimal</code></td><td><code>rust_decimal::Decimal</code></td><td>Decimal</td></tr>
 <tr><td><code>bigdecimal</code></td><td><code>bigdecimal::BigDecimal</code></td><td>Decimal</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::Timestamp</code></td><td>Timestamp</td></tr>
+<tr><td><code>jiff</code></td><td><code>jiff::Zoned</code></td><td>Text (ISO 8601 with an RFC 9557 zone annotation)</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Date</code></td><td>Date</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::Time</code></td><td>Time</td></tr>
 <tr><td><code>jiff</code></td><td><code>jiff::civil::DateTime</code></td><td>DateTime</td></tr>
+<tr><td><code>jiff</code></td><td><code>jiff::tz::TimeZone</code></td><td>Text (IANA identifier, fixed offset, or POSIX TZ string)</td></tr>
 <tr><td><code>net</code></td><td><code>toasty::stmt::IpCidr</code></td><td>IP network prefix</td></tr>
 <tr><td><code>net</code></td><td><code>toasty::stmt::IpInet</code></td><td>IP host address with a network prefix</td></tr>
 <tr><td><code>net</code></td><td><code>toasty::stmt::MacAddr6</code></td><td>Six-byte MAC address</td></tr>
@@ -3280,9 +3282,11 @@ fields:</p>
 </thead>
 <tbody>
 <tr><td><code>jiff::Timestamp</code></td><td>An instant in time (UTC)</td></tr>
+<tr><td><code>jiff::Zoned</code></td><td>An instant in time together with its time zone</td></tr>
 <tr><td><code>jiff::civil::Date</code></td><td>A date without time</td></tr>
 <tr><td><code>jiff::civil::Time</code></td><td>A time of day without date</td></tr>
 <tr><td><code>jiff::civil::DateTime</code></td><td>A date and time without timezone</td></tr>
+<tr><td><code>jiff::tz::TimeZone</code></td><td>A time zone on its own, not a point in time</td></tr>
 </tbody>
 </table>
 </div>
@@ -3944,7 +3948,9 @@ compare the same values that reads reconstruct.</p>
 document keys.</li>
 <li>Relations cannot appear inside a document.</li>
 <li><code>jiff::Zoned</code> is rejected because its IANA time-zone annotation does
-not have a supported document representation.</li>
+not have a supported document representation. A <code>jiff::tz::TimeZone</code>
+leaf is supported: it stores as plain text and needs no cast back to
+a temporal type.</li>
 <li><code>Vec&lt;u8&gt;</code> is rejected because JSON has no binary scalar type.</li>
 <li><code>#[column]</code> renames inside an embedded document are rejected because
 document keys use Rust field names.</li>
@@ -9111,6 +9117,7 @@ below the table.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>DATE</code></td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TIME</code> with microsecond precision</td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>TIMESTAMP</code> with microsecond precision</td></tr>
+<tr><td><code>jiff::tz::TimeZone</code> <em>(feature)</em></td><td><code>TEXT</code></td></tr>
 <tr><td><code>toasty::stmt::IpCidr</code> <em>(feature)</em></td><td><code>CIDR</code></td></tr>
 <tr><td><code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>INET</code></td></tr>
 <tr><td><code>toasty::stmt::MacAddr6</code> <em>(feature)</em></td><td><code>MACADDR</code></td></tr>
@@ -9296,6 +9303,7 @@ quirks worth knowing about; the notes below the table call them out.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>DATE</code></td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TIME(6)</code></td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>DATETIME(6)</code></td></tr>
+<tr><td><code>jiff::tz::TimeZone</code> <em>(feature)</em></td><td><code>VARCHAR(191)</code></td></tr>
 <tr><td><code>toasty::stmt::IpCidr</code> <em>(feature)</em></td><td><code>VARCHAR(43)</code></td></tr>
 <tr><td><code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>VARCHAR(43)</code></td></tr>
 <tr><td><code>toasty::stmt::MacAddr6</code> <em>(feature)</em></td><td><code>VARCHAR(17)</code></td></tr>
@@ -9527,6 +9535,7 @@ underlying SQLite storage class.</p>
 <tr><td><code>jiff::civil::Date</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::Time</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::DateTime</code> <em>(feature)</em></td><td><code>TEXT</code> (ISO 8601)</td></tr>
+<tr><td><code>jiff::tz::TimeZone</code> <em>(feature)</em></td><td><code>TEXT</code> (IANA identifier, fixed offset, or POSIX TZ string)</td></tr>
 <tr><td><code>toasty::stmt::IpCidr</code>, <code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>TEXT</code></td></tr>
 <tr><td><code>toasty::stmt::MacAddr6</code>, <code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>TEXT</code></td></tr>
 <tr><td><code>Vec&lt;T&gt;</code> <em>(T scalar)</em></td><td><code>TEXT</code> holding a JSON array</td></tr>
@@ -10079,6 +10088,7 @@ encodes Rust values into them as follows:</p>
 <tr><td><code>rust_decimal::Decimal</code> <em>(feature)</em></td><td><code>S</code></td></tr>
 <tr><td><code>jiff::Timestamp</code> <em>(feature)</em></td><td><code>S</code> (ISO 8601)</td></tr>
 <tr><td><code>jiff::civil::Date</code> / <code>Time</code> / <code>DateTime</code> <em>(feature)</em></td><td><code>S</code></td></tr>
+<tr><td><code>jiff::tz::TimeZone</code> <em>(feature)</em></td><td><code>S</code></td></tr>
 <tr><td><code>toasty::stmt::IpCidr</code>, <code>toasty::stmt::IpInet</code> <em>(feature)</em></td><td><code>S</code></td></tr>
 <tr><td><code>toasty::stmt::MacAddr6</code>, <code>toasty::stmt::MacAddr8</code> <em>(feature)</em></td><td><code>S</code></td></tr>
 <tr><td>Embedded <code>enum</code></td><td><code>S</code> (variant tag) plus per-variant data attributes</td></tr>

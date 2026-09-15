@@ -222,26 +222,29 @@
 <a href=#222 id=222 data-nosnippet>222</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>jiff::civil::Time {}
 <a href=#223 id=223 data-nosnippet>223</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>jiff::civil::DateTime {}
 <a href=#224 id=224 data-nosnippet>224</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>jiff::civil::DateTime {}
-<a href=#225 id=225 data-nosnippet>225</a>}
-<a href=#226 id=226 data-nosnippet>226</a>
-<a href=#227 id=227 data-nosnippet>227</a><span class="attr">#[cfg(feature = <span class="string">"net"</span>)]
-<a href=#228 id=228 data-nosnippet>228</a></span><span class="kw">mod </span>net_impls {
-<a href=#229 id=229 data-nosnippet>229</a>    <span class="kw">use super</span>::{CompatibleWith, tag};
-<a href=#230 id=230 data-nosnippet>230</a>    <span class="kw">use </span><span class="kw">crate</span>::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
-<a href=#231 id=231 data-nosnippet>231</a>
-<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Cidr&gt; <span class="kw">for </span>IpCidr {}
-<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Inet&gt; <span class="kw">for </span>IpInet {}
-<a href=#234 id=234 data-nosnippet>234</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::MacAddr&gt; <span class="kw">for </span>MacAddr6 {}
-<a href=#235 id=235 data-nosnippet>235</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::MacAddr8&gt; <span class="kw">for </span>MacAddr8 {}
-<a href=#236 id=236 data-nosnippet>236</a>
-<a href=#237 id=237 data-nosnippet>237</a>    <span class="comment">// Backends without native network types store their canonical text forms.
-<a href=#238 id=238 data-nosnippet>238</a>    </span><span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>IpCidr {}
-<a href=#239 id=239 data-nosnippet>239</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>IpCidr {}
-<a href=#240 id=240 data-nosnippet>240</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>IpInet {}
-<a href=#241 id=241 data-nosnippet>241</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>IpInet {}
-<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>MacAddr6 {}
-<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>MacAddr6 {}
-<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>MacAddr8 {}
-<a href=#245 id=245 data-nosnippet>245</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>MacAddr8 {}
-<a href=#246 id=246 data-nosnippet>246</a>}
+<a href=#225 id=225 data-nosnippet>225</a>
+<a href=#226 id=226 data-nosnippet>226</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>jiff::tz::TimeZone {}
+<a href=#227 id=227 data-nosnippet>227</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>jiff::tz::TimeZone {}
+<a href=#228 id=228 data-nosnippet>228</a>}
+<a href=#229 id=229 data-nosnippet>229</a>
+<a href=#230 id=230 data-nosnippet>230</a><span class="attr">#[cfg(feature = <span class="string">"net"</span>)]
+<a href=#231 id=231 data-nosnippet>231</a></span><span class="kw">mod </span>net_impls {
+<a href=#232 id=232 data-nosnippet>232</a>    <span class="kw">use super</span>::{CompatibleWith, tag};
+<a href=#233 id=233 data-nosnippet>233</a>    <span class="kw">use </span><span class="kw">crate</span>::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
+<a href=#234 id=234 data-nosnippet>234</a>
+<a href=#235 id=235 data-nosnippet>235</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Cidr&gt; <span class="kw">for </span>IpCidr {}
+<a href=#236 id=236 data-nosnippet>236</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Inet&gt; <span class="kw">for </span>IpInet {}
+<a href=#237 id=237 data-nosnippet>237</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::MacAddr&gt; <span class="kw">for </span>MacAddr6 {}
+<a href=#238 id=238 data-nosnippet>238</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::MacAddr8&gt; <span class="kw">for </span>MacAddr8 {}
+<a href=#239 id=239 data-nosnippet>239</a>
+<a href=#240 id=240 data-nosnippet>240</a>    <span class="comment">// Backends without native network types store their canonical text forms.
+<a href=#241 id=241 data-nosnippet>241</a>    </span><span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>IpCidr {}
+<a href=#242 id=242 data-nosnippet>242</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>IpCidr {}
+<a href=#243 id=243 data-nosnippet>243</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>IpInet {}
+<a href=#244 id=244 data-nosnippet>244</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>IpInet {}
+<a href=#245 id=245 data-nosnippet>245</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>MacAddr6 {}
+<a href=#246 id=246 data-nosnippet>246</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>MacAddr6 {}
+<a href=#247 id=247 data-nosnippet>247</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::Text&gt; <span class="kw">for </span>MacAddr8 {}
+<a href=#248 id=248 data-nosnippet>248</a>    <span class="kw">impl </span>CompatibleWith&lt;tag::VarChar&gt; <span class="kw">for </span>MacAddr8 {}
+<a href=#249 id=249 data-nosnippet>249</a>}
 </code></pre></div></section></main></body></html>

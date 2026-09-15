@@ -89,21 +89,22 @@
 <a href=#89 id=89 data-nosnippet>89</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>jiff::civil::Date {}
 <a href=#90 id=90 data-nosnippet>90</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>jiff::civil::Time {}
 <a href=#91 id=91 data-nosnippet>91</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>jiff::civil::DateTime {}
-<a href=#92 id=92 data-nosnippet>92</a>}
-<a href=#93 id=93 data-nosnippet>93</a>
-<a href=#94 id=94 data-nosnippet>94</a><span class="attr">#[cfg(feature = <span class="string">"net"</span>)]
-<a href=#95 id=95 data-nosnippet>95</a></span><span class="kw">mod </span>net_impls {
-<a href=#96 id=96 data-nosnippet>96</a>    <span class="kw">use </span><span class="kw">super</span>::IndexableField;
-<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">use </span><span class="kw">crate</span>::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
-<a href=#98 id=98 data-nosnippet>98</a>
-<a href=#99 id=99 data-nosnippet>99</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>IpCidr {}
-<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>IpInet {}
-<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>MacAddr6 {}
-<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>MacAddr8 {}
-<a href=#103 id=103 data-nosnippet>103</a>}
-<a href=#104 id=104 data-nosnippet>104</a>
-<a href=#105 id=105 data-nosnippet>105</a><span class="comment">// Tuple-newtype embeds get a per-type `IndexableField` impl from
-<a href=#106 id=106 data-nosnippet>106</a>// `#[derive(Embed)]` (see `expand_embedded_indexable_impl` in toasty-macros),
-<a href=#107 id=107 data-nosnippet>107</a>// forwarding to their inner type. A `NewtypeOf` blanket would be more concise
-<a href=#108 id=108 data-nosnippet>108</a>// but conflicts with the `Box&lt;T&gt;` impl above, since `Box` is `#[fundamental]`.
+<a href=#92 id=92 data-nosnippet>92</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>jiff::tz::TimeZone {}
+<a href=#93 id=93 data-nosnippet>93</a>}
+<a href=#94 id=94 data-nosnippet>94</a>
+<a href=#95 id=95 data-nosnippet>95</a><span class="attr">#[cfg(feature = <span class="string">"net"</span>)]
+<a href=#96 id=96 data-nosnippet>96</a></span><span class="kw">mod </span>net_impls {
+<a href=#97 id=97 data-nosnippet>97</a>    <span class="kw">use </span><span class="kw">super</span>::IndexableField;
+<a href=#98 id=98 data-nosnippet>98</a>    <span class="kw">use </span><span class="kw">crate</span>::stmt::{IpCidr, IpInet, MacAddr6, MacAddr8};
+<a href=#99 id=99 data-nosnippet>99</a>
+<a href=#100 id=100 data-nosnippet>100</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>IpCidr {}
+<a href=#101 id=101 data-nosnippet>101</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>IpInet {}
+<a href=#102 id=102 data-nosnippet>102</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>MacAddr6 {}
+<a href=#103 id=103 data-nosnippet>103</a>    <span class="kw">impl </span>IndexableField <span class="kw">for </span>MacAddr8 {}
+<a href=#104 id=104 data-nosnippet>104</a>}
+<a href=#105 id=105 data-nosnippet>105</a>
+<a href=#106 id=106 data-nosnippet>106</a><span class="comment">// Tuple-newtype embeds get a per-type `IndexableField` impl from
+<a href=#107 id=107 data-nosnippet>107</a>// `#[derive(Embed)]` (see `expand_embedded_indexable_impl` in toasty-macros),
+<a href=#108 id=108 data-nosnippet>108</a>// forwarding to their inner type. A `NewtypeOf` blanket would be more concise
+<a href=#109 id=109 data-nosnippet>109</a>// but conflicts with the `Box&lt;T&gt;` impl above, since `Box` is `#[fundamental]`.
 </span></code></pre></div></section></main></body></html>

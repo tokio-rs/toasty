@@ -1,4 +1,4 @@
-<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/toasty/src/schema/jiff.rs`."><title>jiff.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">toasty/schema/</div>jiff.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-2"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use super</span>::{Field, Load};
+<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><meta name="generator" content="rustdoc"><meta name="description" content="Source of the Rust file `crates/toasty/src/schema/jiff.rs`."><title>jiff.rs - source</title><script>if(window.location.protocol!=="file:")document.head.insertAdjacentHTML("beforeend","SourceSerif4-Regular-6b053e98.ttf.woff2,FiraSans-Italic-81dc35de.woff2,FiraSans-Regular-0fe48ade.woff2,FiraSans-MediumItalic-ccf7e434.woff2,FiraSans-Medium-e1aa3f0a.woff2,SourceCodePro-Regular-8badfe75.ttf.woff2,SourceCodePro-Semibold-aa29a496.ttf.woff2".split(",").map(f=>`<link rel="preload" as="font" type="font/woff2"href="../../../static.files/${f}">`).join(""))</script><link rel="stylesheet" href="../../../static.files/normalize-9960930a.css"><link rel="stylesheet" href="../../../static.files/rustdoc-1ed95124.css"><meta name="rustdoc-vars" data-root-path="../../../" data-static-root-path="../../../static.files/" data-current-crate="toasty" data-themes="" data-resource-suffix="" data-rustdoc-version="1.98.1 (48a229cea 2026-09-01)" data-channel="1.98.1" data-search-js="search-9944d736.js" data-stringdex-js="stringdex-2da4960a.js" data-settings-js="settings-170eb4bf.js" ><script src="../../../static.files/storage-41dd4d93.js"></script><script defer src="../../../static.files/src-script-813739b1.js"></script><script defer src="../../../src-files.js"></script><script defer src="../../../static.files/main-417ebf0a.js"></script><noscript><link rel="stylesheet" href="../../../static.files/noscript-f7c3ffd8.css"></noscript><link rel="alternate icon" type="image/png" href="../../../static.files/favicon-32x32-eab170b8.png"><link rel="icon" type="image/svg+xml" href="../../../static.files/favicon-044be391.svg"></head><body class="rustdoc src"><a class="skip-main-content" href="#main-content">Skip to main content</a><!--[if lte IE 11]><div class="warning">This old browser is unsupported and will most likely display funky things.</div><![endif]--><nav class="sidebar"><div class="src-sidebar-title"><h2>Files</h2></div></nav><div class="sidebar-resizer" title="Drag to resize sidebar"></div><main><section id="main-content" class="content" tabindex="-1"><div class="main-heading"><h1><div class="sub-heading">toasty/schema/</div>jiff.rs</h1><rustdoc-toolbar></rustdoc-toolbar></div><div class="example-wrap digits-3"><pre class="rust"><code><a href=#1 id=1 data-nosnippet>1</a><span class="kw">use super</span>::{Field, Load};
 <a href=#2 id=2 data-nosnippet>2</a><span class="kw">use </span><span class="kw">crate</span>::stmt::{Expr, List, Path};
 <a href=#3 id=3 data-nosnippet>3</a><span class="kw">use </span>toasty_core::{
 <a href=#4 id=4 data-nosnippet>4</a>    <span class="prelude-ty">Result</span>,
@@ -62,4 +62,92 @@
 <a href=#62 id=62 data-nosnippet>62</a><span class="macro">impl_jiff_field!</span>(jiff::civil::Date, Date, <span class="string">"jiff::civil::Date"</span>);
 <a href=#63 id=63 data-nosnippet>63</a><span class="macro">impl_jiff_field!</span>(jiff::civil::Time, Time, <span class="string">"jiff::civil::Time"</span>);
 <a href=#64 id=64 data-nosnippet>64</a><span class="macro">impl_jiff_field!</span>(jiff::civil::DateTime, DateTime, <span class="string">"jiff::civil::DateTime"</span>);
+<a href=#65 id=65 data-nosnippet>65</a>
+<a href=#66 id=66 data-nosnippet>66</a><span class="doccomment">/// No backend has a time zone column type, so a `TimeZone` has no `stmt::Type`
+<a href=#67 id=67 data-nosnippet>67</a>/// of its own — it is a `String` end to end, and these two functions are the
+<a href=#68 id=68 data-nosnippet>68</a>/// only place the encoding is defined.
+<a href=#69 id=69 data-nosnippet>69</a>///
+<a href=#70 id=70 data-nosnippet>70</a>/// The encoding is the RFC 9557 form a `Zoned` carries in its bracketed
+<a href=#71 id=71 data-nosnippet>71</a>/// annotation: an IANA identifier, a fixed offset, a POSIX TZ string, or
+<a href=#72 id=72 data-nosnippet>72</a>/// `Etc/Unknown`. jiff gives `TimeZone` neither `Display` nor `FromStr`.
+<a href=#73 id=73 data-nosnippet>73</a></span><span class="kw">static </span>PRINTER: ::jiff::fmt::temporal::DateTimePrinter =
+<a href=#74 id=74 data-nosnippet>74</a>    ::jiff::fmt::temporal::DateTimePrinter::new();
+<a href=#75 id=75 data-nosnippet>75</a>
+<a href=#76 id=76 data-nosnippet>76</a><span class="kw">static </span>PARSER: ::jiff::fmt::temporal::DateTimeParser = ::jiff::fmt::temporal::DateTimeParser::new();
+<a href=#77 id=77 data-nosnippet>77</a>
+<a href=#78 id=78 data-nosnippet>78</a><span class="doccomment">/// Printing canonicalizes `america/NEW_YORK` to `America/New_York`, so equal
+<a href=#79 id=79 data-nosnippet>79</a>/// zones store identical text.
+<a href=#80 id=80 data-nosnippet>80</a>///
+<a href=#81 id=81 data-nosnippet>81</a>/// Fails only for a zone with no text form, which jiff produces just for a
+<a href=#82 id=82 data-nosnippet>82</a>/// `TimeZone::system()` read from a non-symlinked `/etc/localtime`.
+<a href=#83 id=83 data-nosnippet>83</a></span><span class="kw">pub</span>(<span class="kw">crate</span>) <span class="kw">fn </span>time_zone_to_text(tz: <span class="kw-2">&amp;</span>::jiff::tz::TimeZone) -&gt; <span class="prelude-ty">Result</span>&lt;String&gt; {
+<a href=#84 id=84 data-nosnippet>84</a>    <span class="kw">let </span><span class="kw-2">mut </span>text = String::new();
+<a href=#85 id=85 data-nosnippet>85</a>
+<a href=#86 id=86 data-nosnippet>86</a>    PRINTER.print_time_zone(tz, <span class="kw-2">&amp;mut </span>text).map_err(|<span class="kw">_</span>| {
+<a href=#87 id=87 data-nosnippet>87</a>        toasty_core::Error::unsupported_feature(
+<a href=#88 id=88 data-nosnippet>88</a>            <span class="string">"this `jiff::tz::TimeZone` has no IANA identifier, fixed offset, \
+<a href=#89 id=89 data-nosnippet>89</a>             or POSIX rule string, so it cannot be stored"</span>,
+<a href=#90 id=90 data-nosnippet>90</a>        )
+<a href=#91 id=91 data-nosnippet>91</a>    })<span class="question-mark">?</span>;
+<a href=#92 id=92 data-nosnippet>92</a>
+<a href=#93 id=93 data-nosnippet>93</a>    <span class="prelude-val">Ok</span>(text)
+<a href=#94 id=94 data-nosnippet>94</a>}
+<a href=#95 id=95 data-nosnippet>95</a>
+<a href=#96 id=96 data-nosnippet>96</a><span class="doccomment">/// IANA identifiers resolve against jiff's global time zone database, so a
+<a href=#97 id=97 data-nosnippet>97</a>/// zone renamed between tzdb releases fails to load on a host carrying only
+<a href=#98 id=98 data-nosnippet>98</a>/// the other name.
+<a href=#99 id=99 data-nosnippet>99</a></span><span class="kw">fn </span>time_zone_from_text(text: <span class="kw-2">&amp;</span>str) -&gt; <span class="prelude-ty">Result</span>&lt;::jiff::tz::TimeZone&gt; {
+<a href=#100 id=100 data-nosnippet>100</a>    PARSER
+<a href=#101 id=101 data-nosnippet>101</a>        .parse_time_zone(text)
+<a href=#102 id=102 data-nosnippet>102</a>        .map_err(|e| toasty_core::Error::from_args(<span class="macro">format_args!</span>(<span class="string">"invalid time zone {text:?}: {e}"</span>)))
+<a href=#103 id=103 data-nosnippet>103</a>}
+<a href=#104 id=104 data-nosnippet>104</a>
+<a href=#105 id=105 data-nosnippet>105</a><span class="kw">impl </span>Load <span class="kw">for </span>::jiff::tz::TimeZone {
+<a href=#106 id=106 data-nosnippet>106</a>    <span class="kw">type </span>Output = <span class="self">Self</span>;
+<a href=#107 id=107 data-nosnippet>107</a>
+<a href=#108 id=108 data-nosnippet>108</a>    <span class="kw">fn </span>ty() -&gt; Type {
+<a href=#109 id=109 data-nosnippet>109</a>        Type::String
+<a href=#110 id=110 data-nosnippet>110</a>    }
+<a href=#111 id=111 data-nosnippet>111</a>
+<a href=#112 id=112 data-nosnippet>112</a>    <span class="kw">fn </span>load(value: Value) -&gt; <span class="prelude-ty">Result</span>&lt;<span class="self">Self</span>&gt; {
+<a href=#113 id=113 data-nosnippet>113</a>        <span class="kw">match </span>value {
+<a href=#114 id=114 data-nosnippet>114</a>            Value::String(text) =&gt; time_zone_from_text(<span class="kw-2">&amp;</span>text),
+<a href=#115 id=115 data-nosnippet>115</a>            <span class="kw">_ </span>=&gt; <span class="prelude-val">Err</span>(toasty_core::Error::type_conversion(
+<a href=#116 id=116 data-nosnippet>116</a>                value,
+<a href=#117 id=117 data-nosnippet>117</a>                <span class="string">"jiff::tz::TimeZone"</span>,
+<a href=#118 id=118 data-nosnippet>118</a>            )),
+<a href=#119 id=119 data-nosnippet>119</a>        }
+<a href=#120 id=120 data-nosnippet>120</a>    }
+<a href=#121 id=121 data-nosnippet>121</a>
+<a href=#122 id=122 data-nosnippet>122</a>    <span class="kw">fn </span>reload(target: <span class="kw-2">&amp;mut </span><span class="self">Self</span>, value: Value) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#123 id=123 data-nosnippet>123</a>        <span class="kw-2">*</span>target = <span class="self">Self</span>::load(value)<span class="question-mark">?</span>;
+<a href=#124 id=124 data-nosnippet>124</a>        <span class="prelude-val">Ok</span>(())
+<a href=#125 id=125 data-nosnippet>125</a>    }
+<a href=#126 id=126 data-nosnippet>126</a>}
+<a href=#127 id=127 data-nosnippet>127</a>
+<a href=#128 id=128 data-nosnippet>128</a><span class="kw">impl </span>Field <span class="kw">for </span>::jiff::tz::TimeZone {
+<a href=#129 id=129 data-nosnippet>129</a>    <span class="kw">type </span>ExprTarget = <span class="self">Self</span>;
+<a href=#130 id=130 data-nosnippet>130</a>    <span class="kw">type </span>Path&lt;Origin&gt; = Path&lt;Origin, <span class="self">Self</span>&gt;;
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="kw">type </span>ListPath&lt;Origin&gt; = Path&lt;Origin, List&lt;<span class="self">Self</span>::ExprTarget&gt;&gt;;
+<a href=#132 id=132 data-nosnippet>132</a>    <span class="kw">type </span>Update&lt;<span class="lifetime">'a</span>&gt; = ();
+<a href=#133 id=133 data-nosnippet>133</a>    <span class="kw">type </span>Inner = <span class="self">Self</span>;
+<a href=#134 id=134 data-nosnippet>134</a>
+<a href=#135 id=135 data-nosnippet>135</a>    <span class="kw">fn </span>new_path&lt;Origin&gt;(path: Path&lt;Origin, <span class="self">Self</span>&gt;) -&gt; <span class="self">Self</span>::Path&lt;Origin&gt; {
+<a href=#136 id=136 data-nosnippet>136</a>        path
+<a href=#137 id=137 data-nosnippet>137</a>    }
+<a href=#138 id=138 data-nosnippet>138</a>
+<a href=#139 id=139 data-nosnippet>139</a>    <span class="kw">fn </span>new_list_path&lt;Origin&gt;(path: Path&lt;Origin, List&lt;<span class="self">Self</span>::ExprTarget&gt;&gt;) -&gt; <span class="self">Self</span>::ListPath&lt;Origin&gt; {
+<a href=#140 id=140 data-nosnippet>140</a>        path
+<a href=#141 id=141 data-nosnippet>141</a>    }
+<a href=#142 id=142 data-nosnippet>142</a>
+<a href=#143 id=143 data-nosnippet>143</a>    <span class="kw">fn </span>new_update&lt;<span class="lifetime">'a</span>&gt;(
+<a href=#144 id=144 data-nosnippet>144</a>        _assignments: <span class="kw-2">&amp;</span><span class="lifetime">'a </span><span class="kw-2">mut </span>toasty_core::stmt::Assignments,
+<a href=#145 id=145 data-nosnippet>145</a>        _projection: toasty_core::stmt::Projection,
+<a href=#146 id=146 data-nosnippet>146</a>    ) -&gt; <span class="self">Self</span>::Update&lt;<span class="lifetime">'a</span>&gt; {
+<a href=#147 id=147 data-nosnippet>147</a>    }
+<a href=#148 id=148 data-nosnippet>148</a>
+<a href=#149 id=149 data-nosnippet>149</a>    <span class="kw">fn </span>key_constraint&lt;Origin&gt;(<span class="kw-2">&amp;</span><span class="self">self</span>, target: Path&lt;Origin, <span class="self">Self</span>::Inner&gt;) -&gt; Expr&lt;bool&gt; {
+<a href=#150 id=150 data-nosnippet>150</a>        target.eq(<span class="self">self</span>)
+<a href=#151 id=151 data-nosnippet>151</a>    }
+<a href=#152 id=152 data-nosnippet>152</a>}
 </code></pre></div></section></main></body></html>
