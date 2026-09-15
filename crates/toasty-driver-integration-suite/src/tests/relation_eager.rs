@@ -314,7 +314,7 @@ pub async fn eager_belongs_to_upsert_or_ignore_returning_loads_relation(
 
     let created = created.expect("insert succeeded");
     assert_eq!(created.title, "hello");
-    assert_struct!(created.user, _ { id: == user.id, name: "Alice", .. });
+    assert_struct!(created.user, { id: == user.id, name: "Alice" });
 
     // On conflict the insert is ignored and the upsert returns `None`.
     let ignored = Post::upsert_by_id(post_id)

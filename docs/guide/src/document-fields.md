@@ -182,7 +182,9 @@ Current restrictions:
   document keys.
 - Relations cannot appear inside a document.
 - `jiff::Zoned` is rejected because its IANA time-zone annotation does
-  not have a supported document representation.
+  not have a supported document representation. A `jiff::tz::TimeZone`
+  leaf is supported: it stores as plain text and needs no cast back to
+  a temporal type.
 - `Vec<u8>` is rejected because JSON has no binary scalar type.
 - `#[column]` renames inside an embedded document are rejected because
   document keys use Rust field names.

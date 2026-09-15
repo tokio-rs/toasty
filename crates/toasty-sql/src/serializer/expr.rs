@@ -124,10 +124,16 @@ impl ToSql for &stmt::Expr {
                 fmt!(f, expr.lhs " " expr.op " ALL(" expr.rhs ")");
             }
             stmt::Expr::InSubquery(expr) => {
-                fmt!(f, expr.expr " IN (" expr.query ")");
+                let op = if expr.negated { " NOT IN (" } else { " IN (" };
+                fmt!(f, expr.expr op expr.query ")");
             }
             stmt::Expr::IsNull(expr) => {
-                fmt!(f, expr.expr " IS NULL");
+                let op = if expr.negated {
+                    " IS NOT NULL"
+                } else {
+                    " IS NULL"
+                };
+                fmt!(f, expr.expr op);
             }
             stmt::Expr::Like(expr) => {
                 let op = if expr.case_insensitive

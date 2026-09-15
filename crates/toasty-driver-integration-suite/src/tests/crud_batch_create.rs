@@ -133,7 +133,7 @@ pub async fn batch_create_many_auto_increment_requires_returning(test: &mut Test
         .await?;
 
     assert_struct!(items, [{ id: 10, name: "one" }, { id: 20, name: "two" }]);
-    assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None, .. }));
+    assert_struct!(test.log().pop_op(), Operation::Insert({ ret: None }));
     assert!(test.log().is_empty());
 
     Ok(())

@@ -38,6 +38,24 @@ impl Expand<'_> {
         let relation_methods = self.expand_model_relation_methods();
         let into_statement_body = self.expand_model_into_statement_body();
         let into_delete_body = self.expand_model_into_delete_body();
+        let field_count = self.model.fields.len();
+        let relation_fields = self
+            .model
+            .fields
+            .iter()
+            .enumerate()
+            .filter_map(|(index, field)| {
+                let FieldTy::Primitive(ty) = &field.ty else {
+                    return None;
+                };
+                let name = &field.name.ident;
+                let field_name = util::bare_ident_name(name);
+                Some(quote! {
+                    #field_name => record[#index] = #toasty::core::stmt::Expr::from(
+                        <#ty as #toasty::IntoExpr<FieldExprTarget<#ty>>>::by_ref(&self.#name)
+                    ),
+                })
+            });
         let into_expr_body_ref = self.expand_model_into_expr_body(true);
         let into_expr_body_val = self.expand_model_into_expr_body(false);
         let reload_trait_method = self.expand_reload_trait_method();
@@ -180,6 +198,20 @@ impl Expand<'_> {
             }
 
             impl #toasty::ModelCodegen for #model_ident {
+                fn to_relation_expr(&self, fields: &[&str]) -> #toasty::core::stmt::Expr {
+                    let mut record = ::std::vec![#toasty::core::stmt::Expr::null(); #field_count];
+                    for field in fields {
+                        match *field {
+                            #( #relation_fields )*
+                            _ => panic!("unknown relation target field: {}", field),
+                        }
+                    }
+                    #toasty::core::stmt::Expr::cast(
+                        #toasty::core::stmt::Expr::record_from_vec(record),
+                        #toasty::core::stmt::Type::Model(<Self as #toasty::Model>::id()),
+                    )
+                }
+
                 fn new_one_field<__Origin>(
                     path: #toasty::Path<__Origin, Self>,
                 ) -> Self::OneField<__Origin> {
@@ -465,54 +497,52 @@ impl Expand<'_> {
     ) -> TokenStream {
         let toasty = &self.toasty;
 
-        // For embedded types, create a record expression from all fields
-        let field_exprs = self.model.fields.iter().enumerate().map(|(index, field)| {
-            let ty = match &field.ty {
-                FieldTy::Primitive(ty) => ty,
-                FieldTy::BelongsTo(_) => {
-                    // The relation slot encodes as `Null`; the sibling key
-                    // fields carry the storage.
-                    let access = if fields_named {
-                        let field_ident = &field.name.ident;
-                        quote!(self.#field_ident)
-                    } else {
-                        let idx = syn::Index::from(index);
-                        quote!(self.#idx)
-                    };
-                    return quote!(#toasty::embedded_relation_expr(&#access));
-                }
-                _ => panic!("only primitive and belongs_to fields are supported in embedded types"),
-            };
-
-            let value = if fields_named {
-                let field_ident = &field.name.ident;
-                quote!(self.#field_ident)
+        let fields: Vec<&crate::model::schema::Field> = self.model.fields.iter().collect();
+        let field_exprs = self.expand_embedded_field_exprs(&fields, by_ref, |field| {
+            if fields_named {
+                let ident = &field.name.ident;
+                quote!(self.#ident)
             } else {
-                let idx = syn::Index::from(index);
-                quote!(self.#idx)
-            };
-
-            // Bind through `Field::ExprTarget` so wrappers such as
-            // `Deferred<T>` encode the underlying expression type.
-            let target_ty = quote!(FieldExprTarget<#ty>);
-            if by_ref {
-                quote!({
-                    let expr: #toasty::core::stmt::Expr =
-                        <#ty as #toasty::IntoExpr<#target_ty>>::by_ref(&#value).into();
-                    expr
-                })
-            } else {
-                quote!(#toasty::into_untyped_expr::<#target_ty, _>(#value))
+                let index = syn::Index::from(field.id);
+                quote!(self.#index)
             }
         });
 
-        quote! {
-            #toasty::stmt::Expr::from_untyped(
-                #toasty::core::stmt::Expr::record([
-                    #( #field_exprs ),*
-                ])
-            )
-        }
+        let record = self.expand_embedded_record(quote! {
+            #toasty::core::stmt::Expr::record([ #( #field_exprs ),* ])
+        });
+        quote!(#toasty::stmt::Expr::from_untyped(#record))
+    }
+
+    /// Encodes embedded fields, retaining relation expressions for the engine.
+    pub(super) fn expand_embedded_field_exprs(
+        &self,
+        fields: &[&crate::model::schema::Field],
+        by_ref: bool,
+        access: impl Fn(&crate::model::schema::Field) -> TokenStream,
+    ) -> Vec<TokenStream> {
+        let toasty = &self.toasty;
+        fields
+            .iter()
+            .map(|field| {
+                let value = access(field);
+                let ty = match &field.ty {
+                    FieldTy::Primitive(ty) => ty,
+                    FieldTy::BelongsTo(rel) => {
+                        let targets = rel.foreign_key.iter().map(|fk| util::bare_ident_name(&fk.target));
+                        return quote!(#toasty::embedded_relation_expr(&#value, &[ #( #targets ),* ]));
+                    }
+                    _ => unreachable!("unsupported embedded field type"),
+                };
+                if by_ref {
+                    quote!(#toasty::core::stmt::Expr::from(
+                        <#ty as #toasty::IntoExpr<FieldExprTarget<#ty>>>::by_ref(&#value)
+                    ))
+                } else {
+                    quote!(#toasty::into_untyped_expr::<FieldExprTarget<#ty>, _>(#value))
+                }
+            })
+            .collect()
     }
 
     /// Generates the body for loading a model or embedded type from a Value.

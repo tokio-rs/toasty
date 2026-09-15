@@ -249,7 +249,7 @@ impl LowerStatement<'_, '_> {
         };
 
         for (variant_idx, arm) in match_expr.arms.iter_mut().enumerate() {
-            let variant_fields: Vec<&app::Field> = app_enum.variant_fields(variant_idx).collect();
+            let variant_fields = app_enum.variant_fields(variant_idx);
             if variant_fields.is_empty() {
                 continue;
             }

@@ -6,6 +6,7 @@ mod lift_in_subquery;
 mod lift_update_query;
 mod paginate;
 mod relation;
+pub(super) mod relation_expr;
 mod relation_path;
 mod returning;
 mod via_join;
@@ -106,6 +107,8 @@ impl LoweringState<'_> {
             .rewrite(&mut stmt);
         lift_update_query::LiftUpdateQuery::new().rewrite(&mut stmt);
 
+        // Combine compatible IN subqueries after relation lifting and before
+        // the lowering walk extracts them into separate NoSQL statements.
         Simplify::with_context(expr_cx, &self.engine.capability).visit_mut(&mut stmt);
 
         let stmt_id = self.hir.new_statement_info(
@@ -702,6 +705,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
     }
 
     fn visit_expr_mut(&mut self, expr: &mut stmt::Expr) {
+        self.plan_typed_record_relations(expr);
         match expr {
             stmt::Expr::BinaryOp(e) => {
                 self.visit_expr_binary_op_mut(e);
@@ -819,11 +823,16 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
 
                     let arg = self.new_sub_statement(source_id, target_id, Box::new(stmt));
 
-                    *expr = stmt::ExprInList {
+                    let membership: stmt::Expr = stmt::ExprInList {
                         expr: e.expr,
                         list: Box::new(arg),
                     }
                     .into();
+                    *expr = if e.negated {
+                        stmt::Expr::not(membership)
+                    } else {
+                        membership
+                    };
                 }
             }
             stmt::Expr::IsVariant(e) => {
@@ -839,19 +848,48 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                 // Lower the inner expression
                 self.visit_expr_mut(&mut e.expr);
 
-                let lowered_expr = e.expr.take();
+                let lowered_expr = collapse_projections(e.expr.take());
 
                 // Emit the appropriate comparison
-                if has_data {
-                    // Data-carrying: project([0]) to extract discriminant from Record
-                    *expr = stmt::Expr::eq(
+                *expr = match lowered_expr {
+                    // Data-carrying, lowered to the enum's decode: compare
+                    // the decode's subject, the discriminant column, rather
+                    // than distributing a `project([0])` over the arms — a
+                    // unit variant's arm is the bare discriminant, which
+                    // cannot be projected into.
+                    stmt::Expr::Match(decode) if has_data => {
+                        stmt::Expr::eq(*decode.subject, stmt::Expr::Value(disc_value))
+                    }
+                    // Data-carrying, in value form: project([0]) to extract
+                    // the discriminant from the record.
+                    lowered_expr if has_data => stmt::Expr::eq(
                         stmt::Expr::project(lowered_expr, [0usize]),
                         stmt::Expr::Value(disc_value),
-                    );
-                } else {
+                    ),
                     // Unit-only: compare directly
-                    *expr = stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value));
-                }
+                    lowered_expr => stmt::Expr::eq(lowered_expr, stmt::Expr::Value(disc_value)),
+                };
+            }
+            stmt::Expr::Variant(e) => {
+                // The selected variant's payload. The base lowers to the
+                // enum's decode — a `Match` on the discriminant column whose
+                // arms hold `Record([disc, field columns...])` — and the
+                // selection takes the matching arm's fields, discriminant
+                // dropped, so the projections above it index the variant's
+                // fields directly. No check is emitted here: the predicate
+                // carries its own `is_variant` guard, lowered separately.
+                let disc_value = self
+                    .schema()
+                    .app
+                    .model(e.variant.model)
+                    .as_embedded_enum_unwrap()
+                    .variants[e.variant.index]
+                    .discriminant
+                    .clone();
+
+                self.visit_expr_mut(&mut e.base);
+
+                *expr = variant_payload(e.base.take(), &disc_value);
             }
             stmt::Expr::Project(project)
                 if let stmt::Expr::Incoming(stmt::ExprIncoming::Model(model)) =
@@ -881,10 +919,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // every flattened column. The head column is `NULL` for `None`, so
             // for `Account::fields().contact().is_none()` (an `Option<enum>`)
             // this emits `contact IS NULL` rather than checking each variant
-            // column. `.is_some()` arrives as `Not(IsNull(..))`, so the
-            // surrounding `Not` yields `contact IS NOT NULL`. Scalar `Option`
-            // and non-nullable fields fall through to the normal reference
-            // lowering below.
+            // column. Normalization expands `.is_some()` to `Not(IsNull(..))`,
+            // so the surrounding `Not` yields `contact IS NOT NULL`. Scalar
+            // `Option` and non-nullable fields fall through to the normal
+            // reference lowering below.
             //
             // Only fires for WHERE-clause predicates (`Statement` context),
             // where a field reference lowers to a column. The `model_to_table`
@@ -894,6 +932,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             // intercept it. (The UPDATE encode substitutes the value before
             // re-visiting, so the inner is no longer a field reference there.)
             stmt::Expr::IsNull(e) => {
+                let negated = e.negated;
                 let head_column = match &*e.expr {
                     stmt::Expr::Reference(stmt::ExprReference::Field { nesting, index })
                         if self.cx.is_statement() =>
@@ -923,7 +962,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                         column,
                     });
                     self.visit_expr_mut(&mut col_ref);
-                    *expr = stmt::Expr::is_null(col_ref);
+                    *expr = if negated {
+                        stmt::Expr::is_not_null(col_ref)
+                    } else {
+                        stmt::Expr::is_null(col_ref)
+                    };
                 } else {
                     stmt::visit_mut::visit_expr_mut(self, expr);
                 }
@@ -1359,55 +1402,89 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
     ///
     /// `Reference::Model { nesting }` becomes a reference to the model's
     /// primary-key field; a `BelongsTo` field reference becomes a reference
-    /// to the relation's foreign-key field.  Both rewrites only match on
-    /// app-level shapes; after the surrounding lowering walk converts the
-    /// references to columns, this method has nothing to rewrite.
+    /// to the relation's foreign-key field; a path to a `belongs_to` inside
+    /// an embedded type becomes the projection of its key field(s). All
+    /// rewrites only match on app-level shapes; after the surrounding
+    /// lowering walk converts the references to columns, this method has
+    /// nothing to rewrite.
     ///
     /// Must fire before the operand's children are visited, since lowering
     /// otherwise replaces the field reference with a column reference and
     /// the rewrite has no app-level shape to match on.
     fn rewrite_eq_operand(&self, operand: &mut stmt::Expr) {
-        if let stmt::Expr::Reference(expr_reference) = operand {
-            match &*expr_reference {
-                stmt::ExprReference::Model { nesting } => {
-                    let nesting = *nesting;
-                    let model = self
-                        .expr_cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_model_unwrap();
+        let stmt::Expr::Reference(expr_reference) = operand else {
+            self.rewrite_embedded_relation_operand(operand);
+            return;
+        };
 
-                    *operand = key_field_refs(nesting, model.primary_key.fields.iter().copied());
-                }
-                stmt::ExprReference::Field { nesting, .. } => {
-                    let nesting = *nesting;
-                    let field = self
-                        .expr_cx
-                        .resolve_expr_reference(expr_reference)
-                        .as_field_unwrap();
+        match &*expr_reference {
+            stmt::ExprReference::Model { nesting } => {
+                let nesting = *nesting;
+                let model = self
+                    .expr_cx
+                    .resolve_expr_reference(expr_reference)
+                    .as_model_unwrap();
 
-                    match &field.ty {
-                        app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
-                        app::FieldTy::Has(_) | app::FieldTy::Via(_) => todo!(),
-                        app::FieldTy::BelongsTo(rel) => {
-                            *operand = key_field_refs(
-                                nesting,
-                                rel.foreign_key.fields.iter().map(|fk| fk.source),
-                            );
-                        }
+                *operand = key_field_refs(nesting, model.primary_key.fields.iter().copied());
+            }
+            stmt::ExprReference::Field { nesting, .. } => {
+                let nesting = *nesting;
+                let field = self
+                    .expr_cx
+                    .resolve_expr_reference(expr_reference)
+                    .as_field_unwrap();
+
+                match &field.ty {
+                    app::FieldTy::Primitive(_) | app::FieldTy::Embedded(_) => {}
+                    app::FieldTy::Has(_) | app::FieldTy::Via(_) => todo!(),
+                    app::FieldTy::BelongsTo(rel) => {
+                        *operand = key_field_refs(
+                            nesting,
+                            rel.foreign_key.fields.iter().map(|fk| fk.source),
+                        );
                     }
                 }
-                _ => {}
             }
+            _ => {}
+        }
+    }
+
+    /// Substitute the projection of the relation's key field(s) for a path
+    /// ending at a `belongs_to` inside an embedded type, in place. The
+    /// analogue of `rewrite_eq_operand`'s `BelongsTo` arm for relations
+    /// inside embedded types; a path continuing into the relation's target
+    /// is a predicate on the target, lifted by `LiftInSubquery` before
+    /// lowering. The key expression keeps the path's variant selections, so
+    /// the `is_variant` guards the typed layer fixed next to the comparison
+    /// still scope it (see `relation_expr::resolve`).
+    ///
+    /// Returns whether the operand was substituted.
+    fn rewrite_embedded_relation_operand(&self, operand: &mut stmt::Expr) -> bool {
+        if let Some(relation) = relation_expr::resolve(&self.expr_cx, operand)
+            && relation.is_endpoint()
+            && let Some(key_expr) = relation.key_expr()
+        {
+            *operand = key_expr;
+            true
+        } else {
+            false
         }
     }
 
     /// App-level rewrite for the LHS of an `IN`-list expression:
-    /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`.
+    /// `Reference::Model { nesting } IN list` becomes `<pk_field> IN list`,
+    /// and `<embedded-relation-path> IN list` becomes
+    /// `<key projection> IN list`. The list holds model values, which the
+    /// typed layer already reduced to their keys.
     ///
     /// Must fire before the LHS is walked, since walking lowers the model
     /// reference into a column reference and the rewrite has nothing to
     /// match on.
     fn rewrite_in_list_model_operand(&self, expr: &mut stmt::ExprInList) {
+        if self.rewrite_embedded_relation_operand(&mut expr.expr) {
+            return;
+        }
+
         let (nesting, pk_field_id) = {
             let stmt::Expr::Reference(expr_ref @ stmt::ExprReference::Model { nesting }) =
                 &*expr.expr
@@ -1498,7 +1575,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     .collect();
                 Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
             }
-            (stmt::Expr::Cast(expr_cast), _) | (_, stmt::Expr::Cast(expr_cast)) => {
+            (stmt::Expr::Cast(expr_cast), other) | (other, stmt::Expr::Cast(expr_cast)) => {
+                // An embedded-enum decode (`Match`, possibly under a
+                // projection) on the other side cannot be cast mid-lower;
+                // post-lower simplify eliminates the match into
+                // variant-gated terms and strips the decode casts
+                // (`eliminate_match_in_binary_op`,
+                // `simplify_expr_in_subquery`).
+                if expr_is_enum_decode(other) {
+                    return None;
+                }
+
                 let target_ty = self.capability().native_type_for(&expr_cast.ty);
                 self.cast_expr(lhs, &target_ty);
                 self.cast_expr(rhs, &target_ty);
@@ -1559,89 +1646,74 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         expr: &mut stmt::Expr,
         list: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
-        match (&mut *expr, list) {
-            (expr, stmt::Expr::Map(expr_map)) => {
-                assert!(expr_map.base.is_arg(), "TODO");
-                let maybe_res =
-                    self.lower_expr_binary_op(stmt::BinaryOp::Eq, expr, &mut expr_map.map);
+        if in_list_requires_equality_expansion(expr)
+            && let Some(items) = take_in_list_items(list)
+        {
+            return Some(self.expand_in_list_equalities(expr, items));
+        }
 
-                assert!(maybe_res.is_none(), "TODO");
-                None
-            }
-            (stmt::Expr::Cast(expr_cast), list) => {
-                let target_ty = self.capability().native_type_for(&expr_cast.ty);
-                self.cast_expr(expr, &target_ty);
+        if let stmt::Expr::Map(map) = list {
+            self.lower_mapped_in_list(expr, map);
+            return None;
+        }
 
-                match list {
-                    stmt::Expr::List(expr_list) => {
-                        for item in &mut expr_list.items {
-                            self.cast_expr(item, &target_ty);
-                        }
-                    }
-                    stmt::Expr::Value(stmt::Value::List(items)) => {
-                        for item in items {
-                            *item = target_ty
-                                .cast(self.expr_cx.schema(), item.take())
-                                .expect("failed to cast value");
-                        }
-                    }
-                    stmt::Expr::Arg(_) => {
-                        let arg = list.take();
-                        let cast = stmt::Expr::cast(stmt::Expr::arg(0), target_ty);
-                        *list = stmt::Expr::map(arg, cast);
-                    }
-                    _ => todo!("expr={expr:#?}; list={list:#?}"),
-                }
+        if matches!(expr, stmt::Expr::Cast(_)) {
+            self.lower_cast_in_list(expr, list);
+            return None;
+        }
 
-                None
-            }
-            (stmt::Expr::Record(lhs), stmt::Expr::List(list)) => {
-                for lhs in lhs {
-                    assert!(lhs.is_column());
-                }
+        assert_lowered_in_list(expr, list);
+        None
+    }
 
+    fn expand_in_list_equalities(
+        &mut self,
+        expr: &stmt::Expr,
+        items: Vec<stmt::Expr>,
+    ) -> stmt::Expr {
+        let equalities = items.into_iter().map(|mut item| {
+            let mut expr = expr.clone();
+            self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut expr, &mut item)
+                .unwrap_or_else(|| stmt::Expr::eq(expr, item))
+        });
+
+        stmt::Expr::or_from_vec(equalities.collect())
+    }
+
+    fn lower_mapped_in_list(&mut self, expr: &mut stmt::Expr, map: &mut stmt::ExprMap) {
+        assert!(map.base.is_arg(), "TODO");
+
+        let lowered = self.lower_expr_binary_op(stmt::BinaryOp::Eq, expr, &mut map.map);
+        assert!(lowered.is_none(), "TODO");
+    }
+
+    fn lower_cast_in_list(&mut self, expr: &mut stmt::Expr, list: &mut stmt::Expr) {
+        let stmt::Expr::Cast(cast) = expr else {
+            unreachable!()
+        };
+        let target_ty = self.capability().native_type_for(&cast.ty);
+
+        self.cast_expr(expr, &target_ty);
+
+        match list {
+            stmt::Expr::List(list) => {
                 for item in &mut list.items {
-                    assert!(item.is_value());
+                    self.cast_expr(item, &target_ty);
                 }
-
-                None
             }
-            (stmt::Expr::Record(lhs), stmt::Expr::Value(stmt::Value::List(_))) => {
-                for lhs in lhs {
-                    assert!(lhs.is_column());
+            stmt::Expr::Value(stmt::Value::List(items)) => {
+                for item in items {
+                    *item = target_ty
+                        .cast(self.expr_cx.schema(), item.take())
+                        .expect("failed to cast value");
                 }
-
-                None
             }
-            (stmt::Expr::Reference(expr_reference), list) => {
-                assert!(expr_reference.is_column());
-
-                match list {
-                    stmt::Expr::Value(stmt::Value::List(_)) => {}
-                    stmt::Expr::List(list) => {
-                        for item in &list.items {
-                            assert!(item.is_value());
-                        }
-                    }
-                    _ => panic!("invalid; should have been caught earlier"),
-                }
-
-                None
+            stmt::Expr::Arg(_) => {
+                let arg = list.take();
+                let cast = stmt::Expr::cast(stmt::Expr::arg(0), target_ty);
+                *list = stmt::Expr::map(arg, cast);
             }
-            (stmt::Expr::Project(_), list) => {
-                match list {
-                    stmt::Expr::Value(stmt::Value::List(_)) => {}
-                    stmt::Expr::List(list) => {
-                        for item in &list.items {
-                            assert!(item.is_value());
-                        }
-                    }
-                    _ => panic!("invalid; should have been caught earlier"),
-                }
-
-                None
-            }
-            (expr, list) => todo!("expr={expr:#?}; list={list:#?}"),
+            _ => todo!("expr={expr:#?}; list={list:#?}"),
         }
     }
 
@@ -1815,8 +1887,8 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 child.state.engine.capability.sql(),
             )
             .rewrite(&mut stmt);
-            // Pre-lower simplify: remaining heavyweight rules the lowering
-            // visitor expects to have already fired.
+            // Combine compatible IN subqueries before the lowering walk
+            // extracts them into separate NoSQL statements.
             Simplify::with_context(child.expr_cx, &child.state.engine.capability)
                 .visit_mut(&mut *stmt);
             // Lowering walk.
@@ -2034,10 +2106,17 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                     .expect("failed to cast value");
                 *value = casted;
             }
-            stmt::Expr::Project(_) => {
-                todo!()
-                // let base = expr.take();
-                // *expr = stmt::Expr::cast(base, target_ty.clone());
+            stmt::Expr::Project(expr_project) => {
+                // A projection into an embedded field's lowered record —
+                // e.g. the key of a relation stored in an embedded type, as
+                // the LHS of a lifted FK IN-subquery. Collapse the
+                // projection and recurse; the collapsed entry is typically
+                // the column's decode cast, which the Cast arm strips.
+                let Some(entry) = expr_project.base.entry(&expr_project.projection) else {
+                    todo!("cast_expr: cannot collapse projection: {expr_project:#?}")
+                };
+                *expr = entry.to_expr();
+                self.cast_expr(expr, target_ty);
             }
             stmt::Expr::Arg(_) => {
                 // Create a cast expression for the arg
@@ -2070,6 +2149,62 @@ impl LoweringContext<'_> {
 /// `lower_expr_binary_op`'s `Record == Record` handler) and for composite
 /// FK IN-subquery comparisons (where the tuple LHS pairs with a tuple
 /// projection on the RHS).
+/// Whether an expression is an embedded-enum decode — a `Match` over the
+/// discriminant, possibly under a projection selecting a record slot.
+fn expr_is_enum_decode(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Match(_) => true,
+        stmt::Expr::Project(project) => expr_is_enum_decode(&project.base),
+        _ => false,
+    }
+}
+
+/// Collapse projections into a lowered record — an embed lowers to
+/// `Record([..])` of its fields' expressions — so the expression at the
+/// projected position is exposed. Stops at a projection that cannot be
+/// collapsed (a base that is not a record).
+fn collapse_projections(mut expr: stmt::Expr) -> stmt::Expr {
+    while let stmt::Expr::Project(project) = &expr {
+        let Some(entry) = project.base.entry(&project.projection) else {
+            break;
+        };
+        expr = entry.to_expr();
+    }
+    expr
+}
+
+/// The payload of a lowered enum value as the variant with discriminant
+/// `disc_value`: the variant's field expressions, without the discriminant.
+///
+/// A lowered enum is its decode `Match` — possibly under projections into
+/// the lowered record of an enclosing embed, which collapse to expose it —
+/// or, for a value row, the encoded record itself. Slot 0 of an arm's record
+/// (and of a value record) is the discriminant; a unit variant's arm is the
+/// bare discriminant and has an empty payload.
+fn variant_payload(lowered: stmt::Expr, disc_value: &stmt::Value) -> stmt::Expr {
+    match collapse_projections(lowered) {
+        stmt::Expr::Match(match_expr) => {
+            let arm = match_expr
+                .arms
+                .into_iter()
+                .find(|arm| arm.pattern == *disc_value)
+                .expect("enum decode has an arm per variant");
+
+            match arm.expr {
+                stmt::Expr::Record(record) => stmt::Expr::record(record.fields.into_iter().skip(1)),
+                _ => stmt::Expr::record(Vec::<stmt::Expr>::new()),
+            }
+        }
+        stmt::Expr::Value(stmt::Value::Record(record))
+            if record.fields.first() == Some(disc_value) =>
+        {
+            stmt::Expr::record(record.fields.into_iter().skip(1).map(stmt::Expr::Value))
+        }
+        stmt::Expr::Value(_) => stmt::Expr::error("value is not the selected variant"),
+        lowered => todo!("variant selection on lowered expression {lowered:#?}"),
+    }
+}
+
 pub(super) fn key_field_refs(
     nesting: usize,
     mut fields: impl ExactSizeIterator<Item = app::FieldId>,
@@ -2108,7 +2243,12 @@ impl stmt::Input for AssignmentInput<'_> {
 
         let remaining_steps = &assignment_steps[1..];
 
-        if expr_projection.as_slice() == remaining_steps {
+        // The assignment value sits at `remaining_steps` below the field;
+        // a template projection outside that subtree refers to a sibling
+        // this assignment does not cover.
+        let inner_steps = expr_projection.as_slice().strip_prefix(remaining_steps)?;
+
+        if inner_steps.is_empty() {
             Some(self.value.clone())
         } else {
             // The column's encode template projects into variant-field
@@ -2121,7 +2261,7 @@ impl stmt::Input for AssignmentInput<'_> {
             // the simplifier drops the dead arm.
             Some(
                 self.value
-                    .entry(expr_projection)
+                    .entry(&stmt::Projection::from(inner_steps))
                     .map(|e| e.to_expr())
                     .unwrap_or_else(stmt::Expr::null),
             )
@@ -2203,6 +2343,49 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
+}
+
+/// Returns whether `IN` must use the same per-value lowering as equality.
+fn in_list_requires_equality_expansion(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Match(_) => true,
+        stmt::Expr::Record(record) => record.fields.iter().any(|field| !field.is_column()),
+        _ => false,
+    }
+}
+
+/// Takes the expressions from a literal `IN` list.
+fn take_in_list_items(list: &mut stmt::Expr) -> Option<Vec<stmt::Expr>> {
+    match list {
+        stmt::Expr::List(list) => Some(std::mem::take(&mut list.items)),
+        stmt::Expr::Value(stmt::Value::List(items)) => Some(
+            std::mem::take(items)
+                .into_iter()
+                .map(stmt::Expr::Value)
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+/// Asserts that both operands have reached a driver-level `IN` form.
+fn assert_lowered_in_list(expr: &stmt::Expr, list: &stmt::Expr) {
+    match expr {
+        stmt::Expr::Record(record) => {
+            assert!(record.fields.iter().all(stmt::Expr::is_column));
+        }
+        stmt::Expr::Reference(reference) => assert!(reference.is_column()),
+        stmt::Expr::Project(_) => {}
+        _ => todo!("expr={expr:#?}; list={list:#?}"),
+    }
+
+    match list {
+        stmt::Expr::Value(stmt::Value::List(_)) => {}
+        stmt::Expr::List(list) => {
+            assert!(list.items.iter().all(stmt::Expr::is_value));
+        }
+        _ => panic!("invalid; should have been caught earlier"),
+    }
 }
 
 /// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:

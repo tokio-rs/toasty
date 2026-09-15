@@ -5,13 +5,13 @@ mod deferred;
 pub use deferred::Deferred;
 
 mod embed;
-pub use embed::Embed;
+pub use embed::{Embed, EmbedCreate};
 
 mod field;
 pub use field::{Document, Field, Scalar};
 
 #[cfg(feature = "jiff")]
-mod jiff;
+pub(crate) mod jiff;
 
 #[cfg(feature = "net")]
 mod net;

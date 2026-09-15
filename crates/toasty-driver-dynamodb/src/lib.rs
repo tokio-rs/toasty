@@ -479,7 +479,11 @@ fn ddb_expression(
                 }
                 other => ddb_expression(cx, attrs, primary, other),
             };
-            format!("attribute_not_exists({inner})")
+            if expr_is_null.negated {
+                format!("attribute_exists({inner})")
+            } else {
+                format!("attribute_not_exists({inner})")
+            }
         }
         stmt::Expr::Not(expr_not) => {
             let inner = ddb_expression(cx, attrs, primary, &expr_not.expr);

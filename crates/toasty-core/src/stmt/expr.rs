@@ -5,7 +5,7 @@ use super::{
     ExprBinaryOp, ExprCast, ExprError, ExprFunc, ExprInList, ExprInSubquery, ExprIncoming,
     ExprIntersects, ExprIsNull, ExprIsSuperset, ExprIsVariant, ExprLength, ExprLet, ExprLike,
     ExprList, ExprMap, ExprMatch, ExprNot, ExprOr, ExprProject, ExprRecord, ExprStartsWith,
-    ExprStmt, Node, Projection, Resolve, Substitute, Type, Value, Visit, VisitMut,
+    ExprStmt, ExprVariant, Node, Projection, Resolve, Substitute, Type, Value, Visit, VisitMut,
     expr_reference::ExprReference,
 };
 use std::fmt;
@@ -162,6 +162,9 @@ pub enum Expr {
     /// Use it for values the statement itself fixes. `.first()` emits its
     /// `LIMIT 1` this way. Caller-supplied values use [`Expr::Value`].
     Static(Value),
+
+    /// Selects a variant of an embedded enum value. See [`ExprVariant`].
+    Variant(ExprVariant),
 }
 
 impl Expr {
@@ -406,6 +409,7 @@ impl Expr {
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_stable()),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_stable(),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_stable(),
+            Self::Variant(expr_variant) => expr_variant.base.is_stable(),
             Self::Not(expr_not) => expr_not.expr.is_stable(),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_stable() && expr_in_list.list.is_stable()
@@ -528,6 +532,7 @@ impl Expr {
             Self::Or(expr_or) => expr_or.iter().all(|expr| expr.is_const_at_depth(map_depth)),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_const_at_depth(map_depth),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_const_at_depth(map_depth),
+            Self::Variant(expr_variant) => expr_variant.base.is_const_at_depth(map_depth),
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_const_at_depth(map_depth)
                     && expr_in_list.list.is_const_at_depth(map_depth)
@@ -615,6 +620,9 @@ impl Expr {
             Self::Not(expr_not) => expr_not.expr.is_eval(),
             Self::IsNull(expr_is_null) => expr_is_null.expr.is_eval(),
             Self::IsVariant(expr_is_variant) => expr_is_variant.expr.is_eval(),
+            // A variant selection is resolved by lowering; the evaluator
+            // never sees one.
+            Self::Variant(_) => false,
             Self::InList(expr_in_list) => {
                 expr_in_list.expr.is_eval() && expr_in_list.list.is_eval()
             }
@@ -802,6 +810,7 @@ impl fmt::Debug for Expr {
             Self::IsNull(e) => e.fmt(f),
             Self::IsSuperset(e) => e.fmt(f),
             Self::IsVariant(e) => e.fmt(f),
+            Self::Variant(e) => e.fmt(f),
             Self::Length(e) => e.fmt(f),
             Self::Let(e) => e.fmt(f),
             Self::Like(e) => e.fmt(f),
