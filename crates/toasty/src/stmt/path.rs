@@ -792,7 +792,7 @@ where
     /// assert_eq!(name, "name");
     /// ```
     pub fn field_name(&self) -> String {
-        let models = Self::registered_models();
+        let models = Self::reachable_models();
         let (leaf, _) = Self::resolve_path_or_panic(&models, &self.untyped);
         leaf.name
             .app
@@ -835,7 +835,7 @@ where
     /// assert!(User::fields().id().is_unique());
     /// ```
     pub fn is_unique(&self) -> bool {
-        let models = Self::registered_models();
+        let models = Self::reachable_models();
         let (field, document) = Self::resolve_path_or_panic(&models, &self.untyped);
         if document.is_some() {
             return false;
@@ -867,12 +867,12 @@ where
         })
     }
 
-    /// Collects the model set rooted at `T` so field lookups can walk into
+    /// Collects the models reachable from `T` so field lookups can walk into
     /// embedded models. Built per call: there is no global registry, and
     /// `T::register` rebuilds the schema of every reachable model, so the
     /// metadata accessors built on this are for one-off use, not per-row
     /// loops.
-    fn registered_models() -> app::ModelSet {
+    fn reachable_models() -> app::ModelSet {
         let mut models = app::ModelSet::new();
         T::register(&mut models);
         models
