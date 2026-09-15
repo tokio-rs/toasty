@@ -141,6 +141,9 @@ pub mod migration;
 pub mod schema;
 pub use schema::Deferred;
 
+#[doc(hidden)]
+pub mod schema_dump;
+
 // `Page` lives in `stmt`.
 
 /// Typed statement, expression, and query builder types.

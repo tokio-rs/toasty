@@ -147,6 +147,6 @@ let mut db = toasty::Db::builder()
     .await?;
 ```
 
-> **Runnable example:** [`service-ops`] lays out a lib + binaries project with connection pooling, tracing, and the `toasty-cli` migration workflow.
+> **Runnable example:** [`service-ops`] lays out a lib + binary project with connection pooling, tracing, and migrations managed with the `toasty` CLI.
 
 [`service-ops`]: https://github.com/tokio-rs/toasty/tree/main/examples/service-ops

@@ -1,4 +1,4 @@
-use crate::Config;
+use crate::Project;
 use anyhow::Result;
 use clap::Parser;
 use console::style;
@@ -17,29 +17,35 @@ use toasty::schema::db::Migration;
 /// If no pending migrations are found, the command prints a message and exits
 /// without modifying the database.
 #[derive(Parser, Debug)]
-pub struct ApplyCommand {}
+pub struct ApplyCommand {
+    /// Database URL to apply migrations to
+    #[arg(long, env = "DATABASE_URL")]
+    url: String,
+}
 
 impl ApplyCommand {
-    pub(crate) async fn run(self, db: &Db, config: &Config) -> Result<()> {
+    pub(crate) async fn run(self, project: &Project) -> Result<()> {
         println!();
         println!("  {}", style("Apply Migrations").cyan().bold().underlined());
         println!();
+
+        let db = crate::utility::connect(&self.url).await?;
         println!(
             "  {}",
             style(format!(
                 "Connected to {}",
-                crate::utility::redact_url_password(&db.driver().url())
+                crate::utility::redact_url_password(&self.url)
             ))
             .dim()
         );
         println!();
 
-        apply_migrations(db, config).await
+        apply_migrations(&db, project).await
     }
 }
 
-pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
-    let history_path = config.migration.get_history_file_path();
+pub(crate) async fn apply_migrations(db: &Db, project: &Project) -> Result<()> {
+    let history_path = project.history_file_path();
 
     // Load migration history
     let history = History::load_or_default(&history_path)?;
@@ -93,10 +99,7 @@ pub(crate) async fn apply_migrations(db: &Db, config: &Config) -> Result<()> {
 
     // Apply each pending migration
     for migration_entry in &pending_migrations {
-        let migration_path = config
-            .migration
-            .get_migrations_dir()
-            .join(&migration_entry.name);
+        let migration_path = project.migrations_dir().join(&migration_entry.name);
 
         println!(
             "  {} Applying migration: {}",
