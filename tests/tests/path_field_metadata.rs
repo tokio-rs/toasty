@@ -1,6 +1,6 @@
 //! `Path` field-metadata accessors: app name, nullability, and single-field
-//! uniqueness — including nested embedded and enum-variant projections — plus
-//! the `CorePath` re-export.
+//! uniqueness — including nested embedded, enum-variant, and relation
+//! projections — plus the `CorePath` re-export.
 
 use toasty::schema::{Embed, Model};
 use toasty::stmt::CorePath;
@@ -128,6 +128,29 @@ struct Post {
     #[belongs_to(key = author_id, references = id)]
     author: toasty::Deferred<Author>,
     title: String,
+}
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct Article {
+    #[key]
+    id: i64,
+    #[has_many]
+    tags: toasty::Deferred<Vec<Tag>>,
+    #[has_many(via = tags.name)]
+    tag_names: Vec<String>,
+}
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct Tag {
+    #[key]
+    id: i64,
+    #[index]
+    article_id: i64,
+    #[belongs_to(key = article_id, references = id)]
+    article: toasty::Deferred<Article>,
+    name: String,
 }
 
 #[derive(Debug, toasty::Embed)]
@@ -366,10 +389,39 @@ fn field_metadata_empty_path_panics() {
 }
 
 #[test]
+fn field_metadata_relation_path() {
+    // A has-many crossing resolves on the target model.
+    let title = Author::fields().posts().title();
+    assert_eq!(title.field_name().as_deref(), Some("title"));
+    assert!(!title.is_unique());
+
+    // A single-field primary key reached through a to-many relation reports
+    // the leaf field's index membership, not uniqueness per author.
+    assert!(Author::fields().posts().id().is_unique());
+
+    // A belongs-to crossing resolves on the target model too.
+    let author_id = Post::fields().author().id();
+    assert_eq!(author_id.field_name().as_deref(), Some("id"));
+
+    // A path may end at a relation field.
+    let author =
+        Post::path_field::<toasty::Deferred<Author>>(Post::field_name_to_id("author").index);
+    assert_eq!(author.field_name().as_deref(), Some("author"));
+}
+
+#[test]
+fn field_metadata_scalar_via_path() {
+    // A scalar-terminal via is a leaf: it names the via field itself.
+    let names = Article::fields().tag_names();
+    assert_eq!(names.field_name().as_deref(), Some("tag_names"));
+    assert!(!names.is_unique());
+}
+
+#[test]
 #[should_panic(expected = "cannot project through non-embedded field")]
-fn field_metadata_relation_projection_panics() {
-    let posts =
-        Author::path_field::<toasty::stmt::List<Post>>(Author::field_name_to_id("posts").index);
-    let title = Post::path_field::<String>(Post::field_name_to_id("title").index);
-    let _ = posts.chain(title).field_name();
+fn field_metadata_scalar_via_projection_panics() {
+    // The via's terminal is a scalar, so there is no model to project into.
+    let names = Article::fields().tag_names();
+    let name = Tag::path_field::<String>(Tag::field_name_to_id("name").index);
+    let _ = names.chain(name).field_name();
 }

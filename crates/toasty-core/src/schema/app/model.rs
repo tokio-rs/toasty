@@ -66,9 +66,10 @@ impl ModelSet {
 
     /// Resolve an untyped path against the models in this set.
     ///
-    /// Walks embedded structs, embedded enum variants, and `#[document]`
-    /// fields; relations are not followed. A path that ends at a relation
-    /// field resolves to that field, but a step through one is an error.
+    /// Walks embedded structs, embedded enum variants, `#[document]` fields,
+    /// and relations: a step landing on a relation continues on its target
+    /// model. A scalar-terminal `via` projects a scalar, so projecting
+    /// through one is an error.
     ///
     /// Returns the field the path's last step lands on, together with the
     /// first `#[document]` field the projection descends through, if any. A
@@ -77,7 +78,7 @@ impl ModelSet {
         &'a self,
         path: &stmt::Path,
     ) -> Result<(&'a Field, Option<&'a Field>), ResolveError> {
-        match resolve_in(&self.models, path, false)? {
+        match resolve_in(&self.models, path)? {
             CoreResolved::Field { leaf, document } => Ok((leaf, document)),
             CoreResolved::Variant(_) => Err(ResolveError::Empty),
         }

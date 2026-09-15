@@ -52,8 +52,9 @@ assert!(User::fields().contact().email().address().is_unique());
 ```
 
 `field_name()` and `is_unique()` resolve through embedded structs,
-embedded-enum variants, and `#[document]` embeds to any depth — a struct
-inside a variant, an enum inside a variant, a document inside a document.
+embedded-enum variants, `#[document]` embeds, and relations to any depth — a
+struct inside a variant, an enum inside a variant, a document inside a
+document, a field on a related model.
 `is_nullable()` needs no resolution: the app schema generates its `nullable`
 flag from the field type's `Field::NULLABLE`, which the typed path's target
 type already carries.
@@ -73,8 +74,10 @@ model with the given `ModelId`, if present.
   are one-off probes, not per-row helpers. `is_nullable()` reads the leaf
   type and never builds a schema.
 - `is_nullable()` reports the leaf field's `Option` marker only, not storage
-  `NULL`s from a nullable parent embed or an inactive enum variant. For a
-  list-targeted path (`Vec<T>` fields) it is always `false`; an
+  `NULL`s from a nullable parent embed, a nullable relation crossed on the
+  way to the leaf, or an inactive enum variant. For a
+  list-targeted path (`Vec<T>` fields, including a field reached through a
+  to-many relation) it is always `false`; an
   `Option<Vec<T>>` field keeps `Option<Vec<T>>` as its path target and is
   covered by the `T: Field` impl.
 - `is_unique()` scans the owning model's `app::Index` entries (there is no
@@ -84,16 +87,19 @@ model with the given `ModelId`, if present.
   membership only: `NULL`s do not conflict in unique indices (SQL treats
   them as distinct; DynamoDB skips the index entry). `true` implies globally
   unique values only when the column cannot be `NULL` (non-optional leaf, no
-  nullable parent embed or enum variant crossed).
+  nullable parent embed, nullable relation, or enum variant crossed).
   Variant columns are storage-nullable by construction, including `#[shared]`
   columns, so a variant path can permit duplicate `NULL`s even when
-  `is_nullable()` is `false`.
+  `is_nullable()` is `false`. A relation step reports the leaf field's index
+  in its own model; values may repeat across root rows, so `true` does not
+  make the path a cursor key.
 - `is_unique()` reports `false` inside a `#[document]` embed: the app-level
   index has no database backing.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
-  does not end at a field or when the projection crosses a relation. A path
-  may end at a relation field; projecting through one panics. Projecting
-  through embedded (including `#[document]`) and enum steps is supported.
+  does not end at a field or projects through a scalar-terminal `via` (a
+  scalar has no fields to step into). A path may end at a relation field and
+  may project through it to the target model. Projecting through embedded
+  (including `#[document]`) and enum steps is supported.
 
 ## Edge cases
 

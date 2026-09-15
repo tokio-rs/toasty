@@ -777,9 +777,10 @@ where
     ///
     /// # Panics
     ///
-    /// Panics if the path does not end at a field, or if the projection
-    /// crosses a relation: only embedded struct, embedded enum, and document
-    /// steps are supported.
+    /// Panics if the path does not end at a field, or if it projects through
+    /// a scalar-terminal `via` (a scalar has no fields to step into).
+    /// Embedded struct, embedded enum, document, and relation steps are
+    /// supported: a relation step resolves on the target model.
     ///
     /// # Examples
     ///
@@ -804,20 +805,23 @@ where
     /// Index membership only, not a global-uniqueness guarantee: `NULL`s do
     /// not conflict (SQL treats them as distinct; DynamoDB skips the index
     /// entry), so `true` implies globally unique values only for a
-    /// non-nullable column (non-optional leaf, no nullable parent embed or
-    /// enum variant crossed). True for `#[unique]` fields, enum-level
+    /// non-nullable leaf with no nullable parent embed, nullable relation,
+    /// or enum variant crossed. True for `#[unique]` fields, enum-level
     /// `#[unique(variant::field)]` and `#[unique(shared)]` references (every
     /// `#[shared(shared)]` member), and single-field primary keys.
     /// Components of composite indices are not unique on their own.
     /// Fields inside a `#[document]` embed report `false`: their app-level
     /// index has no database backing (`collect_indices` only recurses into
-    /// column-expanded embeds).
+    /// column-expanded embeds). A relation step resolves on the target model,
+    /// so the result describes the leaf field's own index; values may repeat
+    /// across root rows and `true` does not make the path a cursor key.
     ///
     /// # Panics
     ///
-    /// Panics if the path does not end at a field, or if the projection
-    /// crosses a relation: only embedded struct, embedded enum, and document
-    /// steps are supported.
+    /// Panics if the path does not end at a field, or if it projects through
+    /// a scalar-terminal `via` (a scalar has no fields to step into).
+    /// Embedded struct, embedded enum, document, and relation steps are
+    /// supported: a relation step resolves on the target model.
     ///
     /// # Examples
     ///
@@ -913,9 +917,7 @@ where
 /// schema walk is needed.
 ///
 /// Only storable leaf types expose this: relation terminals and model roots
-/// have no method, and projecting through a relation is a compile error
-/// rather than the runtime panic `field_name`/`is_unique` still produce. An
-/// embed root reports `false` but has no leaf field.
+/// have no method. An embed root reports `false` but has no leaf field.
 impl<T, U> Path<T, U>
 where
     T: Model,
@@ -924,8 +926,10 @@ where
     /// Whether the leaf field is `Option`-marked.
     ///
     /// Reports the leaf field's own nullability only; a `false` result does
-    /// not rule out storage `NULL`s from a nullable parent embed or an
-    /// inactive enum variant (see [`is_unique`](Self::is_unique)).
+    /// not rule out storage `NULL`s from a nullable parent embed, a nullable
+    /// relation crossed on the way to the leaf, or an inactive enum variant
+    /// (see [`is_unique`](Self::is_unique)). A list-targeted path — including
+    /// a field reached through a to-many relation — always reports `false`.
     ///
     /// Only sound for generated accessors; hand-built `path_field::<U>` /
     /// `chain` paths must supply the field's `ExprTarget` as `U`.

@@ -47,8 +47,8 @@ pub enum ResolveError {
     },
     /// A projection step descends through a field that cannot be projected
     /// through: a scalar, a `List(Model)` document collection, an `Embedded`
-    /// field whose target is not an embedded model, or a relation when the
-    /// resolver does not follow relations.
+    /// field whose target is not an embedded model, or a scalar-terminal
+    /// `via`.
     NonEmbedded {
         /// The step that cannot be crossed.
         step: usize,
@@ -64,7 +64,7 @@ pub enum ResolveError {
     UnknownModel(ModelId),
 }
 
-/// What a path resolves to before either policy maps it.
+/// What a path resolves to before the callers map it.
 ///
 /// [`Schema::resolve`] maps [`CoreResolved::Field`] to the document ancestor
 /// it preserves, and [`CoreResolved::Variant`] to [`Resolved::Variant`].
@@ -220,7 +220,7 @@ impl Schema {
             projection: projection.clone(),
         };
 
-        match resolve_in(&self.models, &path, true) {
+        match resolve_in(&self.models, &path) {
             // A `#[document]` path stores its sub-fields in the document model,
             // so the leaf has no `app::Field`; the document field roots the
             // path. See `resolve_in`.
@@ -250,17 +250,18 @@ impl Schema {
     /// Resolves a [`stmt::Path`] to a [`Field`].
     ///
     /// A [`Model`](stmt::PathRoot::Model)-rooted path resolves through
-    /// [`resolve_field`](Schema::resolve_field), following relations. A
+    /// [`resolve_field`](Schema::resolve_field). A
     /// [`Variant`](stmt::PathRoot::Variant)-rooted path resolves
-    /// variant-locally and does not follow relations: it ends at one of the
-    /// variant's fields.
+    /// variant-locally: it ends at one of the variant's fields, indexed with
+    /// the local indices the typed accessors produce. Both root forms follow
+    /// relations.
     pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {
         match &path.root {
             stmt::PathRoot::Model(_) => {
                 let model = self.model(path.root.as_model_unwrap());
                 self.resolve_field(model, &path.projection)
             }
-            stmt::PathRoot::Variant { .. } => match resolve_in(&self.models, path, false) {
+            stmt::PathRoot::Variant { .. } => match resolve_in(&self.models, path) {
                 Ok(CoreResolved::Field { leaf, .. }) => Some(leaf),
                 _ => None,
             },
@@ -270,22 +271,20 @@ impl Schema {
 
 /// Resolve `path` against `models`, the application schema's model map.
 ///
-/// This is the one walk behind every schema-level path resolution. Two
-/// policies sit on top of it:
+/// This is the one walk behind every schema-level path resolution. It walks
+/// fields, embedded structs, embedded enum variants, relations, and
+/// `#[document]` fields:
 ///
-/// - `follow_relations == true` follows `BelongsTo`/`Has`/`Via` relations (the
-///   engine's dialect, [`Schema::resolve`]); `false` ends at a relation field
-///   and rejects a step through one (the typed path metadata dialect,
-///   [`ModelSet::resolve_path`](super::ModelSet::resolve_path)).
+/// - Relations (`BelongsTo`/`Has`/`Via`) are followed: a step landing on a
+///   relation continues on its target model.
 /// - `#[document]` fields (`Primitive(Type::Model)`) crossed with further
 ///   steps descend into the document's fields. The first one crossed is
 ///   reported alongside the leaf, so callers can tell JSON-backed storage
 ///   from column-backed embeds.
-///
-/// Embedded enums consume two steps when reading a variant's field: the
-/// variant index and a variant-local field index. A lone step naming a
-/// variant is discriminant-only access and resolves to
-/// [`CoreResolved::Variant`].
+/// - Embedded enums consume two steps when reading a variant's field: the
+///   variant index and a variant-local field index. A lone step naming a
+///   variant is discriminant-only access and resolves to
+///   [`CoreResolved::Variant`].
 ///
 /// A [`Variant`](stmt::PathRoot::Variant) root resolves its parent to the
 /// enum field, then consumes a variant-local field step. A variant root with
@@ -293,7 +292,6 @@ impl Schema {
 pub(crate) fn resolve_in<'a>(
     models: &'a IndexMap<ModelId, Model>,
     path: &stmt::Path,
-    follow_relations: bool,
 ) -> Result<CoreResolved<'a>, ResolveError> {
     match &path.root {
         stmt::PathRoot::Model(model_id) => {
@@ -307,14 +305,14 @@ pub(crate) fn resolve_in<'a>(
                 .fields()
                 .get(*first)
                 .ok_or(ResolveError::OutOfBounds { step: *first })?;
-            resolve_steps(models, first, rest, follow_relations, None)
+            resolve_steps(models, first, rest, None)
         }
         stmt::PathRoot::Variant { parent, variant_id } => {
             let parent_step = parent.projection.as_slice().last().copied().unwrap_or(0);
 
             // A document crossed on the way to the enum stays crossed: the
             // variant's fields live inside the same document.
-            let (enum_field, document) = match resolve_in(models, parent, follow_relations)? {
+            let (enum_field, document) = match resolve_in(models, parent)? {
                 CoreResolved::Field { leaf, document } => (leaf, document),
                 CoreResolved::Variant(_) => {
                     return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
@@ -349,7 +347,7 @@ pub(crate) fn resolve_in<'a>(
                 .variant_fields(variant_id.index)
                 .get(*first)
                 .ok_or(ResolveError::OutOfBounds { step: *first })?;
-            resolve_steps(models, first, rest, follow_relations, document)
+            resolve_steps(models, first, rest, document)
         }
     }
 }
@@ -361,7 +359,6 @@ fn resolve_steps<'a>(
     models: &'a IndexMap<ModelId, Model>,
     mut field: &'a Field,
     mut steps: &[usize],
-    follow_relations: bool,
     mut document: Option<&'a Field>,
 ) -> Result<CoreResolved<'a>, ResolveError> {
     while let Some((step, rest)) = steps.split_first() {
@@ -411,10 +408,12 @@ fn resolve_steps<'a>(
                     .ok_or(ResolveError::OutOfBounds { step: *step })?;
                 steps = rest;
             }
+            // A scalar-terminal `via` projects a scalar: there is no model
+            // to step into.
+            FieldTy::Via(via) if via.is_scalar() => {
+                return Err(ResolveError::NonEmbedded { step: *step });
+            }
             FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
-                if !follow_relations {
-                    return Err(ResolveError::NonEmbedded { step: *step });
-                }
                 let target = field
                     .relation_target_id()
                     .expect("relation fields have a target");
