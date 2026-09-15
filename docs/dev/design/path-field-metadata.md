@@ -34,14 +34,16 @@ Three methods on `Path<M, T>` where `M: Model`:
   from the leaf type's `Field::NULLABLE`, so it needs no schema walk and is
   only sound for generated accessors (hand-built `path_field::<U>` / `chain`
   paths must supply the field's `ExprTarget` as `U`).
-- `is_unique() -> bool` whether the field is the target of a single-field
-  unique index (index membership only, not a global-uniqueness guarantee):
+- `is_unique() -> bool` whether the field is backed by a single-field unique
+  index, its own or an enclosing transparent newtype's (index membership
+  only, not a global-uniqueness guarantee):
   `#[unique]` fields, enum-level `#[unique(variant::field)]`
   references, enum-level `#[unique(shared)]` references (true for every
   `#[shared(shared)]` member, which share one column), and primary-key
   fields of single-field primary keys.
   Components of composite unique indices or composite primary keys are not
-  unique on their own.
+  unique on their own. A transparent newtype's unnamed `inner` field reports
+  a unique index on any enclosing field: every layer maps to one column.
 
 ```rust
 // #[unique] on User.email; enum-level #[unique(email::address)] on Contact
@@ -80,8 +82,9 @@ model with the given `ModelId`, if present.
   to-many relation) it is always `false`; an
   `Option<Vec<T>>` field keeps `Option<Vec<T>>` as its path target and is
   covered by the `T: Field` impl.
-- `is_unique()` scans the owning model's `app::Index` entries (there is no
-  per-field unique flag) and matches only single-field unique indices.
+- `is_unique()` scans the `app::Index` entries of the leaf's model and of
+  every enclosing transparent-newtype field (they share one column) and
+  matches only single-field unique indices.
   Enum-level `#[unique(shared)]` stores the first `#[shared(shared)]` member
   only, so members compare by shared identifier, not `FieldId`. Reports index
   membership only: `NULL`s do not conflict in unique indices (SQL treats
@@ -109,7 +112,9 @@ model with the given `ModelId`, if present.
   Flattened embed columns and storage overrides live in the mapping layer.
   The `inner` field of a tuple-newtype embed is transparent (it takes the
   parent field's column) and has no app-level name, so `field_name()`
-  returns `None` there; `is_nullable()` and `is_unique()` still work.
+  returns `None` there; `is_unique()` reports a unique index on an enclosing
+  field, which constrains the same column, and `is_nullable()` reads the
+  inner type.
 
 ## Driver integration
 

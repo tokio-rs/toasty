@@ -800,7 +800,8 @@ where
         leaf.name.app.clone()
     }
 
-    /// Whether this field is the target of a single-field unique index.
+    /// Whether this field is the target of a single-field unique index,
+    /// directly or through a transparent newtype.
     ///
     /// Index membership only, not a global-uniqueness guarantee: `NULL`s do
     /// not conflict (SQL treats them as distinct; DynamoDB skips the index
@@ -809,7 +810,9 @@ where
     /// or enum variant crossed. True for `#[unique]` fields, enum-level
     /// `#[unique(variant::field)]` and `#[unique(shared)]` references (every
     /// `#[shared(shared)]` member), and single-field primary keys.
-    /// Components of composite indices are not unique on their own.
+    /// Components of composite indices are not unique on their own. A
+    /// transparent newtype's unnamed `inner` field reports a unique index on
+    /// any enclosing field: every layer maps to the same column.
     /// Fields inside a `#[document]` embed report `false`: their app-level
     /// index has no database backing (`collect_indices` only recurses into
     /// column-expanded embeds). A relation step resolves on the target model,
@@ -842,7 +845,20 @@ where
         if document.is_some() {
             return false;
         }
-        let owner = Self::model_by_id(&models, field.id.model);
+        if Self::field_has_unique_index(&models, field) {
+            return true;
+        }
+
+        // A transparent newtype stores its parent field's column, so a
+        // single-field unique index anywhere up the newtype chain constrains
+        // the leaf.
+        Self::enclosing_newtype_has_unique_index(&models, &self.untyped, field)
+    }
+
+    /// Whether `field` is the target of a single-field unique index on its own
+    /// model.
+    fn field_has_unique_index(models: &app::ModelSet, field: &app::Field) -> bool {
+        let owner = Self::model_by_id(models, field.id.model);
         let indices = match owner {
             app::Model::Root(root) => &root.indices,
             app::Model::EmbeddedStruct(embedded) => &embedded.indices,
@@ -861,12 +877,59 @@ where
             let Some(shared) = &field.shared else {
                 return false;
             };
-            Self::model_by_id(&models, indexed.model)
+            Self::model_by_id(models, indexed.model)
                 .fields()
                 .get(indexed.index)
                 .and_then(|f| f.shared.as_ref())
                 == Some(shared)
         })
+    }
+
+    /// Whether a transparent newtype enclosing `leaf` is the target of a
+    /// single-field unique index. Every enclosing field is checked: the whole
+    /// chain maps to one column.
+    fn enclosing_newtype_has_unique_index<'a>(
+        models: &'a app::ModelSet,
+        path: &stmt::Path,
+        leaf: &'a app::Field,
+    ) -> bool {
+        let steps = path.projection.as_slice();
+        let mut enclosing_path = path.clone();
+        let mut leaf = leaf;
+
+        // A single-step path has no enclosing field; the empty projection
+        // never resolves.
+        for len in (1..steps.len()).rev() {
+            enclosing_path.projection = stmt::Projection::from(&steps[..len]);
+            let Ok((enclosing, _)) = models.resolve_path(&enclosing_path) else {
+                break;
+            };
+            if !Self::is_transparent_newtype(models, enclosing, leaf) {
+                break;
+            }
+            if Self::field_has_unique_index(models, enclosing) {
+                return true;
+            }
+            leaf = enclosing;
+        }
+
+        false
+    }
+
+    /// Whether `enclosing` is the transparent newtype field backing `leaf`:
+    /// the embed has exactly the unnamed `leaf` field.
+    fn is_transparent_newtype(
+        models: &app::ModelSet,
+        enclosing: &app::Field,
+        leaf: &app::Field,
+    ) -> bool {
+        let app::FieldTy::Embedded(embedded) = &enclosing.ty else {
+            return false;
+        };
+        let Some(app::Model::EmbeddedStruct(embed)) = models.get(embedded.target) else {
+            return false;
+        };
+        matches!(&embed.fields[..], [only] if only.id == leaf.id && only.name.app.is_none())
     }
 
     /// Collects the models reachable from `T` so field lookups can walk into

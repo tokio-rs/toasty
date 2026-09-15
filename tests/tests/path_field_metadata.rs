@@ -202,6 +202,29 @@ struct NewtypeHolder {
     wrapper: Wrapper,
 }
 
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct NewtypeId {
+    #[key]
+    id: Wrapper,
+    #[unique]
+    token: Wrapper,
+    plain: Wrapper,
+}
+
+#[derive(Debug, toasty::Embed)]
+#[allow(dead_code)]
+struct OuterWrapper(Wrapper);
+
+#[derive(Debug, toasty::Model)]
+#[allow(dead_code)]
+struct NestedNewtypeId {
+    #[key]
+    id: i64,
+    #[unique]
+    outer: OuterWrapper,
+}
+
 #[test]
 fn field_metadata_single_path() {
     let email = User::fields().email();
@@ -380,6 +403,27 @@ fn field_metadata_newtype_inner_nullable_unique() {
 fn field_metadata_newtype_inner_name_is_none() {
     let inner = NewtypeHolder::fields().wrapper().inner();
     assert!(inner.field_name().is_none());
+}
+
+#[test]
+fn field_metadata_newtype_inner_unique() {
+    // A transparent newtype stores its parent field's column, so a unique
+    // index on the parent constrains the inner field too.
+    let id = NewtypeId::fields().id().inner();
+    assert!(id.is_unique());
+
+    let token = NewtypeId::fields().token().inner();
+    assert!(token.is_unique());
+
+    let plain = NewtypeId::fields().plain().inner();
+    assert!(!plain.is_unique());
+}
+
+#[test]
+fn field_metadata_nested_newtype_inner_unique() {
+    // Every layer of a nested chain maps to the same column.
+    let nested = NestedNewtypeId::fields().outer().inner().inner();
+    assert!(nested.is_unique());
 }
 
 #[test]
