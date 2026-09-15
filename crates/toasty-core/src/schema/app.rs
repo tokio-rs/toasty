@@ -60,6 +60,6 @@ mod relation;
 pub use relation::{BelongsTo, Cardinality, Has, Via};
 
 mod schema;
-pub use schema::{Resolved, Schema};
+pub use schema::{ResolveError, Resolved, Schema};
 
 use super::Name;

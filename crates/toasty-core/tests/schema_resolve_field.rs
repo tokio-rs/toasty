@@ -6,6 +6,7 @@ const USER: ModelId = ModelId(0);
 const STATUS_ENUM: ModelId = ModelId(1);
 const CONTACT_ENUM: ModelId = ModelId(2);
 const ADDRESS: ModelId = ModelId(3);
+const DOC_PROFILE: ModelId = ModelId(4);
 
 fn id_field(model: ModelId) -> Field {
     Field {
@@ -102,11 +103,38 @@ fn embedded_field(model: ModelId, index: usize, name: &str, target: ModelId) -> 
     }
 }
 
+/// A `#[document]` field: the target model's fields live inside one document
+/// column rather than as `app::Field`s on the parent.
+fn document_field(model: ModelId, index: usize, name: &str, target: ModelId) -> Field {
+    Field {
+        id: model.field(index),
+        name: FieldName {
+            app: Some(name.to_string()),
+            storage: None,
+        },
+        ty: FieldTy::Primitive(FieldPrimitive {
+            ty: stmt::Type::Model(target),
+            storage_ty: None,
+            serialize: None,
+        }),
+        nullable: false,
+        primary_key: false,
+        auto: None,
+        versionable: false,
+        deferred: false,
+        constraints: vec![],
+        variant: None,
+        shared: None,
+    }
+}
+
 /// Schema:
-///   User { id, name, status: Status, contact: ContactInfo, address: Address }
+///   User { id, name, status: Status, contact: ContactInfo, address: Address,
+///          profile: DocProfile as #[document] }
 ///   Status = enum { Active(0), Inactive(1) }  (unit variants only)
 ///   ContactInfo = enum { Email(0, fields: [address]), Phone(1, fields: [country_code, number]) }
 ///   Address = struct { street, city }
+///   DocProfile = struct { city, zip }
 fn schema() -> Schema {
     let status = Model::EmbeddedEnum(EmbeddedEnum {
         id: STATUS_ENUM,
@@ -170,6 +198,16 @@ fn schema() -> Schema {
         indices: vec![],
     });
 
+    let doc_profile = Model::EmbeddedStruct(EmbeddedStruct {
+        id: DOC_PROFILE,
+        name: Name::new("DocProfile"),
+        fields: vec![
+            prim_field(DOC_PROFILE, 0, "city"),
+            prim_field(DOC_PROFILE, 1, "zip"),
+        ],
+        indices: vec![],
+    });
+
     let user = Model::Root(ModelRoot {
         id: USER,
         name: Name::new("User"),
@@ -179,6 +217,7 @@ fn schema() -> Schema {
             embedded_field(USER, 2, "status", STATUS_ENUM),
             embedded_field(USER, 3, "contact", CONTACT_ENUM),
             embedded_field(USER, 4, "address", ADDRESS),
+            document_field(USER, 5, "profile", DOC_PROFILE),
         ],
         primary_key: PrimaryKey {
             fields: vec![USER.field(0)],
@@ -192,7 +231,7 @@ fn schema() -> Schema {
         version_field: None,
     });
 
-    Schema::from_macro([user, status, contact, address]).unwrap()
+    Schema::from_macro([user, status, contact, address, doc_profile]).unwrap()
 }
 
 // === Primitive fields ===
@@ -256,6 +295,25 @@ fn resolve_embedded_struct_field() {
         .resolve_field(root, &stmt::Projection::from([4, 1]))
         .unwrap();
     assert_eq!(field.name.app.as_deref(), Some("city"));
+}
+
+// === #[document] fields ===
+
+#[test]
+fn resolve_document_path_returns_document_field() {
+    let s = schema();
+    let root = s.model(USER);
+
+    // User.profile.city => the document field, not the sub-field: the
+    // document model's fields have no `app::Field` on `User`.
+    let field = s
+        .resolve_field(root, &stmt::Projection::from([5, 0]))
+        .unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("profile"));
+
+    // A path that stops at the document field itself resolves to it too.
+    let field = s.resolve_field(root, &stmt::Projection::from([5])).unwrap();
+    assert_eq!(field.name.app.as_deref(), Some("profile"));
 }
 
 // === Embedded enum (data-carrying) — field step is local to the variant ===

@@ -1,4 +1,4 @@
-use super::{EnumVariant, Field, FieldId, FieldPrimitive, FieldTy, Model, ModelId};
+use super::{EnumVariant, Field, FieldId, FieldTy, Model, ModelId};
 
 use crate::{Result, stmt};
 use indexmap::IndexMap;
@@ -27,6 +27,56 @@ pub enum Resolved<'a> {
     /// The projection resolved to a concrete field.
     Field(&'a Field),
     /// The projection resolved to an enum variant (discriminant-only access).
+    Variant(&'a EnumVariant),
+}
+
+/// Why resolving a path against the application schema failed.
+///
+/// [`Schema::resolve`] maps every error to `None`; the typed path metadata
+/// accessors turn them into panic messages.
+#[derive(Debug)]
+pub enum ResolveError {
+    /// The path does not name a field: its projection is empty.
+    Empty,
+    /// A projection step does not index a field (or variant) of the model it
+    /// lands on.
+    OutOfBounds {
+        /// The step that does not resolve.
+        step: usize,
+    },
+    /// A projection step descends through a field that cannot be projected
+    /// through: a scalar, a `List(Model)` document collection, or a relation
+    /// when the resolver does not follow relations.
+    NonEmbedded {
+        /// The step that cannot be crossed.
+        step: usize,
+    },
+    /// A `Variant` root's parent does not end at an embedded enum field.
+    NotEmbeddedEnum {
+        /// The parent path's last step.
+        step: usize,
+    },
+    /// The path is rooted at, or descends into, a model that is not in the
+    /// resolver's model set.
+    UnknownModel(ModelId),
+}
+
+/// What a path resolves to before either policy maps it.
+///
+/// [`Schema::resolve`] maps [`CoreResolved::Field`] to the document ancestor
+/// it preserves, and [`CoreResolved::Variant`] to [`Resolved::Variant`].
+/// [`ModelSet::resolve_path`](super::ModelSet::resolve_path) returns the leaf
+/// and the first document crossed.
+pub(crate) enum CoreResolved<'a> {
+    /// The path resolves to a field.
+    Field {
+        /// The field the path's last step lands on.
+        leaf: &'a Field,
+        /// The first `#[document]` field the projection descends through, if
+        /// any.
+        document: Option<&'a Field>,
+    },
+    /// The path stops at an enum variant's discriminant.
     Variant(&'a EnumVariant),
 }
 
@@ -151,88 +201,32 @@ impl Schema {
     ///
     /// Starting from the root model, walks through each step of the projection,
     /// resolving fields, following relations/embedded types, and recognizing
-    /// enum variant discriminant access.
+    /// enum variant discriminant access. A `#[document]` path resolves to the
+    /// document field that roots it.
     ///
-    /// Returns `None` if:
-    /// - The projection is empty
-    /// - Any step references an invalid field/variant index
-    /// - A step tries to project through a primitive type
+    /// Returns `None` if the projection is empty, references an invalid
+    /// field/variant index, tries to project through a primitive type, or
+    /// resolves against a model that is not part of this schema.
     pub fn resolve<'a>(
         &'a self,
         root: &'a Model,
         projection: &stmt::Projection,
     ) -> Option<Resolved<'a>> {
-        let [first, rest @ ..] = projection.as_slice() else {
-            return None;
+        let path = stmt::Path {
+            root: stmt::PathRoot::Model(root.id()),
+            projection: projection.clone(),
         };
 
-        // Get the first field from the root model
-        let mut current_field = root.as_root_unwrap().fields.get(*first)?;
-
-        // Walk through remaining steps. Uses a manual iterator because
-        // embedded enums consume two steps (variant discriminant + field index).
-        let mut steps = rest.iter();
-        while let Some(step) = steps.next() {
-            match &current_field.ty {
-                // A `#[document]` embed stores as one column whose sub-fields
-                // live in the document type rather than as `app::Field`s. The
-                // remaining steps index into the document; validate them and
-                // resolve to the document field itself (the leaf has no
-                // `app::Field`). The path was already type-checked by the
-                // generated accessors.
-                FieldTy::Primitive(FieldPrimitive {
-                    ty: stmt::Type::Model(embed_id),
-                    ..
-                }) => {
-                    // `step` and the remaining `steps` are a contiguous tail
-                    // of `rest`; the steps consumed so far (including `step`)
-                    // place `step` at index `consumed - 1`. The document path
-                    // is that tail, valid iff every step resolves to a field.
-                    let consumed = rest.len() - steps.as_slice().len();
-                    let doc_path = &rest[consumed - 1..];
-                    return (self.project_fields(*embed_id, doc_path).count() == doc_path.len())
-                        .then_some(Resolved::Field(current_field));
-                }
-                FieldTy::Primitive(..) => {
-                    // Cannot project through primitive fields
-                    return None;
-                }
-                FieldTy::Embedded(embedded) => {
-                    let target = self.model(embedded.target);
-                    match target {
-                        Model::EmbeddedStruct(s) => {
-                            current_field = s.fields.get(*step)?;
-                        }
-                        Model::EmbeddedEnum(e) => {
-                            let variant_index = *step;
-                            let variant = e.variants.get(variant_index)?;
-
-                            // Check if there's a field index step after the variant
-                            if let Some(field_step) = steps.next() {
-                                // Local index within the variant, not into
-                                // `EmbeddedEnum::fields`.
-                                current_field = e.variant_fields(variant_index).get(*field_step)?;
-                            } else {
-                                // Single step: variant discriminant only → variant
-                                return Some(Resolved::Variant(variant));
-                            }
-                        }
-                        _ => return None,
-                    }
-                }
-                FieldTy::BelongsTo(belongs_to) => {
-                    current_field = belongs_to.target(self).as_root_unwrap().fields.get(*step)?;
-                }
-                FieldTy::Has(has) => {
-                    current_field = has.target(self).as_root_unwrap().fields.get(*step)?;
-                }
-                FieldTy::Via(via) => {
-                    current_field = via.target(self).as_root_unwrap().fields.get(*step)?;
-                }
-            };
+        match resolve_in(&self.models, &path, true) {
+            // A `#[document]` path stores its sub-fields in the document model,
+            // so the leaf has no `app::Field`; the document field roots the
+            // path. See `resolve_in`.
+            Ok(CoreResolved::Field { leaf, document }) => {
+                Some(Resolved::Field(document.unwrap_or(leaf)))
+            }
+            Ok(CoreResolved::Variant(variant)) => Some(Resolved::Variant(variant)),
+            Err(_) => None,
         }
-
-        Some(Resolved::Field(current_field))
     }
 
     /// Resolve a projection to a field, walking through the schema.
@@ -256,6 +250,132 @@ impl Schema {
         let model = self.model(path.root.as_model_unwrap());
         self.resolve_field(model, &path.projection)
     }
+}
+
+/// Resolve `path` against `models`, the application schema's model map.
+///
+/// This is the one walk behind every schema-level path resolution. Two
+/// policies sit on top of it:
+///
+/// - `follow_relations == true` follows `BelongsTo`/`Has`/`Via` relations (the
+///   engine's dialect, [`Schema::resolve`]); `false` ends at a relation field
+///   and rejects a step through one (the typed path metadata dialect,
+///   [`ModelSet::resolve_path`](super::ModelSet::resolve_path)).
+/// - `#[document]` fields (`Primitive(Type::Model)`) crossed with further
+///   steps descend into the document's fields. The first one crossed is
+///   reported alongside the leaf, so callers can tell JSON-backed storage
+///   from column-backed embeds.
+///
+/// Embedded enums consume two steps when reading a variant's field: the
+/// variant index and a variant-local field index. A lone step naming a
+/// variant is discriminant-only access and resolves to
+/// [`CoreResolved::Variant`].
+///
+/// A [`Variant`](stmt::PathRoot::Variant) root resolves its parent to the
+/// enum field, then consumes a variant-local field step. A variant root with
+/// no such step does not name a field and is [`ResolveError::Empty`].
+pub(crate) fn resolve_in<'a>(
+    models: &'a IndexMap<ModelId, Model>,
+    path: &stmt::Path,
+    follow_relations: bool,
+) -> Result<CoreResolved<'a>, ResolveError> {
+    match &path.root {
+        stmt::PathRoot::Model(model_id) => {
+            let model = models
+                .get(model_id)
+                .ok_or(ResolveError::UnknownModel(*model_id))?;
+            let [first, rest @ ..] = path.projection.as_slice() else {
+                return Err(ResolveError::Empty);
+            };
+            let first = model
+                .fields()
+                .get(*first)
+                .ok_or(ResolveError::OutOfBounds { step: *first })?;
+            resolve_steps(models, first, rest, follow_relations, None)
+        }
+        stmt::PathRoot::Variant { .. } => Err(ResolveError::Empty),
+    }
+}
+
+/// Continue a walk from `field` with `steps` remaining.
+///
+/// `document` tracks the first `#[document]` field crossed so far.
+fn resolve_steps<'a>(
+    models: &'a IndexMap<ModelId, Model>,
+    mut field: &'a Field,
+    mut steps: &[usize],
+    follow_relations: bool,
+    mut document: Option<&'a Field>,
+) -> Result<CoreResolved<'a>, ResolveError> {
+    while let Some((step, rest)) = steps.split_first() {
+        match &field.ty {
+            FieldTy::Embedded(embedded) => {
+                let target = models
+                    .get(&embedded.target)
+                    .ok_or(ResolveError::UnknownModel(embedded.target))?;
+                match target {
+                    Model::EmbeddedStruct(s) => {
+                        field = s
+                            .fields
+                            .get(*step)
+                            .ok_or(ResolveError::OutOfBounds { step: *step })?;
+                        steps = rest;
+                    }
+                    Model::EmbeddedEnum(e) => {
+                        let variant = e
+                            .variants
+                            .get(*step)
+                            .ok_or(ResolveError::OutOfBounds { step: *step })?;
+                        let Some((local, rest)) = rest.split_first() else {
+                            // A lone step names the variant's discriminant.
+                            return Ok(CoreResolved::Variant(variant));
+                        };
+                        field = e
+                            .variant_fields(*step)
+                            .get(*local)
+                            .ok_or(ResolveError::OutOfBounds { step: *local })?;
+                        steps = rest;
+                    }
+                    // `Embedded` fields target embedded models; a hand-built
+                    // field pointing elsewhere has nothing to project into.
+                    _ => return Err(ResolveError::NotEmbeddedEnum { step: *step }),
+                }
+            }
+            FieldTy::Primitive(primitive) => {
+                let stmt::Type::Model(embed_id) = &primitive.ty else {
+                    return Err(ResolveError::NonEmbedded { step: *step });
+                };
+                document.get_or_insert(field);
+                field = models
+                    .get(embed_id)
+                    .ok_or(ResolveError::UnknownModel(*embed_id))?
+                    .fields()
+                    .get(*step)
+                    .ok_or(ResolveError::OutOfBounds { step: *step })?;
+                steps = rest;
+            }
+            FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
+                if !follow_relations {
+                    return Err(ResolveError::NonEmbedded { step: *step });
+                }
+                let target = field
+                    .relation_target_id()
+                    .expect("relation fields have a target");
+                field = models
+                    .get(&target)
+                    .ok_or(ResolveError::UnknownModel(target))?
+                    .fields()
+                    .get(*step)
+                    .ok_or(ResolveError::OutOfBounds { step: *step })?;
+                steps = rest;
+            }
+        }
+    }
+
+    Ok(CoreResolved::Field {
+        leaf: field,
+        document,
+    })
 }
 
 impl Builder {
