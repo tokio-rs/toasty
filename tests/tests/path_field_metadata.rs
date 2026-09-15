@@ -165,7 +165,6 @@ struct Tagged {
     #[key]
     id: i64,
     tags: Vec<String>,
-    notes: Option<Vec<String>>,
 }
 
 #[derive(Debug, toasty::Embed)]
@@ -337,8 +336,13 @@ fn path_converts_to_core_path() {
 fn field_metadata_list_path_nullability() {
     // A collection field targets `List<T>`, which is never `Option`-wrapped.
     assert!(!Tagged::fields().tags().is_nullable());
-    // `Option<Vec<T>>` keeps the `Option` wrapper as its path target.
-    assert!(Tagged::fields().notes().is_nullable());
+
+    // `Option<Vec<T>>` keeps the `Option` wrapper as its path target and reads
+    // nullability from `Field`, not from the list impl. The derive cannot
+    // declare the field shape (`to_relation_expr` needs `Vec<T>:
+    // IntoExpr<Vec<T>>`), so build the path directly.
+    let notes = Tagged::path_field::<Option<Vec<String>>>(Tagged::field_name_to_id("tags").index);
+    assert!(notes.is_nullable());
 }
 
 #[test]

@@ -793,9 +793,8 @@ where
     /// ```
     pub fn field_name(&self) -> String {
         let models = Self::registered_models();
-        Self::field_in(&models, &self.untyped)
-            .0
-            .name
+        let (leaf, _) = Self::resolve_path_or_panic(&models, &self.untyped);
+        leaf.name
             .app
             .as_deref()
             .expect("field_name(): leaf field has no app-level name (tuple-newtype `inner` field)")
@@ -837,8 +836,8 @@ where
     /// ```
     pub fn is_unique(&self) -> bool {
         let models = Self::registered_models();
-        let (field, crossed_document) = Self::field_in(&models, &self.untyped);
-        if crossed_document {
+        let (field, document) = Self::resolve_path_or_panic(&models, &self.untyped);
+        if document.is_some() {
             return false;
         }
         let owner = Self::model_by_id(&models, field.id.model);
@@ -885,82 +884,27 @@ where
             .unwrap_or_else(|| panic!("model {id:?} is not registered"))
     }
 
-    fn field_in<'a>(models: &'a app::ModelSet, path: &stmt::Path) -> (&'a app::Field, bool) {
-        match &path.root {
-            stmt::PathRoot::Model(id) => Self::walk_fields(models, *id, path.projection.as_slice()),
-            stmt::PathRoot::Variant { parent, variant_id } => {
-                let (enum_field, parent_crossed) = Self::field_in(models, parent);
-                let embed_id = match &enum_field.ty {
-                    app::FieldTy::Embedded(embedded) => embedded.target,
-                    _ => panic!("variant path parent is not an embedded enum"),
-                };
-                let [first, rest @ ..] = path.projection.as_slice() else {
-                    panic!("path does not end at a field");
-                };
-                let variant_field = Self::model_by_id(models, embed_id)
-                    .as_embedded_enum_unwrap()
-                    .variant_fields(variant_id.index)
-                    .nth(*first)
-                    .expect("path does not end at a field: variant field index out of bounds");
-                if rest.is_empty() {
-                    (variant_field, parent_crossed)
-                } else {
-                    let crossed_here = Self::is_document_field(variant_field);
-                    let embedded_target = Self::embedded_target(variant_field);
-                    let (field, inner_crossed) = Self::walk_fields(models, embedded_target, rest);
-                    (field, parent_crossed || crossed_here || inner_crossed)
-                }
+    /// Resolve `path` through the shared app-schema walk, mapping its errors
+    /// onto the panic messages these accessors document.
+    fn resolve_path_or_panic<'a>(
+        models: &'a app::ModelSet,
+        path: &stmt::Path,
+    ) -> (&'a app::Field, Option<&'a app::Field>) {
+        match models.resolve_path(path) {
+            Ok(resolved) => resolved,
+            Err(app::ResolveError::Empty | app::ResolveError::OutOfBounds { .. }) => {
+                panic!("path does not end at a field")
+            }
+            Err(app::ResolveError::NonEmbedded { .. }) => {
+                panic!("cannot project through non-embedded field")
+            }
+            Err(app::ResolveError::NotEmbeddedEnum { .. }) => {
+                panic!("variant path parent is not an embedded enum")
+            }
+            Err(app::ResolveError::UnknownModel(id)) => {
+                panic!("model {id:?} is not registered")
             }
         }
-    }
-
-    /// Whether `field` is `#[document]` storage (`Primitive(Model)` or
-    /// `Primitive(List(Model))`). Traversing through one reaches JSON-backed
-    /// state with no database index, so `is_unique()` reports `false`.
-    fn is_document_field(field: &app::Field) -> bool {
-        match &field.ty {
-            app::FieldTy::Primitive(primitive) => match &primitive.ty {
-                stmt::Type::Model(_) => true,
-                stmt::Type::List(elem) => matches!(&**elem, stmt::Type::Model(_)),
-                _ => false,
-            },
-            _ => false,
-        }
-    }
-
-    /// The embedded model a projection step traverses into: a column-expanded
-    /// embed (`Embedded`) or a `#[document]` field (`Primitive(Model)`), whose
-    /// accessor is chainable like a column-expanded embed.
-    fn embedded_target(field: &app::Field) -> ModelId {
-        match &field.ty {
-            app::FieldTy::Embedded(embedded) => embedded.target,
-            app::FieldTy::Primitive(primitive) if let stmt::Type::Model(id) = &primitive.ty => *id,
-            _ => panic!("cannot project through non-embedded field"),
-        }
-    }
-
-    fn walk_fields<'a>(
-        models: &'a app::ModelSet,
-        model_id: ModelId,
-        steps: &[usize],
-    ) -> (&'a app::Field, bool) {
-        let [first, rest @ ..] = steps else {
-            panic!("path does not end at a field");
-        };
-        let mut field = Self::model_by_id(models, model_id)
-            .fields()
-            .get(*first)
-            .expect("path does not end at a field: field index out of bounds");
-        let mut crossed_document = false;
-        for &step in rest {
-            crossed_document |= Self::is_document_field(field);
-            let embed_id = Self::embedded_target(field);
-            field = Self::model_by_id(models, embed_id)
-                .fields()
-                .get(step)
-                .expect("path does not end at a field: field index out of bounds");
-        }
-        (field, crossed_document)
     }
 }
 
