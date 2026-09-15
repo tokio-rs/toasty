@@ -430,3 +430,111 @@ fn snapshot_stdout_is_parseable_toml() {
     assert_eq!(tables.len(), 1);
     assert_eq!(tables[0]["name"].as_str(), Some("users"));
 }
+
+#[test]
+fn a_bin_that_never_references_its_toasty_dependency_is_not_executed() {
+    // `unlinked-models` reaches `toasty` and `unlinked-server` depends on it,
+    // so the dependency graph says `toasty` is reachable. But the server's
+    // `main` never names the models crate, so rustc links neither it nor the
+    // dump constructor, and running the artifact would just run the program.
+    //
+    // The package names differ from the other two-crate test on purpose: these
+    // tests share one `CARGO_TARGET_DIR`, so same-named packages with different
+    // contents would overwrite each other's artifacts.
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let marker = root.join("main-ran");
+
+    fs::write(
+        root.join("Cargo.toml"),
+        "[workspace]\nmembers = [\"unlinked-models\", \"unlinked-server\"]\nresolver = \"3\"\n\n\
+         [profile.dev]\ndebug = \"line-tables-only\"\n",
+    )
+    .unwrap();
+    copy_lockfile(root);
+
+    fs::create_dir_all(root.join("unlinked-models/src")).unwrap();
+    fs::write(
+        root.join("unlinked-models/Cargo.toml"),
+        manifest("unlinked-models", "").replace("[workspace]\n", ""),
+    )
+    .unwrap();
+    fs::write(root.join("unlinked-models/src/lib.rs"), MODEL).unwrap();
+
+    fs::create_dir_all(root.join("unlinked-server/src")).unwrap();
+    fs::write(
+        root.join("unlinked-server/Cargo.toml"),
+        "[package]\nname = \"unlinked-server\"\nversion = \"0.0.0\"\nedition = \"2024\"\n\n\
+         [dependencies]\nunlinked-models = { path = \"../unlinked-models\" }\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("unlinked-server/src/main.rs"),
+        format!(
+            "fn main() {{ std::fs::write({:?}, \"ran\").unwrap(); }}\n",
+            marker.display().to_string()
+        ),
+    )
+    .unwrap();
+
+    let output = toasty(
+        root,
+        &[
+            "-p",
+            "unlinked-server",
+            "migrate",
+            "generate",
+            "--flavor",
+            "sqlite",
+            "--name",
+            "init",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not link `toasty`"), "{stderr}");
+    assert!(!marker.exists(), "the user's main() must not be executed");
+}
+
+#[test]
+fn package_selection_is_limited_to_workspace_members() {
+    // The resolved dependency graph also holds registry and out-of-workspace
+    // path dependencies. Selecting one would point the migration directory at
+    // someone else's package and write a migration tree into it.
+    let dir = tempfile::tempdir().unwrap();
+    let shared = dir.path().join("shared");
+    let app = dir.path().join("app");
+
+    fs::create_dir_all(shared.join("src")).unwrap();
+    fs::write(shared.join("Cargo.toml"), manifest("shared", "")).unwrap();
+    fs::write(shared.join("src/lib.rs"), MODEL).unwrap();
+
+    fs::create_dir_all(app.join("src")).unwrap();
+    fs::write(
+        app.join("Cargo.toml"),
+        manifest("app", "shared = { path = \"../shared\" }"),
+    )
+    .unwrap();
+    copy_lockfile(&app);
+    fs::write(
+        app.join("src/main.rs"),
+        "fn main() { let _ = std::any::type_name::<shared::User>(); }\n",
+    )
+    .unwrap();
+
+    let output = toasty(
+        &app,
+        &[
+            "-p", "shared", "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("not found in this workspace"), "{stderr}");
+    assert!(
+        !shared.join("Toasty.toml").exists() && !shared.join("toasty").exists(),
+        "nothing may be written into a package outside the workspace",
+    );
+}

@@ -27,6 +27,11 @@ pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> R
     // Without it there is no constructor, the environment variable is inert,
     // and running the artifact would execute the user's program — starting a
     // server, writing files, whatever `main` does.
+    //
+    // Reachability in the dependency graph is the cheap half of the test: it
+    // rules out a package that cannot possibly link `toasty` without building
+    // anything first. It does not prove the artifact links it, so
+    // `check_has_dumper` inspects the built artifact before it is run.
     if !project.links_toasty {
         bail!(
             "`{}` does not depend on `toasty`, directly or transitively, so it has no schema \
@@ -46,6 +51,8 @@ pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> R
     );
 
     let artifact = cargo::build_artifact(&project.workspace_root, &project.package_name, &target)?;
+
+    check_has_dumper(&artifact, project, &target)?;
 
     let prefix = project.config.migration.table_name_prefix.as_deref();
     let output = run_dumper(&artifact, &target, flavor, prefix)?;
@@ -180,6 +187,60 @@ fn parse_dump(output: &[u8], package: &str, direct_dependency: bool) -> Result<d
     bail!("{}", no_dump_help(package, direct_dependency))
 }
 
+/// Rejects an artifact that does not carry the schema-dump constructor.
+///
+/// Reachability in the dependency graph is not linkage: rustc only links a
+/// crate the target actually references, so a bin that declares a
+/// `toasty`-dependent crate but never uses it has no constructor. Running it
+/// would set an inert environment variable and execute the user's `main`.
+/// The constructor is also compiled out when `debug_assertions` is off, which
+/// leaves the same artifact behind.
+///
+/// The test is the presence of [`DUMP_SCHEMA_ENV`] in the artifact's bytes:
+/// the constructor reads that variable first thing, so the name is in the
+/// artifact whenever the constructor is. The converse does not hold — code
+/// naming the constant for its own reasons also matches — but that only
+/// returns the previous behavior of running the artifact.
+fn check_has_dumper(artifact: &Path, project: &Project, target: &BuildTarget) -> Result<()> {
+    let bytes = std::fs::read(artifact)
+        .with_context(|| format!("failed to read `{}`", artifact.display()))?;
+
+    if contains(&bytes, DUMP_SCHEMA_ENV.as_bytes()) {
+        return Ok(());
+    }
+
+    let hint = match target {
+        BuildTarget::Bin(name) if project.has_lib => format!(
+            "the bin target `{name}` was built; check that it references the lib target, \
+             where the models usually live"
+        ),
+        BuildTarget::Bin(name) => {
+            format!("check that the bin target `{name}` references the models")
+        }
+        BuildTarget::Cdylib => "check that the lib target references the models".to_string(),
+    };
+
+    bail!(
+        "the built artifact for `{}` does not link `toasty`, so it carries no schema dumper \
+         and running it would just run the program; {hint}, and that the `dev` profile keeps \
+         `debug-assertions` on",
+        project.package_name
+    )
+}
+
+/// Returns `true` if `needle` appears anywhere in `haystack`.
+fn contains(haystack: &[u8], needle: &[u8]) -> bool {
+    let Some((first, rest)) = needle.split_first() else {
+        return true;
+    };
+
+    haystack
+        .iter()
+        .enumerate()
+        .filter(|(_, byte)| *byte == first)
+        .any(|(i, _)| haystack[i + 1..].starts_with(rest))
+}
+
 /// Rejects a schema with no tables in it.
 ///
 /// A dump of zero models is indistinguishable from "this project has no
@@ -276,6 +337,21 @@ mod tests {
             let parsed = serde_json::from_str::<toasty_core::stmt::Type>(&format!("\"{ty}\""));
             assert!(parsed.is_ok(), "cannot decode `{ty}`: {parsed:?}");
         }
+    }
+
+    #[test]
+    fn the_dumper_marker_is_found_anywhere_in_the_artifact() {
+        let needle = DUMP_SCHEMA_ENV.as_bytes();
+
+        assert!(contains(needle, needle));
+        assert!(contains(
+            &[b"\x7fELF...", needle, b"...rest"].concat(),
+            needle
+        ));
+        assert!(!contains(b"", needle));
+        assert!(!contains(b"TOASTY_DUMP_SCHEM", needle));
+        // A truncated tail must not match past the end of the haystack.
+        assert!(!contains(&needle[..needle.len() - 1], needle));
     }
 
     #[test]

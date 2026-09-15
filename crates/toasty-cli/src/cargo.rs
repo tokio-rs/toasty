@@ -55,12 +55,17 @@ impl Metadata {
 
     /// Selects the target package: the named one when `-p` was given,
     /// otherwise the workspace root package.
+    ///
+    /// `-p` only matches workspace members. The resolved graph also contains
+    /// registry and out-of-workspace path dependencies, and selecting one of
+    /// those would point the migration directory at someone else's package —
+    /// `~/.cargo/registry/src/…` or a sibling checkout.
     pub fn select_package(&self, name: Option<&str>) -> Result<Package<'_>> {
         if let Some(name) = name {
             return self
                 .inner
-                .packages
-                .iter()
+                .workspace_packages()
+                .into_iter()
                 .find(|pkg| pkg.name.as_str() == name)
                 .map(Package)
                 .with_context(|| {

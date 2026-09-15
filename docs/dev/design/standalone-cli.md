@@ -211,10 +211,16 @@ the public surface — its only caller is `toasty-cli` itself.
   `dev` profile of `<pkg>` does not strip link-time constructors."
 - **`toasty` not actually depended on.** The ctor is in `toasty`; without
   the dependency the env var has no effect and running the artifact would
-  just run the user's program. The CLI resolves the dependency graph and
-  refuses to run anything unless `toasty` is reachable. The whole graph is
-  walked, not just direct dependencies, so a `models` crate paired with a
-  `server` binary still extracts.
+  just run the user's program. The CLI checks twice before running anything.
+  First it resolves the dependency graph and refuses a package that cannot
+  reach `toasty` at all, which costs no build. The whole graph is walked, not
+  just direct dependencies, so a `models` crate paired with a `server` binary
+  still extracts. Reachability is not linkage, though — rustc links only what
+  the target references, so a binary that declares a `toasty`-dependent crate
+  and never names it carries no ctor. So after the build the CLI looks for
+  `TOASTY_DUMP_SCHEMA` in the artifact's bytes, which the ctor reads first
+  thing, and refuses to run an artifact without it. The reverse mistake is
+  harmless: code naming the constant for its own reasons is run as before.
 - **An empty schema.** An artifact that links `toasty` but never references
   the crate holding the models dumps zero models. Generating from that would
   write a `DROP TABLE` for every table in the previous snapshot, so the CLI
