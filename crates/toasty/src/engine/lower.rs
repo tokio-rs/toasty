@@ -1644,120 +1644,74 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
         expr: &mut stmt::Expr,
         list: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
-        // Whole embedded values can contain decode casts and relation
-        // placeholders. Lower each candidate as an equality comparison so
-        // those fields receive the same handling as `=`.
-        let expand_to_equalities = matches!(expr, stmt::Expr::Match(_))
-            || matches!(expr, stmt::Expr::Record(record) if record.fields.iter().any(|field| !field.is_column()));
-
-        if expand_to_equalities {
-            let items = match list {
-                stmt::Expr::List(list) => Some(std::mem::take(&mut list.items)),
-                stmt::Expr::Value(stmt::Value::List(items)) => Some(
-                    std::mem::take(items)
-                        .into_iter()
-                        .map(stmt::Expr::Value)
-                        .collect(),
-                ),
-                _ => None,
-            };
-            if let Some(items) = items {
-                return Some(stmt::Expr::or_from_vec(
-                    items
-                        .into_iter()
-                        .map(|mut item| {
-                            let mut lhs = expr.clone();
-                            self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut lhs, &mut item)
-                                .unwrap_or_else(|| stmt::Expr::eq(lhs, item))
-                        })
-                        .collect(),
-                ));
-            }
+        if in_list_requires_equality_expansion(expr)
+            && let Some(items) = take_in_list_items(list)
+        {
+            return Some(self.expand_in_list_equalities(expr, items));
         }
 
-        match (&mut *expr, list) {
-            (expr, stmt::Expr::Map(expr_map)) => {
-                assert!(expr_map.base.is_arg(), "TODO");
-                let maybe_res =
-                    self.lower_expr_binary_op(stmt::BinaryOp::Eq, expr, &mut expr_map.map);
+        if let stmt::Expr::Map(map) = list {
+            self.lower_mapped_in_list(expr, map);
+            return None;
+        }
 
-                assert!(maybe_res.is_none(), "TODO");
-                None
-            }
-            (stmt::Expr::Cast(expr_cast), list) => {
-                let target_ty = self.capability().native_type_for(&expr_cast.ty);
-                self.cast_expr(expr, &target_ty);
+        if matches!(expr, stmt::Expr::Cast(_)) {
+            self.lower_cast_in_list(expr, list);
+            return None;
+        }
 
-                match list {
-                    stmt::Expr::List(expr_list) => {
-                        for item in &mut expr_list.items {
-                            self.cast_expr(item, &target_ty);
-                        }
-                    }
-                    stmt::Expr::Value(stmt::Value::List(items)) => {
-                        for item in items {
-                            *item = target_ty
-                                .cast(self.expr_cx.schema(), item.take())
-                                .expect("failed to cast value");
-                        }
-                    }
-                    stmt::Expr::Arg(_) => {
-                        let arg = list.take();
-                        let cast = stmt::Expr::cast(stmt::Expr::arg(0), target_ty);
-                        *list = stmt::Expr::map(arg, cast);
-                    }
-                    _ => todo!("expr={expr:#?}; list={list:#?}"),
-                }
+        assert_lowered_in_list(expr, list);
+        None
+    }
 
-                None
-            }
-            (stmt::Expr::Record(lhs), stmt::Expr::List(list)) => {
-                for lhs in lhs {
-                    assert!(lhs.is_column());
-                }
+    fn expand_in_list_equalities(
+        &mut self,
+        expr: &stmt::Expr,
+        items: Vec<stmt::Expr>,
+    ) -> stmt::Expr {
+        let equalities = items.into_iter().map(|mut item| {
+            let mut expr = expr.clone();
+            self.lower_expr_binary_op(stmt::BinaryOp::Eq, &mut expr, &mut item)
+                .unwrap_or_else(|| stmt::Expr::eq(expr, item))
+        });
 
+        stmt::Expr::or_from_vec(equalities.collect())
+    }
+
+    fn lower_mapped_in_list(&mut self, expr: &mut stmt::Expr, map: &mut stmt::ExprMap) {
+        assert!(map.base.is_arg(), "TODO");
+
+        let lowered = self.lower_expr_binary_op(stmt::BinaryOp::Eq, expr, &mut map.map);
+        assert!(lowered.is_none(), "TODO");
+    }
+
+    fn lower_cast_in_list(&mut self, expr: &mut stmt::Expr, list: &mut stmt::Expr) {
+        let stmt::Expr::Cast(cast) = expr else {
+            unreachable!()
+        };
+        let target_ty = self.capability().native_type_for(&cast.ty);
+
+        self.cast_expr(expr, &target_ty);
+
+        match list {
+            stmt::Expr::List(list) => {
                 for item in &mut list.items {
-                    assert!(item.is_value());
+                    self.cast_expr(item, &target_ty);
                 }
-
-                None
             }
-            (stmt::Expr::Record(lhs), stmt::Expr::Value(stmt::Value::List(_))) => {
-                for lhs in lhs {
-                    assert!(lhs.is_column());
+            stmt::Expr::Value(stmt::Value::List(items)) => {
+                for item in items {
+                    *item = target_ty
+                        .cast(self.expr_cx.schema(), item.take())
+                        .expect("failed to cast value");
                 }
-
-                None
             }
-            (stmt::Expr::Reference(expr_reference), list) => {
-                assert!(expr_reference.is_column());
-
-                match list {
-                    stmt::Expr::Value(stmt::Value::List(_)) => {}
-                    stmt::Expr::List(list) => {
-                        for item in &list.items {
-                            assert!(item.is_value());
-                        }
-                    }
-                    _ => panic!("invalid; should have been caught earlier"),
-                }
-
-                None
+            stmt::Expr::Arg(_) => {
+                let arg = list.take();
+                let cast = stmt::Expr::cast(stmt::Expr::arg(0), target_ty);
+                *list = stmt::Expr::map(arg, cast);
             }
-            (stmt::Expr::Project(_), list) => {
-                match list {
-                    stmt::Expr::Value(stmt::Value::List(_)) => {}
-                    stmt::Expr::List(list) => {
-                        for item in &list.items {
-                            assert!(item.is_value());
-                        }
-                    }
-                    _ => panic!("invalid; should have been caught earlier"),
-                }
-
-                None
-            }
-            (expr, list) => todo!("expr={expr:#?}; list={list:#?}"),
+            _ => todo!("expr={expr:#?}; list={list:#?}"),
         }
     }
 
@@ -2387,6 +2341,49 @@ fn build_update_returning(
         stmt::ExprRecord::from_vec(exprs),
         stmt::Type::SparseRecord(field_set),
     )
+}
+
+/// Returns whether `IN` must use the same per-value lowering as equality.
+fn in_list_requires_equality_expansion(expr: &stmt::Expr) -> bool {
+    match expr {
+        stmt::Expr::Match(_) => true,
+        stmt::Expr::Record(record) => record.fields.iter().any(|field| !field.is_column()),
+        _ => false,
+    }
+}
+
+/// Takes the expressions from a literal `IN` list.
+fn take_in_list_items(list: &mut stmt::Expr) -> Option<Vec<stmt::Expr>> {
+    match list {
+        stmt::Expr::List(list) => Some(std::mem::take(&mut list.items)),
+        stmt::Expr::Value(stmt::Value::List(items)) => Some(
+            std::mem::take(items)
+                .into_iter()
+                .map(stmt::Expr::Value)
+                .collect(),
+        ),
+        _ => None,
+    }
+}
+
+/// Asserts that both operands have reached a driver-level `IN` form.
+fn assert_lowered_in_list(expr: &stmt::Expr, list: &stmt::Expr) {
+    match expr {
+        stmt::Expr::Record(record) => {
+            assert!(record.fields.iter().all(stmt::Expr::is_column));
+        }
+        stmt::Expr::Reference(reference) => assert!(reference.is_column()),
+        stmt::Expr::Project(_) => {}
+        _ => todo!("expr={expr:#?}; list={list:#?}"),
+    }
+
+    match list {
+        stmt::Expr::Value(stmt::Value::List(_)) => {}
+        stmt::Expr::List(list) => {
+            assert!(list.items.iter().all(stmt::Expr::is_value));
+        }
+        _ => panic!("invalid; should have been caught earlier"),
+    }
 }
 
 /// True when an `IN` list is a candidate for the `= ANY($1)` rewrite:

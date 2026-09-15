@@ -1150,46 +1150,68 @@ pub(super) fn assign_belongs_to_key(
     expr: stmt::Expr,
     mut assign: impl FnMut(app::FieldId, stmt::Expr),
 ) {
-    let expr = relation_key_expr(foreign_key, expr);
-    if matches!(expr, stmt::Expr::Arg(_)) {
-        for (i, field) in foreign_key.fields.iter().enumerate() {
-            assign(field.source, stmt::Expr::project(expr.clone(), [i]));
-        }
-    } else if let [field] = &foreign_key.fields[..] {
-        assign(field.source, expr);
-    } else if let Some(len) = expr.record_len() {
-        assert_eq!(len, foreign_key.fields.len(), "expr={expr:#?}");
-        for (field, value) in foreign_key
-            .fields
-            .iter()
-            .zip(expr.into_record_items().unwrap())
-        {
+    let key = relation_key_expr(foreign_key, expr);
+
+    if matches!(key, stmt::Expr::Arg(_)) {
+        assign_projected_key(foreign_key, key, &mut assign);
+        return;
+    }
+
+    if let [field] = &foreign_key.fields[..] {
+        assign(field.source, key);
+        return;
+    }
+
+    if let Some(arity) = key.record_len() {
+        assert_eq!(arity, foreign_key.fields.len(), "key={key:#?}");
+        let values = key.into_record_items().unwrap();
+
+        for (field, value) in foreign_key.fields.iter().zip(values) {
             assign(field.source, value);
         }
-    } else {
-        for (i, field) in foreign_key.fields.iter().enumerate() {
-            assign(field.source, stmt::Expr::project(expr.clone(), [i]));
-        }
+        return;
+    }
+
+    assign_projected_key(foreign_key, key, &mut assign);
+}
+
+fn assign_projected_key(
+    foreign_key: &app::ForeignKey,
+    key: stmt::Expr,
+    assign: &mut impl FnMut(app::FieldId, stmt::Expr),
+) {
+    for (index, field) in foreign_key.fields.iter().enumerate() {
+        assign(field.source, stmt::Expr::project(key.clone(), [index]));
     }
 }
 
-fn relation_key_expr(foreign_key: &app::ForeignKey, mut expr: stmt::Expr) -> stmt::Expr {
+fn relation_key_expr(foreign_key: &app::ForeignKey, expr: stmt::Expr) -> stmt::Expr {
     // A loaded model carries its stored fields, including non-primary keys.
     // Ordinary relation expressions already contain the key itself.
-    if let stmt::Expr::Cast(target) = &mut expr
-        && let stmt::Type::Model(model) = target.ty
-        && foreign_key.fields.iter().all(|fk| fk.target.model == model)
+    let mut target = match expr {
+        stmt::Expr::Cast(target) => target,
+        expr => return expr,
+    };
+    let stmt::Type::Model(target_model) = target.ty else {
+        return target.into();
+    };
+    if !foreign_key
+        .fields
+        .iter()
+        .all(|field| field.target.model == target_model)
     {
-        let keys = foreign_key
-            .fields
-            .iter()
-            .map(|fk| target.expr.entry_mut(fk.target.index).take())
-            .collect::<Vec<_>>();
-        expr = if keys.len() == 1 {
-            keys.into_iter().next().unwrap()
-        } else {
-            stmt::Expr::record_from_vec(keys)
-        };
+        return target.into();
     }
-    expr
+
+    let mut key = foreign_key
+        .fields
+        .iter()
+        .map(|field| target.expr.entry_mut(field.target.index).take())
+        .collect::<Vec<_>>();
+
+    if key.len() == 1 {
+        key.pop().unwrap()
+    } else {
+        stmt::Expr::record_from_vec(key)
+    }
 }
