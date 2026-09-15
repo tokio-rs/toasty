@@ -28,11 +28,5 @@ pub enum Dialect {
     Mysql,
 
     /// MariaDB.
-    ///
-    /// Separate from [`Mysql`](Self::Mysql) despite the shared wire protocol:
-    /// MySQL 8 added syntax MariaDB never picked up, so the same statement
-    /// renders differently. The table value constructor is `VALUES ROW(...)`
-    /// on MySQL and `VALUES (...)` on MariaDB, and only MariaDB has a native
-    /// `UUID` type.
     MariaDb,
 }

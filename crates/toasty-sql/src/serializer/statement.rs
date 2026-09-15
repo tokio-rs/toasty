@@ -388,6 +388,12 @@ impl ToSql for &stmt::Insert {
             .as_ref()
             .map(|returning| (" RETURNING ", returning));
 
+        if returning.is_some() && matches!(f.serializer.dialect, Dialect::Mysql) {
+            panic!(
+                "MySQL does not support the RETURNING clause with INSERT statements; returning={returning:#?}"
+            );
+        }
+
         f.in_insert = true;
 
         let upsert = self.upsert.as_ref().map(|_| UpsertClause(self));

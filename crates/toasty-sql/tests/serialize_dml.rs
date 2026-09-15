@@ -20,6 +20,7 @@ enum Flavor {
     Sqlite,
     Postgresql,
     Mysql,
+    MariaDb,
 }
 
 /// Minimal `id INTEGER PRIMARY KEY, *cols` table. `cols` start at column index
@@ -87,6 +88,7 @@ fn render(flavor: Flavor, schema: &Schema, stmt: stmt::Statement) -> String {
         Flavor::Sqlite => Serializer::sqlite(schema).serialize(&sql_stmt),
         Flavor::Postgresql => Serializer::postgresql(schema).serialize(&sql_stmt),
         Flavor::Mysql => Serializer::mysql(schema).serialize(&sql_stmt),
+        Flavor::MariaDb => Serializer::mariadb(schema).serialize(&sql_stmt),
     }
 }
 
@@ -204,15 +206,22 @@ fn insert_with_returning() {
         ));
 }
 
-/// MariaDB shares this dialect and accepts the clause (10.5+), so the
-/// serializer cannot reject it on MySQL's behalf. `returning_from_insert`
-/// decides during planning.
 #[test]
-fn insert_with_returning_renders_on_mysql() {
+#[should_panic(expected = "MySQL does not support the RETURNING clause with INSERT")]
+fn insert_returning_panics_on_mysql() {
+    let schema = users_schema();
+    let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
+    render(Flavor::Mysql, &schema, insert_basic(returning));
+}
+
+/// MariaDB accepts the clause (10.5+), which is why the rejection above is
+/// scoped to MySQL's dialect rather than `is_mysql()`.
+#[test]
+fn insert_with_returning_renders_on_mariadb() {
     let schema = users_schema();
     let returning = Some(Returning::Project(Expr::record([col(0, 0)])));
     expect!["INSERT INTO `users` (`id`, `name`) VALUES (1, 'a') RETURNING `id` AS column_0;"]
-        .assert_eq(&render(Flavor::Mysql, &schema, insert_basic(returning)));
+        .assert_eq(&render(Flavor::MariaDb, &schema, insert_basic(returning)));
 }
 
 // -----------------------------------------------------------------------------

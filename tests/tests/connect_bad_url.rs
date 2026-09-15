@@ -28,9 +28,8 @@ async fn connect_bad_url_mysql() {
     let result = toasty::Db::builder()
         .connect("mysql://localhost:1/bad")
         .await;
-    let err = result.unwrap_err();
     assert!(
-        err.is_connection_pool(),
-        "connecting with a bad MySQL URL should fail; got {err:?}"
+        result.unwrap_err().is_connection_pool(),
+        "connecting with a bad MySQL URL should fail"
     );
 }
