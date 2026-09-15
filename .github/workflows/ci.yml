@@ -293,7 +293,16 @@ jobs:
         id: turso-sync
         env:
           TOASTY_TEST_TURSO_SYNC_URL: ${{ steps.turso-sync.outputs.sync-url }}
-      - run: cargo test -p toasty-driver-turso --features sync
+      - name: driver tests (sync)
+        run: cargo test -p toasty-driver-turso --features sync
+      # Sync and serverless must compose: same tests plus the combined-mode
+      # matrix, with both features enabled.
+      - name: driver tests (sync + serverless)
+        run: cargo test -p toasty-driver-turso --features sync,serverless
+      # The embedded integration suite must be unaffected by enabling every
+      # turso feature.
+      - name: embedded suite (all turso features)
+        run: cargo test -p tests --features turso,turso-sync,turso-serverless --test turso
 
   test-all-os:
     needs: check

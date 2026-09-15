@@ -16,6 +16,7 @@ documentation = "https://docs.rs/toasty-driver-turso"
 [features]
 default = []
 sync = ["turso/sync"]
+serverless = ["dep:turso_serverless"]
 rust_decimal = ["toasty-core/rust_decimal", "toasty-sql/rust_decimal"]
 bigdecimal = ["toasty-core/bigdecimal", "toasty-sql/bigdecimal"]
 jiff = ["toasty-core/jiff", "toasty-sql/jiff"]
@@ -29,6 +30,7 @@ serde.workspace = true
 tokio.workspace = true
 tracing.workspace = true
 turso.workspace = true
+turso_serverless = { workspace = true, optional = true }
 uuid.workspace = true
 
 [dev-dependencies]
