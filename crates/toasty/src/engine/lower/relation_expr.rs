@@ -1,11 +1,10 @@
 //! Resolves the first relation in an application-level path expression.
 //!
-//! A path consists of a field reference followed by field projections and
-//! embedded-enum variant selections. Resolution separates the path into the
-//! expression that reaches an embedded relation and the expression that
-//! continues from the relation's target model.
+//! Resolution walks field references, projections, and embedded-enum variant
+//! selections directly. It separates the path into the expression that reaches
+//! an embedded relation and the expression that continues from its target model.
 //!
-//! Variant steps select fields but do not test the discriminant. Statement
+//! Variant selections identify fields but do not test the discriminant. Statement
 //! normalization adds the corresponding variant predicates.
 
 use toasty_core::{
@@ -27,27 +26,25 @@ struct EmbeddedRelation<'a> {
 }
 
 impl<'a> ResolvedRelation<'a> {
-    fn new(
-        field: &'a app::Field,
-        embedded: Option<EmbeddedRelation<'a>>,
-        target_steps: &[PathStep],
-    ) -> Option<Self> {
+    fn new(field: &'a app::Field, embedded: Option<EmbeddedRelation<'a>>) -> Option<Self> {
         let target = field.relation_target_id()?;
-        let target_expr = match target_steps.split_first() {
-            None => None,
-            Some((PathStep::Field(index), remaining)) => {
-                let root = Expr::ref_self_field(target.field(*index));
-                Some(apply_steps(root, remaining))
-            }
-            Some((PathStep::Variant(_), _)) => return None,
-        };
 
         Some(Self {
             field,
             target,
             embedded,
-            target_expr,
+            target_expr: None,
         })
+    }
+
+    fn project(&mut self, indices: &[usize]) {
+        let Some((index, remaining)) = indices.split_first() else {
+            return;
+        };
+        self.target_expr = Some(match self.target_expr.take() {
+            Some(base) => project(base, indices),
+            None => project(Expr::ref_self_field(self.target.field(*index)), remaining),
+        });
     }
 
     pub(super) fn is_endpoint(&self) -> bool {
@@ -73,43 +70,57 @@ impl<'a> ResolvedRelation<'a> {
 
 /// Locates the first direct or embedded relation in `expr`.
 pub(super) fn resolve<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<ResolvedRelation<'a>> {
-    let path = ExprPath::parse(expr)?;
-    let ResolvedRef::Field(field) = cx.resolve_expr_reference(&path.root) else {
-        return None;
-    };
-
-    match &field.ty {
-        FieldTy::Embedded(embedded) => resolve_embedded(cx, path, embedded.target),
-        _ => ResolvedRelation::new(field, None, &path.steps),
+    match resolve_expr(cx, expr)? {
+        PathTarget::Relation(relation) => Some(relation),
+        PathTarget::Embed(_) => None,
     }
 }
 
-fn resolve_embedded<'a>(
-    cx: &ExprContext<'a>,
-    path: ExprPath,
-    model: app::ModelId,
-) -> Option<ResolvedRelation<'a>> {
-    let mut target = EmbedTarget::embed(&cx.schema().app, model)?;
+enum PathTarget<'a> {
+    Embed(EmbedTarget<'a>),
+    Relation(ResolvedRelation<'a>),
+}
 
-    for (position, step) in path.steps.iter().enumerate() {
-        match step {
-            PathStep::Variant(variant) => target = target.select(*variant)?,
-            PathStep::Field(index) => {
+fn resolve_expr<'a>(cx: &ExprContext<'a>, expr: &Expr) -> Option<PathTarget<'a>> {
+    match expr {
+        Expr::Reference(reference @ ExprReference::Field { .. }) => {
+            let ResolvedRef::Field(field) = cx.resolve_expr_reference(reference) else {
+                return None;
+            };
+            match &field.ty {
+                FieldTy::Embedded(embedded) => Some(PathTarget::Embed(EmbedTarget::embed(
+                    &cx.schema().app,
+                    embedded.target,
+                )?)),
+                _ => Some(PathTarget::Relation(ResolvedRelation::new(field, None)?)),
+            }
+        }
+        Expr::Project(projection) => {
+            let indices = projection.projection.as_slice();
+            let mut target = match resolve_expr(cx, &projection.base)? {
+                PathTarget::Relation(mut relation) => {
+                    relation.project(indices);
+                    return Some(PathTarget::Relation(relation));
+                }
+                PathTarget::Embed(target) => target,
+            };
+            for (position, index) in indices.iter().enumerate() {
                 let field = target.field_at(*index)?;
 
                 match &field.ty {
                     FieldTy::BelongsTo(belongs_to) => {
-                        let host = path.expr_before(position);
+                        let host = project(copy_path(&projection.base), &indices[..position]);
                         let key_expr = embedded_key_expr(host, target, belongs_to)?;
 
-                        return ResolvedRelation::new(
+                        let mut relation = ResolvedRelation::new(
                             field,
                             Some(EmbeddedRelation {
                                 belongs_to,
                                 key_expr,
                             }),
-                            path.steps_after(position),
-                        );
+                        )?;
+                        relation.project(&indices[position + 1..]);
+                        return Some(PathTarget::Relation(relation));
                     }
                     FieldTy::Embedded(embedded) => {
                         target = EmbedTarget::embed(&cx.schema().app, embedded.target)?;
@@ -117,10 +128,19 @@ fn resolve_embedded<'a>(
                     _ => return None,
                 }
             }
+            Some(PathTarget::Embed(target))
         }
+        Expr::Variant(variant) => match resolve_expr(cx, &variant.base)? {
+            PathTarget::Embed(target) => Some(PathTarget::Embed(target.select(variant.variant)?)),
+            PathTarget::Relation(mut relation) => {
+                // A relation targets a model; a variant requires a target field first.
+                relation.target_expr =
+                    Some(Expr::variant(relation.target_expr.take()?, variant.variant));
+                Some(PathTarget::Relation(relation))
+            }
+        },
+        _ => None,
     }
-
-    None
 }
 
 fn embedded_key_expr(host: Expr, target: EmbedTarget<'_>, belongs_to: &BelongsTo) -> Option<Expr> {
@@ -142,68 +162,28 @@ fn scalar_or_record(mut fields: Vec<Expr>) -> Expr {
     }
 }
 
-/// A parsed expression path, before schema resolution.
-struct ExprPath {
-    root: ExprReference,
-    steps: Vec<PathStep>,
-}
-
-impl ExprPath {
-    fn parse(expr: &Expr) -> Option<Self> {
-        let mut steps = vec![];
-        let root = parse_steps(expr, &mut steps)?;
-
-        Some(Self { root, steps })
-    }
-
-    fn expr_before(&self, position: usize) -> Expr {
-        apply_steps(self.root.into(), &self.steps[..position])
-    }
-
-    fn steps_after(&self, position: usize) -> &[PathStep] {
-        &self.steps[position + 1..]
-    }
-}
-
-#[derive(Clone, Copy)]
-enum PathStep {
-    Field(usize),
-    Variant(VariantId),
-}
-
-fn parse_steps(expr: &Expr, steps: &mut Vec<PathStep>) -> Option<ExprReference> {
+/// Copies the host path once a relation is found, merging adjacent projections.
+fn copy_path(expr: &Expr) -> Expr {
     match expr {
-        Expr::Reference(reference @ ExprReference::Field { .. }) => Some(*reference),
-        Expr::Project(project) => {
-            let root = parse_steps(&project.base, steps)?;
-            steps.extend(project.projection.iter().copied().map(PathStep::Field));
-            Some(root)
-        }
-        Expr::Variant(variant) => {
-            let root = parse_steps(&variant.base, steps)?;
-            steps.push(PathStep::Variant(variant.variant));
-            Some(root)
-        }
-        _ => None,
+        Expr::Project(projection) => project(
+            copy_path(&projection.base),
+            projection.projection.as_slice(),
+        ),
+        Expr::Variant(variant) => Expr::variant(copy_path(&variant.base), variant.variant),
+        _ => expr.clone(),
     }
 }
 
-fn apply_steps(mut expr: Expr, steps: &[PathStep]) -> Expr {
-    for step in steps {
-        match step {
-            PathStep::Field(index) => expr = project(expr, *index),
-            PathStep::Variant(variant) => expr = Expr::variant(expr, *variant),
-        }
-    }
-    expr
-}
-
-fn project(mut base: Expr, index: usize) -> Expr {
+fn project(mut base: Expr, indices: &[usize]) -> Expr {
     if let Expr::Project(project) = &mut base {
-        project.projection.push(index);
+        for index in indices {
+            project.projection.push(*index);
+        }
+        base
+    } else if indices.is_empty() {
         base
     } else {
-        Expr::project(base, [index])
+        Expr::project(base, indices)
     }
 }
 
