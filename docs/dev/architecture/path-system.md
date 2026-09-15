@@ -151,16 +151,17 @@ schema-level path resolution: fields, embedded structs, enum variants, and
 `#[document]` fields, with relations followed when asked. It returns a field
 or a variant discriminant, or a `ResolveError`. Two policies sit on top:
 
-- `Schema::resolve` and `Schema::resolve_field_path` follow relations. A
-  `#[document]` path resolves to the document field that roots it.
-  `resolve_field_path` accepts both root forms: a `Model`-rooted path
-  resolves through `Schema::resolve`, and a `Variant`-rooted path resolves
-  variant-locally, indexing the variant's fields with the local indices the
-  typed accessors produce.
+- `Schema::resolve` follows relations. A `#[document]` path resolves to the
+  document field that roots it. `resolve_field_path` accepts both root
+  forms: a `Model`-rooted path resolves through `Schema::resolve`; a
+  `Variant`-rooted path resolves variant-locally without following
+  relations, indexing the variant's fields with the local indices the typed
+  accessors produce.
 - `ModelSet::resolve_path` (in `toasty-core/src/schema/app/model.rs`) does
   not follow relations. It backs the typed path metadata accessors
   (`Path::field_name`, `Path::is_unique`) and returns the leaf field together
-  with the first `#[document]` field the projection descends through, if any.
+  with the first `#[document]` field the projection descends through, if any
+  — including a document crossed on a variant root's parent path.
 
 The simplification phase uses `Schema::resolve_field_path` to turn relation
 paths into concrete relation metadata.

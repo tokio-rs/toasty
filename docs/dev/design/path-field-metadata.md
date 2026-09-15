@@ -116,10 +116,10 @@ None. Read-only views over the app schema; drivers see no changes.
 
 ## Alternatives considered
 
-- **Reuse `app::Schema::resolve_field_path`.** It needs a fully linked
-  `Schema` (relation linking on every call) and resolves the engine's path
-  dialect (discriminant steps), not the typed dialect (variant-local
-  indices).
+- **Reuse `app::Schema::resolve_field_path`.** It resolves variant-rooted
+  paths in the typed dialect, but needs a fully linked `Schema` (relation
+  linking on every call), while the metadata accessors only need the models
+  reachable from `M`.
 - **Macro-emitted const tables.** `Path<M, T>` erases field identity at the
   type level, so per-field consts cannot attach to paths. Compile-time
   tables remain a possible follow-up to remove the per-call schema build.
