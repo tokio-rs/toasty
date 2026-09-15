@@ -7,6 +7,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.10.0...toasty-macros-v0.11.0) - 2026-09-14
+
+### Added
+
+- *(postgresql)* Support for unique Vec constraints ([#1199])
+
+### Fixed
+
+- *(macros)* Vec newtypes can now derive Embed ([#1197])
+- *(macros)* Fields named `path` and `from_path` can now be used ([#1196])
+- *(macros)* [**breaking**] New-type fields are now named `inner` instead of `_0` ([#1183])
+
+[#1183]: https://github.com/tokio-rs/toasty/pull/1183
+[#1196]: https://github.com/tokio-rs/toasty/pull/1196
+[#1197]: https://github.com/tokio-rs/toasty/pull/1197
+[#1199]: https://github.com/tokio-rs/toasty/pull/1199
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-macros-v0.9.0...toasty-macros-v0.10.0) - 2026-08-11
 
 ### Added

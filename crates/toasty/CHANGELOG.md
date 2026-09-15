@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.11.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.10.0...toasty-v0.11.0) - 2026-09-14
+
+### Added
+
+- PostgreSQL: support unique Vec constraints ([#1199])
+- Engine: conditional execution for the exec program ([#1182])
+
+### Fixed
+
+- Enum fields are now resolved by variant-local index ([#1218])
+- Engine: now supports `Not` in eval verify and type inference ([#1214])
+- Connect: now reads max_connection from driver ([#1195])
+- Macros: now allow fields named `path` and `from_path` ([#1196])
+- MySQL: [**breaking**] batch insert no longer infers IDs ([#1194])
+
+[#1182]: https://github.com/tokio-rs/toasty/pull/1182
+[#1194]: https://github.com/tokio-rs/toasty/pull/1194
+[#1195]: https://github.com/tokio-rs/toasty/pull/1195
+[#1196]: https://github.com/tokio-rs/toasty/pull/1196
+[#1199]: https://github.com/tokio-rs/toasty/pull/1199
+[#1214]: https://github.com/tokio-rs/toasty/pull/1214
+[#1218]: https://github.com/tokio-rs/toasty/pull/1218
+
 ## [0.10.0](https://github.com/tokio-rs/toasty/compare/toasty-v0.9.0...toasty-v0.10.0) - 2026-08-11
 
 ### Added
