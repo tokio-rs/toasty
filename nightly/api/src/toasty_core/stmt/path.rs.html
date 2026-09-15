@@ -95,60 +95,73 @@
 <a href=#95 id=95 data-nosnippet>95</a>    ///
 <a href=#96 id=96 data-nosnippet>96</a>    /// `parent` is the path that navigates to the enum field. Subsequent
 <a href=#97 id=97 data-nosnippet>97</a>    /// projection steps (appended via [`chain`][Path::chain]) index into the
-<a href=#98 id=98 data-nosnippet>98</a>    /// variant's fields using 0-based local indices.
-<a href=#99 id=99 data-nosnippet>99</a>    </span><span class="kw">pub fn </span>from_variant(parent: Path, variant_id: VariantId) -&gt; <span class="self">Self </span>{
-<a href=#100 id=100 data-nosnippet>100</a>        <span class="self">Self </span>{
-<a href=#101 id=101 data-nosnippet>101</a>            root: PathRoot::Variant {
-<a href=#102 id=102 data-nosnippet>102</a>                parent: Box::new(parent),
-<a href=#103 id=103 data-nosnippet>103</a>                variant_id,
-<a href=#104 id=104 data-nosnippet>104</a>            },
-<a href=#105 id=105 data-nosnippet>105</a>            projection: Projection::identity(),
-<a href=#106 id=106 data-nosnippet>106</a>        }
-<a href=#107 id=107 data-nosnippet>107</a>    }
-<a href=#108 id=108 data-nosnippet>108</a>
-<a href=#109 id=109 data-nosnippet>109</a>    <span class="doccomment">/// Appends all field steps from `other` onto this path's projection.
-<a href=#110 id=110 data-nosnippet>110</a>    </span><span class="kw">pub fn </span>chain(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) {
-<a href=#111 id=111 data-nosnippet>111</a>        <span class="kw">for </span>field <span class="kw">in </span><span class="kw-2">&amp;</span>other.projection[..] {
-<a href=#112 id=112 data-nosnippet>112</a>            <span class="self">self</span>.projection.push(<span class="kw-2">*</span>field);
-<a href=#113 id=113 data-nosnippet>113</a>        }
-<a href=#114 id=114 data-nosnippet>114</a>    }
-<a href=#115 id=115 data-nosnippet>115</a>
-<a href=#116 id=116 data-nosnippet>116</a>    <span class="doccomment">/// Converts this path into an [`Expr`] that references the path's field.
-<a href=#117 id=117 data-nosnippet>117</a>    </span><span class="kw">pub fn </span>into_stmt(<span class="self">self</span>) -&gt; Expr {
-<a href=#118 id=118 data-nosnippet>118</a>        <span class="kw">match </span><span class="self">self</span>.root {
-<a href=#119 id=119 data-nosnippet>119</a>            PathRoot::Model(model_id) =&gt; <span class="kw">match </span><span class="self">self</span>.projection.as_slice() {
-<a href=#120 id=120 data-nosnippet>120</a>                [] =&gt; Expr::ref_ancestor_model(<span class="number">0</span>),
-<a href=#121 id=121 data-nosnippet>121</a>                [field, project @ ..] =&gt; {
-<a href=#122 id=122 data-nosnippet>122</a>                    <span class="kw">let </span><span class="kw-2">mut </span>ret = Expr::ref_self_field(FieldId {
-<a href=#123 id=123 data-nosnippet>123</a>                        model: model_id,
-<a href=#124 id=124 data-nosnippet>124</a>                        index: <span class="kw-2">*</span>field,
-<a href=#125 id=125 data-nosnippet>125</a>                    });
-<a href=#126 id=126 data-nosnippet>126</a>
-<a href=#127 id=127 data-nosnippet>127</a>                    <span class="kw">if </span>!project.is_empty() {
-<a href=#128 id=128 data-nosnippet>128</a>                        ret = Expr::project(ret, project);
-<a href=#129 id=129 data-nosnippet>129</a>                    }
+<a href=#98 id=98 data-nosnippet>98</a>    /// variant's fields using 0-based local indices. [`into_stmt`] renders
+<a href=#99 id=99 data-nosnippet>99</a>    /// the root as a variant selection ([`Expr::variant`]) over the parent's
+<a href=#100 id=100 data-nosnippet>100</a>    /// expression.
+<a href=#101 id=101 data-nosnippet>101</a>    ///
+<a href=#102 id=102 data-nosnippet>102</a>    /// [`into_stmt`]: Path::into_stmt
+<a href=#103 id=103 data-nosnippet>103</a>    </span><span class="kw">pub fn </span>from_variant(parent: Path, variant_id: VariantId) -&gt; <span class="self">Self </span>{
+<a href=#104 id=104 data-nosnippet>104</a>        <span class="self">Self </span>{
+<a href=#105 id=105 data-nosnippet>105</a>            root: PathRoot::Variant {
+<a href=#106 id=106 data-nosnippet>106</a>                parent: Box::new(parent),
+<a href=#107 id=107 data-nosnippet>107</a>                variant_id,
+<a href=#108 id=108 data-nosnippet>108</a>            },
+<a href=#109 id=109 data-nosnippet>109</a>            projection: Projection::identity(),
+<a href=#110 id=110 data-nosnippet>110</a>        }
+<a href=#111 id=111 data-nosnippet>111</a>    }
+<a href=#112 id=112 data-nosnippet>112</a>
+<a href=#113 id=113 data-nosnippet>113</a>    <span class="doccomment">/// Appends `other`'s traversal onto this path.
+<a href=#114 id=114 data-nosnippet>114</a>    ///
+<a href=#115 id=115 data-nosnippet>115</a>    /// `other`'s root model is dropped: its steps continue from wherever
+<a href=#116 id=116 data-nosnippet>116</a>    /// `self` ends. A variant selection in `other` is preserved — the result
+<a href=#117 id=117 data-nosnippet>117</a>    /// selects the same variant at the same point of the traversal — so a
+<a href=#118 id=118 data-nosnippet>118</a>    /// variant-rooted path can be chained onto a path reaching its enum from
+<a href=#119 id=119 data-nosnippet>119</a>    /// another model.
+<a href=#120 id=120 data-nosnippet>120</a>    </span><span class="kw">pub fn </span>chain(<span class="kw-2">&amp;mut </span><span class="self">self</span>, other: <span class="kw-2">&amp;</span><span class="self">Self</span>) {
+<a href=#121 id=121 data-nosnippet>121</a>        <span class="kw">if let </span>PathRoot::Variant { parent, variant_id } = <span class="kw-2">&amp;</span>other.root {
+<a href=#122 id=122 data-nosnippet>122</a>            <span class="self">self</span>.chain(parent);
+<a href=#123 id=123 data-nosnippet>123</a>            <span class="kw-2">*</span><span class="self">self </span>= <span class="self">Self</span>::from_variant(<span class="self">self</span>.clone(), <span class="kw-2">*</span>variant_id);
+<a href=#124 id=124 data-nosnippet>124</a>        }
+<a href=#125 id=125 data-nosnippet>125</a>
+<a href=#126 id=126 data-nosnippet>126</a>        <span class="kw">for </span>field <span class="kw">in </span><span class="kw-2">&amp;</span>other.projection[..] {
+<a href=#127 id=127 data-nosnippet>127</a>            <span class="self">self</span>.projection.push(<span class="kw-2">*</span>field);
+<a href=#128 id=128 data-nosnippet>128</a>        }
+<a href=#129 id=129 data-nosnippet>129</a>    }
 <a href=#130 id=130 data-nosnippet>130</a>
-<a href=#131 id=131 data-nosnippet>131</a>                    ret
-<a href=#132 id=132 data-nosnippet>132</a>                }
-<a href=#133 id=133 data-nosnippet>133</a>            },
-<a href=#134 id=134 data-nosnippet>134</a>            PathRoot::Variant { parent, .. } =&gt; {
-<a href=#135 id=135 data-nosnippet>135</a>                <span class="kw">let </span>parent_expr = parent.into_stmt();
-<a href=#136 id=136 data-nosnippet>136</a>                <span class="kw">match </span><span class="self">self</span>.projection.as_slice() {
-<a href=#137 id=137 data-nosnippet>137</a>                    [] =&gt; parent_expr,
-<a href=#138 id=138 data-nosnippet>138</a>                    [local_idx, rest @ ..] =&gt; {
-<a href=#139 id=139 data-nosnippet>139</a>                        <span class="comment">// Record position 0 is the discriminant; variant fields
-<a href=#140 id=140 data-nosnippet>140</a>                        // start at position 1, so add 1 to the local field index.
-<a href=#141 id=141 data-nosnippet>141</a>                        </span><span class="kw">let </span><span class="kw-2">mut </span>ret = Expr::project(parent_expr, Projection::single(local_idx + <span class="number">1</span>));
-<a href=#142 id=142 data-nosnippet>142</a>
-<a href=#143 id=143 data-nosnippet>143</a>                        <span class="kw">if </span>!rest.is_empty() {
-<a href=#144 id=144 data-nosnippet>144</a>                            ret = Expr::project(ret, rest);
-<a href=#145 id=145 data-nosnippet>145</a>                        }
+<a href=#131 id=131 data-nosnippet>131</a>    <span class="doccomment">/// Converts this path into an [`Expr`] that references the path's field.
+<a href=#132 id=132 data-nosnippet>132</a>    ///
+<a href=#133 id=133 data-nosnippet>133</a>    /// A variant root becomes an [`ExprVariant`](super::ExprVariant) over the
+<a href=#134 id=134 data-nosnippet>134</a>    /// parent path's expression, projected by the variant-local steps. The
+<a href=#135 id=135 data-nosnippet>135</a>    /// expression carries no variant check; the engine's statement
+<a href=#136 id=136 data-nosnippet>136</a>    /// normalization adds one per selection to the predicate built over it.
+<a href=#137 id=137 data-nosnippet>137</a>    </span><span class="kw">pub fn </span>into_stmt(<span class="self">self</span>) -&gt; Expr {
+<a href=#138 id=138 data-nosnippet>138</a>        <span class="kw">match </span><span class="self">self</span>.root {
+<a href=#139 id=139 data-nosnippet>139</a>            PathRoot::Model(model_id) =&gt; <span class="kw">match </span><span class="self">self</span>.projection.as_slice() {
+<a href=#140 id=140 data-nosnippet>140</a>                [] =&gt; Expr::ref_ancestor_model(<span class="number">0</span>),
+<a href=#141 id=141 data-nosnippet>141</a>                [field, project @ ..] =&gt; {
+<a href=#142 id=142 data-nosnippet>142</a>                    <span class="kw">let </span><span class="kw-2">mut </span>ret = Expr::ref_self_field(FieldId {
+<a href=#143 id=143 data-nosnippet>143</a>                        model: model_id,
+<a href=#144 id=144 data-nosnippet>144</a>                        index: <span class="kw-2">*</span>field,
+<a href=#145 id=145 data-nosnippet>145</a>                    });
 <a href=#146 id=146 data-nosnippet>146</a>
-<a href=#147 id=147 data-nosnippet>147</a>                        ret
-<a href=#148 id=148 data-nosnippet>148</a>                    }
-<a href=#149 id=149 data-nosnippet>149</a>                }
-<a href=#150 id=150 data-nosnippet>150</a>            }
-<a href=#151 id=151 data-nosnippet>151</a>        }
-<a href=#152 id=152 data-nosnippet>152</a>    }
-<a href=#153 id=153 data-nosnippet>153</a>}
+<a href=#147 id=147 data-nosnippet>147</a>                    <span class="kw">if </span>!project.is_empty() {
+<a href=#148 id=148 data-nosnippet>148</a>                        ret = Expr::project(ret, project);
+<a href=#149 id=149 data-nosnippet>149</a>                    }
+<a href=#150 id=150 data-nosnippet>150</a>
+<a href=#151 id=151 data-nosnippet>151</a>                    ret
+<a href=#152 id=152 data-nosnippet>152</a>                }
+<a href=#153 id=153 data-nosnippet>153</a>            },
+<a href=#154 id=154 data-nosnippet>154</a>            PathRoot::Variant { parent, variant_id } =&gt; {
+<a href=#155 id=155 data-nosnippet>155</a>                <span class="comment">// The selection stands for the variant's payload, so the
+<a href=#156 id=156 data-nosnippet>156</a>                // steps index the variant's fields by their local positions.
+<a href=#157 id=157 data-nosnippet>157</a>                </span><span class="kw">let </span>selection = Expr::variant(parent.into_stmt(), variant_id);
+<a href=#158 id=158 data-nosnippet>158</a>
+<a href=#159 id=159 data-nosnippet>159</a>                <span class="kw">match </span><span class="self">self</span>.projection.as_slice() {
+<a href=#160 id=160 data-nosnippet>160</a>                    [] =&gt; selection,
+<a href=#161 id=161 data-nosnippet>161</a>                    steps =&gt; Expr::project(selection, steps),
+<a href=#162 id=162 data-nosnippet>162</a>                }
+<a href=#163 id=163 data-nosnippet>163</a>            }
+<a href=#164 id=164 data-nosnippet>164</a>        }
+<a href=#165 id=165 data-nosnippet>165</a>    }
+<a href=#166 id=166 data-nosnippet>166</a>}
 </code></pre></div></section></main></body></html>

@@ -36,7 +36,7 @@
             const path_to_root = "";
             const default_light_theme = "light";
             const default_dark_theme = "navy";
-            window.path_to_searchindex_js = "searchindex-5baed9ed.js";
+            window.path_to_searchindex_js = "searchindex-5001f70e.js";
         </script>
         <!-- Start loading toc.js asap -->
         <script src="toc-bc94c3fa.js"></script>
@@ -3616,6 +3616,19 @@ field for the active variant contains a value.</p>
 })
 .exec(&amp;mut db)
 .await?;</code></pre>
+<p>Update an enum field by assigning a whole value. The discriminant and the
+variant columns change together:</p>
+<pre><code class="language-rust ignore">user.update()
+    .contact(ContactInfo::Phone {
+        number: "555-1234".to_string(),
+    })
+    .exec(&amp;mut db)
+    .await?;</code></pre>
+<p><code>stmt::patch</code> cannot enter a variant. A path such as
+<code>contact().email().address()</code> makes the update fail with an
+<code>unsupported_feature</code> error before any write, on every backend. A patch may
+end at an enum field nested inside an embedded struct, which replaces the
+enum as a whole.</p>
 <h3 id="mixed-enums"><a class="header" href="#mixed-enums">Mixed enums</a></h3>
 <p>An enum can have both unit variants and data-carrying variants:</p>
 <pre><code class="language-rust ignore">#[derive(Debug, PartialEq, toasty::Embed)]

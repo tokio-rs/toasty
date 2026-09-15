@@ -249,7 +249,7 @@
 <a href=#249 id=249 data-nosnippet>249</a>        };
 <a href=#250 id=250 data-nosnippet>250</a>
 <a href=#251 id=251 data-nosnippet>251</a>        <span class="kw">for </span>(variant_idx, arm) <span class="kw">in </span>match_expr.arms.iter_mut().enumerate() {
-<a href=#252 id=252 data-nosnippet>252</a>            <span class="kw">let </span>variant_fields: Vec&lt;<span class="kw-2">&amp;</span>app::Field&gt; = app_enum.variant_fields(variant_idx).collect();
+<a href=#252 id=252 data-nosnippet>252</a>            <span class="kw">let </span>variant_fields = app_enum.variant_fields(variant_idx);
 <a href=#253 id=253 data-nosnippet>253</a>            <span class="kw">if </span>variant_fields.is_empty() {
 <a href=#254 id=254 data-nosnippet>254</a>                <span class="kw">continue</span>;
 <a href=#255 id=255 data-nosnippet>255</a>            }

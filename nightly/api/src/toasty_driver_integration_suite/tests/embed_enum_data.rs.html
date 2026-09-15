@@ -615,4 +615,67 @@
 <a href=#615 id=615 data-nosnippet>615</a>        ],
 <a href=#616 id=616 data-nosnippet>616</a>    }));
 <a href=#617 id=617 data-nosnippet>617</a>}
+<a href=#618 id=618 data-nosnippet>618</a>
+<a href=#619 id=619 data-nosnippet>619</a><span class="doccomment">/// A data-carrying variant named `Create` keeps its `create()` field
+<a href=#620 id=620 data-nosnippet>620</a>/// accessor on the enum's fields handle: `create!` and `update!` obtain the
+<a href=#621 id=621 data-nosnippet>621</a>/// construction builder from the enum itself, through `EmbedCreate`, so the
+<a href=#622 id=622 data-nosnippet>622</a>/// handle carries no method of the same name.
+<a href=#623 id=623 data-nosnippet>623</a></span><span class="attr">#[driver_test]
+<a href=#624 id=624 data-nosnippet>624</a></span><span class="kw">pub async fn </span>variant_named_create(test: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#625 id=625 data-nosnippet>625</a>    <span class="attr">#[derive(Debug, PartialEq, toasty::Embed)]
+<a href=#626 id=626 data-nosnippet>626</a>    </span><span class="kw">enum </span>Action {
+<a href=#627 id=627 data-nosnippet>627</a>        Create { name: String },
+<a href=#628 id=628 data-nosnippet>628</a>        Delete,
+<a href=#629 id=629 data-nosnippet>629</a>    }
+<a href=#630 id=630 data-nosnippet>630</a>
+<a href=#631 id=631 data-nosnippet>631</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#632 id=632 data-nosnippet>632</a>    #[key(partition = group, local = id)]
+<a href=#633 id=633 data-nosnippet>633</a>    </span><span class="kw">struct </span>Event {
+<a href=#634 id=634 data-nosnippet>634</a>        <span class="attr">#[auto]
+<a href=#635 id=635 data-nosnippet>635</a>        </span>id: uuid::Uuid,
+<a href=#636 id=636 data-nosnippet>636</a>        group: String,
+<a href=#637 id=637 data-nosnippet>637</a>        action: Action,
+<a href=#638 id=638 data-nosnippet>638</a>    }
+<a href=#639 id=639 data-nosnippet>639</a>
+<a href=#640 id=640 data-nosnippet>640</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = test.setup_db(<span class="macro">models!</span>(Event)).<span class="kw">await</span>;
+<a href=#641 id=641 data-nosnippet>641</a>
+<a href=#642 id=642 data-nosnippet>642</a>    <span class="kw">let </span><span class="kw-2">mut </span>event = <span class="macro">toasty::create!</span>(Event {
+<a href=#643 id=643 data-nosnippet>643</a>        group: <span class="string">"audit"</span>,
+<a href=#644 id=644 data-nosnippet>644</a>        action: Action::Create {
+<a href=#645 id=645 data-nosnippet>645</a>            name: <span class="string">"alpha"</span>.to_string()
+<a href=#646 id=646 data-nosnippet>646</a>        },
+<a href=#647 id=647 data-nosnippet>647</a>    })
+<a href=#648 id=648 data-nosnippet>648</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#649 id=649 data-nosnippet>649</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#650 id=650 data-nosnippet>650</a>
+<a href=#651 id=651 data-nosnippet>651</a>    <span class="kw">let </span>found = Event::filter(
+<a href=#652 id=652 data-nosnippet>652</a>        Event::fields().group().eq(<span class="string">"audit"</span>).and(
+<a href=#653 id=653 data-nosnippet>653</a>            Event::fields()
+<a href=#654 id=654 data-nosnippet>654</a>                .action()
+<a href=#655 id=655 data-nosnippet>655</a>                .create()
+<a href=#656 id=656 data-nosnippet>656</a>                .matches(|c| c.name().eq(<span class="string">"alpha"</span>)),
+<a href=#657 id=657 data-nosnippet>657</a>        ),
+<a href=#658 id=658 data-nosnippet>658</a>    )
+<a href=#659 id=659 data-nosnippet>659</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#660 id=660 data-nosnippet>660</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#661 id=661 data-nosnippet>661</a>    <span class="macro">assert_struct!</span>(found, [{ id: == event.id }]);
+<a href=#662 id=662 data-nosnippet>662</a>
+<a href=#663 id=663 data-nosnippet>663</a>    <span class="macro">toasty::update!</span>(event {
+<a href=#664 id=664 data-nosnippet>664</a>        action: Action::Create {
+<a href=#665 id=665 data-nosnippet>665</a>            name: <span class="string">"beta"</span>.to_string()
+<a href=#666 id=666 data-nosnippet>666</a>        },
+<a href=#667 id=667 data-nosnippet>667</a>    })
+<a href=#668 id=668 data-nosnippet>668</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#669 id=669 data-nosnippet>669</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#670 id=670 data-nosnippet>670</a>
+<a href=#671 id=671 data-nosnippet>671</a>    <span class="kw">let </span>reloaded = Event::get_by_group_and_id(<span class="kw-2">&amp;mut </span>db, <span class="string">"audit"</span>, <span class="kw-2">&amp;</span>event.id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#672 id=672 data-nosnippet>672</a>    <span class="macro">assert_eq!</span>(
+<a href=#673 id=673 data-nosnippet>673</a>        reloaded.action,
+<a href=#674 id=674 data-nosnippet>674</a>        Action::Create {
+<a href=#675 id=675 data-nosnippet>675</a>            name: <span class="string">"beta"</span>.to_string()
+<a href=#676 id=676 data-nosnippet>676</a>        }
+<a href=#677 id=677 data-nosnippet>677</a>    );
+<a href=#678 id=678 data-nosnippet>678</a>
+<a href=#679 id=679 data-nosnippet>679</a>    <span class="prelude-val">Ok</span>(())
+<a href=#680 id=680 data-nosnippet>680</a>}
 </code></pre></div></section></main></body></html>

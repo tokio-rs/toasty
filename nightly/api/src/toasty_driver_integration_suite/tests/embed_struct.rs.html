@@ -1322,45 +1322,112 @@
 <a href=#1322 id=1322 data-nosnippet>1322</a>    <span class="prelude-val">Ok</span>(())
 <a href=#1323 id=1323 data-nosnippet>1323</a>}
 <a href=#1324 id=1324 data-nosnippet>1324</a>
-<a href=#1325 id=1325 data-nosnippet>1325</a><span class="doccomment">/// Tests that UUID fields inside embedded structs round-trip correctly.
-<a href=#1326 id=1326 data-nosnippet>1326</a>/// UUID requires a type cast on databases that don't support it natively
-<a href=#1327 id=1327 data-nosnippet>1327</a>/// (e.g., SQLite stores it as text). This exercises the table_to_model
-<a href=#1328 id=1328 data-nosnippet>1328</a>/// lifting path for embedded struct fields with non-trivial type mappings.
+<a href=#1325 id=1325 data-nosnippet>1325</a><span class="doccomment">/// A data-carrying enum inside an embedded struct is replaced through a
+<a href=#1326 id=1326 data-nosnippet>1326</a>/// patch on the struct: the record value is substituted into every column
+<a href=#1327 id=1327 data-nosnippet>1327</a>/// of the nested enum (discriminant and variant fields), and the struct's
+<a href=#1328 id=1328 data-nosnippet>1328</a>/// other fields are untouched.
 <a href=#1329 id=1329 data-nosnippet>1329</a></span><span class="attr">#[driver_test]
-<a href=#1330 id=1330 data-nosnippet>1330</a></span><span class="kw">pub async fn </span>embedded_struct_with_uuid_field(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
-<a href=#1331 id=1331 data-nosnippet>1331</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
-<a href=#1332 id=1332 data-nosnippet>1332</a>    </span><span class="kw">struct </span>Meta {
-<a href=#1333 id=1333 data-nosnippet>1333</a>        ref_id: Uuid,
-<a href=#1334 id=1334 data-nosnippet>1334</a>        label: String,
+<a href=#1330 id=1330 data-nosnippet>1330</a></span><span class="kw">pub async fn </span>patch_data_enum_inside_embedded_struct(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1331 id=1331 data-nosnippet>1331</a>    <span class="attr">#[derive(Debug, PartialEq, toasty::Embed)]
+<a href=#1332 id=1332 data-nosnippet>1332</a>    </span><span class="kw">enum </span>Status {
+<a href=#1333 id=1333 data-nosnippet>1333</a>        Open,
+<a href=#1334 id=1334 data-nosnippet>1334</a>        Failed { reason: String },
 <a href=#1335 id=1335 data-nosnippet>1335</a>    }
 <a href=#1336 id=1336 data-nosnippet>1336</a>
-<a href=#1337 id=1337 data-nosnippet>1337</a>    <span class="attr">#[derive(Debug, toasty::Model)]
-<a href=#1338 id=1338 data-nosnippet>1338</a>    </span><span class="kw">struct </span>Item {
-<a href=#1339 id=1339 data-nosnippet>1339</a>        <span class="attr">#[key]
-<a href=#1340 id=1340 data-nosnippet>1340</a>        #[auto]
-<a href=#1341 id=1341 data-nosnippet>1341</a>        </span>id: uuid::Uuid,
-<a href=#1342 id=1342 data-nosnippet>1342</a>        name: String,
-<a href=#1343 id=1343 data-nosnippet>1343</a>        meta: Meta,
-<a href=#1344 id=1344 data-nosnippet>1344</a>    }
-<a href=#1345 id=1345 data-nosnippet>1345</a>
-<a href=#1346 id=1346 data-nosnippet>1346</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await</span>;
-<a href=#1347 id=1347 data-nosnippet>1347</a>
-<a href=#1348 id=1348 data-nosnippet>1348</a>    <span class="kw">let </span>ref_id = Uuid::new_v4();
-<a href=#1349 id=1349 data-nosnippet>1349</a>
-<a href=#1350 id=1350 data-nosnippet>1350</a>    <span class="kw">let </span>item = Item::create()
-<a href=#1351 id=1351 data-nosnippet>1351</a>        .name(<span class="string">"widget"</span>)
-<a href=#1352 id=1352 data-nosnippet>1352</a>        .meta(Meta {
-<a href=#1353 id=1353 data-nosnippet>1353</a>            ref_id,
-<a href=#1354 id=1354 data-nosnippet>1354</a>            label: <span class="string">"v1"</span>.to_string(),
-<a href=#1355 id=1355 data-nosnippet>1355</a>        })
-<a href=#1356 id=1356 data-nosnippet>1356</a>        .exec(<span class="kw-2">&amp;mut </span>db)
-<a href=#1357 id=1357 data-nosnippet>1357</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1358 id=1358 data-nosnippet>1358</a>
-<a href=#1359 id=1359 data-nosnippet>1359</a>    <span class="comment">// Read back and verify the UUID survived the round-trip
-<a href=#1360 id=1360 data-nosnippet>1360</a>    </span><span class="kw">let </span>found = Item::get_by_id(<span class="kw-2">&amp;mut </span>db, <span class="kw-2">&amp;</span>item.id).<span class="kw">await</span><span class="question-mark">?</span>;
-<a href=#1361 id=1361 data-nosnippet>1361</a>    <span class="macro">assert_eq!</span>(found.meta.ref_id, ref_id);
-<a href=#1362 id=1362 data-nosnippet>1362</a>    <span class="macro">assert_eq!</span>(found.meta.label, <span class="string">"v1"</span>);
-<a href=#1363 id=1363 data-nosnippet>1363</a>
-<a href=#1364 id=1364 data-nosnippet>1364</a>    <span class="prelude-val">Ok</span>(())
-<a href=#1365 id=1365 data-nosnippet>1365</a>}
+<a href=#1337 id=1337 data-nosnippet>1337</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
+<a href=#1338 id=1338 data-nosnippet>1338</a>    </span><span class="kw">struct </span>Meta {
+<a href=#1339 id=1339 data-nosnippet>1339</a>        label: String,
+<a href=#1340 id=1340 data-nosnippet>1340</a>        status: Status,
+<a href=#1341 id=1341 data-nosnippet>1341</a>    }
+<a href=#1342 id=1342 data-nosnippet>1342</a>
+<a href=#1343 id=1343 data-nosnippet>1343</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#1344 id=1344 data-nosnippet>1344</a>    </span><span class="kw">struct </span>Task {
+<a href=#1345 id=1345 data-nosnippet>1345</a>        <span class="attr">#[key]
+<a href=#1346 id=1346 data-nosnippet>1346</a>        #[auto]
+<a href=#1347 id=1347 data-nosnippet>1347</a>        </span>id: uuid::Uuid,
+<a href=#1348 id=1348 data-nosnippet>1348</a>        meta: Meta,
+<a href=#1349 id=1349 data-nosnippet>1349</a>    }
+<a href=#1350 id=1350 data-nosnippet>1350</a>
+<a href=#1351 id=1351 data-nosnippet>1351</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Task)).<span class="kw">await</span>;
+<a href=#1352 id=1352 data-nosnippet>1352</a>
+<a href=#1353 id=1353 data-nosnippet>1353</a>    <span class="kw">let </span><span class="kw-2">mut </span>task = <span class="macro">toasty::create!</span>(Task {
+<a href=#1354 id=1354 data-nosnippet>1354</a>        meta: Meta {
+<a href=#1355 id=1355 data-nosnippet>1355</a>            label: <span class="string">"fix bug"</span>.to_string(),
+<a href=#1356 id=1356 data-nosnippet>1356</a>            status: Status::Open,
+<a href=#1357 id=1357 data-nosnippet>1357</a>        }
+<a href=#1358 id=1358 data-nosnippet>1358</a>    })
+<a href=#1359 id=1359 data-nosnippet>1359</a>    .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#1360 id=1360 data-nosnippet>1360</a>    .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1361 id=1361 data-nosnippet>1361</a>
+<a href=#1362 id=1362 data-nosnippet>1362</a>    task.update()
+<a href=#1363 id=1363 data-nosnippet>1363</a>        .meta(toasty::stmt::patch(
+<a href=#1364 id=1364 data-nosnippet>1364</a>            Meta::fields().status().into(),
+<a href=#1365 id=1365 data-nosnippet>1365</a>            Status::Failed {
+<a href=#1366 id=1366 data-nosnippet>1366</a>                reason: <span class="string">"flaky"</span>.to_string(),
+<a href=#1367 id=1367 data-nosnippet>1367</a>            },
+<a href=#1368 id=1368 data-nosnippet>1368</a>        ))
+<a href=#1369 id=1369 data-nosnippet>1369</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#1370 id=1370 data-nosnippet>1370</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1371 id=1371 data-nosnippet>1371</a>
+<a href=#1372 id=1372 data-nosnippet>1372</a>    <span class="kw">let </span>found = Task::get_by_id(<span class="kw-2">&amp;mut </span>db, <span class="kw-2">&amp;</span>task.id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1373 id=1373 data-nosnippet>1373</a>    <span class="macro">assert_struct!</span>(found.meta, {
+<a href=#1374 id=1374 data-nosnippet>1374</a>        label: <span class="string">"fix bug"</span>,
+<a href=#1375 id=1375 data-nosnippet>1375</a>        status: Status::Failed { reason: <span class="string">"flaky" </span>},
+<a href=#1376 id=1376 data-nosnippet>1376</a>    });
+<a href=#1377 id=1377 data-nosnippet>1377</a>
+<a href=#1378 id=1378 data-nosnippet>1378</a>    task.update()
+<a href=#1379 id=1379 data-nosnippet>1379</a>        .meta(toasty::stmt::patch(
+<a href=#1380 id=1380 data-nosnippet>1380</a>            Meta::fields().status().into(),
+<a href=#1381 id=1381 data-nosnippet>1381</a>            Status::Open,
+<a href=#1382 id=1382 data-nosnippet>1382</a>        ))
+<a href=#1383 id=1383 data-nosnippet>1383</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#1384 id=1384 data-nosnippet>1384</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1385 id=1385 data-nosnippet>1385</a>
+<a href=#1386 id=1386 data-nosnippet>1386</a>    <span class="kw">let </span>found = Task::get_by_id(<span class="kw-2">&amp;mut </span>db, <span class="kw-2">&amp;</span>task.id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1387 id=1387 data-nosnippet>1387</a>    <span class="macro">assert_struct!</span>(found.meta, { label: <span class="string">"fix bug"</span>, status: Status::Open });
+<a href=#1388 id=1388 data-nosnippet>1388</a>
+<a href=#1389 id=1389 data-nosnippet>1389</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1390 id=1390 data-nosnippet>1390</a>}
+<a href=#1391 id=1391 data-nosnippet>1391</a>
+<a href=#1392 id=1392 data-nosnippet>1392</a><span class="doccomment">/// Tests that UUID fields inside embedded structs round-trip correctly.
+<a href=#1393 id=1393 data-nosnippet>1393</a>/// UUID requires a type cast on databases that don't support it natively
+<a href=#1394 id=1394 data-nosnippet>1394</a>/// (e.g., SQLite stores it as text). This exercises the table_to_model
+<a href=#1395 id=1395 data-nosnippet>1395</a>/// lifting path for embedded struct fields with non-trivial type mappings.
+<a href=#1396 id=1396 data-nosnippet>1396</a></span><span class="attr">#[driver_test]
+<a href=#1397 id=1397 data-nosnippet>1397</a></span><span class="kw">pub async fn </span>embedded_struct_with_uuid_field(t: <span class="kw-2">&amp;mut </span>Test) -&gt; <span class="prelude-ty">Result</span>&lt;()&gt; {
+<a href=#1398 id=1398 data-nosnippet>1398</a>    <span class="attr">#[derive(Debug, toasty::Embed)]
+<a href=#1399 id=1399 data-nosnippet>1399</a>    </span><span class="kw">struct </span>Meta {
+<a href=#1400 id=1400 data-nosnippet>1400</a>        ref_id: Uuid,
+<a href=#1401 id=1401 data-nosnippet>1401</a>        label: String,
+<a href=#1402 id=1402 data-nosnippet>1402</a>    }
+<a href=#1403 id=1403 data-nosnippet>1403</a>
+<a href=#1404 id=1404 data-nosnippet>1404</a>    <span class="attr">#[derive(Debug, toasty::Model)]
+<a href=#1405 id=1405 data-nosnippet>1405</a>    </span><span class="kw">struct </span>Item {
+<a href=#1406 id=1406 data-nosnippet>1406</a>        <span class="attr">#[key]
+<a href=#1407 id=1407 data-nosnippet>1407</a>        #[auto]
+<a href=#1408 id=1408 data-nosnippet>1408</a>        </span>id: uuid::Uuid,
+<a href=#1409 id=1409 data-nosnippet>1409</a>        name: String,
+<a href=#1410 id=1410 data-nosnippet>1410</a>        meta: Meta,
+<a href=#1411 id=1411 data-nosnippet>1411</a>    }
+<a href=#1412 id=1412 data-nosnippet>1412</a>
+<a href=#1413 id=1413 data-nosnippet>1413</a>    <span class="kw">let </span><span class="kw-2">mut </span>db = t.setup_db(<span class="macro">models!</span>(Item)).<span class="kw">await</span>;
+<a href=#1414 id=1414 data-nosnippet>1414</a>
+<a href=#1415 id=1415 data-nosnippet>1415</a>    <span class="kw">let </span>ref_id = Uuid::new_v4();
+<a href=#1416 id=1416 data-nosnippet>1416</a>
+<a href=#1417 id=1417 data-nosnippet>1417</a>    <span class="kw">let </span>item = Item::create()
+<a href=#1418 id=1418 data-nosnippet>1418</a>        .name(<span class="string">"widget"</span>)
+<a href=#1419 id=1419 data-nosnippet>1419</a>        .meta(Meta {
+<a href=#1420 id=1420 data-nosnippet>1420</a>            ref_id,
+<a href=#1421 id=1421 data-nosnippet>1421</a>            label: <span class="string">"v1"</span>.to_string(),
+<a href=#1422 id=1422 data-nosnippet>1422</a>        })
+<a href=#1423 id=1423 data-nosnippet>1423</a>        .exec(<span class="kw-2">&amp;mut </span>db)
+<a href=#1424 id=1424 data-nosnippet>1424</a>        .<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1425 id=1425 data-nosnippet>1425</a>
+<a href=#1426 id=1426 data-nosnippet>1426</a>    <span class="comment">// Read back and verify the UUID survived the round-trip
+<a href=#1427 id=1427 data-nosnippet>1427</a>    </span><span class="kw">let </span>found = Item::get_by_id(<span class="kw-2">&amp;mut </span>db, <span class="kw-2">&amp;</span>item.id).<span class="kw">await</span><span class="question-mark">?</span>;
+<a href=#1428 id=1428 data-nosnippet>1428</a>    <span class="macro">assert_eq!</span>(found.meta.ref_id, ref_id);
+<a href=#1429 id=1429 data-nosnippet>1429</a>    <span class="macro">assert_eq!</span>(found.meta.label, <span class="string">"v1"</span>);
+<a href=#1430 id=1430 data-nosnippet>1430</a>
+<a href=#1431 id=1431 data-nosnippet>1431</a>    <span class="prelude-val">Ok</span>(())
+<a href=#1432 id=1432 data-nosnippet>1432</a>}
 </code></pre></div></section></main></body></html>
