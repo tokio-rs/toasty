@@ -73,6 +73,7 @@ impl Engine {
             errors: vec![],
             dependencies: IndexSet::new(),
             insert_stmts: vec![],
+            update_returning: IndexMap::new(),
         };
 
         state.lower_stmt(stmt::ExprContext::new(schema), None, stmt);
@@ -163,6 +164,9 @@ struct LowerStatement<'a, 'b> {
 
 #[derive(Debug)]
 struct LoweringState<'a> {
+    /// Lowered assignments available while loading eager relations for an
+    /// update's returned embeds. Their keys come from the replacement value.
+    update_returning: IndexMap<hir::StmtId, stmt::Assignments>,
     /// Database engine handle
     engine: &'a Engine,
 
@@ -994,6 +998,15 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
                             let source_id = self.scope_stmt_id();
                             let target_id = self.resolve_stmt_id(expr_column.nesting);
 
+                            if let Some(assignments) = self.state.update_returning.get(&target_id)
+                                && let Some(stmt::Assignment::Set(value)) =
+                                    assignments.get(&[expr_column.column])
+                                && value.is_const()
+                            {
+                                *expr = value.clone();
+                                return;
+                            }
+
                             // the current scope ID should also be the top of the stack
                             debug_assert_eq!(self.state.scopes.len(), self.scope_id + 1);
 
@@ -1220,6 +1233,10 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             lower.visit_assignments_mut(&mut upsert.update_defaults);
         }
 
+        let returning_model = stmt
+            .returning
+            .as_ref()
+            .is_some_and(stmt::Returning::is_model);
         if let Some(returning) = &mut stmt.returning {
             lower.visit_returning_mut(returning);
         }
@@ -1238,6 +1255,7 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
             &mut stmt.source,
             &mut stmt.returning,
             preserve_returning_projection,
+            returning_model,
         );
 
         // Lower the insertion source
@@ -1289,6 +1307,11 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         let mut lower = self.scope_expr(&stmt.source);
 
         lower.visit_filter_mut(&mut stmt.filter);
+        if lower.model().is_some()
+            && let stmt::Returning::Project(value) = &mut stmt.returning
+        {
+            lower.lower_returning().process_projected_embeds(value);
+        }
         lower.visit_returning_mut(&mut stmt.returning);
         lower.apply_lowering_filter_constraint(&mut stmt.filter);
 
@@ -1361,9 +1384,18 @@ impl visit_mut::VisitMut for LowerStatement<'_, '_> {
         }
 
         if let Some(returning) = &mut stmt.returning {
+            let stmt_id = lower.scope_stmt_id();
+            lower
+                .state
+                .update_returning
+                .insert(stmt_id, stmt.assignments.clone());
+            if returning_changed {
+                lower.process_update_embedded_relations(returning);
+            }
             lower.visit_returning_mut(returning);
             // Use the lowered assignments (which are now column-indexed)
             returning::constantize_update_returning(lower.expr_cx, returning, &stmt.assignments);
+            lower.state.update_returning.swap_remove(&stmt_id);
         }
 
         self.visit_update_target_mut(&mut stmt.target);
@@ -1576,13 +1608,19 @@ impl<'a, 'b> LowerStatement<'a, 'b> {
                 Some(self.combine_record_op(op, std::mem::take(&mut rec.fields), val_exprs))
             }
             (stmt::Expr::Cast(expr_cast), other) | (other, stmt::Expr::Cast(expr_cast)) => {
-                // An embedded-enum decode (`Match`, possibly under a
-                // projection) on the other side cannot be cast mid-lower;
-                // post-lower simplify eliminates the match into
-                // variant-gated terms and strips the decode casts
-                // (`eliminate_match_in_binary_op`,
-                // `simplify_expr_in_subquery`).
+                // Expand embed decodes into guarded comparisons before
+                // converting their keys to the database's stored type.
                 if expr_is_enum_decode(other) {
+                    // This also covers optional structs. Each surviving arm
+                    // receives the same cast handling as a direct relation.
+                    let original = stmt::Expr::binary_op(lhs.clone(), op, rhs.clone());
+                    let mut expanded = original.clone();
+                    Simplify::with_context(self.expr_cx, self.capability())
+                        .visit_expr_mut(&mut expanded);
+                    if expanded != original {
+                        self.visit_expr_mut(&mut expanded);
+                        return Some(expanded);
+                    }
                     return None;
                 }
 
