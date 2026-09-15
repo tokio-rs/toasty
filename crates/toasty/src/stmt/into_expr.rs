@@ -386,6 +386,16 @@ impl_assign_via_expr!({T: IntoExpr<T>} T => Rc<T>);
 macro_rules! ref_smart_ptr_impl {
     ( $( $ptr:ident ,)* ) => {
         $(
+            impl<T: IntoExpr<T>> IntoExpr<$ptr<T>> for $ptr<T> {
+                fn into_expr(self) -> Expr<$ptr<T>> {
+                    T::by_ref(&self).cast()
+                }
+
+                fn by_ref(&self) -> Expr<$ptr<T>> {
+                    T::by_ref(self).cast()
+                }
+            }
+
             impl<T: IntoExpr<T>> IntoExpr<T> for &$ptr<T> {
                 fn into_expr(self) -> Expr<T> {
                     T::by_ref(self)

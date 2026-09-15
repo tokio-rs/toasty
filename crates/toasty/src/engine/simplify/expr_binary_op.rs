@@ -18,6 +18,13 @@ impl Simplify<'_> {
         lhs: &mut stmt::Expr,
         rhs: &mut stmt::Expr,
     ) -> Option<stmt::Expr> {
+        if (op.is_eq() || op.is_ne())
+            && let (Some(lhs_len), Some(rhs_len)) = (lhs.record_len(), rhs.record_len())
+            && lhs_len != rhs_len
+        {
+            return Some(op.is_ne().into());
+        }
+
         let result = match (&mut *lhs, &mut *rhs) {
             // Self-comparison, e.g.,
             //
@@ -46,14 +53,16 @@ impl Simplify<'_> {
                 let comparisons: Vec<_> = std::mem::take(&mut lhs_rec.fields)
                     .into_iter()
                     .zip(std::mem::take(&mut rhs_rec.fields))
-                    .map(|(l, r)| Expr::binary_op(l, op, r))
+                    .map(|(l, r)| record_field_comparison(l, op, r))
                     .collect();
 
-                if op.is_eq() {
-                    Some(Expr::and_from_vec(comparisons))
+                let mut comparison = if op.is_eq() {
+                    Expr::and_from_vec(comparisons)
                 } else {
-                    Some(Expr::or_from_vec(comparisons))
-                }
+                    Expr::or_from_vec(comparisons)
+                };
+                self.visit_expr_mut(&mut comparison);
+                Some(comparison)
             }
             // Tuple decomposition with a Value::Record on one side,
             //
@@ -67,14 +76,16 @@ impl Simplify<'_> {
                 let comparisons: Vec<_> = std::mem::take(&mut rec.fields)
                     .into_iter()
                     .zip(std::mem::take(&mut val_rec.fields))
-                    .map(|(expr, val)| Expr::binary_op(expr, op, Expr::from(val)))
+                    .map(|(expr, val)| record_field_comparison(expr, op, Expr::from(val)))
                     .collect();
 
-                if op.is_eq() {
-                    Some(Expr::and_from_vec(comparisons))
+                let mut comparison = if op.is_eq() {
+                    Expr::and_from_vec(comparisons)
                 } else {
-                    Some(Expr::or_from_vec(comparisons))
-                }
+                    Expr::or_from_vec(comparisons)
+                };
+                self.visit_expr_mut(&mut comparison);
+                Some(comparison)
             }
             // Match elimination: distribute binary op into match arms as OR
             //
@@ -108,6 +119,15 @@ impl Simplify<'_> {
                 if (op.is_eq() || op.is_ne()) && cast.from.is_none() && cast.expr.is_column() =>
             {
                 self.strip_decode_cast_comparison(op, cast, value)
+            }
+            // Decode-cast stripping on column-versus-column comparisons, such
+            // as one embedded relation compared to another after both sides
+            // substitute to key columns. The eligibility check proves that
+            // comparing the stored forms preserves decoded equality.
+            (Expr::Cast(lhs_cast), Expr::Cast(rhs_cast))
+                if self.can_strip_decode_cast_column_comparison(op, lhs_cast, rhs_cast) =>
+            {
+                self.strip_decode_cast_column_comparison(op, lhs_cast, rhs_cast)
             }
             // Self-comparison with projections, e.g.,
             //
@@ -176,6 +196,54 @@ impl Simplify<'_> {
         Some(Expr::binary_op(cast.expr.take(), op, value))
     }
 
+    /// Returns whether `cast(col_a, T) <eq/ne> cast(col_b, T)` can compare the
+    /// stored columns directly without changing the result.
+    fn can_strip_decode_cast_column_comparison(
+        &self,
+        op: stmt::BinaryOp,
+        lhs: &stmt::ExprCast,
+        rhs: &stmt::ExprCast,
+    ) -> bool {
+        if !(op.is_eq() || op.is_ne())
+            || lhs.from.is_some()
+            || rhs.from.is_some()
+            || !lhs.expr.is_column()
+            || !rhs.expr.is_column()
+            || lhs.ty != rhs.ty
+        {
+            return false;
+        }
+
+        let Some(lhs_reference) = lhs.expr.as_expr_reference() else {
+            return false;
+        };
+        let Some(rhs_reference) = rhs.expr.as_expr_reference() else {
+            return false;
+        };
+
+        let ResolvedRef::Column(lhs_column) = self.cx.resolve_expr_reference(lhs_reference) else {
+            return false;
+        };
+        let ResolvedRef::Column(rhs_column) = self.cx.resolve_expr_reference(rhs_reference) else {
+            return false;
+        };
+
+        lhs_column.ty == rhs_column.ty && lhs_column.ty.cast_preserves_equality(&lhs.ty)
+    }
+
+    /// Rewrites `cast(col_a, T) <eq/ne> cast(col_b, T)` to
+    /// `col_a <eq/ne> col_b` after
+    /// [`Self::can_strip_decode_cast_column_comparison`] proves the rewrite is
+    /// valid.
+    fn strip_decode_cast_column_comparison(
+        &mut self,
+        op: stmt::BinaryOp,
+        lhs: &mut stmt::ExprCast,
+        rhs: &mut stmt::ExprCast,
+    ) -> Option<Expr> {
+        Some(Expr::binary_op(lhs.expr.take(), op, rhs.expr.take()))
+    }
+
     /// Returns `true` if `expr` is a column reference that resolves to a
     /// derived VALUES table where every row has NULL at the referenced column.
     fn is_always_null_derived_column(&self, expr: &Expr) -> bool {
@@ -199,6 +267,25 @@ impl Simplify<'_> {
         other: Expr,
         match_on_lhs: bool,
     ) -> Expr {
+        self.eliminate_match(match_expr, |arm| {
+            if match_on_lhs {
+                Expr::binary_op(arm, op, other.clone())
+            } else {
+                Expr::binary_op(other.clone(), op, arm)
+            }
+        })
+    }
+
+    /// Distributes a predicate over match arms, producing an OR of guarded
+    /// terms. `term` builds the predicate for one arm from that arm's
+    /// expression; each arm becomes `(subject == pattern) AND term(arm_expr)`,
+    /// and the else branch is guarded by the negation of every pattern. Dead
+    /// branches (false/null/error) are pruned after inline simplification.
+    pub(super) fn eliminate_match(
+        &mut self,
+        match_expr: Expr,
+        term: impl Fn(Expr) -> Expr,
+    ) -> Expr {
         let Expr::Match(match_expr) = match_expr else {
             unreachable!()
         };
@@ -209,19 +296,20 @@ impl Simplify<'_> {
         let patterns: Vec<_> = match_expr.arms.iter().map(|a| a.pattern.clone()).collect();
 
         for arm in match_expr.arms {
+            // Unit enum variants return the discriminant subject. The arm's
+            // pattern is the value of that subject within this branch.
+            let arm_expr = if arm.expr == *match_expr.subject {
+                Expr::from(arm.pattern.clone())
+            } else {
+                arm.expr
+            };
             let guard = Expr::binary_op(
                 (*match_expr.subject).clone(),
                 stmt::BinaryOp::Eq,
                 Expr::from(arm.pattern),
             );
 
-            let comparison = if match_on_lhs {
-                Expr::binary_op(arm.expr, op, other.clone())
-            } else {
-                Expr::binary_op(other.clone(), op, arm.expr)
-            };
-
-            let mut term = Expr::and_from_vec(vec![guard, comparison]);
+            let mut term = Expr::and_from_vec(vec![guard, term(arm_expr)]);
             self.visit_expr_mut(&mut term);
 
             // Prune dead branches
@@ -245,14 +333,8 @@ impl Simplify<'_> {
                 })
                 .collect();
 
-            let comparison = if match_on_lhs {
-                Expr::binary_op(*match_expr.else_expr, op, other)
-            } else {
-                Expr::binary_op(other, op, *match_expr.else_expr)
-            };
-
             let mut else_operands = guards;
-            else_operands.push(comparison);
+            else_operands.push(term(*match_expr.else_expr));
             let mut term = Expr::and_from_vec(else_operands);
             self.visit_expr_mut(&mut term);
 
@@ -317,4 +399,20 @@ fn contains_error(expr: &Expr) -> bool {
     let mut find = FindError(false);
     find.visit_expr(expr);
     find.0
+}
+
+/// Uses null checks for record fields, including empty relation slots.
+fn record_field_comparison(lhs: Expr, op: stmt::BinaryOp, rhs: Expr) -> Expr {
+    let other = if lhs.is_value_null() {
+        rhs
+    } else if rhs.is_value_null() {
+        lhs
+    } else {
+        return Expr::binary_op(lhs, op, rhs);
+    };
+    if op.is_eq() {
+        Expr::is_null(other)
+    } else {
+        Expr::is_not_null(other)
+    }
 }

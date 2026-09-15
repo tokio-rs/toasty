@@ -96,6 +96,7 @@ fn fold_one(i: &mut Expr) -> Option<Expr> {
         | Expr::StartsWith(_)
         | Expr::Static(_)
         | Expr::Stmt(_)
-        | Expr::Value(_) => None,
+        | Expr::Value(_)
+        | Expr::Variant(_) => None,
     }
 }

@@ -368,6 +368,24 @@ let user = toasty::create!(User {
 .await?;
 ```
 
+Update an enum field by assigning a whole value. The discriminant and the
+variant columns change together:
+
+```rust,ignore
+user.update()
+    .contact(ContactInfo::Phone {
+        number: "555-1234".to_string(),
+    })
+    .exec(&mut db)
+    .await?;
+```
+
+`stmt::patch` cannot enter a variant. A path such as
+`contact().email().address()` makes the update fail with an
+`unsupported_feature` error before any write, on every backend. A patch may
+end at an enum field nested inside an embedded struct, which replaces the
+enum as a whole.
+
 ### Mixed enums
 
 An enum can have both unit variants and data-carrying variants:

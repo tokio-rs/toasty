@@ -36,11 +36,11 @@ impl<'stmt> IndexMatch<'stmt> {
 
         match expr {
             BinaryOp(e) => match (&*e.lhs, &*e.rhs) {
-                (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column(_)), rhs) => {
-                    assert!(
-                        !rhs.is_expr_reference(),
-                        "TODO: handle ExprReference on both sides"
-                    );
+                // A reference-to-reference predicate has no fixed value with
+                // which to probe an index. Leave it to the scan/result filter
+                // path instead of treating either operand as an index key.
+                (stmt::Expr::Reference(_), stmt::Expr::Reference(_)) => false,
+                (stmt::Expr::Reference(lhs @ stmt::ExprReference::Column(_)), _) => {
                     self.match_expr_binary_op_column(cx, lhs, expr, e.op)
                 }
                 (_, stmt::Expr::Reference(rhs @ stmt::ExprReference::Column(_))) => {
@@ -71,6 +71,8 @@ impl<'stmt> IndexMatch<'stmt> {
                 _ => false,
             },
             InList(e) => self.match_expr_in_list(cx, &e.expr, expr),
+            // `IS NOT NULL` is a range, not a key value.
+            IsNull(e) if e.negated => false,
             IsNull(e) => match &*e.expr {
                 stmt::Expr::Reference(expr_column @ stmt::ExprReference::Column(_)) => {
                     self.match_expr_binary_op_column(cx, expr_column, expr, stmt::BinaryOp::Eq)

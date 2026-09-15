@@ -7,6 +7,7 @@ impl Simplify<'_> {
     /// literals, null propagation, single/empty collapse on canonical input)
     /// runs in `fold::expr_and` before this is reached.
     pub(super) fn simplify_expr_and(&mut self, expr: &mut stmt::ExprAnd) -> Option<stmt::Expr> {
+        self.merge_in_subqueries(&mut expr.operands);
         dedup_operands(&mut expr.operands);
 
         // Absorption law, `x and (x or y)` → `x`
