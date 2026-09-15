@@ -363,7 +363,7 @@ impl EmbeddedEnum {
         }
         let mut flattened = 0;
         for variant_index in 0..self.variants.len() {
-            let count = self.variant_fields(variant_index).count();
+            let count = self.variant_fields(variant_index).len();
             if count >= position {
                 return Some(flattened + position - 1);
             }
@@ -377,7 +377,7 @@ impl EmbeddedEnum {
     pub fn variant_local_index(&self, index: usize) -> Option<(usize, usize)> {
         let mut remaining = index;
         for variant_index in 0..self.variants.len() {
-            let count = self.variant_fields(variant_index).count();
+            let count = self.variant_fields(variant_index).len();
             if remaining < count {
                 return Some((variant_index, remaining));
             }

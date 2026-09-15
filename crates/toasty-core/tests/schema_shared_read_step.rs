@@ -47,10 +47,12 @@ fn degenerate_enum() -> EmbeddedEnum {
             EnumVariant {
                 name: Name::new("Alpha"),
                 discriminant: stmt::Value::I64(0),
+                field_range: 0..2,
             },
             EnumVariant {
                 name: Name::new("Beta"),
                 discriminant: stmt::Value::I64(1),
+                field_range: 2..2,
             },
         ],
         fields: vec![
@@ -76,10 +78,12 @@ fn balanced_enum() -> EmbeddedEnum {
             EnumVariant {
                 name: Name::new("Alpha"),
                 discriminant: stmt::Value::I64(0),
+                field_range: 0..2,
             },
             EnumVariant {
                 name: Name::new("Beta"),
                 discriminant: stmt::Value::I64(1),
+                field_range: 2..3,
             },
         ],
         fields: vec![
@@ -107,18 +111,22 @@ fn unit_heavy_enum() -> EmbeddedEnum {
             EnumVariant {
                 name: Name::new("Alpha"),
                 discriminant: stmt::Value::I64(0),
+                field_range: 0..1,
             },
             EnumVariant {
                 name: Name::new("Beta"),
                 discriminant: stmt::Value::I64(1),
+                field_range: 1..1,
             },
             EnumVariant {
                 name: Name::new("Gamma"),
                 discriminant: stmt::Value::I64(2),
+                field_range: 2..2,
             },
             EnumVariant {
                 name: Name::new("Delta"),
                 discriminant: stmt::Value::I64(3),
+                field_range: 3..3,
             },
         ],
         fields: vec![prim_field(0, "label", 0, Some(Name::new("label")))],

@@ -55,7 +55,7 @@ The gateless accessor is read-only: it builds filter and `order_by` expressions 
 
 ## Behavior
 
-The shared read lowers to a plain column comparison (`col = v`) and `ORDER BY col`, with no gate. Variant-gated access keeps its gate for every variant field — including fields after a variant's first, which the engine previously rejected outright (a gated read that must distribute across a unit sibling still panics; see `shared_column_gated_order_by_unit_sibling`). Rows whose variant does not declare the ident hold `NULL`: `NULL` matches neither `eq` nor `ne`; use `is_none()` / `is_some()` for `NULL` checks. Uniqueness follows the column: only enum-level `#[unique(name)]` applies; field-level `#[unique]` on a sharing member stays rejected. Updates are unchanged: switching variants is full replacement, with no patch through the gateless path.
+The shared read lowers to a plain column comparison (`col = v`) and `ORDER BY col`, with no gate. Variant-gated access keeps its gate for every variant field — including fields after a variant's first, which the engine previously rejected outright (a gated read that must distribute across a unit sibling now lowers instead of panicking; see `shared_column_gated_order_by_unit_sibling`). Rows whose variant does not declare the ident hold `NULL`: `NULL` matches neither `eq` nor `ne`; use `is_none()` / `is_some()` for `NULL` checks. Uniqueness follows the column: only enum-level `#[unique(name)]` applies; field-level `#[unique]` on a sharing member stays rejected. Updates are unchanged: switching variants is full replacement, with no patch through the gateless path.
 
 ## Edge cases
 
