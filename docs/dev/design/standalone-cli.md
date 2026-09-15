@@ -100,6 +100,27 @@ The build always runs in the `dev` profile. Release-profile concerns
 (LTO, dead-stripping, link-section gc) do not apply to the schema-dump
 ctor.
 
+### Feature selection
+
+`-F/--features`, `--all-features`, and `--no-default-features` are global
+flags, forwarded verbatim to cargo. They are not cosmetic: a model behind
+`#[cfg(feature = "…")]` is absent from an artifact built without it, so
+extracting without the flag yields a schema missing those tables and a
+diff that drops them. A bin with `required-features` cannot be built at
+all until they are selected.
+
+The flags reach `cargo metadata` as well as the build. The resolved graph
+is feature-dependent, so a `toasty` dependency declared `optional` is
+absent from it — and extraction is refused as unlinked — until the feature
+enabling it is on.
+
+The environment is otherwise passed through. Cargo's own variables and
+`RUSTUP_TOOLCHAIN` are scrubbed so a CLI running under `cargo run` does
+not cache-bust the user's builds or pin their toolchain, but
+`RUSTFLAGS`, `RUSTC`, and the compiler wrappers are left alone: cargo
+never sets them, so a value there is the user's own, and dropping it
+would build the project differently than they build it themselves.
+
 ### The dump constructor
 
 `toasty` itself contributes a constructor through [`linktime`]:

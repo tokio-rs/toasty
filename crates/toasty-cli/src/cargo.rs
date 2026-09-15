@@ -12,6 +12,54 @@ use std::collections::{HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
 
+/// Cargo's feature-selection flags, forwarded to every cargo invocation the
+/// CLI makes.
+///
+/// Models behind a Cargo feature only exist in the artifact when that feature
+/// is on, so a schema extracted without the flag is missing their tables and
+/// diffs into a drop migration. A bin with `required-features` cannot be built
+/// at all without them.
+///
+/// The flags reach `cargo metadata` too, not just the build: the resolved
+/// graph is feature-dependent, so an optional `toasty` dependency is invisible
+/// there — and [`Metadata::links_toasty`] refuses extraction — until the
+/// feature enabling it is selected.
+#[derive(clap::Args, Debug, Default, Clone)]
+pub struct Features {
+    /// Space or comma separated list of features to activate
+    #[arg(short = 'F', long = "features", global = true, value_name = "FEATURES")]
+    features: Vec<String>,
+
+    /// Activate all available features
+    #[arg(long, global = true)]
+    all_features: bool,
+
+    /// Do not activate the `default` feature
+    #[arg(long, global = true)]
+    no_default_features: bool,
+}
+
+impl Features {
+    /// Appends the flags to a cargo invocation.
+    ///
+    /// Values are forwarded verbatim rather than parsed: cargo already splits
+    /// comma- and space-separated lists, and accepts both `feat` and
+    /// `pkg/feat`.
+    fn apply_to(&self, cmd: &mut Command) {
+        for features in &self.features {
+            cmd.args(["--features", features]);
+        }
+
+        if self.all_features {
+            cmd.arg("--all-features");
+        }
+
+        if self.no_default_features {
+            cmd.arg("--no-default-features");
+        }
+    }
+}
+
 /// Output of `cargo metadata`.
 pub struct Metadata {
     inner: cargo_metadata::Metadata,
@@ -24,12 +72,15 @@ impl Metadata {
     /// extraction runs the built artifact, and running it is only safe once
     /// `toasty` is known to be somewhere in the graph. See
     /// [`Metadata::links_toasty`].
-    pub fn load() -> Result<Self> {
+    pub fn load(features: &Features) -> Result<Self> {
         // `MetadataCommand` would spawn cargo itself, but the environment has
         // to be scrubbed first, so the command is run here and only its output
         // handed over for parsing.
-        let output = scrubbed_command("cargo")
-            .args(["metadata", "--format-version=1"])
+        let mut cmd = scrubbed_command("cargo");
+        cmd.args(["metadata", "--format-version=1"]);
+        features.apply_to(&mut cmd);
+
+        let output = cmd
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .output()
@@ -236,6 +287,7 @@ pub fn build_artifact(
     workspace_root: &Path,
     package: &str,
     target: &BuildTarget,
+    features: &Features,
 ) -> Result<PathBuf> {
     let mut cmd = scrubbed_command("cargo");
     cmd.current_dir(workspace_root);
@@ -248,6 +300,7 @@ pub fn build_artifact(
             cmd.args(["rustc", "-p", package, "--lib", "--crate-type", "cdylib"]);
         }
     }
+    features.apply_to(&mut cmd);
     cmd.arg("--message-format=json-render-diagnostics");
 
     let output = cmd
@@ -323,6 +376,46 @@ fn is_dylib(path: &Path) -> bool {
     )
 }
 
+/// Creates a command with the environment variables cargo and rustup inject
+/// removed. See [`is_injected`].
+fn scrubbed_command(program: &str) -> Command {
+    let mut cmd = Command::new(program);
+    for (key, _) in std::env::vars_os() {
+        let Some(key_str) = key.to_str() else {
+            continue;
+        };
+        if is_injected(key_str) {
+            cmd.env_remove(key);
+        }
+    }
+    cmd
+}
+
+/// Whether an environment variable was put there by cargo or rustup, rather
+/// than by the user.
+///
+/// Injected variables are scrubbed so builds spawned by the CLI have the same
+/// fingerprint as builds the user runs directly; without this, running the CLI
+/// itself under `cargo run` would cache-bust the user's builds.
+/// `RUSTUP_TOOLCHAIN` counts as injected — rustup's proxy sets it, and keeping
+/// it would pin the build to whichever toolchain launched the CLI instead of
+/// the one the target project's `rust-toolchain.toml` asks for.
+///
+/// `CARGO_HOME` and `CARGO_TARGET_DIR` are exceptions: the user's own shell
+/// would apply them too.
+///
+/// Everything else is the user's to set. Cargo does not set `RUSTFLAGS`,
+/// `RUSTC`, or the compiler wrappers, so a value in one of those came from the
+/// caller, and dropping it would build the project differently than they build
+/// it themselves — silently losing `--cfg`-gated models, or bypassing a
+/// toolchain or wrapper the project requires. `RUSTFLAGS` is part of cargo's
+/// fingerprint besides, so scrubbing it forces exactly the rebuild this
+/// scrubbing exists to avoid.
+fn is_injected(key: &str) -> bool {
+    key.starts_with("CARGO") && !matches!(key, "CARGO_HOME" | "CARGO_TARGET_DIR")
+        || key == "RUSTUP_TOOLCHAIN"
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -361,32 +454,58 @@ mod tests {
         assert!(find_artifact(b"", &BuildTarget::Cdylib).is_none());
         assert!(find_artifact(b"not json\n", &BuildTarget::Bin("app".into())).is_none());
     }
-}
 
-/// Creates a command with cargo- and rustc-related environment variables
-/// removed, so builds spawned by the CLI have the same fingerprint as builds
-/// the user runs directly. Without this, running the CLI itself under
-/// `cargo run` would cache-bust the user's builds. `CARGO_HOME` and
-/// `CARGO_TARGET_DIR` are kept: the user's own shell would apply them too.
-fn scrubbed_command(program: &str) -> Command {
-    let mut cmd = Command::new(program);
-    for (key, _) in std::env::vars_os() {
-        let Some(key_str) = key.to_str() else {
-            continue;
-        };
-        let scrub = (key_str.starts_with("CARGO")
-            && !matches!(key_str, "CARGO_HOME" | "CARGO_TARGET_DIR"))
-            || matches!(
-                key_str,
-                "RUSTC"
-                    | "RUSTC_WRAPPER"
-                    | "RUSTC_WORKSPACE_WRAPPER"
-                    | "RUSTFLAGS"
-                    | "RUSTUP_TOOLCHAIN"
-            );
-        if scrub {
-            cmd.env_remove(key);
+    #[test]
+    fn only_cargo_and_rustup_injected_variables_are_scrubbed() {
+        for key in ["CARGO", "CARGO_PKG_NAME", "CARGO_MANIFEST_DIR"] {
+            assert!(is_injected(key), "{key}");
+        }
+        assert!(is_injected("RUSTUP_TOOLCHAIN"));
+
+        // The user's own shell would apply these to a direct build too.
+        assert!(!is_injected("CARGO_HOME"));
+        assert!(!is_injected("CARGO_TARGET_DIR"));
+
+        // Cargo never sets these, so a value is the caller's. Scrubbing
+        // `RUSTFLAGS` would drop `--cfg`-gated models from the dump.
+        for key in [
+            "RUSTFLAGS",
+            "RUSTC",
+            "RUSTC_WRAPPER",
+            "RUSTC_WORKSPACE_WRAPPER",
+        ] {
+            assert!(!is_injected(key), "{key}");
         }
     }
-    cmd
+
+    #[test]
+    fn feature_flags_are_forwarded_verbatim() {
+        let mut cmd = Command::new("cargo");
+        Features {
+            features: vec!["a,b".to_string(), "pkg/c".to_string()],
+            all_features: true,
+            no_default_features: true,
+        }
+        .apply_to(&mut cmd);
+
+        let args: Vec<_> = cmd.get_args().map(|arg| arg.to_string_lossy()).collect();
+        assert_eq!(
+            args,
+            [
+                "--features",
+                "a,b",
+                "--features",
+                "pkg/c",
+                "--all-features",
+                "--no-default-features"
+            ]
+        );
+    }
+
+    #[test]
+    fn no_feature_flags_are_added_by_default() {
+        let mut cmd = Command::new("cargo");
+        Features::default().apply_to(&mut cmd);
+        assert_eq!(cmd.get_args().count(), 0);
+    }
 }

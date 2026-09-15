@@ -538,3 +538,123 @@ fn package_selection_is_limited_to_workspace_members() {
         "nothing may be written into a package outside the workspace",
     );
 }
+
+#[test]
+fn feature_selection_reaches_both_the_resolve_and_the_build() {
+    // Models behind a Cargo feature only exist in the artifact when that
+    // feature is on. The flags have to reach `cargo metadata` as well: the
+    // resolved graph is feature-dependent, so an optional `toasty` is
+    // invisible there and extraction refuses to run before it ever builds.
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        format!(
+            r#"[package]
+name = "feature-gated"
+version = "0.0.0"
+edition = "2024"
+
+[features]
+db = ["dep:toasty"]
+
+[dependencies]
+toasty = {{ path = {toasty_path:?}, optional = true }}
+
+[workspace]
+
+[profile.dev]
+debug = "line-tables-only"
+"#,
+            toasty_path = workspace_root().join("crates/toasty"),
+        ),
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/main.rs"),
+        format!(
+            "#[cfg(feature = \"db\")]\n{MODEL}\n\
+             fn main() {{ panic!(\"user main must not run during schema extraction\"); }}"
+        ),
+    )
+    .unwrap();
+
+    // Without the feature, `toasty` is not in the resolved graph at all.
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("does not depend on `toasty`"), "{stderr}");
+
+    // With it, the gated model is discovered and lands in the migration.
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init", "-F", "db",
+        ],
+    );
+    assert_success(&output);
+
+    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
+}
+
+#[test]
+fn a_bin_with_required_features_is_extractable() {
+    // `cargo build --bin <name>` refuses a target whose `required-features`
+    // are unselected, so such a bin is unreachable without the flags.
+    let dir = tempfile::tempdir().unwrap();
+    fs::write(
+        dir.path().join("Cargo.toml"),
+        manifest(
+            "required-features-bin",
+            "\n[features]\nextra = []\n\n[[bin]]\nname = \"gated\"\n\
+             path = \"src/main.rs\"\nrequired-features = [\"extra\"]\n",
+        ),
+    )
+    .unwrap();
+    copy_lockfile(dir.path());
+
+    fs::create_dir_all(dir.path().join("src")).unwrap();
+    fs::write(
+        dir.path().join("src/main.rs"),
+        format!(
+            "{MODEL}\nfn main() {{ panic!(\"user main must not run during schema extraction\"); }}"
+        ),
+    )
+    .unwrap();
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate", "generate", "--flavor", "sqlite", "--name", "init",
+        ],
+    );
+    assert!(!output.status.success());
+    let stderr = String::from_utf8_lossy(&output.stderr);
+    assert!(stderr.contains("requires the features"), "{stderr}");
+
+    let output = toasty(
+        dir.path(),
+        &[
+            "migrate",
+            "generate",
+            "--flavor",
+            "sqlite",
+            "--name",
+            "init",
+            "--features",
+            "extra",
+        ],
+    );
+    assert_success(&output);
+
+    let sql = fs::read_to_string(dir.path().join("toasty/migrations/0000_init.sql")).unwrap();
+    assert!(sql.contains("CREATE TABLE \"users\""), "{sql}");
+}

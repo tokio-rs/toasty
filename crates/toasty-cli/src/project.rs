@@ -1,4 +1,4 @@
-use crate::cargo::{BuildTarget, Metadata};
+use crate::cargo::{BuildTarget, Features, Metadata};
 use crate::config::Config;
 
 use anyhow::{Context, Result, bail};
@@ -33,13 +33,20 @@ pub struct Project {
 
     /// Configuration loaded from the package's `Toasty.toml` (or defaults).
     pub config: Config,
+
+    /// Cargo feature selection, applied to the schema build.
+    pub features: Features,
 }
 
 impl Project {
     /// Locates the target package via `cargo metadata` and loads its
     /// configuration.
-    pub fn locate(package: Option<&str>) -> Result<Self> {
-        let metadata = Metadata::load()?;
+    ///
+    /// `features` shapes the resolved dependency graph as well as the later
+    /// build, so an optional `toasty` dependency is only seen — and
+    /// extraction only permitted — when the feature enabling it is selected.
+    pub fn locate(package: Option<&str>, features: Features) -> Result<Self> {
+        let metadata = Metadata::load(&features)?;
         let pkg = metadata.select_package(package)?;
 
         let package_root = pkg.root();
@@ -54,6 +61,7 @@ impl Project {
             bin_names: pkg.bin_names().iter().map(|s| s.to_string()).collect(),
             has_lib: pkg.has_lib(),
             config,
+            features,
         })
     }
 

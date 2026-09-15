@@ -20,6 +20,7 @@ mod project;
 mod theme;
 mod utility;
 
+pub use cargo::Features;
 pub use config::Config;
 pub use flavor::Flavor;
 pub use migrate::{MigrationConfig, MigrationPrefixStyle};
@@ -50,7 +51,7 @@ fn run_parsed(cli: Cli) -> Result<()> {
         // while the process is still single-threaded.
         Command::LoadCdylib(cmd) => cmd.run(),
         Command::Migrate(cmd) => {
-            let project = Project::locate(cli.package.as_deref())?;
+            let project = Project::locate(cli.package.as_deref(), cli.features)?;
             runtime()?.block_on(cmd.run(&project))
         }
     }
@@ -76,6 +77,9 @@ struct Cli {
     /// Package to operate on, when the workspace has more than one
     #[arg(short, long, global = true, value_name = "PKG")]
     package: Option<String>,
+
+    #[command(flatten)]
+    features: Features,
 
     #[command(subcommand)]
     command: Command,

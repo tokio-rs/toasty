@@ -50,7 +50,12 @@ pub fn extract_schema(project: &Project, flavor: Flavor, bin: Option<&str>) -> R
         style(&project.package_name).bold()
     );
 
-    let artifact = cargo::build_artifact(&project.workspace_root, &project.package_name, &target)?;
+    let artifact = cargo::build_artifact(
+        &project.workspace_root,
+        &project.package_name,
+        &target,
+        &project.features,
+    )?;
 
     check_has_dumper(&artifact, project, &target)?;
 
