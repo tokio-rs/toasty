@@ -146,7 +146,24 @@ Update statements address fields by path. The same typed accessors used for filt
 
 ### Schema resolution
 
-`Schema::resolve_field_path` (in `toasty-core/src/schema/app/schema.rs`) takes a path and returns the `Field` it refers to. The simplification phase uses this to turn relation paths into concrete relation metadata.
+`resolve_in` (in `toasty-core/src/schema/app/schema.rs`) is the walk behind
+schema-level path resolution: fields, embedded structs, enum variants, and
+`#[document]` fields, with relations followed when asked. It returns a field
+or a variant discriminant, or a `ResolveError`. Two policies sit on top:
+
+- `Schema::resolve` and `Schema::resolve_field_path` follow relations. A
+  `#[document]` path resolves to the document field that roots it.
+  `resolve_field_path` accepts both root forms: a `Model`-rooted path
+  resolves through `Schema::resolve`, and a `Variant`-rooted path resolves
+  variant-locally, indexing the variant's fields with the local indices the
+  typed accessors produce.
+- `ModelSet::resolve_path` (in `toasty-core/src/schema/app/model.rs`) does
+  not follow relations. It backs the typed path metadata accessors
+  (`Path::field_name`, `Path::is_unique`) and returns the leaf field together
+  with the first `#[document]` field the projection descends through, if any.
+
+The simplification phase uses `Schema::resolve_field_path` to turn relation
+paths into concrete relation metadata.
 
 ### Field-bitset metadata
 

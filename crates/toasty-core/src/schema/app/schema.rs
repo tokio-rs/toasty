@@ -244,11 +244,24 @@ impl Schema {
         }
     }
 
-    /// Resolves a [`stmt::Path`] to a [`Field`] by extracting the root model
-    /// from the path and delegating to [`resolve_field`](Schema::resolve_field).
+    /// Resolves a [`stmt::Path`] to a [`Field`].
+    ///
+    /// A [`Model`](stmt::PathRoot::Model)-rooted path resolves through
+    /// [`resolve_field`](Schema::resolve_field), following relations. A
+    /// [`Variant`](stmt::PathRoot::Variant)-rooted path resolves
+    /// variant-locally and does not follow relations: it ends at one of the
+    /// variant's fields.
     pub fn resolve_field_path<'a>(&'a self, path: &stmt::Path) -> Option<&'a Field> {
-        let model = self.model(path.root.as_model_unwrap());
-        self.resolve_field(model, &path.projection)
+        match &path.root {
+            stmt::PathRoot::Model(_) => {
+                let model = self.model(path.root.as_model_unwrap());
+                self.resolve_field(model, &path.projection)
+            }
+            stmt::PathRoot::Variant { .. } => match resolve_in(&self.models, path, false) {
+                Ok(CoreResolved::Field { leaf, .. }) => Some(leaf),
+                _ => None,
+            },
+        }
     }
 }
 
@@ -293,7 +306,53 @@ pub(crate) fn resolve_in<'a>(
                 .ok_or(ResolveError::OutOfBounds { step: *first })?;
             resolve_steps(models, first, rest, follow_relations, None)
         }
-        stmt::PathRoot::Variant { .. } => Err(ResolveError::Empty),
+        stmt::PathRoot::Variant { parent, variant_id } => {
+            let parent_step = parent.projection.as_slice().last().copied().unwrap_or(0);
+
+            let enum_field = match resolve_in(models, parent, follow_relations)? {
+                CoreResolved::Field { leaf, document } => {
+                    debug_assert!(
+                        document.is_none(),
+                        "variant path parent crosses a #[document] field"
+                    );
+                    leaf
+                }
+                CoreResolved::Variant(_) => {
+                    return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
+                }
+            };
+
+            let FieldTy::Embedded(embedded) = &enum_field.ty else {
+                return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
+            };
+            debug_assert_eq!(
+                embedded.target, variant_id.model,
+                "variant id does not match the parent field's enum target"
+            );
+
+            let enum_model = models
+                .get(&variant_id.model)
+                .ok_or(ResolveError::UnknownModel(variant_id.model))?;
+            let Model::EmbeddedEnum(e) = enum_model else {
+                return Err(ResolveError::NotEmbeddedEnum { step: parent_step });
+            };
+
+            // The variant id already names the variant; the projection holds
+            // the variant-local field steps.
+            if e.variants.get(variant_id.index).is_none() {
+                return Err(ResolveError::OutOfBounds {
+                    step: variant_id.index,
+                });
+            }
+            let [first, rest @ ..] = path.projection.as_slice() else {
+                return Err(ResolveError::Empty);
+            };
+            let first = e
+                .variant_fields(variant_id.index)
+                .get(*first)
+                .ok_or(ResolveError::OutOfBounds { step: *first })?;
+            resolve_steps(models, first, rest, follow_relations, None)
+        }
     }
 }
 

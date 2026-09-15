@@ -456,6 +456,101 @@ fn resolve_field_returns_none_for_variant_only_projection() {
     );
 }
 
+// === resolve_field_path() — variant roots ===
+
+/// A typed variant path (`Variant(ContactInfo/Phone)` + local step) and its
+/// flattened spelling (`Model(User)` + `[3, 1, 1]`) resolve to the same field.
+#[test]
+fn resolve_field_path_variant_root_matches_flattened_path() {
+    let s = schema();
+
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 1,
+        },
+    );
+    variant.projection.push(1);
+
+    let mut flattened = stmt::Path::from_index(USER, 3);
+    flattened.projection.push(1);
+    flattened.projection.push(1);
+
+    let variant_field = s.resolve_field_path(&variant).unwrap();
+    let flattened_field = s.resolve_field_path(&flattened).unwrap();
+    assert_eq!(variant_field.name.app.as_deref(), Some("number"));
+    assert_eq!(variant_field.id, flattened_field.id);
+}
+
+#[test]
+fn resolve_field_path_variant_root_without_local_step_is_none() {
+    let s = schema();
+
+    // A variant root with no local step names a discriminant, not a field.
+    let variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 1,
+        },
+    );
+    assert!(s.resolve_field_path(&variant).is_none());
+}
+
+// === ModelSet::resolve_path() — typed path metadata dialect ===
+
+fn model_set(schema: &Schema) -> ModelSet {
+    let mut models = ModelSet::new();
+    for model in schema.models.values() {
+        models.add(model.clone());
+    }
+    models
+}
+
+#[test]
+fn resolve_path_returns_leaf_and_document() {
+    let s = schema();
+    let models = model_set(&s);
+
+    // User.profile.city => leaf `city`, first document crossed `profile`.
+    let path = stmt::Path {
+        root: stmt::PathRoot::Model(USER),
+        projection: stmt::Projection::from([5, 0]),
+    };
+    let (leaf, document) = models.resolve_path(&path).unwrap();
+    assert_eq!(leaf.name.app.as_deref(), Some("city"));
+    assert_eq!(document.unwrap().name.app.as_deref(), Some("profile"));
+
+    // A path that stops at the document field does not cross it.
+    let path = stmt::Path {
+        root: stmt::PathRoot::Model(USER),
+        projection: stmt::Projection::from([5]),
+    };
+    let (leaf, document) = models.resolve_path(&path).unwrap();
+    assert_eq!(leaf.name.app.as_deref(), Some("profile"));
+    assert!(document.is_none());
+}
+
+#[test]
+fn resolve_path_variant_root_resolves_local_field() {
+    let s = schema();
+    let models = model_set(&s);
+
+    let mut variant = stmt::Path::from_variant(
+        stmt::Path::field(USER, 3),
+        VariantId {
+            model: CONTACT_ENUM,
+            index: 1,
+        },
+    );
+    variant.projection.push(1);
+
+    let (leaf, document) = models.resolve_path(&variant).unwrap();
+    assert_eq!(leaf.name.app.as_deref(), Some("number"));
+    assert!(document.is_none());
+}
+
 // === resolve() covers all old is_valid_projection cases ===
 
 #[test]

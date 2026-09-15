@@ -1,3 +1,4 @@
+use super::schema::{CoreResolved, ResolveError, resolve_in};
 use super::{Field, FieldId, FieldPrimitive, FieldTy, Index, Name, PrimaryKey};
 use crate::{Result, driver, stmt};
 use indexmap::IndexMap;
@@ -61,6 +62,25 @@ impl ModelSet {
     /// Creates an empty `ModelSet`.
     pub fn new() -> Self {
         Self::default()
+    }
+
+    /// Resolve an untyped path against the models in this set.
+    ///
+    /// Walks embedded structs, embedded enum variants, and `#[document]`
+    /// fields; relations are not followed. A path that ends at a relation
+    /// field resolves to that field, but a step through one is an error.
+    ///
+    /// Returns the field the path's last step lands on, together with the
+    /// first `#[document]` field the projection descends through, if any. A
+    /// projection that stops at a variant discriminant does not name a field.
+    pub fn resolve_path<'a>(
+        &'a self,
+        path: &stmt::Path,
+    ) -> Result<(&'a Field, Option<&'a Field>), ResolveError> {
+        match resolve_in(&self.models, path, false)? {
+            CoreResolved::Field { leaf, document } => Ok((leaf, document)),
+            CoreResolved::Variant(_) => Err(ResolveError::Empty),
+        }
     }
 
     /// Returns the number of models in the set.
