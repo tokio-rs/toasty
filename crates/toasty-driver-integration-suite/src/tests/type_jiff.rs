@@ -643,7 +643,7 @@ pub async fn time_zone_key_optional_and_update(test: &mut Test) -> Result<(), Bo
     .await?;
 
     let read = ZoneConfig::get_by_zone(&mut db, &tokyo).await?;
-    assert_struct!(read, _ { display: == tokyo, fallback: None, .. });
+    assert_struct!(read, { display: == tokyo, fallback: None });
 
     config
         .update()
@@ -653,7 +653,7 @@ pub async fn time_zone_key_optional_and_update(test: &mut Test) -> Result<(), Bo
         .await?;
 
     let read = ZoneConfig::get_by_zone(&mut db, &tokyo).await?;
-    assert_struct!(read, _ { display: == amsterdam, fallback: Some(== amsterdam), .. });
+    assert_struct!(read, { display: == amsterdam, fallback: Some(== amsterdam) });
 
     Ok(())
 }
