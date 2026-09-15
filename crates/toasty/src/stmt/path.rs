@@ -769,14 +769,16 @@ where
     T: Model,
 {
     /// App-level (Rust) name of the leaf field this path ends at (embed
-    /// prefixes discarded).
+    /// prefixes discarded), or `None` when the leaf has no app-level name.
+    ///
+    /// The `inner` field of a tuple-newtype embed is transparent — it takes
+    /// the parent field's column and has no app-level name — so it returns
+    /// `None`.
     ///
     /// # Panics
     ///
-    /// Panics if the path does not end at a field, if the projection
-    /// crosses a relation, or if the leaf field is unnamed (the `inner`
-    /// field of a tuple-newtype embed, which has no app-level name):
-    /// only embedded struct, embedded enum, and document
+    /// Panics if the path does not end at a field, or if the projection
+    /// crosses a relation: only embedded struct, embedded enum, and document
     /// steps are supported.
     ///
     /// # Examples
@@ -789,16 +791,12 @@ where
     /// #     name: String,
     /// # }
     /// let name = User::fields().name().field_name();
-    /// assert_eq!(name, "name");
+    /// assert_eq!(name.as_deref(), Some("name"));
     /// ```
-    pub fn field_name(&self) -> String {
+    pub fn field_name(&self) -> Option<String> {
         let models = Self::reachable_models();
         let (leaf, _) = Self::resolve_path_or_panic(&models, &self.untyped);
-        leaf.name
-            .app
-            .as_deref()
-            .expect("field_name(): leaf field has no app-level name (tuple-newtype `inner` field)")
-            .to_string()
+        leaf.name.app.clone()
     }
 
     /// Whether this field is the target of a single-field unique index.

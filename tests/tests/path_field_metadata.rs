@@ -182,12 +182,12 @@ struct NewtypeHolder {
 #[test]
 fn field_metadata_single_path() {
     let email = User::fields().email();
-    assert_eq!(email.field_name(), "email");
+    assert_eq!(email.field_name().as_deref(), Some("email"));
     assert!(!email.is_nullable());
     assert!(email.is_unique());
 
     let name = User::fields().name();
-    assert_eq!(name.field_name(), "name");
+    assert_eq!(name.field_name().as_deref(), Some("name"));
     assert!(!name.is_unique());
     assert!(!name.is_nullable());
 
@@ -204,44 +204,44 @@ fn field_metadata_single_path() {
 #[test]
 fn field_metadata_composite_path() {
     let city = User::fields().profile().city();
-    assert_eq!(city.field_name(), "city");
+    assert_eq!(city.field_name().as_deref(), Some("city"));
     assert!(!city.is_nullable());
     assert!(!city.is_unique());
 
     let nickname = User::fields().profile().nickname();
-    assert_eq!(nickname.field_name(), "nickname");
+    assert_eq!(nickname.field_name().as_deref(), Some("nickname"));
     assert!(nickname.is_nullable());
 }
 
 #[test]
 fn field_metadata_variant_path() {
     let address = User::fields().contact().email().address();
-    assert_eq!(address.field_name(), "address");
+    assert_eq!(address.field_name().as_deref(), Some("address"));
     assert!(!address.is_nullable());
     // Index membership only: rows of every other variant store `NULL` here,
     // which unique indices leave non-conflicting, so this is not cursor-safe.
     assert!(address.is_unique());
 
     let country_code = User::fields().contact().phone().country_code();
-    assert_eq!(country_code.field_name(), "country_code");
+    assert_eq!(country_code.field_name().as_deref(), Some("country_code"));
     assert!(!country_code.is_nullable());
     assert!(!country_code.is_unique());
 
     let number = User::fields().contact().phone().number();
-    assert_eq!(number.field_name(), "number");
+    assert_eq!(number.field_name().as_deref(), Some("number"));
     assert!(number.is_nullable());
 }
 
 #[test]
 fn field_metadata_variant_nested_embed_path() {
     let street = User::fields().contact().post().mail().street();
-    assert_eq!(street.field_name(), "street");
+    assert_eq!(street.field_name().as_deref(), Some("street"));
     assert!(!street.is_nullable());
     // Index membership only: same inactive-variant `NULL` caveat as above.
     assert!(street.is_unique());
 
     let po_box = User::fields().contact().post().mail().po_box();
-    assert_eq!(po_box.field_name(), "po_box");
+    assert_eq!(po_box.field_name().as_deref(), Some("po_box"));
     assert!(po_box.is_nullable());
 }
 
@@ -253,30 +253,30 @@ fn field_metadata_nested_variant_path() {
         .handle()
         .telegram()
         .username();
-    assert_eq!(username.field_name(), "username");
+    assert_eq!(username.field_name().as_deref(), Some("username"));
     assert!(!username.is_nullable());
 }
 
 #[test]
 fn field_metadata_document_path() {
     let name = DocAccount::fields().profile().name();
-    assert_eq!(name.field_name(), "name");
+    assert_eq!(name.field_name().as_deref(), Some("name"));
     assert!(!name.is_nullable());
     // `DocProfile::name` carries `#[unique]` at the app level, but the
     // traversal crosses `#[document]` storage (no DB index), so `false`.
     assert!(!name.is_unique());
 
     let nickname = DocAccount::fields().profile().nickname();
-    assert_eq!(nickname.field_name(), "nickname");
+    assert_eq!(nickname.field_name().as_deref(), Some("nickname"));
     assert!(nickname.is_nullable());
 
     // Nested `#[document]` inside a `#[document]`.
     let city = DocAccount::fields().profile().address().city();
-    assert_eq!(city.field_name(), "city");
+    assert_eq!(city.field_name().as_deref(), Some("city"));
     assert!(!city.is_nullable());
 
     let zip = DocAccount::fields().profile().address().zip();
-    assert_eq!(zip.field_name(), "zip");
+    assert_eq!(zip.field_name().as_deref(), Some("zip"));
     assert!(zip.is_nullable());
 }
 
@@ -303,7 +303,7 @@ fn field_metadata_nullable_parent_embed_reports_membership() {
         Customer::path_field::<Option<MailAddress>>(Customer::field_name_to_id("address").index);
     // `street` is field 0 of `MailAddress`.
     let street = address.chain(MailAddress::path_field::<String>(0));
-    assert_eq!(street.field_name(), "street");
+    assert_eq!(street.field_name().as_deref(), Some("street"));
     assert!(!street.is_nullable());
     // Index membership only: `None` parents store `NULL` here, which unique
     // indices leave non-conflicting, so this is not cursor-safe.
@@ -315,12 +315,12 @@ fn field_metadata_shared_unique() {
     // `#[unique(name)]` stores the first `#[shared(name)]` member only, but
     // constrains the shared column for every member.
     let human = Character::fields().creature().human().full_name();
-    assert_eq!(human.field_name(), "full_name");
+    assert_eq!(human.field_name().as_deref(), Some("full_name"));
     assert!(!human.is_nullable());
     assert!(human.is_unique());
 
     let animal = Character::fields().creature().animal().nickname();
-    assert_eq!(animal.field_name(), "nickname");
+    assert_eq!(animal.field_name().as_deref(), Some("nickname"));
     assert!(!animal.is_nullable());
     assert!(animal.is_unique());
 }
@@ -354,9 +354,9 @@ fn field_metadata_newtype_inner_nullable_unique() {
 }
 
 #[test]
-#[should_panic(expected = "no app-level name")]
-fn field_metadata_newtype_inner_name_panics() {
-    let _ = NewtypeHolder::fields().wrapper().inner().field_name();
+fn field_metadata_newtype_inner_name_is_none() {
+    let inner = NewtypeHolder::fields().wrapper().inner();
+    assert!(inner.field_name().is_none());
 }
 
 #[test]

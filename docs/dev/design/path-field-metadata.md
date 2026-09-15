@@ -24,9 +24,8 @@ defaults from the bound field.
 
 Three methods on `Path<M, T>` where `M: Model`:
 
-- `field_name() -> String` the app-level (Rust) name of the field.
-  Panics on the unnamed `inner` field of a tuple-newtype embed, which has
-  no app-level name.
+- `field_name() -> Option<String>` the app-level (Rust) name of the field,
+  or `None` for the unnamed `inner` field of a tuple-newtype embed.
 - `is_nullable() -> bool` whether the leaf field is `Option`-marked (not
   whether storage accepts `NULL`; see Behavior). Available when the leaf
   target is a storable field type (`T: Field`); relation terminals and model
@@ -46,7 +45,7 @@ Three methods on `Path<M, T>` where `M: Model`:
 
 ```rust
 // #[unique] on User.email; enum-level #[unique(email::address)] on Contact
-assert_eq!(User::fields().email().field_name(), "email");
+assert_eq!(User::fields().email().field_name().as_deref(), Some("email"));
 assert!(User::fields().email().is_unique());
 assert!(User::fields().bio().is_nullable());
 assert!(User::fields().contact().email().address().is_unique());
@@ -92,12 +91,9 @@ model with the given `ModelId`, if present.
 - `is_unique()` reports `false` inside a `#[document]` embed: the app-level
   index has no database backing.
 - Panics, matching the crate's `_unwrap`-on-misuse style, when the path
-  does not end at a field, when the projection crosses a relation, or when
-  `field_name()` targets the unnamed `inner` field of a tuple-newtype
-  embed. A
-  path may end at a relation field; projecting through one panics.
-  Projecting through embedded (including `#[document]`) and enum steps is
-  supported.
+  does not end at a field or when the projection crosses a relation. A path
+  may end at a relation field; projecting through one panics. Projecting
+  through embedded (including `#[document]`) and enum steps is supported.
 
 ## Edge cases
 
@@ -107,7 +103,7 @@ model with the given `ModelId`, if present.
   Flattened embed columns and storage overrides live in the mapping layer.
   The `inner` field of a tuple-newtype embed is transparent (it takes the
   parent field's column) and has no app-level name, so `field_name()`
-  panics there; `is_nullable()` and `is_unique()` still work.
+  returns `None` there; `is_nullable()` and `is_unique()` still work.
 
 ## Driver integration
 
