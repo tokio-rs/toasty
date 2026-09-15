@@ -323,6 +323,30 @@
 <a href=#323 id=323 data-nosnippet>323</a>    }
 <a href=#324 id=324 data-nosnippet>324</a>}
 <a href=#325 id=325 data-nosnippet>325</a>
-<a href=#326 id=326 data-nosnippet>326</a><span class="attr">#[cfg(test)]
-<a href=#327 id=327 data-nosnippet>327</a></span><span class="kw">mod </span>tests;
+<a href=#326 id=326 data-nosnippet>326</a><span class="comment">// Equivalence preserves independent evaluations of non-deterministic expressions.
+<a href=#327 id=327 data-nosnippet>327</a></span><span class="kw">fn </span>dedup_operands(operands: <span class="kw-2">&amp;mut </span>Vec&lt;Expr&gt;) {
+<a href=#328 id=328 data-nosnippet>328</a>    <span class="kw">let </span><span class="kw-2">mut </span>seen: Vec&lt;Expr&gt; = Vec::new();
+<a href=#329 id=329 data-nosnippet>329</a>    operands.retain(|operand| {
+<a href=#330 id=330 data-nosnippet>330</a>        <span class="kw">if </span>seen.iter().any(|e| e.is_equivalent_to(operand)) {
+<a href=#331 id=331 data-nosnippet>331</a>            <span class="bool-val">false
+<a href=#332 id=332 data-nosnippet>332</a>        </span>} <span class="kw">else </span>{
+<a href=#333 id=333 data-nosnippet>333</a>            seen.push(operand.clone());
+<a href=#334 id=334 data-nosnippet>334</a>            <span class="bool-val">true
+<a href=#335 id=335 data-nosnippet>335</a>        </span>}
+<a href=#336 id=336 data-nosnippet>336</a>    });
+<a href=#337 id=337 data-nosnippet>337</a>}
+<a href=#338 id=338 data-nosnippet>338</a>
+<a href=#339 id=339 data-nosnippet>339</a><span class="comment">// Nullable operands do not satisfy the complement law in three-valued logic.
+<a href=#340 id=340 data-nosnippet>340</a></span><span class="kw">fn </span>has_complement(operands: <span class="kw-2">&amp;</span>[Expr]) -&gt; bool {
+<a href=#341 id=341 data-nosnippet>341</a>    operands.iter().any(|operand| {
+<a href=#342 id=342 data-nosnippet>342</a>        !<span class="macro">matches!</span>(operand, Expr::Not(<span class="kw">_</span>))
+<a href=#343 id=343 data-nosnippet>343</a>            &amp;&amp; operand.is_always_non_nullable()
+<a href=#344 id=344 data-nosnippet>344</a>            &amp;&amp; operands
+<a href=#345 id=345 data-nosnippet>345</a>                .iter()
+<a href=#346 id=346 data-nosnippet>346</a>                .any(|other| <span class="macro">matches!</span>(other, Expr::Not(not) <span class="kw">if </span>not.expr.is_equivalent_to(operand)))
+<a href=#347 id=347 data-nosnippet>347</a>    })
+<a href=#348 id=348 data-nosnippet>348</a>}
+<a href=#349 id=349 data-nosnippet>349</a>
+<a href=#350 id=350 data-nosnippet>350</a><span class="attr">#[cfg(test)]
+<a href=#351 id=351 data-nosnippet>351</a></span><span class="kw">mod </span>tests;
 </code></pre></div></section></main></body></html>
