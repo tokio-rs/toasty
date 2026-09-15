@@ -89,18 +89,18 @@ fn resolve_embedded<'a>(
     path: ExprPath,
     model: app::ModelId,
 ) -> Option<ResolvedRelation<'a>> {
-    let mut level = Level::embed(&cx.schema().app, model)?;
+    let mut target = EmbedTarget::embed(&cx.schema().app, model)?;
 
     for (position, step) in path.steps.iter().enumerate() {
         match step {
-            PathStep::Variant(variant) => level = level.select(*variant)?,
+            PathStep::Variant(variant) => target = target.select(*variant)?,
             PathStep::Field(index) => {
-                let field = level.field_at(*index)?;
+                let field = target.field_at(*index)?;
 
                 match &field.ty {
                     FieldTy::BelongsTo(belongs_to) => {
                         let host = path.expr_before(position);
-                        let key_expr = embedded_key_expr(host, level, belongs_to)?;
+                        let key_expr = embedded_key_expr(host, target, belongs_to)?;
 
                         return ResolvedRelation::new(
                             field,
@@ -112,7 +112,7 @@ fn resolve_embedded<'a>(
                         );
                     }
                     FieldTy::Embedded(embedded) => {
-                        level = Level::embed(&cx.schema().app, embedded.target)?;
+                        target = EmbedTarget::embed(&cx.schema().app, embedded.target)?;
                     }
                     _ => return None,
                 }
@@ -123,11 +123,11 @@ fn resolve_embedded<'a>(
     None
 }
 
-fn embedded_key_expr(host: Expr, level: Level<'_>, belongs_to: &BelongsTo) -> Option<Expr> {
+fn embedded_key_expr(host: Expr, target: EmbedTarget<'_>, belongs_to: &BelongsTo) -> Option<Expr> {
     let mut fields = Vec::with_capacity(belongs_to.foreign_key.fields.len());
 
     for foreign_key in &belongs_to.foreign_key.fields {
-        let index = level.step_of(foreign_key.source.index)?;
+        let index = target.step_of(foreign_key.source.index)?;
         fields.push(Expr::project(host.clone(), [index]));
     }
 
@@ -207,19 +207,19 @@ fn project(mut base: Expr, index: usize) -> Expr {
     }
 }
 
-/// One embedded model traversed by a path.
+/// The embedded struct or enum, with an optional selected variant, reached by a path.
 #[derive(Clone, Copy)]
-pub(crate) enum Level<'a> {
+pub(crate) enum EmbedTarget<'a> {
     Struct(&'a app::EmbeddedStruct),
     Enum(&'a app::EmbeddedEnum, Option<VariantId>),
 }
 
-impl<'a> Level<'a> {
+impl<'a> EmbedTarget<'a> {
     /// Returns the embedded model for `model_id`.
     pub(crate) fn embed(schema: &'a app::Schema, model_id: app::ModelId) -> Option<Self> {
         match schema.model(model_id) {
-            app::Model::EmbeddedStruct(embedded) => Some(Level::Struct(embedded)),
-            app::Model::EmbeddedEnum(embedded) => Some(Level::Enum(embedded, None)),
+            app::Model::EmbeddedStruct(embedded) => Some(EmbedTarget::Struct(embedded)),
+            app::Model::EmbeddedEnum(embedded) => Some(EmbedTarget::Enum(embedded, None)),
             app::Model::Root(_) => None,
         }
     }
@@ -227,10 +227,10 @@ impl<'a> Level<'a> {
     /// Selects a variant of the current embedded enum.
     pub(crate) fn select(self, variant: VariantId) -> Option<Self> {
         match self {
-            Level::Enum(embedded, None)
+            EmbedTarget::Enum(embedded, None)
                 if embedded.id == variant.model && variant.index < embedded.variants.len() =>
             {
-                Some(Level::Enum(embedded, Some(variant)))
+                Some(EmbedTarget::Enum(embedded, Some(variant)))
             }
             _ => None,
         }
@@ -239,23 +239,23 @@ impl<'a> Level<'a> {
     /// Returns the field selected by a local path index.
     pub(crate) fn field_at(&self, index: usize) -> Option<&'a app::Field> {
         match self {
-            Level::Struct(embedded) => embedded.fields.get(index),
-            Level::Enum(embedded, Some(variant)) => {
+            EmbedTarget::Struct(embedded) => embedded.fields.get(index),
+            EmbedTarget::Enum(embedded, Some(variant)) => {
                 embedded.variant_fields(variant.index).get(index)
             }
-            Level::Enum(_, None) => None,
+            EmbedTarget::Enum(_, None) => None,
         }
     }
 
-    /// Returns a field's local index at this embedded level.
+    /// Returns a field's local index within this target.
     fn step_of(&self, field_index: usize) -> Option<usize> {
         match self {
-            Level::Struct(_) => Some(field_index),
-            Level::Enum(embedded, Some(variant)) => embedded
+            EmbedTarget::Struct(_) => Some(field_index),
+            EmbedTarget::Enum(embedded, Some(variant)) => embedded
                 .variant_fields(variant.index)
                 .iter()
                 .position(|field| field.id.index == field_index),
-            Level::Enum(_, None) => None,
+            EmbedTarget::Enum(_, None) => None,
         }
     }
 }

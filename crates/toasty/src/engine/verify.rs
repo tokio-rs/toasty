@@ -1,5 +1,5 @@
 use crate::Result;
-use crate::engine::lower::relation_expr::Level;
+use crate::engine::lower::relation_expr::EmbedTarget;
 use crate::engine::{Engine, upsert};
 use toasty_core::Error;
 use toasty_core::driver::Capability;
@@ -30,9 +30,8 @@ enum PathTarget<'a> {
     /// A field of a model, embed, or relation target.
     Field(&'a app::Field),
 
-    /// The payload of an embedded enum's variant: the enum's level with
-    /// the variant selected.
-    Variant(Level<'a>),
+    /// The payload of an embedded enum's selected variant.
+    Variant(EmbedTarget<'a>),
 
     /// A position inside a `#[document]` value, which the schema does not
     /// describe field by field.
@@ -501,7 +500,7 @@ impl<'a> VerifyExpr<'a, '_> {
     ///
     /// A projection step continues into a struct embed's fields, a relation
     /// target's fields, or the fields of a selected enum variant, by their
-    /// variant-local position (see [`Level::field_at`]).
+    /// variant-local position (see [`EmbedTarget::field_at`]).
     fn resolve_expr_path(&self, expr: &stmt::Expr) -> Option<PathTarget<'a>> {
         match expr {
             stmt::Expr::Reference(stmt::ExprReference::Field { nesting: 0, index }) => self
@@ -526,7 +525,7 @@ impl<'a> VerifyExpr<'a, '_> {
                 let app::FieldTy::Embedded(embedded) = &field.ty else {
                     return None;
                 };
-                Level::embed(&self.schema.app, embedded.target)?
+                EmbedTarget::embed(&self.schema.app, embedded.target)?
                     .select(variant.variant)
                     .map(PathTarget::Variant)
             }
@@ -539,11 +538,11 @@ impl<'a> VerifyExpr<'a, '_> {
         use app::FieldTy;
 
         let field = match target {
-            PathTarget::Variant(level) => level.field_at(step),
+            PathTarget::Variant(target) => target.field_at(step),
             PathTarget::Document => return Some(PathTarget::Document),
             PathTarget::Field(field) => match &field.ty {
                 FieldTy::Embedded(embedded) => {
-                    Level::embed(&self.schema.app, embedded.target)?.field_at(step)
+                    EmbedTarget::embed(&self.schema.app, embedded.target)?.field_at(step)
                 }
                 FieldTy::BelongsTo(_) | FieldTy::Has(_) | FieldTy::Via(_) => {
                     let target = field.relation_target_id().expect("relation has a target");
