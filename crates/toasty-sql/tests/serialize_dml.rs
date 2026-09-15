@@ -32,6 +32,7 @@ fn make_table(id: usize, name: &str, cols: &[&str]) -> Table {
             index: 0,
         },
         name: "id".to_string(),
+        comment: None,
         ty: stmt::Type::I64,
         storage_ty: StorageType::Integer(8),
         nullable: false,
@@ -46,6 +47,7 @@ fn make_table(id: usize, name: &str, cols: &[&str]) -> Table {
                 index: i + 1,
             },
             name: (*name).to_string(),
+            comment: None,
             ty: stmt::Type::String,
             storage_ty: StorageType::Text,
             nullable: false,
@@ -57,6 +59,7 @@ fn make_table(id: usize, name: &str, cols: &[&str]) -> Table {
     Table {
         id: TableId(id),
         name: name.to_string(),
+        comment: None,
         columns,
         primary_key: PrimaryKey {
             columns: vec![ColumnId {
