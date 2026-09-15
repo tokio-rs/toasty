@@ -625,10 +625,17 @@ impl stmt::Visit for VerifyExpr<'_, '_> {
         }
     }
 
-    fn visit_projection(&mut self, i: &stmt::Projection) {
-        let root = self.schema.app.model(self.model);
+    fn visit_path(&mut self, i: &stmt::Path) {
+        // Resolve include paths against their own root, not `self.model`.
+        // Variant-rooted paths (e.g. deferred embeds) carry variant-local
+        // steps that `resolve` cannot interpret; like
+        // `verify_include_modifiers`, they pass through unchecked.
+        let Some(model) = i.root.as_model() else {
+            return;
+        };
+        let root = self.schema.app.model(model);
         assert!(
-            self.schema.app.resolve(root, i).is_some(),
+            self.schema.app.resolve(root, &i.projection).is_some(),
             "invalid projection: {i:?}"
         );
     }
@@ -752,7 +759,9 @@ fn rhs_is_concrete_list(expr: &stmt::Expr) -> bool {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::engine::test_util::test_schema;
+    use crate as toasty;
+    use crate::engine::test_util::{test_schema, test_schema_with};
+    use crate::schema::{Embed, Model};
     use toasty_core::driver::Capability;
     use toasty_core::stmt::{Expr, ExprIsSuperset, ExprList, Value};
 
@@ -887,5 +896,132 @@ mod tests {
     fn case_sensitive_like_accepted_on_sqlite() {
         let expr = Expr::like(Expr::arg(0), Expr::arg(1));
         assert!(verify_expr_with(&Capability::SQLITE, &expr).is_none());
+    }
+
+    // Inline models for include-path tests. `Metadata` lives inside the
+    // `Email` variant, the shape of a deferred-embed include.
+    #[derive(Debug, toasty::Embed)]
+    struct Metadata {
+        notes: String,
+    }
+
+    #[derive(Debug, toasty::Embed)]
+    enum Contact {
+        Email { metadata: Metadata },
+        Phone { number: String },
+    }
+
+    #[derive(Debug, toasty::Model)]
+    struct User {
+        #[key]
+        id: i64,
+        name: String,
+        contact: Contact,
+    }
+
+    fn user_schema() -> Schema {
+        test_schema_with(&[User::schema(), Contact::schema(), Metadata::schema()])
+    }
+
+    fn field_index(name: &str) -> usize {
+        let app::Model::Root(root) = User::schema() else {
+            panic!("User is a root model");
+        };
+        root.fields
+            .iter()
+            .position(|field| field.name.app.as_deref() == Some(name))
+            .expect("User has the field")
+    }
+
+    /// The include `contact().email().metadata().notes()` is built as: a
+    /// variant root over the `contact` field, with variant-local steps.
+    fn variant_rooted_include() -> stmt::Include {
+        let parent = stmt::Path {
+            root: stmt::PathRoot::Model(User::id()),
+            projection: stmt::Projection::from([field_index("contact")]),
+        };
+        let mut path = stmt::Path::from_variant(
+            parent,
+            app::VariantId {
+                model: Contact::id(),
+                index: 0, // Email
+            },
+        );
+        path.projection.push(0); // metadata, Email-local
+        path.projection.push(0); // notes, Metadata-local
+        stmt::Include::new(path)
+    }
+
+    /// The shape `User::filter_by_id(..).include(..).update()..` produces:
+    /// an update whose target query carries the include in its returning.
+    fn update_with_include(include: stmt::Include) -> Statement {
+        let mut select = stmt::Select::new(
+            stmt::Source::Model(stmt::SourceModel {
+                id: User::id(),
+                via: None,
+            }),
+            stmt::Filter::default(),
+        );
+        select.returning = stmt::Returning::Model {
+            include: vec![include],
+        };
+        let mut update = stmt::Query::from(select).update();
+        update
+            .assignments
+            .insert(stmt::Projection::from([field_index("name")]), "x");
+        Statement::Update(update)
+    }
+
+    // Update-by-query walks the target query's includes. A variant-rooted
+    // include path carries variant-local steps; resolving them as root-model
+    // field indices panicked in verify on a valid query (issue #1224).
+    #[test]
+    fn update_target_query_with_variant_rooted_include_verifies() {
+        let schema = user_schema();
+        let mut error = None;
+        Verify {
+            schema: &schema,
+            capability: &Capability::SQLITE,
+            error: &mut error,
+        }
+        .visit(&update_with_include(variant_rooted_include()));
+        assert!(error.is_none(), "{error:?}");
+    }
+
+    // Model-rooted include paths keep resolving against the path's root.
+    #[test]
+    fn update_target_query_with_model_rooted_include_verifies() {
+        let schema = user_schema();
+        let include = stmt::Include::new(stmt::Path {
+            root: stmt::PathRoot::Model(User::id()),
+            projection: stmt::Projection::from([field_index("contact")]),
+        });
+        let mut error = None;
+        Verify {
+            schema: &schema,
+            capability: &Capability::SQLITE,
+            error: &mut error,
+        }
+        .visit(&update_with_include(include));
+        assert!(error.is_none(), "{error:?}");
+    }
+
+    // The variant-rooted pass-through must not disable checking for
+    // model-rooted paths: an out-of-range root step still panics.
+    #[test]
+    #[should_panic(expected = "invalid projection: Path")]
+    fn bad_step_through_model_rooted_include_still_panics() {
+        let schema = user_schema();
+        let include = stmt::Include::new(stmt::Path {
+            root: stmt::PathRoot::Model(User::id()),
+            projection: stmt::Projection::from([99]),
+        });
+        let mut error = None;
+        Verify {
+            schema: &schema,
+            capability: &Capability::SQLITE,
+            error: &mut error,
+        }
+        .visit(&update_with_include(include));
     }
 }
