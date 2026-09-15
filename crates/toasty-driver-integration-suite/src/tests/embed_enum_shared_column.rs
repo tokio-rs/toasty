@@ -612,19 +612,16 @@ pub async fn shared_column_gateless_distinct_names(t: &mut Test) -> Result<()> {
 /// A variant-gated read's record position must never resolve as the gateless
 /// shared read, even when a unit sibling variant lets the data variant span
 /// every flattened field. The shared accessor offsets its step past
-/// `fields.len()`, the largest reachable record position, so the gated
-/// `kind` read keeps its own column.
+/// `fields.len()` (and the variant index range), the largest reachable record
+/// position, so the gated `kind` read keeps its own column.
 ///
-/// Today the gated read cannot evaluate at all: distributing its record
-/// position across a unit variant's one-slot record panics in the engine (the
-/// same limitation exists on `main`, which panics earlier, at schema verify).
-/// This test pins that panic. If the shared step ever claims the gated read's
-/// record position again, this query stops panicking and silently sorts by
-/// the shared `label` column instead — and this test fails. If the
-/// record-position limitation is fixed first, update this test to assert
-/// ordering by `kind`.
+/// Ordering by the gated `kind` field across a unit sibling used to panic in
+/// the engine when distributing the record position over the unit variant's
+/// one-slot record. The `ExprVariant` lowering decodes each variant against
+/// its own columns, so the query orders by `kind` directly. If the shared
+/// step ever claims the gated read's record position again, this query
+/// silently sorts by the shared `label` column instead — and this test fails.
 #[driver_test]
-#[should_panic]
 pub async fn shared_column_gated_order_by_unit_sibling(t: &mut Test) -> Result<()> {
     #[derive(Debug, toasty::Embed)]
     enum Probe {
