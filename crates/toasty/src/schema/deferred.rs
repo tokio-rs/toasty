@@ -16,18 +16,37 @@ use std::fmt;
 /// # Serde
 ///
 /// With the `serde` feature a loaded `Deferred<T>` serializes transparently as
-/// its inner `T`, and any present value deserializes back to the loaded state.
-/// The unloaded state has no transparent encoding of its own — skip it on the
-/// way out and default it on the way in:
+/// its inner `T`. The unloaded state has no encoding of its own, so skip it
+/// rather than serializing it:
 ///
 /// ```ignore
-/// #[serde(skip_serializing_if = "Deferred::is_unloaded", default)]
+/// #[serde(skip_serializing_if = "Deferred::is_unloaded")]
 /// notes: Deferred<Option<String>>,
 /// ```
 ///
-/// Serializing an unloaded field without `skip_serializing_if` emits `null`,
-/// which does not round-trip (it reads back as loaded), so the annotation is
-/// expected on every deferred field.
+/// Without `skip_serializing_if` an unloaded field emits `null`, which is
+/// indistinguishable from a loaded `Deferred<Option<T>>` holding `None`.
+///
+/// `Deferred<T>` does not implement `serde::Deserialize`.
+/// A deferred relation field carries an invariant Toasty cannot check on the
+/// way in — the foreign key column and the related model deserialize
+/// independently, so nothing forces `todo.user_id` to match
+/// `todo.user.get().id`. Deriving `Deserialize` on a model containing a
+/// deferred field is a compile error for that reason.
+///
+/// To opt a field in, supply the impl at the field:
+///
+/// ```ignore
+/// fn load_notes<'de, D>(deserializer: D) -> Result<Deferred<Option<String>>, D::Error>
+/// where
+///     D: serde::Deserializer<'de>,
+/// {
+///     Ok(Deferred::from(Option::<String>::deserialize(deserializer)?))
+/// }
+///
+/// #[serde(deserialize_with = "load_notes", default)]
+/// notes: Deferred<Option<String>>,
+/// ```
 #[derive(Clone)]
 pub struct Deferred<T> {
     value: Option<Box<T>>,
@@ -203,6 +222,12 @@ impl<T: fmt::Debug> fmt::Debug for Deferred<T> {
 /// The unloaded `null` is not a distinct marker — a loaded `Deferred<Option<T>>`
 /// holding `None` also encodes as `null` — so unloaded fields are meant to be
 /// skipped rather than serialized. See the type-level docs.
+///
+/// There is no matching [`Deserialize`](serde_core::Deserialize) impl. Reading a
+/// `Deferred<T>` back in reconstructs load state and relation targets that
+/// Toasty cannot validate against the rest of the model, so a field that needs
+/// it supplies its own impl through `#[serde(deserialize_with = "...")]` and
+/// [`Deferred::from`]. See the type-level docs.
 #[cfg(feature = "serde")]
 impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -210,18 +235,5 @@ impl<T: serde_core::Serialize> serde_core::Serialize for Deferred<T> {
         S: serde_core::Serializer,
     {
         self.value.serialize(serializer)
-    }
-}
-
-/// Deserializes any present value — including `null` — as loaded, mirroring the
-/// transparent [`Serialize`](serde_core::Serialize) impl above. An absent field
-/// is left unloaded, but only via `#[serde(default)]`; see the type-level docs.
-#[cfg(feature = "serde")]
-impl<'de, T: serde_core::Deserialize<'de>> serde_core::Deserialize<'de> for Deferred<T> {
-    fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-    where
-        D: serde_core::Deserializer<'de>,
-    {
-        Ok(Self::from(T::deserialize(deserializer)?))
     }
 }
